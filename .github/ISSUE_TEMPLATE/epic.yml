@@ -1,0 +1,36 @@
+name: Epic
+description: Track a product or delivery outcome spanning multiple tasks.
+title: "[Epic] "
+labels:
+  - epic
+body:
+  - type: markdown
+    attributes:
+      value: Describe the outcome, boundaries, and evidence of completion.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What valuable result must this epic achieve?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What work is included and explicitly excluded?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] Observable result
+        - [ ] Verification or rollout condition
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and risks
