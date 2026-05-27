@@ -1,0 +1,36 @@
+name: Feature or Task
+description: Plan an implementable product, platform, or maintenance change.
+title: ""
+labels: []
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - Feature
+        - Task
+        - Chore
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should change and why?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] User-visible or technical outcome
+        - [ ] Verification condition
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Technical notes
+      description: Dependencies, design constraints, or rollout considerations.
