@@ -1,0 +1,90 @@
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04 AS dev
+
+ARG USERNAME=vscode
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_LINK_MODE=copy \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PNPM_HOME=/home/${USERNAME}/.local/share/pnpm \
+    PATH=/home/${USERNAME}/.local/share/pnpm:/home/${USERNAME}/.local/share/pnpm/store:/home/${USERNAME}/.local/bin:/usr/local/bin:$PATH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      bash-completion \
+      build-essential \
+      ca-certificates \
+      curl \
+      git \
+      jq \
+      less \
+      libpq-dev \
+      make \
+      postgresql-client \
+      python3 \
+      python3-dev \
+      python3-pip \
+      redis-tools \
+      ripgrep \
+      sudo \
+      unzip \
+      vim \
+      wget \
+      zsh \
+    && curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && corepack enable \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/"$USERNAME" \
+    && chmod 0440 /etc/sudoers.d/"$USERNAME" \
+    && mkdir -p /workspace/backend \
+    && chown -R "$USERNAME":"$USERNAME" /workspace \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace/backend
+USER ${USERNAME}
+
+COPY --chown=${USERNAME}:${USERNAME} backend/pyproject.toml backend/uv.lock backend/README.md ./
+RUN uv sync --no-install-project
+
+COPY --chown=${USERNAME}:${USERNAME} backend ./
+CMD ["uv", "run", "uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+FROM python:3.12-slim AS runtime-builder
+
+ENV UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      build-essential \
+      ca-certificates \
+      curl \
+    && curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY backend ./
+RUN uv sync --frozen --no-dev
+
+FROM python:3.12-slim AS runtime
+
+ENV CODRUT_ENV=production \
+    PATH=/app/.venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN groupadd --system codrut \
+    && useradd --system --gid codrut --home-dir /app --shell /usr/sbin/nologin codrut
+
+WORKDIR /app
+COPY --from=runtime-builder --chown=codrut:codrut /app /app
+
+USER codrut
+
+CMD ["uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

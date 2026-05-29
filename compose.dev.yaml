@@ -1,0 +1,79 @@
+services:
+  frontend:
+    image: codrut-platform-frontend:dev
+    build:
+      target: dev
+    command: ["pnpm", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_BASE_URL: /api
+    volumes:
+      - .:/workspace:cached
+      - frontend_node_modules:/workspace/frontend/node_modules
+      - pnpm_store:/home/node/.local/share/pnpm/store
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    init: true
+    tty: true
+    stdin_open: true
+
+  backend:
+    image: codrut-platform-backend:dev
+    build:
+      target: dev
+    command: ["uv", "run", "uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      CODRUT_ENV: development
+      CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
+      CODRUT_REDIS_URL: redis://redis:6379/0
+      CODRUT_SESSION_SECRET: local-development-secret
+      CODRUT_CORS_ORIGINS: http://localhost,http://localhost:3000,http://localhost:8000
+    volumes:
+      - .:/workspace:cached
+      - backend_uv_cache:/home/vscode/.cache/uv
+      - backend_pip_cache:/home/vscode/.cache/pip
+      - frontend_node_modules:/workspace/frontend/node_modules
+      - pnpm_store:/home/vscode/.local/share/pnpm/store
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    init: true
+    tty: true
+    stdin_open: true
+
+  worker:
+    image: codrut-platform-backend:dev
+    build:
+      target: dev
+    command: ["uv", "run", "python", "-m", "codrut.workers.main"]
+    environment:
+      CODRUT_ENV: development
+      CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
+      CODRUT_REDIS_URL: redis://redis:6379/0
+      CODRUT_SESSION_SECRET: local-development-secret
+    volumes:
+      - .:/workspace:cached
+      - backend_uv_cache:/home/vscode/.cache/uv
+      - backend_pip_cache:/home/vscode/.cache/pip
+    init: true
+    tty: true
+    stdin_open: true
+
+  db:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "${MAILPIT_WEB_PORT:-8025}:8025"
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+
+volumes:
+  backend_uv_cache:
+  backend_pip_cache:
+  frontend_node_modules:
+  pnpm_store:
