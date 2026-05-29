@@ -1,0 +1,113 @@
+name: ${COMPOSE_PROJECT_NAME:-codrut-platform}
+
+services:
+  traefik:
+    image: traefik:v3.4
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+
+  frontend:
+    image: codrut-platform-frontend:runtime
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.frontend
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+    depends_on:
+      backend:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.codrut-frontend.rule: PathPrefix(`/`)
+      traefik.http.routers.codrut-frontend.entrypoints: web
+      traefik.http.services.codrut-frontend.loadbalancer.server.port: "3000"
+
+  backend:
+    image: codrut-platform-backend:runtime
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+      target: runtime
+    environment:
+      CODRUT_ENV: ${CODRUT_ENV:-production}
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://codrut:codrut@db:5432/codrut}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["http://localhost","http://localhost:3000","http://localhost:8000"]}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.codrut-api.rule: PathPrefix(`/api`)
+      traefik.http.routers.codrut-api.entrypoints: web
+      traefik.http.services.codrut-api.loadbalancer.server.port: "8000"
+
+  worker:
+    image: codrut-platform-backend:runtime
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+      target: runtime
+    command: ["python", "-m", "codrut.workers.main"]
+    environment:
+      CODRUT_ENV: ${CODRUT_ENV:-production}
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://codrut:codrut@db:5432/codrut}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codrut}
+      POSTGRES_USER: ${POSTGRES_USER:-codrut}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codrut}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codrut} -d ${POSTGRES_DB:-codrut}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-bookworm
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
