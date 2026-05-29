@@ -27,7 +27,7 @@ services:
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
       CODRUT_REDIS_URL: redis://redis:6379/0
       CODRUT_SESSION_SECRET: local-development-secret
-      CODRUT_CORS_ORIGINS: http://localhost,http://localhost:3000,http://localhost:8000
+      CODRUT_CORS_ORIGINS: '["http://localhost","http://localhost:3000","http://localhost:8000"]'
     volumes:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv

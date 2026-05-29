@@ -48,7 +48,7 @@ services:
       CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://codrut:codrut@db:5432/codrut}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
-      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8000}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["http://localhost","http://localhost:3000","http://localhost:8000"]}
     depends_on:
       db:
         condition: service_healthy
