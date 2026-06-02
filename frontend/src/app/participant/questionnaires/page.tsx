@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
@@ -32,8 +34,14 @@ export default async function ParticipantQuestionnairesPage() {
             </div>
             <p className="mt-3 text-sm leading-6 text-foreground/65">{definition.description}</p>
             <div className="mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/70">
-              {definition.estimatedItems} items · runner API pending
+              {definition.estimatedItems} items · runner disponibil
             </div>
+            <Link
+              href={`/participant/questionnaires/${definition.id}`}
+              className="tap-soft mt-4 inline-flex rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white"
+            >
+              Deschide
+            </Link>
           </article>
         ))}
       </div>

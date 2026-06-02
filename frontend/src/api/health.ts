@@ -1,7 +1,7 @@
-import { API_BASE_URL } from "./runtime";
+import { getApiBaseUrl } from "./runtime";
 
 export async function getHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/health/live`, {
+  const response = await fetch(`${getApiBaseUrl()}/health/live`, {
     cache: "no-store",
   });
 
