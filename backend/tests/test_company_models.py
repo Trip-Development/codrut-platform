@@ -11,6 +11,7 @@ def test_company_participant_tables_are_registered() -> None:
         "company_memberships",
         "participant_profiles",
         "participant_reporting_relationships",
+        "company_access_codes",
     }.issubset(Base.metadata.tables)
 
 
@@ -29,10 +30,16 @@ def test_membership_role_values_support_admin_and_participants() -> None:
 def test_participant_profile_matches_roster_shape() -> None:
     columns = Base.metadata.tables["participant_profiles"].columns
 
-    assert {"full_name", "email", "position", "location", "pcm_profile"}.issubset(
-        columns.keys()
-    )
+    assert {
+        "full_name",
+        "email",
+        "reports_to_name",
+        "position",
+        "location",
+        "pcm_profile",
+    }.issubset(columns.keys())
     assert columns["pcm_profile"].nullable
+    assert columns["reports_to_name"].nullable
 
 
 def test_participant_profile_is_company_scoped() -> None:

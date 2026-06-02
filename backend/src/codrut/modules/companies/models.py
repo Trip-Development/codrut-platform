@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Enum,
     ForeignKey,
@@ -41,6 +42,10 @@ class Company(TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     reporting_relationships: Mapped[list[ParticipantReportingRelationship]] = relationship(
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+    access_codes: Mapped[list[CompanyAccessCode]] = relationship(
         back_populates="company",
         cascade="all, delete-orphan",
     )
@@ -91,6 +96,7 @@ class ParticipantProfile(TimestampMixin, Base):
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(320), nullable=False)
+    reports_to_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     position: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role_group: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -152,3 +158,18 @@ class ParticipantReportingRelationship(TimestampMixin, Base):
         back_populates="direct_reports",
         foreign_keys=[manager_profile_id],
     )
+
+
+class CompanyAccessCode(TimestampMixin, Base):
+    __tablename__ = "company_access_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        index=True,
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    company: Mapped[Company] = relationship(back_populates="access_codes")
