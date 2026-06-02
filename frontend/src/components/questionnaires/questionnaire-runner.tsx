@@ -3,20 +3,27 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useMemo, useState } from "react";
 
-import type { QuestionnaireDefinition, QuestionnaireQuestion } from "@/api/questionnaires";
+import {
+  saveQuestionnaireResponse,
+  submitQuestionnaireResponse,
+  type QuestionnaireDefinition,
+  type QuestionnaireQuestion,
+} from "@/api/questionnaires";
 
 type AnswerState = Record<string, number>;
 
 type QuestionnaireRunnerProps = {
   definition: QuestionnaireDefinition;
+  assignmentId?: string;
 };
 
 function answerKey(question: QuestionnaireQuestion, statementId?: string): string {
   return statementId ? `${question.id}:${statementId}` : question.id;
 }
 
-export function QuestionnaireRunner({ definition }: QuestionnaireRunnerProps) {
+export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireRunnerProps) {
   const [answers, setAnswers] = useState<AnswerState>({});
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "submitted" | "error">("idle");
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const requiredAnswerKeys = useMemo(
     () =>
@@ -33,6 +40,29 @@ export function QuestionnaireRunner({ definition }: QuestionnaireRunnerProps) {
   const progress = requiredAnswerKeys.length > 0
     ? Math.round((answeredCount / requiredAnswerKeys.length) * 100)
     : 0;
+  const canSubmit = answeredCount === requiredAnswerKeys.length && Boolean(assignmentId);
+
+  async function saveDraft() {
+    if (!assignmentId) return;
+    setSaveState("saving");
+    try {
+      await saveQuestionnaireResponse(assignmentId, answers);
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  }
+
+  async function submit() {
+    if (!canSubmit || !assignmentId) return;
+    setSaveState("saving");
+    try {
+      await submitQuestionnaireResponse(assignmentId, answers);
+      setSaveState("submitted");
+    } catch {
+      setSaveState("error");
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -88,16 +118,40 @@ export function QuestionnaireRunner({ definition }: QuestionnaireRunnerProps) {
       ))}
 
       <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-        <button
-          type="button"
-          className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={answeredCount < requiredAnswerKeys.length}
-        >
-          Submit va fi conectat in task-ul de raspunsuri
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy disabled:cursor-not-allowed disabled:opacity-45 sm:flex-1"
+            disabled={!assignmentId || saveState === "saving"}
+            onClick={saveDraft}
+          >
+            Salveaza draft
+          </button>
+          <button
+            type="button"
+            className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45 sm:flex-1"
+            disabled={!canSubmit || saveState === "saving"}
+            onClick={submit}
+          >
+            Trimite raspunsurile
+          </button>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-foreground/60">
+          {assignmentId
+            ? statusMessage(saveState)
+            : "Adauga assignmentId in URL ca sa activezi salvarea reala pentru un task asignat."}
+        </p>
       </section>
     </div>
   );
+}
+
+function statusMessage(status: "idle" | "saving" | "saved" | "submitted" | "error"): string {
+  if (status === "saving") return "Se salveaza...";
+  if (status === "saved") return "Draft salvat.";
+  if (status === "submitted") return "Raspunsuri trimise.";
+  if (status === "error") return "A aparut o eroare la salvare.";
+  return "Poti salva un draft oricand si poti trimite dupa ce ai completat toate campurile.";
 }
 
 type QuestionInputProps = {

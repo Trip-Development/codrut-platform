@@ -2,11 +2,18 @@ from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import configure_mappers
 
 from codrut.core.database import Base
+from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.forms.models import QuestionnaireKey
+from codrut.modules.identity import models as identity_models  # noqa: F401
 
 
 def test_questionnaire_definition_table_is_registered() -> None:
     assert "questionnaire_definitions" in Base.metadata.tables
+    configure_mappers()
+
+
+def test_questionnaire_response_table_is_registered() -> None:
+    assert "questionnaire_responses" in Base.metadata.tables
     configure_mappers()
 
 

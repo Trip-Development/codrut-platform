@@ -7,12 +7,15 @@ import { participantNavItems } from "@/components/shell/nav";
 
 type ParticipantQuestionnaireRunPageProps = {
   params: Promise<{ key: string }>;
+  searchParams: Promise<{ assignmentId?: string }>;
 };
 
 export default async function ParticipantQuestionnaireRunPage({
   params,
+  searchParams,
 }: ParticipantQuestionnaireRunPageProps) {
   const { key } = await params;
+  const { assignmentId } = await searchParams;
   const definition = await getQuestionnaireDefinition(key);
 
   return (
@@ -25,7 +28,7 @@ export default async function ParticipantQuestionnaireRunPage({
       activeHref="/participant/questionnaires"
     >
       {definition ? (
-        <QuestionnaireRunner definition={definition} />
+        <QuestionnaireRunner definition={definition} assignmentId={assignmentId} />
       ) : (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
           <h2 className="text-lg font-bold text-foreground">Definitia nu este disponibila</h2>

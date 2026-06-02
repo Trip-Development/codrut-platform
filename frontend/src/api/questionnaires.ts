@@ -58,6 +58,15 @@ export type QuestionnaireDefinition = {
   };
 };
 
+export type QuestionnaireResponseRecord = {
+  id: string;
+  assignment_id: string;
+  questionnaire_key: string;
+  questionnaire_version: number;
+  status: "draft" | "submitted";
+  answers: Record<string, number>;
+};
+
 function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireDefinitionStub {
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const estimatedItems = questions.reduce((count, question) => {
@@ -149,4 +158,38 @@ export async function getQuestionnaireDefinition(
   } catch {
     return null;
   }
+}
+
+export async function saveQuestionnaireResponse(
+  assignmentId: string,
+  answers: Record<string, number>,
+): Promise<QuestionnaireResponseRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Nu am putut salva draftul.");
+  }
+
+  return (await response.json()) as QuestionnaireResponseRecord;
+}
+
+export async function submitQuestionnaireResponse(
+  assignmentId: string,
+  answers: Record<string, number>,
+): Promise<QuestionnaireResponseRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Nu am putut trimite raspunsurile.");
+  }
+
+  return (await response.json()) as QuestionnaireResponseRecord;
 }

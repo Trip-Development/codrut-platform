@@ -1,12 +1,31 @@
+from datetime import UTC, datetime
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from codrut.core.errors import DomainError
+from codrut.modules.assignments.models import AssignmentStatus
 from codrut.modules.forms.definitions import (
     APPROVED_QUESTIONNAIRE_DEFINITIONS,
     get_approved_questionnaire_definition,
 )
-from codrut.modules.forms.models import QuestionnaireKey
-from codrut.modules.forms.schemas import QuestionnaireDefinitionResponse
+from codrut.modules.forms.models import (
+    QuestionnaireKey,
+    QuestionnaireResponse,
+    QuestionnaireResponseStatus,
+)
+from codrut.modules.forms.repository import FormsRepository
+from codrut.modules.forms.schemas import (
+    QuestionnaireDefinitionResponse,
+    QuestionnaireResponseResponse,
+    QuestionnaireResponseSaveRequest,
+)
 
 
 class FormsService:
+    def __init__(self, session: AsyncSession | None = None) -> None:
+        self.repository = FormsRepository(session) if session is not None else None
+
     def list_definitions(self) -> list[QuestionnaireDefinitionResponse]:
         return [
             _to_response(definition)
@@ -15,6 +34,74 @@ class FormsService:
 
     def get_definition(self, key: QuestionnaireKey) -> QuestionnaireDefinitionResponse:
         return _to_response(get_approved_questionnaire_definition(key))
+
+    async def get_assignment_response(
+        self,
+        user_id: UUID,
+        assignment_id: UUID,
+    ) -> QuestionnaireResponseResponse:
+        repository = self._require_repository()
+        assignment = await repository.get_assignment_for_user(assignment_id, user_id)
+        if assignment is None:
+            raise DomainError("Assignment not found.", code="assignment_not_found")
+        response = await repository.get_response_by_assignment(assignment_id)
+        if response is None:
+            definition = get_approved_questionnaire_definition(
+                QuestionnaireKey(assignment.questionnaire_key)
+            )
+            response = await repository.add_response(
+                QuestionnaireResponse(
+                    assignment_id=assignment.id,
+                    questionnaire_key=definition.key,
+                    questionnaire_version=definition.version,
+                    status=QuestionnaireResponseStatus.draft,
+                    answers={},
+                )
+            )
+        return _response_to_schema(response)
+
+    async def save_assignment_response(
+        self,
+        user_id: UUID,
+        assignment_id: UUID,
+        payload: QuestionnaireResponseSaveRequest,
+        *,
+        submit: bool = False,
+    ) -> QuestionnaireResponseResponse:
+        repository = self._require_repository()
+        assignment = await repository.get_assignment_for_user(assignment_id, user_id)
+        if assignment is None:
+            raise DomainError("Assignment not found.", code="assignment_not_found")
+        definition = get_approved_questionnaire_definition(
+            QuestionnaireKey(assignment.questionnaire_key)
+        )
+        response = await repository.get_response_by_assignment(assignment_id)
+        if response is None:
+            response = await repository.add_response(
+                QuestionnaireResponse(
+                    assignment_id=assignment.id,
+                    questionnaire_key=definition.key,
+                    questionnaire_version=definition.version,
+                    status=QuestionnaireResponseStatus.draft,
+                    answers=payload.answers,
+                )
+            )
+        else:
+            response.answers = payload.answers
+        if submit:
+            response.status = QuestionnaireResponseStatus.submitted
+            response.submitted_at = response.submitted_at or datetime.now(UTC)
+            assignment.status = AssignmentStatus.submitted
+            assignment.submitted_at = assignment.submitted_at or response.submitted_at
+        elif assignment.status == AssignmentStatus.assigned:
+            assignment.status = AssignmentStatus.started
+            assignment.started_at = assignment.started_at or datetime.now(UTC)
+        return _response_to_schema(response)
+
+    def _require_repository(self) -> FormsRepository:
+        if self.repository is None:
+            raise RuntimeError("FormsService requires a database session for response operations")
+        return self.repository
 
 
 def _to_response(definition) -> QuestionnaireDefinitionResponse:
@@ -25,3 +112,7 @@ def _to_response(definition) -> QuestionnaireDefinitionResponse:
         description=definition.description,
         definition_schema=definition.schema,
     )
+
+
+def _response_to_schema(response: QuestionnaireResponse) -> QuestionnaireResponseResponse:
+    return QuestionnaireResponseResponse.model_validate(response)
