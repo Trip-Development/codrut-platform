@@ -66,7 +66,7 @@ class FormsService:
         )
         response = await repository.get_response_by_assignment(assignment_id)
         if submit:
-            _validate_required_answers(definition.schema, payload.answers)
+            _validate_submit_answers(definition.schema, payload.answers)
         if response is None:
             response = await repository.add_response(
                 QuestionnaireResponse(
@@ -109,10 +109,11 @@ def _response_to_schema(response: QuestionnaireResponse) -> QuestionnaireRespons
     return QuestionnaireResponseResponse.model_validate(response)
 
 
-def _validate_required_answers(schema: dict, answers: dict) -> None:
+def _validate_submit_answers(schema: dict, answers: dict) -> None:
+    allowed_values = _allowed_answer_values(schema)
     missing = [
         key
-        for key in _required_answer_keys(schema)
+        for key in allowed_values
         if key not in answers or answers[key] is None
     ]
     if missing:
@@ -120,18 +121,34 @@ def _validate_required_answers(schema: dict, answers: dict) -> None:
             "Submitted response is missing required answers.",
             code="response_incomplete",
         )
+    invalid = [
+        key
+        for key, value in answers.items()
+        if key in allowed_values and value not in allowed_values[key]
+    ]
+    if invalid:
+        raise DomainError(
+            "Submitted response has answers outside the allowed scale.",
+            code="response_invalid_answer",
+        )
 
 
-def _required_answer_keys(schema: dict) -> list[str]:
-    keys: list[str] = []
+def _allowed_answer_values(schema: dict) -> dict[str, set[int]]:
+    values: dict[str, set[int]] = {}
     for section in schema.get("sections", []):
         for question in section.get("questions", []):
             question_id = question["id"]
+            scale_values = {
+                option["value"]
+                for option in question.get("scale", [])
+            }
             if question.get("type") == "statement_score_set":
-                keys.extend(
-                    f"{question_id}:{statement['id']}"
-                    for statement in question.get("statements", [])
+                values.update(
+                    {
+                        f"{question_id}:{statement['id']}": scale_values
+                        for statement in question.get("statements", [])
+                    }
                 )
             else:
-                keys.append(question_id)
-    return keys
+                values[question_id] = scale_values
+    return values

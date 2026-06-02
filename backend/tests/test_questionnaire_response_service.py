@@ -130,3 +130,18 @@ async def test_submit_rejects_incomplete_required_answers() -> None:
             QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
             submit=True,
         )
+
+
+async def test_submit_rejects_answers_outside_question_scale() -> None:
+    assignment = make_assignment()
+    service = make_service(FakeFormsRepository(assignment))
+    answers = complete_lencioni_answers()
+    answers["lencioni_q01"] = 999
+
+    with pytest.raises(DomainError, match="outside the allowed scale"):
+        await service.save_assignment_response(
+            uuid.uuid4(),
+            assignment.id,
+            QuestionnaireResponseSaveRequest(answers=answers),
+            submit=True,
+        )
