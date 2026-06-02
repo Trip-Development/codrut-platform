@@ -1,5 +1,55 @@
 import Link from "next/link";
 
+const routeGroups = [
+  {
+    title: "Trainer new routes",
+    routes: [
+      ["/trainer", "Trainer dashboard"],
+      ["/trainer/projects", "Projects"],
+      ["/trainer/projects/demo-project", "Project detail"],
+      ["/trainer/projects/demo-project/participants/demo-participant", "Participant report"],
+      ["/trainer/org-chart", "Org chart"],
+      ["/trainer/participants", "Participants"],
+      ["/trainer/questionnaires", "Questionnaires"],
+      ["/trainer/email", "Email"],
+      ["/trainer/reports", "Reports"],
+    ],
+  },
+  {
+    title: "Participant new routes",
+    routes: [
+      ["/participant", "Task workspace"],
+      ["/participant/dashboard", "Dashboard"],
+      ["/participant/questionnaires", "Questionnaires"],
+      ["/participant/chat", "Chat"],
+      ["/participant/onboarding", "Onboarding"],
+      ["/participant/final-evaluation", "Final evaluation"],
+      ["/participant/account", "Account"],
+    ],
+  },
+  {
+    title: "Old prototype routes",
+    routes: [
+      ["/admin", "Old admin"],
+      ["/admin/projects/demo-project", "Old project detail"],
+      ["/admin/projects/demo-project/participant/demo-participant", "Old participant report"],
+      ["/dashboard", "Old participant dashboard"],
+      ["/chat", "Old chat"],
+      ["/onboarding", "Old onboarding"],
+      ["/test-out", "Old final evaluation"],
+    ],
+  },
+  {
+    title: "Auth routes",
+    routes: [
+      ["/login", "Login"],
+      ["/register", "Register"],
+      ["/reset-password", "Reset password"],
+      ["/update-password", "Update password"],
+    ],
+  },
+];
+
 export default function HomePage() {
   return (
     <main className="app-min-height bg-vines-pattern bg-background px-4 py-10 text-foreground md:px-6">
@@ -39,6 +89,26 @@ export default function HomePage() {
               Participant workspace
             </Link>
           </div>
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2">
+          {routeGroups.map((group) => (
+            <section key={group.title} className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+              <h2 className="text-base font-bold text-foreground">{group.title}</h2>
+              <div className="mt-4 grid gap-2">
+                {group.routes.map(([href, label]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="tap-soft rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/75 hover:border-burgundy/50 hover:text-burgundy"
+                  >
+                    {label}
+                    <span className="mt-1 block font-mono text-xs font-normal text-foreground/45">{href}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       </section>
     </main>
