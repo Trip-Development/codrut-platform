@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from codrut.core.config import get_settings
 from codrut.core.database import Base
+from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.identity import models as identity_models  # noqa: F401
 
 config = context.config

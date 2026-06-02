@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from codrut.core.database import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from codrut.modules.companies.models import CompanyMembership, ParticipantProfile
 
 
 class UserRole(StrEnum):
@@ -25,9 +31,17 @@ class User(TimestampMixin, Base):
         default=UserRole.participant,
     )
 
-    sessions: Mapped[list["Session"]] = relationship(
+    sessions: Mapped[list[Session]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+    company_memberships: Mapped[list[CompanyMembership]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    participant_profile: Mapped[ParticipantProfile | None] = relationship(
+        back_populates="user",
+        uselist=False,
     )
 
 
