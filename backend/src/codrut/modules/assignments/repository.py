@@ -1,0 +1,58 @@
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from codrut.modules.assignments.models import QuestionnaireAssignment, Team, TeamMembership
+
+
+class AssignmentRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def add_team(self, team: Team) -> Team:
+        self.session.add(team)
+        await self.session.flush()
+        return team
+
+    async def get_team(self, company_id: UUID, team_id: UUID) -> Team | None:
+        result = await self.session.execute(
+            select(Team).where(Team.company_id == company_id).where(Team.id == team_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_teams(self, company_id: UUID) -> list[Team]:
+        result = await self.session.execute(
+            select(Team).where(Team.company_id == company_id).order_by(Team.name)
+        )
+        return list(result.scalars().all())
+
+    async def add_team_membership(self, membership: TeamMembership) -> TeamMembership:
+        self.session.add(membership)
+        await self.session.flush()
+        return membership
+
+    async def add_assignment(self, assignment: QuestionnaireAssignment) -> QuestionnaireAssignment:
+        self.session.add(assignment)
+        await self.session.flush()
+        return assignment
+
+    async def get_assignment(
+        self,
+        company_id: UUID,
+        assignment_id: UUID,
+    ) -> QuestionnaireAssignment | None:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.id == assignment_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_assignments(self, company_id: UUID) -> list[QuestionnaireAssignment]:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .order_by(QuestionnaireAssignment.created_at)
+        )
+        return list(result.scalars().all())
