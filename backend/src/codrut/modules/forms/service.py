@@ -46,18 +46,7 @@ class FormsService:
             raise DomainError("Assignment not found.", code="assignment_not_found")
         response = await repository.get_response_by_assignment(assignment_id)
         if response is None:
-            definition = get_approved_questionnaire_definition(
-                QuestionnaireKey(assignment.questionnaire_key)
-            )
-            response = await repository.add_response(
-                QuestionnaireResponse(
-                    assignment_id=assignment.id,
-                    questionnaire_key=definition.key,
-                    questionnaire_version=definition.version,
-                    status=QuestionnaireResponseStatus.draft,
-                    answers={},
-                )
-            )
+            raise DomainError("Response not found.", code="response_not_found")
         return _response_to_schema(response)
 
     async def save_assignment_response(
@@ -76,6 +65,8 @@ class FormsService:
             QuestionnaireKey(assignment.questionnaire_key)
         )
         response = await repository.get_response_by_assignment(assignment_id)
+        if submit:
+            _validate_required_answers(definition.schema, payload.answers)
         if response is None:
             response = await repository.add_response(
                 QuestionnaireResponse(
@@ -116,3 +107,31 @@ def _to_response(definition) -> QuestionnaireDefinitionResponse:
 
 def _response_to_schema(response: QuestionnaireResponse) -> QuestionnaireResponseResponse:
     return QuestionnaireResponseResponse.model_validate(response)
+
+
+def _validate_required_answers(schema: dict, answers: dict) -> None:
+    missing = [
+        key
+        for key in _required_answer_keys(schema)
+        if key not in answers or answers[key] is None
+    ]
+    if missing:
+        raise DomainError(
+            "Submitted response is missing required answers.",
+            code="response_incomplete",
+        )
+
+
+def _required_answer_keys(schema: dict) -> list[str]:
+    keys: list[str] = []
+    for section in schema.get("sections", []):
+        for question in section.get("questions", []):
+            question_id = question["id"]
+            if question.get("type") == "statement_score_set":
+                keys.extend(
+                    f"{question_id}:{statement['id']}"
+                    for statement in question.get("statements", [])
+                )
+            else:
+                keys.append(question_id)
+    return keys

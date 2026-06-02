@@ -62,6 +62,10 @@ def make_assignment() -> QuestionnaireAssignment:
     )
 
 
+def complete_lencioni_answers() -> dict[str, int]:
+    return {f"lencioni_q{number:02d}": 3 for number in range(1, 16)}
+
+
 async def test_save_assignment_response_creates_draft_and_starts_assignment() -> None:
     assignment = make_assignment()
     service = make_service(FakeFormsRepository(assignment))
@@ -84,7 +88,7 @@ async def test_submit_assignment_response_marks_response_and_assignment_submitte
     response = await service.save_assignment_response(
         uuid.uuid4(),
         assignment.id,
-        QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+        QuestionnaireResponseSaveRequest(answers=complete_lencioni_answers()),
         submit=True,
     )
 
@@ -101,4 +105,28 @@ async def test_save_assignment_response_rejects_missing_assignment() -> None:
             uuid.uuid4(),
             uuid.uuid4(),
             QuestionnaireResponseSaveRequest(answers={}),
+        )
+
+
+async def test_get_assignment_response_does_not_create_draft() -> None:
+    assignment = make_assignment()
+    repository = FakeFormsRepository(assignment)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError, match="Response not found"):
+        await service.get_assignment_response(uuid.uuid4(), assignment.id)
+
+    assert repository.response is None
+
+
+async def test_submit_rejects_incomplete_required_answers() -> None:
+    assignment = make_assignment()
+    service = make_service(FakeFormsRepository(assignment))
+
+    with pytest.raises(DomainError, match="missing required answers"):
+        await service.save_assignment_response(
+            uuid.uuid4(),
+            assignment.id,
+            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+            submit=True,
         )
