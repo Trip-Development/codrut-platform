@@ -47,7 +47,7 @@ export function ThemeToggle() {
       aria-label={isDark ? "Activeaza tema luminoasa" : "Activeaza tema intunecata"}
       aria-pressed={isDark}
       onClick={toggleTheme}
-      className="tap-soft inline-flex h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-surface px-2 text-sm font-bold text-foreground shadow-sm"
+      className="tap-soft inline-flex h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-surface/82 px-2 text-sm font-bold text-foreground shadow-sm backdrop-blur"
     >
       <span
         aria-hidden="true"
@@ -58,7 +58,7 @@ export function ThemeToggle() {
       >
         {isDark ? "N" : "L"}
       </span>
-      <span className="w-12 text-left text-xs text-foreground/65">{isDark ? "Noapte" : "Lumina"}</span>
+      <span className="w-12 text-left text-xs text-foreground/52">{isDark ? "Noapte" : "Lumina"}</span>
     </button>
   );
 }
