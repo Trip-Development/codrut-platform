@@ -27,6 +27,41 @@ export type EmailOpsSummary = {
   metrics: EmailDeliveryMetric[];
   assessmentRows: AssessmentDeliveryRow[];
   rules: string[];
+  campaign: CampaignOpsSummary;
+};
+
+export type CampaignRecipientRow = {
+  id: string;
+  company: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  clientType: "tip_1" | "tip_2" | "tip_3" | "tip_4";
+  status: "ready" | "needs_contact_name" | "suppressed" | "sent";
+  openRate?: string;
+  clickRate?: string;
+  viewRate?: string;
+  outcome?: "intalnire" | "ofertare" | "contract";
+};
+
+export type CampaignOpsSummary = {
+  videoHost: {
+    provider: string;
+    status: "ready" | "needs_upload";
+    note: string;
+  };
+  template: {
+    subject: string;
+    personalization: string;
+    ctaPrimary: string;
+    ctaSecondary: string;
+  };
+  recipients: CampaignRecipientRow[];
+  weeklyReport: {
+    cadence: string;
+    metrics: string[];
+    notification: string;
+  };
 };
 
 export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
@@ -101,5 +136,67 @@ export async function getEmailOpsSummary(): Promise<EmailOpsSummary> {
       "Reminderul se trimite pentru status invitat sau inceput, nu pentru task finalizat.",
       "Emailurile nu includ raspunsuri confidentiale, doar linkuri si status operational.",
     ],
+    campaign: {
+      videoHost: {
+        provider: "Codrut watch page + Cloudflare R2",
+        status: "needs_upload",
+        note: "Emailul trimite thumbnail si CTA catre pagina Codrut; video-ul nu este redat direct in email.",
+      },
+      template: {
+        subject: "O idee practica pentru echipa ta, ${first_name}",
+        personalization: "Prenumele se completeaza automat cand exista nume in baza.",
+        ctaPrimary: "Programeaza o discutie",
+        ctaSecondary: "Vreau sa fiu contactat",
+      },
+      recipients: [
+        {
+          id: "rec-1",
+          company: "Client activ",
+          firstName: "Maria",
+          lastName: "Pop",
+          email: "maria.pop@clientactiv.ro",
+          clientType: "tip_1",
+          status: "ready",
+          openRate: "72%",
+          clickRate: "18%",
+          viewRate: "12%",
+          outcome: "intalnire",
+        },
+        {
+          id: "rec-2",
+          company: "Client trecut cunoscut",
+          firstName: "Sorin",
+          lastName: "Dima",
+          email: "sorin.dima@clienttrecut.ro",
+          clientType: "tip_2",
+          status: "sent",
+          openRate: "54%",
+          clickRate: "9%",
+          viewRate: "7%",
+          outcome: "ofertare",
+        },
+        {
+          id: "rec-3",
+          company: "Client trecut fara contact",
+          email: "office@companie.ro",
+          clientType: "tip_3",
+          status: "needs_contact_name",
+        },
+        {
+          id: "rec-4",
+          company: "Prospect nou",
+          firstName: "Irina",
+          lastName: "Muresan",
+          email: "irina@prospect.ro",
+          clientType: "tip_4",
+          status: "suppressed",
+        },
+      ],
+      weeklyReport: {
+        cadence: "Saptamanal",
+        metrics: ["open rate", "click rate", "view rate"],
+        notification: "Andrei primeste email/Telegram cu link catre raport.",
+      },
+    },
   };
 }
