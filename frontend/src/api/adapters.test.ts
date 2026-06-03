@@ -11,6 +11,7 @@ import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
+  getQuestionnaireDefinition,
   listQuestionnaireDefinitionStubs,
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
@@ -50,6 +51,10 @@ describe("frontend API adapter stubs", () => {
       "phase",
       "boss_360",
     ]);
+    expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
+      status: "active",
+      estimatedItems: 5,
+    });
     await expect(listEmailSurfaceStubs()).resolves.toHaveLength(3);
   });
 
@@ -81,6 +86,25 @@ describe("frontend API adapter stubs", () => {
     ).resolves.toMatchObject({
       status: "submitted",
       questionnaire_key: "lencioni",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(getQuestionnaireDefinition("boss_360")).resolves.toMatchObject({
+      key: "boss_360",
+      schema: {
+        sections: [
+          {
+            questions: expect.arrayContaining([
+              expect.objectContaining({ id: "boss_360_q01" }),
+            ]),
+          },
+        ],
+      },
     });
 
     vi.unstubAllGlobals();
