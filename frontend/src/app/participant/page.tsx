@@ -1,4 +1,4 @@
-import { getCurrentParticipant } from "@/api/auth";
+import { audienceAccessNote, getParticipantSession } from "@/api/auth";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { EmptyState } from "@/components/presentation/empty-state";
 import { AppShell } from "@/components/shell/app-shell";
@@ -7,7 +7,7 @@ import { PlaceholderCard } from "@/components/shell/placeholder-card";
 
 export default async function ParticipantWorkspacePage() {
   const [participant, summary] = await Promise.all([
-    getCurrentParticipant(),
+    getParticipantSession(),
     getParticipantWorkspaceSummary(),
   ]);
 
@@ -19,7 +19,9 @@ export default async function ParticipantWorkspacePage() {
       description="Participantul vede doar propriile task-uri si chestionare asignate, nu organigrama completa a companiei."
       navItems={participantNavItems}
       activeHref="/participant"
-      userLabel={participant.name}
+      userLabel={participant.user.name}
+      session={participant}
+      accessNote={audienceAccessNote("participant")}
     >
       <div className="grid gap-4 md:grid-cols-3">
         {summary.cards.map((card) => (

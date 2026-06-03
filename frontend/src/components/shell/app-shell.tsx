@@ -3,6 +3,8 @@ import Link from "next/link";
 import { BrandMark } from "../brand/brand-mark";
 import { ThemeToggle } from "../theme/theme-toggle";
 import type { ShellNavItem } from "./nav";
+import { SessionBanner } from "./session-banner";
+import type { SessionState } from "@/api/auth";
 
 type AppShellProps = {
   audience: "trainer" | "participant";
@@ -12,6 +14,8 @@ type AppShellProps = {
   navItems: ShellNavItem[];
   activeHref: string;
   userLabel?: string;
+  session?: SessionState;
+  accessNote?: string;
   children: React.ReactNode;
 };
 
@@ -23,6 +27,8 @@ export function AppShell({
   navItems,
   activeHref,
   userLabel,
+  session,
+  accessNote,
   children,
 }: AppShellProps) {
   const isTrainer = audience === "trainer";
@@ -77,6 +83,7 @@ export function AppShell({
           </h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/65">{description}</p>
         </section>
+        <SessionBanner session={session} note={accessNote} />
         {children}
       </main>
     </div>

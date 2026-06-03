@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { audienceAccessNote } from "@/api/auth";
 import { inviteStatusLabel, resolveInviteBundle } from "@/api/invites";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { SessionBanner } from "@/components/shell/session-banner";
 
 type InvitePageProps = {
   params: Promise<{ token: string }>;
@@ -30,6 +32,9 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
         <div className="mt-6 rounded-2xl border border-[var(--border)] bg-surface-muted p-4 text-sm font-semibold text-foreground/62">
           Token demo: <span className="font-mono text-burgundy">{token}</span>
+        </div>
+        <div className="mt-5">
+          <SessionBanner note={audienceAccessNote("invitee")} />
         </div>
 
         {bundle.state === "valid" ? (

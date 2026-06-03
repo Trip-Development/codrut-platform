@@ -1,4 +1,4 @@
-import { getCurrentTrainer } from "@/api/auth";
+import { audienceAccessNote, getTrainerSession } from "@/api/auth";
 import { getTrainerDashboardSummary } from "@/api/trainer";
 import { StatCard } from "@/components/presentation/stat-card";
 import { AppShell } from "@/components/shell/app-shell";
@@ -6,7 +6,7 @@ import { trainerNavItems } from "@/components/shell/nav";
 import { PlaceholderCard } from "@/components/shell/placeholder-card";
 
 export default async function TrainerDashboardPage() {
-  const [trainer, summary] = await Promise.all([getCurrentTrainer(), getTrainerDashboardSummary()]);
+  const [trainer, summary] = await Promise.all([getTrainerSession(), getTrainerDashboardSummary()]);
 
   return (
     <AppShell
@@ -16,7 +16,9 @@ export default async function TrainerDashboardPage() {
       description="Suprafata pentru Andrei: companii, participanti, organigrama, chestionare, invitatii email si progres operational."
       navItems={trainerNavItems}
       activeHref="/trainer"
-      userLabel={trainer.name}
+      userLabel={trainer.user.name}
+      session={trainer}
+      accessNote={audienceAccessNote("trainer")}
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {summary.stats.map((stat) => (

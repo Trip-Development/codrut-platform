@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { getCurrentParticipant, getCurrentTrainer } from "./auth";
+import {
+  audienceAccessNote,
+  getCurrentParticipant,
+  getCurrentTrainer,
+  getParticipantSession,
+  getTrainerSession,
+} from "./auth";
 import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
@@ -11,6 +17,9 @@ describe("frontend API adapter stubs", () => {
   it("returns role-scoped local users", async () => {
     await expect(getCurrentTrainer()).resolves.toMatchObject({ role: "trainer" });
     await expect(getCurrentParticipant()).resolves.toMatchObject({ role: "participant" });
+    await expect(getTrainerSession()).resolves.toMatchObject({ state: "fallback" });
+    await expect(getParticipantSession()).resolves.toMatchObject({ state: "fallback" });
+    expect(audienceAccessNote("invitee")).toContain("linkul securizat");
   });
 
   it("returns trainer dashboard placeholder data", async () => {
