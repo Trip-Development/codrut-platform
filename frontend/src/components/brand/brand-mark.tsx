@@ -26,28 +26,51 @@ export function BrandMark({
         ].join(" ")}
         aria-hidden="true"
       >
-        <svg viewBox="0 0 44 44" className="h-[72%] w-[72%]" role="img">
+        <svg viewBox="0 0 44 44" className="h-[78%] w-[78%]" role="img">
           <path
-            d="M22 7.2c-6.4 0-11.8 4.7-12.6 11-.9 7 4.6 13 11.6 13h1.8"
+            d="M22 34V14"
             fill="none"
             stroke="currentColor"
             strokeLinecap="round"
-            strokeWidth="4.2"
-          />
-          <path
-            d="M25.2 29.8V18.6m0 0 6.8 6.2m-6.8-6.2-6.7 6.2"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
             strokeWidth="3.4"
           />
           <path
-            d="M25.2 18.4c2.1-5 5.1-7.3 9.6-8.2-.4 4.9-2.5 8.3-7.8 10.1"
+            d="M22 14c4.9 2.2 8.4 5.7 9.9 10.6-4.6.2-8.2-1.4-10.9-4.9"
             fill="none"
             stroke="currentColor"
             strokeLinecap="round"
             strokeLinejoin="round"
+            strokeWidth="3.2"
+          />
+          <path
+            d="M22 14c-5 2.2-8.6 5.8-10.2 10.9 4.8.2 8.5-1.6 11.2-5.2"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3.2"
+          />
+          <path
+            d="M22 10c3.7 1.5 6.4 4.1 8 7.7-3.9.3-6.8-.9-8.8-3.7"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3.1"
+          />
+          <path
+            d="M22 10c-3.7 1.5-6.4 4.1-8 7.7 3.9.3 6.8-.9 8.8-3.7"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3.1"
+          />
+          <path
+            d="M15 34h14"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
             strokeWidth="3.2"
           />
         </svg>
