@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     session_secret: SecretStr = Field(default=SecretStr("local-development-secret"))
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     docs_enabled: bool = True
+    email_provider: str = "test"
+    email_from_address: str = "no-reply@codrut.local"
+    email_from_name: str = "Codrut Platform"
+    email_test_mode: bool = True
+    public_app_url: str = "http://localhost:3000"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

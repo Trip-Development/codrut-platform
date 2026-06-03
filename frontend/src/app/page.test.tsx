@@ -9,6 +9,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     expect(screen.getByText("Codrut Platform")).toBeTruthy();
-    expect(screen.getByText("Ready for module implementation")).toBeTruthy();
+    expect(screen.getAllByText("Trainer dashboard").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Participant workspace").length).toBeGreaterThan(0);
   });
 });
