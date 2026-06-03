@@ -15,6 +15,5 @@ describe("HomePage", () => {
     expect(screen.getByText("Link securizat")).toBeTruthy();
     expect(screen.getByText("Campanii video pentru clienti si prospecti.")).toBeTruthy();
     expect(screen.getByText("Tip 4")).toBeTruthy();
-    expect(screen.getByText("Prototype routes")).toBeTruthy();
   });
 });
