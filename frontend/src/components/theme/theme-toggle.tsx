@@ -47,18 +47,26 @@ export function ThemeToggle() {
       aria-label={isDark ? "Activeaza tema luminoasa" : "Activeaza tema intunecata"}
       aria-pressed={isDark}
       onClick={toggleTheme}
-      className="tap-soft inline-flex h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-surface/82 px-2 text-sm font-bold text-foreground shadow-sm backdrop-blur"
+      className="tap-soft inline-grid h-10 grid-cols-2 items-center rounded-full border border-[var(--border)] bg-surface-muted/82 p-1 text-xs font-semibold text-foreground/48 shadow-sm backdrop-blur"
     >
       <span
-        aria-hidden="true"
+        aria-hidden
         className={[
-          "flex h-7 w-7 items-center justify-center rounded-full text-xs text-white transition-transform",
-          isDark ? "translate-x-9 bg-foreground" : "translate-x-0 bg-burgundy",
+          "rounded-full px-3 py-1.5 transition-colors",
+          isDark ? "text-foreground/42" : "bg-surface text-burgundy shadow-sm",
         ].join(" ")}
       >
-        {isDark ? "N" : "L"}
+        Lumina
       </span>
-      <span className="w-12 text-left text-xs text-foreground/52">{isDark ? "Noapte" : "Lumina"}</span>
+      <span
+        aria-hidden
+        className={[
+          "rounded-full px-3 py-1.5 transition-colors",
+          isDark ? "bg-surface text-burgundy-dark shadow-sm" : "text-foreground/42",
+        ].join(" ")}
+      >
+        Noapte
+      </span>
     </button>
   );
 }

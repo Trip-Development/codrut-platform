@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { audienceAccessNote } from "@/api/auth";
-import { inviteStatusLabel, resolveInviteBundle } from "@/api/invites";
+import { resolveInviteBundle } from "@/api/invites";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { SessionBanner } from "@/components/shell/session-banner";
+import { TaskBundle } from "@/components/tasks/task-bundle";
 
 type InvitePageProps = {
   params: Promise<{ token: string }>;
@@ -30,28 +31,18 @@ export default async function InvitePage({ params }: InvitePageProps) {
             : bundle.message}
         </p>
 
-        <div className="mt-6 rounded-2xl border border-[var(--border)] bg-surface-muted p-4 text-sm font-semibold text-foreground/62">
-          Token demo: <span className="font-mono text-burgundy">{token}</span>
-        </div>
-        <div className="mt-5">
+        <div className="mt-6">
           <SessionBanner note={audienceAccessNote("invitee")} />
         </div>
 
         {bundle.state === "valid" ? (
-          <div className="mt-6 grid gap-3">
-            {bundle.tasks.map((task) => (
-              <article key={task.id} className="rounded-2xl border border-[var(--border)] bg-surface p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-foreground">{task.title}</h2>
-                    <p className="mt-1 text-sm leading-6 text-foreground/58">{task.detail}</p>
-                  </div>
-                  <span className="rounded-full bg-burgundy-50 px-3 py-1 text-sm font-bold text-burgundy">
-                    {inviteStatusLabel(task.status)}
-                  </span>
-                </div>
-              </article>
-            ))}
+          <div className="mt-6">
+            <TaskBundle
+              tasks={bundle.tasks}
+              projectName={bundle.projectName}
+              participantEmail={bundle.participantEmail}
+              deadlineLabel={bundle.deadlineLabel}
+            />
           </div>
         ) : null}
 

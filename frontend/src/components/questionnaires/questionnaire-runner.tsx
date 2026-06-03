@@ -65,63 +65,67 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
   }
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-burgundy/80">
-              v{definition.version} · {definition.key}
-            </p>
-            <h2 className="mt-2 text-xl font-bold text-foreground">{definition.title}</h2>
-          </div>
-          <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1 text-sm font-bold text-foreground/70">
-            {answeredCount}/{requiredAnswerKeys.length}
-          </div>
-        </div>
-        <p className="mt-3 text-sm leading-6 text-foreground/65">{definition.description}</p>
-        {definition.schema.instructions ? (
-          <p className="mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-sm leading-6 text-foreground/70">
-            {definition.schema.instructions}
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+        <section className="border-b border-[var(--border)] px-5 py-5 md:px-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">
+            v{definition.version} · {definition.key}
           </p>
-        ) : null}
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface-muted">
-          <div className="h-full rounded-full bg-burgundy" style={{ width: `${progress}%` }} />
-        </div>
-      </section>
-
-      {definition.schema.sections.map((section) => (
-        <section key={section.id} className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-foreground/55">
-            {section.title}
-          </h3>
-          {section.questions.map((question, index) => (
-            <article key={question.id} className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-              <div className="flex items-start gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-sm font-bold text-burgundy">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-base font-bold text-foreground">{question.label}</h4>
-                  {question.instructions ? (
-                    <p className="mt-2 text-sm leading-6 text-foreground/60">{question.instructions}</p>
-                  ) : null}
-                  {question.type === "likert" ? (
-                    <LikertQuestion question={question} answers={answers} setAnswers={setAnswers} />
-                  ) : (
-                    <StatementSetQuestion question={question} answers={answers} setAnswers={setAnswers} />
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/68">{definition.description}</p>
+          {definition.schema.instructions ? (
+            <p className="mt-4 max-w-3xl border-l-2 border-burgundy/45 pl-3 text-sm leading-6 text-foreground/62">
+              {definition.schema.instructions}
+            </p>
+          ) : null}
         </section>
-      ))}
 
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row">
+        {definition.schema.sections.map((section) => (
+          <section key={section.id} className="border-b border-[var(--border)] last:border-b-0">
+            <div className="bg-surface-muted/50 px-5 py-3 md:px-6">
+              <h3 className="text-sm font-semibold text-foreground/70">{section.title}</h3>
+            </div>
+            <div className="divide-y divide-[var(--border)]">
+              {section.questions.map((question, index) => (
+                <article key={question.id} className="px-5 py-5 md:px-6">
+                  <div className="grid gap-4 md:grid-cols-[2.5rem_1fr]">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-sm font-semibold text-burgundy">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
+                      {question.instructions ? (
+                        <p className="mt-2 text-sm leading-6 text-foreground/58">{question.instructions}</p>
+                      ) : null}
+                      {question.type === "likert" ? (
+                        <LikertQuestion question={question} answers={answers} setAnswers={setAnswers} />
+                      ) : (
+                        <StatementSetQuestion question={question} answers={answers} setAnswers={setAnswers} />
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <aside className="sticky top-32 rounded-2xl border border-[var(--border)] bg-surface p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-foreground">Progres</p>
+          <p className="text-sm font-semibold tabular-nums text-foreground/62">
+            {answeredCount}/{requiredAnswerKeys.length}
+          </p>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-muted">
+          <div className="h-full rounded-full bg-burgundy transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <p className="mt-3 text-xs font-semibold text-foreground/52">{progress}% completat</p>
+
+        <div className="mt-5 grid gap-2">
           <button
             type="button"
-            className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy disabled:cursor-not-allowed disabled:opacity-45 sm:flex-1"
+            className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-semibold text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
             disabled={!assignmentId || saveState === "saving"}
             onClick={saveDraft}
           >
@@ -129,19 +133,19 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
           </button>
           <button
             type="button"
-            className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45 sm:flex-1"
+            className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
             disabled={!canSubmit || saveState === "saving"}
             onClick={submit}
           >
             Trimite raspunsurile
           </button>
         </div>
-        <p className="mt-3 text-sm leading-6 text-foreground/60">
+        <p className="mt-3 text-xs leading-5 text-foreground/55">
           {assignmentId
             ? statusMessage(saveState)
-            : "Adauga assignmentId in URL ca sa activezi salvarea reala pentru un task asignat."}
+            : "Linkul demo nu are inca un assignment real pentru salvare."}
         </p>
-      </section>
+      </aside>
     </div>
   );
 }
@@ -172,10 +176,10 @@ function LikertQuestion({ question, answers, setAnswers }: QuestionInputProps) {
             type="button"
             onClick={() => setAnswers((current) => ({ ...current, [key]: option.value }))}
             className={[
-              "tap-soft rounded-xl border px-3 py-3 text-sm font-semibold",
+              "tap-soft rounded-lg border px-3 py-2.5 text-sm font-semibold",
               selected
-                ? "border-burgundy bg-burgundy text-white"
-                : "border-[var(--border)] bg-surface-muted text-foreground/75 hover:border-burgundy/50",
+                ? "border-burgundy bg-burgundy text-white shadow-sm"
+                : "border-[var(--border)] bg-background text-foreground/70 hover:border-burgundy/45 hover:text-burgundy",
             ].join(" ")}
           >
             {option.label}
@@ -188,36 +192,37 @@ function LikertQuestion({ question, answers, setAnswers }: QuestionInputProps) {
 
 function StatementSetQuestion({ question, answers, setAnswers }: QuestionInputProps) {
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)]">
       {(question.statements ?? []).map((statement) => {
         const key = answerKey(question, statement.id);
         return (
-          <div key={statement.id} className="rounded-xl border border-[var(--border)] bg-surface-muted p-3">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <p className="flex-1 text-sm font-semibold leading-6 text-foreground/75">
-                <span className="mr-2 font-bold text-burgundy">{statement.code}.</span>
-                {statement.label}
-              </p>
-              <select
-                value={answers[key] ?? ""}
-                onChange={(event) =>
-                  setAnswers((current) => ({
-                    ...current,
-                    [key]: Number(event.target.value),
-                  }))
-                }
-                className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2 text-sm font-bold text-foreground"
-              >
-                <option value="" disabled>
-                  Scor
+          <div
+            key={statement.id}
+            className="grid gap-3 border-b border-[var(--border)] bg-background px-3 py-3 last:border-b-0 md:grid-cols-[1fr_11rem] md:items-center"
+          >
+            <p className="text-sm font-medium leading-6 text-foreground/72">
+              <span className="mr-2 font-semibold text-burgundy">{statement.code}.</span>
+              {statement.label}
+            </p>
+            <select
+              value={answers[key] ?? ""}
+              onChange={(event) =>
+                setAnswers((current) => ({
+                  ...current,
+                  [key]: Number(event.target.value),
+                }))
+              }
+              className="rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-sm font-semibold text-foreground"
+            >
+              <option value="" disabled>
+                Alege scorul
+              </option>
+              {question.scale.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
-                {question.scale.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              ))}
+            </select>
           </div>
         );
       })}

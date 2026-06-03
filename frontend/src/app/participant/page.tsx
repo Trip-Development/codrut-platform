@@ -1,9 +1,9 @@
 import { audienceAccessNote, getParticipantSession } from "@/api/auth";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
-import { EmptyState } from "@/components/presentation/empty-state";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
 import { PlaceholderCard } from "@/components/shell/placeholder-card";
+import { TaskBundle } from "@/components/tasks/task-bundle";
 
 export default async function ParticipantWorkspacePage() {
   const [participant, summary] = await Promise.all([
@@ -15,8 +15,8 @@ export default async function ParticipantWorkspacePage() {
     <AppShell
       audience="participant"
       eyebrow="Participant"
-      title="Sarcinile tale Codrut"
-      description="Participantul vede doar propriile task-uri si chestionare asignate, nu organigrama completa a companiei."
+      title="Sarcinile tale pentru proiect"
+      description="Aici vezi doar chestionarele asociate emailului tau in proiectul curent. Nu ai acces la organigrama sau la raspunsurile altor persoane."
       navItems={participantNavItems}
       activeHref="/participant"
       userLabel={participant.user.name}
@@ -29,8 +29,14 @@ export default async function ParticipantWorkspacePage() {
         ))}
       </div>
 
-      <div className="mt-4">
-        <EmptyState {...summary.emptyState} />
+      <div className="mt-5">
+        <TaskBundle
+          tasks={summary.tasks}
+          projectName={summary.projectName}
+          participantEmail={summary.participantEmail}
+          deadlineLabel={summary.deadlineLabel}
+          compact
+        />
       </div>
     </AppShell>
   );
