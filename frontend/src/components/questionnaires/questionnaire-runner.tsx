@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 import { useMemo, useState } from "react";
 
@@ -41,6 +42,7 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
     ? Math.round((answeredCount / requiredAnswerKeys.length) * 100)
     : 0;
   const canSubmit = answeredCount === requiredAnswerKeys.length && Boolean(assignmentId);
+  const isComplete = saveState === "submitted";
 
   async function saveDraft() {
     if (!assignmentId) return;
@@ -79,35 +81,39 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
           ) : null}
         </section>
 
-        {definition.schema.sections.map((section) => (
-          <section key={section.id} className="border-b border-[var(--border)] last:border-b-0">
-            <div className="bg-surface-muted/50 px-5 py-3 md:px-6">
-              <h3 className="text-sm font-semibold text-foreground/70">{section.title}</h3>
-            </div>
-            <div className="divide-y divide-[var(--border)]">
-              {section.questions.map((question, index) => (
-                <article key={question.id} className="px-5 py-5 md:px-6">
-                  <div className="grid gap-4 md:grid-cols-[2.5rem_1fr]">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-sm font-semibold text-burgundy">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
-                      {question.instructions ? (
-                        <p className="mt-2 text-sm leading-6 text-foreground/58">{question.instructions}</p>
-                      ) : null}
-                      {question.type === "likert" ? (
-                        <LikertQuestion question={question} answers={answers} setAnswers={setAnswers} />
-                      ) : (
-                        <StatementSetQuestion question={question} answers={answers} setAnswers={setAnswers} />
-                      )}
+        {isComplete ? (
+          <CompletionPanel answeredCount={answeredCount} total={requiredAnswerKeys.length} />
+        ) : (
+          definition.schema.sections.map((section) => (
+            <section key={section.id} className="border-b border-[var(--border)] last:border-b-0">
+              <div className="bg-surface-muted/50 px-5 py-3 md:px-6">
+                <h3 className="text-sm font-semibold text-foreground/70">{section.title}</h3>
+              </div>
+              <div className="divide-y divide-[var(--border)]">
+                {section.questions.map((question, index) => (
+                  <article key={question.id} className="px-5 py-5 md:px-6">
+                    <div className="grid gap-4 md:grid-cols-[2.5rem_1fr]">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-sm font-semibold text-burgundy">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
+                        {question.instructions ? (
+                          <p className="mt-2 text-sm leading-6 text-foreground/58">{question.instructions}</p>
+                        ) : null}
+                        {question.type === "likert" ? (
+                          <LikertQuestion question={question} answers={answers} setAnswers={setAnswers} />
+                        ) : (
+                          <StatementSetQuestion question={question} answers={answers} setAnswers={setAnswers} />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        ))}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))
+        )}
       </div>
 
       <aside className="sticky top-32 rounded-2xl border border-[var(--border)] bg-surface p-4 shadow-sm">
@@ -126,7 +132,7 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
           <button
             type="button"
             className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-semibold text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
-            disabled={!assignmentId || saveState === "saving"}
+            disabled={!assignmentId || saveState === "saving" || isComplete}
             onClick={saveDraft}
           >
             Salveaza draft
@@ -134,7 +140,7 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
           <button
             type="button"
             className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
-            disabled={!canSubmit || saveState === "saving"}
+            disabled={!canSubmit || saveState === "saving" || isComplete}
             onClick={submit}
           >
             Trimite raspunsurile
@@ -153,9 +159,38 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
 function statusMessage(status: "idle" | "saving" | "saved" | "submitted" | "error"): string {
   if (status === "saving") return "Se salveaza...";
   if (status === "saved") return "Draft salvat.";
-  if (status === "submitted") return "Raspunsuri trimise.";
+  if (status === "submitted") return "Raspunsuri trimise. Poti reveni la lista de sarcini.";
   if (status === "error") return "A aparut o eroare la salvare.";
   return "Poti salva un draft oricand si poti trimite dupa ce ai completat toate campurile.";
+}
+
+function CompletionPanel({ answeredCount, total }: { answeredCount: number; total: number }) {
+  return (
+    <section className="px-5 py-10 text-center md:px-6">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/35 text-xl font-semibold text-success-ink">
+        OK
+      </div>
+      <h3 className="mt-5 text-2xl font-semibold text-foreground">Raspunsurile au fost trimise</h3>
+      <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-foreground/62">
+        Am inregistrat {answeredCount}/{total} raspunsuri pentru acest task. Persoana evaluata nu vede raspunsuri
+        individuale; trainerul lucreaza cu raportarea configurata pentru proiect.
+      </p>
+      <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+        <Link
+          href="/participant"
+          className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-semibold text-white"
+        >
+          Inapoi la sarcinile mele
+        </Link>
+        <Link
+          href="/participant/questionnaires"
+          className="tap-soft rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-semibold text-foreground/72"
+        >
+          Vezi chestionarele
+        </Link>
+      </div>
+    </section>
+  );
 }
 
 type QuestionInputProps = {

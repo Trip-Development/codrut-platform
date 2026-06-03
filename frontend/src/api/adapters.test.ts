@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   audienceAccessNote,
@@ -10,7 +10,11 @@ import {
 import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
-import { listQuestionnaireDefinitionStubs } from "./questionnaires";
+import {
+  listQuestionnaireDefinitionStubs,
+  saveQuestionnaireResponse,
+  submitQuestionnaireResponse,
+} from "./questionnaires";
 import { getTrainerDashboardSummary } from "./trainer";
 
 describe("frontend API adapter stubs", () => {
@@ -61,5 +65,24 @@ describe("frontend API adapter stubs", () => {
     await expect(resolveInviteBundle("missing")).resolves.toMatchObject({
       state: "not_found",
     });
+  });
+
+  it("uses seeded questionnaire response fallback for demo assignments", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(
+      saveQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
+    ).resolves.toMatchObject({
+      status: "draft",
+      questionnaire_key: "lencioni",
+    });
+    await expect(
+      submitQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
+    ).resolves.toMatchObject({
+      status: "submitted",
+      questionnaire_key: "lencioni",
+    });
+
+    vi.unstubAllGlobals();
   });
 });
