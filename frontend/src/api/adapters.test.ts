@@ -27,7 +27,15 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {
-    await expect(listQuestionnaireDefinitionStubs()).resolves.toHaveLength(3);
+    const questionnaires = await listQuestionnaireDefinitionStubs();
+
+    expect(questionnaires.map((definition) => definition.id)).toEqual([
+      "lencioni",
+      "distress_drivers",
+      "pcm_baseline",
+      "phase",
+      "boss_360",
+    ]);
     await expect(listEmailSurfaceStubs()).resolves.toHaveLength(3);
   });
 });
