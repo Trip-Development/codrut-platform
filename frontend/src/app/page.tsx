@@ -9,6 +9,7 @@ import {
   participantWorkflowRoutes,
   trainerWorkflowRoutes,
 } from "../api/routes";
+import { BrandMark } from "../components/brand/brand-mark";
 import { ThemeToggle } from "../components/theme/theme-toggle";
 
 const deliveryStats = [
@@ -46,16 +47,8 @@ export default function HomePage() {
     <main className="bg-vines-pattern app-min-height overflow-hidden bg-background text-foreground">
       <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
-          <Link href="/" className="flex min-w-0 items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-burgundy text-xl font-bold text-white shadow-brand">
-              C
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-bold text-foreground">Codrut</span>
-              <span className="block truncate text-xs font-semibold text-foreground/55">
-                Training & Coaching Platform
-              </span>
-            </span>
+          <Link href="/" className="min-w-0">
+            <BrandMark />
           </Link>
 
           <nav aria-label="Acces rapid" className="hidden items-center gap-2 md:flex">
@@ -124,7 +117,7 @@ export default function HomePage() {
                   <p className="text-sm font-bold text-burgundy">Livrare proiect</p>
                   <h2 className="mt-1 text-2xl font-bold text-foreground">Intake Iunie</h2>
                 </div>
-                <span className="rounded-full bg-success/12 px-3 py-1 text-sm font-bold text-success">Activ</span>
+                <span className="rounded-full bg-success/30 px-3 py-1 text-sm font-bold text-success-ink">Activ</span>
               </div>
 
               <div className="mt-6 grid gap-3">

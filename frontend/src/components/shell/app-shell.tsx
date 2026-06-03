@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BrandMark } from "../brand/brand-mark";
+import { ThemeToggle } from "../theme/theme-toggle";
 import type { ShellNavItem } from "./nav";
 
 type AppShellProps = {
@@ -30,19 +32,17 @@ export function AppShell({
       <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:px-6">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="flex min-w-0 items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-burgundy text-lg font-bold text-white shadow-sm">
-                C
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-foreground">Codrut Platform</span>
-                <span className="block truncate text-xs text-foreground/55">
-                  {isTrainer ? "Trainer dashboard" : "Participant workspace"}
-                </span>
-              </span>
+            <Link href="/" className="min-w-0">
+              <BrandMark
+                size="sm"
+                subtitle={isTrainer ? "Trainer dashboard" : "Participant workspace"}
+              />
             </Link>
-            <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1 text-xs font-semibold text-foreground/70">
-              {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1 text-xs font-semibold text-foreground/70">
+                {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
+              </div>
             </div>
           </div>
 

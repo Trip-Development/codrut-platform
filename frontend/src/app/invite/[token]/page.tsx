@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand/brand-mark";
+
 type InvitePageProps = {
   params: Promise<{ token: string }>;
 };
@@ -15,12 +17,8 @@ export default async function InvitePage({ params }: InvitePageProps) {
   return (
     <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10 text-foreground">
       <section className="w-full max-w-3xl rounded-3xl border border-[var(--border)] bg-surface/92 p-6 shadow-brand backdrop-blur md:p-8">
-        <Link href="/" className="mb-8 inline-flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-burgundy text-xl font-bold text-white">C</span>
-          <span>
-            <span className="block text-sm font-bold text-foreground">Codrut</span>
-            <span className="block text-xs font-semibold text-foreground/55">Invitatie securizata</span>
-          </span>
+        <Link href="/" className="mb-8 inline-flex">
+          <BrandMark subtitle="Invitatie securizata" />
         </Link>
 
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-burgundy">Link proiect</p>
