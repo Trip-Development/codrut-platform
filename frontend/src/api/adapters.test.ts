@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { getCurrentParticipant, getCurrentTrainer } from "./auth";
 import { listEmailSurfaceStubs } from "./email";
+import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import { listQuestionnaireDefinitionStubs } from "./questionnaires";
 import { getTrainerDashboardSummary } from "./trainer";
@@ -37,5 +38,19 @@ describe("frontend API adapter stubs", () => {
       "boss_360",
     ]);
     await expect(listEmailSurfaceStubs()).resolves.toHaveLength(3);
+  });
+
+  it("resolves invite bundle fallback states", async () => {
+    await expect(resolveInviteBundle("demo-token")).resolves.toMatchObject({
+      state: "valid",
+      projectName: "Intake Iunie",
+      participantEmail: "participant@companie.ro",
+    });
+    await expect(resolveInviteBundle("expired-demo")).resolves.toMatchObject({
+      state: "expired",
+    });
+    await expect(resolveInviteBundle("missing")).resolves.toMatchObject({
+      state: "not_found",
+    });
   });
 });

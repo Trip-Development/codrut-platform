@@ -260,6 +260,15 @@ export default function HomePage() {
         <WorkflowPanel title="Pentru trainer" routes={trainerWorkflowRoutes} />
         <WorkflowPanel title="Pentru participanti" routes={participantWorkflowRoutes} />
       </section>
+
+      <footer className="border-t border-[var(--border)] bg-surface/70 px-4 py-6 md:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm font-semibold text-foreground/55 sm:flex-row sm:items-center sm:justify-between">
+          <span>Codrut Platform</span>
+          <Link href="/dev/routes" className="text-foreground/45 hover:text-burgundy">
+            Prototype routes
+          </Link>
+        </div>
+      </footer>
     </main>
   );
 }

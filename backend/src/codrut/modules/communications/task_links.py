@@ -4,7 +4,7 @@ import hmac
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from urllib.parse import urlencode
+from urllib.parse import quote
 from uuid import UUID
 
 from codrut.core.config import Settings
@@ -60,7 +60,7 @@ def parse_task_token(
 
 def build_task_url(token: str, settings: Settings) -> str:
     base_url = settings.public_app_url.rstrip("/")
-    return f"{base_url}/participant?{urlencode({'taskToken': token})}"
+    return f"{base_url}/invite/{quote(token, safe='')}"
 
 
 def _sign(encoded_payload: str, settings: Settings) -> str:
