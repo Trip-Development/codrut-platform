@@ -9,6 +9,7 @@ from codrut.modules.identity.models import Session, User, UserRole
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import (
     AuthResponse,
+    InviteVerifyResponse,
     LoginRequest,
     RegisterRequest,
     SessionPrincipal,
@@ -21,23 +22,223 @@ class AuthResult:
     session_token: str
 
 
+@dataclass(frozen=True)
+class InviteVerifyResult:
+    response: "InviteVerifyResponse"
+    session_token: str | None
+
+
 class IdentityService:
     def __init__(self, session: AsyncSession) -> None:
         self.repository = IdentityRepository(session)
 
     async def register(self, payload: RegisterRequest) -> AuthResult:
+        # 1. Verify the invite token
+        verify_result = await self.verify_invite_token(payload.token)
+
+        # 2. Check if the user is leadership (only leadership members can sign up)
+        if not verify_result.is_leadership:
+            raise DomainError(
+                "Registration is restricted to leadership team members.",
+                code="registration_forbidden",
+            )
+
+        # 3. Check if already registered
+        if verify_result.already_registered:
+            raise DomainError(
+                "An account has already been registered with this invitation.",
+                code="already_registered",
+            )
+
+        # 4. Check if the email matches the invitation
+        if payload.email.lower() != verify_result.email.lower():
+            raise DomainError("Email address does not match invitation.", code="email_mismatch")
+
+        # 5. Check if a user with this email already exists in users table
         existing = await self.repository.get_user_by_email(payload.email)
         if existing is not None:
             raise DomainError("An account with this email already exists.", code="email_taken")
+
+        # 6. Create the user
+        import uuid
         user = await self.repository.add_user(
             User(
+                id=uuid.uuid4(),
                 email=payload.email.lower(),
                 password_hash=hash_password(payload.password),
                 role=UserRole.participant,
             )
         )
+
+        # 7. Link user to ParticipantProfile
+        from sqlalchemy import select
+
+        from codrut.modules.companies.models import ParticipantProfile
+        result = await self.repository.session.execute(
+            select(ParticipantProfile).where(ParticipantProfile.email == payload.email.lower())
+        )
+        profile = result.scalar_one_or_none()
+        if profile is not None:
+            profile.user_id = user.id
+
         token = await self._create_session(user)
         return AuthResult(response=self._response(user), session_token=token)
+
+    async def verify_invite_token(self, token: str) -> InviteVerifyResponse:
+        from sqlalchemy import exists, select
+
+        from codrut.core.config import get_settings
+        from codrut.modules.assignments.models import Team, TeamMembership, TeamType
+        from codrut.modules.communications.task_links import parse_task_token
+        from codrut.modules.companies.models import ParticipantProfile
+
+        settings = get_settings()
+        try:
+            claims = parse_task_token(token, settings)
+        except DomainError:
+            raise
+        except Exception as exc:
+            raise DomainError("Invalid task link.", code="task_link_invalid") from exc
+
+        # Find the participant profile associated with the claims
+        result = await self.repository.session.execute(
+            select(ParticipantProfile).where(ParticipantProfile.id == claims.respondent_profile_id)
+        )
+        profile = result.scalar_one_or_none()
+        if profile is None:
+            raise DomainError("Invitation respondent profile not found.", code="profile_not_found")
+
+        # Check if already registered
+        already_registered = profile.user_id is not None
+
+        # Check if the participant is leadership
+        stmt = (
+            select(exists())
+            .where(TeamMembership.participant_profile_id == profile.id)
+            .where(TeamMembership.team_id == Team.id)
+            .where(Team.type == TeamType.leadership)
+        )
+        is_leadership = (await self.repository.session.execute(stmt)).scalar() or False
+
+        # Retrieve assignments details
+        from codrut.modules.assignments.models import QuestionnaireAssignment
+        from codrut.modules.identity.schemas import InviteTask
+        assignments_result = await self.repository.session.execute(
+            select(QuestionnaireAssignment).where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
+        )
+        assignments = assignments_result.scalars().all()
+
+        tasks = []
+        for ass in assignments:
+            target_label = "Self Assessment"
+            if ass.target_type == "team" and ass.target_team_id:
+                team_result = await self.repository.session.execute(
+                    select(Team).where(Team.id == ass.target_team_id)
+                )
+                team = team_result.scalar_one_or_none()
+                if team:
+                    target_label = f"Echipa {team.name}"
+            elif ass.target_type == "person" and ass.target_person_id:
+                person_result = await self.repository.session.execute(
+                    select(ParticipantProfile).where(ParticipantProfile.id == ass.target_person_id)
+                )
+                person = person_result.scalar_one_or_none()
+                if person:
+                    target_label = person.full_name
+
+            status_map = {
+                "assigned": "not_started",
+                "invited": "not_started",
+                "started": "in_progress",
+                "submitted": "completed",
+                "validated": "completed",
+                "scored": "completed",
+            }
+            task_status = status_map.get(ass.status.value, "not_started")
+            est_minutes = 12 if ass.questionnaire_key == "lencioni" else 10
+
+            if ass.questionnaire_key == "lencioni":
+                title = "Lencioni (Cele 5 Disfunctionalitati)"
+                detail = "Raspuns pentru functionalitatea echipei."
+            else:
+                title = "Distress Drivers (Factori de stres)"
+                detail = "Identifica factorii tai majori de stres."
+
+            tasks.append(
+                InviteTask(
+                    id=str(ass.id),
+                    title=title,
+                    status=task_status,
+                    detail=detail,
+                    href=f"/participant/questionnaires/{ass.questionnaire_key}?assignmentId={ass.id}",
+                    assignmentId=str(ass.id),
+                    targetLabel=target_label,
+                    estimatedMinutes=est_minutes,
+                    questionnaireKey=ass.questionnaire_key,
+                )
+            )
+
+        return InviteVerifyResponse(
+            email=profile.email,
+            full_name=profile.full_name,
+            is_leadership=is_leadership,
+            already_registered=already_registered,
+            project_name="Training & Coaching",
+            tasks=tasks,
+        )
+
+    async def verify_invite_token_and_create_session(self, token: str) -> InviteVerifyResult:
+        # 1. Verify the token using the existing verify_invite_token method
+        verify_result = await self.verify_invite_token(token)
+
+        import uuid
+
+        from sqlalchemy import select
+
+        from codrut.modules.companies.models import ParticipantProfile
+        from codrut.modules.identity.models import User, UserRole
+
+        session_token = None
+
+        # Load the participant profile
+        result = await self.repository.session.execute(
+            select(ParticipantProfile).where(
+                ParticipantProfile.email == verify_result.email.lower()
+            )
+        )
+        profile = result.scalar_one_or_none()
+        if profile is None:
+            raise DomainError("Profile not found.", code="profile_not_found")
+
+        # If it is a low member (NOT leadership), we can automatically log them in
+        if not verify_result.is_leadership:
+            # Get or create the user
+            user = None
+            if profile.user_id is not None:
+                # User already exists
+                user_result = await self.repository.session.execute(
+                    select(User).where(User.id == profile.user_id)
+                )
+                user = user_result.scalar_one_or_none()
+            
+            if user is None:
+                # Create a shadow user
+                user = User(
+                    id=uuid.uuid4(),
+                    email=profile.email.lower(),
+                    password_hash="shadow_account_no_password",  # noqa: S106
+                    role=UserRole.participant,
+                )
+                await self.repository.add_user(user)
+                profile.user_id = user.id
+
+            # Create session for this user
+            session_token = await self._create_session(user)
+
+        return InviteVerifyResult(
+            response=verify_result,
+            session_token=session_token,
+        )
 
     async def login(self, payload: LoginRequest) -> AuthResult:
         user = await self.repository.get_user_by_email(payload.email)

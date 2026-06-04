@@ -255,6 +255,31 @@ export async function getQuestionnaireDefinition(
   }
 }
 
+export async function getQuestionnaireResponse(
+  assignmentId: string,
+): Promise<QuestionnaireResponseRecord | null> {
+  if (seededAssignmentQuestionnaires[assignmentId]) {
+    return {
+      id: `seeded-${assignmentId}-draft`,
+      assignment_id: assignmentId,
+      questionnaire_key: seededAssignmentQuestionnaires[assignmentId],
+      questionnaire_version: 1,
+      status: "draft",
+      answers: {},
+    };
+  }
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as QuestionnaireResponseRecord;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,

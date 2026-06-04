@@ -7,9 +7,8 @@ Create Date: 2026-06-04 10:24:32.559840
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = '4102edafb8c7'
@@ -24,13 +23,33 @@ def upgrade() -> None:
     sa.Column('assignment_id', sa.Uuid(), nullable=False),
     sa.Column('scores', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
     sa.Column('primary_result', sa.String(length=255), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['assignment_id'], ['questionnaire_assignments.id'], name=op.f('fk_scoring_results_assignment_id_questionnaire_assignments'), ondelete='CASCADE'),
+    sa.Column(
+        'created_at',
+        sa.DateTime(timezone=True),
+        server_default=sa.text('now()'),
+        nullable=False,
+    ),
+    sa.Column(
+        'updated_at',
+        sa.DateTime(timezone=True),
+        server_default=sa.text('now()'),
+        nullable=False,
+    ),
+    sa.ForeignKeyConstraint(
+        ['assignment_id'],
+        ['questionnaire_assignments.id'],
+        name=op.f('fk_scoring_results_assignment_id_questionnaire_assignments'),
+        ondelete='CASCADE',
+    ),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_scoring_results')),
     sa.UniqueConstraint('assignment_id', name='uq_scoring_results_assignment_id')
     )
-    op.create_index(op.f('ix_scoring_results_assignment_id'), 'scoring_results', ['assignment_id'], unique=False)
+    op.create_index(
+        op.f('ix_scoring_results_assignment_id'),
+        'scoring_results',
+        ['assignment_id'],
+        unique=False,
+    )
 
 
 def downgrade() -> None:

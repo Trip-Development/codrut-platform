@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Dispatch, SetStateAction } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   saveQuestionnaireResponse,
@@ -16,15 +15,21 @@ type AnswerState = Record<string, number>;
 type QuestionnaireRunnerProps = {
   definition: QuestionnaireDefinition;
   assignmentId?: string;
+  initialAnswers?: AnswerState;
 };
 
 function answerKey(question: QuestionnaireQuestion, statementId?: string): string {
   return statementId ? `${question.id}:${statementId}` : question.id;
 }
 
-export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireRunnerProps) {
-  const [answers, setAnswers] = useState<AnswerState>({});
+export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }: QuestionnaireRunnerProps) {
+  const [answers, setAnswers] = useState<AnswerState>(initialAnswers ?? {});
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "submitted" | "error">("idle");
+
+  useEffect(() => {
+    setAnswers(initialAnswers ?? {});
+    setSaveState("idle");
+  }, [initialAnswers, assignmentId]);
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const requiredAnswerKeys = useMemo(
     () =>
@@ -43,6 +48,22 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
     : 0;
   const canSubmit = answeredCount === requiredAnswerKeys.length && Boolean(assignmentId);
   const isComplete = saveState === "submitted";
+
+  async function handleAnswerChange(key: string, value: number) {
+    if (isComplete) return;
+    const newAnswers = { ...answers, [key]: value };
+    setAnswers(newAnswers);
+
+    if (assignmentId) {
+      setSaveState("saving");
+      try {
+        await saveQuestionnaireResponse(assignmentId, newAnswers);
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
+      }
+    }
+  }
 
   async function saveDraft() {
     if (!assignmentId) return;
@@ -102,9 +123,17 @@ export function QuestionnaireRunner({ definition, assignmentId }: QuestionnaireR
                           <p className="mt-2 text-sm leading-6 text-foreground/58">{question.instructions}</p>
                         ) : null}
                         {question.type === "likert" ? (
-                          <LikertQuestion question={question} answers={answers} setAnswers={setAnswers} />
+                          <LikertQuestion
+                            question={question}
+                            answers={answers}
+                            onAnswerChange={handleAnswerChange}
+                          />
                         ) : (
-                          <StatementSetQuestion question={question} answers={answers} setAnswers={setAnswers} />
+                          <StatementSetQuestion
+                            question={question}
+                            answers={answers}
+                            onAnswerChange={handleAnswerChange}
+                          />
                         )}
                       </div>
                     </div>
@@ -196,10 +225,10 @@ function CompletionPanel({ answeredCount, total }: { answeredCount: number; tota
 type QuestionInputProps = {
   question: QuestionnaireQuestion;
   answers: AnswerState;
-  setAnswers: Dispatch<SetStateAction<AnswerState>>;
+  onAnswerChange: (key: string, value: number) => void;
 };
 
-function LikertQuestion({ question, answers, setAnswers }: QuestionInputProps) {
+function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
   return (
     <div className="mt-4 grid gap-2 sm:grid-cols-3">
       {question.scale.map((option) => {
@@ -209,7 +238,7 @@ function LikertQuestion({ question, answers, setAnswers }: QuestionInputProps) {
           <button
             key={option.value}
             type="button"
-            onClick={() => setAnswers((current) => ({ ...current, [key]: option.value }))}
+            onClick={() => onAnswerChange(key, option.value)}
             className={[
               "tap-soft rounded-lg border px-3 py-2.5 text-sm font-semibold",
               selected
@@ -225,7 +254,7 @@ function LikertQuestion({ question, answers, setAnswers }: QuestionInputProps) {
   );
 }
 
-function StatementSetQuestion({ question, answers, setAnswers }: QuestionInputProps) {
+function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
   return (
     <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)]">
       {(question.statements ?? []).map((statement) => {
@@ -241,12 +270,7 @@ function StatementSetQuestion({ question, answers, setAnswers }: QuestionInputPr
             </p>
             <select
               value={answers[key] ?? ""}
-              onChange={(event) =>
-                setAnswers((current) => ({
-                  ...current,
-                  [key]: Number(event.target.value),
-                }))
-              }
+              onChange={(event) => onAnswerChange(key, Number(event.target.value))}
               className="rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-sm font-semibold text-foreground"
             >
               <option value="" disabled>

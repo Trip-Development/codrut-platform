@@ -1,3 +1,6 @@
+import { getApiBaseUrl } from "./runtime";
+import { getCompanyDetail, getCompanyList, type CompanyAssignment } from "./companies";
+
 export type TrainerStat = {
   label: string;
   value: number;
@@ -71,7 +74,7 @@ export type TrainerDashboardSummary = {
 };
 
 export async function getTrainerDashboardSummary(): Promise<TrainerDashboardSummary> {
-  return {
+  const fallback: TrainerDashboardSummary = {
     stats: [
       {
         label: "Livrare",
@@ -131,7 +134,7 @@ export async function getTrainerDashboardSummary(): Promise<TrainerDashboardSumm
         total: 42,
         blockers: ["3 emailuri nelivrate", "2 manageri fara cont activ"],
         nextAction: "Trimite reminder pentru participantii fara progres",
-        href: "/trainer/projects/demo-project",
+        href: "/trainer/companies/demo-project",
       },
       {
         id: "leadership-pilot",
@@ -143,7 +146,7 @@ export async function getTrainerDashboardSummary(): Promise<TrainerDashboardSumm
         total: 14,
         blockers: ["Roster incomplet pentru doua pozitii"],
         nextAction: "Valideaza organigrama si retrimite invitatiile",
-        href: "/trainer/projects/leadership-pilot",
+        href: "/trainer/companies/leadership-pilot",
       },
       {
         id: "past-client-video",
@@ -184,6 +187,69 @@ export async function getTrainerDashboardSummary(): Promise<TrainerDashboardSumm
       note: "Setare demo: Andrei/trainer vede raspunsuri pentru lucru, persoanele evaluate vad doar raport agregat sau nimic pana la validare.",
     },
   };
+
+  try {
+    const companies = await getCompanyList();
+    if (companies.length === 0) return fallback;
+
+    const totalInvited = companies.reduce((total, company) => total + company.assignmentCount, 0);
+    const totalCompleted = companies.reduce((total, company) => total + company.completedCount, 0);
+    const activeProjects = companies.map((company) => ({
+      id: company.id,
+      company: company.name,
+      projectName: `Intake ${company.name}`,
+      stage: company.stage,
+      invited: company.assignmentCount,
+      completed: company.completedCount,
+      total: company.assignmentCount,
+      blockers: company.assignmentCount === 0 ? ["Fara asignari configurate"] : [],
+      nextAction:
+        company.assignmentCount === 0
+          ? "Configureaza roster si chestionare"
+          : company.completedCount < company.assignmentCount
+            ? "Urmareste participantii fara progres"
+            : "Deschide rapoartele calculate",
+      href: `/trainer/companies/${company.id}`,
+    }));
+
+    const completionRate = totalInvited > 0 ? Math.round((totalCompleted / totalInvited) * 100) : 0;
+    const deUrmarit = totalInvited - totalCompleted;
+
+    return {
+      stats: [
+        {
+          label: "Proiecte",
+          value: companies.length,
+          detail: "Proiecte active cu invitatii, completari si raportare in lucru.",
+        },
+        {
+          label: "Rata completare",
+          value: completionRate,
+          suffix: "%",
+          detail: "Rata agregata pentru task-urile proiectelor active.",
+          tone: "success",
+        },
+        {
+          label: "De urmarit",
+          value: deUrmarit,
+          detail: "Participanti fara progres sau cu link neaccesat.",
+          tone: "warning",
+        },
+        {
+          label: "Blocaje",
+          value: 0,
+          detail: "Erori raportate pe fluxul operational curent.",
+          tone: "default",
+        },
+      ],
+      cards: fallback.cards,
+      activeProjects,
+      actions: fallback.actions,
+      visibility: fallback.visibility,
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 export async function getTrainerOperationsSummary(): Promise<TrainerOperationsSummary> {
@@ -265,4 +331,195 @@ export async function getTrainerOperationsSummary(): Promise<TrainerOperationsSu
       },
     ],
   };
+}
+
+export type ScoringResultRecord = {
+  id: string;
+  assignment_id: string;
+  scores: Record<string, unknown>;
+  primary_result: string | null;
+};
+
+export async function getScoringResult(assignmentId: string): Promise<ScoringResultRecord | null> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/scoring/assignments/${assignmentId}/result`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return fallbackScoringResults[assignmentId] ?? null;
+    return (await response.json()) as ScoringResultRecord;
+  } catch {
+    return fallbackScoringResults[assignmentId] ?? null;
+  }
+}
+
+const fallbackScoringResults: Record<string, ScoringResultRecord> = {
+  "11111111-1111-4111-8111-111111111111": {
+    id: "seeded-score-11111111-1111-4111-8111-111111111111",
+    assignment_id: "11111111-1111-4111-8111-111111111111",
+    primary_result: "absence_of_trust",
+    scores: {
+      absence_of_trust: {
+        score: 5,
+        interpretation: "Disfunctia trebuie probabil abordata.",
+      },
+      fear_of_conflict: {
+        score: 7,
+        interpretation: "Disfunctia poate fi o problema.",
+      },
+      lack_of_commitment: {
+        score: 8,
+        interpretation: "Disfunctia probabil nu este o problema.",
+      },
+      avoidance_of_accountability: {
+        score: 6,
+        interpretation: "Disfunctia poate fi o problema.",
+      },
+      inattention_to_results: {
+        score: 9,
+        interpretation: "Disfunctia probabil nu este o problema.",
+      },
+    },
+  },
+  "33333333-3333-4333-8333-333333333333": {
+    id: "seeded-score-33333333-3333-4333-8333-333333333333",
+    assignment_id: "33333333-3333-4333-8333-333333333333",
+    primary_result: "fear_of_conflict",
+    scores: {
+      absence_of_trust: {
+        score: 8,
+        interpretation: "Disfunctia probabil nu este o problema.",
+      },
+      fear_of_conflict: {
+        score: 5,
+        interpretation: "Disfunctia trebuie probabil abordata.",
+      },
+      lack_of_commitment: {
+        score: 7,
+        interpretation: "Disfunctia poate fi o problema.",
+      },
+      avoidance_of_accountability: {
+        score: 8,
+        interpretation: "Disfunctia probabil nu este o problema.",
+      },
+      inattention_to_results: {
+        score: 9,
+        interpretation: "Disfunctia probabil nu este o problema.",
+      },
+    },
+  },
+};
+
+export type TrainerReportItem = {
+  assignmentId: string;
+  participantName: string;
+  participantEmail: string;
+  questionnaireKey: string;
+  projectName: string;
+  status: string;
+  submittedAt: string | null;
+  scoredAt?: string | null;
+  primaryResult?: string | null;
+};
+
+export async function getTrainerReports(): Promise<TrainerReportItem[]> {
+  try {
+    const companies = await getCompanyList();
+    if (companies.length === 0) return fallbackTrainerReports();
+
+    const nestedReports = await Promise.all(
+      companies.map(async (company) => {
+        const detail = await getCompanyDetail(company.id);
+        if (!detail) return [];
+
+        const participantsById = new Map(
+          detail.participants.map((participant) => [participant.id, participant]),
+        );
+
+        return Promise.all(
+          detail.assignments
+            .filter((assignment) => assignment.status === "submitted" || assignment.status === "scored")
+            .map(async (assignment) => {
+              const participant = participantsById.get(assignment.respondent_profile_id);
+              const result = await getScoringResult(assignment.id);
+
+              return toTrainerReportItem({
+                assignment,
+                projectName: company.name,
+                participantName: participant?.full_name ?? "Participant necunoscut",
+                participantEmail: participant?.email ?? "email indisponibil",
+                primaryResult: result?.primary_result ?? null,
+              });
+            }),
+        );
+      }),
+    );
+
+    const reports = nestedReports.flat();
+    return reports.length > 0 ? reports : fallbackTrainerReports();
+  } catch {
+    return fallbackTrainerReports();
+  }
+}
+
+function toTrainerReportItem({
+  assignment,
+  projectName,
+  participantName,
+  participantEmail,
+  primaryResult,
+}: {
+  assignment: CompanyAssignment;
+  projectName: string;
+  participantName: string;
+  participantEmail: string;
+  primaryResult: string | null;
+}): TrainerReportItem {
+  return {
+    assignmentId: assignment.id,
+    participantName,
+    participantEmail,
+    questionnaireKey: assignment.questionnaire_key,
+    projectName,
+    status: assignment.status,
+    submittedAt: assignment.submitted_at,
+    scoredAt: assignment.scored_at,
+    primaryResult,
+  };
+}
+
+function fallbackTrainerReports(): TrainerReportItem[] {
+  return [
+      {
+        assignmentId: "11111111-1111-4111-8111-111111111111",
+        participantName: "Mihai Matei",
+        participantEmail: "mihai.matei@client.ro",
+        questionnaireKey: "lencioni",
+        projectName: "Intake Iunie",
+        status: "scored",
+        submittedAt: "2026-06-04T12:00:00Z",
+        scoredAt: "2026-06-04T12:00:00Z",
+        primaryResult: "absence_of_trust",
+      },
+      {
+        assignmentId: "22222222-2222-4222-8222-222222222222",
+        participantName: "Ioana Ionescu",
+        participantEmail: "ioana.ionescu@client.ro",
+        questionnaireKey: "boss_360",
+        projectName: "Intake Iunie",
+        status: "submitted",
+        submittedAt: "2026-06-04T13:30:00Z",
+        primaryResult: null,
+      },
+      {
+        assignmentId: "33333333-3333-4333-8333-333333333333",
+        participantName: "Andrei Popescu",
+        participantEmail: "andrei.popescu@client.ro",
+        questionnaireKey: "lencioni",
+        projectName: "Intake Iunie",
+        status: "scored",
+        submittedAt: "2026-06-04T10:00:00Z",
+        scoredAt: "2026-06-04T10:00:00Z",
+        primaryResult: "fear_of_conflict",
+      },
+    ];
 }

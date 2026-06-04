@@ -8,6 +8,28 @@ from codrut.modules.identity.models import UserRole
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=128)
+    token: str
+
+
+class InviteTask(BaseModel):
+    id: str
+    title: str
+    status: str
+    detail: str
+    href: str
+    assignmentId: str
+    targetLabel: str
+    estimatedMinutes: int
+    questionnaireKey: str
+
+
+class InviteVerifyResponse(BaseModel):
+    email: EmailStr
+    full_name: str
+    is_leadership: bool
+    already_registered: bool
+    project_name: str
+    tasks: list[InviteTask]
 
 
 class LoginRequest(BaseModel):

@@ -43,7 +43,14 @@ class FormsService:
             raise DomainError("Assignment not found.", code="assignment_not_found")
         response = await repository.get_response_by_assignment(assignment_id)
         if response is None:
-            raise DomainError("Response not found.", code="response_not_found")
+            return QuestionnaireResponseResponse(
+                id=assignment_id,
+                assignment_id=assignment_id,
+                questionnaire_key=QuestionnaireKey(assignment.questionnaire_key),
+                questionnaire_version=1,
+                status=QuestionnaireResponseStatus.draft,
+                answers={},
+            )
         return _response_to_schema(response)
 
     async def save_assignment_response(

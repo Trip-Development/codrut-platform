@@ -47,7 +47,7 @@ function DeliveryTable({ projects }: { projects: TrainerProjectRow[] }) {
     <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
       <div className="border-b border-[var(--border)] px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Livrare</p>
-        <h2 className="mt-1 text-xl font-semibold text-foreground">Proiecte active</h2>
+        <h2 className="mt-1 text-xl font-semibold text-foreground">Companii active</h2>
         <p className="mt-2 text-sm leading-6 text-foreground/62">
           Primul ecran pentru owner/trainer: unde e blocajul, cine trebuie urmarit si ce merge mai departe.
         </p>
@@ -98,10 +98,10 @@ function ProjectRow({ project }: { project: TrainerProjectRow }) {
           <div className="h-full rounded-full bg-burgundy" style={{ width: `${completion}%` }} />
         </div>
         <Link
-          href={project.href}
+          href={`/trainer/companies/${project.id}`}
           className="tap-soft mt-3 inline-flex w-full justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
         >
-          Deschide
+          Deschide compania
         </Link>
       </div>
     </article>
