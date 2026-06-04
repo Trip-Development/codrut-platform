@@ -6,6 +6,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { SessionBanner } from "@/components/shell/session-banner";
 import { TaskBundle } from "@/components/tasks/task-bundle";
 import { audienceAccessNote } from "@/api/auth";
+import { resolveInviteBundle } from "@/api/invites";
 
 type InviteTask = {
   id: string;
@@ -41,6 +42,22 @@ export default function InvitePage({ params }: InvitePageProps) {
   useEffect(() => {
     async function verify() {
       try {
+        if (token === "demo-token" || token === "expired-demo") {
+          const bundle = await resolveInviteBundle(token);
+          if (bundle.state !== "valid") {
+            throw new Error(bundle.message);
+          }
+          setData({
+            email: bundle.participantEmail,
+            full_name: "Participant demo",
+            is_leadership: false,
+            already_registered: false,
+            project_name: bundle.projectName,
+            tasks: bundle.tasks,
+          });
+          return;
+        }
+
         const res = await fetch(`/api/auth/invite/verify?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));

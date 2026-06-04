@@ -20,7 +20,7 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
   const [zoom, setZoom] = useState(1);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const company = companies.find((item) => item.id === companyId);
-  const participants = company?.participants ?? [];
+  const participants = useMemo(() => company?.participants ?? [], [company?.participants]);
   const roots = useMemo(() => participants.filter((participant) => !participant.reports_to_name), [participants]);
 
   function toggle(id: string) {
