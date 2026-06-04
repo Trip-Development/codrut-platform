@@ -11,9 +11,16 @@ function getInitialTheme(): ThemeMode {
     return "light";
   }
 
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark") {
-    return stored;
+  try {
+    if (!window.localStorage) {
+      return "light";
+    }
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === "light" || stored === "dark") {
+      return stored;
+    }
+  } catch {
+    // Handle cases where localStorage is disabled or throws
   }
 
   if (typeof window.matchMedia !== "function") {

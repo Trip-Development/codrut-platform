@@ -13,6 +13,7 @@ from codrut.modules.communications import models as communication_models  # noqa
 from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.forms import models as form_models  # noqa: F401
 from codrut.modules.identity import models as identity_models  # noqa: F401
+from codrut.modules.scoring import models as scoring_models  # noqa: F401
 
 config = context.config
 

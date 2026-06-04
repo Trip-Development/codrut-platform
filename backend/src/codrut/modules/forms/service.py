@@ -27,10 +27,7 @@ class FormsService:
         self.repository = FormsRepository(session) if session is not None else None
 
     def list_definitions(self) -> list[QuestionnaireDefinitionResponse]:
-        return [
-            _to_response(definition)
-            for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS
-        ]
+        return [_to_response(definition) for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS]
 
     def get_definition(self, key: QuestionnaireKey) -> QuestionnaireDefinitionResponse:
         return _to_response(get_approved_questionnaire_definition(key))
@@ -82,8 +79,28 @@ class FormsService:
         if submit:
             response.status = QuestionnaireResponseStatus.submitted
             response.submitted_at = response.submitted_at or datetime.now(UTC)
-            assignment.status = AssignmentStatus.submitted
-            assignment.submitted_at = assignment.submitted_at or response.submitted_at
+
+            session = getattr(repository, "session", None)
+            if session is not None:
+                from codrut.modules.scoring.service import ScoringService
+
+                scoring_service = ScoringService(session)
+                try:
+                    await scoring_service.compute_and_save_score(
+                        assignment_id=assignment.id,
+                        questionnaire_key=definition.key,
+                        answers=payload.answers,
+                    )
+                    assignment.status = AssignmentStatus.scored
+                    assignment.scored_at = response.submitted_at
+                except DomainError as e:
+                    if e.code not in {"scoring_not_supported", "scoring_metadata_missing"}:
+                        raise
+                    assignment.status = AssignmentStatus.submitted
+                    assignment.submitted_at = assignment.submitted_at or response.submitted_at
+            else:
+                assignment.status = AssignmentStatus.submitted
+                assignment.submitted_at = assignment.submitted_at or response.submitted_at
         elif assignment.status == AssignmentStatus.assigned:
             assignment.status = AssignmentStatus.started
             assignment.started_at = assignment.started_at or datetime.now(UTC)
@@ -111,11 +128,7 @@ def _response_to_schema(response: QuestionnaireResponse) -> QuestionnaireRespons
 
 def _validate_submit_answers(schema: dict, answers: dict) -> None:
     allowed_values = _allowed_answer_values(schema)
-    missing = [
-        key
-        for key in allowed_values
-        if key not in answers or answers[key] is None
-    ]
+    missing = [key for key in allowed_values if key not in answers or answers[key] is None]
     if missing:
         raise DomainError(
             "Submitted response is missing required answers.",
@@ -138,10 +151,7 @@ def _allowed_answer_values(schema: dict) -> dict[str, set[int]]:
     for section in schema.get("sections", []):
         for question in section.get("questions", []):
             question_id = question["id"]
-            scale_values = {
-                option["value"]
-                for option in question.get("scale", [])
-            }
+            scale_values = {option["value"] for option in question.get("scale", [])}
             if question.get("type") == "statement_score_set":
                 values.update(
                     {
