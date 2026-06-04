@@ -7,6 +7,8 @@ export type ShellNavItem = {
 export const trainerNavItems: ShellNavItem[] = [
   { href: "/trainer", label: "Dashboard", shortLabel: "Home" },
   { href: "/trainer/companies", label: "Companii", shortLabel: "Co." },
+  { href: "/trainer/roster", label: "Roster", shortLabel: "Roster" },
+  { href: "/trainer/org", label: "Organigrama", shortLabel: "Org" },
   { href: "/trainer/questionnaires", label: "Chestionare", shortLabel: "Forms" },
   { href: "/trainer/email", label: "Email & invitatii", shortLabel: "Email" },
   { href: "/trainer/reports", label: "Rapoarte", shortLabel: "Reports" },
