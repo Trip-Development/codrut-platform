@@ -259,6 +259,10 @@ export async function saveQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,
 ): Promise<QuestionnaireResponseRecord> {
+  if (seededAssignmentQuestionnaires[assignmentId]) {
+    return seededQuestionnaireResponse(assignmentId, answers, "draft");
+  }
+
   try {
     const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
       method: "PUT",
@@ -280,6 +284,10 @@ export async function submitQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,
 ): Promise<QuestionnaireResponseRecord> {
+  if (seededAssignmentQuestionnaires[assignmentId]) {
+    return seededQuestionnaireResponse(assignmentId, answers, "submitted");
+  }
+
   try {
     const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
       method: "POST",
