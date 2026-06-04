@@ -23,7 +23,7 @@ export default async function ParticipantQuestionnaireRunPage({
       audience="participant"
       eyebrow="Chestionar"
       title={definition?.title ?? "Chestionar indisponibil"}
-      description="Runner generic pentru definitii versionate. Submit-ul si drafturile vor fi conectate in task-ul urmator."
+      description="Completeaza raspunsurile in ritmul tau. Draftul si trimiterea folosesc assignment-ul din link cand este disponibil."
       navItems={participantNavItems}
       activeHref="/participant/questionnaires"
     >

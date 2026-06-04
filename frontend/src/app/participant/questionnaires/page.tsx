@@ -14,31 +14,33 @@ export default async function ParticipantQuestionnairesPage() {
       audience="participant"
       eyebrow="Chestionare"
       title="Formele asignate tie"
-      description="Flow-ul real va folosi definitii versionate si submit server-validat. Acum pastram suprafata vizuala."
+      description="Alege formularul primit prin linkul securizat. Layout-ul este gandit pentru completare rapida, fara zgomot vizual."
       navItems={participantNavItems}
       activeHref="/participant/questionnaires"
     >
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         {activeDefinitions.map((definition) => (
-          <article key={definition.id} className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-burgundy/80">
-                  {definition.audience}
-                </p>
-                <h2 className="mt-2 text-lg font-bold text-foreground">{definition.name}</h2>
+          <article
+            key={definition.id}
+            className="grid gap-4 border-b border-[var(--border)] px-5 py-4 last:border-b-0 md:grid-cols-[1fr_auto] md:items-center"
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-foreground">{definition.name}</h2>
+                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55">
+                  v{definition.version}
+                </span>
               </div>
-              <span className="rounded-full bg-burgundy px-3 py-1 text-xs font-bold text-white">
-                v{definition.version}
-              </span>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-foreground/65">{definition.description}</p>
-            <div className="mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/70">
-              {definition.estimatedItems} items · runner disponibil
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">{definition.description}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-foreground/45">
+                <span>{definition.audience}</span>
+                <span>{definition.estimatedItems} itemi</span>
+                <span>{definition.status}</span>
+              </div>
             </div>
             <Link
               href={`/participant/questionnaires/${definition.id}`}
-              className="tap-soft mt-4 inline-flex rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white"
+              className="tap-soft inline-flex justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
             >
               Deschide
             </Link>

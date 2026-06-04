@@ -67,6 +67,12 @@ export type QuestionnaireResponseRecord = {
   answers: Record<string, number>;
 };
 
+const seededAssignmentQuestionnaires: Record<string, string> = {
+  "11111111-1111-4111-8111-111111111111": "lencioni",
+  "22222222-2222-4222-8222-222222222222": "boss_360",
+  "33333333-3333-4333-8333-333333333333": "lencioni",
+};
+
 function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireDefinitionStub {
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const estimatedItems = questions.reduce((count, question) => {
@@ -123,11 +129,100 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   {
     id: "boss_360",
     name: "Boss / manager 360",
-    description: "Source pending. Assignment targets remain many-to-many capable.",
-    status: "planned",
+    description: "Prototype 360 feedback form for a direct manager.",
+    status: "active",
+    version: 1,
     audience: "participant",
+    estimatedItems: 5,
   },
 ];
+
+const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
+  boss_360: {
+    key: "boss_360",
+    version: 1,
+    title: "Feedback 360 pentru manager",
+    description: "Formular scurt de feedback confidential pentru persoana catre care raportezi.",
+    schema: {
+      schema_version: "questionnaire.v1",
+      source: {
+        type: "prototype",
+        path: "seeded/boss_360",
+        status: "provisional",
+      },
+      instructions:
+        "Raspunde concret si echilibrat. Persoana evaluata nu primeste raspunsurile individuale.",
+      sections: [
+        {
+          id: "manager_feedback",
+          title: "Feedback manager",
+          questions: [
+            {
+              id: "boss_360_q01",
+              code: "Q1",
+              type: "likert",
+              label: "Managerul meu clarifica asteptarile si prioritatile.",
+              required: true,
+              scale: [
+                { value: 1, label: "Rar" },
+                { value: 2, label: "Uneori" },
+                { value: 3, label: "De obicei" },
+              ],
+            },
+            {
+              id: "boss_360_q02",
+              code: "Q2",
+              type: "likert",
+              label: "Managerul meu ofera feedback util si la timp.",
+              required: true,
+              scale: [
+                { value: 1, label: "Rar" },
+                { value: 2, label: "Uneori" },
+                { value: 3, label: "De obicei" },
+              ],
+            },
+            {
+              id: "boss_360_q03",
+              code: "Q3",
+              type: "likert",
+              label: "Managerul meu creeaza spatiu pentru intrebari si opinii diferite.",
+              required: true,
+              scale: [
+                { value: 1, label: "Rar" },
+                { value: 2, label: "Uneori" },
+                { value: 3, label: "De obicei" },
+              ],
+            },
+            {
+              id: "boss_360_q04",
+              code: "Q4",
+              type: "likert",
+              label: "Managerul meu sustine colaborarea in echipa.",
+              required: true,
+              scale: [
+                { value: 1, label: "Rar" },
+                { value: 2, label: "Uneori" },
+                { value: 3, label: "De obicei" },
+              ],
+            },
+            {
+              id: "boss_360_q05",
+              code: "Q5",
+              type: "likert",
+              label: "Managerul meu gestioneaza tensiunile intr-un mod constructiv.",
+              required: true,
+              scale: [
+                { value: 1, label: "Rar" },
+                { value: 2, label: "Uneori" },
+                { value: 3, label: "De obicei" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
 
 export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireDefinitionStub[]> {
   try {
@@ -152,11 +247,11 @@ export async function getQuestionnaireDefinition(
     const response = await fetch(`${getApiBaseUrl()}/forms/definitions/${key}`, {
       cache: "no-store",
     });
-    if (!response.ok) return null;
+    if (!response.ok) return fallbackDefinitionDetails[key] ?? null;
 
     return (await response.json()) as QuestionnaireDefinition;
   } catch {
-    return null;
+    return fallbackDefinitionDetails[key] ?? null;
   }
 }
 
@@ -164,32 +259,69 @@ export async function saveQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,
 ): Promise<QuestionnaireResponseRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ answers }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Nu am putut salva draftul.");
+  if (seededAssignmentQuestionnaires[assignmentId]) {
+    return seededQuestionnaireResponse(assignmentId, answers, "draft");
   }
 
-  return (await response.json()) as QuestionnaireResponseRecord;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+
+    if (!response.ok) {
+      return seededQuestionnaireResponse(assignmentId, answers, "draft");
+    }
+
+    return (await response.json()) as QuestionnaireResponseRecord;
+  } catch {
+    return seededQuestionnaireResponse(assignmentId, answers, "draft");
+  }
 }
 
 export async function submitQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,
 ): Promise<QuestionnaireResponseRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ answers }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Nu am putut trimite raspunsurile.");
+  if (seededAssignmentQuestionnaires[assignmentId]) {
+    return seededQuestionnaireResponse(assignmentId, answers, "submitted");
   }
 
-  return (await response.json()) as QuestionnaireResponseRecord;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+
+    if (!response.ok) {
+      return seededQuestionnaireResponse(assignmentId, answers, "submitted");
+    }
+
+    return (await response.json()) as QuestionnaireResponseRecord;
+  } catch {
+    return seededQuestionnaireResponse(assignmentId, answers, "submitted");
+  }
+}
+
+function seededQuestionnaireResponse(
+  assignmentId: string,
+  answers: Record<string, number>,
+  status: "draft" | "submitted",
+): QuestionnaireResponseRecord {
+  const questionnaireKey = seededAssignmentQuestionnaires[assignmentId];
+
+  if (!questionnaireKey) {
+    throw new Error(status === "draft" ? "Nu am putut salva draftul." : "Nu am putut trimite raspunsurile.");
+  }
+
+  return {
+    id: `seeded-${assignmentId}-${status}`,
+    assignment_id: assignmentId,
+    questionnaire_key: questionnaireKey,
+    questionnaire_version: 1,
+    status,
+    answers,
+  };
 }

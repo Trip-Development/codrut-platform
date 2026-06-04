@@ -1,10 +1,14 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand/brand-mark";
+
 export default function LoginPage() {
   return (
     <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
       <section className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm">
-        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-burgundy text-2xl font-bold text-white">C</div>
+        <div className="mb-6 flex justify-center">
+          <BrandMark size="lg" showText={false} />
+        </div>
         <h1 className="text-center text-2xl font-bold text-foreground">Bine ai revenit</h1>
         <p className="mt-2 text-center text-sm leading-6 text-foreground/60">Autentificare recuperata din vechiul app, pregatita pentru noul backend de auth.</p>
         <div className="mt-6 space-y-4">

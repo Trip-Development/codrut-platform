@@ -6,16 +6,16 @@ const config: Config = {
     extend: {
       colors: {
         burgundy: {
-          DEFAULT: "#8B0000",
+          DEFAULT: "#890505",
           50: "#FDF6F6",
           100: "#FBE9E9",
           200: "#F5C9C9",
           400: "#B83333",
-          500: "#8B0000",
-          600: "#7A0000",
-          700: "#6A0000",
-          800: "#5A0000",
-          900: "#4A0000",
+          500: "#890505",
+          600: "#780404",
+          700: "#650303",
+          800: "#520303",
+          900: "#3F0202",
         },
         cream: {
           DEFAULT: "#FAF6EE",
@@ -30,15 +30,21 @@ const config: Config = {
           700: "#8E6708",
         },
         charcoal: {
-          DEFAULT: "#1C1A1A",
+          DEFAULT: "#5E5E5E",
           800: "#2A2826",
         },
         background: "var(--background)",
         foreground: "var(--foreground)",
         surface: "var(--surface)",
         "surface-muted": "var(--surface-muted)",
+        success: {
+          DEFAULT: "var(--success)",
+          ink: "var(--success-ink)",
+        },
         codrut: {
-          burgundy: "#8B0000",
+          burgundy: "#890505",
+          green: "#A3D376",
+          gray: "#5E5E5E",
           cream: "#FAF6EE",
           ink: "#191716",
           ochre: "#c28f2c",

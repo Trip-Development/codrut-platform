@@ -1,9 +1,16 @@
+import { resolveInviteBundle, type InviteTask } from "./invites";
+
 export type ParticipantWorkspaceCard = {
   title: string;
   description: string;
+  meta?: string;
 };
 
 export type ParticipantWorkspaceSummary = {
+  projectName: string;
+  participantEmail: string;
+  deadlineLabel: string;
+  tasks: InviteTask[];
   cards: ParticipantWorkspaceCard[];
   emptyState: {
     title: string;
@@ -12,19 +19,29 @@ export type ParticipantWorkspaceSummary = {
 };
 
 export async function getParticipantWorkspaceSummary(): Promise<ParticipantWorkspaceSummary> {
+  const bundle = await resolveInviteBundle("demo-token");
+  const tasks = bundle.state === "valid" ? bundle.tasks : [];
+
   return {
+    projectName: bundle.state === "valid" ? bundle.projectName : "Proiect demo",
+    participantEmail: bundle.state === "valid" ? bundle.participantEmail : "participant@companie.ro",
+    deadlineLabel: bundle.state === "valid" ? bundle.deadlineLabel : "deadline-ul proiectului",
+    tasks,
     cards: [
       {
-        title: "Cont",
-        description: "Confirmare profil, companie si acces securizat.",
+        title: "De completat",
+        description: `${tasks.filter((task) => task.status !== "completed").length} task-uri active`,
+        meta: "Astazi",
       },
       {
-        title: "Task-uri",
-        description: "Chestionare de completat si deadline-uri.",
+        title: "Confidential",
+        description: "Managerii evaluati nu vad raspunsuri individuale.",
+        meta: "Regula",
       },
       {
-        title: "Ajutor",
-        description: "Mesaje clare pentru urmatorul pas, fara informatii sensibile in email.",
+        title: "Fara cont",
+        description: "Linkul securizat strange toate task-urile pentru emailul tau.",
+        meta: "Acces",
       },
     ],
     emptyState: {

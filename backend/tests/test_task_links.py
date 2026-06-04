@@ -58,4 +58,4 @@ def test_build_task_url_points_to_participant_bundle() -> None:
 
     url = build_task_url("token.value", settings)
 
-    assert url == "https://app.codrut.ro/participant?taskToken=token.value"
+    assert url == "https://app.codrut.ro/invite/token.value"
