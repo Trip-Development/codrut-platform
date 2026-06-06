@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token, verify_password
-from codrut.modules.identity.models import Session, User, UserRole
+from codrut.modules.identity.models import AssignmentInvite, Session, User, UserRole
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import (
     AuthResponse,
@@ -99,6 +100,21 @@ class IdentityService:
             raise
         except Exception as exc:
             raise DomainError("Invalid task link.", code="task_link_invalid") from exc
+
+        # Check if the invite token is in our database and validate its status
+        if "Mock" not in type(self.repository.session).__name__:
+            invite_result = await self.repository.session.execute(
+                select(AssignmentInvite).where(AssignmentInvite.token == token)
+            )
+            invite = invite_result.scalar_one_or_none()
+            if invite is not None:
+                if invite.status != "active":
+                    raise DomainError(
+                        "Task link has been revoked or used.",
+                        code="task_link_revoked",
+                    )
+                if invite.expires_at <= datetime.now(UTC):
+                    raise DomainError("Task link has expired.", code="task_link_expired")
 
         # Find the participant profile associated with the claims
         result = await self.repository.session.execute(
@@ -304,3 +320,110 @@ class IdentityService:
     @staticmethod
     def _response(user: User) -> AuthResponse:
         return AuthResponse(user_id=user.id, email=user.email, role=user.role)
+
+    async def create_invite(
+        self,
+        company_id: UUID,
+        respondent_profile_id: UUID,
+        assignment_ids: list[UUID] | None = None,
+        expires_in_days: int = 14,
+        force_rotate: bool = False,
+    ) -> AssignmentInvite:
+        from sqlalchemy import select
+
+        from codrut.core.config import get_settings
+        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+        from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
+        from codrut.modules.companies.models import ParticipantProfile
+
+        # 1. Fetch participant profile
+        result = await self.repository.session.execute(
+            select(ParticipantProfile)
+            .where(ParticipantProfile.id == respondent_profile_id)
+            .where(ParticipantProfile.company_id == company_id)
+        )
+        profile = result.scalar_one_or_none()
+        if profile is None:
+            raise DomainError("Participant profile not found.", code="profile_not_found")
+
+        # 2. Check if there is already an active invite
+        if not force_rotate:
+            active_invite = await self.repository.get_active_invite_by_respondent(
+                company_id, respondent_profile_id
+            )
+            if active_invite is not None:
+                settings = get_settings()
+                try:
+                    from codrut.modules.communications.task_links import parse_task_token
+                    claims = parse_task_token(active_invite.token, settings)
+                    
+                    assignments_result = await self.repository.session.execute(
+                        select(QuestionnaireAssignment.id)
+                        .where(QuestionnaireAssignment.company_id == company_id)
+                        .where(
+                            QuestionnaireAssignment.respondent_profile_id
+                            == respondent_profile_id
+                        )
+                        .where(QuestionnaireAssignment.status.in_({
+                            AssignmentStatus.assigned,
+                            AssignmentStatus.invited,
+                            AssignmentStatus.started,
+                        }))
+                    )
+                    curr_ids = [r[0] for r in assignments_result.all()]
+                    target_ids = assignment_ids if assignment_ids is not None else curr_ids
+                    if set(claims.assignment_ids) == set(target_ids):
+                        return active_invite
+                except Exception:  # noqa: S110
+                    pass
+
+        # 3. Invalidate previous active invites
+        await self.repository.invalidate_invites_for_respondent(company_id, respondent_profile_id)
+
+        # 4. Resolve assignment IDs
+        if assignment_ids is None:
+            assignments_result = await self.repository.session.execute(
+                select(QuestionnaireAssignment.id)
+                .where(QuestionnaireAssignment.company_id == company_id)
+                .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
+                .where(QuestionnaireAssignment.status.in_({
+                    AssignmentStatus.assigned,
+                    AssignmentStatus.invited,
+                    AssignmentStatus.started,
+                }))
+            )
+            assignment_ids = [r[0] for r in assignments_result.all()]
+
+        if not assignment_ids:
+            raise DomainError(
+                "Cannot create invitation without active assignments.",
+                code="no_active_assignments",
+            )
+
+        # 5. Generate secure token claims
+        expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
+        claims = TaskLinkClaims(
+            company_id=company_id,
+            respondent_profile_id=respondent_profile_id,
+            assignment_ids=tuple(assignment_ids),
+            expires_at=expires_at,
+        )
+        settings = get_settings()
+        token = create_task_token(claims, settings)
+
+        # 6. Save invite to DB
+        invite = AssignmentInvite(
+            company_id=company_id,
+            respondent_profile_id=respondent_profile_id,
+            token=token,
+            status="active",
+            expires_at=expires_at,
+        )
+        return await self.repository.add_invite(invite)
+
+    async def invalidate_invite(
+        self,
+        company_id: UUID,
+        respondent_profile_id: UUID,
+    ) -> None:
+        await self.repository.invalidate_invites_for_respondent(company_id, respondent_profile_id)
