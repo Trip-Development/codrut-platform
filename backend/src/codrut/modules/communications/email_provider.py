@@ -75,12 +75,13 @@ class SmtpEmailProvider:
                 if self.username and self.password:
                     server.login(self.username, self.password)
                 server.send_message(smtp_message)
-        except (OSError, smtplib.SMTPException):
+        except (OSError, smtplib.SMTPException) as exc:
             return EmailSendResult(
                 provider=self.key,
                 status=EmailDeliveryStatus.failed,
                 message_id="smtp:failed",
                 recipient=message.to,
+                error_details=str(exc),
             )
 
         return EmailSendResult(
@@ -122,11 +123,20 @@ class BrevoEmailProvider:
             "api-key": self.api_key,
             "content-type": "application/json",
         }
-        if self.client is not None:
-            response = await self.client.post(self.endpoint, json=payload, headers=headers)
-        else:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(self.endpoint, json=payload, headers=headers)
+        try:
+            if self.client is not None:
+                response = await self.client.post(self.endpoint, json=payload, headers=headers)
+            else:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(self.endpoint, json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            return EmailSendResult(
+                provider=self.key,
+                status=EmailDeliveryStatus.failed,
+                message_id="brevo:failed:network",
+                recipient=message.to,
+                error_details=f"Brevo HTTP error: {exc}",
+            )
 
         if response.is_success:
             body = response.json()
@@ -137,11 +147,20 @@ class BrevoEmailProvider:
                 recipient=message.to,
             )
 
+        error_msg = f"Brevo API error: status {response.status_code}"
+        try:
+            body = response.json()
+            if "message" in body:
+                error_msg = f"{error_msg} - {body['message']}"
+        except Exception:  # noqa: S110
+            pass
+
         return EmailSendResult(
             provider=self.key,
             status=EmailDeliveryStatus.failed,
             message_id=f"brevo:failed:{response.status_code}",
             recipient=message.to,
+            error_details=error_msg,
         )
 
 

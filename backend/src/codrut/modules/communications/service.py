@@ -329,6 +329,7 @@ class TransactionalEmailService:
                 provider=result.provider.value,
                 provider_message_id=result.message_id,
                 status=send_status,
+                error_details=result.error_details,
                 last_event_at=datetime.now(UTC),
             )
             self.session.add(email_send)

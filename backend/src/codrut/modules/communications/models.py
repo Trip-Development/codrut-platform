@@ -71,6 +71,7 @@ class EmailSend(TimestampMixin, Base):
         nullable=False,
         default=EmailSendStatus.queued,
     )
+    error_details: Mapped[str | None] = mapped_column(String, nullable=True)
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

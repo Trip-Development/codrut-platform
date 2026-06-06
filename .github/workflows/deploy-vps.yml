@@ -1,0 +1,131 @@
+name: VPS Deployment
+
+on:
+  push:
+    branches:
+      - prod
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy to Hetzner VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase Repository Name
+        id: repo-name
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "repo=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.backend
+          target: runtime
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:latest
+            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.frontend
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:latest
+            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Hetzner VPS via SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
+          SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+          # App deployment configurations
+          CODRUT_DATABASE_URL: ${{ secrets.CODRUT_DATABASE_URL }}
+          CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
+          CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
+          CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
+          CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
+          CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
+          CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
+          CODRUT_EMAIL_BREVO_API_KEY: ${{ secrets.CODRUT_EMAIL_BREVO_API_KEY }}
+          CODRUT_HOST: ${{ secrets.CODRUT_HOST }}
+          TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
+        run: |
+          # 1. Configure SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$HETZNER_VPS_IP" >> ~/.ssh/known_hosts
+
+          # 2. Ensure deployment directory exists
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "mkdir -p /opt/codrut-platform"
+
+          # 3. Copy Docker Compose files to the server
+          scp -i ~/.ssh/id_rsa compose.yaml compose.prod.yaml "$SSH_USER@$HETZNER_VPS_IP:/opt/codrut-platform/"
+
+          # 4. Generate the production .env file on the VPS
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cat << 'EOF' > /opt/codrut-platform/.env
+          COMPOSE_PROJECT_NAME=codrut-platform
+          FRONTEND_IMAGE=ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:latest
+          BACKEND_IMAGE=ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:latest
+          CODRUT_ENV=production
+          CODRUT_DATABASE_URL=$CODRUT_DATABASE_URL
+          CODRUT_REDIS_URL=$CODRUT_REDIS_URL
+          CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
+          CODRUT_CORS_ORIGINS=$CODRUT_CORS_ORIGINS
+          CODRUT_EMAIL_PROVIDER=$CODRUT_EMAIL_PROVIDER
+          CODRUT_EMAIL_FROM_ADDRESS=$CODRUT_EMAIL_FROM_ADDRESS
+          CODRUT_EMAIL_FROM_NAME=$CODRUT_EMAIL_FROM_NAME
+          CODRUT_EMAIL_BREVO_API_KEY=$CODRUT_EMAIL_BREVO_API_KEY
+          CODRUT_HOST=$CODRUT_HOST
+          TRAEFIK_ACME_EMAIL=$TRAEFIK_ACME_EMAIL
+          EOF"
+
+          # 5. Connect and restart Docker Compose services with new images
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "
+            cd /opt/codrut-platform
+            
+            # Log in to GHCR on remote host
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull registry images
+            docker compose -f compose.yaml -f compose.prod.yaml pull
+            
+            # Stop existing containers
+            docker compose -f compose.yaml -f compose.prod.yaml down
+            
+            # Run database migrations
+            docker compose -f compose.yaml -f compose.prod.yaml run --rm backend alembic upgrade head
+            
+            # Launch production services
+            docker compose -f compose.yaml -f compose.prod.yaml up -d
+            
+            # Prune old images to save disk space
+            docker image prune -a -f
+          "
