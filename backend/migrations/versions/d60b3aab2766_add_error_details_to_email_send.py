@@ -7,10 +7,8 @@ Create Date: 2026-06-06 12:08:58.146564
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
-from sqlalchemy.dialects import postgresql
+from alembic import op
 
 revision: str = 'd60b3aab2766'
 down_revision: str | None = '59a90d317c62'
