@@ -5,6 +5,8 @@ services:
       - --entrypoints.web.address=:80
       - --api.dashboard=true
       - --api.insecure=true
+    ports:
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
     volumes:
       - ./infra/traefik/dev-dynamic.yaml:/etc/traefik/dev-dynamic.yaml:ro
     depends_on:

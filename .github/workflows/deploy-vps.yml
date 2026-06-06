@@ -66,10 +66,14 @@ jobs:
           HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
           SSH_USER: ${{ secrets.SSH_USER || 'root' }}
           # App deployment configurations
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           CODRUT_DATABASE_URL: ${{ secrets.CODRUT_DATABASE_URL }}
           CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
           CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
           CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
+          CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
           CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
           CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
           CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
@@ -94,11 +98,15 @@ jobs:
           COMPOSE_PROJECT_NAME=codrut-platform
           FRONTEND_IMAGE=ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:latest
           BACKEND_IMAGE=ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:latest
+          POSTGRES_DB=$POSTGRES_DB
+          POSTGRES_USER=$POSTGRES_USER
+          POSTGRES_PASSWORD=$POSTGRES_PASSWORD
           CODRUT_ENV=production
           CODRUT_DATABASE_URL=$CODRUT_DATABASE_URL
           CODRUT_REDIS_URL=$CODRUT_REDIS_URL
           CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
           CODRUT_CORS_ORIGINS=$CODRUT_CORS_ORIGINS
+          CODRUT_PUBLIC_APP_URL=$CODRUT_PUBLIC_APP_URL
           CODRUT_EMAIL_PROVIDER=$CODRUT_EMAIL_PROVIDER
           CODRUT_EMAIL_FROM_ADDRESS=$CODRUT_EMAIL_FROM_ADDRESS
           CODRUT_EMAIL_FROM_NAME=$CODRUT_EMAIL_FROM_NAME
