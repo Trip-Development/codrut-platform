@@ -6,9 +6,17 @@ import { trainerNavItems } from "@/components/shell/nav";
 
 import { RosterImporter } from "./roster-importer";
 
-export default async function TrainerRosterPage() {
+export default async function TrainerRosterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ companyId?: string }>;
+}) {
+  const { companyId } = await searchParams;
   const requestOptions = await getServerApiRequestOptions();
-  const [trainer, companies] = await Promise.all([getTrainerSession(), getCompanyList(requestOptions)]);
+  const [trainer, companies] = await Promise.all([
+    getTrainerSession(),
+    getCompanyList(requestOptions),
+  ]);
 
   return (
     <AppShell
@@ -21,7 +29,10 @@ export default async function TrainerRosterPage() {
       userLabel={trainer.user.name}
       session={trainer}
     >
-      <RosterImporter companies={companies.map(({ id, name }) => ({ id, name }))} />
+      <RosterImporter
+        companies={companies.map(({ id, name }) => ({ id, name }))}
+        defaultCompanyId={companyId}
+      />
     </AppShell>
   );
 }

@@ -100,14 +100,26 @@ export async function getCompanyParticipants(
       `${getApiBaseUrl()}/companies/${companyId}/participants`,
       { cache: "no-store", credentials: "include", ...options },
     );
-    if (!response.ok) return localParticipants;
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-au putut obține participanții.`);
+      }
+      return localParticipants;
+    }
     const serverParticipants = (await response.json()) as CompanyParticipant[];
+
+    if (!isDemoFallbackEnabled()) {
+      return serverParticipants;
+    }
 
     const map = new Map<string, CompanyParticipant>();
     serverParticipants.forEach((p) => map.set(p.id, p));
     localParticipants.forEach((p) => map.set(p.id, p));
     return Array.from(map.values());
-  } catch {
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
     return localParticipants;
   }
 }
@@ -133,14 +145,26 @@ export async function getCompanyAssignments(
       `${getApiBaseUrl()}/companies/${companyId}/assignments`,
       { cache: "no-store", credentials: "include", ...options },
     );
-    if (!response.ok) return localAssignments;
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-au putut obține asignările.`);
+      }
+      return localAssignments;
+    }
     const serverAssignments = (await response.json()) as CompanyAssignment[];
+
+    if (!isDemoFallbackEnabled()) {
+      return serverAssignments;
+    }
 
     const map = new Map<string, CompanyAssignment>();
     serverAssignments.forEach((a) => map.set(a.id, a));
     localAssignments.forEach((a) => map.set(a.id, a));
     return Array.from(map.values());
-  } catch {
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
     return localAssignments;
   }
 }
@@ -154,9 +178,17 @@ export async function getCompanyTeams(
       `${getApiBaseUrl()}/companies/${companyId}/teams`,
       { cache: "no-store", credentials: "include", ...options },
     );
-    if (!response.ok) return [];
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-au putut obține echipele.`);
+      }
+      return [];
+    }
     return (await response.json()) as CompanyTeam[];
-  } catch {
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
     return [];
   }
 }
@@ -185,10 +217,17 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
       credentials: "include",
       ...options,
     });
-    if (companiesResponse.ok) {
+    if (!companiesResponse.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${companiesResponse.status}): Nu s-a putut obține lista de companii.`);
+      }
+    } else {
       serverCompanies = (await companiesResponse.json()) as Array<{ id: string; name: string }>;
     }
   } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
     console.error("Fetch companies failed, using local fallback", e);
   }
 
@@ -226,7 +265,10 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           completedCount,
           stage: deriveStage(assignments.length, completedCount),
         };
-      } catch {
+      } catch (e) {
+        if (!isDemoFallbackEnabled()) {
+          throw e;
+        }
         return {
           id: company.id,
           name: company.name,
@@ -243,18 +285,30 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
 }
 
 export async function createCompany(name: string): Promise<{ id: string; name: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/companies`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ name }),
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error?.message ?? "Compania nu a putut fi creată în backend.");
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/companies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Server returned status ${response.status}`);
+    }
+    return (await response.json()) as { id: string; name: string };
+  } catch (e) {
+    if (isDemoFallbackEnabled() && typeof window !== "undefined") {
+      const id = `local-co-${Date.now()}`;
+      const newCo = { id, name };
+      const stored = localStorage.getItem("codrut_local_companies");
+      const current = stored ? (JSON.parse(stored) as Array<{ id: string; name: string }>) : [];
+      current.push(newCo);
+      localStorage.setItem("codrut_local_companies", JSON.stringify(current));
+      return newCo;
+    }
+    throw e;
   }
-  const created = (await response.json()) as { id: string; name: string };
-  return { id: created.id, name: created.name };
 }
 
 export async function getCompanyDetail(
@@ -268,10 +322,18 @@ export async function getCompanyDetail(
       credentials: "include",
       ...options,
     });
-    if (response.ok) {
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-a putut obține compania.`);
+      }
+    } else {
       serverCompanies = (await response.json()) as Array<{ id: string; name: string }>;
     }
-  } catch {}
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
+  }
 
   const localCompanies = getLocalCompanies();
   const map = new Map<string, { id: string; name: string }>();
@@ -289,7 +351,6 @@ export async function getCompanyDetail(
   if (!company) return null;
 
   try {
-    // Fetch participants, assignments, and teams in parallel.
     const [participants, assignments, teams] = await Promise.all([
       getCompanyParticipants(companyId, options),
       getCompanyAssignments(companyId, options),
@@ -324,7 +385,10 @@ export async function getCompanyDetail(
         pendingCount,
       },
     };
-  } catch {
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
     return null;
   }
 }

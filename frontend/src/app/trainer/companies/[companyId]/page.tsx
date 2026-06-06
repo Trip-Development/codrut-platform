@@ -30,6 +30,55 @@ export default async function CompanyOverviewPage({
 
   return (
     <>
+      {company.stats.totalParticipants === 0 && (
+        <div className="rounded-2xl border border-dashed border-burgundy/30 bg-burgundy/5 p-6 mb-5">
+          <h3 className="text-lg font-bold text-burgundy">Ghid Configurare Companie Nouă</h3>
+          <p className="mt-2 text-sm text-foreground/70 leading-relaxed">
+            Această companie este configurată în sistem, dar nu are încă participanți adăugați. Urmează acești pași pentru a lansa evaluările:
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl bg-surface p-4 border border-[var(--border)]">
+              <span className="text-xs font-bold text-burgundy/70 uppercase">Pasul 1</span>
+              <h4 className="font-semibold text-foreground mt-1">Încarcă Rosterul</h4>
+              <p className="text-xs text-foreground/56 mt-1 leading-relaxed">
+                Adaugă participanții prin fișierul Excel/CSV în ecranul de import pentru a asocia oameni cu această companie.
+              </p>
+              <Link
+                href="/trainer/roster"
+                className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
+              >
+                Mergi la import roster &rarr;
+              </Link>
+            </div>
+            <div className="rounded-xl bg-surface p-4 border border-[var(--border)]">
+              <span className="text-xs font-bold text-burgundy/70 uppercase">Pasul 2</span>
+              <h4 className="font-semibold text-foreground mt-1">Configurează Echipe</h4>
+              <p className="text-xs text-foreground/56 mt-1 leading-relaxed">
+                Definește echipele de leadership sau funcționale pentru a pregăti structurile de raportare și analiză.
+              </p>
+              <Link
+                href={`${basePath}/teams`}
+                className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
+              >
+                Gestionează echipe &rarr;
+              </Link>
+            </div>
+            <div className="rounded-xl bg-surface p-4 border border-[var(--border)]">
+              <span className="text-xs font-bold text-burgundy/70 uppercase">Pasul 3</span>
+              <h4 className="font-semibold text-foreground mt-1">Trimite Invitații</h4>
+              <p className="text-xs text-foreground/56 mt-1 leading-relaxed">
+                După popularea rosterului, folosește catalogul de șabloane pentru a expedia invitațiile și a monitoriza livrarea.
+              </p>
+              <Link
+                href="/trainer/email"
+                className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
+              >
+                Gestionează emailuri &rarr;
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Participanti"

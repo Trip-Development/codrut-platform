@@ -12,6 +12,7 @@ type CompanyOption = {
 
 type RosterImporterProps = {
   companies: CompanyOption[];
+  defaultCompanyId?: string;
 };
 
 type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile";
@@ -34,11 +35,17 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   pcm_profile: ["profil pcm", "pcm", "pcm profile", "profil_pcm"],
 };
 
-export function RosterImporter({ companies }: RosterImporterProps) {
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
+export function RosterImporter({ companies, defaultCompanyId }: RosterImporterProps) {
+  const [companyId, setCompanyId] = useState(defaultCompanyId || companies[0]?.id || "");
   const [allCompanies, setAllCompanies] = useState<CompanyOption[]>(companies);
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
+
+  useEffect(() => {
+    if (defaultCompanyId) {
+      setCompanyId(defaultCompanyId);
+    }
+  }, [defaultCompanyId]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -226,22 +233,72 @@ export function RosterImporter({ companies }: RosterImporterProps) {
   }, [rawRows, mappings, editedCells]);
 
   const validationErrors = useMemo(() => {
-    const errors: { rowIndex: number; name: string; field: DbField; error: string }[] = [];
+    const errors: { rowIndex: number; name: string; field: DbField; error: string; type: "critical" | "warning" }[] = [];
+    
+    const emailsInFile = new Map<string, number[]>();
+    const namesInFile = new Set<string>();
+
+    processedRows.forEach((row, idx) => {
+      if (row.full_name) {
+        namesInFile.add(row.full_name.trim().toLowerCase());
+      }
+      if (row.email) {
+        const emailKey = row.email.trim().toLowerCase();
+        if (!emailsInFile.has(emailKey)) {
+          emailsInFile.set(emailKey, []);
+        }
+        emailsInFile.get(emailKey)!.push(idx);
+      }
+    });
+
     processedRows.forEach((row, idx) => {
       const name = row.full_name || `Rândul ${idx + 2}`;
       if (!row.full_name) {
-        errors.push({ rowIndex: idx, name, field: "full_name", error: "Numele este obligatoriu." });
+        errors.push({ rowIndex: idx, name, field: "full_name", error: "Numele este obligatoriu.", type: "critical" });
       }
       if (!row.email) {
-        errors.push({ rowIndex: idx, name, field: "email", error: "Emailul este obligatoriu." });
-      } else if (!row.email.includes("@")) {
-        errors.push({ rowIndex: idx, name, field: "email", error: "Formatul emailului este invalid." });
+        errors.push({ rowIndex: idx, name, field: "email", error: "Emailul este obligatoriu.", type: "critical" });
+      } else {
+        if (!row.email.includes("@")) {
+          errors.push({ rowIndex: idx, name, field: "email", error: "Formatul emailului este invalid.", type: "critical" });
+        }
+        const dups = emailsInFile.get(row.email.trim().toLowerCase());
+        if (dups && dups.length > 1) {
+          errors.push({
+            rowIndex: idx,
+            name,
+            field: "email",
+            error: `Adresă email duplicată în fișier (rândurile ${dups.map((d) => d + 2).join(", ")}).`,
+            type: "critical",
+          });
+        }
+      }
+      if (row.reports_to_name) {
+        const mgrKey = row.reports_to_name.trim().toLowerCase();
+        if (!namesInFile.has(mgrKey)) {
+          errors.push({
+            rowIndex: idx,
+            name,
+            field: "reports_to_name",
+            error: `Managerul "${row.reports_to_name}" nu se află în lista de participanți.`,
+            type: "warning",
+          });
+        }
+      }
+      if (!row.pcm_profile) {
+        errors.push({
+          rowIndex: idx,
+          name,
+          field: "pcm_profile",
+          error: "Profil PCM necompletat (participantul nu va primi evaluări PCM).",
+          type: "warning",
+        });
       }
     });
     return errors;
   }, [processedRows]);
 
-  const hasCriticalErrors = validationErrors.some((e) => e.field === "full_name" || e.field === "email");
+  const hasCriticalErrors = validationErrors.some((e) => e.type === "critical");
 
   const handleCellEditSave = (rowIndex: number, field: DbField, value: string) => {
     setEditedCells((prev) => {
@@ -489,19 +546,47 @@ export function RosterImporter({ companies }: RosterImporterProps) {
 
       {/* Warnings & Errors Panel */}
       {validationErrors.length > 0 && importState.status === "ready" && (
-        <section className="rounded-2xl border border-red-200 bg-red-50/50 p-5 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-red-800 uppercase tracking-wider">Atenție! Erori de validare ({validationErrors.length})</h3>
-          <p className="text-xs text-red-700">
-            Următoarele rânduri au date incomplete sau invalide. Corectați-le direct făcând clic pe celulele respective din tabelul de preview de mai jos înainte de a importa.
-          </p>
-          <div className="max-h-28 overflow-y-auto space-y-1.5">
-            {validationErrors.map((err, i) => (
-              <p key={i} className="text-xs font-semibold text-red-700">
-                · <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
+        <div className="space-y-3">
+          {validationErrors.some((e) => e.type === "critical") && (
+            <section className="rounded-2xl border border-red-200 bg-red-50/50 p-5 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-red-800 uppercase tracking-wider">
+                Erori Critice ({validationErrors.filter((e) => e.type === "critical").length})
+              </h3>
+              <p className="text-xs text-red-700">
+                Următoarele probleme blochează importul. Corectați-le direct în tabelul de mai jos:
               </p>
-            ))}
-          </div>
-        </section>
+              <div className="max-h-28 overflow-y-auto space-y-1.5">
+                {validationErrors
+                  .filter((e) => e.type === "critical")
+                  .map((err, i) => (
+                    <p key={i} className="text-xs font-semibold text-red-700">
+                      · <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
+                    </p>
+                  ))}
+              </div>
+            </section>
+          )}
+
+          {validationErrors.some((e) => e.type === "warning") && (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-amber-800 uppercase tracking-wider">
+                Atenționări ({validationErrors.filter((e) => e.type === "warning").length})
+              </h3>
+              <p className="text-xs text-amber-700">
+                Următoarele atenționări nu blochează importul, dar pot afecta generarea automată a evaluărilor:
+              </p>
+              <div className="max-h-28 overflow-y-auto space-y-1.5">
+                {validationErrors
+                  .filter((e) => e.type === "warning")
+                  .map((err, i) => (
+                    <p key={i} className="text-xs font-semibold text-amber-700">
+                      · <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
+                    </p>
+                  ))}
+              </div>
+            </section>
+          )}
+        </div>
       )}
 
       {/* Spreadsheet Live Preview & Inline Editing */}

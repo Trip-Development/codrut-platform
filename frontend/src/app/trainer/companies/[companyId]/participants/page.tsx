@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCompanyParticipants } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 
@@ -11,12 +12,20 @@ export default async function CompanyParticipantsPage({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-      <div className="border-b border-[var(--border)] px-5 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Roster</p>
-        <h2 className="mt-1 text-xl font-semibold text-foreground">Participanti si status acces</h2>
-        <p className="mt-2 text-sm leading-6 text-foreground/62">
-          Coloane: Nume, Reports To, Pozitie, Locatie, PCM, Email.
-        </p>
+      <div className="border-b border-[var(--border)] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Roster</p>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">Participanti si status acces</h2>
+          <p className="mt-2 text-sm leading-6 text-foreground/62">
+            Coloane: Nume, Reports To, Pozitie, Locatie, PCM, Email.
+          </p>
+        </div>
+        <Link
+          href={`/trainer/roster?companyId=${companyId}`}
+          className="tap-soft rounded-xl bg-burgundy px-4 py-2 text-sm font-bold text-white hover:bg-burgundy/90"
+        >
+          Importă Roster
+        </Link>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
