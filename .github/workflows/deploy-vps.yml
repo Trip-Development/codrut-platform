@@ -125,14 +125,11 @@ jobs:
             # Pull registry images
             docker compose -f compose.yaml -f compose.prod.yaml pull
             
-            # Stop existing containers
-            docker compose -f compose.yaml -f compose.prod.yaml down
-            
-            # Run database migrations
+            # Run database migrations while active containers serve traffic
             docker compose -f compose.yaml -f compose.prod.yaml run --rm backend alembic upgrade head
             
-            # Launch production services
-            docker compose -f compose.yaml -f compose.prod.yaml up -d
+            # Launch production services with zero-downtime rolling reload
+            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
             
             # Prune old images to save disk space
             docker image prune -a -f
