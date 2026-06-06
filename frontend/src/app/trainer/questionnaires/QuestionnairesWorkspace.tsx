@@ -3,11 +3,11 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import {
-  deleteLocalQuestionnaireDefinition,
-  listLocalQuestionnaireDefinitions,
   listQuestionnaireDefinitionStubs,
   getQuestionnaireDefinition,
-  saveLocalQuestionnaireDefinition,
+  createQuestionnaireDefinitionOnServer,
+  updateQuestionnaireDefinitionOnServer,
+  deleteQuestionnaireDefinitionOnServer,
   type QuestionnaireDefinitionStub,
   type QuestionnaireDefinition,
   type QuestionnaireSection,
@@ -26,7 +26,6 @@ export function QuestionnairesWorkspace() {
   const [availableVersions, setAvailableVersions] = useState<number[]>([]);
   const [currentDefinition, setCurrentDefinition] = useState<QuestionnaireDefinition | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [localDefinitionKeys, setLocalDefinitionKeys] = useState<Set<string>>(new Set());
   const [draftKey, setDraftKey] = useState("");
 
   // New Questionnaire Modal State
@@ -38,12 +37,16 @@ export function QuestionnairesWorkspace() {
 
   // Load stubs list
   const loadStubs = async () => {
-    const list = await listQuestionnaireDefinitionStubs();
-    setStubs(list);
-    setLocalDefinitionKeys(new Set(listLocalQuestionnaireDefinitions().map((definition) => definition.key)));
-    if (list.length > 0 && !selectedKey) {
-      setSelectedKey(list[0].id);
-      setSelectedVersion(list[0].version ?? 1);
+    setIsLoading(true);
+    try {
+      const list = await listQuestionnaireDefinitionStubs();
+      setStubs(list);
+      if (list.length > 0 && !selectedKey) {
+        setSelectedKey(list[0].id);
+        setSelectedVersion(list[0].version ?? 1);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -55,31 +58,10 @@ export function QuestionnairesWorkspace() {
   useEffect(() => {
     if (!selectedKey) return;
 
-    // Discover all local versions for this key
-    const allVersions: number[] = [];
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("codrut_local_questionnaire_definitions");
-      if (stored) {
-        try {
-          const localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
-          localDefs
-            .filter((d) => d.key === selectedKey)
-            .forEach((d) => {
-              if (!allVersions.includes(d.version)) {
-                allVersions.push(d.version);
-              }
-            });
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
-
-    // Include version from stubs list if missing
-    const stub = stubs.find((s) => s.id === selectedKey);
-    if (stub && stub.version && !allVersions.includes(stub.version)) {
-      allVersions.push(stub.version);
-    }
+    const allVersions: number[] = stubs
+      .filter((s) => s.id === selectedKey)
+      .map((s) => s.version)
+      .filter((v): v is number => typeof v === "number");
 
     if (allVersions.length === 0) {
       allVersions.push(1);
@@ -98,18 +80,39 @@ export function QuestionnairesWorkspace() {
     if (!selectedKey) return;
     const fetchDefinition = async () => {
       setIsLoading(true);
-      const def = await getQuestionnaireDefinition(`${selectedKey}@${selectedVersion}`);
-      setCurrentDefinition(def);
-      setDraftKey(def?.key ?? "");
-      setIsLoading(false);
+      try {
+        const def = await getQuestionnaireDefinition(`${selectedKey}@${selectedVersion}`);
+        setCurrentDefinition(def);
+        setDraftKey(def?.key ?? "");
+      } finally {
+        setIsLoading(false);
+      }
     };
     fetchDefinition();
   }, [selectedKey, selectedVersion]);
 
-  const handleSave = (updatedDef: QuestionnaireDefinition) => {
-    saveLocalQuestionnaireDefinition(updatedDef);
-    setCurrentDefinition(updatedDef);
-    loadStubs(); // Refresh list to update count
+  const handleSave = async (updatedDef: QuestionnaireDefinition) => {
+    setIsLoading(true);
+    try {
+      const saved = await updateQuestionnaireDefinitionOnServer(
+        updatedDef.key,
+        {
+          title: updatedDef.title,
+          description: updatedDef.description,
+          schema: updatedDef.schema,
+        },
+        updatedDef.version
+      );
+      setCurrentDefinition(saved);
+      if (saved.version !== updatedDef.version) {
+        setSelectedVersion(saved.version);
+      }
+      await loadStubs();
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la salvarea chestionarului.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveMetadata = (
@@ -129,125 +132,109 @@ export function QuestionnairesWorkspace() {
   };
 
   const handleRenameDefinitionKey = () => {
-    if (!currentDefinition) return;
-    const normalizedKey = draftKey.toLowerCase().trim().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
-    if (!normalizedKey) {
-      setDraftKey(currentDefinition.key);
-      return;
-    }
-    if (normalizedKey === currentDefinition.key) return;
-
-    const renamedDefinition = {
-      ...currentDefinition,
-      key: normalizedKey,
-    };
-
-    if (localDefinitionKeys.has(currentDefinition.key)) {
-      deleteLocalQuestionnaireDefinition(currentDefinition.key);
-    }
-    saveLocalQuestionnaireDefinition(renamedDefinition);
-    setCurrentDefinition(renamedDefinition);
-    setDraftKey(normalizedKey);
-    setSelectedKey(normalizedKey);
-    setSelectedVersion(renamedDefinition.version);
-    loadStubs();
+    alert("Redenumirea cheii nu este permisă pe server. Creează un chestionar nou cu o altă cheie dacă este necesar.");
   };
 
-  const handleCreateNewVersion = () => {
+  const handleCreateNewVersion = async () => {
     if (!currentDefinition) return;
-    const nextVersion = Math.max(...availableVersions, currentDefinition.version) + 1;
-    
-    // Copy definition and increase version
-    const newVersion: QuestionnaireDefinition = {
-      ...currentDefinition,
-      version: nextVersion,
-      schema: {
-        ...currentDefinition.schema,
-        instructions: currentDefinition.schema.instructions ?? "",
-        sections: JSON.parse(JSON.stringify(currentDefinition.schema.sections)), // deep copy
-      },
-    };
-
-    saveLocalQuestionnaireDefinition(newVersion);
-    setSelectedVersion(nextVersion);
-    loadStubs();
+    setIsLoading(true);
+    try {
+      const saved = await createQuestionnaireDefinitionOnServer({
+        key: currentDefinition.key,
+        title: currentDefinition.title,
+        description: currentDefinition.description,
+        schema: currentDefinition.schema,
+        active: true,
+      });
+      setSelectedVersion(saved.version);
+      await loadStubs();
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la crearea unei noi versiuni.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteQuestionnaire = async () => {
     if (!selectedKey) return;
     const selectedName = currentDefinition?.title ?? selectedKey;
-    if (!localDefinitionKeys.has(selectedKey)) {
-      alert("Poți șterge doar chestionarele create sau modificate local. Definițiile de bază rămân protejate.");
-      return;
-    }
     const confirmed = window.confirm(
-      `Ștergi chestionarul local "${selectedName}" și toate versiunile lui locale? Această acțiune nu poate fi anulată.`,
+      `Pensionați chestionarul "${selectedName}"? Această acțiune îl va marca ca inactiv pe server.`,
     );
     if (!confirmed) return;
 
-    const deleted = deleteLocalQuestionnaireDefinition(selectedKey);
-    if (!deleted) return;
-
-    const remaining = await listQuestionnaireDefinitionStubs();
-    setStubs(remaining);
-    setLocalDefinitionKeys(new Set(listLocalQuestionnaireDefinitions().map((definition) => definition.key)));
-
-    const nextSelection = remaining.find((stub) => stub.id !== selectedKey) ?? remaining[0];
-    if (nextSelection) {
-      setSelectedKey(nextSelection.id);
-      setSelectedVersion(nextSelection.version ?? 1);
-    } else {
-      setSelectedKey(null);
-      setCurrentDefinition(null);
-      setAvailableVersions([]);
+    setIsLoading(true);
+    try {
+      await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
+      const remaining = await listQuestionnaireDefinitionStubs();
+      setStubs(remaining);
+      const nextSelection = remaining.find((stub) => stub.id !== selectedKey) ?? remaining[0];
+      if (nextSelection) {
+        setSelectedKey(nextSelection.id);
+        setSelectedVersion(nextSelection.version ?? 1);
+      } else {
+        setSelectedKey(null);
+        setCurrentDefinition(null);
+        setAvailableVersions([]);
+      }
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la ștergerea/pensionarea chestionarului.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleAddQuestionnaire = (e: FormEvent) => {
+  const handleAddQuestionnaire = async (e: FormEvent) => {
     e.preventDefault();
     if (!newKey || !newTitle) return;
 
     const key = newKey.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-    const newDef: QuestionnaireDefinition = {
-      key,
-      version: 1,
-      title: newTitle,
-      description: newDescription,
-      schema: {
-        schema_version: "questionnaire.v1",
-        audience: newAudience,
-        instructions: "Te rugăm să completezi formularul de mai jos.",
-        sections: [
-          {
-            id: "sectiunea_1",
-            title: "Secțiunea 1",
-            questions: [
-              {
-                id: `${key}_q1`,
-                code: "Q1",
-                type: "likert",
-                label: "Prima întrebare din acest chestionar.",
-                required: true,
-                scale: [
-                  { value: 1, label: "Dezacord total" },
-                  { value: 2, label: "Neutru" },
-                  { value: 3, label: "Acord total" },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    };
+    setIsLoading(true);
+    try {
+      const saved = await createQuestionnaireDefinitionOnServer({
+        key,
+        title: newTitle,
+        description: newDescription,
+        schema: {
+          schema_version: "questionnaire.v1",
+          audience: newAudience,
+          instructions: "Te rugăm să completezi formularul de mai jos.",
+          sections: [
+            {
+              id: "sectiunea_1",
+              title: "Secțiunea 1",
+              questions: [
+                {
+                  id: `${key}_q1`,
+                  code: "Q1",
+                  type: "likert",
+                  label: "Prima întrebare din acest chestionar.",
+                  required: true,
+                  scale: [
+                     { value: 1, label: "Dezacord total" },
+                     { value: 2, label: "Neutru" },
+                     { value: 3, label: "Acord total" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        active: true,
+      });
 
-    saveLocalQuestionnaireDefinition(newDef);
-    setShowCreateModal(false);
-    setNewKey("");
-    setNewTitle("");
-    setNewDescription("");
-    setSelectedKey(key);
-    setSelectedVersion(1);
-    loadStubs();
+      setShowCreateModal(false);
+      setNewKey("");
+      setNewTitle("");
+      setNewDescription("");
+      setSelectedKey(saved.key);
+      setSelectedVersion(saved.version);
+      await loadStubs();
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la crearea chestionarului.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Section modifiers
@@ -434,7 +421,7 @@ export function QuestionnairesWorkspace() {
   };
 
   const selectedStub = stubs.find((s) => s.id === selectedKey);
-  const canDeleteSelected = selectedKey ? localDefinitionKeys.has(selectedKey) : false;
+  const canDeleteSelected = !!selectedKey;
 
   return (
     <div className="space-y-6">
@@ -442,7 +429,7 @@ export function QuestionnairesWorkspace() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-bold text-foreground">Catalog chestionare</h2>
-              <p className="mt-1 text-xs leading-5 text-foreground/52">Definiții active și drafturi locale.</p>
+              <p className="mt-1 text-xs leading-5 text-foreground/52">Definiții active și drafturi.</p>
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -454,7 +441,7 @@ export function QuestionnairesWorkspace() {
 
           <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
             {stubs.map((stub) => {
-              const isLocal = localDefinitionKeys.has(stub.id);
+              const isLocal = false;
 
               return (
               <button

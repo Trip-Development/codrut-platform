@@ -1,87 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { type EmailOpsSummary, type AssessmentDeliveryRow, type CampaignRecipientRow } from "@/api/email";
+import {
+  listEmailTemplatesOnServer,
+  getEmailTemplateOnServer,
+  createEmailTemplateOnServer,
+  updateEmailTemplateOnServer,
+  deleteEmailTemplateOnServer,
+  type EmailOpsSummary,
+  type AssessmentDeliveryRow,
+  type CampaignRecipientRow,
+  type EmailTemplate
+} from "@/api/email";
 
 type TabKey = "delivery" | "templates";
 
-type EmailTemplate = {
-  id: string;
-  baseKey: string;
-  version: number;
-  name: string;
-  subject: string;
-  body: string;
-  lane: "transactional" | "campaign";
-  placeholders: string[];
-};
-
 const destructiveButtonClass =
   "tap-soft rounded-lg border border-[#890505]/35 bg-transparent px-3 py-1.5 text-xs font-bold text-[#890505] shadow-none transition hover:bg-[#890505]/10 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
-
-const SEEDED_TEMPLATES: EmailTemplate[] = [
-  {
-    id: "invitation-secure-link",
-    baseKey: "invitation-secure-link",
-    version: 1,
-    name: "Invitație Assessment (Link Securizat)",
-    subject: "Bun venit în programul Codruț, {first_name}",
-    lane: "transactional",
-    placeholders: ["{first_name}", "{project}", "{link_securizat}", "{estimare_timp}"],
-    body: `Salutare {first_name},
-
-Ai fost invitat să participi la evaluarea organizațională pentru echipa **{project}**.
-
-Te rugăm să completezi chestionarele desemnate accesând următorul link securizat:
-[{link_securizat}]({link_securizat})
-
-Aceste chestionare vor dura aproximativ **{estimare_timp} minute** în total. Răspunsurile tale individuale sunt complet confidențiale și vor fi agregate în raportul de echipă.
-
-Gânduri bune,
-Echipa Codruț`
-  },
-  {
-    id: "reminder-pending",
-    baseKey: "reminder-pending",
-    version: 1,
-    name: "Reminder Completare Evaluare",
-    subject: "Reminder: Te rugăm să finalizezi completarea, {first_name}",
-    lane: "transactional",
-    placeholders: ["{first_name}", "{project}", "{link_securizat}", "{sarcini_ramase}"],
-    body: `Salut {first_name},
-
-Acesta este un scurt reminder că evaluarea pentru **{project}** este în curs de desfășurare, iar feedback-ul tău este extrem de valoros.
-
-Te rugăm să accesezi link-ul tău securizat pentru a finaliza răspunsurile:
-[{link_securizat}]({link_securizat})
-
-Sarcini rămase de completat: **{sarcini_ramase}**.
-
-Mulțumim pentru implicare și cooperare!
-
-Echipa Codruț`
-  },
-  {
-    id: "video-prospecting",
-    baseKey: "video-prospecting",
-    version: 1,
-    name: "Campanie Video Follow-up",
-    subject: "O idee practică pentru echipa ta, {first_name}",
-    lane: "campaign",
-    placeholders: ["{first_name}", "{link_video}"],
-    body: `Salutare {first_name},
-
-Am pregătit un material video scurt despre dinamica echipelor performante și cum putem adresa disfuncțiile comune care blochează progresul în livrare.
-
-Poți viziona clipul accesând link-ul de mai jos:
-[Vizualizează Video Codruț]({link_video})
-
-Dacă ți se pare util și aplicabil pentru contextul tău curent, te invit să programăm o scurtă discuție.
-
-Toate cele bune,
-Andrei`
-  }
-];
 
 const MOCK_REPLACEMENTS: Record<string, string> = {
   "{first_name}": "Ioana",
@@ -91,14 +26,6 @@ const MOCK_REPLACEMENTS: Record<string, string> = {
   "{sarcini_ramase}": "2 chestionare rămase (Lencioni, Distress)",
   "{link_video}": "https://watch.codrut.ro/v/performanta-echipe-2026",
 };
-
-function normalizeTemplates(input: EmailTemplate[]): EmailTemplate[] {
-  return input.map((template) => ({
-    ...template,
-    baseKey: template.baseKey ?? template.id.replace(/-v\d+$/, ""),
-    version: template.version ?? 1,
-  }));
-}
 
 function detectedPlaceholders(subject: string, body: string): string[] {
   const placeholderRegex = /\{[a-z0-9_]+\}/gi;
@@ -117,6 +44,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
 
   // Editor fields
   const [editName, setEditName] = useState("");
@@ -124,28 +52,24 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [editBody, setEditBody] = useState("");
   const [editLane, setEditLane] = useState<"transactional" | "campaign">("transactional");
 
-  // Load templates from localStorage or seeds
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("codrut_email_templates");
-      if (stored) {
-        try {
-          const parsed = normalizeTemplates(JSON.parse(stored) as EmailTemplate[]);
-          setTemplates(parsed);
-          if (parsed.length > 0) {
-            setSelectedTemplateId(parsed[0].id);
-          }
-          return;
-        } catch (e) {
-          console.error(e);
+  // Load templates from Server
+  const loadTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const list = await listEmailTemplatesOnServer(true);
+      setTemplates(list);
+      if (list.length > 0) {
+        if (!selectedTemplateId || !list.some((t) => t.id === selectedTemplateId)) {
+          setSelectedTemplateId(list[0].id);
         }
       }
-      // Fallback/Seed
-      const seeded = normalizeTemplates(SEEDED_TEMPLATES);
-      setTemplates(seeded);
-      localStorage.setItem("codrut_email_templates", JSON.stringify(seeded));
-      setSelectedTemplateId(SEEDED_TEMPLATES[0].id);
+    } finally {
+      setIsLoadingTemplates(false);
     }
+  };
+
+  useEffect(() => {
+    loadTemplates();
   }, []);
 
   // Sync editor fields when selected template changes
@@ -159,33 +83,33 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
   }, [selectedTemplateId, templates]);
 
-  const handleSaveTemplate = () => {
-    if (!selectedTemplateId) return;
-
-    const updatedTemplates = templates.map((t) => {
-      if (t.id === selectedTemplateId) {
-        return {
-          ...t,
-          name: editName,
-          subject: editSubject,
-          body: editBody,
-          lane: editLane,
-          placeholders: detectedPlaceholders(editSubject, editBody),
-        };
-      }
-      return t;
-    });
-
-    setTemplates(updatedTemplates);
-    localStorage.setItem("codrut_email_templates", JSON.stringify(updatedTemplates));
-    setIsEditing(false);
+  const handleSaveTemplate = async () => {
+    if (!selectedTemplateId || !selectedTemplate) return;
+    setIsLoadingTemplates(true);
+    try {
+      const updatedTemp: EmailTemplate = {
+        ...selectedTemplate,
+        subject: editSubject,
+        body: editBody,
+        lane: editLane,
+        placeholders: detectedPlaceholders(editSubject, editBody),
+      };
+      const saved = await updateEmailTemplateOnServer(updatedTemp);
+      setIsEditing(false);
+      setSelectedTemplateId(saved.id);
+      await loadTemplates();
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la salvarea șablonului.");
+    } finally {
+      setIsLoadingTemplates(false);
+    }
   };
 
-  const handleCreateTemplate = () => {
-    const newId = `template-${Date.now()}`;
+  const handleCreateTemplate = async () => {
+    const key = `template_${Date.now()}`;
     const newTemp: EmailTemplate = {
-      id: newId,
-      baseKey: newId,
+      id: key,
+      baseKey: key,
       version: 1,
       name: "Șablon Email Nou",
       subject: "Subiectul emailului {first_name}",
@@ -195,52 +119,63 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
 Introduceți conținutul noului șablon email aici. Puteți folosi coduri între acolade pentru personalizare.`,
     };
-
-    const updated = [...templates, newTemp];
-    setTemplates(updated);
-    localStorage.setItem("codrut_email_templates", JSON.stringify(updated));
-    setSelectedTemplateId(newId);
-    setIsEditing(true);
+    setIsLoadingTemplates(true);
+    try {
+      const saved = await createEmailTemplateOnServer(newTemp);
+      setSelectedTemplateId(saved.id);
+      setIsEditing(true);
+      await loadTemplates();
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la crearea șablonului.");
+    } finally {
+      setIsLoadingTemplates(false);
+    }
   };
 
-  const handleCreateTemplateVersion = () => {
+  const handleCreateTemplateVersion = async () => {
     if (!selectedTemplate) return;
-    const baseKey = selectedTemplate.baseKey ?? selectedTemplate.id;
-    const nextVersion =
-      Math.max(
-        0,
-        ...templates
-          .filter((template) => (template.baseKey ?? template.id) === baseKey)
-          .map((template) => template.version ?? 1)
-      ) + 1;
-    const newId = `${baseKey}-v${nextVersion}`;
-    const nextTemplate: EmailTemplate = {
-      ...selectedTemplate,
-      id: newId,
-      baseKey,
-      version: nextVersion,
-      name: selectedTemplate.name,
-      placeholders: detectedPlaceholders(selectedTemplate.subject, selectedTemplate.body),
-    };
-    const updated = [...templates, nextTemplate];
-    setTemplates(updated);
-    localStorage.setItem("codrut_email_templates", JSON.stringify(updated));
-    setSelectedTemplateId(newId);
-    setIsEditing(true);
+    setIsLoadingTemplates(true);
+    try {
+      const nextTemplate: EmailTemplate = {
+        ...selectedTemplate,
+        version: selectedTemplate.version + 1,
+      };
+      const saved = await createEmailTemplateOnServer(nextTemplate);
+      setSelectedTemplateId(saved.id);
+      setIsEditing(true);
+      await loadTemplates();
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la crearea versiunii noi.");
+    } finally {
+      setIsLoadingTemplates(false);
+    }
   };
 
-  const handleDeleteTemplate = () => {
+  const handleDeleteTemplate = async () => {
+    if (!selectedTemplate) return;
     if (templates.length <= 1) {
       alert("Trebuie să păstrați cel puțin un șablon în catalog.");
       return;
     }
-    if (!confirm("Sigur doriți să ștergeți acest șablon?")) return;
+    if (!confirm("Sigur doriți să pensionați acest șablon?")) return;
 
-    const updated = templates.filter((t) => t.id !== selectedTemplateId);
-    setTemplates(updated);
-    localStorage.setItem("codrut_email_templates", JSON.stringify(updated));
-    setSelectedTemplateId(updated[0].id);
-    setIsEditing(false);
+    setIsLoadingTemplates(true);
+    try {
+      await deleteEmailTemplateOnServer(selectedTemplate.baseKey, selectedTemplate.version);
+      const list = await listEmailTemplatesOnServer(true);
+      setTemplates(list);
+      const remaining = list.filter((t) => t.id !== selectedTemplateId);
+      if (remaining.length > 0) {
+        setSelectedTemplateId(remaining[0].id);
+      } else if (list.length > 0) {
+        setSelectedTemplateId(list[0].id);
+      }
+      setIsEditing(false);
+    } catch (e) {
+      alert((e as Error).message ?? "Eroare la pensionarea șablonului.");
+    } finally {
+      setIsLoadingTemplates(false);
+    }
   };
 
   // Convert markdown to clean, basic HTML preview
@@ -254,7 +189,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
     });
 
     // Basic markdown parsing
-    let html = replacedBody
+    const html = replacedBody
       .replace(/\r?\n/g, "<br />")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-burgundy underline font-bold">$1</a>');
@@ -721,7 +656,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
             <div className="rounded-2xl border border-[var(--border)] bg-surface p-10 text-center shadow-sm">
               <p className="text-lg font-bold text-foreground">Catalog gol</p>
               <p className="mt-2 text-sm leading-6 text-foreground/62">
-                Niciun șablon email disponibil. Faceți clic pe "+ Adaugă" în stânga.
+                Niciun șablon email disponibil. Faceți clic pe &quot;+ Adaugă&quot; în stânga.
               </p>
             </div>
           )}

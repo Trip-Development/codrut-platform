@@ -23,17 +23,21 @@ class ScoringService:
         assignment_id: UUID,
         questionnaire_key: QuestionnaireKey,
         answers: dict[str, Any],
+        *,
+        questionnaire_version: int | None = None,
+        definition_schema: dict[str, Any] | None = None,
     ) -> ScoringResult:
-        try:
-            definition = get_approved_questionnaire_definition(questionnaire_key)
-        except KeyError as e:
-            raise DomainError(
-                f"No scoring definition for key: {questionnaire_key.value}",
-                code="scoring_not_supported",
+        if definition_schema is None:
+            try:
+                definition = get_approved_questionnaire_definition(questionnaire_key)
+            except KeyError as e:
+                raise DomainError(
+                    f"No scoring definition for key: {questionnaire_key.value}",
+                    code="scoring_not_supported",
             ) from e
+            definition_schema = definition.schema
 
-        schema = definition.schema
-        scoring_meta = schema.get("scoring")
+        scoring_meta = definition_schema.get("scoring")
         if not scoring_meta:
             raise DomainError(
                 f"Questionnaire {questionnaire_key.value} has no scoring metadata.",
@@ -74,7 +78,7 @@ class ScoringService:
             for driver in drivers:
                 scores[driver["id"]] = 0
 
-            for section in schema.get("sections", []):
+            for section in definition_schema.get("sections", []):
                 for question in section.get("questions", []):
                     if question.get("type") == "statement_score_set":
                         q_id = question["id"]

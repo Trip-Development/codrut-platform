@@ -1,8 +1,175 @@
+import { getApiBaseUrl } from "./runtime";
+
 export type EmailSurfaceStub = {
   id: string;
   name: string;
   lane: "transactional" | "campaign";
 };
+
+export type EmailTemplate = {
+  id: string;
+  baseKey: string;
+  version: number;
+  name: string;
+  subject: string;
+  body: string;
+  lane: "transactional" | "campaign";
+  placeholders: string[];
+};
+
+const SEEDED_TEMPLATES: EmailTemplate[] = [
+  {
+    id: "account_setup",
+    baseKey: "account_setup",
+    version: 1,
+    name: "Invitatie inrolare",
+    subject: "Activeaza contul Codrut pentru {company_name}",
+    lane: "transactional",
+    placeholders: ["{participant_name}", "{trainer_name}", "{company_name}", "{action_url}"],
+    body: `<p>Buna, {participant_name}.</p><p>{trainer_name} te-a invitat in Codrut pentru {company_name}.</p><p><a href="{action_url}">Activeaza contul si vezi sarcinile</a></p>`
+  },
+  {
+    id: "assignment_bundle",
+    baseKey: "assignment_bundle",
+    version: 1,
+    name: "Sarcini de completat",
+    subject: "Ai chestionare Codrut de completat pentru {company_name}",
+    lane: "transactional",
+    placeholders: ["{participant_name}", "{company_name}", "{task_count}", "{action_url}"],
+    body: `<p>Buna, {participant_name}.</p><p>Ai {task_count} sarcini de assessment pregatite in Codrut.</p><p><a href="{action_url}">Deschide sarcinile mele</a></p>`
+  }
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function backendToFrontendTemplate(b: any): EmailTemplate {
+  const placeholders = (b.variables || []).map((v: string) => `{${v}}`);
+  const subject = (b.subject || "").replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}");
+  const body = (b.html_body || "").replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}");
+
+  return {
+    id: b.id || `${b.key}@${b.version}`,
+    baseKey: b.key,
+    version: b.version,
+    name: b.key === "account_setup" ? "Invitatie inrolare" : b.key === "assignment_bundle" ? "Sarcini de completat" : b.key,
+    subject,
+    body,
+    lane: b.audience === "campaign" ? "campaign" : "transactional",
+    placeholders,
+  };
+}
+
+function frontendToBackendTemplate(f: EmailTemplate) {
+  const variables = (f.placeholders || []).map((p: string) => p.replace(/[{}]/g, ""));
+  const subject = (f.subject || "").replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}");
+  const html_body = (f.body || "").replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}");
+  const text_body = html_body.replace(/<[^>]*>/g, "");
+
+  return {
+    key: f.baseKey,
+    subject,
+    html_body,
+    text_body,
+    variables,
+    audience: f.lane,
+    active: true,
+  };
+}
+
+export async function listEmailTemplatesOnServer(includeRetired: boolean = false): Promise<EmailTemplate[]> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/templates?include_retired=${includeRetired}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      return SEEDED_TEMPLATES;
+    }
+    const data = await response.json();
+    return data.map(backendToFrontendTemplate);
+  } catch (e) {
+    console.error("Error fetching email templates", e);
+    return SEEDED_TEMPLATES;
+  }
+}
+
+export async function getEmailTemplateOnServer(key: string, version?: number): Promise<EmailTemplate | null> {
+  try {
+    const url = version
+      ? `${getApiBaseUrl()}/communications/templates/${key}?version=${version}`
+      : `${getApiBaseUrl()}/communications/templates/${key}`;
+    const response = await fetch(url, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return backendToFrontendTemplate(data);
+  } catch (e) {
+    console.error("Error fetching email template", e);
+    return null;
+  }
+}
+
+export async function createEmailTemplateOnServer(template: EmailTemplate): Promise<EmailTemplate> {
+  const payload = frontendToBackendTemplate(template);
+  const response = await fetch(`${getApiBaseUrl()}/communications/templates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut crea șablonul pe server.");
+  }
+  const data = await response.json();
+  return backendToFrontendTemplate(data);
+}
+
+export async function updateEmailTemplateOnServer(template: EmailTemplate): Promise<EmailTemplate> {
+  const payload = frontendToBackendTemplate(template);
+  const response = await fetch(`${getApiBaseUrl()}/communications/templates/${template.baseKey}?version=${template.version}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut actualiza șablonul pe server.");
+  }
+  const data = await response.json();
+  return backendToFrontendTemplate(data);
+}
+
+export async function activateEmailTemplateOnServer(key: string, version: number): Promise<EmailTemplate> {
+  const response = await fetch(`${getApiBaseUrl()}/communications/templates/${key}/versions/${version}/activate`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut activa versiunea șablonului.");
+  }
+  const data = await response.json();
+  return backendToFrontendTemplate(data);
+}
+
+export async function deleteEmailTemplateOnServer(key: string, version?: number): Promise<EmailTemplate> {
+  const url = version
+    ? `${getApiBaseUrl()}/communications/templates/${key}?version=${version}`
+    : `${getApiBaseUrl()}/communications/templates/${key}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut pensiona șablonul.");
+  }
+  const data = await response.json();
+  return backendToFrontendTemplate(data);
+}
 
 export type EmailDeliveryMetric = {
   label: string;

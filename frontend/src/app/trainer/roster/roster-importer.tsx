@@ -124,6 +124,7 @@ export function RosterImporter({ companies }: RosterImporterProps) {
         const worksheet = workbook.Sheets[firstSheetName];
 
         // Read headers and rows as array of arrays
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawSheetData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
         if (rawSheetData.length === 0) {
           setImportState({ status: "error", message: "Fișierul este gol sau invalid." });

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +11,16 @@ from codrut.modules.forms.definitions import (
     get_approved_questionnaire_definition,
 )
 from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
     QuestionnaireKey,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
 from codrut.modules.forms.repository import FormsRepository
 from codrut.modules.forms.schemas import (
+    QuestionnaireDefinitionCreateRequest,
     QuestionnaireDefinitionResponse,
+    QuestionnaireDefinitionUpdateRequest,
     QuestionnaireResponseResponse,
     QuestionnaireResponseSaveRequest,
 )
@@ -32,6 +36,121 @@ class FormsService:
     def get_definition(self, key: QuestionnaireKey) -> QuestionnaireDefinitionResponse:
         return _to_response(get_approved_questionnaire_definition(key))
 
+    async def list_persisted_definitions(
+        self,
+        *,
+        active_only: bool = True,
+    ) -> list[QuestionnaireDefinitionResponse]:
+        repository = self._require_repository()
+        await self._seed_catalog_definitions(repository)
+        definitions = await repository.list_definitions(active_only=active_only)
+        return [_to_response(definition) for definition in definitions]
+
+    async def get_persisted_definition(
+        self,
+        key: QuestionnaireKey,
+        *,
+        version: int | None = None,
+    ) -> QuestionnaireDefinitionResponse:
+        repository = self._require_repository()
+        await self._seed_catalog_definitions(repository)
+        definition = await repository.get_definition(key, version=version)
+        if definition is None:
+            raise DomainError("Questionnaire definition not found.", code="definition_not_found")
+        return _to_response(definition)
+
+    async def create_definition(
+        self,
+        payload: QuestionnaireDefinitionCreateRequest,
+    ) -> QuestionnaireDefinitionResponse:
+        repository = self._require_repository()
+        _validate_definition_schema(payload.definition_schema)
+        version = await repository.get_latest_version(payload.key) + 1
+        if payload.active:
+            await repository.deactivate_definitions_for_key(payload.key)
+        definition = await repository.add_definition(
+            QuestionnaireDefinition(
+                key=payload.key,
+                version=version,
+                title=payload.title.strip(),
+                description=payload.description or "",
+                schema=payload.definition_schema,
+                active=payload.active,
+            )
+        )
+        return _to_response(definition)
+
+    async def update_definition(
+        self,
+        key: QuestionnaireKey,
+        payload: QuestionnaireDefinitionUpdateRequest,
+        *,
+        version: int | None = None,
+    ) -> QuestionnaireDefinitionResponse:
+        repository = self._require_repository()
+        definition = await repository.get_definition(key, version=version)
+        if definition is None:
+            raise DomainError("Questionnaire definition not found.", code="definition_not_found")
+        updated_schema = definition.schema
+        if payload.definition_schema is not None:
+            updated_schema = payload.definition_schema
+        _validate_definition_schema(updated_schema)
+        has_submissions = await repository.has_submitted_responses(key, definition.version)
+        if has_submissions:
+            next_version = await repository.get_latest_version(key) + 1
+            await repository.deactivate_definitions_for_key(key)
+            definition = await repository.add_definition(
+                QuestionnaireDefinition(
+                    key=key,
+                    version=next_version,
+                    title=(payload.title or definition.title).strip(),
+                    description=(
+                        payload.description
+                        if payload.description is not None
+                        else definition.description
+                    ),
+                    schema=updated_schema,
+                    active=payload.active if payload.active is not None else True,
+                )
+            )
+        else:
+            definition.title = (payload.title or definition.title).strip()
+            definition.description = (
+                payload.description if payload.description is not None else definition.description
+            )
+            definition.schema = updated_schema
+            if payload.active is not None:
+                definition.active = payload.active
+        if definition.active:
+            await repository.deactivate_definitions_for_key(key, except_version=definition.version)
+        return _to_response(definition)
+
+    async def activate_definition(
+        self,
+        key: QuestionnaireKey,
+        version: int,
+    ) -> QuestionnaireDefinitionResponse:
+        repository = self._require_repository()
+        definition = await repository.get_definition(key, version=version)
+        if definition is None:
+            raise DomainError("Questionnaire definition not found.", code="definition_not_found")
+        await repository.deactivate_definitions_for_key(key, except_version=definition.version)
+        definition.active = True
+        return _to_response(definition)
+
+    async def retire_definition(
+        self,
+        key: QuestionnaireKey,
+        *,
+        version: int | None = None,
+    ) -> QuestionnaireDefinitionResponse:
+        repository = self._require_repository()
+        definition = await repository.get_definition(key, version=version)
+        if definition is None:
+            raise DomainError("Questionnaire definition not found.", code="definition_not_found")
+        definition.active = False
+        return _to_response(definition)
+
     async def get_assignment_response(
         self,
         user_id: UUID,
@@ -43,11 +162,15 @@ class FormsService:
             raise DomainError("Assignment not found.", code="assignment_not_found")
         response = await repository.get_response_by_assignment(assignment_id)
         if response is None:
+            definition = await _resolve_definition(
+                repository,
+                QuestionnaireKey(assignment.questionnaire_key),
+            )
             return QuestionnaireResponseResponse(
                 id=assignment_id,
                 assignment_id=assignment_id,
-                questionnaire_key=QuestionnaireKey(assignment.questionnaire_key),
-                questionnaire_version=1,
+                questionnaire_key=definition.key,
+                questionnaire_version=definition.version,
                 status=QuestionnaireResponseStatus.draft,
                 answers={},
             )
@@ -65,8 +188,9 @@ class FormsService:
         assignment = await repository.get_assignment_for_user(assignment_id, user_id)
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
-        definition = get_approved_questionnaire_definition(
-            QuestionnaireKey(assignment.questionnaire_key)
+        definition = await _resolve_definition(
+            repository,
+            QuestionnaireKey(assignment.questionnaire_key),
         )
         response = await repository.get_response_by_assignment(assignment_id)
         if submit:
@@ -96,7 +220,9 @@ class FormsService:
                     await scoring_service.compute_and_save_score(
                         assignment_id=assignment.id,
                         questionnaire_key=definition.key,
+                        questionnaire_version=definition.version,
                         answers=payload.answers,
+                        definition_schema=definition.schema,
                     )
                     assignment.status = AssignmentStatus.scored
                     assignment.scored_at = response.submitted_at
@@ -118,13 +244,33 @@ class FormsService:
             raise RuntimeError("FormsService requires a database session for response operations")
         return self.repository
 
+    async def _seed_catalog_definitions(self, repository: FormsRepository) -> None:
+        for catalog_definition in APPROVED_QUESTIONNAIRE_DEFINITIONS:
+            existing = await repository.get_definition(
+                catalog_definition.key,
+                version=catalog_definition.version,
+            )
+            if existing is not None:
+                continue
+            await repository.add_definition(
+                QuestionnaireDefinition(
+                    key=catalog_definition.key,
+                    version=catalog_definition.version,
+                    title=catalog_definition.title,
+                    description=catalog_definition.description,
+                    schema=catalog_definition.schema,
+                    active=True,
+                )
+            )
 
-def _to_response(definition) -> QuestionnaireDefinitionResponse:
+
+def _to_response(definition: Any) -> QuestionnaireDefinitionResponse:
     return QuestionnaireDefinitionResponse(
         key=definition.key,
         version=definition.version,
         title=definition.title,
-        description=definition.description,
+        description=definition.description or "",
+        active=getattr(definition, "active", True),
         definition_schema=definition.schema,
     )
 
@@ -169,3 +315,30 @@ def _allowed_answer_values(schema: dict) -> dict[str, set[int]]:
             else:
                 values[question_id] = scale_values
     return values
+
+
+async def _resolve_definition(
+    repository: FormsRepository,
+    key: QuestionnaireKey,
+) -> Any:
+    if hasattr(repository, "get_definition"):
+        definition = await repository.get_definition(key)
+        if definition is not None:
+            return definition
+    return get_approved_questionnaire_definition(key)
+
+
+def _validate_definition_schema(schema: dict[str, Any]) -> None:
+    sections = schema.get("sections")
+    if not isinstance(sections, list) or not sections:
+        raise DomainError(
+            "Questionnaire definition must include at least one section.",
+            code="definition_invalid",
+        )
+    for section in sections:
+        questions = section.get("questions") if isinstance(section, dict) else None
+        if not isinstance(questions, list) or not questions:
+            raise DomainError(
+                "Questionnaire definition sections must include at least one item.",
+                code="definition_invalid",
+            )

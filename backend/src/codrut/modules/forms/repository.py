@@ -1,11 +1,16 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.assignments.models import QuestionnaireAssignment
 from codrut.modules.companies.models import ParticipantProfile
-from codrut.modules.forms.models import QuestionnaireResponse
+from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
+    QuestionnaireKey,
+    QuestionnaireResponse,
+    QuestionnaireResponseStatus,
+)
 
 
 class FormsRepository:
@@ -43,3 +48,74 @@ class FormsRepository:
         self.session.add(response)
         await self.session.flush()
         return response
+
+    async def list_definitions(
+        self,
+        *,
+        active_only: bool = True,
+    ) -> list[QuestionnaireDefinition]:
+        stmt = select(QuestionnaireDefinition).order_by(
+            QuestionnaireDefinition.key,
+            QuestionnaireDefinition.version.desc(),
+        )
+        if active_only:
+            stmt = stmt.where(QuestionnaireDefinition.active.is_(True))
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_definition(
+        self,
+        key: QuestionnaireKey,
+        *,
+        version: int | None = None,
+    ) -> QuestionnaireDefinition | None:
+        stmt = select(QuestionnaireDefinition).where(QuestionnaireDefinition.key == key)
+        if version is None:
+            stmt = stmt.where(QuestionnaireDefinition.active.is_(True)).order_by(
+                QuestionnaireDefinition.version.desc()
+            )
+        else:
+            stmt = stmt.where(QuestionnaireDefinition.version == version)
+        result = await self.session.execute(stmt.limit(1))
+        return result.scalar_one_or_none()
+
+    async def get_latest_version(self, key: QuestionnaireKey) -> int:
+        result = await self.session.execute(
+            select(func.max(QuestionnaireDefinition.version)).where(
+                QuestionnaireDefinition.key == key,
+            )
+        )
+        return result.scalar_one_or_none() or 0
+
+    async def add_definition(
+        self,
+        definition: QuestionnaireDefinition,
+    ) -> QuestionnaireDefinition:
+        self.session.add(definition)
+        await self.session.flush()
+        return definition
+
+    async def has_submitted_responses(
+        self,
+        key: QuestionnaireKey,
+        version: int,
+    ) -> bool:
+        result = await self.session.execute(
+            select(QuestionnaireResponse.id)
+            .where(QuestionnaireResponse.questionnaire_key == key)
+            .where(QuestionnaireResponse.questionnaire_version == version)
+            .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def deactivate_definitions_for_key(
+        self,
+        key: QuestionnaireKey,
+        *,
+        except_version: int | None = None,
+    ) -> None:
+        definitions = await self.list_definitions(active_only=False)
+        for definition in definitions:
+            if definition.key == key and definition.version != except_version:
+                definition.active = False

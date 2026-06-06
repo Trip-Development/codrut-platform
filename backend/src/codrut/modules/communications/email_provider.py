@@ -105,7 +105,10 @@ class BrevoEmailProvider:
 
     async def send(self, message: EmailMessage) -> EmailSendResult:
         payload = {
-            "sender": {"email": (message.from_address or self.from_address).value, "name": self.from_name},
+            "sender": {
+                "email": (message.from_address or self.from_address).value,
+                "name": self.from_name,
+            },
             "to": [{"email": message.to.value}],
             "subject": message.subject,
             "htmlContent": message.html_body,
@@ -156,7 +159,10 @@ def build_email_provider(settings: Settings) -> EmailProvider:
         return LocalEmailProvider()
     if provider in {EmailProviderKey.smtp, EmailProviderKey.mailpit}:
         if settings.is_production and provider == EmailProviderKey.mailpit:
-            raise DomainError("Mailpit cannot be used in production.", code="email_provider_not_configured")
+            raise DomainError(
+                "Mailpit cannot be used in production.",
+                code="email_provider_not_configured",
+            )
         return SmtpEmailProvider(settings)
     if provider == EmailProviderKey.brevo:
         return BrevoEmailProvider(settings)

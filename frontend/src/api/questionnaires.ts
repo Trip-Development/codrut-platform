@@ -524,81 +524,20 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
   },
 };
 
-function getQuestionnaireStorage(): Storage | null {
-  if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
-  return localStorage;
-}
-
 export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireDefinitionStub[]> {
-  let localDefs: QuestionnaireDefinition[] = [];
-  const storage = getQuestionnaireStorage();
-  if (storage) {
-    const stored = storage.getItem("codrut_local_questionnaire_definitions");
-    if (stored) {
-      try {
-        localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
-      } catch (e) {
-        console.error("Error parsing local questionnaire definitions", e);
-      }
-    }
-  }
-
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
+    const response = await fetch(`${getApiBaseUrl()}/forms/definitions?include_retired=true`, {
       cache: "no-store",
+      credentials: "include",
     });
-    let serverDefs: QuestionnaireDefinition[] = [];
-    if (response.ok) {
-      serverDefs = (await response.json()) as QuestionnaireDefinition[];
+    if (!response.ok) {
+      return Object.values(fallbackDefinitionDetails).map(stubFromDefinition);
     }
-
-    const allDefsMap = new Map<string, QuestionnaireDefinition>();
-
-    // Seed fallback details first if server is empty
-    if (serverDefs.length === 0) {
-      Object.values(fallbackDefinitionDetails).forEach((def) => {
-        allDefsMap.set(`${def.key}_v${def.version}`, def);
-      });
-    } else {
-      serverDefs.forEach((def) => {
-        allDefsMap.set(`${def.key}_v${def.version}`, def);
-      });
-    }
-
-    // Overlay localStorage definitions
-    localDefs.forEach((def) => {
-      allDefsMap.set(`${def.key}_v${def.version}`, def);
-    });
-
-    const mergedList = Array.from(allDefsMap.values());
-    const activeDefinitions = mergedList.map(stubFromDefinition);
-
-    // Merge in planned questionnaires that don't have active implementations yet
-    const plannedDefinitions = fallbackDefinitions.filter(
-      (definition) =>
-        definition.status === "planned" &&
-        !activeDefinitions.some((d) => d.id === definition.id)
-    );
-
-    return [...activeDefinitions, ...plannedDefinitions];
-  } catch {
-    // Merge fallback details and local storage on failure
-    const allDefsMap = new Map<string, QuestionnaireDefinition>();
-    Object.values(fallbackDefinitionDetails).forEach((def) => {
-      allDefsMap.set(`${def.key}_v${def.version}`, def);
-    });
-    localDefs.forEach((def) => {
-      allDefsMap.set(`${def.key}_v${def.version}`, def);
-    });
-
-    const activeDefinitions = Array.from(allDefsMap.values()).map(stubFromDefinition);
-    const plannedDefinitions = fallbackDefinitions.filter(
-      (definition) =>
-        definition.status === "planned" &&
-        !activeDefinitions.some((d) => d.id === definition.id)
-    );
-
-    return [...activeDefinitions, ...plannedDefinitions];
+    const serverDefs = (await response.json()) as QuestionnaireDefinition[];
+    return serverDefs.map(stubFromDefinition);
+  } catch (e) {
+    console.error("Error listing definitions", e);
+    return Object.values(fallbackDefinitionDetails).map(stubFromDefinition);
   }
 }
 
@@ -608,40 +547,108 @@ export async function getQuestionnaireDefinition(
   const [realKey, versionStr] = key.split("@");
   const targetVersion = versionStr ? parseInt(versionStr) : null;
 
-  const storage = getQuestionnaireStorage();
-  if (storage) {
-    const stored = storage.getItem("codrut_local_questionnaire_definitions");
-    if (stored) {
-      try {
-        const localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
-        const matched = localDefs.filter((d) => d.key === realKey);
-        if (matched.length > 0) {
-          if (targetVersion) {
-            const vMatch = matched.find((d) => d.version === targetVersion);
-            if (vMatch) return vMatch;
-          } else {
-            // Sort by version descending and return latest
-            matched.sort((a, b) => b.version - a.version);
-            return matched[0];
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }
-
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/definitions/${realKey}`, {
+    const url = targetVersion
+      ? `${getApiBaseUrl()}/forms/definitions/${realKey}?version=${targetVersion}`
+      : `${getApiBaseUrl()}/forms/definitions/${realKey}`;
+    const response = await fetch(url, {
       cache: "no-store",
+      credentials: "include",
     });
     if (!response.ok) {
       return fallbackDefinitionDetails[realKey] ?? null;
     }
     return (await response.json()) as QuestionnaireDefinition;
-  } catch {
+  } catch (e) {
+    console.error("Error getting definition", e);
     return fallbackDefinitionDetails[realKey] ?? null;
   }
+}
+
+export async function createQuestionnaireDefinitionOnServer(
+  definition: Omit<QuestionnaireDefinition, "version"> & { active?: boolean }
+): Promise<QuestionnaireDefinition> {
+  const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      key: definition.key,
+      title: definition.title,
+      description: definition.description,
+      schema: definition.schema,
+      active: definition.active ?? true,
+    }),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut crea chestionarul pe server.");
+  }
+  return (await response.json()) as QuestionnaireDefinition;
+}
+
+export async function updateQuestionnaireDefinitionOnServer(
+  key: string,
+  fields: { title?: string; description?: string; schema?: any; active?: boolean }, // eslint-disable-line @typescript-eslint/no-explicit-any
+  version?: number
+): Promise<QuestionnaireDefinition> {
+  const url = version
+    ? `${getApiBaseUrl()}/forms/definitions/${key}?version=${version}`
+    : `${getApiBaseUrl()}/forms/definitions/${key}`;
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      title: fields.title,
+      description: fields.description,
+      schema: fields.schema,
+      active: fields.active,
+    }),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut actualiza chestionarul pe server.");
+  }
+  return (await response.json()) as QuestionnaireDefinition;
+}
+
+export async function activateQuestionnaireDefinitionOnServer(
+  key: string,
+  version: number
+): Promise<QuestionnaireDefinition> {
+  const response = await fetch(`${getApiBaseUrl()}/forms/definitions/${key}/versions/${version}/activate`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut activa versiunea chestionarului.");
+  }
+  return (await response.json()) as QuestionnaireDefinition;
+}
+
+export async function deleteQuestionnaireDefinitionOnServer(
+  key: string,
+  version?: number
+): Promise<QuestionnaireDefinition> {
+  const url = version
+    ? `${getApiBaseUrl()}/forms/definitions/${key}?version=${version}`
+    : `${getApiBaseUrl()}/forms/definitions/${key}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Nu am putut pensiona chestionarul.");
+  }
+  return (await response.json()) as QuestionnaireDefinition;
+}
+
+function getQuestionnaireStorage(): Storage | null {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
+  return localStorage;
 }
 
 export function saveLocalQuestionnaireDefinition(definition: QuestionnaireDefinition): void {

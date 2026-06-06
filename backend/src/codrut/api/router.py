@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 from codrut.modules.assignments.router import router as assignments_router
-from codrut.modules.companies.router import router as companies_router
 from codrut.modules.communications.router import router as communications_router
+from codrut.modules.companies.router import router as companies_router
 from codrut.modules.forms.router import router as forms_router
 from codrut.modules.health.router import router as health_router
 from codrut.modules.identity.router import router as identity_router

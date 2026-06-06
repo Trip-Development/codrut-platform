@@ -1,7 +1,12 @@
-import pytest
 import httpx
+import pytest
 
-from codrut.contracts.emails import EmailAddress, EmailDeliveryStatus, EmailMessage, EmailProviderKey
+from codrut.contracts.emails import (
+    EmailAddress,
+    EmailDeliveryStatus,
+    EmailMessage,
+    EmailProviderKey,
+)
 from codrut.core.config import Settings
 from codrut.core.errors import DomainError
 from codrut.modules.communications.email_provider import (

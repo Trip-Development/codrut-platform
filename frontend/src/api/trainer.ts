@@ -380,6 +380,7 @@ export async function getTrainerOperationsSummary(): Promise<TrainerOperationsSu
         const storedP = localStorage.getItem(`codrut_participants_${cId}`);
         if (storedP) {
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const parsed = JSON.parse(storedP) as any[];
             parsed.forEach((p) => {
               if (!mergedRoster.some((r) => r.email.toLowerCase() === p.email.toLowerCase())) {
