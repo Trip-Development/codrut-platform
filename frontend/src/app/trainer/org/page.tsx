@@ -1,13 +1,15 @@
-import { getTrainerSession } from "@/api/auth";
+import { getTrainerSession } from "@/api/auth-server";
 import { getCompanyDetail, getCompanyList } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 
 import { OrgExplorer, type OrgExplorerCompany } from "./org-explorer";
 
 export default async function TrainerOrgPage() {
-  const [trainer, companies] = await Promise.all([getTrainerSession(), getCompanyList()]);
-  const details = await Promise.all(companies.map((company) => getCompanyDetail(company.id)));
+  const requestOptions = await getServerApiRequestOptions();
+  const [trainer, companies] = await Promise.all([getTrainerSession(), getCompanyList(requestOptions)]);
+  const details = await Promise.all(companies.map((company) => getCompanyDetail(company.id, requestOptions)));
   const explorerCompanies: OrgExplorerCompany[] = details
     .filter((company): company is NonNullable<typeof company> => Boolean(company))
     .map((company) => ({

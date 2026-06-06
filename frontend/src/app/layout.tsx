@@ -29,8 +29,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ro">
+    <html lang="ro" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={`${interTight.variable} ${fraunces.variable}`}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('codrut-theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t}else if(matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.dataset.theme='dark'}}catch(e){}",
+          }}
+        />
         <div className="app-min-height bg-background text-foreground selection:bg-burgundy selection:text-white">
           {children}
         </div>

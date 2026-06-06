@@ -1,12 +1,14 @@
-import { getTrainerSession } from "@/api/auth";
+import { getTrainerSession } from "@/api/auth-server";
 import { getCompanyList } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 
 import { RosterImporter } from "./roster-importer";
 
 export default async function TrainerRosterPage() {
-  const [trainer, companies] = await Promise.all([getTrainerSession(), getCompanyList()]);
+  const requestOptions = await getServerApiRequestOptions();
+  const [trainer, companies] = await Promise.all([getTrainerSession(), getCompanyList(requestOptions)]);
 
   return (
     <AppShell

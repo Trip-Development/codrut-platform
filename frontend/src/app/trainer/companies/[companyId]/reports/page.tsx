@@ -1,4 +1,5 @@
 import { getCompanyAssignments, getCompanyParticipants } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 
 export default async function CompanyReportsPage({
   params,
@@ -6,9 +7,10 @@ export default async function CompanyReportsPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
+  const requestOptions = await getServerApiRequestOptions();
   const [assignments, participants] = await Promise.all([
-    getCompanyAssignments(companyId),
-    getCompanyParticipants(companyId),
+    getCompanyAssignments(companyId, requestOptions),
+    getCompanyParticipants(companyId, requestOptions),
   ]);
 
   const participantMap = new Map(participants.map((p) => [p.id, p.full_name]));

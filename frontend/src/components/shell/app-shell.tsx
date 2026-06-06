@@ -22,58 +22,80 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
-// Helper to get SVG icon path based on navigation item href
 function getNavIcon(href: string) {
   if (href.endsWith("/trainer") || href === "/participant") {
-    // Home / Dashboard
     return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
       </svg>
     );
   }
-  if (href.includes("/projects") || href.includes("/questionnaires")) {
-    // Folders / Assessments
+  if (href.includes("/companies") || href.includes("/projects")) {
     return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8.8a1.8 1.8 0 0 1 1.8-1.8h6.4A1.8 1.8 0 0 1 15 8.8V21M8 11h1.5M8 14h1.5M8 17h1.5M15 12h2.2A1.8 1.8 0 0 1 19 13.8V21" />
       </svg>
     );
   }
-  if (href.includes("/org-chart")) {
-    // Org Chart
+  if (href.includes("/roster") || href.includes("/participants") || href.includes("/account")) {
     return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94-3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7Z" />
       </svg>
     );
   }
-  if (href.includes("/participants") || href.includes("/account")) {
-    // Users / Profile
+  if (href.includes("/org") || href.includes("/org-chart")) {
     return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v4m0 0H7.5A2.5 2.5 0 0 0 5 10.5V13m7-5h4.5A2.5 2.5 0 0 1 19 10.5V13M5 13h5v5H5v-5Zm9 0h5v5h-5v-5Z" />
       </svg>
     );
   }
   if (href.includes("/email") || href.includes("/onboarding")) {
-    // Messaging / Outbox
     return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     );
   }
-  if (href.includes("/reports") || href.includes("/final-evaluation") || href.includes("/chat")) {
-    // Analytics / Star
+  if (href.includes("/questionnaires") || href.includes("/tasks")) {
     return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+      </svg>
+    );
+  }
+  if (href.includes("/final-evaluation")) {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+      </svg>
+    );
+  }
+  if (href.includes("/chat")) {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 0 1-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    );
+  }
+  if (href.includes("/reports")) {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.961 0 1.36 1.253.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.772-.557-.373-1.81.588-1.81h4.906a1 1 0 00.95-.69l1.519-4.674z" />
       </svg>
     );
   }
+  if (href.includes("/settings")) {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.3 4.3 11 2h2l.7 2.3a7.8 7.8 0 0 1 1.6.7l2.1-1.1 1.4 1.4-1.1 2.1c.3.5.5 1 .7 1.6L21 10v2l-2.3.7a7.8 7.8 0 0 1-.7 1.6l1.1 2.1-1.4 1.4-2.1-1.1c-.5.3-1 .5-1.6.7L13 20h-2l-.7-2.3a7.8 7.8 0 0 1-1.6-.7l-2.1 1.1-1.4-1.4 1.1-2.1c-.3-.5-.5-1-.7-1.6L3 12v-2l2.3-.7c.2-.6.4-1.1.7-1.6L4.9 5.6l1.4-1.4L8.7 5c.5-.3 1-.5 1.6-.7Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z" />
+      </svg>
+    );
+  }
   return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
@@ -104,14 +126,14 @@ export function AppShell({
             href={item.href}
             onClick={() => setMobileMenuOpen(false)}
             className={[
-              "tap-soft flex items-center gap-3.5 rounded-2xl px-4 py-3.5 text-sm font-semibold transition-all duration-200",
+              "tap-soft group relative flex items-center gap-3.5 rounded-2xl px-4 py-3.5 text-sm font-semibold",
               active
-                ? "bg-burgundy text-white shadow-md shadow-burgundy/10"
-                : "text-foreground/75 hover:bg-surface-muted hover:text-burgundy",
+                ? "bg-burgundy text-white shadow-md shadow-burgundy/12"
+                : "text-foreground/72 hover:bg-surface-muted hover:text-burgundy",
             ].join(" ")}
           >
-            {getNavIcon(item.href)}
-            <span>{item.label}</span>
+            <span className={active ? "text-white" : "text-foreground/48 group-hover:text-burgundy"}>{getNavIcon(item.href)}</span>
+            <span className="truncate">{item.label}</span>
           </Link>
         );
       })}
@@ -119,9 +141,8 @@ export function AppShell({
   );
 
   return (
-    <div className="app-min-height flex flex-col md:flex-row bg-background">
-      {/* Desktop Sidebar (Left) */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-surface p-6 sticky top-0 h-screen">
+    <div className={`app-min-height flex flex-col bg-background md:flex-row ${audience === "participant" ? "bg-vines-pattern" : ""}`}>
+      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--shell-sidebar)] p-6 shadow-sm backdrop-blur md:sticky md:top-0 md:flex">
         <div className="mb-8">
           <Link href="/">
             <BrandMark
@@ -135,9 +156,9 @@ export function AppShell({
           {renderNavLinks()}
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-[var(--border)] flex flex-col gap-4">
+        <div className="mt-auto flex flex-col gap-4 border-t border-[var(--border)] pt-6">
           <div className="flex items-center justify-between gap-3">
-            <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/75 truncate max-w-[130px]">
+            <div className="max-w-[130px] truncate rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/75">
               {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
             </div>
             <ThemeToggle />
@@ -145,49 +166,48 @@ export function AppShell({
         </div>
       </aside>
 
-      {/* Mobile Top Header (Fixed Top) */}
-      <header className="safe-top md:hidden sticky top-0 z-40 border-b border-[var(--border)] bg-surface/90 shadow-sm backdrop-blur-xl flex items-center justify-between px-4 py-3">
+      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b border-[var(--border)] bg-surface/90 px-4 py-3 shadow-sm backdrop-blur-xl md:hidden">
         <Link href="/">
-          <BrandMark
-            size="sm"
-            subtitle={isTrainer ? "Trainer" : "Participant"}
-          />
+            <BrandMark
+              size="sm"
+              subtitle={isTrainer ? "Trainer" : "Participant"}
+            />
         </Link>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2.5 rounded-xl border border-[var(--border)] bg-surface text-foreground/75 hover:bg-surface-muted active:scale-95 transition-transform"
+            className="tap-soft rounded-xl border border-[var(--border)] bg-surface p-2.5 text-foreground/75 hover:bg-surface-muted"
             aria-label="Toggle Navigation Menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
         </div>
       </header>
 
-      {/* Mobile Menu Drawer Overlay */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-300 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
           <nav
-            className="absolute left-0 top-0 bottom-0 w-72 bg-surface p-6 shadow-2xl flex flex-col h-full animate-slide-in"
+            className="animate-slide-in absolute bottom-0 left-0 top-0 flex h-full w-72 flex-col border-r border-[var(--border)] bg-[var(--shell-sidebar)] p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             aria-label="Mobile Drawer Navigation"
           >
-            <div className="flex items-center justify-between mb-8">
-              <BrandMark
-                size="sm"
-                subtitle={isTrainer ? "Trainer" : "Participant"}
-              />
+            <div className="mb-8 flex items-center justify-between">
+                <BrandMark
+                  size="sm"
+                  subtitle={isTrainer ? "Trainer" : "Participant"}
+                />
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-1.5 rounded-xl text-foreground/50 hover:bg-surface-muted"
+                className="tap-soft rounded-xl p-1.5 text-foreground/50 hover:bg-surface-muted"
+                aria-label="Inchide meniul"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -195,7 +215,7 @@ export function AppShell({
             <div className="flex-1 overflow-y-auto">
               {renderNavLinks()}
             </div>
-            <div className="mt-auto pt-6 border-t border-[var(--border)]">
+            <div className="mt-auto border-t border-[var(--border)] pt-6">
               <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-center text-xs font-bold text-foreground/75">
                 {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
               </div>
@@ -204,9 +224,8 @@ export function AppShell({
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 px-4 py-8 md:px-10 md:py-12 max-w-7xl mx-auto w-full">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 md:px-10 md:py-12">
           <section className="mb-8">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-burgundy">{eyebrow}</p>
             <h1 className="mt-2.5 font-display text-4xl font-semibold tracking-tight text-foreground md:text-5xl">

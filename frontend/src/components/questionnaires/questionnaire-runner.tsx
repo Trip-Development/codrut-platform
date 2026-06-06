@@ -88,15 +88,15 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+      <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-surface shadow-sm">
         <section className="border-b border-[var(--border)] px-5 py-5 md:px-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-burgundy/75">
             v{definition.version} · {definition.key}
           </p>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/68">{definition.description}</p>
           {definition.schema.instructions ? (
-            <p className="mt-4 max-w-3xl border-l-2 border-burgundy/45 pl-3 text-sm leading-6 text-foreground/62">
+            <p className="mt-4 max-w-3xl rounded-2xl border border-burgundy/18 bg-surface-muted px-4 py-3 text-sm leading-6 text-foreground/66">
               {definition.schema.instructions}
             </p>
           ) : null}
@@ -107,16 +107,14 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
         ) : (
           definition.schema.sections.map((section) => (
             <section key={section.id} className="border-b border-[var(--border)] last:border-b-0">
-              <div className="bg-surface-muted/50 px-5 py-3 md:px-6">
-                <h3 className="text-sm font-semibold text-foreground/70">{section.title}</h3>
+              <div className="bg-surface-muted/45 px-5 py-3 md:px-6">
+                <h3 className="text-sm font-bold text-foreground/72">{section.title}</h3>
               </div>
               <div className="divide-y divide-[var(--border)]">
                 {section.questions.map((question, index) => (
-                  <article key={question.id} className="px-5 py-5 md:px-6">
-                    <div className="grid gap-4 md:grid-cols-[2.5rem_1fr]">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-sm font-semibold text-burgundy">
-                        {index + 1}
-                      </span>
+                  <article key={question.id} className="animate-fade-up px-5 py-5 md:px-6">
+                    <div className="grid gap-3 md:grid-cols-[1.5rem_1fr]">
+                      <span className="pt-0.5 text-sm font-bold tabular-nums text-burgundy/72">{index + 1}</span>
                       <div className="min-w-0">
                         <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
                         {question.instructions ? (
@@ -145,7 +143,7 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
         )}
       </div>
 
-      <aside className="sticky top-32 rounded-2xl border border-[var(--border)] bg-surface p-4 shadow-sm">
+      <aside className="rounded-3xl border border-[var(--border)] bg-surface p-4 shadow-sm lg:sticky lg:top-8">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-foreground">Progres</p>
           <p className="text-sm font-semibold tabular-nums text-foreground/62">
@@ -160,7 +158,7 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
         <div className="mt-5 grid gap-2">
           <button
             type="button"
-            className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-semibold text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+            className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
             disabled={!assignmentId || saveState === "saving" || isComplete}
             onClick={saveDraft}
           >
@@ -168,7 +166,7 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
           </button>
           <button
             type="button"
-            className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-brand disabled:cursor-not-allowed disabled:opacity-45"
             disabled={!canSubmit || saveState === "saving" || isComplete}
             onClick={submit}
           >
@@ -197,7 +195,7 @@ function CompletionPanel({ answeredCount, total }: { answeredCount: number; tota
   return (
     <section className="px-5 py-10 text-center md:px-6">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/35 text-xl font-semibold text-success-ink">
-        OK
+        <CheckIcon />
       </div>
       <h3 className="mt-5 text-2xl font-semibold text-foreground">Raspunsurile au fost trimise</h3>
       <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-foreground/62">
@@ -240,7 +238,7 @@ function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProp
             type="button"
             onClick={() => onAnswerChange(key, option.value)}
             className={[
-              "tap-soft rounded-lg border px-3 py-2.5 text-sm font-semibold",
+              "tap-soft min-h-11 rounded-xl border px-3 py-2.5 text-sm font-bold",
               selected
                 ? "border-burgundy bg-burgundy text-white shadow-sm"
                 : "border-[var(--border)] bg-background text-foreground/70 hover:border-burgundy/45 hover:text-burgundy",
@@ -256,13 +254,13 @@ function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProp
 
 function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
   return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)]">
+    <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)]">
       {(question.statements ?? []).map((statement) => {
         const key = answerKey(question, statement.id);
         return (
           <div
             key={statement.id}
-            className="grid gap-3 border-b border-[var(--border)] bg-background px-3 py-3 last:border-b-0 md:grid-cols-[1fr_11rem] md:items-center"
+            className="grid gap-3 border-b border-[var(--border)] bg-surface px-4 py-3.5 last:border-b-0 md:grid-cols-[1fr_11rem] md:items-center"
           >
             <p className="text-sm font-medium leading-6 text-foreground/72">
               <span className="mr-2 font-semibold text-burgundy">{statement.code}.</span>
@@ -271,7 +269,7 @@ function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInp
             <select
               value={answers[key] ?? ""}
               onChange={(event) => onAnswerChange(key, Number(event.target.value))}
-              className="rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-sm font-semibold text-foreground"
+              className="min-h-10 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground"
             >
               <option value="" disabled>
                 Alege scorul
@@ -286,5 +284,13 @@ function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInp
         );
       })}
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24" fill="none">
+      <path d="m6.5 12.5 3.2 3.2 7.8-8.4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" />
+    </svg>
   );
 }

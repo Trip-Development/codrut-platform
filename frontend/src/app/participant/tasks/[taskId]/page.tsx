@@ -45,7 +45,7 @@ export default async function TaskRunnerPage({ params }: TaskRunnerPageProps) {
             href="/participant"
             className="tap-soft mt-4 inline-flex rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white"
           >
-            Inapoi la sarcinile mele
+            Înapoi la Dashboard
           </Link>
         </section>
       )}

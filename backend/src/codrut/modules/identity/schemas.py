@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -28,7 +30,10 @@ class InviteVerifyResponse(BaseModel):
     full_name: str
     is_leadership: bool
     already_registered: bool
+    project_id: UUID
     project_name: str
+    expires_at: datetime
+    token_status: Literal["active"]
     tasks: list[InviteTask]
 
 

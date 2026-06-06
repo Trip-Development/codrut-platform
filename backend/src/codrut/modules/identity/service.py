@@ -90,7 +90,7 @@ class IdentityService:
         from codrut.core.config import get_settings
         from codrut.modules.assignments.models import Team, TeamMembership, TeamType
         from codrut.modules.communications.task_links import parse_task_token
-        from codrut.modules.companies.models import ParticipantProfile
+        from codrut.modules.companies.models import Company, ParticipantProfile
 
         settings = get_settings()
         try:
@@ -107,6 +107,18 @@ class IdentityService:
         profile = result.scalar_one_or_none()
         if profile is None:
             raise DomainError("Invitation respondent profile not found.", code="profile_not_found")
+        if profile.company_id != claims.company_id:
+            raise DomainError(
+                "Task link does not match respondent scope.",
+                code="task_link_scope_mismatch",
+            )
+
+        company_result = await self.repository.session.execute(
+            select(Company).where(Company.id == claims.company_id)
+        )
+        company = company_result.scalar_one_or_none()
+        if company is None:
+            raise DomainError("Invitation project not found.", code="project_not_found")
 
         # Check if already registered
         already_registered = profile.user_id is not None
@@ -124,23 +136,37 @@ class IdentityService:
         from codrut.modules.assignments.models import QuestionnaireAssignment
         from codrut.modules.identity.schemas import InviteTask
         assignments_result = await self.repository.session.execute(
-            select(QuestionnaireAssignment).where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
+            .where(QuestionnaireAssignment.company_id == claims.company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id == claims.respondent_profile_id)
         )
         assignments = assignments_result.scalars().all()
+        assignments_by_id = {assignment.id: assignment for assignment in assignments}
+        if set(assignments_by_id) != set(claims.assignment_ids):
+            raise DomainError(
+                "Task link assignment scope is invalid.",
+                code="task_link_scope_mismatch",
+            )
 
         tasks = []
-        for ass in assignments:
+        for assignment_id in claims.assignment_ids:
+            ass = assignments_by_id[assignment_id]
             target_label = "Self Assessment"
             if ass.target_type == "team" and ass.target_team_id:
                 team_result = await self.repository.session.execute(
-                    select(Team).where(Team.id == ass.target_team_id)
+                    select(Team)
+                    .where(Team.id == ass.target_team_id)
+                    .where(Team.company_id == claims.company_id)
                 )
                 team = team_result.scalar_one_or_none()
                 if team:
                     target_label = f"Echipa {team.name}"
             elif ass.target_type == "person" and ass.target_person_id:
                 person_result = await self.repository.session.execute(
-                    select(ParticipantProfile).where(ParticipantProfile.id == ass.target_person_id)
+                    select(ParticipantProfile)
+                    .where(ParticipantProfile.id == ass.target_person_id)
+                    .where(ParticipantProfile.company_id == claims.company_id)
                 )
                 person = person_result.scalar_one_or_none()
                 if person:
@@ -183,7 +209,10 @@ class IdentityService:
             full_name=profile.full_name,
             is_leadership=is_leadership,
             already_registered=already_registered,
-            project_name="Training & Coaching",
+            project_id=claims.company_id,
+            project_name=company.name,
+            expires_at=claims.expires_at,
+            token_status="active",  # noqa: S106
             tasks=tasks,
         )
 

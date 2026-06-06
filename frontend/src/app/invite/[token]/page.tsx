@@ -7,6 +7,7 @@ import { SessionBanner } from "@/components/shell/session-banner";
 import { TaskBundle } from "@/components/tasks/task-bundle";
 import { audienceAccessNote } from "@/api/auth";
 import { resolveInviteBundle } from "@/api/invites";
+import { isDemoFallbackEnabled } from "@/api/runtime";
 
 type InviteTask = {
   id: string;
@@ -25,7 +26,10 @@ type VerifyData = {
   full_name: string;
   is_leadership: boolean;
   already_registered: boolean;
+  project_id?: string;
   project_name: string;
+  expires_at?: string;
+  token_status?: "active";
   tasks: InviteTask[];
 };
 
@@ -42,7 +46,7 @@ export default function InvitePage({ params }: InvitePageProps) {
   useEffect(() => {
     async function verify() {
       try {
-        if (token === "demo-token" || token === "expired-demo") {
+        if (isDemoFallbackEnabled() && (token === "demo-token" || token === "expired-demo")) {
           const bundle = await resolveInviteBundle(token);
           if (bundle.state !== "valid") {
             throw new Error(bundle.message);
@@ -167,7 +171,7 @@ export default function InvitePage({ params }: InvitePageProps) {
         </h1>
 
         <p className="mt-4 max-w-2xl text-base leading-7 text-foreground/65">
-          Acest link strânge toate chestionarele asociate e-mailului <strong className="text-foreground/80">{data.email}</strong> în proiectul <strong className="text-foreground/80">{data.project_name}</strong>.
+          Acest link strânge toate chestionarele asociate e-mailului <strong className="text-foreground/80">{data.email}</strong> în proiectul <strong className="text-foreground/80">{data.project_name}</strong>{data.expires_at ? ` până la ${formatInviteDeadline(data.expires_at)}.` : "."}
         </p>
 
         <div className="mt-6">
@@ -179,7 +183,7 @@ export default function InvitePage({ params }: InvitePageProps) {
             tasks={data.tasks}
             projectName={data.project_name}
             participantEmail={data.email}
-            deadlineLabel="finalul evaluării"
+            deadlineLabel={data.expires_at ? formatInviteDeadline(data.expires_at) : "finalul evaluării"}
           />
         </div>
 
@@ -209,4 +213,17 @@ export default function InvitePage({ params }: InvitePageProps) {
       </section>
     </main>
   );
+}
+
+function formatInviteDeadline(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "deadline-ul proiectului";
+  }
+
+  return new Intl.DateTimeFormat("ro-RO", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }

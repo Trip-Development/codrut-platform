@@ -13,10 +13,16 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
 )
 from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
-from codrut.modules.companies.models import ParticipantProfile
+from codrut.modules.companies.models import Company, ParticipantProfile
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import RegisterRequest
 from codrut.modules.identity.service import IdentityService
+
+
+def _company_result(company_id: uuid.UUID, name: str = "Intake Iunie") -> MagicMock:
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = Company(id=company_id, name=name)
+    return result
 
 
 @pytest.mark.asyncio
@@ -57,6 +63,7 @@ async def test_verify_invite_token_success() -> None:
 
     mock_session.execute.side_effect = [
         mock_result_profile,
+        _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
     ]
@@ -68,8 +75,84 @@ async def test_verify_invite_token_success() -> None:
     assert result.full_name == "Test User"
     assert result.is_leadership is True
     assert result.already_registered is False
+    assert result.project_id == claims.company_id
+    assert result.project_name == "Intake Iunie"
+    assert result.expires_at.timestamp() == int(claims.expires_at.timestamp())
+    assert result.token_status == "active"  # noqa: S105
     assert len(result.tasks) == 1
     assert result.tasks[0].id == str(mock_assignment.id)
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_token_rejects_profile_company_mismatch() -> None:
+    settings = get_settings()
+    claims = TaskLinkClaims(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        assignment_ids=(uuid.uuid4(),),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    token = create_task_token(claims, settings)
+
+    mock_session = AsyncMock()
+    mock_profile = ParticipantProfile(
+        id=claims.respondent_profile_id,
+        company_id=uuid.uuid4(),
+        user_id=None,
+        email="test@example.com",
+        full_name="Test User",
+    )
+    mock_result_profile = MagicMock()
+    mock_result_profile.scalar_one_or_none.return_value = mock_profile
+    mock_session.execute.side_effect = [mock_result_profile]
+
+    service = IdentityService(mock_session)
+    with pytest.raises(DomainError) as exc_info:
+        await service.verify_invite_token(token)
+
+    assert exc_info.value.code == "task_link_scope_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_token_rejects_assignment_scope_mismatch() -> None:
+    settings = get_settings()
+    claims = TaskLinkClaims(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        assignment_ids=(uuid.uuid4(),),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    token = create_task_token(claims, settings)
+
+    mock_session = AsyncMock()
+    mock_profile = ParticipantProfile(
+        id=claims.respondent_profile_id,
+        company_id=claims.company_id,
+        user_id=None,
+        email="test@example.com",
+        full_name="Test User",
+    )
+    mock_result_profile = MagicMock()
+    mock_result_profile.scalar_one_or_none.return_value = mock_profile
+
+    mock_result_leadership = MagicMock()
+    mock_result_leadership.scalar.return_value = False
+
+    mock_result_assignments = MagicMock()
+    mock_result_assignments.scalars.return_value.all.return_value = []
+
+    mock_session.execute.side_effect = [
+        mock_result_profile,
+        _company_result(claims.company_id),
+        mock_result_leadership,
+        mock_result_assignments,
+    ]
+
+    service = IdentityService(mock_session)
+    with pytest.raises(DomainError) as exc_info:
+        await service.verify_invite_token(token)
+
+    assert exc_info.value.code == "task_link_scope_mismatch"
 
 
 @pytest.mark.asyncio
@@ -122,7 +205,7 @@ async def test_register_success() -> None:
     token = create_task_token(claims, settings)
 
     mock_session = AsyncMock()
-    
+
     # 1. select(ParticipantProfile) in verify_invite_token
     mock_profile = ParticipantProfile(
         id=claims.respondent_profile_id,
@@ -165,6 +248,7 @@ async def test_register_success() -> None:
 
     mock_session.execute.side_effect = [
         mock_result_profile,
+        _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
         mock_result_user_exists,
@@ -172,7 +256,7 @@ async def test_register_success() -> None:
     ]
 
     service = IdentityService(mock_session)
-    
+
     payload = RegisterRequest(
         email="test@example.com",
         password="securepassword123",
@@ -197,7 +281,7 @@ async def test_register_forbidden_for_non_leadership() -> None:
     token = create_task_token(claims, settings)
 
     mock_session = AsyncMock()
-    
+
     mock_profile = ParticipantProfile(
         id=claims.respondent_profile_id,
         company_id=claims.company_id,
@@ -226,6 +310,7 @@ async def test_register_forbidden_for_non_leadership() -> None:
 
     mock_session.execute.side_effect = [
         mock_result_profile,
+        _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
     ]
@@ -254,7 +339,7 @@ async def test_register_mismatched_email() -> None:
     token = create_task_token(claims, settings)
 
     mock_session = AsyncMock()
-    
+
     mock_profile = ParticipantProfile(
         id=claims.respondent_profile_id,
         company_id=claims.company_id,
@@ -282,6 +367,7 @@ async def test_register_mismatched_email() -> None:
 
     mock_session.execute.side_effect = [
         mock_result_profile,
+        _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
     ]
@@ -344,6 +430,7 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
 
     mock_session.execute.side_effect = [
         mock_result_profile,
+        _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
         mock_result_profile_again,
@@ -404,6 +491,7 @@ async def test_verify_invite_token_and_create_session_for_leadership() -> None:
 
     mock_session.execute.side_effect = [
         mock_result_profile,
+        _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
         mock_result_profile_again,

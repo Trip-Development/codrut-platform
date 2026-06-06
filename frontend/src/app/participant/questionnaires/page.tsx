@@ -34,7 +34,7 @@ export default async function ParticipantQuestionnairesPage() {
               <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">{definition.description}</p>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-foreground/45">
                 <span>{definition.audience}</span>
-                <span>{definition.estimatedItems} itemi</span>
+                <span>{definition.estimatedItems} {definition.estimatedItems === 1 ? "întrebare" : "întrebări"}</span>
                 <span>{definition.status}</span>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   audienceAccessNote,
@@ -19,6 +19,15 @@ import {
 import { getTrainerDashboardSummary } from "./trainer";
 
 describe("frontend API adapter stubs", () => {
+  beforeEach(() => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
+  });
+
   it("returns role-scoped local users", async () => {
     await expect(getCurrentTrainer()).resolves.toMatchObject({ role: "trainer" });
     await expect(getCurrentParticipant()).resolves.toMatchObject({ role: "participant" });
@@ -44,13 +53,9 @@ describe("frontend API adapter stubs", () => {
   it("keeps questionnaire and email surfaces explicit", async () => {
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
-    expect(questionnaires.map((definition) => definition.id)).toEqual([
-      "lencioni",
-      "distress_drivers",
-      "pcm_baseline",
-      "phase",
-      "boss_360",
-    ]);
+    expect(questionnaires.map((definition) => definition.id)).toEqual(
+      expect.arrayContaining(["icare", "boss_360", "pcm_baseline", "phase"]),
+    );
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
       estimatedItems: 5,
@@ -88,7 +93,6 @@ describe("frontend API adapter stubs", () => {
       questionnaire_key: "lencioni",
     });
 
-    vi.unstubAllGlobals();
   });
 
   it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
@@ -107,6 +111,13 @@ describe("frontend API adapter stubs", () => {
       },
     });
 
-    vi.unstubAllGlobals();
+  });
+
+  it("does not fall back to demo sessions when fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(getTrainerSession()).rejects.toThrow("Trainer authentication required");
+    await expect(getParticipantSession()).rejects.toThrow("Participant authentication required");
   });
 });

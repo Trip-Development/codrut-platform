@@ -22,7 +22,7 @@ export function TaskBundle({
 
   if (tasks.length === 0) {
     return (
-      <section className="rounded-xl border border-[var(--border)] bg-surface px-5 py-6 text-center shadow-sm">
+      <section className="rounded-2xl border border-[var(--border)] bg-surface px-5 py-7 text-center shadow-sm">
         <p className="text-base font-semibold text-foreground">Nu exista sarcini active pentru acest proiect.</p>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-foreground/60">
           Cand trainerul trimite invitatiile, task-urile apar aici grupate dupa email si proiect.
@@ -32,14 +32,14 @@ export function TaskBundle({
   }
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-      <div className="border-b border-[var(--border)] px-5 py-4">
+    <section className="overflow-hidden rounded-3xl border border-[var(--border)] bg-surface shadow-sm">
+      <div className="border-b border-[var(--border)] bg-surface/80 px-5 py-5 md:px-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-burgundy/75">
               {projectName}
             </p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Sarcinile tale</h2>
+            <h2 className="mt-1.5 text-2xl font-semibold text-foreground">Sarcinile tale</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
               {participantEmail ? `${participantEmail} · ` : null}
               Link valid pana la {deadlineLabel}. Raspunsurile sunt asociate emailului, fara cont.
@@ -47,7 +47,7 @@ export function TaskBundle({
           </div>
           <Link
             href={nextHref}
-            className="tap-soft inline-flex justify-center rounded-xl bg-burgundy px-4 py-3 text-sm font-semibold text-white shadow-sm"
+            className="tap-soft inline-flex justify-center rounded-2xl bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-brand hover:bg-burgundy-700"
           >
             {progress.nextTask ? "Continua urmatorul task" : "Vezi chestionarele"}
           </Link>
@@ -75,14 +75,14 @@ function TaskRow({ task }: { task: InviteTask }) {
   const isDone = task.status === "completed";
 
   return (
-    <article className="group grid gap-3 px-5 py-4 transition-colors hover:bg-surface-muted/55 md:grid-cols-[1fr_auto] md:items-center">
+    <article className="group grid gap-3 px-5 py-4 transition-colors hover:bg-surface-muted/55 md:grid-cols-[1fr_auto] md:items-center md:px-6">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-semibold text-foreground">{task.title}</h3>
           <span
             className={[
-              "rounded-full px-2.5 py-1 text-xs font-semibold",
-              isDone ? "bg-success/35 text-success-ink" : "bg-burgundy-50 text-burgundy",
+              "rounded-full px-2.5 py-1 text-xs font-bold",
+              isDone ? "bg-success/35 text-success-ink" : "bg-burgundy-50 dark:bg-burgundy/10 text-burgundy",
             ].join(" ")}
           >
             {inviteStatusLabel(task.status)}
@@ -99,7 +99,7 @@ function TaskRow({ task }: { task: InviteTask }) {
         href={task.href}
         aria-disabled={isDone}
         className={[
-          "tap-soft inline-flex justify-center rounded-xl px-4 py-2.5 text-sm font-semibold",
+          "tap-soft inline-flex justify-center rounded-xl px-4 py-2.5 text-sm font-bold",
           isDone
             ? "border border-[var(--border)] bg-surface text-foreground/52"
             : "bg-foreground text-background group-hover:bg-burgundy group-hover:text-white",

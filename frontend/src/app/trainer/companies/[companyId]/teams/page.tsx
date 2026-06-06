@@ -1,4 +1,5 @@
 import { getCompanyTeams, type CompanyTeam } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 
 export default async function CompanyTeamsPage({
   params,
@@ -6,7 +7,7 @@ export default async function CompanyTeamsPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const teams = await getCompanyTeams(companyId);
+  const teams = await getCompanyTeams(companyId, await getServerApiRequestOptions());
 
   return (
     <>

@@ -4,12 +4,26 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { isDemoFallbackEnabled } from "@/api/runtime";
+
+const generateNickname = (name: string) => {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove Romanian diacritics
+    .replace(/[^a-z0-9]/g, "_")      // replace non-alphanumeric with underscore
+    .replace(/_+/g, "_")             // remove duplicate underscores
+    .replace(/^_+|_+$/g, "");        // trim leading/trailing underscores
+};
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [isNicknameCustom, setIsNicknameCustom] = useState(false);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -19,24 +33,37 @@ export default function RegisterPage() {
   useEffect(() => {
     // Retrieve invitation data from sessionStorage
     const storedInvite = sessionStorage.getItem("codrut_invite");
-    if (!storedInvite) {
-      // Redirect to login if no invite details are present
-      router.push("/login");
-      return;
+    let inviteData = null;
+    if (storedInvite) {
+      try {
+        inviteData = JSON.parse(storedInvite);
+      } catch {
+        // ignore
+      }
     }
 
-    try {
-      const inviteData = JSON.parse(storedInvite);
-      if (!inviteData.email || !inviteData.token) {
-        throw new Error("Date invitație nevalide");
+    // Fallback/demo invite if not found, only for intentional demo browsing.
+    if (!inviteData) {
+      if (!isDemoFallbackEnabled()) {
+        setError("Invitația lipsește sau nu mai este activă. Folosește linkul primit pe email.");
+        setLoading(false);
+        return;
       }
-      setEmail(inviteData.email);
-      setFullName(inviteData.fullName || "");
-      setToken(inviteData.token);
-      setLoading(false);
-    } catch {
-      router.push("/login");
+
+      inviteData = {
+        email: "lider.demo@companie.ro",
+        token: "demo-token",
+        fullName: "Lider Demo",
+        isLeadership: true,
+      };
+      sessionStorage.setItem("codrut_invite", JSON.stringify(inviteData));
     }
+
+    setEmail(inviteData.email || "lider.demo@companie.ro");
+    setFullName(inviteData.fullName || "");
+    setNickname(generateNickname(inviteData.fullName || ""));
+    setToken(inviteData.token || "demo-token");
+    setLoading(false);
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,13 +97,25 @@ export default function RegisterPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (isDemoFallbackEnabled() && token === "demo-token") {
+          console.warn("Bypassing API registration error for demo-token in prototype mode.");
+          sessionStorage.removeItem("codrut_invite");
+          router.push("/participant");
+          return;
+        }
         throw new Error(data.error?.message || "Înregistrarea a eșuat. Reîncearcă.");
       }
 
       // Registration successful, remove invite session and redirect to dashboard
       sessionStorage.removeItem("codrut_invite");
-      router.push("/participant/dashboard");
+      router.push("/participant");
     } catch (err) {
+      if (isDemoFallbackEnabled() && token === "demo-token") {
+        console.warn("Bypassing registration error for demo-token in prototype mode:", err);
+        sessionStorage.removeItem("codrut_invite");
+        router.push("/participant");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "A apărut o eroare la înregistrare.";
       setError(msg);
       setSubmitting(false);
@@ -118,18 +157,26 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Email
-            </label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
+                Email securizat
+              </label>
+              <span className="flex items-center gap-1 text-[11px] font-bold text-burgundy bg-burgundy/5 px-2 py-0.5 rounded-full border border-burgundy/10">
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+                Asociat invitației
+              </span>
+            </div>
             <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted/50 px-4 py-3.5 text-base text-foreground/50 cursor-not-allowed outline-none"
+              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted/62 px-4 py-3.5 text-base text-foreground/45 cursor-not-allowed outline-none select-none"
               type="email"
               value={email}
               disabled={true}
               title="Adresa de email este blocată la cea specificată în invitație."
             />
-            <p className="mt-1 text-[11px] text-foreground/45 italic">
-              * Emailul este blocat la cel din invitația securizată.
+            <p className="mt-1.5 text-[11px] text-foreground/45 italic">
+              * Emailul este blocat pentru a păstra continuitatea profilului tău.
             </p>
           </div>
 
@@ -140,11 +187,39 @@ export default function RegisterPage() {
             <input
               className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
               type="text"
-              placeholder="Numele tău"
+              placeholder="Numele tău complet"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (!isNicknameCustom) {
+                  setNickname(generateNickname(e.target.value));
+                }
+              }}
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
+              Nume utilizator (Nickname)
+            </label>
+            <div className="relative flex items-center">
+              <span className="absolute left-4 text-foreground/40 font-bold select-none">@</span>
+              <input
+                className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted pl-8 pr-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                type="text"
+                placeholder="nickname_ul_tau"
+                value={nickname}
+                onChange={(e) => {
+                  setNickname(generateNickname(e.target.value));
+                  setIsNicknameCustom(true);
+                }}
+                required
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-foreground/45 italic">
+              Nume de utilizator generat automat. Îl poți edita.
+            </p>
           </div>
 
           <div>
@@ -178,7 +253,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="tap-soft mt-2 w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark disabled:bg-burgundy/50 px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md flex items-center justify-center gap-2"
+            className="tap-soft mt-2.5 w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark disabled:bg-burgundy/50 px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md flex items-center justify-center gap-2"
           >
             {submitting ? (
               <>

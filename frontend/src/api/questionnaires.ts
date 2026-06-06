@@ -52,6 +52,7 @@ export type QuestionnaireDefinition = {
       status?: string;
       type?: string;
     };
+    audience?: "leadership" | "team" | "participant";
     instructions?: string;
     sections: QuestionnaireSection[];
     scoring?: Record<string, unknown>;
@@ -78,6 +79,9 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
   const estimatedItems = questions.reduce((count, question) => {
     return count + (question.statements?.length ?? 1);
   }, 0);
+  const audience =
+    definition.schema.audience ??
+    (definition.key === "distress_drivers" ? "leadership" : "team");
 
   return {
     id: definition.key,
@@ -86,7 +90,7 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
     status: "active",
     version: definition.version,
     source: definition.schema.source?.path,
-    audience: definition.key === "distress_drivers" ? "leadership" : "team",
+    audience,
     estimatedItems,
   };
 }
@@ -135,9 +139,305 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
     audience: "participant",
     estimatedItems: 5,
   },
+  {
+    id: "icare",
+    name: "ICARE leadership behaviors",
+    description: "48 behavior statements grouped by ICARE attributes and abilities.",
+    status: "active",
+    version: 1,
+    source: "docs/questionnaires/ICARE_scala.xlsx",
+    audience: "leadership",
+    estimatedItems: 48,
+  },
+];
+
+const icareFourPointScale: QuestionnaireScaleOption[] = [
+  { value: 1, label: "Rar" },
+  { value: 2, label: "Uneori" },
+  { value: 3, label: "Frecvent" },
+  { value: 4, label: "Întotdeauna" },
 ];
 
 const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
+  icare: {
+    key: "icare",
+    version: 1,
+    title: "ICARE leadership behaviors",
+    description:
+      "Evaluare comportamentală pe atributele ICARE. Versiune provizorie cu scală în 4 trepte, pregătită pentru ajustarea scalei finale.",
+    schema: {
+      schema_version: "questionnaire.v1",
+      audience: "leadership",
+      source: {
+        type: "xlsx",
+        path: "docs/questionnaires/ICARE_scala.xlsx",
+        status: "provisional",
+      },
+      instructions:
+        "Alege frecvența care descrie cel mai bine comportamentul observat. Scala curentă are 4 opțiuni și poate fi modificată fără rescrierea itemilor.",
+      scoring: {
+        scale_status: "provisional_4_point",
+        source_columns_used: ["2; Rar / 25%", "3; Uneori / 50%", "4; Frecvent / 75%", "5; Întotdeauna / 100%"],
+        source_column_excluded_for_now: "1; Niciodată / 0%",
+      },
+      sections: [
+        {
+          id: "inspiring",
+          title: "Inspiring",
+          questions: [
+            {
+              id: "icare_inspiring_developing_people",
+              code: "ICARE-1.1",
+              type: "statement_score_set",
+              label: "Developing people",
+              required: true,
+              instructions: "Dezvoltare continuă prin feedback constructiv, încurajare și follow-up.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_01", code: "S1", label: "Oferă feedback constructiv" },
+                { id: "icare_02", code: "S2", label: "Sprijină planurile de dezvoltare" },
+                { id: "icare_03", code: "S3", label: "Se implică în propria dezvoltare continuă" },
+              ],
+            },
+            {
+              id: "icare_inspiring_leading_by_example",
+              code: "ICARE-1.2",
+              type: "statement_score_set",
+              label: "Leading by example",
+              required: true,
+              instructions: "Aliniere între valori, angajamente și comportamentul zilnic.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_04", code: "S1", label: "Acționează conform valorilor declarate" },
+                { id: "icare_05", code: "S2", label: "Respectă angajamentele asumate față de echipă" },
+                { id: "icare_06", code: "S3", label: "Tratează toți membrii echipei cu respect și echitate" },
+              ],
+            },
+            {
+              id: "icare_inspiring_engagement_environment",
+              code: "ICARE-1.3",
+              type: "statement_score_set",
+              label: "Creating an environment that drives engagement",
+              required: true,
+              instructions: "Mediu sigur, energizant și orientat către contribuția fiecărui membru.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_07", code: "S1", label: "Creează spațiu psihologic sigur pentru exprimare" },
+                { id: "icare_08", code: "S2", label: "Delegă cu sens, nu doar cu sarcini" },
+                { id: "icare_09", code: "S3", label: "Recunoaște contribuția individuală la succesul echipei" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "create_trust",
+          title: "Create Trust",
+          questions: [
+            {
+              id: "icare_trust_collaboration",
+              code: "ICARE-2.1",
+              type: "statement_score_set",
+              label: "Advocate of collaboration",
+              required: true,
+              instructions: "Transparență, colaborare și prioritizarea interesului comun.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_10", code: "S1", label: "Verifică înțelegerea comună după discuții" },
+                { id: "icare_11", code: "S2", label: "Împărtășește context și motivații proprii" },
+                { id: "icare_12", code: "S3", label: "Prioritizează interesul comun față de cel personal sau al echipei" },
+              ],
+            },
+            {
+              id: "icare_trust_inspired",
+              code: "ICARE-2.2",
+              type: "statement_score_set",
+              label: "Inspired",
+              required: true,
+              instructions: "Sens, ambiție și angajament construite împreună cu echipa.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_13", code: "S1", label: "Conectează munca echipei la un scop mai larg" },
+                { id: "icare_14", code: "S2", label: "Co-construiește ambiții îndrăznețe cu echipa" },
+                { id: "icare_15", code: "S3", label: "Inspiră prin propriul nivel de angajament" },
+              ],
+            },
+            {
+              id: "icare_trust_reality",
+              code: "ICARE-2.3",
+              type: "statement_score_set",
+              label: "Anchored in reality",
+              required: true,
+              instructions: "Ascultare activă, informații relevante și realism onest.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_16", code: "S1", label: "Ascultă activ înainte de a răspunde sau decide" },
+                { id: "icare_17", code: "S2", label: "Împărtășește informații relevante proactiv" },
+                { id: "icare_18", code: "S3", label: "Recunoaște faptele neplăcute cu onestitate" },
+              ],
+            },
+            {
+              id: "icare_trust_illuminating",
+              code: "ICARE-2.4",
+              type: "statement_score_set",
+              label: "Illuminating",
+              required: true,
+              instructions: "Claritate strategică în contexte complexe și incerte.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_19", code: "S1", label: "Comunică strategia și direcția cu claritate" },
+                { id: "icare_20", code: "S2", label: "Oferă claritate în situații de ambiguitate" },
+                { id: "icare_21", code: "S3", label: "Acționează cu claritate în medii complexe și incerte" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "awareness",
+          title: "Awareness",
+          questions: [
+            {
+              id: "icare_awareness_humility",
+              code: "ICARE-3.1",
+              type: "statement_score_set",
+              label: "Humility",
+              required: true,
+              instructions: "Feedback, limite personale și integrarea perspectivelor diferite.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_22", code: "S1", label: "Solicită feedback despre propriul comportament" },
+                { id: "icare_23", code: "S2", label: "Știe când să ceară ajutor sau să admită că nu știe" },
+                { id: "icare_24", code: "S3", label: "Integrează perspectivele diferite de a sa în decizii" },
+              ],
+            },
+            {
+              id: "icare_awareness_emotional_intelligence",
+              code: "ICARE-3.2",
+              type: "statement_score_set",
+              label: "Emotional and situational intelligence",
+              required: true,
+              instructions: "Autoreglare, interes autentic și adaptarea comunicării.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_25", code: "S1", label: "Recunoaște și gestionează propriile emoții în interacțiuni" },
+                { id: "icare_26", code: "S2", label: "Arată interes autentic față de oameni ca indivizi" },
+                { id: "icare_27", code: "S3", label: "Adaptează comunicarea la stilul și nevoile interlocutorului" },
+              ],
+            },
+            {
+              id: "icare_awareness_open_world",
+              code: "ICARE-3.3",
+              type: "statement_score_set",
+              label: "Open to the world",
+              required: true,
+              instructions: "Curiozitate, benchmarkuri externe și facilitarea schimbării.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_28", code: "S1", label: "Caută activ benchmarkuri și tendințe externe" },
+                { id: "icare_29", code: "S2", label: "Îmbrățișează și facilitează schimbarea" },
+                { id: "icare_30", code: "S3", label: "Explorează activ domenii adiacente sau noi tehnologii" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "results",
+          title: "Results",
+          questions: [
+            {
+              id: "icare_results_ambitious",
+              code: "ICARE-4.1",
+              type: "statement_score_set",
+              label: "Openly ambitious for the company",
+              required: true,
+              instructions: "Inovație, asumarea riscului și învățare din performanță.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_31", code: "S1", label: "Propune soluții inovatoare și îndrăznețe" },
+                { id: "icare_32", code: "S2", label: "Promovează asumarea responsabilă a riscului" },
+                { id: "icare_33", code: "S3", label: "Urmărește performanța și învață din eșecuri" },
+              ],
+            },
+            {
+              id: "icare_results_caring",
+              code: "ICARE-4.2",
+              type: "statement_score_set",
+              label: "Caring equally for employees and customers",
+              required: true,
+              instructions: "Echilibru între performanță, bunăstarea echipei și standarde realiste.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_34", code: "S1", label: "Echilibrează presiunile de performanță cu bunăstarea echipei" },
+                { id: "icare_35", code: "S2", label: "Acordă atenție echilibrului muncă-viață al membrilor echipei" },
+                { id: "icare_36", code: "S3", label: "Construiește standarde înalte bazate pe înțelegerea realității" },
+              ],
+            },
+            {
+              id: "icare_results_agility",
+              code: "ICARE-4.3",
+              type: "statement_score_set",
+              label: "Entrepreneurial agility",
+              required: true,
+              instructions: "Testare rapidă, simplificare și conectarea rețelei externe la oportunități.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_37", code: "S1", label: "Testează și învață rapid (test & learn)" },
+                { id: "icare_38", code: "S2", label: "Livrează rezultate mai rapid prin simplificare și prioritizare" },
+                { id: "icare_39", code: "S3", label: "Conectează rețeaua externă la oportunități de business" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "empowerment",
+          title: "Empowerment",
+          questions: [
+            {
+              id: "icare_empowerment_decision_making",
+              code: "ICARE-5.1",
+              type: "statement_score_set",
+              label: "On-the-ground decision-making",
+              required: true,
+              instructions: "Autonomie, inițiativă și raportare transparentă.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_40", code: "S1", label: "Delegă autoritatea decizională la nivelul potrivit" },
+                { id: "icare_41", code: "S2", label: "Ia inițiativă și acționează fără să aștepte permisiunea" },
+                { id: "icare_42", code: "S3", label: "Setează obiective clare și raportează transparent rezultatele" },
+              ],
+            },
+            {
+              id: "icare_empowerment_collective_intelligence",
+              code: "ICARE-5.2",
+              type: "statement_score_set",
+              label: "Cultivating collective intelligence",
+              required: true,
+              instructions: "Diversity, co-construcție, decizii asumate și refuzul compromisului facil.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_43", code: "S1", label: "Susține decizia finală chiar dacă diferă de propria opinie" },
+                { id: "icare_44", code: "S2", label: "Caută și oferă sfaturi fără a impune soluții" },
+                { id: "icare_45", code: "S3", label: "Refuză compromisul sistematic în favoarea soluțiilor mai bune" },
+              ],
+            },
+            {
+              id: "icare_empowerment_helping_team",
+              code: "ICARE-5.3",
+              type: "statement_score_set",
+              label: "Helping the team",
+              required: true,
+              instructions: "Contribuție la dinamica echipei, deblocare și sharing de cunoaștere.",
+              scale: icareFourPointScale,
+              statements: [
+                { id: "icare_46", code: "S1", label: "Alimentează dinamica și energia pozitivă a echipei" },
+                { id: "icare_47", code: "S2", label: "Facilitează deblocarea obstacolelor pentru colegii din echipă" },
+                { id: "icare_48", code: "S3", label: "Dezvoltă competențele echipei prin sharing de cunoaștere" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  },
   boss_360: {
     key: "boss_360",
     version: 1,
@@ -224,35 +524,164 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
   },
 };
 
+function getQuestionnaireStorage(): Storage | null {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
+  return localStorage;
+}
+
 export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireDefinitionStub[]> {
+  let localDefs: QuestionnaireDefinition[] = [];
+  const storage = getQuestionnaireStorage();
+  if (storage) {
+    const stored = storage.getItem("codrut_local_questionnaire_definitions");
+    if (stored) {
+      try {
+        localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
+      } catch (e) {
+        console.error("Error parsing local questionnaire definitions", e);
+      }
+    }
+  }
+
   try {
     const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
       cache: "no-store",
     });
-    if (!response.ok) return fallbackDefinitions;
+    let serverDefs: QuestionnaireDefinition[] = [];
+    if (response.ok) {
+      serverDefs = (await response.json()) as QuestionnaireDefinition[];
+    }
 
-    const definitions = (await response.json()) as QuestionnaireDefinition[];
-    const activeDefinitions = definitions.map(stubFromDefinition);
-    const plannedDefinitions = fallbackDefinitions.filter((definition) => definition.status !== "active");
+    const allDefsMap = new Map<string, QuestionnaireDefinition>();
+
+    // Seed fallback details first if server is empty
+    if (serverDefs.length === 0) {
+      Object.values(fallbackDefinitionDetails).forEach((def) => {
+        allDefsMap.set(`${def.key}_v${def.version}`, def);
+      });
+    } else {
+      serverDefs.forEach((def) => {
+        allDefsMap.set(`${def.key}_v${def.version}`, def);
+      });
+    }
+
+    // Overlay localStorage definitions
+    localDefs.forEach((def) => {
+      allDefsMap.set(`${def.key}_v${def.version}`, def);
+    });
+
+    const mergedList = Array.from(allDefsMap.values());
+    const activeDefinitions = mergedList.map(stubFromDefinition);
+
+    // Merge in planned questionnaires that don't have active implementations yet
+    const plannedDefinitions = fallbackDefinitions.filter(
+      (definition) =>
+        definition.status === "planned" &&
+        !activeDefinitions.some((d) => d.id === definition.id)
+    );
+
     return [...activeDefinitions, ...plannedDefinitions];
   } catch {
-    return fallbackDefinitions;
+    // Merge fallback details and local storage on failure
+    const allDefsMap = new Map<string, QuestionnaireDefinition>();
+    Object.values(fallbackDefinitionDetails).forEach((def) => {
+      allDefsMap.set(`${def.key}_v${def.version}`, def);
+    });
+    localDefs.forEach((def) => {
+      allDefsMap.set(`${def.key}_v${def.version}`, def);
+    });
+
+    const activeDefinitions = Array.from(allDefsMap.values()).map(stubFromDefinition);
+    const plannedDefinitions = fallbackDefinitions.filter(
+      (definition) =>
+        definition.status === "planned" &&
+        !activeDefinitions.some((d) => d.id === definition.id)
+    );
+
+    return [...activeDefinitions, ...plannedDefinitions];
   }
 }
 
 export async function getQuestionnaireDefinition(
   key: string,
 ): Promise<QuestionnaireDefinition | null> {
+  const [realKey, versionStr] = key.split("@");
+  const targetVersion = versionStr ? parseInt(versionStr) : null;
+
+  const storage = getQuestionnaireStorage();
+  if (storage) {
+    const stored = storage.getItem("codrut_local_questionnaire_definitions");
+    if (stored) {
+      try {
+        const localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
+        const matched = localDefs.filter((d) => d.key === realKey);
+        if (matched.length > 0) {
+          if (targetVersion) {
+            const vMatch = matched.find((d) => d.version === targetVersion);
+            if (vMatch) return vMatch;
+          } else {
+            // Sort by version descending and return latest
+            matched.sort((a, b) => b.version - a.version);
+            return matched[0];
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/definitions/${key}`, {
+    const response = await fetch(`${getApiBaseUrl()}/forms/definitions/${realKey}`, {
       cache: "no-store",
     });
-    if (!response.ok) return fallbackDefinitionDetails[key] ?? null;
-
+    if (!response.ok) {
+      return fallbackDefinitionDetails[realKey] ?? null;
+    }
     return (await response.json()) as QuestionnaireDefinition;
   } catch {
-    return fallbackDefinitionDetails[key] ?? null;
+    return fallbackDefinitionDetails[realKey] ?? null;
   }
+}
+
+export function saveLocalQuestionnaireDefinition(definition: QuestionnaireDefinition): void {
+  const storage = getQuestionnaireStorage();
+  if (!storage) return;
+  try {
+    const stored = storage.getItem("codrut_local_questionnaire_definitions");
+    let localDefs: QuestionnaireDefinition[] = [];
+    if (stored) {
+      localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
+    }
+    // Overwrite existing key+version combination
+    localDefs = localDefs.filter((d) => !(d.key === definition.key && d.version === definition.version));
+    localDefs.push(definition);
+    storage.setItem("codrut_local_questionnaire_definitions", JSON.stringify(localDefs));
+  } catch (e) {
+    console.error("Error saving local questionnaire definition", e);
+  }
+}
+
+export function listLocalQuestionnaireDefinitions(): QuestionnaireDefinition[] {
+  const storage = getQuestionnaireStorage();
+  if (!storage) return [];
+  try {
+    const stored = storage.getItem("codrut_local_questionnaire_definitions");
+    return stored ? (JSON.parse(stored) as QuestionnaireDefinition[]) : [];
+  } catch (e) {
+    console.error("Error reading local questionnaire definitions", e);
+    return [];
+  }
+}
+
+export function deleteLocalQuestionnaireDefinition(key: string): boolean {
+  const storage = getQuestionnaireStorage();
+  if (!storage) return false;
+  const definitions = listLocalQuestionnaireDefinitions();
+  const filtered = definitions.filter((definition) => definition.key !== key);
+  if (filtered.length === definitions.length) return false;
+  storage.setItem("codrut_local_questionnaire_definitions", JSON.stringify(filtered));
+  return true;
 }
 
 export async function getQuestionnaireResponse(

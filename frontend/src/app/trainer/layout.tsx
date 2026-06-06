@@ -1,4 +1,4 @@
-import { getTrainerSession } from "@/api/auth";
+import { getTrainerSession } from "@/api/auth-server";
 import { redirect } from "next/navigation";
 
 export default async function TrainerLayout({

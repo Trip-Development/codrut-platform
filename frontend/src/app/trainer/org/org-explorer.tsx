@@ -138,7 +138,7 @@ function OrgNode({
         className={[
           "rounded-2xl border px-4 py-3 shadow-sm",
           matches && query.trim()
-            ? "border-burgundy bg-burgundy-50"
+            ? "border-burgundy bg-burgundy-50 dark:bg-burgundy/10"
             : "border-[var(--border)] bg-background",
         ].join(" ")}
       >

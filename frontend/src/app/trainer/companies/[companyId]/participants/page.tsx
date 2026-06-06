@@ -1,4 +1,5 @@
 import { getCompanyParticipants } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 
 export default async function CompanyParticipantsPage({
   params,
@@ -6,7 +7,7 @@ export default async function CompanyParticipantsPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const participants = await getCompanyParticipants(companyId);
+  const participants = await getCompanyParticipants(companyId, await getServerApiRequestOptions());
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">

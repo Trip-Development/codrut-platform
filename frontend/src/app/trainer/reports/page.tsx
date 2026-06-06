@@ -1,14 +1,16 @@
 import Link from "next/link";
 
-import { getTrainerSession } from "@/api/auth";
+import { getTrainerSession } from "@/api/auth-server";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { getTrainerReports } from "@/api/trainer";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 
 export default async function TrainerReportsPage() {
+  const requestOptions = await getServerApiRequestOptions();
   const [trainer, reports] = await Promise.all([
     getTrainerSession(),
-    getTrainerReports(),
+    getTrainerReports(requestOptions),
   ]);
 
   return (
@@ -71,7 +73,7 @@ export default async function TrainerReportsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="rounded-full bg-burgundy-50 px-2.5 py-1 text-xs font-bold text-burgundy capitalize">
+                        <span className="rounded-full bg-burgundy-50 dark:bg-burgundy/10 px-2.5 py-1 text-xs font-bold text-burgundy capitalize">
                           {report.questionnaireKey.replace("_", " ")}
                         </span>
                       </td>

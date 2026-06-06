@@ -1,4 +1,5 @@
 import { getCompanyParticipants, type CompanyParticipant } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 
 export default async function CompanyOrgChartPage({
   params,
@@ -6,7 +7,7 @@ export default async function CompanyOrgChartPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const participants = await getCompanyParticipants(companyId);
+  const participants = await getCompanyParticipants(companyId, await getServerApiRequestOptions());
   const rootMembers = participants.filter((p) => !p.reports_to_name);
 
   return (

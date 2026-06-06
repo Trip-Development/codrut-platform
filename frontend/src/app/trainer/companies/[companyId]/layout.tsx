@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getCompanyDetail } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 
@@ -20,7 +21,7 @@ export default async function CompanyDetailLayout({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const company = await getCompanyDetail(companyId);
+  const company = await getCompanyDetail(companyId, await getServerApiRequestOptions());
   const companyName = company?.name ?? "Companie";
   const basePath = `/trainer/companies/${companyId}`;
 

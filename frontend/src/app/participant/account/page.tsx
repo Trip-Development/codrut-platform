@@ -1,18 +1,29 @@
+import { getParticipantSession } from "@/api/auth-server";
+import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
-import { PlaceholderCard } from "@/components/shell/placeholder-card";
+import { AccountWorkspace } from "./AccountWorkspace";
 
-export default function ParticipantAccountPage() {
+export default async function ParticipantAccountPage() {
+  const [participant, summary] = await Promise.all([
+    getParticipantSession(),
+    getParticipantWorkspaceSummary(),
+  ]);
+
+  const name = participant.user.name || "Radu Georgescu";
+
   return (
     <AppShell
       audience="participant"
-      eyebrow="Cont"
-      title="Profil si acces"
-      description="Suprafata pentru contul participantului, legatura cu compania si starea invitatiei."
+      eyebrow="Profil"
+      title="Contul tău"
+      description="Aici poți vedea detaliile contului tău corporate, integrarea cu programul de training și setările de confidențialitate."
       navItems={participantNavItems}
       activeHref="/participant/account"
+      userLabel={name.split(" ")[0]}
+      session={participant}
     >
-      <PlaceholderCard title="Profil participant" description="Datele reale vor veni din FastAPI dupa implementarea identity/company." />
+      <AccountWorkspace session={participant} summary={summary} />
     </AppShell>
   );
 }

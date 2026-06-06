@@ -20,6 +20,9 @@ class EmailMessage:
 
 class EmailProviderKey(StrEnum):
     test = "test"
+    smtp = "smtp"
+    mailpit = "mailpit"
+    brevo = "brevo"
 
 
 class EmailDeliveryStatus(StrEnum):

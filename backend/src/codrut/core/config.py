@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     email_provider: str = "test"
     email_from_address: str = "no-reply@codrut.local"
     email_from_name: str = "Codrut Platform"
+    email_brevo_api_key: SecretStr | None = None
+    email_smtp_host: str = "mailpit"
+    email_smtp_port: int = 1025
+    email_smtp_username: str | None = None
+    email_smtp_password: SecretStr | None = None
+    email_smtp_starttls: bool = False
     email_test_mode: bool = True
     public_app_url: str = "http://localhost:3000"
 

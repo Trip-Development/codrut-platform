@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { getTrainerSession } from "@/api/auth";
+import { getTrainerSession } from "@/api/auth-server";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { getScoringResult, getTrainerReports, type ScoringResultRecord } from "@/api/trainer";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
@@ -18,10 +19,11 @@ type ScoreRow = {
 
 export default async function TrainerReportDetailPage({ params }: TrainerReportDetailPageProps) {
   const { id } = await params;
+  const requestOptions = await getServerApiRequestOptions();
   const [trainer, reports, result] = await Promise.all([
     getTrainerSession(),
-    getTrainerReports(),
-    getScoringResult(id),
+    getTrainerReports(requestOptions),
+    getScoringResult(id, requestOptions),
   ]);
   const report = reports.find((item) => item.assignmentId === id);
   const rows = result ? scoringRows(result) : [];

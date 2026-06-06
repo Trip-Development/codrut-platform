@@ -5,6 +5,7 @@ type BrandMarkProps = {
   showText?: boolean;
   subtitle?: string;
   className?: string;
+  tone?: "default" | "inverted";
 };
 
 const sizeClasses = {
@@ -18,6 +19,7 @@ export function BrandMark({
   showText = true,
   subtitle = "Training & Coaching Platform",
   className = "",
+  tone = "default",
 }: BrandMarkProps) {
   return (
     <span className={`inline-flex min-w-0 items-center gap-3 ${className}`}>
@@ -39,8 +41,8 @@ export function BrandMark({
       </span>
       {showText ? (
         <span className="min-w-0 text-left">
-          <span className="block truncate text-sm font-bold text-foreground font-display">Codrut</span>
-          <span className="block truncate text-xs font-semibold text-foreground/55">{subtitle}</span>
+          <span className={`block truncate text-sm font-bold font-display ${tone === "inverted" ? "text-white" : "text-foreground"}`}>Codrut</span>
+          <span className={`block truncate text-xs font-semibold ${tone === "inverted" ? "text-white/68" : "text-foreground/55"}`}>{subtitle}</span>
         </span>
       ) : null}
     </span>

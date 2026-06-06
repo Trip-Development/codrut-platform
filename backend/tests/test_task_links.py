@@ -53,6 +53,19 @@ def test_task_token_rejects_expired_claims() -> None:
         parse_task_token(token, settings)
 
 
+def test_task_token_requires_assignment_scope() -> None:
+    settings = Settings()
+    claims = TaskLinkClaims(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        assignment_ids=(),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+    )
+
+    with pytest.raises(DomainError, match="assignment"):
+        create_task_token(claims, settings)
+
+
 def test_build_task_url_points_to_participant_bundle() -> None:
     settings = Settings(public_app_url="https://app.codrut.ro")
 

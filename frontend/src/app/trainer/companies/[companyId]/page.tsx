@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getCompanyDetail } from "@/api/companies";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { StatCard } from "@/components/presentation/stat-card";
 
 export default async function CompanyOverviewPage({
@@ -9,7 +10,7 @@ export default async function CompanyOverviewPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const company = await getCompanyDetail(companyId);
+  const company = await getCompanyDetail(companyId, await getServerApiRequestOptions());
 
   if (!company) {
     return (

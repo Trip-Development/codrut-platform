@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
+from codrut.core.config import get_settings
 from codrut.modules.identity.schemas import (
     AuthResponse,
     InviteVerifyResponse,
@@ -74,12 +75,13 @@ async def me(
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
     response.set_cookie(
         "codrut_session",
         token,
         max_age=int(timedelta(days=14).total_seconds()),
         httponly=True,
-        secure=False,
+        secure=settings.is_production,
         samesite="lax",
         path="/",
     )

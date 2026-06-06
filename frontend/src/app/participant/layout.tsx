@@ -1,4 +1,4 @@
-import { getParticipantSession } from "@/api/auth";
+import { getParticipantSession } from "@/api/auth-server";
 import { redirect } from "next/navigation";
 
 export default async function ParticipantLayout({
