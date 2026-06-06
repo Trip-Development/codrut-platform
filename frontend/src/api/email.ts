@@ -240,130 +240,50 @@ export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
 }
 
 export async function getEmailOpsSummary(): Promise<EmailOpsSummary> {
-  return {
-    metrics: [
-      { label: "Invitatii trimise", value: "42", detail: "Conturi lideri si linkuri securizate membri." },
-      { label: "Au intrat in app", value: "31", detail: "Click pe link sau autentificare cont." },
-      { label: "Completate", value: "18", detail: "Toate task-urile din bundle finalizate." },
-      { label: "Reminder azi", value: "9", detail: "Invitati sau inceputi fara submit." },
-    ],
-    assessmentRows: [
-      {
-        id: "andrei-popescu",
-        participant: "Andrei Popescu",
-        email: "andrei.popescu@client.ro",
-        audience: "leadership_account",
-        project: "Intake Iunie",
-        tasks: "4/5",
-        delivery: "opened",
-        reminder: "tomorrow",
-        completion: "in_progress",
-        nextAction: "Reminder bland pentru distress drivers",
-      },
-      {
-        id: "mihai-matei",
-        participant: "Mihai Matei",
-        email: "mihai.matei@client.ro",
-        audience: "secure_link",
-        project: "Intake Iunie",
-        tasks: "1/2",
-        delivery: "delivered",
-        reminder: "today",
-        completion: "in_progress",
-        nextAction: "Trimite reminder pentru 360 manager",
-      },
-      {
-        id: "ana-stan",
-        participant: "Ana Stan",
-        email: "ana.stan@client.ro",
-        audience: "secure_link",
-        project: "Intake Iunie",
-        tasks: "0/2",
-        delivery: "sent",
-        reminder: "today",
-        completion: "not_started",
-        nextAction: "Verifica daca linkul a fost accesat",
-      },
-      {
-        id: "elena-radu",
-        participant: "Elena Radu",
-        email: "elena.radu@client.ro",
-        audience: "leadership_account",
-        project: "Leadership pilot",
-        tasks: "0/5",
-        delivery: "failed",
-        reminder: "paused",
-        completion: "not_started",
-        nextAction: "Corecteaza emailul in roster inainte de retrimitere",
-      },
-    ],
-    rules: [
-      "Liderii primesc email de cont si pot reveni la task-uri.",
-      "Membrii fara cont primesc link securizat per proiect, valabil pana la deadline.",
-      "Reminderul se trimite pentru status invitat sau inceput, nu pentru task finalizat.",
-      "Emailurile nu includ raspunsuri confidentiale, doar linkuri si status operational.",
-    ],
-    campaign: {
-      videoHost: {
-        provider: "Codrut watch page + Cloudflare R2",
-        status: "needs_upload",
-        note: "Emailul trimite thumbnail si CTA catre pagina Codrut; video-ul nu este redat direct in email.",
-      },
-      template: {
-        subject: "O idee practica pentru echipa ta, ${first_name}",
-        personalization: "Prenumele se completeaza automat cand exista nume in baza.",
-        ctaPrimary: "Programeaza o discutie",
-        ctaSecondary: "Vreau sa fiu contactat",
-      },
-      recipients: [
-        {
-          id: "rec-1",
-          company: "Client activ",
-          firstName: "Maria",
-          lastName: "Pop",
-          email: "maria.pop@clientactiv.ro",
-          clientType: "tip_1",
-          status: "ready",
-          openRate: "72%",
-          clickRate: "18%",
-          viewRate: "12%",
-          outcome: "intalnire",
-        },
-        {
-          id: "rec-2",
-          company: "Client trecut cunoscut",
-          firstName: "Sorin",
-          lastName: "Dima",
-          email: "sorin.dima@clienttrecut.ro",
-          clientType: "tip_2",
-          status: "sent",
-          openRate: "54%",
-          clickRate: "9%",
-          viewRate: "7%",
-          outcome: "ofertare",
-        },
-        {
-          id: "rec-3",
-          company: "Client trecut fara contact",
-          email: "office@companie.ro",
-          clientType: "tip_3",
-          status: "needs_contact_name",
-        },
-        {
-          id: "rec-4",
-          company: "Prospect nou",
-          firstName: "Irina",
-          lastName: "Muresan",
-          email: "irina@prospect.ro",
-          clientType: "tip_4",
-          status: "suppressed",
-        },
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/ops-summary`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+    return await response.json();
+  } catch (e) {
+    console.error("Error fetching email ops summary, using fallback data", e);
+    return {
+      metrics: [
+        { label: "Invitatii trimise", value: "0", detail: "Conturi lideri si linkuri securizate membri." },
+        { label: "Au intrat in app", value: "0", detail: "Click pe link sau autentificare cont." },
+        { label: "Completate", value: "0", detail: "Toate task-urile din bundle finalizate." },
+        { label: "Reminder azi", value: "0", detail: "Invitati sau inceputi fara submit." },
       ],
-      weeklyReport: {
-        cadence: "Saptamanal",
-        metrics: ["open rate", "click rate", "view rate"],
-        notification: "Andrei primeste email/Telegram cu link catre raport.",
+      assessmentRows: [],
+      rules: [
+        "Liderii primesc email de cont si pot reveni la task-uri.",
+        "Membrii fara cont primesc link securizat per proiect, valabil pana la deadline.",
+        "Reminderul se trimite pentru status invitat sau inceput, nu pentru task finalizat.",
+        "Emailurile nu includ raspunsuri confidentiale, doar linkuri si status operational.",
+      ],
+      campaign: {
+        videoHost: {
+          provider: "Codrut watch page + Cloudflare R2",
+          status: "needs_upload",
+          note: "Emailul trimite thumbnail si CTA catre pagina Codrut; video-ul nu este redat direct in email.",
+        },
+        template: {
+          subject: "O idee practica pentru echipa ta, ${first_name}",
+          personalization: "Prenumele se completeaza automat cand exista nume in baza.",
+          ctaPrimary: "Programeaza o discutie",
+          ctaSecondary: "Vreau sa fiu contactat",
+        },
+        recipients: [],
+        weeklyReport: {
+          cadence: "Saptamanal",
+          metrics: ["open rate", "click rate", "view rate"],
+          notification: "Andrei primeste email/Telegram cu link catre raport.",
+        },
       },
-    },
-  };
+    };
+  }
 }

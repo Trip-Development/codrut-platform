@@ -256,6 +256,207 @@ class CommunicationsService:
                 )
             )
 
+    async def get_email_ops_summary(self) -> dict:
+        repository = self._require_repository()
+        session = repository.session
+
+        from collections import defaultdict
+
+        from sqlalchemy import select
+
+        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+        from codrut.modules.communications.models import EmailSend, EmailSendStatus
+        from codrut.modules.communications.reminders import (
+            DEFAULT_REMINDER_POLICY,
+            reminder_candidates,
+        )
+        from codrut.modules.companies.models import Company, ParticipantProfile
+
+        # 1. Fetch all participants and their company details
+        profiles_result = await session.execute(
+            select(ParticipantProfile, Company.name)
+            .join(Company, ParticipantProfile.company_id == Company.id)
+        )
+        profiles = []
+        company_names = {}
+        for profile, comp_name in profiles_result.all():
+            profiles.append(profile)
+            company_names[profile.id] = comp_name
+
+        # 2. Fetch all assignments
+        assignments_result = await session.execute(select(QuestionnaireAssignment))
+        assignments = list(assignments_result.scalars().all())
+
+        profile_assignments = defaultdict(list)
+        for a in assignments:
+            profile_assignments[a.respondent_profile_id].append(a)
+
+        # 3. Fetch all EmailSend records
+        sends_result = await session.execute(
+            select(EmailSend).order_by(EmailSend.created_at.desc())
+        )
+        sends = list(sends_result.scalars().all())
+
+        latest_send_by_email = {}
+        for s in sends:
+            if s.recipient_email not in latest_send_by_email:
+                latest_send_by_email[s.recipient_email] = s
+
+        # 4. Process rows
+        rows = []
+        total_invites_sent = 0
+        total_entered = 0
+        total_completed = 0
+        total_reminder_today = 0
+
+        for profile in profiles:
+            p_assignments = profile_assignments[profile.id]
+            if not p_assignments:
+                continue
+
+            total_tasks = len(p_assignments)
+            completed_tasks = sum(1 for a in p_assignments if a.status in {
+                AssignmentStatus.submitted,
+                AssignmentStatus.validated,
+                AssignmentStatus.scored,
+            })
+            started_tasks = sum(1 for a in p_assignments if a.status == AssignmentStatus.started)
+
+            tasks_str = f"{completed_tasks}/{total_tasks}"
+
+            if completed_tasks == total_tasks:
+                completion_state = "completed"
+                total_completed += 1
+            elif completed_tasks > 0 or started_tasks > 0:
+                completion_state = "in_progress"
+            else:
+                completion_state = "not_started"
+
+            latest_send = latest_send_by_email.get(profile.email)
+            if latest_send is None:
+                delivery_state = "draft"
+            else:
+                total_invites_sent += 1
+                if latest_send.status == EmailSendStatus.failed:
+                    delivery_state = "failed"
+                elif latest_send.status == EmailSendStatus.accepted:
+                    delivery_state = "sent"
+                else:
+                    delivery_state = latest_send.status.value
+
+            has_entered = profile.user_id is not None or any(a.status in {
+                AssignmentStatus.started,
+                AssignmentStatus.submitted,
+                AssignmentStatus.validated,
+                AssignmentStatus.scored,
+            } for a in p_assignments)
+            if has_entered:
+                total_entered += 1
+
+            r_candidates = reminder_candidates(p_assignments, policy=DEFAULT_REMINDER_POLICY)
+            is_reminder_due = len(r_candidates) > 0
+
+            if completion_state == "completed":
+                reminder_state = "none"
+            elif is_reminder_due:
+                reminder_state = "today"
+                total_reminder_today += 1
+            else:
+                reminder_state = "tomorrow"
+
+            if completion_state == "completed":
+                next_action = "Completat"
+            elif is_reminder_due:
+                next_action = "Trimite reminder"
+            elif latest_send is None:
+                next_action = "Trimite invitatie"
+            else:
+                next_action = "Asteapta raspuns"
+
+            audience_type = "leadership_account" if profile.user_id is not None else "secure_link"
+
+            rows.append({
+                "id": str(profile.id),
+                "participant": profile.full_name,
+                "email": profile.email,
+                "audience": audience_type,
+                "project": company_names.get(profile.id, "Pilot"),
+                "tasks": tasks_str,
+                "delivery": delivery_state,
+                "reminder": reminder_state,
+                "completion": completion_state,
+                "nextAction": next_action,
+            })
+
+        metrics = [
+            {
+                "label": "Invitatii trimise",
+                "value": str(total_invites_sent),
+                "detail": "Conturi lideri si linkuri securizate membri.",
+            },
+            {
+                "label": "Au intrat in app",
+                "value": str(total_entered),
+                "detail": "Click pe link sau autentificare cont.",
+            },
+            {
+                "label": "Completate",
+                "value": str(total_completed),
+                "detail": "Toate sarcinile finalizate.",
+            },
+            {
+                "label": "Reminder azi",
+                "value": str(total_reminder_today),
+                "detail": "Invitati sau inceputi fara submit.",
+            },
+        ]
+
+        rules = [
+            "Liderii primesc email de cont si pot reveni la sarcinile lor.",
+            (
+                "Membrii fara cont primesc link securizat per proiect, "
+                "valabil pana la deadline."
+            ),
+            (
+                "Reminderul se trimite pentru status invitat sau inceput, "
+                "nu pentru sarcini finalizate."
+            ),
+            (
+                "Emailurile nu includ raspunsuri confidentiale, "
+                "doar linkuri si status operational."
+            ),
+        ]
+
+        campaign = {
+            "videoHost": {
+                "provider": "Codrut watch page + Cloudflare R2",
+                "status": "needs_upload",
+                "note": (
+                    "Emailul trimite thumbnail si CTA catre pagina Codrut; "
+                    "video-ul nu este redat direct in email."
+                ),
+            },
+            "template": {
+                "subject": "O idee practica pentru echipa ta, ${first_name}",
+                "personalization": "Prenumele se completeaza automat cand exista nume in baza.",
+                "ctaPrimary": "Programeaza o discutie",
+                "ctaSecondary": "Vreau sa fiu contactat",
+            },
+            "recipients": [],
+            "weeklyReport": {
+                "cadence": "Saptamanal",
+                "metrics": ["open rate", "click rate", "view rate"],
+                "notification": "Andrei primeste email/Telegram cu link catre raport.",
+            },
+        }
+
+        return {
+            "metrics": metrics,
+            "assessmentRows": rows,
+            "rules": rules,
+            "campaign": campaign,
+        }
+
 
 
 @dataclass(frozen=True)

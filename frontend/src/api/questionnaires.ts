@@ -531,13 +531,13 @@ export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireD
       credentials: "include",
     });
     if (!response.ok) {
-      return Object.values(fallbackDefinitionDetails).map(stubFromDefinition);
+      return fallbackDefinitions;
     }
     const serverDefs = (await response.json()) as QuestionnaireDefinition[];
     return serverDefs.map(stubFromDefinition);
   } catch (e) {
     console.error("Error listing definitions", e);
-    return Object.values(fallbackDefinitionDetails).map(stubFromDefinition);
+    return fallbackDefinitions;
   }
 }
 

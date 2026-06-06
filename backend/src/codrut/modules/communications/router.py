@@ -9,6 +9,7 @@ from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.schemas import (
+    EmailOpsSummaryResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
@@ -135,3 +136,14 @@ async def retire_email_template(
     template = await CommunicationsService(session).retire_template(key, version=version)
     await session.commit()
     return template
+
+
+@router.get("/ops-summary", response_model=EmailOpsSummaryResponse)
+async def get_email_ops_summary(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> EmailOpsSummaryResponse:
+    _require_trainer(principal)
+    summary = await CommunicationsService(session).get_email_ops_summary()
+    await session.commit()
+    return summary

@@ -52,3 +52,50 @@ class EmailTemplateUpdateRequest(BaseModel):
     audience: str | None = Field(default=None, max_length=100)
     active: bool | None = None
 
+
+class EmailDeliveryMetricResponse(BaseModel):
+    label: str
+    value: str
+    detail: str
+
+
+class AssessmentDeliveryRowResponse(BaseModel):
+    id: str
+    participant: str
+    email: str
+    audience: str  # "leadership_account" | "secure_link"
+    project: str
+    tasks: str
+    delivery: str  # "draft" | "sent" | "delivered" | "opened" | "failed"
+    reminder: str  # "today" | "tomorrow" | "paused" | "none"
+    completion: str  # "not_started" | "in_progress" | "completed"
+    nextAction: str
+
+
+class CampaignRecipientRowResponse(BaseModel):
+    id: str
+    company: str
+    firstName: str | None = None
+    lastName: str | None = None
+    email: str
+    clientType: str
+    status: str
+    openRate: str | None = None
+    clickRate: str | None = None
+    viewRate: str | None = None
+    outcome: str | None = None
+
+
+class CampaignOpsSummaryResponse(BaseModel):
+    videoHost: dict
+    template: dict
+    recipients: list[CampaignRecipientRowResponse]
+    weeklyReport: dict
+
+
+class EmailOpsSummaryResponse(BaseModel):
+    metrics: list[EmailDeliveryMetricResponse]
+    assessmentRows: list[AssessmentDeliveryRowResponse]
+    rules: list[str]
+    campaign: CampaignOpsSummaryResponse
+

@@ -1,10 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import HomePage from "./page";
 
 describe("HomePage", () => {
+  beforeAll(() => {
+    const mockIntersectionObserver = vi.fn();
+    mockIntersectionObserver.prototype.observe = vi.fn();
+    mockIntersectionObserver.prototype.unobserve = vi.fn();
+    mockIntersectionObserver.prototype.disconnect = vi.fn();
+    vi.stubGlobal("IntersectionObserver", mockIntersectionObserver);
+  });
+
   it("renders the business landing and access paths", () => {
     render(<HomePage />);
 
