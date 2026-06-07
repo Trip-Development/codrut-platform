@@ -90,6 +90,10 @@ jobs:
           # Wait for backend healthcheck (using the project's health check command)
           docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest tests/test_health.py
 
+      - name: Print Docker logs on failure
+        if: failure()
+        run: docker compose -f compose.yaml -f compose.dev.yaml logs
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
