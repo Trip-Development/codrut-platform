@@ -1,10 +1,11 @@
 import hashlib
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.modules.identity.models import Session, User
+from codrut.modules.identity.models import AssignmentInvite, Session, User
 
 
 def hash_session_token(token: str) -> str:
@@ -45,3 +46,41 @@ class IdentityRepository:
         session = result.scalar_one_or_none()
         if session is not None:
             await self.session.delete(session)
+
+    async def add_invite(self, invite: AssignmentInvite) -> AssignmentInvite:
+        self.session.add(invite)
+        await self.session.flush()
+        return invite
+
+    async def get_active_invite_by_respondent(
+        self, company_id: UUID, respondent_profile_id: UUID
+    ) -> AssignmentInvite | None:
+        result = await self.session.execute(
+            select(AssignmentInvite)
+            .where(AssignmentInvite.company_id == company_id)
+            .where(AssignmentInvite.respondent_profile_id == respondent_profile_id)
+            .where(AssignmentInvite.status == "active")
+            .where(AssignmentInvite.expires_at > datetime.now(UTC))
+            .order_by(AssignmentInvite.created_at.desc())
+        )
+        return result.scalars().first()
+
+    async def get_invite_by_token(self, token: str) -> AssignmentInvite | None:
+        result = await self.session.execute(
+            select(AssignmentInvite).where(AssignmentInvite.token == token)
+        )
+        return result.scalar_one_or_none()
+
+    async def invalidate_invites_for_respondent(
+        self, company_id: UUID, respondent_profile_id: UUID
+    ) -> None:
+        result = await self.session.execute(
+            select(AssignmentInvite)
+            .where(AssignmentInvite.company_id == company_id)
+            .where(AssignmentInvite.respondent_profile_id == respondent_profile_id)
+            .where(AssignmentInvite.status == "active")
+        )
+        invites = result.scalars().all()
+        for invite in invites:
+            invite.status = "revoked"
+        await self.session.flush()

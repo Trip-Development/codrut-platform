@@ -1,17 +1,18 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
         burgundy: {
-          DEFAULT: "#890505",
+          DEFAULT: "var(--burgundy)",
           50: "#FDF6F6",
           100: "#FBE9E9",
           200: "#F5C9C9",
           400: "#B83333",
-          500: "#890505",
+          500: "var(--burgundy)",
           600: "#780404",
           700: "#650303",
           800: "#520303",
@@ -24,9 +25,9 @@ const config: Config = {
           200: "#F2EAD8",
         },
         ochre: {
-          DEFAULT: "#B8860B",
+          DEFAULT: "var(--ochre)",
           100: "#FBF1D7",
-          500: "#B8860B",
+          500: "var(--ochre)",
           700: "#8E6708",
         },
         charcoal: {

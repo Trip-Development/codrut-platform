@@ -20,6 +20,9 @@ class EmailMessage:
 
 class EmailProviderKey(StrEnum):
     test = "test"
+    smtp = "smtp"
+    mailpit = "mailpit"
+    brevo = "brevo"
 
 
 class EmailDeliveryStatus(StrEnum):
@@ -33,6 +36,7 @@ class EmailSendResult:
     status: EmailDeliveryStatus
     message_id: str
     recipient: EmailAddress
+    error_details: str | None = None
 
 
 def make_test_message_id() -> str:

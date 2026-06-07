@@ -1,15 +1,35 @@
 services:
+  traefik:
+    command:
+      - --providers.file.filename=/etc/traefik/dev-dynamic.yaml
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      - ./infra/traefik/dev-dynamic.yaml:/etc/traefik/dev-dynamic.yaml:ro
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+
   frontend:
     image: codrut-platform-frontend:dev
     build:
       target: dev
-    command: ["pnpm", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+    user: root
+    command: ["sh", "-lc", "mkdir -p /workspace/frontend/.next && chown -R node:node /workspace/frontend/.next && exec su node -c 'pnpm dev --hostname 0.0.0.0 --port 3000'"]
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_BASE_URL: /api
+      CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-false}
+      NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-false}
     volumes:
       - .:/workspace:cached
       - frontend_node_modules:/workspace/frontend/node_modules
+      - frontend_next_cache:/workspace/frontend/.next
       - pnpm_store:/home/node/.local/share/pnpm/store
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
@@ -21,17 +41,27 @@ services:
     image: codrut-platform-backend:dev
     build:
       target: dev
-    command: ["uv", "run", "uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uv", "run", "uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "src", "--reload-dir", "migrations"]
     environment:
       CODRUT_ENV: development
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
       CODRUT_REDIS_URL: redis://redis:6379/0
       CODRUT_SESSION_SECRET: local-development-secret
       CODRUT_CORS_ORIGINS: '["http://localhost","http://localhost:3000","http://localhost:8000"]'
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-test}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-no-reply@codrut.local}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Codrut Platform}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-}
+      CODRUT_EMAIL_SMTP_HOST: ${CODRUT_EMAIL_SMTP_HOST:-mailpit}
+      CODRUT_EMAIL_SMTP_PORT: ${CODRUT_EMAIL_SMTP_PORT:-1025}
+      CODRUT_EMAIL_SMTP_USERNAME: ${CODRUT_EMAIL_SMTP_USERNAME:-}
+      CODRUT_EMAIL_SMTP_PASSWORD: ${CODRUT_EMAIL_SMTP_PASSWORD:-}
+      CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
     volumes:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
+      - backend_venv:/workspace/backend/.venv
       - frontend_node_modules:/workspace/frontend/node_modules
       - pnpm_store:/home/vscode/.local/share/pnpm/store
     ports:
@@ -39,7 +69,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "uv run python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live').read()\""]
       interval: 10s
-      timeout: 5s
+      timeout: 15s
       retries: 5
     init: true
     tty: true
@@ -55,10 +85,20 @@ services:
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
       CODRUT_REDIS_URL: redis://redis:6379/0
       CODRUT_SESSION_SECRET: local-development-secret
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-test}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-no-reply@codrut.local}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Codrut Platform}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-}
+      CODRUT_EMAIL_SMTP_HOST: ${CODRUT_EMAIL_SMTP_HOST:-mailpit}
+      CODRUT_EMAIL_SMTP_PORT: ${CODRUT_EMAIL_SMTP_PORT:-1025}
+      CODRUT_EMAIL_SMTP_USERNAME: ${CODRUT_EMAIL_SMTP_USERNAME:-}
+      CODRUT_EMAIL_SMTP_PASSWORD: ${CODRUT_EMAIL_SMTP_PASSWORD:-}
+      CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
     volumes:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
+      - worker_venv:/workspace/backend/.venv
     init: true
     tty: true
     stdin_open: true
@@ -80,5 +120,8 @@ services:
 volumes:
   backend_uv_cache:
   backend_pip_cache:
+  backend_venv:
+  worker_venv:
   frontend_node_modules:
+  frontend_next_cache:
   pnpm_store:

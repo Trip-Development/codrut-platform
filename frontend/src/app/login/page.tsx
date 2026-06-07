@@ -1,31 +1,121 @@
-import Link from "next/link";
+"use client";
 
+import Link from "next/link";
+import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { loginWithPassword } from "@/api/auth";
+
+const quotes = [
+  "„Liderii nu creează adepți, ei creează alți lideri.”",
+  "„Feedback-ul este micul dejun al campionilor.”",
+  "„Niciunul dintre noi nu este la fel de inteligent ca noi toți împreună.”",
+  "„Performanța unei echipe depinde de claritatea direcției sale.”",
+  "„Ascultarea activă este prima formă de respect în leadership.”",
+];
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [quoteIdx, setQuoteIdx] = useState(0);
+  const [fade, setFade] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setQuoteIdx((prev) => (prev + 1) % quotes.length);
+        setFade(true);
+      }, 300); // Wait for fade-out animation to complete
+    }, 4500); // Rotate every 4.5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const session = await loginWithPassword(email, password);
+      router.push(session.user.role === "trainer" ? "/trainer" : "/participant");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
-      <section className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm">
-        <div className="mb-6 flex justify-center">
+    <main className="app-min-height flex items-center justify-center bg-background bg-vines-pattern px-4 py-10">
+      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-300">
+        <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
+          <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            Bine ai venit
+          </h1>
+          <div className="mt-3 w-full min-h-[3rem] flex items-center justify-center px-2">
+            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-300 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
+              {quotes[quoteIdx]}
+            </p>
+          </div>
         </div>
-        <h1 className="text-center text-2xl font-bold text-foreground">Bine ai revenit</h1>
-        <p className="mt-2 text-center text-sm leading-6 text-foreground/60">Autentificare recuperata din vechiul app, pregatita pentru noul backend de auth.</p>
-        <div className="mt-6 space-y-4">
-          <label className="block text-sm font-semibold text-foreground/70">
-            Email
-            <input className="mt-1 w-full rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3 text-base" placeholder="nume@companie.ro" type="email" />
-          </label>
-          <label className="block text-sm font-semibold text-foreground/70">
-            Parola
-            <input className="mt-1 w-full rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3 text-base" placeholder="Introdu parola" type="password" />
-          </label>
-          <button className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 font-semibold text-white">Intra in cont</button>
-        </div>
-        <div className="mt-5 flex justify-between text-sm font-semibold text-burgundy">
-          <Link href="/register">Creeaza cont</Link>
-          <Link href="/reset-password">Ai uitat parola?</Link>
-        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
+              Email
+            </label>
+            <input
+              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              placeholder="nume@companie.ro"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
+                Parolă
+              </label>
+              <Link
+                href="/reset-password"
+                className="text-xs font-semibold text-burgundy hover:text-burgundy-dark transition-colors"
+              >
+                Ai uitat parola?
+              </Link>
+            </div>
+            <input
+              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              placeholder="Introdu parola"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="tap-soft mt-2 w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md disabled:cursor-not-allowed disabled:opacity-65"
+          >
+            {submitting ? "Se verifică..." : "Intră în cont"}
+          </button>
+          {error ? (
+            <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {error}
+            </p>
+          ) : null}
+        </form>
       </section>
     </main>
   );

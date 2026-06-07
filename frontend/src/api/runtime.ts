@@ -7,3 +7,10 @@ export function getApiBaseUrl(): string {
 
   return API_BASE_URL;
 }
+
+export function isDemoFallbackEnabled(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK === "true" ||
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK === "true"
+  );
+}

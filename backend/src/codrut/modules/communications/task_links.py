@@ -20,6 +20,11 @@ class TaskLinkClaims:
 
 
 def create_task_token(claims: TaskLinkClaims, settings: Settings) -> str:
+    if not claims.assignment_ids:
+        raise DomainError(
+            "Task link must include at least one assignment.",
+            code="task_link_invalid",
+        )
     payload = {
         "company_id": str(claims.company_id),
         "respondent_profile_id": str(claims.respondent_profile_id),
@@ -46,16 +51,23 @@ def parse_task_token(
     expected = _sign(encoded_payload, settings)
     if not hmac.compare_digest(signature, expected):
         raise DomainError("Invalid task link.", code="task_link_invalid")
-    payload = json.loads(_urlsafe_decode(encoded_payload))
-    expires_at = datetime.fromtimestamp(payload["expires_at"], UTC)
-    if expires_at <= (now or datetime.now(UTC)):
+    try:
+        payload = json.loads(_urlsafe_decode(encoded_payload))
+        assignment_ids = tuple(UUID(value) for value in payload["assignment_ids"])
+        expires_at = datetime.fromtimestamp(payload["expires_at"], UTC)
+        claims = TaskLinkClaims(
+            company_id=UUID(payload["company_id"]),
+            respondent_profile_id=UUID(payload["respondent_profile_id"]),
+            assignment_ids=assignment_ids,
+            expires_at=expires_at,
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise DomainError("Invalid task link.", code="task_link_invalid") from exc
+    if not claims.assignment_ids:
+        raise DomainError("Invalid task link.", code="task_link_invalid")
+    if claims.expires_at <= (now or datetime.now(UTC)):
         raise DomainError("Task link has expired.", code="task_link_expired")
-    return TaskLinkClaims(
-        company_id=UUID(payload["company_id"]),
-        respondent_profile_id=UUID(payload["respondent_profile_id"]),
-        assignment_ids=tuple(UUID(value) for value in payload["assignment_ids"]),
-        expires_at=expires_at,
-    )
+    return claims
 
 
 def build_task_url(token: str, settings: Settings) -> str:

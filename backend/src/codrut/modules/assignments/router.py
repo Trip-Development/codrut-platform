@@ -9,6 +9,8 @@ from codrut.modules.assignments.schemas import (
     AssignmentCreateRequest,
     AssignmentResponse,
     AssignmentStatusUpdateRequest,
+    InvitationCreateRequest,
+    InvitationResponse,
     TeamCreateRequest,
     TeamMembershipCreateRequest,
     TeamMembershipResponse,
@@ -122,3 +124,83 @@ async def update_company_assignment_status(
     )
     await session.commit()
     return assignment
+
+
+@router.post(
+    "/companies/{company_id}/invitations",
+    response_model=InvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_company_invitation(
+    company_id: UUID,
+    payload: InvitationCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> InvitationResponse:
+    require_trainer_principal(principal)
+    from codrut.core.config import get_settings
+    from codrut.modules.communications.task_links import build_task_url
+    from codrut.modules.identity.service import IdentityService
+
+    settings = get_settings()
+    service = IdentityService(session)
+
+    # 1. Generate/get invite
+    invite = await service.create_invite(
+        company_id=company_id,
+        respondent_profile_id=payload.respondent_profile_id,
+        assignment_ids=payload.assignment_ids,
+        expires_in_days=payload.expires_in_days,
+        force_rotate=payload.force_rotate,
+    )
+
+    # 2. Update status of the assignments included in this invite to "invited"
+    from codrut.modules.communications.task_links import parse_task_token
+    try:
+        claims = parse_task_token(invite.token, settings)
+        from sqlalchemy import select
+
+        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+        assignments_result = await session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
+            .where(QuestionnaireAssignment.status == AssignmentStatus.assigned)
+        )
+        assignments = assignments_result.scalars().all()
+        for assignment in assignments:
+            assignment.status = AssignmentStatus.invited
+            # Also update invited_at
+            from datetime import UTC, datetime
+            assignment.invited_at = datetime.now(UTC)
+    except Exception:  # noqa: S110
+        pass
+
+    await session.commit()
+
+    invite_url = build_task_url(invite.token, settings)
+    return InvitationResponse(
+        id=invite.id,
+        company_id=invite.company_id,
+        respondent_profile_id=invite.respondent_profile_id,
+        token=invite.token,
+        invite_url=invite_url,
+        status=invite.status,
+        expires_at=invite.expires_at,
+    )
+
+
+@router.post(
+    "/companies/{company_id}/invitations/{respondent_profile_id}/invalidate",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def invalidate_company_invitation(
+    company_id: UUID,
+    respondent_profile_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> None:
+    require_trainer_principal(principal)
+    from codrut.modules.identity.service import IdentityService
+    service = IdentityService(session)
+    await service.invalidate_invite(company_id, respondent_profile_id)
+    await session.commit()

@@ -11,9 +11,16 @@ function getInitialTheme(): ThemeMode {
     return "light";
   }
 
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark") {
-    return stored;
+  try {
+    if (!window.localStorage) {
+      return "light";
+    }
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === "light" || stored === "dark") {
+      return stored;
+    }
+  } catch {
+    // Handle cases where localStorage is disabled or throws
   }
 
   if (typeof window.matchMedia !== "function") {
@@ -47,13 +54,13 @@ export function ThemeToggle() {
       aria-label={isDark ? "Activeaza tema luminoasa" : "Activeaza tema intunecata"}
       aria-pressed={isDark}
       onClick={toggleTheme}
-      className="tap-soft inline-grid h-10 grid-cols-2 items-center rounded-full border border-[var(--border)] bg-surface-muted/82 p-1 text-foreground/45 shadow-sm backdrop-blur"
+      className="tap-soft inline-grid h-10 grid-cols-2 items-center rounded-full border border-[var(--border)] bg-surface-muted/82 p-1 text-foreground/42 shadow-sm backdrop-blur hover:text-foreground/68"
     >
       <span
         aria-hidden
         className={[
           "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-          isDark ? "text-foreground/42" : "bg-surface text-burgundy shadow-sm",
+          isDark ? "text-foreground/36" : "bg-surface text-burgundy shadow-sm",
         ].join(" ")}
       >
         <SunIcon />
@@ -62,7 +69,7 @@ export function ThemeToggle() {
         aria-hidden
         className={[
           "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-          isDark ? "bg-surface text-burgundy-dark shadow-sm" : "text-foreground/42",
+          isDark ? "bg-surface text-success-ink shadow-sm" : "text-foreground/36",
         ].join(" ")}
       >
         <MoonIcon />

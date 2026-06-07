@@ -75,3 +75,22 @@ class AssignmentResponse(BaseModel):
 
 class AssignmentStatusUpdateRequest(BaseModel):
     status: AssignmentStatus
+
+
+class InvitationCreateRequest(BaseModel):
+    respondent_profile_id: UUID
+    assignment_ids: list[UUID] | None = None
+    expires_in_days: int = 14
+    force_rotate: bool = False
+
+
+class InvitationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    company_id: UUID
+    respondent_profile_id: UUID
+    token: str
+    invite_url: str
+    status: str
+    expires_at: datetime

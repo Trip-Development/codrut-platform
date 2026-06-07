@@ -2,7 +2,16 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from codrut.core.database import Base, TimestampMixin
@@ -62,6 +71,7 @@ class EmailSend(TimestampMixin, Base):
         nullable=False,
         default=EmailSendStatus.queued,
     )
+    error_details: Mapped[str | None] = mapped_column(String, nullable=True)
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -118,3 +128,26 @@ class Campaign(TimestampMixin, Base):
     video_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     landing_page_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+
+class EmailTemplate(TimestampMixin, Base):
+    __tablename__ = "email_templates"
+    __table_args__ = (
+        UniqueConstraint("key", "version", name="uq_email_templates_key_version"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    key: Mapped[str] = mapped_column(String(120), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    html_body: Mapped[str] = mapped_column(String, nullable=False)
+    text_body: Mapped[str] = mapped_column(String, nullable=False)
+    variables: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    audience: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+

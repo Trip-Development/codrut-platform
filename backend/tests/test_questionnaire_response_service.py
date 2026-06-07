@@ -113,9 +113,9 @@ async def test_get_assignment_response_does_not_create_draft() -> None:
     repository = FakeFormsRepository(assignment)
     service = make_service(repository)
 
-    with pytest.raises(DomainError, match="Response not found"):
-        await service.get_assignment_response(uuid.uuid4(), assignment.id)
-
+    res = await service.get_assignment_response(uuid.uuid4(), assignment.id)
+    assert res.answers == {}
+    assert res.questionnaire_key == assignment.questionnaire_key
     assert repository.response is None
 
 

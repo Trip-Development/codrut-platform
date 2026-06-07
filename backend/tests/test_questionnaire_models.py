@@ -24,6 +24,7 @@ def test_questionnaire_keys_cover_current_workflow() -> None:
         "lencioni",
         "distress_drivers",
         "boss_360",
+        "icare",
     }
 
 

@@ -57,3 +57,22 @@ class Session(TimestampMixin, Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class AssignmentInvite(TimestampMixin, Base):
+    __tablename__ = "assignment_invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    respondent_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token: Mapped[str] = mapped_column(String(512), unique=True, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

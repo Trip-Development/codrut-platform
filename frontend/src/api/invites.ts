@@ -1,3 +1,5 @@
+import { isDemoFallbackEnabled } from "./runtime";
+
 export type InviteTaskStatus = "not_started" | "in_progress" | "completed";
 
 export type InviteTask = {
@@ -35,7 +37,17 @@ export type InviteBundle =
     };
 
 export async function resolveInviteBundle(token: string): Promise<InviteBundle> {
+  const demoFallbackEnabled = isDemoFallbackEnabled();
+
   if (token === "expired-demo") {
+    if (!demoFallbackEnabled) {
+      return {
+        state: "not_found",
+        token,
+        message: "Nu am gasit o invitatie activa pentru acest link.",
+      };
+    }
+
     return {
       state: "expired",
       token,
@@ -46,6 +58,14 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
   }
 
   if (token !== "demo-token") {
+    return {
+      state: "not_found",
+      token,
+      message: "Nu am gasit o invitatie activa pentru acest link.",
+    };
+  }
+
+  if (!demoFallbackEnabled) {
     return {
       state: "not_found",
       token,

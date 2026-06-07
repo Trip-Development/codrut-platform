@@ -14,6 +14,7 @@ class QuestionnaireKey(StrEnum):
     lencioni = "lencioni"
     distress_drivers = "distress_drivers"
     boss_360 = "boss_360"
+    icare = "icare"
 
 
 class QuestionnaireResponseStatus(StrEnum):

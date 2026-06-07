@@ -109,3 +109,63 @@ async def test_send_assignment_invitation_does_not_stamp_failed_send() -> None:
 
     assert assignment.status == AssignmentStatus.assigned
     assert assignment.invited_at is None
+
+
+async def test_send_assignment_invitation_persists_error_details_on_failure() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from codrut.modules.communications.models import EmailSendStatus
+
+    class MockFailingEmailProvider:
+        async def send(self, message: EmailMessage) -> EmailSendResult:
+            return EmailSendResult(
+                provider=EmailProviderKey.test,
+                status=EmailDeliveryStatus.failed,
+                message_id="failed:test",
+                recipient=message.to,
+                error_details="Connection timed out",
+            )
+
+    from codrut.modules.communications.models import EmailTemplate
+
+    db_template = EmailTemplate(
+        id=uuid.uuid4(),
+        key="account_setup",
+        version=1,
+        subject="Setup Subject",
+        html_body="Setup HTML",
+        text_body="Setup Text",
+        variables=["participant_name", "trainer_name", "company_name", "action_url"],
+        audience="participant",
+        active=True,
+    )
+
+    class FakeResult:
+        def scalar_one_or_none(self):
+            return db_template
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=FakeResult())
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+
+    service = TransactionalEmailService(MockFailingEmailProvider(), session)
+    assignment = make_assignment()
+
+    result = await service.send_assignment_invitation(
+        assignment,
+        make_participant(),
+        AssignmentInvitationContext(
+            company_name="Demo",
+            trainer_name="Andrei",
+            action_url="https://app.codrut.ro/invite/token",
+        ),
+    )
+
+    assert result.status == EmailDeliveryStatus.failed
+    assert result.error_details == "Connection timed out"
+    
+    assert session.add.call_count == 1
+    email_send = session.add.call_args[0][0]
+    assert email_send.status == EmailSendStatus.failed
+    assert email_send.error_details == "Connection timed out"

@@ -32,18 +32,7 @@ const routeGroups = [
       ["/participant/account", "Account"],
     ],
   },
-  {
-    title: "Recovered compatibility routes",
-    routes: [
-      ["/admin", "Old admin"],
-      ["/admin/projects/demo-project", "Old project detail"],
-      ["/admin/projects/demo-project/participant/demo-participant", "Old participant report"],
-      ["/dashboard", "Old participant dashboard"],
-      ["/chat", "Old chat"],
-      ["/onboarding", "Old onboarding"],
-      ["/test-out", "Old final evaluation"],
-    ],
-  },
+
   {
     title: "Auth routes",
     routes: [

@@ -7,11 +7,8 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
-      - --api.dashboard=true
-      - --api.insecure=true
     ports:
       - "${TRAEFIK_HTTP_PORT:-80}:80"
-      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
@@ -21,7 +18,7 @@ services:
         condition: service_healthy
 
   frontend:
-    image: codrut-platform-frontend:runtime
+    image: ${FRONTEND_IMAGE:-codrut-platform-frontend:runtime}
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.frontend
@@ -38,7 +35,7 @@ services:
       traefik.http.services.codrut-frontend.loadbalancer.server.port: "3000"
 
   backend:
-    image: codrut-platform-backend:runtime
+    image: ${BACKEND_IMAGE:-codrut-platform-backend:runtime}
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.backend
@@ -49,6 +46,7 @@ services:
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
       CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["http://localhost","http://localhost:3000","http://localhost:8000"]}
+      CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy
@@ -66,7 +64,7 @@ services:
       traefik.http.services.codrut-api.loadbalancer.server.port: "8000"
 
   worker:
-    image: codrut-platform-backend:runtime
+    image: ${BACKEND_IMAGE:-codrut-platform-backend:runtime}
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.backend
@@ -77,6 +75,7 @@ services:
       CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://codrut:codrut@db:5432/codrut}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
+      CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy

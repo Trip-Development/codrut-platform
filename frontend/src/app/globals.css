@@ -8,6 +8,7 @@
   --foreground: #1c1a1a;
   --surface: #ffffff;
   --surface-muted: #f8f2ea;
+  --shell-sidebar: #f4ede3;
   --border: #eadfd0;
   --burgundy: #890505;
   --burgundy-dark: #650303;
@@ -17,6 +18,10 @@
   --success-ink: #3f6f2a;
   --warning: #ba7517;
   --danger: #dc2626;
+  --bloom-red: #E24B4A;
+  --bloom-gold: #BA7517;
+  --bloom-blue: #1A4A7A;
+  --bloom-green: #639922;
   --shadow-brand: 0 18px 45px rgba(137, 5, 5, 0.14);
   background: var(--background);
   color: var(--foreground);
@@ -28,15 +33,20 @@
   --foreground: #fff8f2;
   --surface: #1b1715;
   --surface-muted: #241d1a;
+  --shell-sidebar: #171311;
   --border: #3a2c28;
   --burgundy: #e35f5f;
   --burgundy-dark: #f0b7b7;
   --ochre: #d9a441;
   --brand-gray: #b9b0aa;
   --success: #a3d376;
-  --success-ink: #c9efa8;
+  --success-ink: #8ce362;
   --warning: #e6b45f;
   --danger: #f87171;
+  --bloom-red: #f87171;
+  --bloom-gold: #e6b45f;
+  --bloom-blue: #60a5fa;
+  --bloom-green: #a3d376;
   --shadow-brand: 0 18px 45px rgba(217, 80, 80, 0.16);
 }
 
@@ -48,6 +58,10 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 .font-display {
@@ -72,6 +86,12 @@ body {
   background-repeat: repeat;
 }
 
+.bg-vines-inverted {
+  background-color: var(--burgundy, #8b0000);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' opacity='0.09'%3E%3Cg stroke='%23FFFFFF' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M0 100 Q 50 50 100 100 T 200 100' /%3E%3Cpath d='M0 0 Q 50 150 100 100 T 200 200' /%3E%3Cpath d='M 40 70 Q 30 60 40 50 Q 50 60 40 70 Z' fill='%23FFFFFF' fill-opacity='0.05'/%3E%3Cpath d='M 140 130 Q 150 140 140 150 Q 130 140 140 130 Z' fill='%23FFFFFF' fill-opacity='0.05'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
 .shadow-brand {
   box-shadow: var(--shadow-brand);
 }
@@ -84,7 +104,10 @@ body {
   transition:
     transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 120ms ease,
-    border-color 120ms ease;
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
 }
 
 .tap-soft:active {
@@ -102,12 +125,104 @@ body {
   }
 }
 
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-fade-up {
+  animation: fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   .tap-soft {
     transition: none;
   }
 
-  .landing-orbit {
+  .landing-orbit,
+  .animate-slide-in,
+  .animate-fade-up {
     animation: none;
   }
+}
+
+/* Custom themed card styling to resolve Tailwind opacity issues with CSS variables */
+.card-xp {
+  background-color: rgba(163, 211, 118, 0.45);
+  border-color: rgba(163, 211, 118, 0.40);
+  color: #3f6f2a;
+}
+[data-theme="dark"] .card-xp {
+  background-color: rgba(163, 211, 118, 0.45);
+  border-color: rgba(163, 211, 118, 0.30);
+  color: #8ce362;
+}
+
+.card-streak {
+  background-color: rgba(249, 115, 22, 0.45);
+  border-color: rgba(249, 115, 22, 0.40);
+  color: #c2410c;
+}
+[data-theme="dark"] .card-streak {
+  background-color: rgba(249, 115, 22, 0.45);
+  border-color: rgba(249, 115, 22, 0.30);
+  color: #fb923c;
+}
+
+.card-tasks {
+  background-color: rgba(137, 5, 5, 0.45);
+  border-color: rgba(137, 5, 5, 0.40);
+  color: #890505;
+}
+[data-theme="dark"] .card-tasks {
+  background-color: rgba(227, 95, 95, 0.45);
+  border-color: rgba(227, 95, 95, 0.30);
+  color: #e35f5f;
+}
+
+.card-project {
+  background-color: rgba(184, 134, 11, 0.45);
+  border-color: rgba(184, 134, 11, 0.40);
+  color: #b8860b;
+}
+[data-theme="dark"] .card-project {
+  background-color: rgba(217, 164, 65, 0.45);
+  border-color: rgba(217, 164, 65, 0.30);
+  color: #d9a441;
+}
+
+.card-success-recommendation {
+  background-color: rgba(163, 211, 118, 0.45);
+  border-color: rgba(163, 211, 118, 0.15);
+}
+[data-theme="dark"] .card-success-recommendation {
+  background-color: rgba(163, 211, 118, 0.45);
+  border-color: rgba(163, 211, 118, 0.25);
 }

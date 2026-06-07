@@ -1,3 +1,5 @@
+import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
+
 export type CurrentUser = {
   id: string;
   name: string;
@@ -10,6 +12,65 @@ export type SessionState = {
   message?: string;
 };
 
+type AuthApiResponse = {
+  user_id: string;
+  email: string;
+  role: "trainer" | "participant";
+};
+
+type SessionPrincipalResponse = {
+  user_id: string;
+  email: string;
+  role: "trainer" | "participant";
+};
+
+export async function loginWithPassword(email: string, password: string): Promise<SessionState> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Autentificarea a eșuat. Verifică emailul și parola.";
+    throw new Error(message);
+  }
+
+  const user = (await response.json()) as AuthApiResponse;
+  return {
+    state: "authenticated",
+    user: {
+      id: user.user_id,
+      name: user.email.split("@")[0],
+      role: user.role,
+    },
+  };
+}
+
+async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/auth/me`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const user = (await response.json()) as SessionPrincipalResponse;
+    if (user.role !== expectedRole) return null;
+    return {
+      state: "authenticated",
+      user: {
+        id: user.user_id,
+        name: user.email.split("@")[0],
+        role: user.role,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getCurrentTrainer(): Promise<CurrentUser> {
   return getTrainerSession().then((session) => session.user);
 }
@@ -19,6 +80,13 @@ export async function getCurrentParticipant(): Promise<CurrentUser> {
 }
 
 export async function getTrainerSession(): Promise<SessionState> {
+  const session = await getSessionFromApi("trainer");
+  if (session) return session;
+
+  if (!isDemoFallbackEnabled()) {
+    throw new Error("Trainer authentication required.");
+  }
+
   return {
     state: "fallback",
     user: {
@@ -31,6 +99,13 @@ export async function getTrainerSession(): Promise<SessionState> {
 }
 
 export async function getParticipantSession(): Promise<SessionState> {
+  const session = await getSessionFromApi("participant");
+  if (session) return session;
+
+  if (!isDemoFallbackEnabled()) {
+    throw new Error("Participant authentication required.");
+  }
+
   return {
     state: "fallback",
     user: {

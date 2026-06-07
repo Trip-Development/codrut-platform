@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 
 from pydantic import Field, SecretStr, field_validator
@@ -17,6 +18,12 @@ class Settings(BaseSettings):
     email_provider: str = "test"
     email_from_address: str = "no-reply@codrut.local"
     email_from_name: str = "Codrut Platform"
+    email_brevo_api_key: SecretStr | None = None
+    email_smtp_host: str = "mailpit"
+    email_smtp_port: int = 1025
+    email_smtp_username: str | None = None
+    email_smtp_password: SecretStr | None = None
+    email_smtp_starttls: bool = False
     email_test_mode: bool = True
     public_app_url: str = "http://localhost:3000"
 
@@ -24,6 +31,11 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(origin).strip() for origin in parsed if str(origin).strip()]
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
