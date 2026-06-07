@@ -70,5 +70,6 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /mnt/HC_Volume_105944446
+      device: ${CODRUT_DB_VOLUME_PATH}
+
 
