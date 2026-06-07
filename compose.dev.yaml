@@ -98,7 +98,7 @@ services:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
-      - backend_venv:/workspace/backend/.venv
+      - worker_venv:/workspace/backend/.venv
     init: true
     tty: true
     stdin_open: true
@@ -121,6 +121,7 @@ volumes:
   backend_uv_cache:
   backend_pip_cache:
   backend_venv:
+  worker_venv:
   frontend_node_modules:
   frontend_next_cache:
   pnpm_store:
