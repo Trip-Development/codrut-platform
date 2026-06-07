@@ -1,12 +1,11 @@
-import asyncio
 import pytest
-from sqlalchemy import select
 from redis.asyncio import Redis
+from sqlalchemy import select
 
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import Company
-from codrut.modules.identity.models import User
+
 
 @pytest.mark.asyncio
 async def test_postgres_db_connection() -> None:
