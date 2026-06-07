@@ -1,0 +1,101 @@
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from codrut.contracts.emails import EmailDeliveryStatus, EmailProviderKey
+
+
+class EmailTestSendRequest(BaseModel):
+    to: EmailStr
+    subject: str = Field(default="Test Codrut email", min_length=1, max_length=180)
+    html_body: str = Field(default="<p>Test email din Codrut.</p>", min_length=1)
+    text_body: str = Field(default="Test email din Codrut.", min_length=1)
+
+
+class EmailTestSendResponse(BaseModel):
+    provider: EmailProviderKey
+    status: EmailDeliveryStatus
+    message_id: str
+    recipient: EmailStr
+
+
+class EmailTemplateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    key: str
+    version: int
+    subject: str
+    html_body: str
+    text_body: str
+    variables: list[str]
+    audience: str | None = None
+    active: bool = True
+    owner_id: UUID | None = None
+
+
+class EmailTemplateCreateRequest(BaseModel):
+    key: str = Field(min_length=1, max_length=120)
+    subject: str = Field(min_length=1, max_length=255)
+    html_body: str = Field(min_length=1)
+    text_body: str = Field(min_length=1)
+    variables: list[str] = Field(default_factory=list)
+    audience: str | None = Field(default=None, max_length=100)
+    active: bool = True
+
+
+class EmailTemplateUpdateRequest(BaseModel):
+    subject: str | None = Field(default=None, min_length=1, max_length=255)
+    html_body: str | None = Field(default=None, min_length=1)
+    text_body: str | None = Field(default=None, min_length=1)
+    variables: list[str] | None = None
+    audience: str | None = Field(default=None, max_length=100)
+    active: bool | None = None
+
+
+class EmailDeliveryMetricResponse(BaseModel):
+    label: str
+    value: str
+    detail: str
+
+
+class AssessmentDeliveryRowResponse(BaseModel):
+    id: str
+    participant: str
+    email: str
+    audience: str  # "leadership_account" | "secure_link"
+    project: str
+    tasks: str
+    delivery: str  # "draft" | "sent" | "delivered" | "opened" | "failed"
+    reminder: str  # "today" | "tomorrow" | "paused" | "none"
+    completion: str  # "not_started" | "in_progress" | "completed"
+    nextAction: str
+
+
+class CampaignRecipientRowResponse(BaseModel):
+    id: str
+    company: str
+    firstName: str | None = None
+    lastName: str | None = None
+    email: str
+    clientType: str
+    status: str
+    openRate: str | None = None
+    clickRate: str | None = None
+    viewRate: str | None = None
+    outcome: str | None = None
+
+
+class CampaignOpsSummaryResponse(BaseModel):
+    videoHost: dict
+    template: dict
+    recipients: list[CampaignRecipientRowResponse]
+    weeklyReport: dict
+
+
+class EmailOpsSummaryResponse(BaseModel):
+    metrics: list[EmailDeliveryMetricResponse]
+    assessmentRows: list[AssessmentDeliveryRowResponse]
+    rules: list[str]
+    campaign: CampaignOpsSummaryResponse
+

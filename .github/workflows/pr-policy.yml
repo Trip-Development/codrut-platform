@@ -1,0 +1,63 @@
+name: Policy
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - prod
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+
+jobs:
+  pr-hygiene:
+    name: policy / pr-hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate title and work tracking reference
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+
+          title_pattern='^(feat|fix|build|docs|chore|ci|refactor|perf|test|revert)(\([a-z0-9._/-]+\))?!?: .+'
+          if [[ ! "${PR_TITLE}" =~ ${title_pattern} ]]; then
+            echo "PR title must follow Conventional Commits, for example: build(repo): add delivery checks."
+            exit 1
+          fi
+
+          if jq -e 'index("admin-exempt") != null' <<< "${PR_LABELS}" >/dev/null; then
+            echo "Administrative exemption label present."
+            exit 0
+          fi
+
+          shopt -s nocasematch
+          issue_pattern='(^|[[:space:](])(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|references?)[[:space:]]+#[0-9]+([[:space:],.)]|$)'
+          if [[ ! "${PR_BODY}" =~ ${issue_pattern} ]]; then
+            echo "PR body must include Closes #123 or Refs #123, unless labeled admin-exempt."
+            exit 1
+          fi
+
+  release-source:
+    name: policy / release-source
+    if: github.base_ref == 'prod'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require release promotion from dev
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref }}
+        run: |
+          if [[ "${SOURCE_BRANCH}" != "dev" ]]; then
+            echo "Production PRs must promote the dev branch; received ${SOURCE_BRANCH}."
+            exit 1
+          fi

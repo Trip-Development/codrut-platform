@@ -1,0 +1,75 @@
+services:
+  traefik:
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - traefik_letsencrypt:/letsencrypt
+    restart: unless-stopped
+
+  frontend:
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: /api
+      CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-false}
+      NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-false}
+    labels:
+      traefik.http.routers.codrut-frontend.rule: Host(`${CODRUT_HOST}`)
+      traefik.http.routers.codrut-frontend.entrypoints: websecure
+      traefik.http.routers.codrut-frontend.tls.certresolver: letsencrypt
+    restart: unless-stopped
+
+  backend:
+    environment:
+      CODRUT_ENV: production
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY}
+    labels:
+      traefik.http.routers.codrut-api.rule: Host(`${CODRUT_HOST}`) && PathPrefix(`/api`)
+      traefik.http.routers.codrut-api.entrypoints: websecure
+      traefik.http.routers.codrut-api.tls.certresolver: letsencrypt
+    restart: unless-stopped
+
+  worker:
+    environment:
+      CODRUT_ENV: production
+      CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL}
+      CODRUT_REDIS_URL: ${CODRUT_REDIS_URL}
+      CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER}
+      CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME}
+      CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY}
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+volumes:
+  traefik_letsencrypt:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${CODRUT_DB_VOLUME_PATH}
+
+

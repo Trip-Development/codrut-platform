@@ -1,0 +1,21 @@
+{
+  "name": "Codrut Platform",
+  "dockerComposeFile": ["../compose.yaml", "../compose.dev.yaml"],
+  "service": "backend",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "overrideCommand": false,
+  "postCreateCommand": "cd /workspace/backend && uv sync; cd /workspace/frontend && corepack enable && pnpm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}

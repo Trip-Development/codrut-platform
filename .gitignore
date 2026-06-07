@@ -206,6 +206,18 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Codrut local app state
+backend/.coverage
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.venv/
+.playwright-cli/
+.pnpm-store/
+frontend/.next/
+frontend/coverage/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+
 # PyPI configuration file
 .pypirc
 

@@ -1,0 +1,4 @@
+nume,email,manager,pozitie,locatie,pcm
+Alice Ionescu,alice.ionescu@example.com,,CEO,Bucuresti,Thinker
+Bob Popescu,bob.popescu@example.com,Alice Ionescu,CTO,Bucuresti,Persister
+Charlie Vasilescu,charlie.vasilescu@example.com,Alice Ionescu,Developer,Cluj,Harmonizer

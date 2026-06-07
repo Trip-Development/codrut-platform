@@ -1,0 +1,24 @@
+http:
+  routers:
+    codrut-api:
+      entryPoints:
+        - web
+      rule: PathPrefix(`/api`)
+      service: codrut-backend
+      priority: 100
+    codrut-frontend:
+      entryPoints:
+        - web
+      rule: PathPrefix(`/`)
+      service: codrut-frontend
+      priority: 1
+
+  services:
+    codrut-backend:
+      loadBalancer:
+        servers:
+          - url: http://backend:8000
+    codrut-frontend:
+      loadBalancer:
+        servers:
+          - url: http://frontend:3000
