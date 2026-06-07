@@ -81,6 +81,7 @@ jobs:
   e2e:
     name: end-to-end / playwright
     runs-on: ubuntu-latest
+    if: github.base_ref == 'prod'
     steps:
       - uses: actions/checkout@v4
 
