@@ -14,6 +14,7 @@ jobs:
   build-and-deploy:
     name: Build & Deploy to Hetzner VPS
     runs-on: ubuntu-latest
+    environment: prod
 
     steps:
       - name: Checkout Repository
