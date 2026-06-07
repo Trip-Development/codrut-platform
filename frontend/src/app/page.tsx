@@ -242,13 +242,7 @@ export default function HomePage() {
               href="/login"
               className="tap-soft rounded-2xl border border-[var(--border)] bg-surface px-5 py-2.5 text-center text-sm font-bold text-foreground hover:bg-surface-muted"
             >
-              Acces participanți
-            </Link>
-            <Link
-              href="/trainer/login"
-              className="tap-soft rounded-2xl border border-burgundy bg-surface px-5 py-2.5 text-center text-sm font-bold text-burgundy hover:bg-burgundy-50 dark:hover:bg-burgundy/10"
-            >
-              Portal trainer
+              Intră în cont
             </Link>
             <Link
               href="#contact"
@@ -285,13 +279,7 @@ export default function HomePage() {
               href="/login"
               className="tap-soft rounded-2xl border border-burgundy bg-surface px-6 py-4 text-center text-base font-bold text-burgundy hover:bg-burgundy-50 dark:hover:bg-burgundy/10"
             >
-              Acces participanți
-            </Link>
-            <Link
-              href="/trainer/login"
-              className="tap-soft rounded-2xl border border-[var(--border)] bg-surface px-6 py-4 text-center text-base font-bold text-foreground hover:bg-surface-muted"
-            >
-              Portal trainer
+              Intră în cont
             </Link>
           </div>
 
