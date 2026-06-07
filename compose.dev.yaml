@@ -96,7 +96,7 @@ services:
       CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
     volumes:
       - .:/workspace:cached
-      - backend_uv_cache:/home/vscode/.cache/uv
+      - worker_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
       - worker_venv:/workspace/backend/.venv
     init: true
@@ -121,6 +121,7 @@ volumes:
   backend_uv_cache:
   backend_pip_cache:
   backend_venv:
+  worker_uv_cache:
   worker_venv:
   frontend_node_modules:
   frontend_next_cache:
