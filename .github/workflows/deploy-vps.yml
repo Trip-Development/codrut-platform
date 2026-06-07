@@ -80,6 +80,7 @@ jobs:
           CODRUT_EMAIL_BREVO_API_KEY: ${{ secrets.CODRUT_EMAIL_BREVO_API_KEY }}
           CODRUT_HOST: ${{ secrets.CODRUT_HOST }}
           TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
+          CODRUT_DB_VOLUME_PATH: ${{ secrets.CODRUT_DB_VOLUME_PATH }}
         run: |
           # 1. Configure SSH
           mkdir -p ~/.ssh
@@ -113,6 +114,7 @@ jobs:
           CODRUT_EMAIL_BREVO_API_KEY=$CODRUT_EMAIL_BREVO_API_KEY
           CODRUT_HOST=$CODRUT_HOST
           TRAEFIK_ACME_EMAIL=$TRAEFIK_ACME_EMAIL
+          CODRUT_DB_VOLUME_PATH=$CODRUT_DB_VOLUME_PATH
           EOF"
 
           # 5. Connect and restart Docker Compose services with new images
