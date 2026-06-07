@@ -27,7 +27,8 @@ describe("HomePage", () => {
 
     expect(screen.getAllByText("Codrut").length).toBeGreaterThan(0);
     expect(screen.getByText("Codrut transforma trainingul in pasi clari pentru fiecare om.")).toBeTruthy();
-    expect(screen.getAllByText("Intră în cont").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Acces participanți").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Portal trainer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Trainer login").length).toBeGreaterThan(0);
     expect(screen.getByText("Link sigur")).toBeTruthy();
     expect(screen.getByText("Continuitate dupa training, fara follow-up pierdut.")).toBeTruthy();

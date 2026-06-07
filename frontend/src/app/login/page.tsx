@@ -116,6 +116,16 @@ export default function LoginPage() {
             </p>
           ) : null}
         </form>
+
+        <div className="mt-8 pt-6 border-t border-[var(--border)] flex justify-center text-sm">
+          <span className="text-foreground/50">Ești trainer sau owner?</span>
+          <Link
+            href="/trainer/login"
+            className="ml-2 font-bold text-burgundy hover:text-burgundy-dark transition-colors"
+          >
+            Intră în portalul trainer
+          </Link>
+        </div>
       </section>
     </main>
   );

@@ -2,7 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-codrut-platform}
 
 services:
   traefik:
-    image: traefik:v3.4
+    image: traefik:v3.7.1
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false

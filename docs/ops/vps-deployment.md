@@ -15,7 +15,6 @@ Required GitHub secrets for the `VPS Deployment` workflow:
 - `CODRUT_HOST`
 - `TRAEFIK_ACME_EMAIL`
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-- `CODRUT_DATABASE_URL`
 - `CODRUT_REDIS_URL`
 - `CODRUT_SESSION_SECRET`
 - `CODRUT_CORS_ORIGINS`
@@ -24,12 +23,16 @@ Required GitHub secrets for the `VPS Deployment` workflow:
 - `CODRUT_EMAIL_FROM_ADDRESS`
 - `CODRUT_EMAIL_FROM_NAME`
 - `CODRUT_EMAIL_BREVO_API_KEY`
+- `CODRUT_DB_VOLUME_PATH`
 
-For the current single-host Compose deployment, `CODRUT_DATABASE_URL` should use the
-same Postgres credentials as the `POSTGRES_*` secrets and host `db`, for example:
+For the current single-host Compose deployment, the workflow derives
+`CODRUT_DATABASE_URL` from the `POSTGRES_*` secrets and writes the database into a
+`postgres-data` subdirectory under the Hetzner volume path.
+
+`CODRUT_DB_VOLUME_PATH` should point at the mounted Hetzner volume root, for example:
 
 ```text
-postgresql+asyncpg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@db:5432/<POSTGRES_DB>
+/mnt/HC_Volume_105944446
 ```
 
 Set `CODRUT_PUBLIC_APP_URL` to the final HTTPS origin, for example:
