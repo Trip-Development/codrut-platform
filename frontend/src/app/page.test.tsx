@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import React from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import HomePage from "./page";
 
@@ -11,6 +11,15 @@ describe("HomePage", () => {
     mockIntersectionObserver.prototype.unobserve = vi.fn();
     mockIntersectionObserver.prototype.disconnect = vi.fn();
     vi.stubGlobal("IntersectionObserver", mockIntersectionObserver);
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
   });
 
   it("renders the business landing and access paths", () => {

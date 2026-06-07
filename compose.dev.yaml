@@ -61,6 +61,7 @@ services:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
+      - backend_venv:/workspace/backend/.venv
       - frontend_node_modules:/workspace/frontend/node_modules
       - pnpm_store:/home/vscode/.local/share/pnpm/store
     ports:
@@ -97,6 +98,7 @@ services:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
+      - backend_venv:/workspace/backend/.venv
     init: true
     tty: true
     stdin_open: true
@@ -118,6 +120,7 @@ services:
 volumes:
   backend_uv_cache:
   backend_pip_cache:
+  backend_venv:
   frontend_node_modules:
   frontend_next_cache:
   pnpm_store:
