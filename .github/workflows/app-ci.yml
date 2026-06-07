@@ -89,6 +89,8 @@ jobs:
           docker compose -f compose.yaml -f compose.dev.yaml up -d --build
           # Wait for backend healthcheck (using the project's health check command)
           docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest tests/test_health.py
+          # Run database migrations
+          docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run alembic upgrade head
 
       - name: Print Docker logs on failure
         if: failure()
