@@ -6,6 +6,7 @@ from sqlalchemy import delete, select
 
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
+from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
@@ -18,7 +19,7 @@ from codrut.modules.companies.models import (
     CompanyMembershipRole,
     ParticipantProfile,
 )
-from codrut.modules.identity.models import AssignmentInvite, User
+from codrut.modules.identity.models import AssignmentInvite, User, UserRole
 from codrut.modules.identity.service import IdentityService
 
 
@@ -71,20 +72,36 @@ async def seed_e2e_state() -> None:
         session.add(company)
         await session.flush()
 
-        # 2.5 Link Trainer to Company
+        # 2.5 Ensure and link the E2E trainer account used by Playwright.
         trainer_email = os.getenv("CODRUT_SEED_TRAINER_EMAIL", "trainer@example.com").lower()
+        trainer_password = os.getenv(
+            "CODRUT_SEED_TRAINER_PASSWORD",
+            "replace-with-a-long-test-password",
+        )
         t_stmt = select(User).where(User.email == trainer_email)
         t_result = await session.execute(t_stmt)
         trainer = t_result.scalar_one_or_none()
-        if trainer is not None:
-            membership = CompanyMembership(
+        if trainer is None:
+            trainer = User(
                 id=uuid.uuid4(),
-                company_id=company.id,
-                user_id=trainer.id,
-                role=CompanyMembershipRole.owner,
+                email=trainer_email,
+                password_hash=hash_password(trainer_password),
+                role=UserRole.trainer,
             )
-            session.add(membership)
-            await session.flush()
+            session.add(trainer)
+        else:
+            trainer.password_hash = hash_password(trainer_password)
+            trainer.role = UserRole.trainer
+
+        await session.flush()
+        membership = CompanyMembership(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            user_id=trainer.id,
+            role=CompanyMembershipRole.owner,
+        )
+        session.add(membership)
+        await session.flush()
 
         # 3. Create three participants
         participants_data = [
