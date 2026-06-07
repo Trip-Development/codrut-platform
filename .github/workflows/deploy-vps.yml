@@ -70,7 +70,6 @@ jobs:
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          CODRUT_DATABASE_URL: ${{ secrets.CODRUT_DATABASE_URL }}
           CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
           CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
           CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
@@ -89,6 +88,9 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$HETZNER_VPS_IP" >> ~/.ssh/known_hosts
 
+          DERIVED_DATABASE_URL=$(python3 -c "from urllib.parse import quote; import os; print(f\"postgresql+asyncpg://{quote(os.environ['POSTGRES_USER'])}:{quote(os.environ['POSTGRES_PASSWORD'])}@db:5432/{quote(os.environ['POSTGRES_DB'])}\")")
+          DERIVED_DB_VOLUME_PATH="${CODRUT_DB_VOLUME_PATH%/}/postgres-data"
+
           # 2. Ensure deployment directory exists
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "mkdir -p /opt/codrut-platform"
 
@@ -104,7 +106,7 @@ jobs:
           POSTGRES_USER=$POSTGRES_USER
           POSTGRES_PASSWORD=$POSTGRES_PASSWORD
           CODRUT_ENV=production
-          CODRUT_DATABASE_URL=$CODRUT_DATABASE_URL
+          CODRUT_DATABASE_URL=$DERIVED_DATABASE_URL
           CODRUT_REDIS_URL=$CODRUT_REDIS_URL
           CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
           CODRUT_CORS_ORIGINS=$CODRUT_CORS_ORIGINS
@@ -115,7 +117,7 @@ jobs:
           CODRUT_EMAIL_BREVO_API_KEY=$CODRUT_EMAIL_BREVO_API_KEY
           CODRUT_HOST=$CODRUT_HOST
           TRAEFIK_ACME_EMAIL=$TRAEFIK_ACME_EMAIL
-          CODRUT_DB_VOLUME_PATH=$CODRUT_DB_VOLUME_PATH
+          CODRUT_DB_VOLUME_PATH=$DERIVED_DB_VOLUME_PATH
           EOF"
 
           # 5. Connect and restart Docker Compose services with new images
