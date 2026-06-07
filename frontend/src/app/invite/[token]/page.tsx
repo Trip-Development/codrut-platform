@@ -130,7 +130,7 @@ export default function InvitePage({ params }: InvitePageProps) {
     );
   }
 
-  if (data.already_registered) {
+  if (data.already_registered && data.is_leadership) {
     return (
       <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
         <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">

@@ -111,7 +111,7 @@ class QuestionnaireAssignment(TimestampMixin, Base):
     )
     questionnaire_key: Mapped[str] = mapped_column(String(120), nullable=False)
     target_type: Mapped[AssignmentTargetType] = mapped_column(
-        Enum(AssignmentTargetType),
+        Enum(AssignmentTargetType, native_enum=True, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     target_person_id: Mapped[uuid.UUID | None] = mapped_column(

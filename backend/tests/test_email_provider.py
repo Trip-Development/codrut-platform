@@ -34,8 +34,10 @@ async def test_test_email_provider_accepts_and_records_message() -> None:
     assert provider.sent_messages == [message]
 
 
-def test_build_email_provider_defaults_to_test_provider() -> None:
-    provider = build_email_provider(Settings())
+def test_build_email_provider_defaults_to_test_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CODRUT_EMAIL_PROVIDER", raising=False)
+    settings = Settings(_env_file=None)
+    provider = build_email_provider(settings)
 
     assert isinstance(provider, LocalEmailProvider)
 
@@ -70,8 +72,9 @@ def test_build_email_provider_supports_mailpit_provider() -> None:
     assert isinstance(provider, SmtpEmailProvider)
 
 
-def test_build_email_provider_requires_brevo_api_key() -> None:
-    settings = Settings(email_provider="brevo")
+def test_build_email_provider_requires_brevo_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CODRUT_EMAIL_BREVO_API_KEY", raising=False)
+    settings = Settings(_env_file=None, email_provider="brevo")
 
     with pytest.raises(DomainError, match="Brevo API key is required"):
         build_email_provider(settings)

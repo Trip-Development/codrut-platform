@@ -140,11 +140,13 @@ class IdentityService:
         already_registered = profile.user_id is not None
 
         # Check if the participant is leadership
-        stmt = (
-            select(exists())
-            .where(TeamMembership.participant_profile_id == profile.id)
-            .where(TeamMembership.team_id == Team.id)
-            .where(Team.type == TeamType.leadership)
+        stmt = select(
+            exists(
+                select(1)
+                .where(TeamMembership.participant_profile_id == profile.id)
+                .where(TeamMembership.team_id == Team.id)
+                .where(Team.type == TeamType.leadership)
+            )
         )
         is_leadership = (await self.repository.session.execute(stmt)).scalar() or False
 

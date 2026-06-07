@@ -159,6 +159,10 @@ export default async function CompanyReportsPage({
               <div className="py-12 text-center text-foreground/50 text-sm">
                 Niciun răspuns Lencioni completat pentru această companie.
               </div>
+            ) : lencioniCount < 3 ? (
+              <div className="py-12 text-center text-foreground/50 text-sm italic">
+                Rezultatele agregate vor fi afișate după ce minim 3 participanți completează chestionarul (în prezent: {lencioniCount}).
+              </div>
             ) : (
               <div className="mt-5 space-y-4">
                 {lencioniAverages.map((item) => {
@@ -206,6 +210,10 @@ export default async function CompanyReportsPage({
             {driverCount === 0 ? (
               <div className="py-12 text-center text-foreground/50 text-sm">
                 Niciun răspuns Distress Drivers completat pentru această companie.
+              </div>
+            ) : driverCount < 3 ? (
+              <div className="py-12 text-center text-foreground/50 text-sm italic">
+                Rezultatele agregate vor fi afișate după ce minim 3 participanți completează chestionarul (în prezent: {driverCount}).
               </div>
             ) : (
               <div className="mt-5 space-y-4">
