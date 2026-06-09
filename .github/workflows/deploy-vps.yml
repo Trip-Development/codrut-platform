@@ -46,8 +46,6 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:latest
             ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v6
@@ -58,8 +56,6 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:latest
             ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Deploy to Hetzner VPS via SSH
         env:
