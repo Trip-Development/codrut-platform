@@ -118,3 +118,19 @@ class CompanyRepository:
             .where(ParticipantProfile.user_id.is_(None))
         )
         return result.scalar_one_or_none()
+
+    async def get_participant_by_id(self, participant_id: UUID) -> ParticipantProfile | None:
+        result = await self.session.execute(
+            select(ParticipantProfile).where(ParticipantProfile.id == participant_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_assignments_for_participant(self, participant_id: UUID) -> list:
+        from codrut.modules.assignments.models import QuestionnaireAssignment
+
+        result = await self.session.execute(
+            select(QuestionnaireAssignment).where(
+                QuestionnaireAssignment.respondent_profile_id == participant_id
+            )
+        )
+        return list(result.scalars().all())

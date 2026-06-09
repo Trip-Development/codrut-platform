@@ -82,3 +82,19 @@ class ParticipantResponse(BaseModel):
     location: str | None
     role_group: str | None
     pcm_profile: str | None
+
+
+class RosterImportEmailResult(BaseModel):
+    participant_id: UUID
+    email: EmailStr
+    full_name: str
+    email_sent: bool
+    error: str | None = None
+
+
+class RosterImportResponse(BaseModel):
+    participants: list[ParticipantResponse]
+    email_results: list[RosterImportEmailResult]
+    total_imported: int
+    emails_sent: int
+    emails_failed: int
