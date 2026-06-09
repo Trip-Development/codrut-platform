@@ -143,6 +143,24 @@ async def test_create_definition_persists_versioned_structure() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_definition_accepts_custom_category_slug() -> None:
+    repository = FakeDefinitionRepository()
+    service = make_service(repository)
+
+    result = await service.create_definition(
+        QuestionnaireDefinitionCreateRequest(
+            key="team_health_custom",
+            title="Team health",
+            description="Custom trainer-defined questionnaire",
+            schema=minimal_schema(),
+        )
+    )
+
+    assert result.key == "team_health_custom"
+    assert repository.definitions[0].key == "team_health_custom"
+
+
+@pytest.mark.asyncio
 async def test_update_definition_mutates_unused_version() -> None:
     definition = persisted_definition()
     repository = FakeDefinitionRepository([definition])

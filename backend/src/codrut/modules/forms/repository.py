@@ -7,7 +7,6 @@ from codrut.modules.assignments.models import QuestionnaireAssignment
 from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
-    QuestionnaireKey,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
@@ -65,7 +64,7 @@ class FormsRepository:
 
     async def get_definition(
         self,
-        key: QuestionnaireKey,
+        key: str,
         *,
         version: int | None = None,
     ) -> QuestionnaireDefinition | None:
@@ -79,7 +78,7 @@ class FormsRepository:
         result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
-    async def get_latest_version(self, key: QuestionnaireKey) -> int:
+    async def get_latest_version(self, key: str) -> int:
         result = await self.session.execute(
             select(func.max(QuestionnaireDefinition.version)).where(
                 QuestionnaireDefinition.key == key,
@@ -97,7 +96,7 @@ class FormsRepository:
 
     async def has_submitted_responses(
         self,
-        key: QuestionnaireKey,
+        key: str,
         version: int,
     ) -> bool:
         result = await self.session.execute(
@@ -111,7 +110,7 @@ class FormsRepository:
 
     async def deactivate_definitions_for_key(
         self,
-        key: QuestionnaireKey,
+        key: str,
         *,
         except_version: int | None = None,
     ) -> None:

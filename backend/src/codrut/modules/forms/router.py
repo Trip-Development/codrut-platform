@@ -5,13 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
-from codrut.modules.forms.models import QuestionnaireKey
 from codrut.modules.forms.schemas import (
     QuestionnaireDefinitionCreateRequest,
     QuestionnaireDefinitionResponse,
     QuestionnaireDefinitionUpdateRequest,
     QuestionnaireResponseResponse,
     QuestionnaireResponseSaveRequest,
+    QuestionnaireSlug,
 )
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity.models import UserRole
@@ -34,7 +34,7 @@ async def list_questionnaire_definitions(
 
 @router.get("/definitions/{key}", response_model=QuestionnaireDefinitionResponse)
 async def get_questionnaire_definition(
-    key: QuestionnaireKey,
+    key: QuestionnaireSlug,
     session: Annotated[AsyncSession, Depends(db_session)],
     version: int | None = None,
 ) -> QuestionnaireDefinitionResponse:
@@ -57,7 +57,7 @@ async def create_questionnaire_definition(
 
 @router.put("/definitions/{key}", response_model=QuestionnaireDefinitionResponse)
 async def update_questionnaire_definition(
-    key: QuestionnaireKey,
+    key: QuestionnaireSlug,
     payload: QuestionnaireDefinitionUpdateRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
@@ -74,7 +74,7 @@ async def update_questionnaire_definition(
     response_model=QuestionnaireDefinitionResponse,
 )
 async def activate_questionnaire_definition(
-    key: QuestionnaireKey,
+    key: QuestionnaireSlug,
     version: int,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
@@ -87,7 +87,7 @@ async def activate_questionnaire_definition(
 
 @router.delete("/definitions/{key}", response_model=QuestionnaireDefinitionResponse)
 async def retire_questionnaire_definition(
-    key: QuestionnaireKey,
+    key: QuestionnaireSlug,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     version: int | None = None,

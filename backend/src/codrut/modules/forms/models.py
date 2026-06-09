@@ -29,7 +29,7 @@ class QuestionnaireDefinition(TimestampMixin, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    key: Mapped[QuestionnaireKey] = mapped_column(Enum(QuestionnaireKey), nullable=False)
+    key: Mapped[str] = mapped_column(String(120), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -49,10 +49,7 @@ class QuestionnaireResponse(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    questionnaire_key: Mapped[QuestionnaireKey] = mapped_column(
-        Enum(QuestionnaireKey),
-        nullable=False,
-    )
+    questionnaire_key: Mapped[str] = mapped_column(String(120), nullable=False)
     questionnaire_version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[QuestionnaireResponseStatus] = mapped_column(
         Enum(QuestionnaireResponseStatus),

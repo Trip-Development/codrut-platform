@@ -42,24 +42,29 @@ def make_assignment() -> QuestionnaireAssignment:
     )
 
 
-def make_participant(*, user_id: uuid.UUID | None = None) -> ParticipantProfile:
+def make_participant(
+    *,
+    user_id: uuid.UUID | None = None,
+    role_group: str | None = None,
+) -> ParticipantProfile:
     return ParticipantProfile(
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         user_id=user_id,
         full_name="Ana Pop",
         email="ana@example.com",
+        role_group=role_group,
     )
 
 
-async def test_send_assignment_invitation_uses_account_setup_for_unlinked_participant() -> None:
+async def test_send_assignment_invitation_uses_account_setup_for_leadership_participant() -> None:
     provider = LocalEmailProvider()
     service = TransactionalEmailService(provider)
     assignment = make_assignment()
 
     result = await service.send_assignment_invitation(
         assignment,
-        make_participant(),
+        make_participant(role_group="leadership"),
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
@@ -81,7 +86,7 @@ async def test_send_assignment_invitation_uses_bundle_template_for_existing_acco
 
     await service.send_assignment_invitation(
         make_assignment(),
-        make_participant(user_id=uuid.uuid4()),
+        make_participant(role_group="member"),
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
@@ -99,7 +104,7 @@ async def test_send_assignment_invitation_does_not_stamp_failed_send() -> None:
 
     await service.send_assignment_invitation(
         assignment,
-        make_participant(user_id=uuid.uuid4()),
+        make_participant(role_group="member"),
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
@@ -154,7 +159,7 @@ async def test_send_assignment_invitation_persists_error_details_on_failure() ->
 
     result = await service.send_assignment_invitation(
         assignment,
-        make_participant(),
+        make_participant(role_group="leadership"),
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
