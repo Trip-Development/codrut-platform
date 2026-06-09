@@ -27,6 +27,18 @@ export function QuestionnairesWorkspace() {
   const [currentDefinition, setCurrentDefinition] = useState<QuestionnaireDefinition | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [draftKey, setDraftKey] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (stubs.length > 0) {
+      const uniqueKeys = stubs.map((s) => s.id);
+      const standardKeys = ["lencioni", "distress_drivers", "boss_360", "icare", "pcm_base", "phase"];
+      const merged = Array.from(new Set([...uniqueKeys, ...standardKeys]));
+      setCategories(merged);
+    } else {
+      setCategories(["lencioni", "distress_drivers", "boss_360", "icare", "pcm_base", "phase"]);
+    }
+  }, [stubs]);
 
   // New Questionnaire Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -515,13 +527,18 @@ export function QuestionnairesWorkspace() {
                     />
                   </label>
                   <label className="space-y-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">Slug</span>
-                    <input
-                      value={draftKey}
-                      onChange={(e) => setDraftKey(e.target.value)}
-                      onBlur={handleRenameDefinitionKey}
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">Categorie / Slug</span>
+                    <select
+                      value={currentDefinition.key}
+                      onChange={handleRenameDefinitionKey}
                       className="w-full rounded-2xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground outline-none focus:border-burgundy/45"
-                    />
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
 
@@ -841,15 +858,51 @@ export function QuestionnairesWorkspace() {
             <h3 className="text-lg font-bold text-foreground">Adaugă Chestionar Nou</h3>
             
             <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Cod Unic (Slug, litere mici/cifre)</label>
-              <input
-                type="text"
-                required
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                placeholder="Ex. pcm_profil"
-                className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
-              />
+              <label className="text-xs font-bold text-foreground/60">Cod Unic (Slug / Categorie)</label>
+              <div className="flex gap-2">
+                <select
+                  value={newKey}
+                  onChange={(e) => setNewKey(e.target.value)}
+                  className="flex-1 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
+                  required
+                >
+                  <option value="">Alege o categorie...</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = prompt("Introduceți codul categoriei noi (litere mici, cifre, sublinieri):");
+                    if (name) {
+                      const cleanName = name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+                      if (cleanName && !categories.includes(cleanName)) {
+                        setCategories([...categories, cleanName]);
+                        setNewKey(cleanName);
+                      }
+                    }
+                  }}
+                  className="tap-soft rounded-lg bg-burgundy/10 px-3 text-xs font-bold text-burgundy border border-burgundy/20 hover:bg-burgundy/20"
+                >
+                  + Adaugă
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newKey && window.confirm(`Ștergeți categoria "${newKey}" din listă?`)) {
+                      setCategories(categories.filter((cat) => cat !== newKey));
+                      setNewKey("");
+                    }
+                  }}
+                  className="tap-soft rounded-lg bg-[#890505]/10 border border-[#890505]/20 px-3 text-xs font-bold text-[#890505] hover:bg-[#890505]/20"
+                  disabled={!newKey}
+                >
+                  Șterge
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1">

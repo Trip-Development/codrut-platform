@@ -708,6 +708,7 @@ export async function getQuestionnaireResponse(
   try {
     const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
       cache: "no-store",
+      credentials: "include",
     });
     if (!response.ok) return null;
     return (await response.json()) as QuestionnaireResponseRecord;
@@ -728,6 +729,7 @@ export async function saveQuestionnaireResponse(
     const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ answers }),
     });
 
@@ -753,6 +755,7 @@ export async function submitQuestionnaireResponse(
     const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ answers }),
     });
 

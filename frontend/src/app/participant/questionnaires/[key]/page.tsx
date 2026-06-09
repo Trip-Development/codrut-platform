@@ -30,17 +30,19 @@ export default async function ParticipantQuestionnaireRunPage({
       {definition ? (
         <QuestionnaireRunner definition={definition} assignmentId={assignmentId} />
       ) : (
-        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-foreground">Definitia nu este disponibila</h2>
-          <p className="mt-2 text-sm leading-6 text-foreground/65">
-            Verifica daca backendul ruleaza si daca formularul este in catalogul aprobat.
+        <section className="rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm max-w-lg mx-auto text-center space-y-4 my-8">
+          <h2 className="text-xl font-bold text-foreground">Chestionarul nu este disponibil</h2>
+          <p className="text-sm leading-relaxed text-foreground/70">
+            Formularul solicitat nu a putut fi încărcat. Este posibil ca linkul să fie incorect sau chestionarul să nu mai fie activ.
           </p>
-          <Link
-            href="/participant/questionnaires"
-            className="tap-soft mt-4 inline-flex rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white"
-          >
-            Inapoi la chestionare
-          </Link>
+          <div className="pt-2">
+            <Link
+              href="/participant/questionnaires"
+              className="tap-soft inline-flex items-center justify-center rounded-xl bg-burgundy px-5 py-3 text-sm font-bold text-white hover:bg-burgundy/90 transition"
+            >
+              Înapoi la chestionare
+            </Link>
+          </div>
         </section>
       )}
     </AppShell>
