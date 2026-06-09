@@ -26,7 +26,9 @@ from codrut.modules.companies.schemas import (
     ParticipantCreateRequest,
     ReportingRelationshipImportResponse,
     ReportingRelationshipIssue,
+    RosterImportEmailResult,
     RosterImportRequest,
+    RosterImportResponse,
     RosterImportRow,
 )
 from codrut.modules.identity.models import Session, User, UserRole
@@ -101,7 +103,7 @@ class CompanyService:
         user_id: UUID,
         company_id: UUID,
         payload: RosterImportRequest,
-    ) -> list[ParticipantProfile]:
+    ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         rows = [_normalize_roster_row(row) for row in payload.rows]
@@ -195,6 +197,7 @@ class CompanyService:
                 )
             await self.repository.session.flush()
 
+        email_results: list[RosterImportEmailResult] = []
         for participant in participants:
             assignments = [
                 QuestionnaireAssignment(
@@ -223,6 +226,95 @@ class CompanyService:
                 force_rotate=True,
             )
             invite_url = build_task_url(invite.token, settings)
+
+            # Send email — failure is non-fatal; participants are already saved to DB
+            send_error: str | None = None
+            try:
+                result = await email_service.send_assignment_invitation(
+                    assignments[0],
+                    participant,
+                    AssignmentInvitationContext(
+                        company_name=company.name,
+                        trainer_name=trainer_name,
+                        action_url=invite_url,
+                        task_count=len(assignments),
+                    ),
+                )
+                if result.status == "accepted":
+                    now = datetime.now(UTC)
+                    for assignment in assignments:
+                        assignment.status = AssignmentStatus.invited
+                        assignment.invited_at = now
+                else:
+                    send_error = result.error_details or "Email provider rejected the message."
+            except Exception as exc:  # noqa: BLE001
+                send_error = str(exc)
+
+            email_results.append(
+                RosterImportEmailResult(
+                    participant_id=participant.id,
+                    email=participant.email,
+                    full_name=participant.full_name,
+                    email_sent=send_error is None,
+                    error=send_error,
+                )
+            )
+
+        emails_sent = sum(1 for r in email_results if r.email_sent)
+        return RosterImportResponse(
+            participants=participants,
+            email_results=email_results,
+            total_imported=len(participants),
+            emails_sent=emails_sent,
+            emails_failed=len(email_results) - emails_sent,
+        )
+
+    async def resend_invite(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        participant_id: UUID,
+    ) -> RosterImportResponse:
+        from codrut.core.config import get_settings
+        from codrut.modules.assignments.models import AssignmentStatus
+        from codrut.modules.communications.email_provider import build_email_provider
+        from codrut.modules.communications.service import (
+            AssignmentInvitationContext,
+            TransactionalEmailService,
+        )
+        from codrut.modules.communications.task_links import build_task_url
+        from codrut.modules.identity.service import IdentityService
+
+        company = await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+
+        participant = await self.repository.get_participant_by_id(participant_id)
+        if participant is None or participant.company_id != company_id:
+            raise DomainError("Participant not found.", code="participant_not_found")
+
+        trainer = await self.identity_repository.get_user_by_id(user_id)
+        trainer_name = trainer.email.split("@", 1)[0] if trainer is not None else "trainer"
+        settings = get_settings()
+        email_service = TransactionalEmailService(
+            build_email_provider(settings),
+            self.repository.session,
+        )
+        identity_service = IdentityService(self.repository.session)
+
+        assignments = await self.repository.list_assignments_for_participant(participant_id)
+        if not assignments:
+            raise DomainError("No assignments found for participant.", code="no_assignments")
+
+        invite = await identity_service.create_invite(
+            company_id=company_id,
+            respondent_profile_id=participant_id,
+            assignment_ids=[a.id for a in assignments],
+            force_rotate=True,
+        )
+        invite_url = build_task_url(invite.token, settings)
+
+        send_error: str | None = None
+        try:
             result = await email_service.send_assignment_invitation(
                 assignments[0],
                 participant,
@@ -233,18 +325,31 @@ class CompanyService:
                     task_count=len(assignments),
                 ),
             )
-            if result.status != "accepted":
-                raise DomainError(
-                    f"Failed to send invitation email to {participant.email}.",
-                    code="email_send_failed",
-                )
+            if result.status == "accepted":
+                now = datetime.now(UTC)
+                for assignment in assignments:
+                    assignment.status = AssignmentStatus.invited
+                    assignment.invited_at = now
+            else:
+                send_error = result.error_details or "Email provider rejected the message."
+        except Exception as exc:  # noqa: BLE001
+            send_error = str(exc)
 
-            now = datetime.now(UTC)
-            for assignment in assignments:
-                assignment.status = AssignmentStatus.invited
-                assignment.invited_at = now
+        email_result = RosterImportEmailResult(
+            participant_id=participant.id,
+            email=participant.email,
+            full_name=participant.full_name,
+            email_sent=send_error is None,
+            error=send_error,
+        )
+        return RosterImportResponse(
+            participants=[participant],
+            email_results=[email_result],
+            total_imported=1,
+            emails_sent=1 if send_error is None else 0,
+            emails_failed=0 if send_error is None else 1,
+        )
 
-        return participants
 
     async def create_access_code(
         self,
@@ -252,6 +357,7 @@ class CompanyService:
         company_id: UUID,
         payload: CompanyAccessCodeCreateRequest,
     ) -> CompanyAccessCodeResponse:
+
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         code = _new_access_code()
