@@ -8,6 +8,7 @@ def test_forms_service_lists_approved_definitions() -> None:
     assert {definition.key for definition in definitions} == {
         QuestionnaireKey.lencioni,
         QuestionnaireKey.distress_drivers,
+        QuestionnaireKey.icare,
     }
 
 
