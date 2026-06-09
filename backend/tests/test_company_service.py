@@ -336,7 +336,7 @@ async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
     )
 
     try:
-        participants = await service.import_roster(
+        result = await service.import_roster(
             trainer.id,
             company.id,
             RosterImportRequest(
@@ -363,6 +363,11 @@ async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
     finally:
         monkeypatch.undo()
 
+
+    participants = result.participants
+    assert result.total_imported == 2
+    assert result.emails_sent == 2
+    assert result.emails_failed == 0
     assert len(participants) == 2
     assert participants[0].full_name == "Maria Popescu"
     assert participants[0].role_group == "leadership"
@@ -423,7 +428,7 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         await session.flush()
 
         service = CompanyService(session)
-        participants = await service.import_roster(
+        result = await service.import_roster(
             trainer.id,
             company.id,
             RosterImportRequest(
@@ -456,6 +461,9 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
             ),
         )
 
+        participants = result.participants
+        assert result.total_imported == 3
+        assert result.emails_sent == 3
         assert [participant.role_group for participant in participants] == [
             "leadership",
             "leadership",

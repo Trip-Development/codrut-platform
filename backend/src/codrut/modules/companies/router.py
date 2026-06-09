@@ -18,6 +18,7 @@ from codrut.modules.companies.schemas import (
     ParticipantResponse,
     ReportingRelationshipImportResponse,
     RosterImportRequest,
+    RosterImportResponse,
 )
 from codrut.modules.companies.service import CompanyService
 from codrut.modules.identity.schemas import AuthResponse, SessionPrincipal
@@ -79,7 +80,7 @@ async def create_company_participant(
 
 @router.post(
     "/{company_id}/participants/roster",
-    response_model=list[ParticipantResponse],
+    response_model=RosterImportResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def import_company_roster(
@@ -87,15 +88,36 @@ async def import_company_roster(
     payload: RosterImportRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
-) -> list[ParticipantResponse]:
+) -> RosterImportResponse:
     require_trainer_principal(principal)
-    participants = await CompanyService(session).import_roster(
+    result = await CompanyService(session).import_roster(
         principal.user_id,
         company_id,
         payload,
     )
     await session.commit()
-    return participants
+    return result
+
+
+@router.post(
+    "/{company_id}/participants/{participant_id}/resend-invite",
+    response_model=RosterImportResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def resend_participant_invite(
+    company_id: UUID,
+    participant_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> RosterImportResponse:
+    require_trainer_principal(principal)
+    result = await CompanyService(session).resend_invite(
+        principal.user_id,
+        company_id,
+        participant_id,
+    )
+    await session.commit()
+    return result
 
 
 @router.post(

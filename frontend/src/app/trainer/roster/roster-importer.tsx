@@ -102,6 +102,17 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
     pcm_profile: "",
   });
 
+  type EmailResult = {
+    participant_id: string;
+    email: string;
+    full_name: string;
+    email_sent: boolean;
+    error: string | null;
+  };
+
+  const [emailResults, setEmailResults] = useState<EmailResult[]>([]);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
   const [importState, setImportState] = useState<{
     status: "idle" | "ready" | "importing" | "success" | "error";
     message: string;
@@ -400,11 +411,21 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
         throw new Error(detail || `Backend refuzat (${response.status})`);
       }
 
-      // Backend succeeded, also cache locally for client-side queries
+      const importResult = await response.json();
+      const results: EmailResult[] = importResult.email_results ?? [];
+      setEmailResults(results);
+
+      const failedCount = importResult.emails_failed ?? 0;
+      const sentCount = importResult.emails_sent ?? 0;
+      const total = importResult.total_imported ?? newParticipants.length;
+
+      // Cache locally for client-side queries
       saveToLocalStorage(companyId, newParticipants, newAssignments);
       setImportState({
         status: "success",
-        message: `Import reușit în backend! ${newParticipants.length} participanți adăugați cu succes.`,
+        message: failedCount === 0
+          ? `Import reușit! ${total} participanți adăugați, ${sentCount} emailuri trimise.`
+          : `Import reușit: ${total} participanți adăugați. ⚠️ ${failedCount} emailuri nu au putut fi trimise — le poți retrimite mai jos.`,
       });
     } catch (error) {
       setImportState({
@@ -414,7 +435,30 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
     }
   };
 
+  const handleResend = async (participantId: string) => {
+    if (!companyId) return;
+    setResendingId(participantId);
+    try {
+      const response = await fetch(
+        `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite`,
+        { method: "POST", credentials: "include" }
+      );
+      const data = await response.json();
+      const result = data.email_results?.[0];
+      if (result) {
+        setEmailResults((prev) =>
+          prev.map((r) => (r.participant_id === participantId ? { ...r, ...result } : r))
+        );
+      }
+    } catch {
+      // leave row in ⚠ state — user can retry
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const saveToLocalStorage = (cId: string, participants: CompanyParticipant[], assignments: CompanyAssignment[]) => {
+
     if (typeof window === "undefined") return;
 
     // Load existing participants
@@ -513,6 +557,61 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
           </div>
         )}
       </section>
+
+      {/* Email delivery results table */}
+      {importState.status === "success" && emailResults.length > 0 && (
+        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-burgundy">Stare Emailuri Invitație</h3>
+            <span className="text-xs text-foreground/50">
+              {emailResults.filter((r) => r.email_sent).length}/{emailResults.length} trimise cu succes
+            </span>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+            <table className="w-full text-xs">
+              <thead className="bg-background border-b border-[var(--border)]">
+                <tr>
+                  <th className="px-4 py-2.5 text-left font-bold text-foreground/70">Participant</th>
+                  <th className="px-4 py-2.5 text-left font-bold text-foreground/70">Email</th>
+                  <th className="px-4 py-2.5 text-center font-bold text-foreground/70">Status Email</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-foreground/70">Acțiune</th>
+                </tr>
+              </thead>
+              <tbody>
+                {emailResults.map((r) => (
+                  <tr key={r.participant_id} className="border-b border-[var(--border)] last:border-0 hover:bg-background/50 transition-colors">
+                    <td className="px-4 py-2.5 font-semibold text-foreground">{r.full_name}</td>
+                    <td className="px-4 py-2.5 text-foreground/70">{r.email}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {r.email_sent ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-green-700 font-bold dark:bg-green-900/30 dark:text-green-400">
+                          ✓ Trimis
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-700 font-bold dark:bg-amber-900/30 dark:text-amber-400" title={r.error ?? ""}>
+                          ⚠ Eșuat
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      {!r.email_sent && (
+                        <button
+                          type="button"
+                          disabled={resendingId === r.participant_id}
+                          onClick={() => handleResend(r.participant_id)}
+                          className="rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        >
+                          {resendingId === r.participant_id ? "Se trimite..." : "Retrimite"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Roster column mapping */}
       {headers.length > 0 && importState.status === "ready" && (
