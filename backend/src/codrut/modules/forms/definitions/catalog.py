@@ -771,10 +771,11 @@ APPROVED_QUESTIONNAIRE_DEFINITIONS = [
 
 
 def get_approved_questionnaire_definition(
-    key: QuestionnaireKey,
+    key: str | QuestionnaireKey,
 ) -> ApprovedQuestionnaireDefinition:
+    key_value = key.value if isinstance(key, QuestionnaireKey) else key
     for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS:
-        if definition.key == key:
+        if definition.key == key_value:
             return definition
-    msg = f"No approved questionnaire definition for {key.value}"
+    msg = f"No approved questionnaire definition for {key_value}"
     raise KeyError(msg)

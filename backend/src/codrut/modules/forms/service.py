@@ -12,7 +12,6 @@ from codrut.modules.forms.definitions import (
 )
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
-    QuestionnaireKey,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
@@ -33,7 +32,7 @@ class FormsService:
     def list_definitions(self) -> list[QuestionnaireDefinitionResponse]:
         return [_to_response(definition) for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS]
 
-    def get_definition(self, key: QuestionnaireKey) -> QuestionnaireDefinitionResponse:
+    def get_definition(self, key: str) -> QuestionnaireDefinitionResponse:
         return _to_response(get_approved_questionnaire_definition(key))
 
     async def list_persisted_definitions(
@@ -48,7 +47,7 @@ class FormsService:
 
     async def get_persisted_definition(
         self,
-        key: QuestionnaireKey,
+        key: str,
         *,
         version: int | None = None,
     ) -> QuestionnaireDefinitionResponse:
@@ -82,7 +81,7 @@ class FormsService:
 
     async def update_definition(
         self,
-        key: QuestionnaireKey,
+        key: str,
         payload: QuestionnaireDefinitionUpdateRequest,
         *,
         version: int | None = None,
@@ -127,7 +126,7 @@ class FormsService:
 
     async def activate_definition(
         self,
-        key: QuestionnaireKey,
+        key: str,
         version: int,
     ) -> QuestionnaireDefinitionResponse:
         repository = self._require_repository()
@@ -140,7 +139,7 @@ class FormsService:
 
     async def retire_definition(
         self,
-        key: QuestionnaireKey,
+        key: str,
         *,
         version: int | None = None,
     ) -> QuestionnaireDefinitionResponse:
@@ -164,7 +163,7 @@ class FormsService:
         if response is None:
             definition = await _resolve_definition(
                 repository,
-                QuestionnaireKey(assignment.questionnaire_key),
+                assignment.questionnaire_key,
             )
             return QuestionnaireResponseResponse(
                 id=assignment_id,
@@ -190,7 +189,7 @@ class FormsService:
             raise DomainError("Assignment not found.", code="assignment_not_found")
         definition = await _resolve_definition(
             repository,
-            QuestionnaireKey(assignment.questionnaire_key),
+            assignment.questionnaire_key,
         )
         response = await repository.get_response_by_assignment(assignment_id)
         if submit:
@@ -319,13 +318,19 @@ def _allowed_answer_values(schema: dict) -> dict[str, set[int]]:
 
 async def _resolve_definition(
     repository: FormsRepository,
-    key: QuestionnaireKey,
+    key: str,
 ) -> Any:
     if hasattr(repository, "get_definition"):
         definition = await repository.get_definition(key)
         if definition is not None:
             return definition
-    return get_approved_questionnaire_definition(key)
+    try:
+        return get_approved_questionnaire_definition(key)
+    except KeyError as exc:
+        raise DomainError(
+            "Questionnaire definition not found.",
+            code="definition_not_found",
+        ) from exc
 
 
 def _validate_definition_schema(schema: dict[str, Any]) -> None:

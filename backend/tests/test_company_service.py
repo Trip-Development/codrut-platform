@@ -3,12 +3,23 @@ from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
+from codrut.core.database import SessionLocal
 from codrut.core.errors import DomainError
+from codrut.core.security import hash_password
+from codrut.modules.assignments.models import (
+    QuestionnaireAssignment,
+    Team,
+    TeamMembership,
+    TeamType,
+)
+from codrut.modules.communications.email_provider import LocalEmailProvider
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
     CompanyMembership,
+    CompanyMembershipRole,
     ParticipantProfile,
     ParticipantReportingRelationship,
 )
@@ -21,12 +32,22 @@ from codrut.modules.companies.schemas import (
     RosterImportRequest,
 )
 from codrut.modules.companies.service import CompanyService, hash_company_access_code
-from codrut.modules.identity.models import Session, User, UserRole
-from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.identity.models import AssignmentInvite, Session, User, UserRole
+from codrut.modules.identity.schemas import RegisterRequest, SessionPrincipal
+from codrut.modules.identity.service import IdentityService
+
+
+class FakeSession:
+    def add(self, _obj: Any) -> None:
+        return None
+
+    async def flush(self) -> None:
+        return None
 
 
 class FakeCompanyRepository:
     def __init__(self) -> None:
+        self.session: Any = FakeSession()
         self.companies_by_id: dict[uuid.UUID, Company] = {}
         self.companies_by_name: dict[str, Company] = {}
         self.access_codes_by_hash: dict[str, CompanyAccessCode] = {}
@@ -71,9 +92,7 @@ class FakeCompanyRepository:
 
     async def list_participants(self, company_id: uuid.UUID) -> list[ParticipantProfile]:
         return [
-            participant
-            for participant in self.participants
-            if participant.company_id == company_id
+            participant for participant in self.participants if participant.company_id == company_id
         ]
 
     async def replace_reporting_relationships(
@@ -136,13 +155,18 @@ class FakeIdentityRepository:
     def __init__(self) -> None:
         self.sessions: list[Session] = []
         self.users_by_email: dict[str, User] = {}
+        self.users_by_id: dict[uuid.UUID, User] = {}
 
     async def get_user_by_email(self, email: str) -> User | None:
         return self.users_by_email.get(email.lower())
 
+    async def get_user_by_id(self, user_id: uuid.UUID) -> User | None:
+        return self.users_by_id.get(user_id)
+
     async def add_user(self, user: User) -> User:
         user.id = uuid.uuid4()
         self.users_by_email[user.email] = user
+        self.users_by_id[user.id] = user
         return user
 
     async def add_session(self, session: Session) -> Session:
@@ -278,31 +302,74 @@ def test_require_trainer_principal_rejects_participant() -> None:
 async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
-    owner_id = uuid.uuid4()
-    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    trainer = User(
+        id=uuid.uuid4(),
+        email="trainer@example.com",
+        password_hash=hash_password("trainer-password-123"),
+        role=UserRole.trainer,
+    )
+    company = await service.create_company(trainer.id, CompanyCreateRequest(name="Client"))
+    service.identity_repository.users_by_id[trainer.id] = trainer
 
-    participants = await service.import_roster(
-        owner_id,
-        company.id,
-        RosterImportRequest(
-            rows=[
-                {
-                    "Name": "  Ana Ionescu  ",
-                    "Reports To": "Maria Popescu",
-                    "Position": "Consultant",
-                    "Location": "Bucharest",
-                    "email": "ANA@example.com",
-                    "Profil PCM": "",
-                }
-            ]
-        ),
+    fake_invite_token = str(uuid.uuid4())
+
+    class FakeInvite:
+        token = fake_invite_token
+
+    class FakeSendResult:
+        status = "accepted"
+
+    async def fake_create_invite(*_args: Any, **_kwargs: Any) -> FakeInvite:
+        return FakeInvite()
+
+    async def fake_send_assignment_invitation(*_args: Any, **_kwargs: Any) -> FakeSendResult:
+        return FakeSendResult()
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "codrut.modules.identity.service.IdentityService.create_invite",
+        fake_create_invite,
+    )
+    monkeypatch.setattr(
+        "codrut.modules.communications.service.TransactionalEmailService.send_assignment_invitation",
+        fake_send_assignment_invitation,
     )
 
-    assert len(participants) == 1
-    assert participants[0].full_name == "Ana Ionescu"
-    assert participants[0].reports_to_name == "Maria Popescu"
-    assert participants[0].email == "ana@example.com"
-    assert participants[0].pcm_profile is None
+    try:
+        participants = await service.import_roster(
+            trainer.id,
+            company.id,
+            RosterImportRequest(
+                rows=[
+                    {
+                        "Name": "Maria Popescu",
+                        "Reports To": "",
+                        "Position": "Manager",
+                        "Location": "Bucharest",
+                        "email": "maria.popescu@example.com",
+                        "Profil PCM": "",
+                    },
+                    {
+                        "Name": "  Ana Ionescu  ",
+                        "Reports To": "Maria Popescu",
+                        "Position": "Consultant",
+                        "Location": "Bucharest",
+                        "email": "ANA@example.com",
+                        "Profil PCM": "",
+                    },
+                ]
+            ),
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert len(participants) == 2
+    assert participants[0].full_name == "Maria Popescu"
+    assert participants[0].role_group == "leadership"
+    assert participants[1].full_name == "Ana Ionescu"
+    assert participants[1].reports_to_name == "Maria Popescu"
+    assert participants[1].email == "ana@example.com"
+    assert participants[1].pcm_profile is None
 
 
 async def test_import_roster_rejects_duplicate_row_email() -> None:
@@ -322,6 +389,147 @@ async def test_import_roster_rejects_duplicate_row_email() -> None:
                 ]
             ),
         )
+
+
+@pytest.mark.asyncio
+async def test_import_roster_creates_invites_and_rank_specific_email_flows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = LocalEmailProvider()
+
+    monkeypatch.setattr(
+        "codrut.modules.communications.email_provider.build_email_provider",
+        lambda _settings: provider,
+    )
+
+    async with SessionLocal() as session:
+        trainer = User(
+            id=uuid.uuid4(),
+            email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("trainer-password-123"),
+            role=UserRole.trainer,
+        )
+        company = Company(id=uuid.uuid4(), name="Roster Flow Company")
+        session.add(trainer)
+        session.add(company)
+        await session.flush()
+        session.add(
+            CompanyMembership(
+                company_id=company.id,
+                user_id=trainer.id,
+                role=CompanyMembershipRole.owner,
+            )
+        )
+        await session.flush()
+
+        service = CompanyService(session)
+        participants = await service.import_roster(
+            trainer.id,
+            company.id,
+            RosterImportRequest(
+                rows=[
+                    {
+                        "Name": "Manager Andrei",
+                        "Reports To": "",
+                        "Position": "Manager",
+                        "Location": "Bucharest",
+                        "email": "andrei.vacaru@tripdevelopment.ro",
+                        "Profil PCM": "",
+                    },
+                    {
+                        "Name": "Manager Ilinca",
+                        "Reports To": "",
+                        "Position": "Manager",
+                        "Location": "Bucharest",
+                        "email": "ilincacrb4825@gmail.com",
+                        "Profil PCM": "",
+                    },
+                    {
+                        "Name": "Member Vlad",
+                        "Reports To": "Manager Andrei",
+                        "Position": "Member",
+                        "Location": "Bucharest",
+                        "email": "vlad.soimu@yahoo.com",
+                        "Profil PCM": "",
+                    },
+                ]
+            ),
+        )
+
+        assert [participant.role_group for participant in participants] == [
+            "leadership",
+            "leadership",
+            "member",
+        ]
+
+        assert len(provider.sent_messages) == 3
+        assert (
+            sum("Activeaza contul" in message.html_body for message in provider.sent_messages) == 2
+        )
+        assert (
+            sum(
+                "Deschide sarcinile mele" in message.html_body for message in provider.sent_messages
+            )
+            == 1
+        )
+
+        team_result = await session.execute(
+            select(Team)
+            .where(Team.company_id == company.id)
+            .where(Team.type == TeamType.leadership)
+        )
+        leadership_team = team_result.scalar_one_or_none()
+        assert leadership_team is not None
+
+        membership_result = await session.execute(
+            select(TeamMembership).where(TeamMembership.team_id == leadership_team.id)
+        )
+        assert len(membership_result.scalars().all()) == 2
+
+        assignment_result = await session.execute(
+            select(QuestionnaireAssignment).where(QuestionnaireAssignment.company_id == company.id)
+        )
+        assert len(assignment_result.scalars().all()) == 6
+
+        invite_result = await session.execute(
+            select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+        )
+        invites = invite_result.scalars().all()
+        assert len(invites) == 3
+
+        identity_service = IdentityService(session)
+        manager_invite = next(
+            invite for invite in invites if invite.respondent_profile_id == participants[1].id
+        )
+        member_invite = next(
+            invite for invite in invites if invite.respondent_profile_id == participants[2].id
+        )
+
+        verify_manager = await identity_service.verify_invite_token(manager_invite.token)
+        assert verify_manager.is_leadership is True
+        assert verify_manager.already_registered is False
+        assert len(verify_manager.tasks) == 2
+
+        registration_token = next(
+            invite.token for invite in invites if invite.respondent_profile_id == participants[0].id
+        )
+        registration_password = "".join(["Satinmint3!", "23"])
+        register_result = await identity_service.register(
+            RegisterRequest(
+                email=participants[0].email,
+                password=registration_password,
+                token=registration_token,
+            )
+        )
+        assert register_result.response.email == participants[0].email
+
+        verify_member = await identity_service.verify_invite_token_and_create_session(
+            member_invite.token
+        )
+        assert verify_member.response.is_leadership is False
+        assert verify_member.session_token is not None
+
+        await session.rollback()
 
 
 async def test_create_access_code_returns_plain_code_once_and_stores_hash() -> None:
@@ -370,8 +578,7 @@ async def test_access_code_registration_claims_roster_profile() -> None:
     assert result.response.role == UserRole.participant
     assert repository.participants[0].user_id == result.response.user_id
     assert any(
-        membership.user_id == result.response.user_id
-        for membership in repository.memberships
+        membership.user_id == result.response.user_id for membership in repository.memberships
     )
     assert identity_repository.sessions
 
@@ -438,9 +645,7 @@ async def test_access_code_registration_rejects_claimed_profile_generically() ->
 
 
 def test_access_code_hash_ignores_case_spaces_and_hyphens() -> None:
-    assert hash_company_access_code("ABCD-EFGH-IJKL") == hash_company_access_code(
-        "abcd efgh ijkl"
-    )
+    assert hash_company_access_code("ABCD-EFGH-IJKL") == hash_company_access_code("abcd efgh ijkl")
 
 
 async def test_import_reporting_relationships_resolves_reports_to_names() -> None:

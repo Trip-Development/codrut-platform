@@ -546,6 +546,6 @@ class TransactionalEmailService:
 
 
 def _select_invitation_template(respondent: ParticipantProfile) -> TransactionalTemplateKey:
-    if respondent.user_id is None:
+    if (respondent.role_group or "").strip().casefold() == "leadership":
         return TransactionalTemplateKey.account_setup
     return TransactionalTemplateKey.assignment_bundle
