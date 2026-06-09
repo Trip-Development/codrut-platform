@@ -10,6 +10,7 @@ import {
 import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
+import { createCompany } from "./companies";
 import {
   getQuestionnaireDefinition,
   listQuestionnaireDefinitionStubs,
@@ -122,5 +123,65 @@ describe("frontend API adapter stubs", () => {
 
     await expect(getTrainerSession()).rejects.toThrow("Trainer authentication required");
     await expect(getParticipantSession()).rejects.toThrow("Participant authentication required");
+  });
+
+  it("creates companies through the backend only", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "company-1", name: "Test Company" }),
+    } as Response);
+
+    await expect(createCompany("Test Company")).resolves.toEqual({
+      id: "company-1",
+      name: "Test Company",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/companies"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ name: "Test Company" }),
+      }),
+    );
+  });
+
+  it("lists only active questionnaire definitions", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          key: "boss_360",
+          version: 1,
+          title: "Boss / manager 360",
+          description: "Feedback form",
+          schema: {
+            schema_version: "questionnaire.v1",
+            audience: "participant",
+            sections: [],
+          },
+        },
+      ],
+    } as Response);
+
+    await expect(listQuestionnaireDefinitionStubs()).resolves.toEqual([
+      expect.objectContaining({
+        id: "boss_360",
+        name: "Boss / manager 360",
+        status: "active",
+      }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/forms\/definitions$/),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
   });
 });

@@ -526,7 +526,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
 
 export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireDefinitionStub[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/definitions?include_retired=true`, {
+    const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
       cache: "no-store",
       credentials: "include",
     });
