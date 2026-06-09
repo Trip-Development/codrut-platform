@@ -298,15 +298,6 @@ export async function createCompany(name: string): Promise<{ id: string; name: s
     }
     return (await response.json()) as { id: string; name: string };
   } catch (e) {
-    if (isDemoFallbackEnabled() && typeof window !== "undefined") {
-      const id = `local-co-${Date.now()}`;
-      const newCo = { id, name };
-      const stored = localStorage.getItem("codrut_local_companies");
-      const current = stored ? (JSON.parse(stored) as Array<{ id: string; name: string }>) : [];
-      current.push(newCo);
-      localStorage.setItem("codrut_local_companies", JSON.stringify(current));
-      return newCo;
-    }
     throw e;
   }
 }

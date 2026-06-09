@@ -32,11 +32,9 @@ export function QuestionnairesWorkspace() {
   useEffect(() => {
     if (stubs.length > 0) {
       const uniqueKeys = stubs.map((s) => s.id);
-      const standardKeys = ["lencioni", "distress_drivers", "boss_360", "icare", "pcm_base", "phase"];
-      const merged = Array.from(new Set([...uniqueKeys, ...standardKeys]));
-      setCategories(merged);
+      setCategories(Array.from(new Set(uniqueKeys)));
     } else {
-      setCategories(["lencioni", "distress_drivers", "boss_360", "icare", "pcm_base", "phase"]);
+      setCategories([]);
     }
   }, [stubs]);
 

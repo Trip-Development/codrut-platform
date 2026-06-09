@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { getApiBaseUrl } from "@/api/runtime";
-import { type CompanyParticipant, type CompanyAssignment } from "@/api/companies";
+import { createCompany, type CompanyAssignment, type CompanyParticipant } from "@/api/companies";
 
 type CompanyOption = {
   id: string;
@@ -40,6 +40,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
   const [allCompanies, setAllCompanies] = useState<CompanyOption[]>(companies);
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
+  const [isCreatingCompany, setIsCreatingCompany] = useState(false);
 
   useEffect(() => {
     if (defaultCompanyId) {
@@ -64,31 +65,31 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
     }
   }, [companies]);
 
-  const handleAddCompany = (e: React.FormEvent) => {
+  const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCompanyName.trim()) return;
 
-    const newId = newCompanyName.toLowerCase().replace(/[^a-z0-9_]/g, "-") + "-" + Date.now().toString().slice(-4);
-    const newCompany = { id: newId, name: newCompanyName.trim() };
-
-    const stored = localStorage.getItem("codrut_local_companies");
-    let currentLocal: CompanyOption[] = [];
-    if (stored) {
-      try {
-        currentLocal = JSON.parse(stored) as CompanyOption[];
-      } catch {}
+    setIsCreatingCompany(true);
+    try {
+      const created = await createCompany(newCompanyName.trim());
+      const newCompany = { id: created.id, name: created.name };
+      setAllCompanies((current) => {
+        const map = new Map<string, CompanyOption>();
+        current.forEach((c) => map.set(c.id, c));
+        map.set(newCompany.id, newCompany);
+        return Array.from(map.values());
+      });
+      setCompanyId(newCompany.id);
+      setNewCompanyName("");
+      setShowAddCompanyModal(false);
+    } catch (error) {
+      setImportState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Compania nu a putut fi creată în backend.",
+      });
+    } finally {
+      setIsCreatingCompany(false);
     }
-    currentLocal.push(newCompany);
-    localStorage.setItem("codrut_local_companies", JSON.stringify(currentLocal));
-
-    const map = new Map<string, CompanyOption>();
-    companies.forEach((c) => map.set(c.id, c));
-    currentLocal.forEach((c) => map.set(c.id, c));
-    setAllCompanies(Array.from(map.values()));
-
-    setCompanyId(newId);
-    setNewCompanyName("");
-    setShowAddCompanyModal(false);
   };
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);
@@ -395,7 +396,8 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
       });
 
       if (!response.ok) {
-        throw new Error("Backend refuzat");
+        const detail = await response.text().catch(() => "");
+        throw new Error(detail || `Backend refuzat (${response.status})`);
       }
 
       // Backend succeeded, also cache locally for client-side queries
@@ -404,12 +406,10 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
         status: "success",
         message: `Import reușit în backend! ${newParticipants.length} participanți adăugați cu succes.`,
       });
-    } catch {
-      // Fallback: save to LocalStorage only
-      saveToLocalStorage(companyId, newParticipants, newAssignments);
+    } catch (error) {
       setImportState({
-        status: "success",
-        message: `Import local finalizat! Am salvat ${newParticipants.length} participanți în local storage.`,
+        status: "error",
+        message: error instanceof Error ? error.message : "Importul rosterului a eșuat în backend.",
       });
     }
   };
@@ -707,9 +707,10 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
               </button>
               <button
                 type="submit"
-                className="tap-soft rounded-lg bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy/90"
+                disabled={isCreatingCompany}
+                className="tap-soft rounded-lg bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Adaugă
+                {isCreatingCompany ? "Se creează..." : "Adaugă"}
               </button>
             </div>
           </form>
