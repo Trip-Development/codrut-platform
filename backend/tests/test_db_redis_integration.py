@@ -1,10 +1,12 @@
 import pytest
 from redis.asyncio import Redis
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from codrut.core.config import get_settings
-from codrut.core.database import SessionLocal
 from codrut.modules.companies.models import Company
+from codrut.modules.identity.models import User
 
 
 @pytest.mark.asyncio
@@ -13,31 +15,41 @@ async def test_postgres_db_connection() -> None:
     settings = get_settings()
     # Ensure we are not using a fake database URL
     assert "postgresql" in settings.database_url
+    assert User.__name__ == "User"
 
-    async with SessionLocal() as session:
-        # 1. Create a test company
-        test_company = Company(
-            name="Integration Test Company Co."
-        )
-        session.add(test_company)
-        await session.flush()
-        company_id = test_company.id
+    engine = create_async_engine(
+        settings.database_url,
+        poolclass=NullPool,
+    )
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
-        # 2. Query it back
-        stmt = select(Company).where(Company.id == company_id)
-        result = await session.execute(stmt)
-        queried_company = result.scalar_one_or_none()
+    try:
+        async with session_factory() as session:
+            # 1. Create a test company
+            test_company = Company(
+                name="Integration Test Company Co."
+            )
+            session.add(test_company)
+            await session.flush()
+            company_id = test_company.id
 
-        assert queried_company is not None
-        assert queried_company.name == "Integration Test Company Co."
+            # 2. Query it back
+            stmt = select(Company).where(Company.id == company_id)
+            result = await session.execute(stmt)
+            queried_company = result.scalar_one_or_none()
 
-        # 3. Clean up (rollback or delete)
-        await session.delete(queried_company)
-        await session.commit()
+            assert queried_company is not None
+            assert queried_company.name == "Integration Test Company Co."
 
-        # 4. Verify deletion
-        result_after_delete = await session.execute(stmt)
-        assert result_after_delete.scalar_one_or_none() is None
+            # 3. Clean up (rollback or delete)
+            await session.delete(queried_company)
+            await session.commit()
+
+            # 4. Verify deletion
+            result_after_delete = await session.execute(stmt)
+            assert result_after_delete.scalar_one_or_none() is None
+    finally:
+        await engine.dispose()
 
 @pytest.mark.asyncio
 async def test_redis_cache_connection() -> None:

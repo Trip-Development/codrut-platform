@@ -21,11 +21,13 @@ import { getTrainerDashboardSummary } from "./trainer";
 describe("frontend API adapter stubs", () => {
   beforeEach(() => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
+    delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
   });
 
   it("returns role-scoped local users", async () => {
@@ -115,6 +117,7 @@ describe("frontend API adapter stubs", () => {
 
   it("does not fall back to demo sessions when fallback is disabled", async () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
     await expect(getTrainerSession()).rejects.toThrow("Trainer authentication required");

@@ -1,15 +1,25 @@
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from codrut.modules.forms.models import QuestionnaireKey, QuestionnaireResponseStatus
+from codrut.modules.forms.models import QuestionnaireResponseStatus
+
+QuestionnaireSlug = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=120,
+        pattern=r"^[a-z0-9_]+$",
+    ),
+]
 
 
 class QuestionnaireDefinitionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    key: QuestionnaireKey
+    key: str
     version: int
     title: str
     description: str
@@ -18,7 +28,7 @@ class QuestionnaireDefinitionResponse(BaseModel):
 
 
 class QuestionnaireDefinitionCreateRequest(BaseModel):
-    key: QuestionnaireKey
+    key: QuestionnaireSlug
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
     definition_schema: dict[str, Any] = Field(alias="schema")
@@ -41,7 +51,7 @@ class QuestionnaireResponseResponse(BaseModel):
 
     id: UUID
     assignment_id: UUID
-    questionnaire_key: QuestionnaireKey
+    questionnaire_key: str
     questionnaire_version: int
     status: QuestionnaireResponseStatus
     answers: dict[str, Any]

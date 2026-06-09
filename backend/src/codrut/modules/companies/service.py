@@ -102,7 +102,7 @@ class CompanyService:
         company_id: UUID,
         payload: RosterImportRequest,
     ) -> list[ParticipantProfile]:
-        await self._require_company(company_id)
+        company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         rows = [_normalize_roster_row(row) for row in payload.rows]
         seen_emails: set[str] = set()
@@ -131,11 +131,119 @@ class CompanyService:
                         reports_to_name=row.reports_to_name,
                         position=row.position,
                         location=row.location,
-                        role_group=None,
+                        role_group=_infer_roster_role_group(row),
                         pcm_profile=row.pcm_profile,
                     )
                 )
             )
+
+        reporting_result = await self.import_reporting_relationships(user_id, company_id)
+        if reporting_result.issues:
+            first_issue = reporting_result.issues[0]
+            raise DomainError(
+                f"Roster reporting relationships are invalid: {first_issue.message}",
+                code=first_issue.code,
+            )
+
+        from codrut.core.config import get_settings
+        from codrut.modules.assignments.models import (
+            AssignmentStatus,
+            AssignmentTargetType,
+            QuestionnaireAssignment,
+            Team,
+            TeamMembership,
+            TeamMembershipRole,
+            TeamType,
+        )
+        from codrut.modules.communications.email_provider import build_email_provider
+        from codrut.modules.communications.service import (
+            AssignmentInvitationContext,
+            TransactionalEmailService,
+        )
+        from codrut.modules.communications.task_links import build_task_url
+        from codrut.modules.identity.service import IdentityService
+
+        trainer = await self.identity_repository.get_user_by_id(user_id)
+        trainer_name = trainer.email.split("@", 1)[0] if trainer is not None else "trainer"
+        settings = get_settings()
+        email_service = TransactionalEmailService(
+            build_email_provider(settings),
+            self.repository.session,
+        )
+        identity_service = IdentityService(self.repository.session)
+
+        leadership_participants = [
+            participant
+            for participant in participants
+            if participant.role_group == "leadership"
+        ]
+        if leadership_participants:
+            leadership_team = Team(
+                company_id=company.id,
+                name="Leadership",
+                type=TeamType.leadership,
+            )
+            self.repository.session.add(leadership_team)
+            await self.repository.session.flush()
+            for participant in leadership_participants:
+                self.repository.session.add(
+                    TeamMembership(
+                        team_id=leadership_team.id,
+                        participant_profile_id=participant.id,
+                        role=TeamMembershipRole.leader,
+                    )
+                )
+            await self.repository.session.flush()
+
+        for participant in participants:
+            assignments = [
+                QuestionnaireAssignment(
+                    company_id=company.id,
+                    respondent_profile_id=participant.id,
+                    questionnaire_key="distress_drivers",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.assigned,
+                ),
+                QuestionnaireAssignment(
+                    company_id=company.id,
+                    respondent_profile_id=participant.id,
+                    questionnaire_key="lencioni",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.assigned,
+                ),
+            ]
+            for assignment in assignments:
+                self.repository.session.add(assignment)
+            await self.repository.session.flush()
+
+            invite = await identity_service.create_invite(
+                company_id=company.id,
+                respondent_profile_id=participant.id,
+                assignment_ids=[assignment.id for assignment in assignments],
+                force_rotate=True,
+            )
+            invite_url = build_task_url(invite.token, settings)
+            result = await email_service.send_assignment_invitation(
+                assignments[0],
+                participant,
+                AssignmentInvitationContext(
+                    company_name=company.name,
+                    trainer_name=trainer_name,
+                    action_url=invite_url,
+                    task_count=len(assignments),
+                ),
+            )
+            if result.status != "accepted":
+                raise DomainError(
+                    f"Failed to send invitation email to {participant.email}.",
+                    code="email_send_failed",
+                )
+
+            now = datetime.now(UTC)
+            for assignment in assignments:
+                assignment.status = AssignmentStatus.invited
+                assignment.invited_at = now
+
         return participants
 
     async def create_access_code(
@@ -300,6 +408,15 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
         email=row.email.lower(),
         pcm_profile=_clean_optional(row.pcm_profile),
     )
+
+
+def _infer_roster_role_group(row: RosterImportRow) -> str:
+    position = (row.position or "").casefold()
+    if row.reports_to_name is None:
+        return "leadership"
+    if any(token in position for token in ("manager", "director", "lead")):
+        return "leadership"
+    return "member"
 
 
 def _new_access_code() -> str:

@@ -20,6 +20,10 @@ class IdentityRepository:
         result = await self.session.execute(select(User).where(User.email == email.lower()))
         return result.scalar_one_or_none()
 
+    async def get_user_by_id(self, user_id: UUID) -> User | None:
+        result = await self.session.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
     async def get_user_by_session_token(self, token: str) -> User | None:
         result = await self.session.execute(
             select(User)
