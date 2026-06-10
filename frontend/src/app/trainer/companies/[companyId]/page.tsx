@@ -63,9 +63,9 @@ export default async function CompanyOverviewPage({
       )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Participanți"
+          label="Roster"
           value={company.stats.totalParticipants}
-          detail="Persoane înregistrate în roster."
+          detail="Persoane active în companie."
         />
         <StatCard
           label="Asignări"
@@ -139,10 +139,10 @@ export default async function CompanyOverviewPage({
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
           <p className="text-xs font-semibold text-burgundy/75">Acțiuni rapide</p>
           <div className="mt-4 space-y-3">
-            <QuickLink href={`${basePath}/participants`} label="Participanți" detail="Vezi și gestionează rostere." />
+            <QuickLink href={`${basePath}/participants`} label="Roster" detail="Import, verificare și acces participanți." />
             <QuickLink href={`${basePath}/org-chart`} label="Organigramă" detail="Validează ierarhia clientului." />
-            <QuickLink href={`${basePath}/reports`} label="Rapoarte" detail="Asignări trimise și evaluate." />
             <QuickLink href={`${basePath}/teams`} label="Echipe" detail="Echipe de leadership și funcționale." />
+            <QuickLink href={`${basePath}/reports`} label="Rapoarte" detail="Asignări trimise și evaluate." />
           </div>
         </section>
       </div>

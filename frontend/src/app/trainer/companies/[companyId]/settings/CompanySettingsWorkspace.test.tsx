@@ -44,6 +44,10 @@ describe("CompanySettingsWorkspace", () => {
       />,
     );
 
+    expect(screen.queryByRole("button", { name: "Șterge compania" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Configurează ștergerea" }));
+
     const deleteButton = screen.getByRole("button", { name: "Șterge compania" }) as HTMLButtonElement;
     expect(deleteButton.disabled).toBe(true);
 
