@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { createCompany, getCompanyList, type CompanyListItem } from "@/api/companies";
+import { createCompany, deleteCompany, getCompanyList, type CompanyListItem } from "@/api/companies";
 
 type CompaniesWorkspaceProps = {
   initialCompanies: CompanyListItem[];
@@ -19,6 +19,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   const [name, setName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
 
   useEffect(() => {
     getCompanyList()
@@ -51,6 +52,25 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       setMessage(error instanceof Error ? error.message : "Compania nu a putut fi creată.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeleteCompany(company: CompanyListItem) {
+    const confirmed = window.confirm(
+      `Ștergi compania "${company.name}"? Participanții, organigrama, invitațiile și asignările legate de ea vor fi eliminate.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingCompanyId(company.id);
+    setMessage(null);
+    try {
+      await deleteCompany(company.id);
+      setCompanies((current) => current.filter((item) => item.id !== company.id));
+      setMessage(`Compania "${company.name}" a fost ștearsă.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Compania nu a putut fi ștearsă.");
+    } finally {
+      setDeletingCompanyId(null);
     }
   }
 
@@ -91,7 +111,12 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       ) : (
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {sortedCompanies.map((company) => (
-            <CompanyCard key={company.id} company={company} />
+            <CompanyCard
+              key={company.id}
+              company={company}
+              isDeleting={deletingCompanyId === company.id}
+              onDelete={handleDeleteCompany}
+            />
           ))}
         </div>
       )}
@@ -99,7 +124,15 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   );
 }
 
-function CompanyCard({ company }: { company: CompanyListItem }) {
+function CompanyCard({
+  company,
+  isDeleting,
+  onDelete,
+}: {
+  company: CompanyListItem;
+  isDeleting: boolean;
+  onDelete: (company: CompanyListItem) => void;
+}) {
   const completion =
     !company.dataUnavailable && company.assignmentCount > 0
       ? Math.round((company.completedCount / company.assignmentCount) * 100)
@@ -139,12 +172,24 @@ function CompanyCard({ company }: { company: CompanyListItem }) {
         </div>
       </div>
 
-      <Link
-        href={`/trainer/companies/${company.id}`}
-        className="tap-soft mt-4 inline-flex w-full justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
-      >
-        Deschide compania
-      </Link>
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <Link
+          href={`/trainer/companies/${company.id}`}
+          className="tap-soft inline-flex min-h-10 justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
+        >
+          Deschide compania
+        </Link>
+        <button
+          type="button"
+          disabled={isDeleting}
+          onClick={() => onDelete(company)}
+          aria-label={`Șterge compania ${company.name}`}
+          title={`Șterge compania ${company.name}`}
+          className="tap-soft inline-flex min-h-10 items-center justify-center rounded-xl border border-red-200 px-3 py-2.5 text-sm font-semibold text-red-700 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {isDeleting ? "..." : "Șterge"}
+        </button>
+      </div>
     </article>
   );
 }

@@ -42,6 +42,10 @@ class CompanyRepository:
         await self.session.flush()
         return company
 
+    async def delete_company(self, company: Company) -> None:
+        await self.session.delete(company)
+        await self.session.flush()
+
     async def add_membership(self, membership: CompanyMembership) -> CompanyMembership:
         self.session.add(membership)
         await self.session.flush()

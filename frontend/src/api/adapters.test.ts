@@ -10,7 +10,13 @@ import {
 import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
-import { createCompany, getCompanyList, importCompanyRoster, sendParticipantInvitations } from "./companies";
+import {
+  createCompany,
+  deleteCompany,
+  getCompanyList,
+  importCompanyRoster,
+  sendParticipantInvitations,
+} from "./companies";
 import {
   getQuestionnaireDefinition,
   listQuestionnaireDefinitionStubs,
@@ -221,6 +227,22 @@ describe("frontend API adapter stubs", () => {
         method: "POST",
         credentials: "include",
         body: JSON.stringify({ name: "Test Company" }),
+      }),
+    );
+  });
+
+  it("deletes companies through the backend only", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({ ok: true } as Response);
+
+    await expect(deleteCompany("company-1")).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/companies/company-1"),
+      expect.objectContaining({
+        method: "DELETE",
+        credentials: "include",
       }),
     );
   });

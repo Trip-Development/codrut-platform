@@ -1,0 +1,255 @@
+name: Reusable VPS Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      backend_image:
+        required: true
+        type: string
+      frontend_image:
+        required: true
+        type: string
+      release_sha:
+        required: true
+        type: string
+      require_prod_ref:
+        required: false
+        type: boolean
+        default: false
+      prod_confirmation:
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Guard Production Deployment Ref
+        if: inputs.require_prod_ref
+        shell: bash
+        env:
+          DISPATCH_CONFIRMATION: ${{ inputs.prod_confirmation }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" != "refs/heads/prod" ]]; then
+            echo "Production deployments must run from refs/heads/prod; received ${GITHUB_REF}."
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CONFIRMATION}" != "prod" ]]; then
+            echo "Manual production deployments require confirm_prod_ref=prod."
+            exit 1
+          fi
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        env:
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
+          SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+          GHCR_TOKEN: ${{ github.token }}
+          FRONTEND_IMAGE: ${{ inputs.frontend_image }}
+          BACKEND_IMAGE: ${{ inputs.backend_image }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
+          CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
+          CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
+          CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
+          CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
+          CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
+          CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
+          CODRUT_EMAIL_BREVO_API_KEY: ${{ secrets.CODRUT_EMAIL_BREVO_API_KEY }}
+          CODRUT_HOST: ${{ secrets.CODRUT_HOST }}
+          TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
+          CODRUT_DB_VOLUME_PATH: ${{ secrets.CODRUT_DB_VOLUME_PATH }}
+          CODRUT_DEPLOY_DIR: ${{ secrets.CODRUT_DEPLOY_DIR }}
+          CODRUT_COMPOSE_PROJECT_NAME: ${{ secrets.CODRUT_COMPOSE_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+
+          required_vars=(
+            SSH_PRIVATE_KEY
+            HETZNER_VPS_IP
+            SSH_USER
+            FRONTEND_IMAGE
+            BACKEND_IMAGE
+            POSTGRES_DB
+            POSTGRES_USER
+            POSTGRES_PASSWORD
+            CODRUT_REDIS_URL
+            CODRUT_SESSION_SECRET
+            CODRUT_CORS_ORIGINS
+            CODRUT_PUBLIC_APP_URL
+            CODRUT_EMAIL_PROVIDER
+            CODRUT_EMAIL_FROM_ADDRESS
+            CODRUT_EMAIL_FROM_NAME
+            CODRUT_EMAIL_BREVO_API_KEY
+            CODRUT_HOST
+            TRAEFIK_ACME_EMAIL
+            CODRUT_DB_VOLUME_PATH
+          )
+
+          for var_name in "${required_vars[@]}"; do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "${var_name} is required for ${DEPLOY_ENVIRONMENT} deployment."
+              exit 1
+            fi
+          done
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          try:
+              origins = json.loads(os.environ["CODRUT_CORS_ORIGINS"])
+          except json.JSONDecodeError as exc:
+              print(f"CODRUT_CORS_ORIGINS must be a JSON array: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
+
+          if not isinstance(origins, list) or not origins or not all(isinstance(origin, str) and origin for origin in origins):
+              print("CODRUT_CORS_ORIGINS must be a non-empty JSON array of origin strings.", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$HETZNER_VPS_IP" >> ~/.ssh/known_hosts
+
+          DERIVED_DATABASE_URL=$(python3 -c "from urllib.parse import quote; import os; print(f\"postgresql+asyncpg://{quote(os.environ['POSTGRES_USER'])}:{quote(os.environ['POSTGRES_PASSWORD'])}@db:5432/{quote(os.environ['POSTGRES_DB'])}\")")
+          DERIVED_DB_VOLUME_PATH="${CODRUT_DB_VOLUME_PATH%/}/postgres-data"
+          DEPLOY_DIR="${CODRUT_DEPLOY_DIR:-/opt/codrut-platform}"
+          COMPOSE_PROJECT_NAME_VALUE="${CODRUT_COMPOSE_PROJECT_NAME:-codrut-platform}"
+
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "mkdir -p ${DEPLOY_DIR}"
+          scp -i ~/.ssh/id_rsa compose.yaml compose.prod.yaml "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/"
+
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cd ${DEPLOY_DIR} && if [ -f .env ]; then awk -F= '/^(FRONTEND_IMAGE|BACKEND_IMAGE)=/ { print }' .env > previous-images.env; else : > previous-images.env; fi"
+          scp -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/previous-images.env" "$RUNNER_TEMP/previous-images.env"
+
+          umask 077
+          cat > "$RUNNER_TEMP/app.env" <<EOF
+          COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME_VALUE
+          FRONTEND_IMAGE=$FRONTEND_IMAGE
+          BACKEND_IMAGE=$BACKEND_IMAGE
+          CODRUT_RELEASE_SHA=$RELEASE_SHA
+          POSTGRES_DB=$POSTGRES_DB
+          POSTGRES_USER=$POSTGRES_USER
+          POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+          CODRUT_ENV=production
+          CODRUT_DATABASE_URL=$DERIVED_DATABASE_URL
+          CODRUT_REDIS_URL=$CODRUT_REDIS_URL
+          CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
+          CODRUT_CORS_ORIGINS=$CODRUT_CORS_ORIGINS
+          CODRUT_PUBLIC_APP_URL=$CODRUT_PUBLIC_APP_URL
+          CODRUT_EMAIL_PROVIDER=$CODRUT_EMAIL_PROVIDER
+          CODRUT_EMAIL_FROM_ADDRESS=$CODRUT_EMAIL_FROM_ADDRESS
+          CODRUT_EMAIL_FROM_NAME=$CODRUT_EMAIL_FROM_NAME
+          CODRUT_EMAIL_BREVO_API_KEY=$CODRUT_EMAIL_BREVO_API_KEY
+          CODRUT_HOST=$CODRUT_HOST
+          TRAEFIK_ACME_EMAIL=$TRAEFIK_ACME_EMAIL
+          CODRUT_DB_VOLUME_PATH=$DERIVED_DB_VOLUME_PATH
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/app.env"
+          scp -i ~/.ssh/id_rsa "$RUNNER_TEMP/app.env" "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/.env"
+
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "DEPLOY_DIR='${DEPLOY_DIR}' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          compose=(docker compose -f compose.yaml -f compose.prod.yaml)
+
+          expected_backend_image="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' .env)"
+          expected_frontend_image="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' .env)"
+
+          if [[ -z "$expected_backend_image" || -z "$expected_frontend_image" ]]; then
+            echo "BACKEND_IMAGE and FRONTEND_IMAGE must be present in /opt/codrut-platform/.env."
+            exit 1
+          fi
+
+          assert_service_image() {
+            local service="$1"
+            local expected_image="$2"
+            local container_id
+            local running_image
+
+            container_id="$("${compose[@]}" ps -q "$service")"
+            if [[ -z "$container_id" ]]; then
+              echo "Service ${service} is not running after deployment."
+              exit 1
+            fi
+
+            running_image="$(docker inspect "$container_id" --format '{{ index .Config.Image }}')"
+            if [[ "$running_image" != "$expected_image" ]]; then
+              echo "Service ${service} is running ${running_image}; expected ${expected_image}."
+              exit 1
+            fi
+
+            echo "Service ${service} is running ${running_image}."
+          }
+
+          "${compose[@]}" config >/dev/null
+          "${compose[@]}" pull
+          "${compose[@]}" run --rm -T backend alembic upgrade head </dev/null
+
+          if docker compose up --help | grep -q -- '--wait'; then
+            "${compose[@]}" up -d --force-recreate --no-build --pull never --remove-orphans --wait backend worker frontend
+          else
+            "${compose[@]}" up -d --force-recreate --no-build --pull never --remove-orphans backend worker frontend
+          fi
+
+          "${compose[@]}" ps
+          assert_service_image backend "$expected_backend_image"
+          assert_service_image worker "$expected_backend_image"
+          assert_service_image frontend "$expected_frontend_image"
+          "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
+          docker image prune -f
+          REMOTE
+
+          HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then
+              echo "Public health check passed on attempt ${attempt}."
+              break
+            fi
+
+            if [[ "$attempt" == "30" ]]; then
+              echo "Public health check failed after ${attempt} attempts: ${HEALTH_URL}"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          PREVIOUS_FRONTEND_IMAGE="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' "$RUNNER_TEMP/previous-images.env" || true)"
+          PREVIOUS_BACKEND_IMAGE="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' "$RUNNER_TEMP/previous-images.env" || true)"
+
+          {
+            echo "### ${DEPLOY_ENVIRONMENT} VPS deployment"
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Frontend image: \`${FRONTEND_IMAGE}\`"
+            echo "- Backend image: \`${BACKEND_IMAGE}\`"
+            echo "- Previous frontend image: \`${PREVIOUS_FRONTEND_IMAGE:-unknown}\`"
+            echo "- Previous backend image: \`${PREVIOUS_BACKEND_IMAGE:-unknown}\`"
+            echo ""
+            echo "Rollback: set \`FRONTEND_IMAGE\` and \`BACKEND_IMAGE\` in \`${DEPLOY_DIR}/.env\` to the previous refs above, then run \`docker compose -f compose.yaml -f compose.prod.yaml up -d --wait\` when supported and verify \`${HEALTH_URL}\`."
+          } >> "$GITHUB_STEP_SUMMARY"

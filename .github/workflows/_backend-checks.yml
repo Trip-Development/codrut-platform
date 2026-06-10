@@ -1,0 +1,54 @@
+name: Reusable Backend Checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend / lint-test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_DB: codrut
+          POSTGRES_USER: codrut
+          POSTGRES_PASSWORD: codrut
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U codrut -d codrut"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-bookworm
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@localhost:5432/codrut
+      CODRUT_REDIS_URL: redis://localhost:6379/0
+      CODRUT_SESSION_SECRET: ci-session-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.7.8"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: uv run ruff check src tests migrations
+      - run: uv run alembic upgrade head
+      - run: uv run pytest

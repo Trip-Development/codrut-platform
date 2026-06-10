@@ -280,6 +280,17 @@ export async function createCompany(name: string): Promise<{ id: string; name: s
   }
 }
 
+export async function deleteCompany(companyId: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? `Server returned status ${response.status}`);
+  }
+}
+
 export async function importCompanyRoster(
   companyId: string,
   rows: Array<{
