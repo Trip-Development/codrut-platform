@@ -1,5 +1,12 @@
 import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
-import { getCompanyDetail, getCompanyList, type ApiRequestOptions, type CompanyAssignment } from "./companies";
+import {
+  getCompanyDetail,
+  getCompanyList,
+  type ApiRequestOptions,
+  type CompanyAssignment,
+  type CompanyDetail,
+  type CompanyParticipant,
+} from "./companies";
 
 export type TrainerStat = {
   label: string;
@@ -294,7 +301,9 @@ export async function getTrainerDashboardSummary(
   }
 }
 
-export async function getTrainerOperationsSummary(): Promise<TrainerOperationsSummary> {
+export async function getTrainerOperationsSummary(
+  options: ApiRequestOptions = {},
+): Promise<TrainerOperationsSummary> {
   const defaultRoster: TrainerRosterMember[] = [
     {
       id: "andrei-popescu",
@@ -355,68 +364,58 @@ export async function getTrainerOperationsSummary(): Promise<TrainerOperationsSu
     },
   ];
 
-  if (!isDemoFallbackEnabled()) {
-    return {
-      roster: [],
-      validations: [
-        {
-          label: "Roster",
-          detail: "Nu există încă date reale de roster pentru compania selectată.",
-          severity: "warning",
-        },
-      ],
-    };
-  }
-
-  const mergedRoster = [...defaultRoster];
-
-  if (typeof window !== "undefined") {
-    try {
-      const storedLocalCompanies = localStorage.getItem("codrut_local_companies");
-      const localCos = storedLocalCompanies ? JSON.parse(storedLocalCompanies) as Array<{ id: string }> : [];
-      const companyIds = ["demo-project", "leadership-pilot", "past-client-video", ...localCos.map((c) => c.id)];
-
-      companyIds.forEach((cId) => {
-        const storedP = localStorage.getItem(`codrut_participants_${cId}`);
-        if (storedP) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parsed = JSON.parse(storedP) as any[];
-            parsed.forEach((p) => {
-              if (!mergedRoster.some((r) => r.email.toLowerCase() === p.email.toLowerCase())) {
-                mergedRoster.push({
-                  id: p.id,
-                  name: p.full_name,
-                  reportsTo: p.reports_to_name || undefined,
-                  position: p.position || "Participant",
-                  location: p.location || "Remote",
-                  email: p.email,
-                  pcmProfile: p.pcm_profile || undefined,
-                  role: p.role_group || "member",
-                  inviteStatus: "link_sent",
-                  completion: 0,
-                });
-              }
-            });
-          } catch {}
-        }
-      });
-    } catch (e) {
-      console.error("Error merging local roster", e);
+  try {
+    const companies = await getCompanyList(options);
+    if (companies.length === 0 && isDemoFallbackEnabled()) {
+      return fallbackOperationsSummary(defaultRoster);
     }
-  }
+    if (companies.length === 0) {
+      return emptyOperationsSummary();
+    }
+    if (isDemoFallbackEnabled() && isSeededDemoCompanyList(companies)) {
+      return fallbackOperationsSummary(defaultRoster);
+    }
 
+    const detailResults = await Promise.allSettled(
+      companies.map((company) => getCompanyDetail(company.id, options)),
+    );
+    const details = detailResults
+      .filter((result): result is PromiseFulfilledResult<CompanyDetail | null> => result.status === "fulfilled")
+      .map((result) => result.value)
+      .filter((detail): detail is CompanyDetail => Boolean(detail));
+    const roster = details.flatMap((detail) =>
+      detail.participants.map((participant) => toOperationsRosterMember(participant, detail.assignments)),
+    );
+
+    return {
+      roster,
+      validations: buildOperationsValidations(roster, details),
+    };
+  } catch {
+    if (isDemoFallbackEnabled()) {
+      return fallbackOperationsSummary(defaultRoster);
+    }
+    return emptyOperationsSummary();
+  }
+}
+
+function isSeededDemoCompanyList(companies: Array<{ id: string }>): boolean {
+  const seededIds = new Set(["demo-project", "leadership-pilot", "past-client-video"]);
+  return companies.length === seededIds.size && companies.every((company) => seededIds.has(company.id));
+}
+
+function fallbackOperationsSummary(defaultRoster: TrainerRosterMember[]): TrainerOperationsSummary {
   return {
-    roster: mergedRoster,
+    roster: defaultRoster,
     validations: [
       {
         label: "Reports To",
-        detail: `${mergedRoster.filter((r) => r.reportsTo || r.id === "andrei-popescu").length}/${mergedRoster.length} persoane au manager validat.`,
+        detail: `${defaultRoster.filter((r) => r.reportsTo || r.id === "andrei-popescu").length}/${defaultRoster.length} persoane au manager validat.`,
         severity: "ok",
       },
       {
         label: "Profil PCM",
-        detail: `PCM este optional si este configurat pentru ${mergedRoster.filter((r) => r.pcmProfile).length} persoane.`,
+        detail: `PCM este optional si este configurat pentru ${defaultRoster.filter((r) => r.pcmProfile).length} persoane.`,
         severity: "ok",
       },
       {
@@ -426,6 +425,100 @@ export async function getTrainerOperationsSummary(): Promise<TrainerOperationsSu
       },
     ],
   };
+}
+
+function emptyOperationsSummary(): TrainerOperationsSummary {
+  return {
+    roster: [],
+    validations: [
+      {
+        label: "Roster",
+        detail: "Nu există încă date reale de roster pentru compania selectată.",
+        severity: "warning",
+      },
+    ],
+  };
+}
+
+function toOperationsRosterMember(
+  participant: CompanyParticipant,
+  assignments: CompanyAssignment[],
+): TrainerRosterMember {
+  const participantAssignments = assignments.filter(
+    (assignment) => assignment.respondent_profile_id === participant.id,
+  );
+  const completedAssignments = participantAssignments.filter(
+    (assignment) =>
+      assignment.status === "submitted" ||
+      assignment.status === "validated" ||
+      assignment.status === "scored",
+  );
+
+  return {
+    id: participant.id,
+    name: participant.full_name,
+    reportsTo: participant.reports_to_name ?? undefined,
+    position: participant.position ?? "Participant",
+    location: participant.location ?? "Remote",
+    email: participant.email,
+    pcmProfile: participant.pcm_profile ?? undefined,
+    role: participant.role_group === "leadership" ? "leadership" : "member",
+    inviteStatus: deriveInviteStatus(participant, participantAssignments),
+    completion:
+      participantAssignments.length > 0
+        ? Math.round((completedAssignments.length / participantAssignments.length) * 100)
+        : 0,
+  };
+}
+
+function deriveInviteStatus(
+  participant: CompanyParticipant,
+  assignments: CompanyAssignment[],
+): TrainerRosterMember["inviteStatus"] {
+  if (participant.user_id) return "account_active";
+  if (assignments.length === 0) return "not_sent";
+  return "link_sent";
+}
+
+function buildOperationsValidations(
+  roster: TrainerRosterMember[],
+  details: CompanyDetail[],
+): TrainerOrgValidation[] {
+  if (roster.length === 0) {
+    return [
+      {
+        label: "Roster",
+        detail: "Nu există încă participanți importați în companiile active.",
+        severity: "warning",
+      },
+    ];
+  }
+
+  const names = new Set(roster.map((member) => member.name));
+  const validReportsTo = roster.filter((member) => !member.reportsTo || names.has(member.reportsTo)).length;
+  const pcmCount = roster.filter((member) => member.pcmProfile).length;
+  const dataErrorCount = details.reduce((total, detail) => total + (detail.dataErrors?.length ?? 0), 0);
+
+  return [
+    {
+      label: "Reports To",
+      detail: `${validReportsTo}/${roster.length} persoane au manager validat.`,
+      severity: validReportsTo === roster.length ? "ok" : "warning",
+    },
+    {
+      label: "Profil PCM",
+      detail: `PCM este optional si este configurat pentru ${pcmCount} persoane.`,
+      severity: "ok",
+    },
+    {
+      label: "Date backend",
+      detail:
+        dataErrorCount === 0
+          ? "Rosterul, asignările și echipele au fost citite din backend."
+          : `${dataErrorCount} citiri backend au eșuat parțial.`,
+      severity: dataErrorCount === 0 ? "ok" : "warning",
+    },
+  ];
 }
 
 export type ScoringResultRecord = {
