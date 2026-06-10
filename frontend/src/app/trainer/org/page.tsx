@@ -21,9 +21,9 @@ export default async function TrainerOrgPage() {
   return (
     <AppShell
       audience="trainer"
-      eyebrow="Organigrama"
-      title="Harta organizatiei"
-      description="Exploreaza ierarhia activa din roster, cauta persoane si restrange ramuri pentru validarea relatiei manageriale."
+      eyebrow="Organigramă"
+      title="Harta organizației"
+      description="Explorează ierarhia activă din roster, caută persoane și restrânge ramuri pentru validarea relației manageriale."
       navItems={trainerNavItems}
       activeHref="/trainer/org"
       userLabel={trainer.user.name}

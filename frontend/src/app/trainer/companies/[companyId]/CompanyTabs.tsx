@@ -5,18 +5,19 @@ import { usePathname } from "next/navigation";
 
 const companyTabs = [
   { key: "", label: "Prezentare" },
-  { key: "/participants", label: "Participanți" },
+  { key: "/participants", label: "Roster" },
   { key: "/org-chart", label: "Organigramă" },
-  { key: "/reports", label: "Rapoarte" },
   { key: "/teams", label: "Echipe" },
+  { key: "/reports", label: "Rapoarte" },
+  { key: "/settings", label: "Setări" },
 ];
 
 export function CompanyTabs({ basePath }: { basePath: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="mb-6 overflow-x-auto rounded-2xl border border-[var(--border)] bg-surface/95 p-1.5 shadow-sm">
-      <div className="flex min-w-max gap-1">
+    <nav className="mb-6 border-b border-[var(--border)]" aria-label="Navigare companie">
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
         {companyTabs.map((tab) => {
           const href = `${basePath}${tab.key}`;
           const isActive = tab.key === "" ? pathname === basePath : pathname.startsWith(href);
@@ -27,10 +28,10 @@ export function CompanyTabs({ basePath }: { basePath: string }) {
               href={href}
               aria-current={isActive ? "page" : undefined}
               className={[
-                "tap-soft rounded-xl px-4 py-2.5 text-sm font-semibold transition-all",
+                "tap-soft border-b-2 pb-3 pt-1 text-sm font-semibold transition-all",
                 isActive
-                  ? "bg-burgundy text-white shadow-sm shadow-burgundy/10"
-                  : "text-foreground/62 hover:bg-surface-muted/70 hover:text-burgundy",
+                  ? "border-burgundy text-burgundy"
+                  : "border-transparent text-foreground/58 hover:text-foreground",
               ].join(" ")}
             >
               {tab.label}

@@ -33,7 +33,7 @@ export default async function TrainerReportDetailPage({ params }: TrainerReportD
       audience="trainer"
       eyebrow="Raport"
       title={report ? `Raport ${report.questionnaireKey.replaceAll("_", " ")}` : "Raport evaluare"}
-      description="Breakdown calculat progresiv pe masura ce raspunsurile sunt trimise. Vizibilitatea catre manageri ramane separata de accesul trainerului."
+      description="Breakdown calculat progresiv pe măsură ce răspunsurile sunt trimise. Vizibilitatea către manageri rămâne separată de accesul trainerului."
       navItems={trainerNavItems}
       activeHref="/trainer/reports"
       userLabel={trainer.user.name}
@@ -41,7 +41,7 @@ export default async function TrainerReportDetailPage({ params }: TrainerReportD
     >
       <div className="mb-5">
         <Link href="/trainer/reports" className="text-sm font-bold text-burgundy hover:text-burgundy-700">
-          Inapoi la rapoarte
+          Înapoi la rapoarte
         </Link>
       </div>
 
@@ -50,14 +50,14 @@ export default async function TrainerReportDetailPage({ params }: TrainerReportD
           <div className="border-b border-[var(--border)] bg-surface-muted/30 px-5 py-4">
             <h2 className="text-lg font-semibold text-foreground">Matrice scoruri</h2>
             <p className="mt-1 text-xs leading-5 text-foreground/55">
-              Scorurile sunt calculate din definitia versionata a chestionarului si raspunsurile trimise.
+              Scorurile sunt calculate din definiția versionată a chestionarului și răspunsurile trimise.
             </p>
           </div>
 
           {rows.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-sm font-semibold text-foreground/60">
-                Scorul nu este disponibil inca pentru aceasta asignare.
+                Scorul nu este disponibil încă pentru această asignare.
               </p>
             </div>
           ) : (
@@ -90,7 +90,7 @@ export default async function TrainerReportDetailPage({ params }: TrainerReportD
               <ContextLine label="Status" value={report?.primaryResult ? "calculat" : report?.status ?? "necunoscut"} />
               <ContextLine
                 label="Rezultat principal"
-                value={result?.primary_result?.replaceAll("_", " ") ?? "in asteptare"}
+                value={result?.primary_result?.replaceAll("_", " ") ?? "în așteptare"}
               />
             </div>
           </section>
@@ -98,8 +98,8 @@ export default async function TrainerReportDetailPage({ params }: TrainerReportD
           <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-burgundy/75">Vizibilitate</p>
             <p className="mt-3 text-sm leading-6 text-foreground/62">
-              Trainerul poate inspecta rezultatul calculat. Persoanele evaluate nu primesc raspunsuri individuale;
-              publicarea catre manageri trebuie controlata separat prin politica de raportare.
+              Trainerul poate inspecta rezultatul calculat. Persoanele evaluate nu primesc răspunsuri individuale;
+              publicarea către manageri trebuie controlată separat prin politica de raportare.
             </p>
           </section>
         </aside>

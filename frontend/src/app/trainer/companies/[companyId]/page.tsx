@@ -14,8 +14,8 @@ export default async function CompanyOverviewPage({
 
   if (!company) {
     return (
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-8 text-center shadow-sm">
-        <p className="text-sm text-foreground/62">Compania nu a fost gasita.</p>
+      <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
+        <p className="text-base font-semibold text-foreground">Compania nu a fost găsită.</p>
       </section>
     );
   }
@@ -31,53 +31,35 @@ export default async function CompanyOverviewPage({
   return (
     <>
       {company.stats.totalParticipants === 0 && (
-        <div className="mb-5 rounded-2xl border border-dashed border-burgundy/30 bg-burgundy/5 p-5">
-          <h3 className="text-lg font-semibold text-burgundy">Ghid configurare companie nouă</h3>
-          <p className="mt-2 text-sm leading-relaxed text-foreground/70">
-            Această companie este configurată în sistem, dar nu are încă participanți adăugați. Urmează acești pași pentru a lansa evaluările:
+        <section className="mb-5 rounded-2xl border border-burgundy/20 bg-burgundy/5 p-5 shadow-sm">
+          <h3 className="text-lg font-semibold text-burgundy">Configurează compania</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/68">
+            Clientul există deja. Următorul pas este să adaugi rosterul, apoi echipele și invitațiile.
           </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl border border-[var(--border)] bg-surface p-4 transition-all hover:border-burgundy/20 hover:shadow-sm">
-              <span className="text-xs font-semibold text-burgundy/70">Pasul 1</span>
-              <h4 className="mt-1 font-semibold text-foreground">Încarcă rosterul</h4>
-              <p className="mt-1 text-xs leading-relaxed text-foreground/56">
-                Adaugă participanții prin fișierul Excel/CSV în ecranul de import pentru a asocia oameni cu această companie.
-              </p>
-              <Link
-                href={`${basePath}/participants`}
-                className="mt-3 inline-block text-xs font-semibold text-burgundy hover:text-burgundy/80"
-              >
-                Mergi la import roster
-              </Link>
-            </div>
-            <div className="rounded-xl border border-[var(--border)] bg-surface p-4 transition-all hover:border-burgundy/20 hover:shadow-sm">
-              <span className="text-xs font-semibold text-burgundy/70">Pasul 2</span>
-              <h4 className="mt-1 font-semibold text-foreground">Configurează echipe</h4>
-              <p className="mt-1 text-xs leading-relaxed text-foreground/56">
-                Definește echipele de leadership sau funcționale pentru a pregăti structurile de raportare și analiză.
-              </p>
-              <Link
-                href={`${basePath}/teams`}
-                className="mt-3 inline-block text-xs font-semibold text-burgundy hover:text-burgundy/80"
-              >
-                Gestionează echipe
-              </Link>
-            </div>
-            <div className="rounded-xl border border-[var(--border)] bg-surface p-4 transition-all hover:border-burgundy/20 hover:shadow-sm">
-              <span className="text-xs font-semibold text-burgundy/70">Pasul 3</span>
-              <h4 className="mt-1 font-semibold text-foreground">Trimite invitații</h4>
-              <p className="mt-1 text-xs leading-relaxed text-foreground/56">
-                După popularea rosterului, folosește catalogul de șabloane pentru a expedia invitațiile și a monitoriza livrarea.
-              </p>
-              <Link
-                href="/trainer/email"
-                className="mt-3 inline-block text-xs font-semibold text-burgundy hover:text-burgundy/80"
-              >
-                Gestionează emailuri
-              </Link>
-            </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <SetupStep
+              step="1"
+              title="Încarcă rosterul"
+              detail="Adaugă oamenii prin Excel sau CSV și leagă-i de companie."
+              href={`${basePath}/participants`}
+              action="Import roster"
+            />
+            <SetupStep
+              step="2"
+              title="Configurează echipe"
+              detail="Grupează rosterul în echipe de leadership sau funcționale."
+              href={`${basePath}/teams`}
+              action="Gestionează echipe"
+            />
+            <SetupStep
+              step="3"
+              title="Trimite invitații"
+              detail="Expediază invitațiile și urmărește livrarea."
+              href="/trainer/email"
+              action="Deschide email"
+            />
           </div>
-        </div>
+        </section>
       )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -125,7 +107,7 @@ export default async function CompanyOverviewPage({
                 {recentAssignments.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-5 py-6 text-center text-foreground/62">
-                      Nicio asignare trimisa inca.
+                      Nicio asignare trimisă încă.
                     </td>
                   </tr>
                 ) : (
@@ -172,10 +154,38 @@ function QuickLink({ href, label, detail }: { href: string; label: string; detai
   return (
     <Link
       href={href}
-      className="tap-soft block rounded-xl border border-[var(--border)] bg-background px-3 py-3 hover:border-burgundy/45"
+      className="tap-soft block rounded-xl border border-[var(--border)] bg-background px-3 py-3 hover:border-burgundy/45 hover:bg-surface-muted/55"
     >
       <p className="text-sm font-semibold text-foreground">{label}</p>
       <p className="mt-1 text-xs leading-5 text-foreground/56">{detail}</p>
+    </Link>
+  );
+}
+
+function SetupStep({
+  step,
+  title,
+  detail,
+  href,
+  action,
+}: {
+  step: string;
+  title: string;
+  detail: string;
+  href: string;
+  action: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="tap-soft group rounded-xl border border-[var(--border)] bg-surface p-4 hover:-translate-y-0.5 hover:border-burgundy/30 hover:shadow-sm"
+    >
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-burgundy/10 text-xs font-bold text-burgundy">
+        {step}
+      </span>
+      <h4 className="mt-3 font-semibold text-foreground">{title}</h4>
+      <p className="mt-1 text-xs leading-5 text-foreground/56">{detail}</p>
+      <p className="mt-3 text-xs font-semibold text-burgundy group-hover:text-burgundy-700">{action}</p>
     </Link>
   );
 }

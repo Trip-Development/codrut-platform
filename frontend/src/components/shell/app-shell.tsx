@@ -225,13 +225,13 @@ export function AppShell({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 md:px-10 md:py-12">
-          <section className="mb-8">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-burgundy">{eyebrow}</p>
-            <h1 className="mt-2.5 font-display text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-7 md:px-8 lg:px-10 lg:py-10">
+          <section className="mb-7 border-b border-[var(--border)] pb-6">
+            <p className="text-sm font-semibold text-burgundy/75">{eyebrow}</p>
+            <h1 className="mt-2 font-display text-3xl font-semibold leading-tight text-foreground md:text-4xl">
               {title}
             </h1>
-            <p className="mt-3.5 max-w-3xl text-base leading-7 text-foreground/65">{description}</p>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/64">{description}</p>
           </section>
           <SessionBanner session={session} note={accessNote} />
           {children}

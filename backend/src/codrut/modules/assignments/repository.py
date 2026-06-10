@@ -32,6 +32,26 @@ class AssignmentRepository:
         await self.session.flush()
         return membership
 
+    async def get_team_membership(
+        self,
+        team_id: UUID,
+        participant_profile_id: UUID,
+    ) -> TeamMembership | None:
+        result = await self.session.execute(
+            select(TeamMembership)
+            .where(TeamMembership.team_id == team_id)
+            .where(TeamMembership.participant_profile_id == participant_profile_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_team_memberships(self, team_id: UUID) -> list[TeamMembership]:
+        result = await self.session.execute(
+            select(TeamMembership)
+            .where(TeamMembership.team_id == team_id)
+            .order_by(TeamMembership.created_at)
+        )
+        return list(result.scalars().all())
+
     async def add_assignment(self, assignment: QuestionnaireAssignment) -> QuestionnaireAssignment:
         self.session.add(assignment)
         await self.session.flush()

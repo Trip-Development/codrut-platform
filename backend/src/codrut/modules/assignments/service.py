@@ -57,6 +57,13 @@ class AssignmentService:
         team = await self.assignment_repository.get_team(company_id, team_id)
         if team is None:
             raise DomainError("Team not found.", code="team_not_found")
+        await self._require_company_participant(company_id, payload.participant_profile_id)
+        existing = await self.assignment_repository.get_team_membership(
+            team_id,
+            payload.participant_profile_id,
+        )
+        if existing is not None:
+            raise DomainError("Participant is already in this team.", code="team_membership_exists")
         return await self.assignment_repository.add_team_membership(
             TeamMembership(
                 team_id=team_id,
@@ -64,6 +71,18 @@ class AssignmentService:
                 role=payload.role,
             )
         )
+
+    async def list_team_memberships(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        team_id: UUID,
+    ) -> list[TeamMembership]:
+        await self._require_company_manager(user_id, company_id)
+        team = await self.assignment_repository.get_team(company_id, team_id)
+        if team is None:
+            raise DomainError("Team not found.", code="team_not_found")
+        return await self.assignment_repository.list_team_memberships(team_id)
 
     async def create_assignment(
         self,
@@ -73,6 +92,13 @@ class AssignmentService:
     ) -> QuestionnaireAssignment:
         await self._require_company_manager(user_id, company_id)
         _validate_target_shape(payload)
+        await self._require_company_participant(company_id, payload.respondent_profile_id)
+        if payload.target_person_id is not None:
+            await self._require_company_participant(company_id, payload.target_person_id)
+        if payload.target_team_id is not None:
+            team = await self.assignment_repository.get_team(company_id, payload.target_team_id)
+            if team is None:
+                raise DomainError("Target team not found in this company.", code="team_not_found")
         return await self.assignment_repository.add_assignment(
             QuestionnaireAssignment(
                 company_id=company_id,
@@ -129,6 +155,18 @@ class AssignmentService:
             "You do not have access to manage assignments for this company.",
             code="company_access_denied",
         )
+
+    async def _require_company_participant(
+        self,
+        company_id: UUID,
+        participant_profile_id: UUID,
+    ) -> None:
+        participant = await self.company_repository.get_participant_by_id(participant_profile_id)
+        if participant is None or participant.company_id != company_id:
+            raise DomainError(
+                "Participant not found in this company.",
+                code="participant_not_found",
+            )
 
 
 def _validate_target_shape(payload: AssignmentCreateRequest) -> None:

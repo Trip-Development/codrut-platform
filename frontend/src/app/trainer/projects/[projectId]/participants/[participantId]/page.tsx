@@ -20,34 +20,34 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
     >
       <RecoveredView
         actions={[
-          { label: "Inapoi la proiect", href: `/trainer/projects/${projectId}` },
+          { label: "Înapoi la proiect", href: `/trainer/projects/${projectId}` },
           { label: "Rapoarte", href: "/trainer/reports" },
         ]}
         metrics={[
           { label: "Test IN", value: "54", detail: "Baseline teoretic." },
           { label: "Progres", value: "72%", detail: "Evidence acumulat.", tone: "success" },
-          { label: "Test OUT", value: "-", detail: "In asteptare.", tone: "warning" },
-          { label: "Sesiuni", value: "9", detail: "Practica aplicata." },
+          { label: "Test OUT", value: "-", detail: "În așteptare.", tone: "warning" },
+          { label: "Sesiuni", value: "9", detail: "Practică aplicată." },
         ]}
         sections={[
           {
             title: "Teorie",
-            description: "Recupereaza comparatia Test IN / Test OUT.",
-            items: ["Scor pe competenta", "Delta final", "Zone unde a crescut", "Zone unde ramane sub prag"],
+            description: "Recuperează comparația Test IN / Test OUT.",
+            items: ["Scor pe competență", "Delta final", "Zone unde a crescut", "Zone unde rămâne sub prag"],
           },
           {
-            title: "Practica",
-            description: "Recupereaza evidence radar si evolutie din sesiuni.",
-            items: ["Radar evidence", "Linie de evolutie", "Insight moments", "Mostre de invatare"],
+            title: "Practică",
+            description: "Recuperează evidence radar și evoluție din sesiuni.",
+            items: ["Radar evidence", "Linie de evoluție", "Insight moments", "Mostre de învățare"],
           },
           {
             title: "Note trainer",
-            description: "Spatiu pentru observatii operationale private.",
-            items: ["Observatii manuale", "Recomandari urmatoare", "Riscuri de engagement", "Follow-up"],
+            description: "Spațiu pentru observații operaționale private.",
+            items: ["Observații manuale", "Recomandări următoare", "Riscuri de engagement", "Follow-up"],
           },
           {
             title: "Vizibilitate",
-            description: "Trainerul poate inspecta raspunsuri, dar persoana evaluata nu vede identitatea evaluatorilor.",
+            description: "Trainerul poate inspecta răspunsurile, dar persoana evaluată nu vede identitatea evaluatorilor.",
             items: ["Acces trainer complet", "Raport manager agregat", "360 anonim", "Audit de acces"],
           },
         ]}
