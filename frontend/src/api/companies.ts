@@ -36,6 +36,34 @@ export type CompanyAssignment = {
   scored_at: string | null;
 };
 
+export type RosterInviteResult = {
+  participant_id: string;
+  email: string;
+  full_name: string;
+  delivery_mode: "email" | "secure_links";
+  email_sent: boolean;
+  error: string | null;
+  invite_url: string | null;
+};
+
+export type RosterImportResponse = {
+  participants: CompanyParticipant[];
+  email_results: RosterInviteResult[];
+  total_imported: number;
+  emails_sent: number;
+  emails_failed: number;
+};
+
+export type ParticipantInvitationMode = "email" | "secure_links";
+
+export type ParticipantInviteBatchResponse = {
+  results: RosterInviteResult[];
+  total: number;
+  emails_sent: number;
+  emails_failed: number;
+  links_generated: number;
+};
+
 export type CompanyTeam = {
   id: string;
   company_id: string;
@@ -300,6 +328,63 @@ export async function createCompany(name: string): Promise<{ id: string; name: s
   } catch (e) {
     throw e;
   }
+}
+
+export async function importCompanyRoster(
+  companyId: string,
+  rows: Array<{
+    Name: string;
+    "Reports To": string;
+    Position: string;
+    Location: string;
+    email: string;
+    "Profil PCM": string;
+  }>,
+  options: { sendInvites?: boolean } = {},
+): Promise<RosterImportResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/roster`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      rows,
+      send_invites: options.sendInvites ?? false,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as RosterImportResponse;
+}
+
+export async function sendParticipantInvitations(
+  companyId: string,
+  payload: {
+    participantIds?: string[];
+    mode: ParticipantInvitationMode;
+    forceRotate?: boolean;
+  },
+): Promise<ParticipantInviteBatchResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/invitations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      participant_ids: payload.participantIds,
+      mode: payload.mode,
+      force_rotate: payload.forceRotate ?? false,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as ParticipantInviteBatchResponse;
 }
 
 export async function getCompanyDetail(

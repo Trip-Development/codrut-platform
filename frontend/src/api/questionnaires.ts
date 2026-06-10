@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "./runtime";
+import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 
 export type QuestionnaireDefinitionStub = {
   id: string;
@@ -531,13 +531,13 @@ export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireD
       credentials: "include",
     });
     if (!response.ok) {
-      return fallbackDefinitions;
+      return isDemoFallbackEnabled() ? fallbackDefinitions : [];
     }
     const serverDefs = (await response.json()) as QuestionnaireDefinition[];
     return serverDefs.map(stubFromDefinition);
   } catch (e) {
     console.error("Error listing definitions", e);
-    return fallbackDefinitions;
+    return isDemoFallbackEnabled() ? fallbackDefinitions : [];
   }
 }
 
@@ -556,12 +556,12 @@ export async function getQuestionnaireDefinition(
       credentials: "include",
     });
     if (!response.ok) {
-      return fallbackDefinitionDetails[realKey] ?? null;
+      return isDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
     }
     return (await response.json()) as QuestionnaireDefinition;
   } catch (e) {
     console.error("Error getting definition", e);
-    return fallbackDefinitionDetails[realKey] ?? null;
+    return isDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
   }
 }
 
@@ -694,7 +694,7 @@ export function deleteLocalQuestionnaireDefinition(key: string): boolean {
 export async function getQuestionnaireResponse(
   assignmentId: string,
 ): Promise<QuestionnaireResponseRecord | null> {
-  if (seededAssignmentQuestionnaires[assignmentId]) {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
     return {
       id: `seeded-${assignmentId}-draft`,
       assignment_id: assignmentId,
@@ -721,7 +721,7 @@ export async function saveQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,
 ): Promise<QuestionnaireResponseRecord> {
-  if (seededAssignmentQuestionnaires[assignmentId]) {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "draft");
   }
 
@@ -734,12 +734,12 @@ export async function saveQuestionnaireResponse(
     });
 
     if (!response.ok) {
-      return seededQuestionnaireResponse(assignmentId, answers, "draft");
+      throw await responseError(response, "Nu am putut salva draftul.");
     }
 
     return (await response.json()) as QuestionnaireResponseRecord;
-  } catch {
-    return seededQuestionnaireResponse(assignmentId, answers, "draft");
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut salva draftul.");
   }
 }
 
@@ -747,7 +747,7 @@ export async function submitQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, number>,
 ): Promise<QuestionnaireResponseRecord> {
-  if (seededAssignmentQuestionnaires[assignmentId]) {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "submitted");
   }
 
@@ -760,13 +760,29 @@ export async function submitQuestionnaireResponse(
     });
 
     if (!response.ok) {
-      return seededQuestionnaireResponse(assignmentId, answers, "submitted");
+      throw await responseError(response, "Nu am putut trimite raspunsurile.");
     }
 
     return (await response.json()) as QuestionnaireResponseRecord;
-  } catch {
-    return seededQuestionnaireResponse(assignmentId, answers, "submitted");
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut trimite raspunsurile.");
   }
+}
+
+function canUseSeededAssignmentFallback(assignmentId: string): boolean {
+  return isDemoFallbackEnabled() && Boolean(seededAssignmentQuestionnaires[assignmentId]);
+}
+
+async function responseError(response: Response, fallbackMessage: string): Promise<Error> {
+  const payload =
+    typeof response.json === "function" ? await response.json().catch(() => null) : null;
+  const message = payload?.error?.message ?? fallbackMessage;
+  return new Error(message);
+}
+
+function normalizeResponseError(error: unknown, fallbackMessage: string): Error {
+  if (error instanceof Error) return error;
+  return new Error(fallbackMessage);
 }
 
 function seededQuestionnaireResponse(

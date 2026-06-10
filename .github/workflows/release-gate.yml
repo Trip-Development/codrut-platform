@@ -1,0 +1,100 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches:
+      - prod
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  prod-compose:
+    name: release / prod-compose-config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Production Compose Config
+        env:
+          FRONTEND_IMAGE: ghcr.io/example/codrut-platform-frontend:${{ github.event.pull_request.head.sha }}
+          BACKEND_IMAGE: ghcr.io/example/codrut-platform-backend:${{ github.event.pull_request.head.sha }}
+          TRAEFIK_ACME_EMAIL: ops@example.com
+          CODRUT_HOST: codrut.example.com
+          POSTGRES_DB: codrut
+          POSTGRES_USER: codrut
+          POSTGRES_PASSWORD: codrut
+          CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
+          CODRUT_REDIS_URL: redis://redis:6379/0
+          CODRUT_SESSION_SECRET: compose-config-secret
+          CODRUT_CORS_ORIGINS: '["https://codrut.example.com"]'
+          CODRUT_PUBLIC_APP_URL: https://codrut.example.com
+          CODRUT_EMAIL_PROVIDER: brevo
+          CODRUT_EMAIL_FROM_ADDRESS: ops@example.com
+          CODRUT_EMAIL_FROM_NAME: Codrut
+          CODRUT_EMAIL_BREVO_API_KEY: compose-config-placeholder
+          CODRUT_DB_VOLUME_PATH: /tmp/codrut-postgres-data
+        run: docker compose -f compose.yaml -f compose.prod.yaml config >/dev/null
+
+  backend-image:
+    name: release / backend-image-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.backend
+          target: runtime
+          push: false
+          tags: codrut-platform-backend:release-gate
+
+  frontend-image:
+    name: release / frontend-image-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build frontend runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.frontend
+          push: false
+          tags: codrut-platform-frontend:release-gate
+
+  required:
+    name: release / required
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - prod-compose
+      - backend-image
+      - frontend-image
+    steps:
+      - name: Verify release gate checks
+        shell: bash
+        env:
+          PROD_COMPOSE_RESULT: ${{ needs['prod-compose'].result }}
+          BACKEND_IMAGE_RESULT: ${{ needs['backend-image'].result }}
+          FRONTEND_IMAGE_RESULT: ${{ needs['frontend-image'].result }}
+        run: |
+          set -euo pipefail
+
+          for check in PROD_COMPOSE_RESULT BACKEND_IMAGE_RESULT FRONTEND_IMAGE_RESULT; do
+            if [[ "${!check}" != "success" ]]; then
+              echo "${check}=${!check}; expected success."
+              exit 1
+            fi
+          done

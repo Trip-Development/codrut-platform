@@ -242,15 +242,19 @@ class IdentityService:
 
         from sqlalchemy import select
 
+        from codrut.core.config import get_settings
+        from codrut.modules.communications.task_links import parse_task_token
         from codrut.modules.companies.models import ParticipantProfile
         from codrut.modules.identity.models import User, UserRole
 
+        claims = parse_task_token(token, get_settings())
         session_token = None
 
-        # Load the participant profile
+        # Load the exact participant profile covered by the verified task link.
         result = await self.repository.session.execute(
             select(ParticipantProfile).where(
-                ParticipantProfile.email == verify_result.email.lower()
+                ParticipantProfile.id == claims.respondent_profile_id,
+                ParticipantProfile.company_id == claims.company_id,
             )
         )
         profile = result.scalar_one_or_none()

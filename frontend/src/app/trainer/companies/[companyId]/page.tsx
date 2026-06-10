@@ -44,7 +44,7 @@ export default async function CompanyOverviewPage({
                 Adaugă participanții prin fișierul Excel/CSV în ecranul de import pentru a asocia oameni cu această companie.
               </p>
               <Link
-                href="/trainer/roster"
+                href={`${basePath}/participants`}
                 className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
               >
                 Mergi la import roster &rarr;

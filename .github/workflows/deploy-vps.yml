@@ -5,10 +5,19 @@ on:
     branches:
       - prod
   workflow_dispatch:
+    inputs:
+      confirm_prod_ref:
+        description: Type prod to confirm this deployment is running from refs/heads/prod.
+        required: true
+        type: string
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: prod-vps-deploy
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -17,6 +26,23 @@ jobs:
     environment: prod
 
     steps:
+      - name: Guard Production Deployment Ref
+        shell: bash
+        env:
+          DISPATCH_CONFIRMATION: ${{ github.event.inputs.confirm_prod_ref || '' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" != "refs/heads/prod" ]]; then
+            echo "Production deployments must run from refs/heads/prod; received ${GITHUB_REF}."
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CONFIRMATION}" != "prod" ]]; then
+            echo "Manual production deployments require confirm_prod_ref=prod."
+            exit 1
+          fi
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -33,8 +59,40 @@ jobs:
       - name: Lowercase Repository Name
         id: repo-name
         run: |
-          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-          echo "repo=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "repo=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Set Release Image Refs
+        id: images
+        shell: bash
+        env:
+          OWNER: ${{ steps.repo-name.outputs.owner }}
+          REPO: ${{ steps.repo-name.outputs.repo }}
+        run: |
+          set -euo pipefail
+          echo "backend=ghcr.io/${OWNER}/${REPO}-backend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "frontend=ghcr.io/${OWNER}/${REPO}-frontend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Production Compose Config
+        env:
+          FRONTEND_IMAGE: ${{ steps.images.outputs.frontend }}
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
+          TRAEFIK_ACME_EMAIL: ops@example.com
+          CODRUT_HOST: codrut.example.com
+          POSTGRES_DB: codrut
+          POSTGRES_USER: codrut
+          POSTGRES_PASSWORD: codrut
+          CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
+          CODRUT_REDIS_URL: redis://redis:6379/0
+          CODRUT_SESSION_SECRET: compose-config-secret
+          CODRUT_CORS_ORIGINS: '["https://codrut.example.com"]'
+          CODRUT_PUBLIC_APP_URL: https://codrut.example.com
+          CODRUT_EMAIL_PROVIDER: brevo
+          CODRUT_EMAIL_FROM_ADDRESS: ops@example.com
+          CODRUT_EMAIL_FROM_NAME: Codrut
+          CODRUT_EMAIL_BREVO_API_KEY: compose-config-placeholder
+          CODRUT_DB_VOLUME_PATH: /tmp/codrut-postgres-data
+        run: docker compose -f compose.yaml -f compose.prod.yaml config >/dev/null
 
       - name: Build and Push Backend Image
         uses: docker/build-push-action@v6
@@ -43,9 +101,7 @@ jobs:
           file: infra/docker/Dockerfile.backend
           target: runtime
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:latest
-            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:${{ github.sha }}
+          tags: ${{ steps.images.outputs.backend }}
 
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v6
@@ -53,15 +109,17 @@ jobs:
           context: .
           file: infra/docker/Dockerfile.frontend
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:latest
-            ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:${{ github.sha }}
+          tags: ${{ steps.images.outputs.frontend }}
 
       - name: Deploy to Hetzner VPS via SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
           SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FRONTEND_IMAGE: ${{ steps.images.outputs.frontend }}
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
+          RELEASE_SHA: ${{ github.sha }}
           # App deployment configurations
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -78,7 +136,53 @@ jobs:
           TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
           CODRUT_DB_VOLUME_PATH: ${{ secrets.CODRUT_DB_VOLUME_PATH }}
         run: |
-          # 1. Configure SSH
+          set -euo pipefail
+
+          required_vars=(
+            SSH_PRIVATE_KEY
+            HETZNER_VPS_IP
+            SSH_USER
+            FRONTEND_IMAGE
+            BACKEND_IMAGE
+            POSTGRES_DB
+            POSTGRES_USER
+            POSTGRES_PASSWORD
+            CODRUT_REDIS_URL
+            CODRUT_SESSION_SECRET
+            CODRUT_CORS_ORIGINS
+            CODRUT_PUBLIC_APP_URL
+            CODRUT_EMAIL_PROVIDER
+            CODRUT_EMAIL_FROM_ADDRESS
+            CODRUT_EMAIL_FROM_NAME
+            CODRUT_EMAIL_BREVO_API_KEY
+            CODRUT_HOST
+            TRAEFIK_ACME_EMAIL
+            CODRUT_DB_VOLUME_PATH
+          )
+
+          for var_name in "${required_vars[@]}"; do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "${var_name} is required for production deployment."
+              exit 1
+            fi
+          done
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          try:
+              origins = json.loads(os.environ["CODRUT_CORS_ORIGINS"])
+          except json.JSONDecodeError as exc:
+              print(f"CODRUT_CORS_ORIGINS must be a JSON array: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
+
+          if not isinstance(origins, list) or not origins or not all(isinstance(origin, str) and origin for origin in origins):
+              print("CODRUT_CORS_ORIGINS must be a non-empty JSON array of origin strings.", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
@@ -86,18 +190,20 @@ jobs:
 
           DERIVED_DATABASE_URL=$(python3 -c "from urllib.parse import quote; import os; print(f\"postgresql+asyncpg://{quote(os.environ['POSTGRES_USER'])}:{quote(os.environ['POSTGRES_PASSWORD'])}@db:5432/{quote(os.environ['POSTGRES_DB'])}\")")
           DERIVED_DB_VOLUME_PATH="${CODRUT_DB_VOLUME_PATH%/}/postgres-data"
+          DEPLOY_DIR="/opt/codrut-platform"
 
-          # 2. Ensure deployment directory exists
-          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "mkdir -p /opt/codrut-platform"
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "mkdir -p ${DEPLOY_DIR}"
+          scp -i ~/.ssh/id_rsa compose.yaml compose.prod.yaml "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/"
 
-          # 3. Copy Docker Compose files to the server
-          scp -i ~/.ssh/id_rsa compose.yaml compose.prod.yaml "$SSH_USER@$HETZNER_VPS_IP:/opt/codrut-platform/"
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cd ${DEPLOY_DIR} && if [ -f .env ]; then awk -F= '/^(FRONTEND_IMAGE|BACKEND_IMAGE)=/ { print }' .env > previous-images.env; else : > previous-images.env; fi"
+          scp -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/previous-images.env" "$RUNNER_TEMP/previous-images.env"
 
-          # 4. Generate the production .env file on the VPS
-          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cat << 'EOF' > /opt/codrut-platform/.env
+          umask 077
+          cat > "$RUNNER_TEMP/prod.env" <<EOF
           COMPOSE_PROJECT_NAME=codrut-platform
-          FRONTEND_IMAGE=ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-frontend:latest
-          BACKEND_IMAGE=ghcr.io/${{ steps.repo-name.outputs.owner }}/${{ steps.repo-name.outputs.repo }}-backend:latest
+          FRONTEND_IMAGE=$FRONTEND_IMAGE
+          BACKEND_IMAGE=$BACKEND_IMAGE
+          CODRUT_RELEASE_SHA=$RELEASE_SHA
           POSTGRES_DB=$POSTGRES_DB
           POSTGRES_USER=$POSTGRES_USER
           POSTGRES_PASSWORD=$POSTGRES_PASSWORD
@@ -114,24 +220,56 @@ jobs:
           CODRUT_HOST=$CODRUT_HOST
           TRAEFIK_ACME_EMAIL=$TRAEFIK_ACME_EMAIL
           CODRUT_DB_VOLUME_PATH=$DERIVED_DB_VOLUME_PATH
-          EOF"
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/prod.env"
+          scp -i ~/.ssh/id_rsa "$RUNNER_TEMP/prod.env" "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/.env"
 
-          # 5. Connect and restart Docker Compose services with new images
-          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "
-            cd /opt/codrut-platform
-            
-            # Log in to GHCR on remote host
-            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Pull registry images
-            docker compose -f compose.yaml -f compose.prod.yaml pull
-            
-            # Run database migrations while active containers serve traffic
-            docker compose -f compose.yaml -f compose.prod.yaml run --rm backend alembic upgrade head
-            
-            # Launch production services with zero-downtime rolling reload
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/codrut-platform
+
+          docker compose -f compose.yaml -f compose.prod.yaml config >/dev/null
+          docker compose -f compose.yaml -f compose.prod.yaml pull
+          docker compose -f compose.yaml -f compose.prod.yaml run --rm backend alembic upgrade head
+
+          if docker compose up --help | grep -q -- '--wait'; then
+            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans --wait
+          else
             docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
-            
-            # Prune old images to save disk space
-            docker image prune -a -f
-          "
+          fi
+
+          docker compose -f compose.yaml -f compose.prod.yaml ps
+          docker compose -f compose.yaml -f compose.prod.yaml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
+          docker image prune -f
+          REMOTE
+
+          HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then
+              echo "Public health check passed on attempt ${attempt}."
+              break
+            fi
+
+            if [[ "$attempt" == "30" ]]; then
+              echo "Public health check failed after ${attempt} attempts: ${HEALTH_URL}"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          PREVIOUS_FRONTEND_IMAGE="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' "$RUNNER_TEMP/previous-images.env" || true)"
+          PREVIOUS_BACKEND_IMAGE="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' "$RUNNER_TEMP/previous-images.env" || true)"
+
+          {
+            echo "### VPS deployment"
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Frontend image: \`${FRONTEND_IMAGE}\`"
+            echo "- Backend image: \`${BACKEND_IMAGE}\`"
+            echo "- Previous frontend image: \`${PREVIOUS_FRONTEND_IMAGE:-unknown}\`"
+            echo "- Previous backend image: \`${PREVIOUS_BACKEND_IMAGE:-unknown}\`"
+            echo ""
+            echo "Rollback: set \`FRONTEND_IMAGE\` and \`BACKEND_IMAGE\` in \`${DEPLOY_DIR}/.env\` to the previous refs above, then run \`docker compose -f compose.yaml -f compose.prod.yaml up -d --wait\` when supported and verify \`${HEALTH_URL}\`."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -54,6 +55,7 @@ class RosterImportRow(BaseModel):
 
 class RosterImportRequest(BaseModel):
     rows: list[RosterImportRow] = Field(min_length=1, max_length=1000)
+    send_invites: bool = False
 
 
 class ReportingRelationshipIssue(BaseModel):
@@ -88,8 +90,10 @@ class RosterImportEmailResult(BaseModel):
     participant_id: UUID
     email: EmailStr
     full_name: str
+    delivery_mode: Literal["email", "secure_links"] = "email"
     email_sent: bool
     error: str | None = None
+    invite_url: str | None = None
 
 
 class RosterImportResponse(BaseModel):
@@ -98,3 +102,17 @@ class RosterImportResponse(BaseModel):
     total_imported: int
     emails_sent: int
     emails_failed: int
+
+
+class ParticipantInviteBatchRequest(BaseModel):
+    participant_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=1000)
+    mode: Literal["email", "secure_links"] = "email"
+    force_rotate: bool = False
+
+
+class ParticipantInviteBatchResponse(BaseModel):
+    results: list[RosterImportEmailResult]
+    total: int
+    emails_sent: int
+    emails_failed: int
+    links_generated: int
