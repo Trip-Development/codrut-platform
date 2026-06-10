@@ -118,18 +118,6 @@ export async function getCompanyParticipants(
   companyId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyParticipant[]> {
-  let localParticipants: CompanyParticipant[] = [];
-  if (isDemoFallbackEnabled() && typeof window !== "undefined") {
-    const stored = localStorage.getItem(`codrut_participants_${companyId}`);
-    if (stored) {
-      try {
-        localParticipants = JSON.parse(stored) as CompanyParticipant[];
-      } catch (e) {
-        console.error("Error loading local participants", e);
-      }
-    }
-  }
-
   try {
     const response = await fetch(
       `${getApiBaseUrl()}/companies/${companyId}/participants`,
@@ -139,23 +127,14 @@ export async function getCompanyParticipants(
       if (!isDemoFallbackEnabled()) {
         throw new Error(`Eroare server (${response.status}): Nu s-au putut obține participanții.`);
       }
-      return localParticipants;
+      return [];
     }
-    const serverParticipants = (await response.json()) as CompanyParticipant[];
-
-    if (!isDemoFallbackEnabled()) {
-      return serverParticipants;
-    }
-
-    const map = new Map<string, CompanyParticipant>();
-    serverParticipants.forEach((p) => map.set(p.id, p));
-    localParticipants.forEach((p) => map.set(p.id, p));
-    return Array.from(map.values());
+    return (await response.json()) as CompanyParticipant[];
   } catch (e) {
     if (!isDemoFallbackEnabled()) {
       throw e;
     }
-    return localParticipants;
+    return [];
   }
 }
 
@@ -163,18 +142,6 @@ export async function getCompanyAssignments(
   companyId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyAssignment[]> {
-  let localAssignments: CompanyAssignment[] = [];
-  if (isDemoFallbackEnabled() && typeof window !== "undefined") {
-    const stored = localStorage.getItem(`codrut_assignments_${companyId}`);
-    if (stored) {
-      try {
-        localAssignments = JSON.parse(stored) as CompanyAssignment[];
-      } catch (e) {
-        console.error("Error loading local assignments", e);
-      }
-    }
-  }
-
   try {
     const response = await fetch(
       `${getApiBaseUrl()}/companies/${companyId}/assignments`,
@@ -184,23 +151,14 @@ export async function getCompanyAssignments(
       if (!isDemoFallbackEnabled()) {
         throw new Error(`Eroare server (${response.status}): Nu s-au putut obține asignările.`);
       }
-      return localAssignments;
+      return [];
     }
-    const serverAssignments = (await response.json()) as CompanyAssignment[];
-
-    if (!isDemoFallbackEnabled()) {
-      return serverAssignments;
-    }
-
-    const map = new Map<string, CompanyAssignment>();
-    serverAssignments.forEach((a) => map.set(a.id, a));
-    localAssignments.forEach((a) => map.set(a.id, a));
-    return Array.from(map.values());
+    return (await response.json()) as CompanyAssignment[];
   } catch (e) {
     if (!isDemoFallbackEnabled()) {
       throw e;
     }
-    return localAssignments;
+    return [];
   }
 }
 
@@ -232,18 +190,6 @@ export async function getCompanyTeams(
 // Aggregated fetchers
 // ---------------------------------------------------------------------------
 
-function getLocalCompanies(): Array<{ id: string; name: string }> {
-  if (!isDemoFallbackEnabled()) return [];
-  if (typeof window === "undefined") return [];
-  const stored = localStorage.getItem("codrut_local_companies");
-  if (!stored) return [];
-  try {
-    return JSON.parse(stored) as Array<{ id: string; name: string }>;
-  } catch {
-    return [];
-  }
-}
-
 export async function getCompanyList(options: ApiRequestOptions = {}): Promise<CompanyListItem[]> {
   let serverCompanies: Array<{ id: string; name: string }> = [];
   try {
@@ -266,16 +212,14 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
     console.error("Fetch companies failed, using local fallback", e);
   }
 
-  const localCompanies = getLocalCompanies();
   const map = new Map<string, { id: string; name: string }>();
 
-  if (serverCompanies.length === 0 && localCompanies.length === 0 && isDemoFallbackEnabled()) {
+  if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
     map.set("demo-project", { id: "demo-project", name: "Client demo" });
     map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa directie" });
     map.set("past-client-video", { id: "past-client-video", name: "Campanie clienti trecuti" });
   } else {
     serverCompanies.forEach((c) => map.set(c.id, c));
-    localCompanies.forEach((c) => map.set(c.id, c));
   }
 
   const mergedCompanies = Array.from(map.values());
@@ -417,16 +361,14 @@ export async function getCompanyDetail(
     }
   }
 
-  const localCompanies = getLocalCompanies();
   const map = new Map<string, { id: string; name: string }>();
 
-  if (serverCompanies.length === 0 && localCompanies.length === 0 && isDemoFallbackEnabled()) {
+  if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
     map.set("demo-project", { id: "demo-project", name: "Client demo" });
     map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa directie" });
     map.set("past-client-video", { id: "past-client-video", name: "Campanie clienti trecuti" });
   } else {
     serverCompanies.forEach((c) => map.set(c.id, c));
-    localCompanies.forEach((c) => map.set(c.id, c));
   }
 
   const company = map.get(companyId);

@@ -27,6 +27,7 @@ describe("frontend API adapter stubs", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    window.localStorage.clear();
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
     delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
   });
@@ -187,6 +188,21 @@ describe("frontend API adapter stubs", () => {
         dataUnavailable: true,
       }),
     ]);
+  });
+
+  it("does not merge localStorage companies into the company list", async () => {
+    window.localStorage.setItem(
+      "codrut_local_companies",
+      JSON.stringify([{ id: "local-company", name: "Local-only client" }]),
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    const companies = await getCompanyList();
+
+    expect(companies.map((company) => company.id)).not.toContain("local-company");
+    expect(companies.map((company) => company.id)).toEqual(
+      expect.arrayContaining(["demo-project", "leadership-pilot", "past-client-video"]),
+    );
   });
 
   it("imports roster first and sends participant access through an explicit batch action", async () => {
