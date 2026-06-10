@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "./runtime";
+import type { ApiRequestOptions } from "./companies";
 
 export type EmailSurfaceStub = {
   id: string;
@@ -240,11 +241,12 @@ export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
   ];
 }
 
-export async function getEmailOpsSummary(): Promise<EmailOpsSummary> {
+export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promise<EmailOpsSummary> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/ops-summary`, {
       cache: "no-store",
       credentials: "include",
+      ...options,
     });
     if (!response.ok) {
       throw new Error(`Server returned status ${response.status}`);
