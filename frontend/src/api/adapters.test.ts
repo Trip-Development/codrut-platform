@@ -17,7 +17,7 @@ import {
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
 } from "./questionnaires";
-import { getTrainerDashboardSummary } from "./trainer";
+import { getTrainerDashboardSummary, getTrainerOperationsSummary } from "./trainer";
 
 describe("frontend API adapter stubs", () => {
   beforeEach(() => {
@@ -45,6 +45,69 @@ describe("frontend API adapter stubs", () => {
 
     expect(summary.stats).toHaveLength(4);
     expect(summary.cards.map((card) => card.title)).toContain("Email");
+  });
+
+  it("builds trainer operations from backend data without localStorage roster state", async () => {
+    window.localStorage.setItem(
+      "codrut_participants_company-1",
+      JSON.stringify([{ id: "local-participant", full_name: "Local Participant", email: "local@example.com" }]),
+    );
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/companies")) {
+        return {
+          ok: true,
+          json: async () => [{ id: "company-1", name: "Michelin" }],
+        } as Response;
+      }
+      if (url.endsWith("/companies/company-1/participants")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "participant-1",
+              full_name: "Ana Pop",
+              email: "ana@example.com",
+              reports_to_name: null,
+              position: "Manager",
+              location: "Bucuresti",
+              role_group: "leadership",
+              pcm_profile: "Persister",
+              user_id: "user-1",
+            },
+          ],
+        } as Response;
+      }
+      if (url.endsWith("/companies/company-1/assignments")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "assignment-1",
+              company_id: "company-1",
+              respondent_profile_id: "participant-1",
+              questionnaire_key: "lencioni",
+              target_type: "self",
+              status: "submitted",
+              submitted_at: "2026-06-10T08:00:00Z",
+              scored_at: null,
+            },
+          ],
+        } as Response;
+      }
+      if (url.endsWith("/companies/company-1/teams")) {
+        return { ok: true, json: async () => [] } as Response;
+      }
+      return { ok: false, status: 404 } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await getTrainerOperationsSummary();
+
+    expect(summary.roster.map((participant) => participant.name)).toEqual(["Ana Pop"]);
+    expect(summary.roster.map((participant) => participant.name)).not.toContain("Local Participant");
+    expect(summary.validations.map((validation) => validation.label)).toContain("Date backend");
   });
 
   it("returns participant workspace placeholder data", async () => {
