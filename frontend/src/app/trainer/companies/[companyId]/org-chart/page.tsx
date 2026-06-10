@@ -1,4 +1,5 @@
 import { getCompanyDetail, type CompanyParticipant } from "@/api/companies";
+import { normalizeReportsToName } from "@/api/roster-format";
 import { getServerApiRequestOptions } from "@/api/server-request";
 
 type OrgValidationError = {
@@ -17,8 +18,9 @@ function analyzeHierarchy(participants: CompanyParticipant[]) {
 
   // 1. Detect self-reports and invalid managers
   participants.forEach((p) => {
-    if (!p.reports_to_name) return;
-    const reportsTo = p.reports_to_name.trim().toLowerCase();
+    const reportsToName = normalizeReportsToName(p.reports_to_name);
+    if (!reportsToName) return;
+    const reportsTo = reportsToName.toLowerCase();
     const selfName = p.full_name.trim().toLowerCase();
 
     if (reportsTo === selfName) {
@@ -32,7 +34,7 @@ function analyzeHierarchy(participants: CompanyParticipant[]) {
       if (!manager) {
         errors.push({
           type: "invalid_manager",
-          message: `Managerul "${p.reports_to_name}" specificat pentru "${p.full_name}" nu există în listă.`,
+          message: `Managerul "${reportsToName}" specificat pentru "${p.full_name}" nu există în listă.`,
           participant: p,
         });
       }
@@ -49,8 +51,9 @@ function analyzeHierarchy(participants: CompanyParticipant[]) {
     recStack.add(p.id);
     path.push(p);
 
-    if (p.reports_to_name) {
-      const mgr = nameToParticipant.get(p.reports_to_name.trim().toLowerCase());
+    const reportsToName = normalizeReportsToName(p.reports_to_name);
+    if (reportsToName) {
+      const mgr = nameToParticipant.get(reportsToName.toLowerCase());
       if (mgr) {
         if (recStack.has(mgr.id)) {
           const cycleStartIdx = path.findIndex((x) => x.id === mgr.id);
@@ -81,8 +84,9 @@ function analyzeHierarchy(participants: CompanyParticipant[]) {
 
   // 3. Traversal to find rendered nodes
   const rootMembers = participants.filter((p) => {
-    if (!p.reports_to_name) return true;
-    const mgr = nameToParticipant.get(p.reports_to_name.trim().toLowerCase());
+    const reportsToName = normalizeReportsToName(p.reports_to_name);
+    if (!reportsToName) return true;
+    const mgr = nameToParticipant.get(reportsToName.toLowerCase());
     return !mgr; // treat invalid managers as root for rendering
   });
 
@@ -91,9 +95,7 @@ function analyzeHierarchy(participants: CompanyParticipant[]) {
   function traverse(member: CompanyParticipant, currentVisited: Set<string>) {
     renderedIds.add(member.id);
     const reports = participants.filter(
-      (c) =>
-        c.reports_to_name?.trim().toLowerCase() ===
-        member.full_name.trim().toLowerCase()
+      (c) => normalizeReportsToName(c.reports_to_name).toLowerCase() === member.full_name.trim().toLowerCase()
     );
     reports.forEach((child) => {
       if (!currentVisited.has(child.id)) {
@@ -111,8 +113,9 @@ function analyzeHierarchy(participants: CompanyParticipant[]) {
 
   // Determine orphan roots to render them as pseudo-roots
   const orphanRoots = orphans.filter((o) => {
-    if (!o.reports_to_name) return true;
-    const mgr = nameToParticipant.get(o.reports_to_name.trim().toLowerCase());
+    const reportsToName = normalizeReportsToName(o.reports_to_name);
+    if (!reportsToName) return true;
+    const mgr = nameToParticipant.get(reportsToName.toLowerCase());
     return !mgr || !orphans.some((other) => other.id === mgr.id);
   });
 
@@ -259,13 +262,14 @@ function OrgNode({
   cycleParticipantIds: Set<string>;
 }) {
   const reports = members.filter(
-    (c) => c.reports_to_name?.trim().toLowerCase() === member.full_name.trim().toLowerCase()
+    (c) => normalizeReportsToName(c.reports_to_name).toLowerCase() === member.full_name.trim().toLowerCase()
   );
 
-  const hasSelfReport = member.reports_to_name?.trim().toLowerCase() === member.full_name.trim().toLowerCase();
+  const reportsToName = normalizeReportsToName(member.reports_to_name);
+  const hasSelfReport = reportsToName.toLowerCase() === member.full_name.trim().toLowerCase();
   const hasInvalidManager =
-    member.reports_to_name &&
-    !members.some((m) => m.full_name.trim().toLowerCase() === member.reports_to_name?.trim().toLowerCase());
+    reportsToName &&
+    !members.some((m) => m.full_name.trim().toLowerCase() === reportsToName.toLowerCase());
   const isInCycle = cycleParticipantIds.has(member.id);
 
   // Border/background styles based on status
@@ -290,7 +294,7 @@ function OrgNode({
     cardStyles = "border-amber-300 bg-amber-50/20";
     labelBadge = (
       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">
-        Manager inexistent: {member.reports_to_name}
+        Manager inexistent: {reportsToName}
       </span>
     );
   }

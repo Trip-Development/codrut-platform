@@ -397,7 +397,7 @@ async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
             rows=[
                 {
                     "Name": "Maria Popescu",
-                    "Reports To": "",
+                    "Reports To": "  Rădăcină  ",
                     "Position": "Manager",
                     "Location": "Bucharest",
                     "email": "maria.popescu@example.com",
@@ -422,11 +422,31 @@ async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
     assert result.emails_failed == 0
     assert len(participants) == 2
     assert participants[0].full_name == "Maria Popescu"
+    assert participants[0].reports_to_name is None
     assert participants[0].role_group == "leadership"
     assert participants[1].full_name == "Ana Ionescu"
     assert participants[1].reports_to_name == "Maria Popescu"
     assert participants[1].email == "ana@example.com"
     assert participants[1].pcm_profile is None
+
+
+async def test_create_participant_cleans_top_level_reports_to_markers() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+
+    participant = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(
+            full_name="Maria",
+            email="maria@example.com",
+            reports_to_name="root",
+        ),
+    )
+
+    assert participant.reports_to_name is None
 
 
 async def test_import_roster_rejects_duplicate_row_email() -> None:
@@ -824,6 +844,26 @@ async def test_import_reporting_relationships_resolves_reports_to_names() -> Non
     assert result.issues == []
     assert repository.reporting_relationships[0].participant_profile_id == participant.id
     assert repository.reporting_relationships[0].manager_profile_id == manager.id
+
+
+async def test_import_reporting_relationships_ignores_top_level_reports_to_markers() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    participant = ParticipantProfile(
+        company_id=company.id,
+        full_name="Maria",
+        email="maria@example.com",
+        reports_to_name="radacina",
+    )
+    await repository.add_participant(participant)
+
+    result = await service.import_reporting_relationships(owner_id, company.id)
+
+    assert result.created_count == 0
+    assert result.issues == []
+    assert repository.reporting_relationships == []
 
 
 async def test_import_reporting_relationships_returns_validation_issues() -> None:

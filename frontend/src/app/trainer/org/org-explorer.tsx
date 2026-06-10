@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import type { CompanyParticipant } from "@/api/companies";
+import { normalizeReportsToName } from "@/api/roster-format";
 
 export type OrgExplorerCompany = {
   id: string;
@@ -21,7 +22,10 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const company = companies.find((item) => item.id === companyId);
   const participants = useMemo(() => company?.participants ?? [], [company?.participants]);
-  const roots = useMemo(() => participants.filter((participant) => !participant.reports_to_name), [participants]);
+  const roots = useMemo(
+    () => participants.filter((participant) => !normalizeReportsToName(participant.reports_to_name)),
+    [participants],
+  );
 
   function toggle(id: string) {
     setCollapsed((current) => {
@@ -90,7 +94,7 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
 
         <div className="mt-5 grid grid-cols-2 gap-2">
           <OrgStat label="Persoane" value={participants.length} />
-          <OrgStat label="Rădăcini" value={roots.length} />
+          <OrgStat label="Fără manager" value={roots.length} />
         </div>
       </aside>
 
@@ -148,7 +152,7 @@ function OrgNode({
   onToggle: (id: string) => void;
   depth: number;
 }) {
-  const reports = members.filter((candidate) => candidate.reports_to_name === member.full_name);
+  const reports = members.filter((candidate) => normalizeReportsToName(candidate.reports_to_name) === member.full_name);
   const isCollapsed = collapsed.has(member.id);
   const matches = queryMatches(member, query);
   const childMatches = reports.some((report) => branchMatches(report, members, query));
@@ -208,7 +212,7 @@ function OrgNode({
 function branchMatches(member: CompanyParticipant, members: CompanyParticipant[], query: string): boolean {
   if (queryMatches(member, query)) return true;
   return members
-    .filter((candidate) => candidate.reports_to_name === member.full_name)
+    .filter((candidate) => normalizeReportsToName(candidate.reports_to_name) === member.full_name)
     .some((child) => branchMatches(child, members, query));
 }
 
