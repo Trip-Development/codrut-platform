@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 import string
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -103,7 +104,7 @@ class CompanyService:
                 company_id=company_id,
                 full_name=payload.full_name.strip(),
                 email=email,
-                reports_to_name=_clean_optional(payload.reports_to_name),
+                reports_to_name=_clean_reports_to_name(payload.reports_to_name),
                 position=_clean_optional(payload.position),
                 location=_clean_optional(payload.location),
                 role_group=_clean_optional(payload.role_group),
@@ -539,7 +540,7 @@ class CompanyService:
         issues: list[ReportingRelationshipIssue] = []
 
         for participant in participants:
-            reports_to_name = _clean_optional(participant.reports_to_name)
+            reports_to_name = _clean_reports_to_name(participant.reports_to_name)
             if reports_to_name is None:
                 continue
             manager = participants_by_name.get(reports_to_name.casefold())
@@ -611,10 +612,41 @@ def _clean_optional(value: str | None) -> str | None:
     return cleaned or None
 
 
+_TOP_LEVEL_REPORTS_TO_VALUES = {
+    "radacina",
+    "root",
+    "top",
+    "top level",
+    "nivel superior",
+    "fara manager",
+    "fara sef",
+    "none",
+    "n/a",
+    "na",
+    "-",
+    "—",
+}
+
+
+def _clean_reports_to_name(value: str | None) -> str | None:
+    cleaned = _clean_optional(value)
+    if cleaned is None:
+        return None
+    normalized = _normalize_reports_to_token(cleaned)
+    return None if normalized in _TOP_LEVEL_REPORTS_TO_VALUES else cleaned
+
+
+def _normalize_reports_to_token(value: str) -> str:
+    without_diacritics = "".join(
+        char for char in unicodedata.normalize("NFD", value) if unicodedata.category(char) != "Mn"
+    )
+    return " ".join(without_diacritics.casefold().split())
+
+
 def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
     return RosterImportRow(
         full_name=row.full_name.strip(),
-        reports_to_name=_clean_optional(row.reports_to_name),
+        reports_to_name=_clean_reports_to_name(row.reports_to_name),
         position=_clean_optional(row.position),
         location=_clean_optional(row.location),
         email=row.email.lower(),

@@ -11,6 +11,7 @@ import {
   type ParticipantInvitationMode,
   type RosterInviteResult,
 } from "@/api/companies";
+import { normalizeReportsToName } from "@/api/roster-format";
 
 type CompanyOption = {
   id: string;
@@ -233,7 +234,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     return {
       full_name: getVal("full_name"),
       email: getVal("email"),
-      reports_to_name: getVal("reports_to_name"),
+      reports_to_name: normalizeReportsToName(getVal("reports_to_name")),
       position: getVal("position"),
       location: getVal("location"),
       pcm_profile: getVal("pcm_profile"),
@@ -384,7 +385,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
         ...prev,
         [rowIndex]: {
           ...rowEdits,
-          [field]: value.trim(),
+          [field]: field === "reports_to_name" ? normalizeReportsToName(value) : value.trim(),
         },
       };
     });
@@ -849,7 +850,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
                                   row[field]
                                 ) : (
                                   <span className="text-foreground/30 italic">
-                                    {isRequired ? "Lipsă obligatoriu" : "-"}
+                                    {isRequired ? "Lipsă obligatoriu" : "—"}
                                   </span>
                                 )}
                               </span>
