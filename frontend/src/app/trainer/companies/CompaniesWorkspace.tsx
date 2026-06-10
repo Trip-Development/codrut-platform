@@ -76,16 +76,16 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_28rem] lg:items-end">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Flux principal</p>
+          <div className="p-5">
+            <p className="text-xs font-semibold text-burgundy/75">Flux principal</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Adaugă și gestionează companii</h2>
             <p className="mt-2 text-sm leading-6 text-foreground/62">
               Creează clientul aici, apoi intră în companie pentru roster, organigramă, echipe, invitații și rapoarte.
             </p>
           </div>
-          <form onSubmit={handleCreateCompany} className="flex flex-col gap-2 sm:flex-row">
+          <form onSubmit={handleCreateCompany} className="flex flex-col gap-2 bg-surface-muted/50 p-5 sm:flex-row lg:h-full lg:items-end">
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -101,7 +101,11 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             </button>
           </form>
         </div>
-        {message ? <p className="mt-3 text-sm font-semibold text-foreground/58">{message}</p> : null}
+        {message ? (
+          <p className="border-t border-[var(--border)] bg-background/60 px-5 py-3 text-sm font-semibold text-foreground/58">
+            {message}
+          </p>
+        ) : null}
       </section>
 
       {sortedCompanies.length === 0 ? (
@@ -139,11 +143,16 @@ function CompanyCard({
       : 0;
 
   return (
-    <article className="flex flex-col rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-semibold text-foreground">{company.name}</h2>
-        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55">
-          {company.dataUnavailable ? "date indisponibile" : company.stage}
+    <article className="group flex flex-col rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-burgundy/20 hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold text-foreground">{company.name}</h2>
+          <p className="mt-1 text-xs font-semibold text-foreground/50">
+            {company.dataUnavailable ? "Date indisponibile" : stageLabel(company.stage)}
+          </p>
+        </div>
+        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55 transition-colors group-hover:bg-burgundy/10 group-hover:text-burgundy">
+          {company.participantCount} pers.
         </span>
       </div>
 
@@ -152,9 +161,10 @@ function CompanyCard({
           Datele operaționale nu au putut fi citite momentan. Deschide compania pentru verificare.
         </p>
       ) : (
-        <p className="mt-3 text-sm text-foreground/62">
-          {company.participantCount} participanți · {company.completedCount}/{company.assignmentCount} completate
-        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <CompanyStat label="Participanți" value={company.participantCount} />
+          <CompanyStat label="Completate" value={`${company.completedCount}/${company.assignmentCount}`} />
+        </div>
       )}
 
       <div className="mt-4">
@@ -177,7 +187,7 @@ function CompanyCard({
           href={`/trainer/companies/${company.id}`}
           className="tap-soft inline-flex min-h-10 justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
         >
-          Deschide compania
+          Deschide
         </Link>
         <button
           type="button"
@@ -192,6 +202,30 @@ function CompanyCard({
       </div>
     </article>
   );
+}
+
+function CompanyStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-2.5">
+      <p className="text-xs font-semibold text-foreground/45">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function stageLabel(stage: CompanyListItem["stage"]): string {
+  switch (stage) {
+    case "setup":
+      return "Configurare";
+    case "invites":
+      return "Invitații";
+    case "completion":
+      return "În lucru";
+    case "reporting":
+      return "Raportare";
+    default:
+      return stage;
+  }
 }
 
 function companyToListItem(company: CompanyIdentity): CompanyListItem {
