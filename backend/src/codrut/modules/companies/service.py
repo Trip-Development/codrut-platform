@@ -50,6 +50,9 @@ class CompanyService:
     async def list_companies(self, user_id: UUID) -> list[Company]:
         return await self.repository.list_companies_for_user(user_id)
 
+    async def list_all_companies(self) -> list[Company]:
+        return await self.repository.list_all_companies()
+
     async def create_company(self, owner_user_id: UUID, payload: CompanyCreateRequest) -> Company:
         name = payload.name.strip()
         existing = await self.repository.get_company_by_name(name)

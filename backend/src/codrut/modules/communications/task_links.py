@@ -77,7 +77,7 @@ def build_task_url(token: str, settings: Settings) -> str:
 
 def _sign(encoded_payload: str, settings: Settings) -> str:
     digest = hmac.new(
-        settings.session_secret.get_secret_value().encode(),
+        settings.effective_task_link_secret.encode(),
         encoded_payload.encode(),
         hashlib.sha256,
     ).digest()

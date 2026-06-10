@@ -377,6 +377,7 @@ class CommunicationsService:
 
             rows.append({
                 "id": str(profile.id),
+                "company_id": str(profile.company_id),
                 "participant": profile.full_name,
                 "email": profile.email,
                 "audience": audience_type,

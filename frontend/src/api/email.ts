@@ -179,6 +179,7 @@ export type EmailDeliveryMetric = {
 
 export type AssessmentDeliveryRow = {
   id: string;
+  company_id: string;
   participant: string;
   email: string;
   audience: "leadership_account" | "secure_link";

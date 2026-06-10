@@ -61,6 +61,7 @@ class EmailDeliveryMetricResponse(BaseModel):
 
 class AssessmentDeliveryRowResponse(BaseModel):
     id: str
+    company_id: str
     participant: str
     email: str
     audience: str  # "leadership_account" | "secure_link"
