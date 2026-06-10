@@ -64,8 +64,17 @@ or `hotfix/*`, and skips that source-branch check on non-production PRs.
 
 ## Images
 
-The deployment workflow builds backend and frontend images tagged with the
-release commit SHA:
+The deployment workflow separates build and deploy work:
+
+- `build-images` validates the production Compose config with placeholder
+  secrets, then builds and pushes backend/frontend images tagged with the
+  release commit SHA.
+- `deploy-vps` runs behind the `prod` GitHub Environment, consumes the exact
+  image refs from `build-images`, writes the VPS `.env`, pulls those images,
+  migrates, recreates app services, asserts running image refs, and checks
+  health.
+
+Backend and frontend images are tagged with the release commit SHA:
 
 ```text
 ghcr.io/<owner>/<repo>-backend:<sha>
@@ -123,10 +132,11 @@ Before using real participant data, verify:
 
 ## Deployment Checks
 
-The workflow validates `compose.yaml` plus `compose.prod.yaml` before building
-images, copies both Compose files to `/opt/codrut-platform`, writes the
-production `.env`, validates Compose again on the VPS, pulls the SHA-tagged
-images, runs migrations, and force-recreates only the app services
+The `build-images` job validates `compose.yaml` plus `compose.prod.yaml` before
+building images. The `deploy-vps` job copies both Compose files to
+`/opt/codrut-platform`, writes the production `.env`, validates Compose again on
+the VPS, pulls the SHA-tagged images, runs migrations, and force-recreates only
+the app services
 (`backend`, `worker`, and `frontend`) with
 `docker compose up -d --force-recreate --no-build --pull never --wait backend worker frontend`
 when the installed Compose version supports it. `--no-build --pull never` makes
@@ -149,7 +159,7 @@ After startup, the workflow checks:
   `${CODRUT_PUBLIC_APP_URL}/api/health/live`.
 
 The workflow summary records the deployed release SHA, deployed image refs, and
-the previous frontend/backend image refs.
+the previous frontend/backend image refs from the deploy job.
 
 ## Rollback
 
