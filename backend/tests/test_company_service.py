@@ -265,7 +265,29 @@ async def test_create_participant_rejects_missing_company() -> None:
         )
 
 
-async def test_create_participant_rejects_trainer_without_company_membership() -> None:
+async def test_create_participant_allows_trainer_without_company_membership() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    trainer = User(
+        id=uuid.uuid4(),
+        email="global-trainer@example.com",
+        password_hash=hash_password("trainer-password-123"),
+        role=UserRole.trainer,
+    )
+    service.identity_repository.users_by_id[trainer.id] = trainer
+
+    participant = await service.create_participant(
+        trainer.id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
+
+    assert participant.email == "ana@example.com"
+
+
+async def test_create_participant_rejects_non_trainer_without_company_membership() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()

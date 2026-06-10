@@ -5,7 +5,8 @@ overlay:
 
 ```sh
 docker compose -f compose.yaml -f compose.prod.yaml config
-docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+docker compose -f compose.yaml -f compose.prod.yaml pull
+docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --no-build --pull never --remove-orphans --wait backend worker frontend
 ```
 
 Secrets must be supplied through environment files or GitHub Environment secrets on the VPS, never committed to the repository.
@@ -20,13 +21,19 @@ Production releases follow the repo branch policy:
 4. Merge the `dev -> prod` PR. The `VPS Deployment` workflow deploys only from
    `refs/heads/prod`.
 
+Emergency production fixes may use a `hotfix/*` branch directly into `prod`
+when waiting for a full `dev` promotion would leave production broken. A merged
+hotfix must be back-merged into `dev` immediately after the production deploy
+passes, so `dev` remains the source of the next normal release.
+
 The deploy workflow also allows `workflow_dispatch`, but the run must execute
 from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
 workflow from another branch fails before images are built.
 
 Treat the `prod` GitHub Environment as the final approval and secret boundary.
 Use the internal staging or acceptance checklist before opening the release PR;
-do not use manual dispatch to promote unmerged feature refs.
+do not use manual dispatch to promote unmerged feature refs or non-hotfix
+branches.
 
 ## Required Checks
 
@@ -48,10 +55,12 @@ For PRs into `prod`, require:
 - `release / required`
 
 `app-ci / required` runs backend, frontend, and Compose checks for PRs into
-`dev`. For `prod` promotion PRs it skips those duplicated dev checks and
-requires the Playwright E2E job instead. `release / required` then validates the
-production Compose config and runtime image builds. `policy / required` allows
-the `dev -> prod` source-branch check to be skipped on non-production PRs.
+`dev`. For normal `dev -> prod` promotion PRs it skips those duplicated dev
+checks and requires the Playwright E2E job instead. For `hotfix/* -> prod`, it
+runs backend, frontend, Compose, and E2E checks because the change bypasses
+`dev`. `release / required` then validates the production Compose config and
+runtime image builds. `policy / required` allows production PRs only from `dev`
+or `hotfix/*`, and skips that source-branch check on non-production PRs.
 
 ## Images
 
@@ -117,11 +126,23 @@ Before using real participant data, verify:
 The workflow validates `compose.yaml` plus `compose.prod.yaml` before building
 images, copies both Compose files to `/opt/codrut-platform`, writes the
 production `.env`, validates Compose again on the VPS, pulls the SHA-tagged
-images, runs migrations, and starts services with `docker compose up -d --wait`
-when the installed Compose version supports it.
+images, runs migrations, and force-recreates only the app services
+(`backend`, `worker`, and `frontend`) with
+`docker compose up -d --force-recreate --no-build --pull never --wait backend worker frontend`
+when the installed Compose version supports it. `--no-build --pull never` makes
+the rollout use the exact images that were just pulled instead of rebuilding or
+implicitly changing refs during startup. The database, Redis, and Traefik
+containers are not force-recreated during ordinary app rollouts. The migration
+step disables container stdin so it cannot consume the remaining SSH deploy
+script before the app service recreate runs.
 
 After startup, the workflow checks:
 
+- Running backend, worker, and frontend container image refs against the
+  `BACKEND_IMAGE` and `FRONTEND_IMAGE` values stored in `/opt/codrut-platform/.env`.
+  The workflow repeats this assertion in a separate SSH command after the
+  remote deploy script returns, so a skipped recreate cannot produce a false
+  green deployment.
 - Backend health inside the VPS container network:
   `http://127.0.0.1:8000/api/health/live`.
 - Public health through the configured app URL:
@@ -144,21 +165,28 @@ Rollback is manual and image-ref based:
    cd /opt/codrut-platform
    docker compose -f compose.yaml -f compose.prod.yaml config
    docker compose -f compose.yaml -f compose.prod.yaml pull
-   docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+   docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --no-build --pull never --remove-orphans --wait backend worker frontend
    ```
 
    If the installed Compose version does not support `--wait`, use:
 
    ```sh
-   docker compose -f compose.yaml -f compose.prod.yaml up -d
+   docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --no-build --pull never --remove-orphans backend worker frontend
    ```
 
-4. Verify health:
+4. Verify image refs and health:
 
    ```sh
+   docker compose -f compose.yaml -f compose.prod.yaml ps backend worker frontend
+   docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q backend)" --format '{{ index .Config.Image }}'
+   docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q worker)" --format '{{ index .Config.Image }}'
+   docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q frontend)" --format '{{ index .Config.Image }}'
    docker compose -f compose.yaml -f compose.prod.yaml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
    curl --fail --silent --show-error "${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
    ```
+
+   The backend and worker image refs must match `BACKEND_IMAGE`; the frontend
+   image ref must match `FRONTEND_IMAGE`.
 
 Rollback to an older application image does not undo database migrations. Check
 the migration notes before rolling back across schema changes.

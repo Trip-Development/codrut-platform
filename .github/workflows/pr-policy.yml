@@ -53,12 +53,12 @@ jobs:
     if: github.base_ref == 'prod'
     runs-on: ubuntu-latest
     steps:
-      - name: Require release promotion from dev
+      - name: Require release or hotfix source
         env:
           SOURCE_BRANCH: ${{ github.head_ref }}
         run: |
-          if [[ "${SOURCE_BRANCH}" != "dev" ]]; then
-            echo "Production PRs must promote the dev branch; received ${SOURCE_BRANCH}."
+          if [[ "${SOURCE_BRANCH}" != "dev" && "${SOURCE_BRANCH}" != hotfix/* ]]; then
+            echo "Production PRs must promote dev or an emergency hotfix/* branch; received ${SOURCE_BRANCH}."
             exit 1
           fi
 

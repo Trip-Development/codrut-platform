@@ -1,4 +1,4 @@
-import { getCompanyParticipants, type CompanyParticipant } from "@/api/companies";
+import { getCompanyDetail, type CompanyParticipant } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 
 type OrgValidationError = {
@@ -154,7 +154,8 @@ export default async function CompanyOrgChartPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const participants = await getCompanyParticipants(companyId, await getServerApiRequestOptions());
+  const company = await getCompanyDetail(companyId, await getServerApiRequestOptions());
+  const participants = company?.participants ?? [];
   
   const { errors, displayRoots, cycleParticipantIds } = analyzeHierarchy(participants);
 
@@ -163,6 +164,15 @@ export default async function CompanyOrgChartPage({
 
   return (
     <div className="space-y-6">
+      {company?.dataErrors?.length ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-amber-800">Date parțiale</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-800/80">
+            Unele date ale companiei nu au putut fi citite. Organigrama afișează ce este disponibil acum.
+          </p>
+        </section>
+      ) : null}
+
       {/* Validation Warnings/Errors Panel */}
       {errors.length > 0 && (
         <div className="space-y-4">
