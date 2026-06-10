@@ -10,7 +10,7 @@ import {
 import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
-import { createCompany, importCompanyRoster, sendParticipantInvitations } from "./companies";
+import { createCompany, getCompanyList, importCompanyRoster, sendParticipantInvitations } from "./companies";
 import {
   getQuestionnaireDefinition,
   listQuestionnaireDefinitionStubs,
@@ -159,6 +159,34 @@ describe("frontend API adapter stubs", () => {
         body: JSON.stringify({ name: "Test Company" }),
       }),
     );
+  });
+
+  it("keeps company list rendering when one company enrichment fails", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ id: "company-1", name: "Michelin" }],
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      } as Response);
+
+    await expect(getCompanyList()).resolves.toEqual([
+      expect.objectContaining({
+        id: "company-1",
+        name: "Michelin",
+        dataUnavailable: true,
+      }),
+    ]);
   });
 
   it("imports roster first and sends participant access through an explicit batch action", async () => {

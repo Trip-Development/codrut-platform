@@ -20,13 +20,19 @@ Production releases follow the repo branch policy:
 4. Merge the `dev -> prod` PR. The `VPS Deployment` workflow deploys only from
    `refs/heads/prod`.
 
+Emergency production fixes may use a `hotfix/*` branch directly into `prod`
+when waiting for a full `dev` promotion would leave production broken. A merged
+hotfix must be back-merged into `dev` immediately after the production deploy
+passes, so `dev` remains the source of the next normal release.
+
 The deploy workflow also allows `workflow_dispatch`, but the run must execute
 from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
 workflow from another branch fails before images are built.
 
 Treat the `prod` GitHub Environment as the final approval and secret boundary.
 Use the internal staging or acceptance checklist before opening the release PR;
-do not use manual dispatch to promote unmerged feature refs.
+do not use manual dispatch to promote unmerged feature refs or non-hotfix
+branches.
 
 ## Required Checks
 
@@ -48,10 +54,12 @@ For PRs into `prod`, require:
 - `release / required`
 
 `app-ci / required` runs backend, frontend, and Compose checks for PRs into
-`dev`. For `prod` promotion PRs it skips those duplicated dev checks and
-requires the Playwright E2E job instead. `release / required` then validates the
-production Compose config and runtime image builds. `policy / required` allows
-the `dev -> prod` source-branch check to be skipped on non-production PRs.
+`dev`. For normal `dev -> prod` promotion PRs it skips those duplicated dev
+checks and requires the Playwright E2E job instead. For `hotfix/* -> prod`, it
+runs backend, frontend, Compose, and E2E checks because the change bypasses
+`dev`. `release / required` then validates the production Compose config and
+runtime image builds. `policy / required` allows production PRs only from `dev`
+or `hotfix/*`, and skips that source-branch check on non-production PRs.
 
 ## Images
 
