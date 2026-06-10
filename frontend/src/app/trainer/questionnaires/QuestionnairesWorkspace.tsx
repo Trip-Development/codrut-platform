@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listQuestionnaireDefinitionStubs,
   getQuestionnaireDefinition,
@@ -10,10 +10,7 @@ import {
   deleteQuestionnaireDefinitionOnServer,
   type QuestionnaireDefinitionStub,
   type QuestionnaireDefinition,
-  type QuestionnaireSection,
   type QuestionnaireQuestion,
-  type QuestionnaireScaleOption,
-  type QuestionnaireStatement
 } from "@/api/questionnaires";
 
 const destructiveButtonClass =
@@ -26,8 +23,8 @@ export function QuestionnairesWorkspace() {
   const [availableVersions, setAvailableVersions] = useState<number[]>([]);
   const [currentDefinition, setCurrentDefinition] = useState<QuestionnaireDefinition | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [draftKey, setDraftKey] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (stubs.length > 0) {
@@ -93,7 +90,6 @@ export function QuestionnairesWorkspace() {
       try {
         const def = await getQuestionnaireDefinition(`${selectedKey}@${selectedVersion}`);
         setCurrentDefinition(def);
-        setDraftKey(def?.key ?? "");
       } finally {
         setIsLoading(false);
       }
@@ -101,28 +97,34 @@ export function QuestionnairesWorkspace() {
     fetchDefinition();
   }, [selectedKey, selectedVersion]);
 
-  const handleSave = async (updatedDef: QuestionnaireDefinition) => {
-    setIsLoading(true);
-    try {
-      const saved = await updateQuestionnaireDefinitionOnServer(
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleSave = (updatedDef: QuestionnaireDefinition) => {
+    setCurrentDefinition(updatedDef);
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      void updateQuestionnaireDefinitionOnServer(
         updatedDef.key,
         {
           title: updatedDef.title,
           description: updatedDef.description,
           schema: updatedDef.schema,
         },
-        updatedDef.version
-      );
-      setCurrentDefinition(saved);
-      if (saved.version !== updatedDef.version) {
-        setSelectedVersion(saved.version);
-      }
-      await loadStubs();
-    } catch (e) {
-      alert((e as Error).message ?? "Eroare la salvarea chestionarului.");
-    } finally {
-      setIsLoading(false);
-    }
+        updatedDef.version,
+      ).catch((e) => {
+        alert((e as Error).message ?? "Eroare la salvarea chestionarului.");
+      });
+    }, 450);
   };
 
   const handleSaveMetadata = (
