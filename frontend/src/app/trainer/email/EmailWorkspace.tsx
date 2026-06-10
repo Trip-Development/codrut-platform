@@ -39,6 +39,34 @@ type EmailWorkspaceProps = {
 export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("delivery");
   const [summary, setSummary] = useState<EmailOpsSummary>(initialSummary);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refreshSummary = async () => {
+    setIsRefreshing(true);
+    try {
+      const { getEmailOpsSummary } = await import("@/api/email");
+      const fresh = await getEmailOpsSummary();
+      setSummary(fresh);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleResendRow = async (row: AssessmentDeliveryRow) => {
+    if (resendingId) return;
+    setResendingId(row.id);
+    try {
+      const { getApiBaseUrl } = await import("@/api/runtime");
+      await fetch(
+        `${getApiBaseUrl()}/companies/${row.company_id}/participants/${row.id}/resend-invite`,
+        { method: "POST", credentials: "include" }
+      );
+      await refreshSummary();
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   // Template Manager States
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -263,8 +291,9 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     <th className="px-5 py-3">Acces</th>
                     <th className="px-5 py-3">Sarcini completate</th>
                     <th className="px-5 py-3">Status livrare</th>
-                    <th className="px-5 py-3">Planificator reminder</th>
-                    <th className="px-5 py-3">Următorul pas operational</th>
+                    <th className="px-5 py-3">Reminder</th>
+                    <th className="px-5 py-3">Următorul pas</th>
+                    <th className="px-5 py-3">Acțiune</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
@@ -298,6 +327,18 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                         </span>
                       </td>
                       <td className="px-5 py-4 text-foreground/62 font-medium">{row.nextAction}</td>
+                      <td className="px-5 py-4">
+                        {(row.delivery === "draft" || row.delivery === "failed") && (
+                          <button
+                            type="button"
+                            disabled={resendingId === row.id}
+                            onClick={() => handleResendRow(row)}
+                            className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {resendingId === row.id ? "Se trimite..." : "Retrimite"}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -352,18 +393,16 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           {/* Quick Actions Panel */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
             <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acțiuni rapide expediere</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acțiuni rapide</p>
               <div className="grid gap-3 md:grid-cols-3">
-                {["Trimite invitații noi", "Trimite remindere azi", "Deblochează adrese email"].map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    onClick={() => alert(`Simulare actiune: "${action}"`)}
-                    className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-3.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
-                  >
-                    {action}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  disabled={isRefreshing}
+                  onClick={refreshSummary}
+                  className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-3.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:opacity-50"
+                >
+                  {isRefreshing ? "Se actualizează..." : "↻ Actualizează starea"}
+                </button>
               </div>
             </section>
 

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://codrut:codrut@localhost:5432/codrut"
     redis_url: str = "redis://localhost:6379/0"
     session_secret: SecretStr = Field(default=SecretStr("local-development-secret"))
+    # Dedicated secret for signing task/invite links. Defaults to session_secret if not set.
+    # Set this independently in prod so links survive session secret rotation.
+    task_link_secret: SecretStr | None = None
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     docs_enabled: bool = True
     email_provider: str = "test"
@@ -42,6 +45,13 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.env == "production"
+
+    @property
+    def effective_task_link_secret(self) -> str:
+        """The secret used to sign task/invite link tokens."""
+        if self.task_link_secret is not None:
+            return self.task_link_secret.get_secret_value()
+        return self.session_secret.get_secret_value()
 
 
 @lru_cache
