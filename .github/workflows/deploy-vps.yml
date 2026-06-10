@@ -20,10 +20,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    name: Build & Deploy to Hetzner VPS
+  build-images:
+    name: Build Production Images
     runs-on: ubuntu-latest
-    environment: prod
+    outputs:
+      backend-image: ${{ steps.images.outputs.backend }}
+      frontend-image: ${{ steps.images.outputs.frontend }}
+      release-sha: ${{ steps.images.outputs.release-sha }}
 
     steps:
       - name: Guard Production Deployment Ref
@@ -70,6 +73,7 @@ jobs:
           REPO: ${{ steps.repo-name.outputs.repo }}
         run: |
           set -euo pipefail
+          echo "release-sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "backend=ghcr.io/${OWNER}/${REPO}-backend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "frontend=ghcr.io/${OWNER}/${REPO}-frontend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
@@ -111,15 +115,42 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.frontend }}
 
+  deploy-vps:
+    name: Deploy to Hetzner VPS
+    runs-on: ubuntu-latest
+    needs: build-images
+    environment: prod
+
+    steps:
+      - name: Guard Production Deployment Ref
+        shell: bash
+        env:
+          DISPATCH_CONFIRMATION: ${{ github.event.inputs.confirm_prod_ref || '' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" != "refs/heads/prod" ]]; then
+            echo "Production deployments must run from refs/heads/prod; received ${GITHUB_REF}."
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CONFIRMATION}" != "prod" ]]; then
+            echo "Manual production deployments require confirm_prod_ref=prod."
+            exit 1
+          fi
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Deploy to Hetzner VPS via SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
           SSH_USER: ${{ secrets.SSH_USER || 'root' }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FRONTEND_IMAGE: ${{ steps.images.outputs.frontend }}
-          BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
-          RELEASE_SHA: ${{ github.sha }}
+          FRONTEND_IMAGE: ${{ needs.build-images.outputs.frontend-image }}
+          BACKEND_IMAGE: ${{ needs.build-images.outputs.backend-image }}
+          RELEASE_SHA: ${{ needs.build-images.outputs.release-sha }}
           # App deployment configurations
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
