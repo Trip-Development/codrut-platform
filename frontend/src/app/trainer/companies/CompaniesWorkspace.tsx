@@ -9,12 +9,10 @@ type CompaniesWorkspaceProps = {
   initialCompanies: CompanyListItem[];
 };
 
-type LocalCompany = {
+type CompanyIdentity = {
   id: string;
   name: string;
 };
-
-const STORAGE_KEY = "codrut_local_companies";
 
 export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps) {
   const [companies, setCompanies] = useState<CompanyListItem[]>(initialCompanies);
@@ -30,15 +28,6 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       .catch(() => {
         setMessage("Lista de companii din backend nu a putut fi reîmprospătată.");
       });
-
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-    try {
-      const local = JSON.parse(stored) as LocalCompany[];
-      setCompanies((current) => mergeCompanies(current, local.map(localCompanyToListItem)));
-    } catch {
-      setMessage("Companiile locale nu au putut fi citite.");
-    }
   }, []);
 
   const sortedCompanies = useMemo(
@@ -55,7 +44,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
     setMessage(null);
     try {
       const created = await createCompany(trimmedName);
-      setCompanies((current) => mergeCompanies(current, [localCompanyToListItem(created)]));
+      setCompanies((current) => mergeCompanies(current, [companyToListItem(created)]));
       setName("");
       setMessage("Compania a fost creată în backend.");
     } catch (error) {
@@ -160,7 +149,7 @@ function CompanyCard({ company }: { company: CompanyListItem }) {
   );
 }
 
-function localCompanyToListItem(company: LocalCompany): CompanyListItem {
+function companyToListItem(company: CompanyIdentity): CompanyListItem {
   return {
     id: company.id,
     name: company.name,
