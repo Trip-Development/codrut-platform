@@ -229,20 +229,87 @@ jobs:
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" 'bash -se' <<'REMOTE'
           set -euo pipefail
           cd /opt/codrut-platform
+          compose=(docker compose -f compose.yaml -f compose.prod.yaml)
 
-          docker compose -f compose.yaml -f compose.prod.yaml config >/dev/null
-          docker compose -f compose.yaml -f compose.prod.yaml pull
-          docker compose -f compose.yaml -f compose.prod.yaml run --rm backend alembic upgrade head
+          expected_backend_image="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' .env)"
+          expected_frontend_image="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' .env)"
 
-          if docker compose up --help | grep -q -- '--wait'; then
-            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans --wait
-          else
-            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
+          if [[ -z "$expected_backend_image" || -z "$expected_frontend_image" ]]; then
+            echo "BACKEND_IMAGE and FRONTEND_IMAGE must be present in /opt/codrut-platform/.env."
+            exit 1
           fi
 
-          docker compose -f compose.yaml -f compose.prod.yaml ps
-          docker compose -f compose.yaml -f compose.prod.yaml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
+          assert_service_image() {
+            local service="$1"
+            local expected_image="$2"
+            local container_id
+            local running_image
+
+            container_id="$("${compose[@]}" ps -q "$service")"
+            if [[ -z "$container_id" ]]; then
+              echo "Service ${service} is not running after deployment."
+              exit 1
+            fi
+
+            running_image="$(docker inspect "$container_id" --format '{{ index .Config.Image }}')"
+            if [[ "$running_image" != "$expected_image" ]]; then
+              echo "Service ${service} is running ${running_image}; expected ${expected_image}."
+              exit 1
+            fi
+
+            echo "Service ${service} is running ${running_image}."
+          }
+
+          "${compose[@]}" config >/dev/null
+          "${compose[@]}" pull
+          "${compose[@]}" run --rm -T backend alembic upgrade head </dev/null
+
+          if docker compose up --help | grep -q -- '--wait'; then
+            "${compose[@]}" up -d --force-recreate --no-build --pull never --remove-orphans --wait backend worker frontend
+          else
+            "${compose[@]}" up -d --force-recreate --no-build --pull never --remove-orphans backend worker frontend
+          fi
+
+          "${compose[@]}" ps
+          assert_service_image backend "$expected_backend_image"
+          assert_service_image worker "$expected_backend_image"
+          assert_service_image frontend "$expected_frontend_image"
+          "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
           docker image prune -f
+          REMOTE
+
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/codrut-platform
+          compose=(docker compose -f compose.yaml -f compose.prod.yaml)
+
+          expected_backend_image="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' .env)"
+          expected_frontend_image="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' .env)"
+
+          assert_service_image() {
+            local service="$1"
+            local expected_image="$2"
+            local container_id
+            local running_image
+
+            container_id="$("${compose[@]}" ps -q "$service")"
+            if [[ -z "$container_id" ]]; then
+              echo "Service ${service} is not running after deployment."
+              exit 1
+            fi
+
+            running_image="$(docker inspect "$container_id" --format '{{ index .Config.Image }}')"
+            if [[ "$running_image" != "$expected_image" ]]; then
+              echo "Service ${service} is running ${running_image}; expected ${expected_image}."
+              exit 1
+            fi
+
+            echo "Verified ${service}: ${running_image}."
+          }
+
+          assert_service_image backend "$expected_backend_image"
+          assert_service_image worker "$expected_backend_image"
+          assert_service_image frontend "$expected_frontend_image"
           REMOTE
 
           HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
