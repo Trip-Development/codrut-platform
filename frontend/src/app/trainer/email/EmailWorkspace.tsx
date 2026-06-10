@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   listEmailTemplatesOnServer,
-  getEmailTemplateOnServer,
   createEmailTemplateOnServer,
   updateEmailTemplateOnServer,
   deleteEmailTemplateOnServer,
   type EmailOpsSummary,
   type AssessmentDeliveryRow,
-  type CampaignRecipientRow,
   type EmailTemplate
 } from "@/api/email";
 
@@ -81,24 +79,26 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [editLane, setEditLane] = useState<"transactional" | "campaign">("transactional");
 
   // Load templates from Server
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     setIsLoadingTemplates(true);
     try {
       const list = await listEmailTemplatesOnServer(true);
       setTemplates(list);
       if (list.length > 0) {
-        if (!selectedTemplateId || !list.some((t) => t.id === selectedTemplateId)) {
-          setSelectedTemplateId(list[0].id);
-        }
+        setSelectedTemplateId((currentTemplateId) =>
+          currentTemplateId && list.some((template) => template.id === currentTemplateId)
+            ? currentTemplateId
+            : list[0].id,
+        );
       }
     } finally {
       setIsLoadingTemplates(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadTemplates();
-  }, []);
+  }, [loadTemplates]);
 
   // Sync editor fields when selected template changes
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
@@ -109,7 +109,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       setEditBody(selectedTemplate.body);
       setEditLane(selectedTemplate.lane);
     }
-  }, [selectedTemplateId, templates]);
+  }, [selectedTemplate]);
 
   const handleSaveTemplate = async () => {
     if (!selectedTemplateId || !selectedTemplate) return;
@@ -235,10 +235,39 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
       )
     : { subject: "", bodyHtml: "" };
 
+  const deliveryLabel = (delivery: AssessmentDeliveryRow["delivery"]) => {
+    switch (delivery) {
+      case "draft":
+        return "Ciornă";
+      case "sent":
+        return "Trimis";
+      case "delivered":
+        return "Livrat";
+      case "opened":
+        return "Deschis";
+      case "failed":
+        return "Eșuat";
+      default:
+        return delivery;
+    }
+  };
+
+  const reminderLabel = (reminder: AssessmentDeliveryRow["reminder"]) => {
+    switch (reminder) {
+      case "today":
+        return "Azi";
+      case "tomorrow":
+        return "Mâine";
+      case "paused":
+        return "Oprit";
+      default:
+        return "Fără";
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Sub Navigation Tabs */}
-      <div className="flex gap-1 border-b border-[var(--border)] pb-px">
+      <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-px">
         <button
           onClick={() => setActiveTab("delivery")}
           className={`px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all border-b-2 ${
@@ -247,7 +276,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               : "border-transparent text-foreground/60 hover:text-foreground hover:bg-surface-muted/50"
           }`}
         >
-          Monitorizare livrare & Monitor
+          Livrare invitații
         </button>
         <button
           onClick={() => setActiveTab("templates")}
@@ -257,7 +286,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               : "border-transparent text-foreground/60 hover:text-foreground hover:bg-surface-muted/50"
           }`}
         >
-          Catalog Șabloane Email
+          Șabloane email
         </button>
       </div>
 
@@ -277,8 +306,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           {/* Delivery Queue table */}
           <section className="rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
             <div className="border-b border-[var(--border)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Delivery queue</p>
-              <h2 className="mt-1 text-xl font-semibold text-foreground">Invitații active assessment</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Invitații</p>
+              <h2 className="mt-1 text-xl font-semibold text-foreground">Status acces participanți</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
                 Liderii primesc cont complet, membrii primesc link securizat de completare rapidă.
               </p>
@@ -305,25 +334,25 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                         <p className="mt-1 text-xs font-semibold text-burgundy">{row.project}</p>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/60 border border-[var(--border)]">
-                          {row.audience === "leadership_account" ? "cont lider" : "link securizat"}
+                        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/60 border border-[var(--border)] whitespace-nowrap">
+                          {row.audience === "leadership_account" ? "Cont lider" : "Link securizat"}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-foreground/62 font-semibold">{row.tasks}</td>
                       <td className="px-5 py-4">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize border ${
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold border whitespace-nowrap ${
                           row.delivery === "delivered" || row.delivery === "opened"
                             ? "bg-green-50 border-green-200 text-green-700"
                             : row.delivery === "failed"
                               ? "bg-red-50 border-red-200 text-red-700"
                               : "bg-surface-muted border-[var(--border)] text-foreground/60"
                         }`}>
-                          {row.delivery}
+                          {deliveryLabel(row.delivery)}
                         </span>
                       </td>
                       <td className="px-5 py-4">
                         <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/60 border border-[var(--border)]">
-                          {row.reminder === "today" ? "Azi" : row.reminder === "tomorrow" ? "Mâine" : "Oprit"}
+                          {reminderLabel(row.reminder)}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-foreground/62 font-medium">{row.nextAction}</td>
@@ -355,16 +384,16 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <span className="rounded-full border border-[var(--border)] bg-surface px-2.5 py-1 text-xs font-semibold text-foreground/60">
-                        {row.audience === "leadership_account" ? "cont lider" : "link securizat"}
+                        {row.audience === "leadership_account" ? "Cont lider" : "Link securizat"}
                       </span>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize border ${
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${
                         row.delivery === "delivered" || row.delivery === "opened"
                           ? "bg-green-50 border-green-200 text-green-700"
                           : row.delivery === "failed"
                             ? "bg-red-50 border-red-200 text-red-700"
                             : "bg-surface border-[var(--border)] text-foreground/60"
                       }`}>
-                        {row.delivery}
+                        {deliveryLabel(row.delivery)}
                       </span>
                     </div>
                   </div>
@@ -376,9 +405,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     </div>
                     <div className="rounded-xl bg-surface px-3 py-2">
                       <dt className="text-[11px] font-bold uppercase tracking-wider text-foreground/45">Reminder</dt>
-                      <dd className="mt-1 text-sm font-semibold text-foreground">
-                        {row.reminder === "today" ? "Azi" : row.reminder === "tomorrow" ? "Mâine" : "Oprit"}
-                      </dd>
+                      <dd className="mt-1 text-sm font-semibold text-foreground">{reminderLabel(row.reminder)}</dd>
                     </div>
                     <div className="rounded-xl bg-surface px-3 py-2 sm:col-span-3">
                       <dt className="text-[11px] font-bold uppercase tracking-wider text-foreground/45">Următorul pas</dt>
@@ -393,7 +420,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           {/* Quick Actions Panel */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
             <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acțiuni rapide</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Operare</p>
               <div className="grid gap-3 md:grid-cols-3">
                 <button
                   type="button"
@@ -401,13 +428,13 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   onClick={refreshSummary}
                   className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-3.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:opacity-50"
                 >
-                  {isRefreshing ? "Se actualizează..." : "↻ Actualizează starea"}
+                  {isRefreshing ? "Se actualizează..." : "Actualizează starea"}
                 </button>
               </div>
             </section>
 
             <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Reguli livrare</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Reguli de livrare</p>
               <div className="mt-4 space-y-2">
                 {summary.rules.map((rule) => (
                   <p key={rule} className="rounded-xl bg-surface-muted px-3 py-2.5 text-xs leading-relaxed text-foreground/62 border border-[var(--border)]">
@@ -421,8 +448,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           {/* Campaigns lists */}
           <section className="rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
             <div className="border-b border-[var(--border)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Campanii Prospectare</p>
-              <h2 className="mt-1 text-xl font-semibold text-foreground">Emailuri personalizate video</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Campanii</p>
+              <h2 className="mt-1 text-xl font-semibold text-foreground">Emailuri video personalizate</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
                 Template-uri adresate direct factorilor de decizie cu linkuri de urmărire și vizualizare video.
               </p>
@@ -497,6 +524,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 <h3 className="text-sm font-bold text-foreground">Șabloane ({templates.length})</h3>
                 <button
                   onClick={handleCreateTemplate}
+                  disabled={isLoadingTemplates}
                   className="tap-soft rounded-lg bg-burgundy px-2.5 py-1 text-xs font-bold text-white hover:bg-burgundy/90"
                 >
                   + Adaugă
@@ -540,7 +568,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
             <main className="grid gap-6 xl:grid-cols-2">
               {/* Editor Column */}
               <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
                   <div>
                     <h3 className="text-base font-bold text-foreground">
                       {isEditing ? "Editare șablon" : "Detalii șablon"}
@@ -550,17 +578,19 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     </p>
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     {isEditing ? (
                       <>
                         <button
                           onClick={handleSaveTemplate}
+                          disabled={isLoadingTemplates}
                           className="tap-soft rounded-lg bg-burgundy px-3.5 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90"
                         >
                           Salvează
                         </button>
                         <button
                           onClick={() => setIsEditing(false)}
+                          disabled={isLoadingTemplates}
                           className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:bg-surface-muted"
                         >
                           Anulează
@@ -570,18 +600,21 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       <>
                         <button
                           onClick={() => setIsEditing(true)}
+                          disabled={isLoadingTemplates}
                           className="tap-soft rounded-lg bg-burgundy/10 border border-burgundy/25 px-3.5 py-1.5 text-xs font-bold text-burgundy hover:bg-burgundy/25"
                         >
                           Editează
                         </button>
                         <button
                           onClick={handleCreateTemplateVersion}
+                          disabled={isLoadingTemplates}
                           className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                         >
                           Versiune nouă
                         </button>
                         <button
                           onClick={handleDeleteTemplate}
+                          disabled={isLoadingTemplates}
                           className={destructiveButtonClass}
                         >
                           Șterge șablonul
@@ -593,7 +626,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
 
                 <div className="space-y-3">
                   <label className="block">
-                    <span className="text-xs font-bold text-foreground/60">Nume Șablon</span>
+                    <span className="text-xs font-bold text-foreground/60">Nume șablon</span>
                     <input
                       type="text"
                       disabled={!isEditing}
@@ -605,7 +638,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
 
                   <div className="grid gap-3 grid-cols-2">
                     <label className="block">
-                      <span className="text-xs font-bold text-foreground/60">Tip Canal</span>
+                      <span className="text-xs font-bold text-foreground/60">Canal</span>
                       <select
                         disabled={!isEditing}
                         value={isEditing ? editLane : selectedTemplate.lane}
@@ -633,7 +666,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   </div>
 
                   <label className="block">
-                    <span className="text-xs font-bold text-foreground/60">Subiect Email</span>
+                    <span className="text-xs font-bold text-foreground/60">Subiect email</span>
                     <input
                       type="text"
                       disabled={!isEditing}
@@ -644,7 +677,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   </label>
 
                   <label className="block">
-                    <span className="text-xs font-bold text-foreground/60">Corp Email (Markdown acceptat)</span>
+                    <span className="text-xs font-bold text-foreground/60">Corp email (Markdown acceptat)</span>
                     <textarea
                       disabled={!isEditing}
                       value={isEditing ? editBody : selectedTemplate.body}
@@ -659,7 +692,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               {/* Preview Column */}
               <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-burgundy border-b border-[var(--border)] pb-3">
-                  Previzualizare Live (Randare cu date mock)
+                  Previzualizare cu date exemplu
                 </h3>
 
                 <div className="rounded-xl border border-[var(--border)] bg-background overflow-hidden">

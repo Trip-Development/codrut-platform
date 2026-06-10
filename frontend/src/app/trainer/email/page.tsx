@@ -1,11 +1,16 @@
 import { getTrainerSession } from "@/api/auth-server";
 import { getEmailOpsSummary } from "@/api/email";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 import { EmailWorkspace } from "./EmailWorkspace";
 
 export default async function TrainerEmailPage() {
-  const [trainer, summary] = await Promise.all([getTrainerSession(), getEmailOpsSummary()]);
+  const requestOptions = await getServerApiRequestOptions();
+  const [trainer, summary] = await Promise.all([
+    getTrainerSession(),
+    getEmailOpsSummary(requestOptions),
+  ]);
 
   return (
     <AppShell

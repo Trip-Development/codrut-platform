@@ -332,13 +332,13 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
   const flowSteps: Array<{ key: FlowStepKey; label: string; detail: string; state: FlowStepState }> = [
     {
       key: "upload",
-      label: "1. Alege fișierul",
+      label: "Alege fișierul",
       detail: companyId ? selectedCompanyName : "Selectează compania",
       state: headers.length > 0 || importState.status === "success" ? "complete" : activeStep === "upload" ? "current" : "upcoming",
     },
     {
       key: "review",
-      label: "2. Validează rosterul",
+      label: "Revizuiește datele",
       detail:
         processedRows.length > 0
           ? `${processedRows.length} rânduri · ${criticalErrorCount} erori · ${warningCount} atenționări`
@@ -354,7 +354,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     },
     {
       key: "import",
-      label: "3. Salvează în backend",
+      label: "Salvează rosterul",
       detail:
         importState.status === "success"
           ? `${lastImportedParticipantIds.length} participanți salvați`
@@ -368,11 +368,11 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     },
     {
       key: "access",
-      label: "4. Trimite acces",
+      label: "Alege accesul",
       detail:
         deliveryState.status === "success"
           ? deliveryState.message
-          : "Emailuri sau linkuri securizate",
+          : "Emailuri sau linkuri",
       state: activeStep === "access" ? "current" : "upcoming",
     },
   ];
@@ -502,14 +502,15 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="border-b border-[var(--border)] bg-surface-muted/50 p-5 lg:border-b-0 lg:border-r">
-            <p className="text-sm font-semibold text-foreground">Pregătire import</p>
+          <div className="border-b border-[var(--border)] bg-background/55 p-5 lg:border-b-0 lg:border-r">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import roster</p>
+            <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
-              Alege compania și încarcă rosterul. Platforma salvează participanții întâi, apoi alegi separat cum trimiți accesul.
+              Importul creează rosterul în companie. Abia după confirmare alegi dacă trimiți emailuri sau pregătești linkuri securizate.
             </p>
-            <div className="mt-4 rounded-xl border border-[var(--border)] bg-surface px-3 py-2.5 text-xs font-semibold text-foreground/58">
-              Nu trimitem emailuri automat în pasul de import.
-            </div>
+            <p className="mt-4 inline-flex rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
+              Fără trimitere automată la import
+            </p>
           </div>
 
           <div className="grid gap-4 p-5 md:grid-cols-2">
@@ -600,32 +601,33 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
       )}
 
       {importState.status === "success" && lastImportedParticipantIds.length > 0 && (
-        <section className="rounded-2xl border border-burgundy/20 bg-gradient-to-br from-surface via-surface to-burgundy/5 p-5 shadow-sm">
+        <section className="rounded-2xl border border-burgundy/20 bg-surface p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h3 className="text-base font-semibold text-foreground">Roster salvat. Alege livrarea accesului.</h3>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acces participanți</p>
+              <h3 className="mt-1 text-base font-semibold text-foreground">Roster salvat. Alege livrarea.</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-foreground/62">
-                Rosterul este salvat. Alege dacă participanții primesc email automat sau dacă pregătești linkuri securizate pentru trimitere manuală.
+                Acesta este un pas separat de import. Poți trimite invitațiile acum sau poți genera linkuri pentru distribuție manuală.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={deliveryState.status === "sending"}
-                onClick={() => handleDeliverInvites("email")}
-                className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy/90 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deliveryState.status === "sending" && deliveryState.mode === "email" ? "Se trimit..." : "Trimite emailuri"}
-              </button>
-              <button
-                type="button"
-                disabled={deliveryState.status === "sending"}
-                onClick={() => handleDeliverInvites("secure_links")}
-                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/50 hover:bg-surface-muted/70 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deliveryState.status === "sending" && deliveryState.mode === "secure_links" ? "Se generează..." : "Generează linkuri"}
-              </button>
-            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <DeliveryChoice
+              title="Trimite emailuri"
+              detail="Folosește șablonul activ și salvează statusul de livrare pentru fiecare participant."
+              action={deliveryState.status === "sending" && deliveryState.mode === "email" ? "Se trimit..." : "Trimite emailuri"}
+              disabled={deliveryState.status === "sending"}
+              selected={deliveryState.mode === "email"}
+              onClick={() => handleDeliverInvites("email")}
+            />
+            <DeliveryChoice
+              title="Generează linkuri"
+              detail="Creează linkuri securizate fără expediere, potrivite pentru trimitere manuală sau test."
+              action={deliveryState.status === "sending" && deliveryState.mode === "secure_links" ? "Se generează..." : "Generează linkuri"}
+              disabled={deliveryState.status === "sending"}
+              selected={deliveryState.mode === "secure_links"}
+              onClick={() => handleDeliverInvites("secure_links")}
+            />
           </div>
           {deliveryState.message && (
             <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${
@@ -744,17 +746,17 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
           {validationErrors.some((e) => e.type === "critical") && (
             <section className="rounded-2xl border border-red-200 bg-red-50/60 p-5 shadow-sm space-y-3">
               <h3 className="text-base font-semibold text-red-800">
-                Erori Critice ({validationErrors.filter((e) => e.type === "critical").length})
+                Erori critice ({validationErrors.filter((e) => e.type === "critical").length})
               </h3>
               <p className="text-xs text-red-700">
-                Următoarele probleme blochează importul. Corectați-le direct în tabelul de mai jos:
+                Problemele de mai jos blochează importul. Corectează-le direct în tabel:
               </p>
               <div className="max-h-28 overflow-y-auto space-y-1.5">
                 {validationErrors
                   .filter((e) => e.type === "critical")
                   .map((err, i) => (
                     <p key={i} className="text-xs font-semibold text-red-700">
-                      · <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
+                      - <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
                     </p>
                   ))}
               </div>
@@ -767,14 +769,14 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
                 Atenționări ({validationErrors.filter((e) => e.type === "warning").length})
               </h3>
               <p className="text-xs text-amber-700">
-                Următoarele atenționări nu blochează importul, dar pot afecta generarea automată a evaluărilor:
+                Nu blochează importul, dar pot afecta generarea automată a evaluărilor:
               </p>
               <div className="max-h-28 overflow-y-auto space-y-1.5">
                 {validationErrors
                   .filter((e) => e.type === "warning")
                   .map((err, i) => (
                     <p key={i} className="text-xs font-semibold text-amber-700">
-                      · <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
+                      - <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
                     </p>
                   ))}
               </div>
@@ -987,6 +989,42 @@ function StatusDot({ tone }: { tone: "idle" | "ready" | "importing" | "success" 
             : "bg-foreground/35";
 
   return <span className={["h-2.5 w-2.5 rounded-full", toneClass].join(" ")} aria-hidden="true" />;
+}
+
+function DeliveryChoice({
+  title,
+  detail,
+  action,
+  disabled,
+  selected,
+  onClick,
+}: {
+  title: string;
+  detail: string;
+  action: string;
+  disabled: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={[
+        "tap-soft group flex min-h-32 flex-col items-start justify-between rounded-xl border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-55",
+        selected ? "border-burgundy/45 ring-2 ring-burgundy/10" : "border-[var(--border)] hover:border-burgundy/35",
+      ].join(" ")}
+    >
+      <span>
+        <span className="block text-sm font-semibold text-foreground">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-foreground/58">{detail}</span>
+      </span>
+      <span className="mt-4 inline-flex rounded-lg bg-foreground px-3 py-1.5 text-xs font-bold text-background group-hover:bg-burgundy group-hover:text-white">
+        {action}
+      </span>
+    </button>
+  );
 }
 
 function RosterMetric({
