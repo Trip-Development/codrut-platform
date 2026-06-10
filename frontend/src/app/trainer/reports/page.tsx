@@ -18,7 +18,7 @@ export default async function TrainerReportsPage() {
       audience="trainer"
       eyebrow="Rapoarte"
       title="Rapoarte de evaluare"
-      description="Sumarul complet al raspunsurilor primite. Inspecteaza rezultatele calculate pe disfunctionalitati si profile de distress."
+      description="Sumarul complet al răspunsurilor primite. Inspectează rezultatele calculate pe disfuncționalități și profiluri de distress."
       navItems={trainerNavItems}
       activeHref="/trainer/reports"
       userLabel={trainer.user.name}
@@ -26,9 +26,9 @@ export default async function TrainerReportsPage() {
     >
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="border-b border-[var(--border)] px-5 py-4 bg-surface-muted/30">
-          <h2 className="text-lg font-semibold text-foreground">Sarcini si completari</h2>
+          <h2 className="text-lg font-semibold text-foreground">Sarcini și completări</h2>
           <p className="mt-1 text-xs text-foreground/50">
-            Vezi scorurile calculate pentru evaluari PCM, Lencioni, 360 si distress drivers.
+            Vezi scorurile calculate pentru evaluări PCM, Lencioni, 360 și distress drivers.
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export default async function TrainerReportsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4 font-semibold text-foreground/70">
-                        {report.primaryResult ? report.primaryResult.replaceAll("_", " ") : "in asteptare"}
+                        {report.primaryResult ? report.primaryResult.replaceAll("_", " ") : "în așteptare"}
                       </td>
                       <td className="px-5 py-4 font-semibold text-foreground/60">{dateLabel}</td>
                       <td className="px-5 py-4 text-right">
