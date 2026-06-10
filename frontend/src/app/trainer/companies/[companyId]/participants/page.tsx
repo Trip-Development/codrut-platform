@@ -19,7 +19,7 @@ export default async function CompanyParticipantsPage({
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="border-b border-[var(--border)] px-5 py-4">
           <p className="text-xs font-semibold text-burgundy/75">Roster</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">Participanți și status acces</h2>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">Persoane și status acces</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
             Coloane: nume, manager, poziție, locație, PCM, email.
           </p>
@@ -40,7 +40,7 @@ export default async function CompanyParticipantsPage({
               {participants.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-6 text-center text-foreground/62">
-                    Niciun participant importat încă.
+                    Nicio persoană importată încă.
                   </td>
                 </tr>
               ) : (
@@ -49,7 +49,7 @@ export default async function CompanyParticipantsPage({
                     <td className="px-5 py-4">
                       <p className="font-semibold text-foreground">{member.full_name}</p>
                     </td>
-                    <td className="px-5 py-4 text-foreground/62">{member.reports_to_name ?? "Rădăcină"}</td>
+                    <td className="px-5 py-4 text-foreground/62">{member.reports_to_name ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground/62">{member.position ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground/62">{member.location ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground/62">{member.pcm_profile ?? "Necompletat"}</td>

@@ -73,6 +73,24 @@ async def create_team_membership(
     return membership
 
 
+@router.get(
+    "/companies/{company_id}/teams/{team_id}/memberships",
+    response_model=list[TeamMembershipResponse],
+)
+async def list_team_memberships(
+    company_id: UUID,
+    team_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[TeamMembershipResponse]:
+    require_trainer_principal(principal)
+    return await AssignmentService(session).list_team_memberships(
+        principal.user_id,
+        company_id,
+        team_id,
+    )
+
+
 @router.get("/companies/{company_id}/assignments", response_model=list[AssignmentResponse])
 async def list_company_assignments(
     company_id: UUID,

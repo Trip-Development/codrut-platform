@@ -19,8 +19,8 @@ export default async function TrainerDashboardPage() {
     <AppShell
       audience="trainer"
       eyebrow="Trainer"
-      title="Panou pentru rollout si monitorizare"
-      description="Suprafata pentru Andrei: companii, participanti, organigrama, chestionare, invitatii email si progres operational."
+      title="Panou pentru rollout și monitorizare"
+      description="Suprafață de lucru pentru companii, participanți, organigramă, chestionare, invitații email și progres operațional."
       navItems={trainerNavItems}
       activeHref="/trainer"
       userLabel={trainer.user.name}
@@ -108,7 +108,7 @@ function DeliveryTable({ projects }: { projects: TrainerProjectRow[] }) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Livrare</p>
         <h2 className="mt-1 text-xl font-semibold text-foreground">Companii active</h2>
         <p className="mt-2 text-sm leading-6 text-foreground/62">
-          Primul ecran pentru owner/trainer: unde e blocajul, cine trebuie urmarit si ce merge mai departe.
+          Primul ecran pentru trainer: unde este blocajul, cine trebuie urmărit și ce merge mai departe.
         </p>
       </div>
       <div className="divide-y divide-[var(--border)]">
@@ -143,7 +143,7 @@ function ProjectRow({ project }: { project: TrainerProjectRow }) {
             ))
           ) : (
             <span className="rounded-full bg-success/35 px-2.5 py-1 text-xs font-semibold text-success-ink">
-              Fara blocaje
+              Fără blocaje
             </span>
           )}
         </div>
@@ -200,7 +200,7 @@ function StatusLine({ label, value }: { label: string; value: string }) {
 function NextActions({ actions }: { actions: TrainerAction[] }) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Urmatoarele actiuni</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Următoarele acțiuni</p>
       <div className="mt-4 space-y-3">
         {actions.map((action) => (
           <Link

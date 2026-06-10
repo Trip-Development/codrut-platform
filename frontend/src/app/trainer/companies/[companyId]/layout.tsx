@@ -21,7 +21,7 @@ export default async function CompanyDetailLayout({
       audience="trainer"
       eyebrow="Companie"
       title={companyName}
-      description={`Detalii, participanți, organigramă și rapoarte pentru ${companyName}.`}
+      description={`Workspace pentru roster, organigramă, echipe, invitații și rapoarte pentru ${companyName}.`}
       navItems={trainerNavItems}
       activeHref="/trainer/companies"
     >

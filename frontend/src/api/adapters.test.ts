@@ -11,9 +11,12 @@ import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
+  addCompanyTeamMembership,
   createCompany,
+  createCompanyTeam,
   deleteCompany,
   getCompanyList,
+  getCompanyTeamMemberships,
   importCompanyRoster,
   resendParticipantInvitation,
   sendParticipantInvitations,
@@ -404,6 +407,82 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({
         method: "POST",
         credentials: "include",
+      }),
+    );
+  });
+
+  it("manages company teams and memberships through the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "team-1",
+          company_id: "company-1",
+          name: "Leadership",
+          type: "leadership",
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            id: "membership-1",
+            team_id: "team-1",
+            participant_profile_id: "participant-1",
+            role: "leader",
+          },
+        ],
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "membership-2",
+          team_id: "team-1",
+          participant_profile_id: "participant-2",
+          role: "member",
+        }),
+      } as Response);
+
+    await expect(
+      createCompanyTeam("company-1", { name: "Leadership", type: "leadership" }),
+    ).resolves.toMatchObject({ id: "team-1", type: "leadership" });
+    await expect(getCompanyTeamMemberships("company-1", "team-1")).resolves.toHaveLength(1);
+    await expect(
+      addCompanyTeamMembership("company-1", "team-1", {
+        participantProfileId: "participant-2",
+        role: "member",
+      }),
+    ).resolves.toMatchObject({ participant_profile_id: "participant-2" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/companies/company-1/teams"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ name: "Leadership", type: "leadership" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/companies/company-1/teams/team-1/memberships"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("/companies/company-1/teams/team-1/memberships"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          participant_profile_id: "participant-2",
+          role: "member",
+        }),
       }),
     );
   });

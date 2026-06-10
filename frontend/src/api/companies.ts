@@ -73,6 +73,13 @@ export type CompanyTeam = {
   type: "leadership" | "functional";
 };
 
+export type CompanyTeamMembership = {
+  id: string;
+  team_id: string;
+  participant_profile_id: string;
+  role: "leader" | "member";
+};
+
 export type CompanyDetail = {
   id: string;
   name: string;
@@ -367,6 +374,63 @@ export async function resendParticipantInvitation(
 
   const data = (await response.json()) as RosterImportResponse;
   return data.email_results[0] ?? null;
+}
+
+export async function createCompanyTeam(
+  companyId: string,
+  payload: { name: string; type: CompanyTeam["type"] },
+): Promise<CompanyTeam> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/teams`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as CompanyTeam;
+}
+
+export async function getCompanyTeamMemberships(
+  companyId: string,
+  teamId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyTeamMembership[]> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/companies/${companyId}/teams/${teamId}/memberships`,
+    { cache: "no-store", credentials: "include", ...options },
+  );
+  if (!response.ok) {
+    throw new Error(`Eroare server (${response.status}): Nu s-au putut obține membrii echipei.`);
+  }
+  return (await response.json()) as CompanyTeamMembership[];
+}
+
+export async function addCompanyTeamMembership(
+  companyId: string,
+  teamId: string,
+  payload: { participantProfileId: string; role: CompanyTeamMembership["role"] },
+): Promise<CompanyTeamMembership> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/teams/${teamId}/memberships`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      participant_profile_id: payload.participantProfileId,
+      role: payload.role,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as CompanyTeamMembership;
 }
 
 export async function getCompanyDetail(

@@ -33,17 +33,25 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
       <aside className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+        <div>
+          <p className="text-sm font-semibold text-burgundy/75">Explorare rapidă</p>
+          <h2 className="mt-1 text-lg font-semibold text-foreground">Organigramă pe companie</h2>
+          <p className="mt-2 text-sm leading-6 text-foreground/58">
+            Alege clientul, caută persoana și ajustează nivelul de detaliu.
+          </p>
+        </div>
+
         <label className="block">
-          <span className="text-sm font-bold text-foreground">Companie</span>
+          <span className="mt-5 block text-sm font-semibold text-foreground">Companie</span>
           <select
             value={companyId}
             onChange={(event) => {
               setCompanyId(event.target.value);
               setCollapsed(new Set());
             }}
-            className="mt-2 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-3 text-sm font-semibold text-foreground"
+            className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2.5 text-sm font-semibold text-foreground outline-none transition-colors focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
           >
             {companies.length === 0 ? <option value="">Nicio companie</option> : null}
             {companies.map((item) => (
@@ -55,17 +63,20 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
         </label>
 
         <label className="mt-4 block">
-          <span className="text-sm font-bold text-foreground">Cauta</span>
+          <span className="text-sm font-semibold text-foreground">Caută</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="nume, email, pozitie"
-            className="mt-2 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-3 text-sm font-semibold text-foreground"
+            placeholder="nume, email, poziție"
+            className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2.5 text-sm font-semibold text-foreground outline-none transition-colors placeholder:text-foreground/34 focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
           />
         </label>
 
         <div className="mt-4">
-          <p className="text-sm font-bold text-foreground">Zoom</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">Zoom</p>
+            <p className="text-xs font-semibold text-foreground/50">{Math.round(zoom * 100)}%</p>
+          </div>
           <input
             type="range"
             min="0.75"
@@ -75,18 +86,22 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
             onChange={(event) => setZoom(Number(event.target.value))}
             className="mt-3 w-full accent-[var(--burgundy)]"
           />
-          <p className="mt-1 text-xs font-semibold text-foreground/50">{Math.round(zoom * 100)}%</p>
         </div>
 
-        <div className="mt-5 rounded-xl bg-background px-3 py-3 text-sm">
-          <p className="font-bold text-foreground">{participants.length} persoane</p>
-          <p className="mt-1 text-foreground/56">{roots.length} radacini in ierarhie</p>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <OrgStat label="Persoane" value={participants.length} />
+          <OrgStat label="Rădăcini" value={roots.length} />
         </div>
       </aside>
 
-      <section className="overflow-auto rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+      <section className="min-h-[32rem] overflow-auto rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
         {participants.length === 0 ? (
-          <p className="text-sm text-foreground/62">Importa un roster pentru a vedea organigrama.</p>
+          <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-background/70 p-6 text-center">
+            <div>
+              <p className="text-base font-semibold text-foreground">Nu există roster importat.</p>
+              <p className="mt-2 text-sm text-foreground/58">Importă participanții ca să vezi organigrama.</p>
+            </div>
+          </div>
         ) : (
           <div className="min-w-[44rem] origin-top-left transition-transform" style={{ transform: `scale(${zoom})` }}>
             <div className="space-y-4">
@@ -105,6 +120,15 @@ export function OrgExplorer({ companies }: OrgExplorerProps) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function OrgStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-2.5">
+      <p className="text-xs font-semibold text-foreground/48">{label}</p>
+      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -136,7 +160,7 @@ function OrgNode({
     <div className={depth > 0 ? "ml-7 border-l border-[var(--border)] pl-5" : ""}>
       <article
         className={[
-          "rounded-2xl border px-4 py-3 shadow-sm",
+          "rounded-xl border px-4 py-3 shadow-sm transition-all hover:border-burgundy/20 hover:shadow-md",
           matches && query.trim()
             ? "border-burgundy bg-burgundy-50 dark:bg-burgundy/10"
             : "border-[var(--border)] bg-background",
@@ -144,10 +168,10 @@ function OrgNode({
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-foreground">{member.full_name}</h2>
-            <p className="mt-1 text-xs font-semibold text-burgundy">{member.position ?? "Fara pozitie"}</p>
+            <h2 className="text-sm font-semibold text-foreground">{member.full_name}</h2>
+            <p className="mt-1 text-xs font-semibold text-burgundy">{member.position ?? "Fără poziție"}</p>
             <p className="mt-2 text-xs leading-5 text-foreground/55">
-              {member.location ?? "Fara locatie"} · {member.email}
+              {member.location ?? "Fără locație"} · {member.email}
               {member.pcm_profile ? ` · PCM ${member.pcm_profile}` : ""}
             </p>
           </div>
@@ -155,7 +179,7 @@ function OrgNode({
             type="button"
             disabled={reports.length === 0}
             onClick={() => onToggle(member.id)}
-            className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground/65 disabled:opacity-45"
+            className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground/65 hover:border-burgundy/40 hover:text-burgundy disabled:opacity-45"
           >
             {reports.length === 0 ? "0" : isCollapsed ? `+${reports.length}` : `-${reports.length}`}
           </button>
