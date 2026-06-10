@@ -73,8 +73,12 @@ class CompanyRepository:
                 ParticipantReportingRelationship.company_id == company_id
             )
         )
+        deleted_existing = False
         for relationship in existing.scalars():
             await self.session.delete(relationship)
+            deleted_existing = True
+        if deleted_existing:
+            await self.session.flush()
         for relationship in relationships:
             self.session.add(relationship)
         await self.session.flush()
@@ -126,6 +130,16 @@ class CompanyRepository:
     async def get_participant_by_id(self, participant_id: UUID) -> ParticipantProfile | None:
         result = await self.session.execute(
             select(ParticipantProfile).where(ParticipantProfile.id == participant_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_team_by_company_name(self, company_id: UUID, name: str):
+        from codrut.modules.assignments.models import Team
+
+        result = await self.session.execute(
+            select(Team)
+            .where(Team.company_id == company_id)
+            .where(Team.name == name)
         )
         return result.scalar_one_or_none()
 

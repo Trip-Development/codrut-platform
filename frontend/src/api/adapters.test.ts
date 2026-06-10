@@ -10,7 +10,7 @@ import {
 import { listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
-import { createCompany } from "./companies";
+import { createCompany, importCompanyRoster, sendParticipantInvitations } from "./companies";
 import {
   getQuestionnaireDefinition,
   listQuestionnaireDefinitionStubs,
@@ -98,6 +98,19 @@ describe("frontend API adapter stubs", () => {
 
   });
 
+  it("does not report seeded questionnaire saves as successful outside demo mode", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(
+      saveQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
+    ).rejects.toThrow("Nu am putut salva draftul.");
+    await expect(
+      submitQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
+    ).rejects.toThrow("Nu am putut trimite raspunsurile.");
+  });
+
   it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
@@ -144,6 +157,85 @@ describe("frontend API adapter stubs", () => {
         method: "POST",
         credentials: "include",
         body: JSON.stringify({ name: "Test Company" }),
+      }),
+    );
+  });
+
+  it("imports roster first and sends participant access through an explicit batch action", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          participants: [{ id: "participant-1", full_name: "Ana", email: "ana@example.com" }],
+          email_results: [],
+          total_imported: 1,
+          emails_sent: 0,
+          emails_failed: 0,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            {
+              participant_id: "participant-1",
+              full_name: "Ana",
+              email: "ana@example.com",
+              delivery_mode: "secure_links",
+              email_sent: false,
+              error: null,
+              invite_url: "https://app.example.com/invite/token",
+            },
+          ],
+          total: 1,
+          emails_sent: 0,
+          emails_failed: 0,
+          links_generated: 1,
+        }),
+      } as Response);
+
+    await expect(
+      importCompanyRoster("company-1", [
+        {
+          Name: "Ana",
+          "Reports To": "",
+          Position: "Member",
+          Location: "Bucharest",
+          email: "ana@example.com",
+          "Profil PCM": "",
+        },
+      ]),
+    ).resolves.toMatchObject({ total_imported: 1, emails_sent: 0 });
+
+    await expect(
+      sendParticipantInvitations("company-1", {
+        participantIds: ["participant-1"],
+        mode: "secure_links",
+      }),
+    ).resolves.toMatchObject({ links_generated: 1 });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/companies/company-1/participants/roster"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: expect.stringContaining('"send_invites":false'),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/companies/company-1/participants/invitations"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          participant_ids: ["participant-1"],
+          mode: "secure_links",
+          force_rotate: false,
+        }),
       }),
     );
   });

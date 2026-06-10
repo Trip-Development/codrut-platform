@@ -62,7 +62,9 @@ export default function InvitePage({ params }: InvitePageProps) {
           return;
         }
 
-        const res = await fetch(`/api/auth/invite/verify?token=${encodeURIComponent(token)}`);
+        const res = await fetch(`/api/auth/invite/verify?token=${encodeURIComponent(token)}`, {
+          credentials: "include",
+        });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error?.message || "Invitația este nevalidă sau a expirat.");

@@ -9,6 +9,7 @@ from codrut.core.database import SessionLocal
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssignmentStatus,
     QuestionnaireAssignment,
     Team,
     TeamMembership,
@@ -29,6 +30,7 @@ from codrut.modules.companies.schemas import (
     CompanyAccessCodeRegistrationRequest,
     CompanyCreateRequest,
     ParticipantCreateRequest,
+    ParticipantInviteBatchRequest,
     RosterImportRequest,
 )
 from codrut.modules.companies.service import CompanyService, hash_company_access_code
@@ -124,6 +126,9 @@ class FakeCompanyRepository:
         participant.id = uuid.uuid4()
         self.participants.append(participant)
         return participant
+
+    async def get_team_by_company_name(self, _company_id: uuid.UUID, _name: str) -> None:
+        return None
 
     async def add_access_code(self, access_code: CompanyAccessCode) -> CompanyAccessCode:
         access_code.id = uuid.uuid4()
@@ -311,62 +316,35 @@ async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
     company = await service.create_company(trainer.id, CompanyCreateRequest(name="Client"))
     service.identity_repository.users_by_id[trainer.id] = trainer
 
-    fake_invite_token = str(uuid.uuid4())
-
-    class FakeInvite:
-        token = fake_invite_token
-
-    class FakeSendResult:
-        status = "accepted"
-
-    async def fake_create_invite(*_args: Any, **_kwargs: Any) -> FakeInvite:
-        return FakeInvite()
-
-    async def fake_send_assignment_invitation(*_args: Any, **_kwargs: Any) -> FakeSendResult:
-        return FakeSendResult()
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(
-        "codrut.modules.identity.service.IdentityService.create_invite",
-        fake_create_invite,
+    result = await service.import_roster(
+        trainer.id,
+        company.id,
+        RosterImportRequest(
+            rows=[
+                {
+                    "Name": "Maria Popescu",
+                    "Reports To": "",
+                    "Position": "Manager",
+                    "Location": "Bucharest",
+                    "email": "maria.popescu@example.com",
+                    "Profil PCM": "",
+                },
+                {
+                    "Name": "  Ana Ionescu  ",
+                    "Reports To": "Maria Popescu",
+                    "Position": "Consultant",
+                    "Location": "Bucharest",
+                    "email": "ANA@example.com",
+                    "Profil PCM": "",
+                },
+            ]
+        ),
     )
-    monkeypatch.setattr(
-        "codrut.modules.communications.service.TransactionalEmailService.send_assignment_invitation",
-        fake_send_assignment_invitation,
-    )
-
-    try:
-        result = await service.import_roster(
-            trainer.id,
-            company.id,
-            RosterImportRequest(
-                rows=[
-                    {
-                        "Name": "Maria Popescu",
-                        "Reports To": "",
-                        "Position": "Manager",
-                        "Location": "Bucharest",
-                        "email": "maria.popescu@example.com",
-                        "Profil PCM": "",
-                    },
-                    {
-                        "Name": "  Ana Ionescu  ",
-                        "Reports To": "Maria Popescu",
-                        "Position": "Consultant",
-                        "Location": "Bucharest",
-                        "email": "ANA@example.com",
-                        "Profil PCM": "",
-                    },
-                ]
-            ),
-        )
-    finally:
-        monkeypatch.undo()
-
 
     participants = result.participants
     assert result.total_imported == 2
-    assert result.emails_sent == 2
+    assert result.email_results == []
+    assert result.emails_sent == 0
     assert result.emails_failed == 0
     assert len(participants) == 2
     assert participants[0].full_name == "Maria Popescu"
@@ -463,13 +441,53 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
 
         participants = result.participants
         assert result.total_imported == 3
-        assert result.emails_sent == 3
+        assert result.email_results == []
+        assert result.emails_sent == 0
+        assert provider.sent_messages == []
         assert [participant.role_group for participant in participants] == [
             "leadership",
             "leadership",
             "member",
         ]
 
+        assignment_result = await session.execute(
+            select(QuestionnaireAssignment).where(QuestionnaireAssignment.company_id == company.id)
+        )
+        assignments = assignment_result.scalars().all()
+        assert len(assignments) == 6
+        assert {assignment.status for assignment in assignments} == {AssignmentStatus.assigned}
+
+        invite_result = await session.execute(
+            select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+        )
+        assert invite_result.scalars().all() == []
+
+        link_result = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(mode="secure_links"),
+        )
+
+        assert link_result.total == 3
+        assert link_result.links_generated == 3
+        assert link_result.emails_sent == 0
+        assert link_result.emails_failed == 0
+        assert all(
+            delivery.invite_url and "/invite/" in delivery.invite_url
+            for delivery in link_result.results
+        )
+        assert {delivery.delivery_mode for delivery in link_result.results} == {"secure_links"}
+        assert provider.sent_messages == []
+
+        email_result = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(mode="email"),
+        )
+
+        assert email_result.total == 3
+        assert email_result.emails_sent == 3
+        assert email_result.emails_failed == 0
         assert len(provider.sent_messages) == 3
         assert (
             sum("Activeaza contul" in message.html_body for message in provider.sent_messages) == 2
@@ -497,7 +515,9 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         assignment_result = await session.execute(
             select(QuestionnaireAssignment).where(QuestionnaireAssignment.company_id == company.id)
         )
-        assert len(assignment_result.scalars().all()) == 6
+        assert {assignment.status for assignment in assignment_result.scalars().all()} == {
+            AssignmentStatus.invited
+        }
 
         invite_result = await session.execute(
             select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
@@ -536,6 +556,54 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
         assert verify_member.response.is_leadership is False
         assert verify_member.session_token is not None
+
+        repeat_import = await service.import_roster(
+            trainer.id,
+            company.id,
+            RosterImportRequest(
+                rows=[
+                    {
+                        "Name": "Repeat Manager",
+                        "Reports To": "",
+                        "Position": "Manager",
+                        "Location": "Bucharest",
+                        "email": "repeat.manager@example.com",
+                        "Profil PCM": "",
+                    },
+                    {
+                        "Name": "Repeat Member",
+                        "Reports To": "Repeat Manager",
+                        "Position": "Member",
+                        "Location": "Bucharest",
+                        "email": "repeat.member@example.com",
+                        "Profil PCM": "",
+                    },
+                ]
+            ),
+        )
+        assert repeat_import.total_imported == 2
+
+        relationship_result = await session.execute(
+            select(ParticipantReportingRelationship).where(
+                ParticipantReportingRelationship.company_id == company.id
+            )
+        )
+        relationships = relationship_result.scalars().all()
+        repeat_member = next(
+            participant
+            for participant in repeat_import.participants
+            if participant.email == "repeat.member@example.com"
+        )
+        repeat_manager = next(
+            participant
+            for participant in repeat_import.participants
+            if participant.email == "repeat.manager@example.com"
+        )
+        assert any(
+            relationship.participant_profile_id == repeat_member.id
+            and relationship.manager_profile_id == repeat_manager.id
+            for relationship in relationships
+        )
 
         await session.rollback()
 

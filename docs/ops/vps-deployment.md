@@ -1,13 +1,70 @@
 # VPS Deployment
 
-Production deployment uses the same base Compose topology with the production overlay:
+Production deployment uses the same base Compose topology with the production
+overlay:
 
 ```sh
 docker compose -f compose.yaml -f compose.prod.yaml config
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
 ```
 
 Secrets must be supplied through environment files or GitHub Environment secrets on the VPS, never committed to the repository.
+
+## Release Gate
+
+Production releases follow the repo branch policy:
+
+1. Merge feature PRs into `dev`.
+2. Open the release PR from `dev` into `prod`.
+3. Let the required aggregate checks pass before merging.
+4. Merge the `dev -> prod` PR. The `VPS Deployment` workflow deploys only from
+   `refs/heads/prod`.
+
+The deploy workflow also allows `workflow_dispatch`, but the run must execute
+from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
+workflow from another branch fails before images are built.
+
+Treat the `prod` GitHub Environment as the final approval and secret boundary.
+Use the internal staging or acceptance checklist before opening the release PR;
+do not use manual dispatch to promote unmerged feature refs.
+
+## Required Checks
+
+Use the aggregate job names in GitHub branch protection or rulesets. They are
+stable wrappers around the lower-level jobs, so renaming or splitting internal
+jobs does not silently weaken the policy.
+
+For PRs into `dev`, require:
+
+- `app-ci / required`
+- `policy / required`
+- `security / required`
+
+For PRs into `prod`, require:
+
+- `app-ci / required`
+- `policy / required`
+- `security / required`
+- `release / required`
+
+`app-ci / required` runs backend, frontend, and Compose checks for PRs into
+`dev`. For `prod` promotion PRs it skips those duplicated dev checks and
+requires the Playwright E2E job instead. `release / required` then validates the
+production Compose config and runtime image builds. `policy / required` allows
+the `dev -> prod` source-branch check to be skipped on non-production PRs.
+
+## Images
+
+The deployment workflow builds backend and frontend images tagged with the
+release commit SHA:
+
+```text
+ghcr.io/<owner>/<repo>-backend:<sha>
+ghcr.io/<owner>/<repo>-frontend:<sha>
+```
+
+The VPS `.env` stores those SHA image refs in `BACKEND_IMAGE` and
+`FRONTEND_IMAGE`. It does not deploy `latest`.
 
 Required GitHub secrets for the `VPS Deployment` workflow:
 
@@ -41,6 +98,12 @@ Set `CODRUT_PUBLIC_APP_URL` to the final HTTPS origin, for example:
 https://app.example.com
 ```
 
+Set `CODRUT_CORS_ORIGINS` as a JSON array, not a comma-separated string:
+
+```text
+["https://app.example.com"]
+```
+
 Before using real participant data, verify:
 
 - HTTPS and routing through Traefik.
@@ -48,3 +111,54 @@ Before using real participant data, verify:
 - Redis persistence expectations.
 - Application logs and restart policy.
 - Internal staging acceptance from the June release checklist.
+
+## Deployment Checks
+
+The workflow validates `compose.yaml` plus `compose.prod.yaml` before building
+images, copies both Compose files to `/opt/codrut-platform`, writes the
+production `.env`, validates Compose again on the VPS, pulls the SHA-tagged
+images, runs migrations, and starts services with `docker compose up -d --wait`
+when the installed Compose version supports it.
+
+After startup, the workflow checks:
+
+- Backend health inside the VPS container network:
+  `http://127.0.0.1:8000/api/health/live`.
+- Public health through the configured app URL:
+  `${CODRUT_PUBLIC_APP_URL}/api/health/live`.
+
+The workflow summary records the deployed release SHA, deployed image refs, and
+the previous frontend/backend image refs.
+
+## Rollback
+
+Rollback is manual and image-ref based:
+
+1. Open the failed `VPS Deployment` run summary and copy the previous
+   `FRONTEND_IMAGE` and `BACKEND_IMAGE` values.
+2. SSH into the VPS and edit `/opt/codrut-platform/.env` so those two variables
+   point at the previous image refs.
+3. Validate and restart:
+
+   ```sh
+   cd /opt/codrut-platform
+   docker compose -f compose.yaml -f compose.prod.yaml config
+   docker compose -f compose.yaml -f compose.prod.yaml pull
+   docker compose -f compose.yaml -f compose.prod.yaml up -d --wait
+   ```
+
+   If the installed Compose version does not support `--wait`, use:
+
+   ```sh
+   docker compose -f compose.yaml -f compose.prod.yaml up -d
+   ```
+
+4. Verify health:
+
+   ```sh
+   docker compose -f compose.yaml -f compose.prod.yaml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
+   curl --fail --silent --show-error "${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
+   ```
+
+Rollback to an older application image does not undo database migrations. Check
+the migration notes before rolling back across schema changes.
