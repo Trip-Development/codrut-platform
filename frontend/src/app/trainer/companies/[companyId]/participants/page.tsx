@@ -1,4 +1,5 @@
 import { getCompanyDetail } from "@/api/companies";
+import { displayReportsToName } from "@/api/roster-format";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { RosterImporter } from "@/app/trainer/roster/roster-importer";
 
@@ -49,7 +50,7 @@ export default async function CompanyParticipantsPage({
                     <td className="px-5 py-4">
                       <p className="font-semibold text-foreground">{member.full_name}</p>
                     </td>
-                    <td className="px-5 py-4 text-foreground/62">{member.reports_to_name ?? "—"}</td>
+                    <td className="px-5 py-4 text-foreground/62">{displayReportsToName(member.reports_to_name)}</td>
                     <td className="px-5 py-4 text-foreground/62">{member.position ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground/62">{member.location ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground/62">{member.pcm_profile ?? "Necompletat"}</td>
