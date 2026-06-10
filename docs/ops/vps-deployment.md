@@ -132,12 +132,17 @@ images, runs migrations, and force-recreates only the app services
 when the installed Compose version supports it. `--no-build --pull never` makes
 the rollout use the exact images that were just pulled instead of rebuilding or
 implicitly changing refs during startup. The database, Redis, and Traefik
-containers are not force-recreated during ordinary app rollouts.
+containers are not force-recreated during ordinary app rollouts. The migration
+step disables container stdin so it cannot consume the remaining SSH deploy
+script before the app service recreate runs.
 
 After startup, the workflow checks:
 
 - Running backend, worker, and frontend container image refs against the
   `BACKEND_IMAGE` and `FRONTEND_IMAGE` values stored in `/opt/codrut-platform/.env`.
+  The workflow repeats this assertion in a separate SSH command after the
+  remote deploy script returns, so a skipped recreate cannot produce a false
+  green deployment.
 - Backend health inside the VPS container network:
   `http://127.0.0.1:8000/api/health/live`.
 - Public health through the configured app URL:
