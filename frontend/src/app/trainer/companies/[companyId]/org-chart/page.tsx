@@ -222,7 +222,7 @@ export default async function CompanyOrgChartPage({
 
       {/* Main Org Chart */}
       <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Organigrama Ierarhică</p>
+        <p className="text-xs font-semibold text-burgundy/75">Organigramă ierarhică</p>
 
         {participants.length === 0 ? (
           <p className="mt-4 text-sm text-foreground/62">Niciun participant importat încă.</p>
@@ -296,15 +296,15 @@ function OrgNode({
   }
 
   return (
-    <div className={depth > 0 ? "ml-6 border-l border-[var(--border)] pl-5 mt-4" : "mt-6 first:mt-0"}>
+    <div className={depth > 0 ? "ml-6 mt-4 border-l border-[var(--border)] pl-5" : "mt-6 first:mt-0"}>
       <article className={`rounded-xl border p-4 shadow-sm transition-all hover:shadow-md ${cardStyles}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-foreground truncate">{member.full_name}</h2>
+              <h2 className="truncate text-sm font-semibold text-foreground">{member.full_name}</h2>
               {labelBadge}
             </div>
-            <p className="mt-1 text-xs font-bold text-burgundy">{member.position ?? "Fără poziție specificată"}</p>
+            <p className="mt-1 text-xs font-semibold text-burgundy">{member.position ?? "Fără poziție specificată"}</p>
           </div>
           {member.role_group ? (
             <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55 border border-[var(--border)]">

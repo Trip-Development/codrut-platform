@@ -348,6 +348,27 @@ export async function sendParticipantInvitations(
   return (await response.json()) as ParticipantInviteBatchResponse;
 }
 
+export async function resendParticipantInvitation(
+  companyId: string,
+  participantId: string,
+): Promise<RosterInviteResult | null> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite`,
+    {
+      method: "POST",
+      credentials: "include",
+    },
+  );
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  const data = (await response.json()) as RosterImportResponse;
+  return data.email_results[0] ?? null;
+}
+
 export async function getCompanyDetail(
   companyId: string,
   options: ApiRequestOptions = {},

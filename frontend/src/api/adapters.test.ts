@@ -15,6 +15,7 @@ import {
   deleteCompany,
   getCompanyList,
   importCompanyRoster,
+  resendParticipantInvitation,
   sendParticipantInvitations,
 } from "./companies";
 import {
@@ -365,6 +366,44 @@ describe("frontend API adapter stubs", () => {
           mode: "secure_links",
           force_rotate: false,
         }),
+      }),
+    );
+  });
+
+  it("resends participant invitations through the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        participants: [],
+        email_results: [
+          {
+            participant_id: "participant-1",
+            full_name: "Ana",
+            email: "ana@example.com",
+            delivery_mode: "email",
+            email_sent: true,
+            error: null,
+            invite_url: null,
+          },
+        ],
+        total_imported: 0,
+        emails_sent: 1,
+        emails_failed: 0,
+      }),
+    } as Response);
+
+    await expect(resendParticipantInvitation("company-1", "participant-1")).resolves.toMatchObject({
+      participant_id: "participant-1",
+      email_sent: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/companies/company-1/participants/participant-1/resend-invite"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
       }),
     );
   });

@@ -31,49 +31,49 @@ export default async function CompanyOverviewPage({
   return (
     <>
       {company.stats.totalParticipants === 0 && (
-        <div className="rounded-2xl border border-dashed border-burgundy/30 bg-burgundy/5 p-6 mb-5">
-          <h3 className="text-lg font-bold text-burgundy">Ghid Configurare Companie Nouă</h3>
-          <p className="mt-2 text-sm text-foreground/70 leading-relaxed">
+        <div className="mb-5 rounded-2xl border border-dashed border-burgundy/30 bg-burgundy/5 p-5">
+          <h3 className="text-lg font-semibold text-burgundy">Ghid configurare companie nouă</h3>
+          <p className="mt-2 text-sm leading-relaxed text-foreground/70">
             Această companie este configurată în sistem, dar nu are încă participanți adăugați. Urmează acești pași pentru a lansa evaluările:
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl bg-surface p-4 border border-[var(--border)]">
-              <span className="text-xs font-bold text-burgundy/70 uppercase">Pasul 1</span>
-              <h4 className="font-semibold text-foreground mt-1">Încarcă Rosterul</h4>
-              <p className="text-xs text-foreground/56 mt-1 leading-relaxed">
+            <div className="rounded-xl border border-[var(--border)] bg-surface p-4 transition-all hover:border-burgundy/20 hover:shadow-sm">
+              <span className="text-xs font-semibold text-burgundy/70">Pasul 1</span>
+              <h4 className="mt-1 font-semibold text-foreground">Încarcă rosterul</h4>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/56">
                 Adaugă participanții prin fișierul Excel/CSV în ecranul de import pentru a asocia oameni cu această companie.
               </p>
               <Link
                 href={`${basePath}/participants`}
-                className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
+                className="mt-3 inline-block text-xs font-semibold text-burgundy hover:text-burgundy/80"
               >
-                Mergi la import roster &rarr;
+                Mergi la import roster
               </Link>
             </div>
-            <div className="rounded-xl bg-surface p-4 border border-[var(--border)]">
-              <span className="text-xs font-bold text-burgundy/70 uppercase">Pasul 2</span>
-              <h4 className="font-semibold text-foreground mt-1">Configurează Echipe</h4>
-              <p className="text-xs text-foreground/56 mt-1 leading-relaxed">
+            <div className="rounded-xl border border-[var(--border)] bg-surface p-4 transition-all hover:border-burgundy/20 hover:shadow-sm">
+              <span className="text-xs font-semibold text-burgundy/70">Pasul 2</span>
+              <h4 className="mt-1 font-semibold text-foreground">Configurează echipe</h4>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/56">
                 Definește echipele de leadership sau funcționale pentru a pregăti structurile de raportare și analiză.
               </p>
               <Link
                 href={`${basePath}/teams`}
-                className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
+                className="mt-3 inline-block text-xs font-semibold text-burgundy hover:text-burgundy/80"
               >
-                Gestionează echipe &rarr;
+                Gestionează echipe
               </Link>
             </div>
-            <div className="rounded-xl bg-surface p-4 border border-[var(--border)]">
-              <span className="text-xs font-bold text-burgundy/70 uppercase">Pasul 3</span>
-              <h4 className="font-semibold text-foreground mt-1">Trimite Invitații</h4>
-              <p className="text-xs text-foreground/56 mt-1 leading-relaxed">
+            <div className="rounded-xl border border-[var(--border)] bg-surface p-4 transition-all hover:border-burgundy/20 hover:shadow-sm">
+              <span className="text-xs font-semibold text-burgundy/70">Pasul 3</span>
+              <h4 className="mt-1 font-semibold text-foreground">Trimite invitații</h4>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/56">
                 După popularea rosterului, folosește catalogul de șabloane pentru a expedia invitațiile și a monitoriza livrarea.
               </p>
               <Link
                 href="/trainer/email"
-                className="mt-3 inline-block text-xs font-bold text-burgundy underline hover:text-burgundy/80"
+                className="mt-3 inline-block text-xs font-semibold text-burgundy hover:text-burgundy/80"
               >
-                Gestionează emailuri &rarr;
+                Gestionează emailuri
               </Link>
             </div>
           </div>
@@ -81,26 +81,26 @@ export default async function CompanyOverviewPage({
       )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Participanti"
+          label="Participanți"
           value={company.stats.totalParticipants}
-          detail="Persoane inregistrate in roster."
+          detail="Persoane înregistrate în roster."
         />
         <StatCard
-          label="Asignari"
+          label="Asignări"
           value={company.stats.totalAssignments}
-          detail="Chestionare asignate in total."
+          detail="Chestionare asignate în total."
         />
         <StatCard
           label="Rata completare"
           value={company.stats.completionRate}
           suffix="%"
-          detail="Proportia asignarilor finalizate."
+          detail="Proporția asignărilor finalizate."
           tone="success"
         />
         <StatCard
           label="Evaluate"
           value={company.stats.scoredCount}
-          detail="Asignari cu scoring finalizat."
+          detail="Asignări cu scoring finalizat."
         />
       </div>
 
@@ -108,8 +108,8 @@ export default async function CompanyOverviewPage({
         {/* Recent assignments */}
         <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
           <div className="border-b border-[var(--border)] px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Activitate recenta</p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Ultimele asignari</h2>
+            <p className="text-xs font-semibold text-burgundy/75">Activitate recentă</p>
+            <h2 className="mt-1 text-xl font-semibold text-foreground">Ultimele asignări</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -155,12 +155,12 @@ export default async function CompanyOverviewPage({
 
         {/* Quick actions */}
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Actiuni rapide</p>
+          <p className="text-xs font-semibold text-burgundy/75">Acțiuni rapide</p>
           <div className="mt-4 space-y-3">
-            <QuickLink href={`${basePath}/participants`} label="Participanti" detail="Vezi si gestioneaza rostere." />
-            <QuickLink href={`${basePath}/org-chart`} label="Organigrama" detail="Valideaza ierarhia clientului." />
-            <QuickLink href={`${basePath}/reports`} label="Rapoarte" detail="Asignari trimise si evaluate." />
-            <QuickLink href={`${basePath}/teams`} label="Echipe" detail="Echipe de leadership si functionale." />
+            <QuickLink href={`${basePath}/participants`} label="Participanți" detail="Vezi și gestionează rostere." />
+            <QuickLink href={`${basePath}/org-chart`} label="Organigramă" detail="Validează ierarhia clientului." />
+            <QuickLink href={`${basePath}/reports`} label="Rapoarte" detail="Asignări trimise și evaluate." />
+            <QuickLink href={`${basePath}/teams`} label="Echipe" detail="Echipe de leadership și funcționale." />
           </div>
         </section>
       </div>
