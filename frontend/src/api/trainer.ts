@@ -22,10 +22,9 @@ export type TrainerSurfaceCard = {
   meta: string;
 };
 
-export type TrainerProjectRow = {
+export type TrainerCompanyRow = {
   id: string;
   company: string;
-  projectName: string;
   stage: "setup" | "invites" | "completion" | "reporting";
   invited: number;
   completed: number;
@@ -75,7 +74,7 @@ export type TrainerOperationsSummary = {
 export type TrainerDashboardSummary = {
   stats: TrainerStat[];
   cards: TrainerSurfaceCard[];
-  activeProjects: TrainerProjectRow[];
+  activeCompanies: TrainerCompanyRow[];
   actions: TrainerAction[];
   visibility: TrainerReportingVisibility;
 };
@@ -86,15 +85,15 @@ export async function getTrainerDashboardSummary(
   const fallback: TrainerDashboardSummary = {
     stats: [
       {
-        label: "Livrare",
+        label: "Companii",
         value: 3,
-        detail: "Proiecte active cu invitatii, completari si raportare in lucru.",
+        detail: "Companii active cu invitații, completări și raportare în lucru.",
       },
       {
         label: "Completare",
         value: 68,
         suffix: "%",
-        detail: "Rata agregata pentru task-urile proiectelor active.",
+        detail: "Rata agregată pentru task-urile companiilor active.",
         tone: "success",
       },
       {
@@ -132,11 +131,10 @@ export async function getTrainerDashboardSummary(
         meta: "Comms",
       },
     ],
-    activeProjects: [
+    activeCompanies: [
       {
         id: "demo-project",
         company: "Client demo",
-        projectName: "Intake Iunie",
         stage: "completion",
         invited: 42,
         completed: 28,
@@ -148,7 +146,6 @@ export async function getTrainerDashboardSummary(
       {
         id: "leadership-pilot",
         company: "Echipa directie",
-        projectName: "Leadership pilot",
         stage: "invites",
         invited: 11,
         completed: 4,
@@ -160,7 +157,6 @@ export async function getTrainerDashboardSummary(
       {
         id: "past-client-video",
         company: "Campanie clienti trecuti",
-        projectName: "Video follow-up",
         stage: "reporting",
         invited: 26,
         completed: 18,
@@ -172,9 +168,9 @@ export async function getTrainerDashboardSummary(
     ],
     actions: [
       {
-        label: "Finalizeaza roster Intake Iunie",
-        detail: "Confirma Reports To, pozitie, locatie si email pentru import.",
-        href: "/trainer/org-chart",
+        label: "Finalizează rosterul companiei",
+        detail: "Confirmă managerul direct, poziția, locația și emailul înainte de invitații.",
+        href: "/trainer/companies",
         urgency: "today",
       },
       {
@@ -205,7 +201,7 @@ export async function getTrainerDashboardSummary(
         ...fallback,
         stats: [
           {
-            label: "Proiecte",
+            label: "Companii",
             value: 0,
             detail: "Adaugă prima companie pentru a porni fluxul pilot.",
           },
@@ -229,16 +225,15 @@ export async function getTrainerDashboardSummary(
             tone: "default",
           },
         ],
-        activeProjects: [],
+        activeCompanies: [],
       };
     }
 
     const totalInvited = companies.reduce((total, company) => total + company.assignmentCount, 0);
     const totalCompleted = companies.reduce((total, company) => total + company.completedCount, 0);
-    const activeProjects = companies.map((company) => ({
+    const activeCompanies = companies.map((company) => ({
       id: company.id,
       company: company.name,
-      projectName: `Intake ${company.name}`,
       stage: company.stage,
       invited: company.assignmentCount,
       completed: company.completedCount,
@@ -246,9 +241,9 @@ export async function getTrainerDashboardSummary(
       blockers: company.assignmentCount === 0 ? ["Fara asignari configurate"] : [],
       nextAction:
         company.assignmentCount === 0
-          ? "Configureaza roster si chestionare"
+          ? "Configurează rosterul și chestionarele"
           : company.completedCount < company.assignmentCount
-            ? "Urmareste participantii fara progres"
+            ? "Urmărește participanții fără progres"
             : "Deschide rapoartele calculate",
       href: `/trainer/companies/${company.id}`,
     }));
@@ -259,15 +254,15 @@ export async function getTrainerDashboardSummary(
     return {
       stats: [
         {
-          label: "Proiecte",
+          label: "Companii",
           value: companies.length,
-          detail: "Proiecte active cu invitatii, completari si raportare in lucru.",
+          detail: "Companii active cu invitații, completări și raportare în lucru.",
         },
         {
           label: "Rata completare",
           value: completionRate,
           suffix: "%",
-          detail: "Rata agregata pentru task-urile proiectelor active.",
+          detail: "Rata agregată pentru task-urile companiilor active.",
           tone: "success",
         },
         {
@@ -284,7 +279,7 @@ export async function getTrainerDashboardSummary(
         },
       ],
       cards: fallback.cards,
-      activeProjects,
+      activeCompanies,
       actions: fallback.actions,
       visibility: fallback.visibility,
     };
@@ -293,7 +288,7 @@ export async function getTrainerDashboardSummary(
       return {
         ...fallback,
         stats: [],
-        activeProjects: [],
+        activeCompanies: [],
         actions: [],
       };
     }
