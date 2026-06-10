@@ -6,9 +6,14 @@ import pytest
 
 from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
+from codrut.modules.assignments.models import (
+    AssignmentStatus,
+    AssignmentTargetType,
+    QuestionnaireAssignment,
+)
 from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
-from codrut.modules.companies.models import ParticipantProfile
-from codrut.modules.identity.models import AssignmentInvite
+from codrut.modules.companies.models import Company, ParticipantProfile
+from codrut.modules.identity.models import AssignmentInvite, Session, User
 from codrut.modules.identity.service import IdentityService
 
 
@@ -288,3 +293,72 @@ async def test_verify_invite_token_expired() -> None:
     service = IdentityService(session)
     with pytest.raises(DomainError, match="expired"):
         await service.verify_invite_token(token_future)
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() -> None:
+    company_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+
+    session = FakeSession()
+    settings = get_settings()
+    expires_at = datetime.now(UTC) + timedelta(days=5)
+    claims = TaskLinkClaims(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        assignment_ids=(assignment_id,),
+        expires_at=expires_at,
+    )
+    token = create_task_token(claims, settings)
+    invite = AssignmentInvite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        token=token,
+        status="active",
+        expires_at=expires_at,
+    )
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        email="same.person@example.com",
+        full_name="Same Person",
+    )
+    company = Company(id=company_id, name="Michelin")
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.invited,
+    )
+
+    class ScopedFakeSession(FakeSession):
+        async def execute(self, query: Any) -> Any:
+            if len(self.side_effects) == 1:
+                where_text = " ".join(str(clause) for clause in query._where_criteria)
+                assert "participant_profiles.email" not in where_text
+                assert "participant_profiles.id" in where_text
+                assert "participant_profiles.company_id" in where_text
+            return await super().execute(query)
+
+    session = ScopedFakeSession()
+    session.side_effects = [
+        FakeScalarResult(invite),
+        FakeScalarResult(profile),
+        FakeScalarResult(company),
+        FakeScalarResult(False),
+        FakeScalarsResult([assignment]),
+        FakeScalarResult(profile),
+    ]
+
+    result = await IdentityService(session).verify_invite_token_and_create_session(token)
+
+    assert result.response.email == profile.email
+    assert result.response.is_leadership is False
+    assert result.session_token
+    assert len(result.response.tasks) == 1
+    assert profile.user_id is not None
+    assert any(isinstance(model, User) for model in session.added_models)
+    assert any(isinstance(model, Session) for model in session.added_models)

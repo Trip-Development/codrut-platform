@@ -7,11 +7,8 @@ const routeGroups = [
     title: "Trainer routes",
     routes: [
       ["/trainer", "Delivery dashboard"],
-      ["/trainer/projects", "Projects"],
-      ["/trainer/projects/demo-project", "Project detail"],
-      ["/trainer/projects/demo-project/participants/demo-participant", "Participant report"],
-      ["/trainer/org-chart", "Org chart"],
-      ["/trainer/participants", "Participants"],
+      ["/trainer/companies", "Companies"],
+      ["/trainer/org", "Cross-company org"],
       ["/trainer/questionnaires", "Questionnaires"],
       ["/trainer/email", "Email"],
       ["/trainer/reports", "Reports"],

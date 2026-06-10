@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
-import { getApiBaseUrl } from "@/api/runtime";
-import { createCompany, type CompanyAssignment, type CompanyParticipant } from "@/api/companies";
+import { getApiBaseUrl, isDemoFallbackEnabled } from "@/api/runtime";
+import {
+  createCompany,
+  importCompanyRoster,
+  sendParticipantInvitations,
+  type CompanyAssignment,
+  type CompanyParticipant,
+  type ParticipantInvitationMode,
+  type RosterInviteResult,
+} from "@/api/companies";
 
 type CompanyOption = {
   id: string;
@@ -13,6 +22,7 @@ type CompanyOption = {
 type RosterImporterProps = {
   companies: CompanyOption[];
   defaultCompanyId?: string;
+  lockCompany?: boolean;
 };
 
 type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile";
@@ -35,7 +45,23 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   pcm_profile: ["profil pcm", "pcm", "pcm profile", "profil_pcm"],
 };
 
-export function RosterImporter({ companies, defaultCompanyId }: RosterImporterProps) {
+function buildDemoAssignments(companyId: string, participants: CompanyParticipant[]): CompanyAssignment[] {
+  return participants.flatMap((participant) =>
+    ["distress_drivers", "lencioni"].map((questionnaireKey) => ({
+      id: crypto.randomUUID(),
+      company_id: companyId,
+      respondent_profile_id: participant.id,
+      questionnaire_key: questionnaireKey,
+      target_type: "self" as const,
+      status: "assigned" as const,
+      submitted_at: null,
+      scored_at: null,
+    })),
+  );
+}
+
+export function RosterImporter({ companies, defaultCompanyId, lockCompany = false }: RosterImporterProps) {
+  const router = useRouter();
   const [companyId, setCompanyId] = useState(defaultCompanyId || companies[0]?.id || "");
   const [allCompanies, setAllCompanies] = useState<CompanyOption[]>(companies);
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
@@ -49,7 +75,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
   }, [defaultCompanyId]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (isDemoFallbackEnabled() && typeof window !== "undefined") {
       const stored = localStorage.getItem("codrut_local_companies");
       if (stored) {
         try {
@@ -102,16 +128,19 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
     pcm_profile: "",
   });
 
-  type EmailResult = {
-    participant_id: string;
-    email: string;
-    full_name: string;
-    email_sent: boolean;
-    error: string | null;
-  };
-
-  const [emailResults, setEmailResults] = useState<EmailResult[]>([]);
+  const [emailResults, setEmailResults] = useState<RosterInviteResult[]>([]);
+  const [lastImportedParticipantIds, setLastImportedParticipantIds] = useState<string[]>([]);
+  const [copiedResultId, setCopiedResultId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [deliveryState, setDeliveryState] = useState<{
+    status: "idle" | "sending" | "success" | "error";
+    mode: ParticipantInvitationMode | null;
+    message: string;
+  }>({
+    status: "idle",
+    mode: null,
+    message: "",
+  });
 
   const [importState, setImportState] = useState<{
     status: "idle" | "ready" | "importing" | "success" | "error";
@@ -131,6 +160,10 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
     if (!file) return;
 
     setImportState({ status: "importing", message: "Se citește fișierul..." });
+    setEmailResults([]);
+    setLastImportedParticipantIds([]);
+    setDeliveryState({ status: "idle", mode: null, message: "" });
+    setCopiedResultId(null);
     setEditedCells({});
     setEditingCellId(null);
 
@@ -220,7 +253,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
   };
 
   // Convert raw row to Db fields taking manual edits into account
-  const getNormalizedRow = (rawRow: Record<string, string>, rowIndex: number): Record<DbField, string> => {
+  const getNormalizedRow = useCallback((rawRow: Record<string, string>, rowIndex: number): Record<DbField, string> => {
     const rowEdits = editedCells[rowIndex] || {};
 
     const getVal = (field: DbField): string => {
@@ -237,12 +270,12 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
       location: getVal("location"),
       pcm_profile: getVal("pcm_profile"),
     };
-  };
+  }, [editedCells, mappings]);
 
   // Build full preview lists and validation errors
   const processedRows = useMemo(() => {
     return rawRows.map((rawRow, idx) => getNormalizedRow(rawRow, idx));
-  }, [rawRows, mappings, editedCells]);
+  }, [rawRows, getNormalizedRow]);
 
   const validationErrors = useMemo(() => {
     const errors: { rowIndex: number; name: string; field: DbField; error: string; type: "critical" | "warning" }[] = [];
@@ -311,6 +344,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
   }, [processedRows]);
 
   const hasCriticalErrors = validationErrors.some((e) => e.type === "critical");
+  const selectedCompanyName = allCompanies.find((company) => company.id === companyId)?.name ?? "Compania curentă";
 
   const handleCellEditSave = (rowIndex: number, field: DbField, value: string) => {
     setEditedCells((prev) => {
@@ -330,107 +364,83 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
     if (!companyId || processedRows.length === 0 || hasCriticalErrors) return;
 
     setImportState({ status: "importing", message: "Se importă participanții..." });
-
-    // Prepare participants matching CompanyParticipant schema
-    const newParticipants: CompanyParticipant[] = processedRows.map((row) => {
-      const pId = crypto.randomUUID();
-      return {
-        id: pId,
-        full_name: row.full_name,
-        email: row.email,
-        reports_to_name: row.reports_to_name || null,
-        position: row.position || null,
-        location: row.location || null,
-        role_group: (row.position?.toLowerCase().includes("director") || row.position?.toLowerCase().includes("manager") || row.position?.toLowerCase().includes("lead")) ? "leadership" : "member",
-        pcm_profile: row.pcm_profile || null,
-        user_id: null,
-      };
-    });
-
-    // Generate assignments: Lencioni for everyone; Distress Drivers & Boss 360 for leadership
-    const newAssignments: CompanyAssignment[] = [];
-    newParticipants.forEach((p) => {
-      // 1. Assign Lencioni (Team assessment)
-      newAssignments.push({
-        id: crypto.randomUUID(),
-        company_id: companyId,
-        respondent_profile_id: p.id,
-        questionnaire_key: "lencioni",
-        target_type: "team",
-        status: "invited",
-        submitted_at: null,
-        scored_at: null,
-      });
-
-      // 2. Assign distress drivers & boss 360 if leader
-      if (p.role_group === "leadership" || p.pcm_profile) {
-        newAssignments.push({
-          id: crypto.randomUUID(),
-          company_id: companyId,
-          respondent_profile_id: p.id,
-          questionnaire_key: "distress_drivers",
-          target_type: "self",
-          status: "invited",
-          submitted_at: null,
-          scored_at: null,
-        });
-
-        newAssignments.push({
-          id: crypto.randomUUID(),
-          company_id: companyId,
-          respondent_profile_id: p.id,
-          questionnaire_key: "boss_360",
-          target_type: "person",
-          status: "invited",
-          submitted_at: null,
-          scored_at: null,
-        });
-      }
-    });
+    setEmailResults([]);
+    setLastImportedParticipantIds([]);
+    setDeliveryState({ status: "idle", mode: null, message: "" });
+    setCopiedResultId(null);
 
     try {
-      // Attempt backend call
-      const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/roster`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          rows: processedRows.map((r) => ({
-            Name: r.full_name,
-            "Reports To": r.reports_to_name,
-            Position: r.position,
-            Location: r.location,
-            email: r.email,
-            "Profil PCM": r.pcm_profile,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(detail || `Backend refuzat (${response.status})`);
-      }
-
-      const importResult = await response.json();
-      const results: EmailResult[] = importResult.email_results ?? [];
+      const importResult = await importCompanyRoster(
+        companyId,
+        processedRows.map((r) => ({
+          Name: r.full_name,
+          "Reports To": r.reports_to_name,
+          Position: r.position,
+          Location: r.location,
+          email: r.email,
+          "Profil PCM": r.pcm_profile,
+        })),
+      );
+      const results = importResult.email_results ?? [];
       setEmailResults(results);
-
-      const failedCount = importResult.emails_failed ?? 0;
-      const sentCount = importResult.emails_sent ?? 0;
-      const total = importResult.total_imported ?? newParticipants.length;
-
-      // Cache locally for client-side queries
-      saveToLocalStorage(companyId, newParticipants, newAssignments);
+      setLastImportedParticipantIds(importResult.participants.map((participant) => participant.id));
+      saveToLocalStorage(companyId, importResult.participants, buildDemoAssignments(companyId, importResult.participants));
+      router.refresh();
       setImportState({
         status: "success",
-        message: failedCount === 0
-          ? `Import reușit! ${total} participanți adăugați, ${sentCount} emailuri trimise.`
-          : `Import reușit: ${total} participanți adăugați. ⚠️ ${failedCount} emailuri nu au putut fi trimise — le poți retrimite mai jos.`,
+        message: `Import reușit: ${importResult.total_imported} participanți salvați. Alege mai jos cum trimiți accesul.`,
       });
     } catch (error) {
       setImportState({
         status: "error",
         message: error instanceof Error ? error.message : "Importul rosterului a eșuat în backend.",
+      });
+    }
+  };
+
+  const handleDeliverInvites = async (mode: ParticipantInvitationMode) => {
+    if (!companyId || lastImportedParticipantIds.length === 0) return;
+    setDeliveryState({
+      status: "sending",
+      mode,
+      message: mode === "email" ? "Se trimit emailurile..." : "Se generează linkurile securizate...",
+    });
+    setCopiedResultId(null);
+
+    try {
+      const result = await sendParticipantInvitations(companyId, {
+        participantIds: lastImportedParticipantIds,
+        mode,
+      });
+      setEmailResults(result.results);
+      router.refresh();
+      setDeliveryState({
+        status: "success",
+        mode,
+        message:
+          mode === "email"
+            ? `${result.emails_sent}/${result.total} emailuri trimise.`
+            : `${result.links_generated} linkuri securizate generate.`,
+      });
+    } catch (error) {
+      setDeliveryState({
+        status: "error",
+        mode,
+        message: error instanceof Error ? error.message : "Livrarea accesului a eșuat.",
+      });
+    }
+  };
+
+  const handleCopyLink = async (result: RosterInviteResult) => {
+    if (!result.invite_url || typeof navigator === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(result.invite_url);
+      setCopiedResultId(result.participant_id);
+    } catch {
+      setDeliveryState({
+        status: "error",
+        mode: "secure_links",
+        message: "Linkul nu a putut fi copiat. Deschideți meniul contextual al browserului și copiați manual.",
       });
     }
   };
@@ -458,7 +468,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
   };
 
   const saveToLocalStorage = (cId: string, participants: CompanyParticipant[], assignments: CompanyAssignment[]) => {
-
+    if (!isDemoFallbackEnabled()) return;
     if (typeof window === "undefined") return;
 
     // Load existing participants
@@ -498,25 +508,33 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
           <div className="block">
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-foreground">Compania Destinație</span>
-              <button
-                type="button"
-                onClick={() => setShowAddCompanyModal(true)}
-                className="text-xs font-bold text-burgundy hover:underline"
-              >
-                + Companie Nouă
-              </button>
+              {!lockCompany && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddCompanyModal(true)}
+                  className="text-xs font-bold text-burgundy hover:underline"
+                >
+                  + Companie Nouă
+                </button>
+              )}
             </div>
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-[var(--border)] bg-background px-3.5 py-3 text-sm font-semibold text-foreground focus:border-burgundy"
-            >
-              {allCompanies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
+            {lockCompany ? (
+              <div className="mt-2 rounded-xl border border-[var(--border)] bg-background px-3.5 py-3 text-sm font-semibold text-foreground">
+                {selectedCompanyName}
+              </div>
+            ) : (
+              <select
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-[var(--border)] bg-background px-3.5 py-3 text-sm font-semibold text-foreground focus:border-burgundy"
+              >
+                {allCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <label className="block">
@@ -558,13 +576,51 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
         )}
       </section>
 
-      {/* Email delivery results table */}
+      {importState.status === "success" && lastImportedParticipantIds.length > 0 && (
+        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-burgundy">Livrare acces</h3>
+              <p className="mt-1 text-sm leading-6 text-foreground/62">
+                Rosterul este salvat. Alege dacă participanții primesc email automat sau dacă pregătești linkuri securizate pentru trimitere manuală.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={deliveryState.status === "sending"}
+                onClick={() => handleDeliverInvites("email")}
+                className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deliveryState.status === "sending" && deliveryState.mode === "email" ? "Se trimit..." : "Trimite emailuri"}
+              </button>
+              <button
+                type="button"
+                disabled={deliveryState.status === "sending"}
+                onClick={() => handleDeliverInvites("secure_links")}
+                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-xs font-bold text-foreground hover:border-burgundy/50 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deliveryState.status === "sending" && deliveryState.mode === "secure_links" ? "Se generează..." : "Generează linkuri"}
+              </button>
+            </div>
+          </div>
+          {deliveryState.message && (
+            <p className={`mt-3 text-xs font-bold uppercase tracking-wider ${
+              deliveryState.status === "error" ? "text-red-600" : deliveryState.status === "success" ? "text-green-600" : "text-burgundy"
+            }`}>
+              {deliveryState.message}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Delivery results table */}
       {importState.status === "success" && emailResults.length > 0 && (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-burgundy">Stare Emailuri Invitație</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-burgundy">Rezultat livrare acces</h3>
             <span className="text-xs text-foreground/50">
-              {emailResults.filter((r) => r.email_sent).length}/{emailResults.length} trimise cu succes
+              {emailResults.filter((r) => r.email_sent || r.delivery_mode === "secure_links").length}/{emailResults.length} pregătite
             </span>
           </div>
           <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
@@ -573,7 +629,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
                 <tr>
                   <th className="px-4 py-2.5 text-left font-bold text-foreground/70">Participant</th>
                   <th className="px-4 py-2.5 text-left font-bold text-foreground/70">Email</th>
-                  <th className="px-4 py-2.5 text-center font-bold text-foreground/70">Status Email</th>
+                  <th className="px-4 py-2.5 text-center font-bold text-foreground/70">Status</th>
                   <th className="px-4 py-2.5 text-right font-bold text-foreground/70">Acțiune</th>
                 </tr>
               </thead>
@@ -583,7 +639,11 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
                     <td className="px-4 py-2.5 font-semibold text-foreground">{r.full_name}</td>
                     <td className="px-4 py-2.5 text-foreground/70">{r.email}</td>
                     <td className="px-4 py-2.5 text-center">
-                      {r.email_sent ? (
+                      {r.delivery_mode === "secure_links" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-blue-700 font-bold dark:bg-blue-900/30 dark:text-blue-300">
+                          Link generat
+                        </span>
+                      ) : r.email_sent ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-green-700 font-bold dark:bg-green-900/30 dark:text-green-400">
                           ✓ Trimis
                         </span>
@@ -594,7 +654,15 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      {!r.email_sent && (
+                      {r.delivery_mode === "secure_links" && r.invite_url ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(r)}
+                          className="rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/50 hover:text-burgundy transition-all"
+                        >
+                          {copiedResultId === r.participant_id ? "Copiat" : "Copiază link"}
+                        </button>
+                      ) : !r.email_sent ? (
                         <button
                           type="button"
                           disabled={resendingId === r.participant_id}
@@ -603,6 +671,8 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
                         >
                           {resendingId === r.participant_id ? "Se trimite..." : "Retrimite"}
                         </button>
+                      ) : (
+                        <span className="text-foreground/35">—</span>
                       )}
                     </td>
                   </tr>
@@ -773,7 +843,7 @@ export function RosterImporter({ companies, defaultCompanyId }: RosterImporterPr
       )}
 
       {/* Add Company Modal */}
-      {showAddCompanyModal && (
+      {showAddCompanyModal && !lockCompany && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <form
             onSubmit={handleAddCompany}

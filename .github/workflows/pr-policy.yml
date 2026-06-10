@@ -61,3 +61,29 @@ jobs:
             echo "Production PRs must promote the dev branch; received ${SOURCE_BRANCH}."
             exit 1
           fi
+
+  required:
+    name: policy / required
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - pr-hygiene
+      - release-source
+    steps:
+      - name: Verify required policy checks
+        shell: bash
+        env:
+          PR_HYGIENE_RESULT: ${{ needs['pr-hygiene'].result }}
+          RELEASE_SOURCE_RESULT: ${{ needs['release-source'].result }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${PR_HYGIENE_RESULT}" != "success" ]]; then
+            echo "PR_HYGIENE_RESULT=${PR_HYGIENE_RESULT}; expected success."
+            exit 1
+          fi
+
+          if [[ "${RELEASE_SOURCE_RESULT}" != "success" && "${RELEASE_SOURCE_RESULT}" != "skipped" ]]; then
+            echo "RELEASE_SOURCE_RESULT=${RELEASE_SOURCE_RESULT}; expected success or skipped."
+            exit 1
+          fi

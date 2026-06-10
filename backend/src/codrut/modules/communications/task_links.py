@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import quote
@@ -30,6 +31,7 @@ def create_task_token(claims: TaskLinkClaims, settings: Settings) -> str:
         "respondent_profile_id": str(claims.respondent_profile_id),
         "assignment_ids": [str(assignment_id) for assignment_id in claims.assignment_ids],
         "expires_at": int(claims.expires_at.timestamp()),
+        "nonce": secrets.token_urlsafe(12),
     }
     encoded_payload = _urlsafe_encode(
         json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
