@@ -11,6 +11,8 @@ export type CompanyListItem = {
   assignmentCount: number;
   completedCount: number;
   stage: "setup" | "invites" | "completion" | "reporting";
+  dataUnavailable?: boolean;
+  dataError?: string;
 };
 
 export type CompanyParticipant = {
@@ -77,6 +79,7 @@ export type CompanyDetail = {
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
   teams: CompanyTeam[];
+  dataErrors?: string[];
   stats: {
     totalParticipants: number;
     totalAssignments: number;
@@ -101,6 +104,10 @@ function deriveStage(
   if (completedCount === assignmentCount) return "reporting";
   if (completedCount > 0) return "completion";
   return "invites";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Date indisponibile.";
 }
 
 // ---------------------------------------------------------------------------
@@ -294,9 +301,6 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           stage: deriveStage(assignments.length, completedCount),
         };
       } catch (e) {
-        if (!isDemoFallbackEnabled()) {
-          throw e;
-        }
         return {
           id: company.id,
           name: company.name,
@@ -304,6 +308,8 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           assignmentCount: 0,
           completedCount: 0,
           stage: "setup" as const,
+          dataUnavailable: true,
+          dataError: errorMessage(e),
         };
       }
     }),
@@ -426,45 +432,48 @@ export async function getCompanyDetail(
   const company = map.get(companyId);
   if (!company) return null;
 
-  try {
-    const [participants, assignments, teams] = await Promise.all([
-      getCompanyParticipants(companyId, options),
-      getCompanyAssignments(companyId, options),
-      getCompanyTeams(companyId, options),
-    ]);
+  const [participantsResult, assignmentsResult, teamsResult] = await Promise.allSettled([
+    getCompanyParticipants(companyId, options),
+    getCompanyAssignments(companyId, options),
+    getCompanyTeams(companyId, options),
+  ]);
 
-    const completedAssignments = assignments.filter(
-      (a) => a.status === "submitted" || a.status === "validated" || a.status === "scored",
-    ).length;
+  const participants = participantsResult.status === "fulfilled" ? participantsResult.value : [];
+  const assignments = assignmentsResult.status === "fulfilled" ? assignmentsResult.value : [];
+  const teams = teamsResult.status === "fulfilled" ? teamsResult.value : [];
+  const dataErrors = [
+    participantsResult.status === "rejected" ? `Participanti: ${errorMessage(participantsResult.reason)}` : null,
+    assignmentsResult.status === "rejected" ? `Asignari: ${errorMessage(assignmentsResult.reason)}` : null,
+    teamsResult.status === "rejected" ? `Echipe: ${errorMessage(teamsResult.reason)}` : null,
+  ].filter((error): error is string => Boolean(error));
 
-    const scoredCount = assignments.filter((a) => a.status === "scored").length;
+  const completedAssignments = assignments.filter(
+    (a) => a.status === "submitted" || a.status === "validated" || a.status === "scored",
+  ).length;
 
-    const pendingCount = assignments.filter(
-      (a) => a.status === "assigned" || a.status === "invited" || a.status === "started",
-    ).length;
+  const scoredCount = assignments.filter((a) => a.status === "scored").length;
 
-    return {
-      id: company.id,
-      name: company.name,
-      participants,
-      assignments,
-      teams,
-      stats: {
-        totalParticipants: participants.length,
-        totalAssignments: assignments.length,
-        completedAssignments,
-        completionRate:
-          assignments.length > 0
-            ? Math.round((completedAssignments / assignments.length) * 100)
-            : 0,
-        scoredCount,
-        pendingCount,
-      },
-    };
-  } catch (e) {
-    if (!isDemoFallbackEnabled()) {
-      throw e;
-    }
-    return null;
-  }
+  const pendingCount = assignments.filter(
+    (a) => a.status === "assigned" || a.status === "invited" || a.status === "started",
+  ).length;
+
+  return {
+    id: company.id,
+    name: company.name,
+    participants,
+    assignments,
+    teams,
+    dataErrors: dataErrors.length > 0 ? dataErrors : undefined,
+    stats: {
+      totalParticipants: participants.length,
+      totalAssignments: assignments.length,
+      completedAssignments,
+      completionRate:
+        assignments.length > 0
+          ? Math.round((completedAssignments / assignments.length) * 100)
+          : 0,
+      scoredCount,
+      pendingCount,
+    },
+  };
 }

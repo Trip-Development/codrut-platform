@@ -583,14 +583,20 @@ class CompanyService:
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
         membership = await self.repository.get_membership(company_id, user_id)
-        if membership is None or membership.role not in {
+        if membership is not None and membership.role in {
             CompanyMembershipRole.owner,
             CompanyMembershipRole.trainer,
         }:
-            raise DomainError(
-                "You do not have access to manage this company.",
-                code="company_access_denied",
-            )
+            return
+
+        user = await self.identity_repository.get_user_by_id(user_id)
+        if user is not None and user.role == UserRole.trainer:
+            return
+
+        raise DomainError(
+            "You do not have access to manage this company.",
+            code="company_access_denied",
+        )
 
 
 def _clean_optional(value: str | None) -> str | None:

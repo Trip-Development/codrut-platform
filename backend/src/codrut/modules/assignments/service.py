@@ -21,12 +21,15 @@ from codrut.modules.assignments.schemas import (
 )
 from codrut.modules.companies.models import CompanyMembershipRole
 from codrut.modules.companies.repository import CompanyRepository
+from codrut.modules.identity.models import UserRole
+from codrut.modules.identity.repository import IdentityRepository
 
 
 class AssignmentService:
     def __init__(self, session: AsyncSession) -> None:
         self.assignment_repository = AssignmentRepository(session)
         self.company_repository = CompanyRepository(session)
+        self.identity_repository = IdentityRepository(session)
 
     async def create_team(
         self,
@@ -108,15 +111,24 @@ class AssignmentService:
         return assignment
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
+        if await self.company_repository.get_company(company_id) is None:
+            raise DomainError("Company not found.", code="company_not_found")
+
         membership = await self.company_repository.get_membership(company_id, user_id)
-        if membership is None or membership.role not in {
+        if membership is not None and membership.role in {
             CompanyMembershipRole.owner,
             CompanyMembershipRole.trainer,
         }:
-            raise DomainError(
-                "You do not have access to manage assignments for this company.",
-                code="company_access_denied",
-            )
+            return
+
+        user = await self.identity_repository.get_user_by_id(user_id)
+        if user is not None and user.role == UserRole.trainer:
+            return
+
+        raise DomainError(
+            "You do not have access to manage assignments for this company.",
+            code="company_access_denied",
+        )
 
 
 def _validate_target_shape(payload: AssignmentCreateRequest) -> None:
