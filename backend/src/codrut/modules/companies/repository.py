@@ -25,6 +25,10 @@ class CompanyRepository:
         )
         return list(result.scalars().all())
 
+    async def list_all_companies(self) -> list[Company]:
+        result = await self.session.execute(select(Company).order_by(Company.name))
+        return list(result.scalars().all())
+
     async def get_company(self, company_id: UUID) -> Company | None:
         result = await self.session.execute(select(Company).where(Company.id == company_id))
         return result.scalar_one_or_none()

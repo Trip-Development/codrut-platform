@@ -32,7 +32,8 @@ async def list_companies(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanyResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_companies(principal.user_id)
+    # Trainers see all companies — they are trusted platform operators
+    return await CompanyService(session).list_all_companies()
 
 
 @router.post("", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
