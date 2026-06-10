@@ -235,9 +235,9 @@ jobs:
           docker compose -f compose.yaml -f compose.prod.yaml run --rm backend alembic upgrade head
 
           if docker compose up --help | grep -q -- '--wait'; then
-            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans --wait
+            docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --remove-orphans --wait backend worker frontend
           else
-            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
+            docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --remove-orphans backend worker frontend
           fi
 
           docker compose -f compose.yaml -f compose.prod.yaml ps
