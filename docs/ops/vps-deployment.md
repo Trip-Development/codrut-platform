@@ -125,8 +125,10 @@ Before using real participant data, verify:
 The workflow validates `compose.yaml` plus `compose.prod.yaml` before building
 images, copies both Compose files to `/opt/codrut-platform`, writes the
 production `.env`, validates Compose again on the VPS, pulls the SHA-tagged
-images, runs migrations, and starts services with `docker compose up -d --wait`
-when the installed Compose version supports it.
+images, runs migrations, and force-recreates the app services
+(`backend`, `worker`, and `frontend`) with `docker compose up -d --force-recreate --wait`
+when the installed Compose version supports it. The database, Redis, and Traefik
+containers are not force-recreated during ordinary app rollouts.
 
 After startup, the workflow checks:
 
