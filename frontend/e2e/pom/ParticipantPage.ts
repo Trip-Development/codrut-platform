@@ -13,14 +13,14 @@ export class ParticipantPage {
   }
 
   async startFilling() {
-    const button = this.page.getByRole("link", { name: "Începe completarea" });
+    const button = this.page.getByRole("link", { name: "Continuă următorul task" });
     await expect(button).toBeVisible();
     await button.click();
     await this.page.waitForLoadState("networkidle");
   }
 
   async startNextTask() {
-    const continuaLink = this.page.getByRole("link", { name: "Continua urmatorul task" });
+    const continuaLink = this.page.getByRole("link", { name: "Continuă următorul task" });
     if (await continuaLink.isVisible()) {
       await continuaLink.click();
     } else {

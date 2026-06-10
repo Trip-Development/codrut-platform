@@ -42,14 +42,14 @@ export function TaskBundle({
             <h2 className="mt-1.5 text-2xl font-semibold text-foreground">Sarcinile tale</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
               {participantEmail ? `${participantEmail} · ` : null}
-              Link valid pana la {deadlineLabel}. Raspunsurile sunt asociate emailului, fara cont.
+              Link valid până la {deadlineLabel}. Răspunsurile sunt asociate emailului, fără cont.
             </p>
           </div>
           <Link
             href={nextHref}
             className="tap-soft inline-flex justify-center rounded-2xl bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-brand hover:bg-burgundy-700"
           >
-            {progress.nextTask ? "Continua urmatorul task" : "Vezi chestionarele"}
+            {progress.nextTask ? "Continuă următorul task" : "Vezi chestionarele"}
           </Link>
         </div>
         <div className="mt-4 flex items-center gap-3">
@@ -105,7 +105,7 @@ function TaskRow({ task }: { task: InviteTask }) {
             : "bg-foreground text-background group-hover:bg-burgundy group-hover:text-white",
         ].join(" ")}
       >
-        {isDone ? "Revizuieste" : "Deschide"}
+        {isDone ? "Revizuiește" : "Deschide"}
       </Link>
     </article>
   );
