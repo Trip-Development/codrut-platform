@@ -630,7 +630,7 @@ export async function activateQuestionnaireDefinitionOnServer(
 
 export async function deleteQuestionnaireDefinitionOnServer(
   key: string,
-  version?: number
+  version?: number,
 ): Promise<QuestionnaireDefinition> {
   const url = version
     ? `${getApiBaseUrl()}/forms/definitions/${key}?version=${version}`
@@ -644,51 +644,6 @@ export async function deleteQuestionnaireDefinitionOnServer(
     throw new Error(errorBody?.error?.message ?? "Nu am putut pensiona chestionarul.");
   }
   return (await response.json()) as QuestionnaireDefinition;
-}
-
-function getQuestionnaireStorage(): Storage | null {
-  if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
-  return localStorage;
-}
-
-export function saveLocalQuestionnaireDefinition(definition: QuestionnaireDefinition): void {
-  const storage = getQuestionnaireStorage();
-  if (!storage) return;
-  try {
-    const stored = storage.getItem("codrut_local_questionnaire_definitions");
-    let localDefs: QuestionnaireDefinition[] = [];
-    if (stored) {
-      localDefs = JSON.parse(stored) as QuestionnaireDefinition[];
-    }
-    // Overwrite existing key+version combination
-    localDefs = localDefs.filter((d) => !(d.key === definition.key && d.version === definition.version));
-    localDefs.push(definition);
-    storage.setItem("codrut_local_questionnaire_definitions", JSON.stringify(localDefs));
-  } catch (e) {
-    console.error("Error saving local questionnaire definition", e);
-  }
-}
-
-export function listLocalQuestionnaireDefinitions(): QuestionnaireDefinition[] {
-  const storage = getQuestionnaireStorage();
-  if (!storage) return [];
-  try {
-    const stored = storage.getItem("codrut_local_questionnaire_definitions");
-    return stored ? (JSON.parse(stored) as QuestionnaireDefinition[]) : [];
-  } catch (e) {
-    console.error("Error reading local questionnaire definitions", e);
-    return [];
-  }
-}
-
-export function deleteLocalQuestionnaireDefinition(key: string): boolean {
-  const storage = getQuestionnaireStorage();
-  if (!storage) return false;
-  const definitions = listLocalQuestionnaireDefinitions();
-  const filtered = definitions.filter((definition) => definition.key !== key);
-  if (filtered.length === definitions.length) return false;
-  storage.setItem("codrut_local_questionnaire_definitions", JSON.stringify(filtered));
-  return true;
 }
 
 export async function getQuestionnaireResponse(

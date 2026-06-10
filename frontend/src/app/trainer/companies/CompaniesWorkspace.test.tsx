@@ -1,8 +1,8 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getCompanyList } from "@/api/companies";
+import { deleteCompany, getCompanyList } from "@/api/companies";
 import { CompaniesWorkspace } from "./CompaniesWorkspace";
 
 vi.mock("@/api/companies", async (importOriginal) => {
@@ -10,6 +10,7 @@ vi.mock("@/api/companies", async (importOriginal) => {
   return {
     ...original,
     createCompany: vi.fn(),
+    deleteCompany: vi.fn().mockResolvedValue(undefined),
     getCompanyList: vi.fn().mockResolvedValue([]),
   };
 });
@@ -46,5 +47,31 @@ describe("CompaniesWorkspace", () => {
 
     expect(screen.getByText("Michelin")).toBeTruthy();
     expect(screen.queryByText("Local-only client")).toBeNull();
+  });
+
+  it("deletes companies only after backend confirmation", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <CompaniesWorkspace
+        initialCompanies={[
+          {
+            id: "backend-company",
+            name: "Michelin",
+            participantCount: 0,
+            assignmentCount: 0,
+            completedCount: 0,
+            stage: "setup",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Șterge compania Michelin" }));
+
+    await waitFor(() => expect(deleteCompany).toHaveBeenCalledWith("backend-company"));
+    await waitFor(() => expect(screen.queryByText("Michelin")).toBeNull());
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("Michelin"));
+    confirmSpy.mockRestore();
   });
 });

@@ -50,6 +50,18 @@ async def create_company(
     return company
 
 
+@router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_company(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await CompanyService(session).delete_company(principal.user_id, company_id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/{company_id}/participants", response_model=list[ParticipantResponse])
 async def list_company_participants(
     company_id: UUID,

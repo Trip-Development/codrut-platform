@@ -73,6 +73,11 @@ class CompanyService:
         )
         return company
 
+    async def delete_company(self, user_id: UUID, company_id: UUID) -> None:
+        company = await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        await self.repository.delete_company(company)
+
     async def list_participants(self, user_id: UUID, company_id: UUID) -> list[ParticipantProfile]:
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)

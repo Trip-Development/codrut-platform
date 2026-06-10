@@ -16,146 +16,25 @@ concurrency:
 jobs:
   backend:
     name: backend / lint-test
-    runs-on: ubuntu-latest
     if: github.base_ref == 'dev' || startsWith(github.head_ref, 'hotfix/')
-    services:
-      postgres:
-        image: postgres:17-bookworm
-        env:
-          POSTGRES_DB: codrut
-          POSTGRES_USER: codrut
-          POSTGRES_PASSWORD: codrut
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U codrut -d codrut"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7-bookworm
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    defaults:
-      run:
-        working-directory: backend
-    env:
-      CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@localhost:5432/codrut
-      CODRUT_REDIS_URL: redis://localhost:6379/0
-      CODRUT_SESSION_SECRET: ci-session-secret
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          version: "0.7.8"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: uv sync
-      - run: uv run ruff check src tests migrations
-      - run: uv run alembic upgrade head
-      - run: uv run pytest
+    uses: ./.github/workflows/_backend-checks.yml
 
   frontend:
     name: frontend / lint-typecheck-test-build
-    runs-on: ubuntu-latest
     if: github.base_ref == 'dev' || startsWith(github.head_ref, 'hotfix/')
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
+    uses: ./.github/workflows/_frontend-checks.yml
 
   e2e:
     name: end-to-end / playwright
-    runs-on: ubuntu-latest
     if: github.base_ref == 'prod'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Start Docker Compose Stack
-        run: |
-          docker compose -f compose.yaml -f compose.dev.yaml up -d --build
-          # Wait for backend healthcheck (using the project's health check command)
-          docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest tests/test_health.py
-          # Run database migrations
-          docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run alembic upgrade head
-
-      - name: Print Docker logs on failure
-        if: failure()
-        run: docker compose -f compose.yaml -f compose.dev.yaml logs
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright Browsers
-        working-directory: frontend
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Playwright E2E tests
-        working-directory: frontend
-        run: pnpm exec playwright test
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: |
-            frontend/playwright-report/
-            frontend/test-results/
-          retention-days: 30
-
-      - name: Stop Docker Compose Stack
-        if: always()
-        run: docker compose -f compose.yaml -f compose.dev.yaml down
+    uses: ./.github/workflows/_e2e-playwright.yml
 
   infra:
     name: infra / compose-config
-    runs-on: ubuntu-latest
     if: github.base_ref == 'dev' || startsWith(github.head_ref, 'hotfix/')
-    env:
-      TRAEFIK_ACME_EMAIL: ops@example.com
-      CODRUT_HOST: codrut.example.com
-      CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
-      CODRUT_REDIS_URL: redis://redis:6379/0
-      CODRUT_SESSION_SECRET: compose-config-secret
-      CODRUT_CORS_ORIGINS: '["https://codrut.example.com"]'
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker compose -f compose.yaml -f compose.dev.yaml config
-      - run: docker compose -f compose.yaml -f compose.prod.yaml config
+    uses: ./.github/workflows/_compose-validate.yml
+    with:
+      mode: both
 
   required:
     name: app-ci / required
