@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
-import { getApiBaseUrl, isDemoFallbackEnabled } from "@/api/runtime";
+import { getApiBaseUrl } from "@/api/runtime";
 import {
   createCompany,
   importCompanyRoster,
   sendParticipantInvitations,
-  type CompanyAssignment,
-  type CompanyParticipant,
   type ParticipantInvitationMode,
   type RosterInviteResult,
 } from "@/api/companies";
@@ -45,21 +43,6 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   pcm_profile: ["profil pcm", "pcm", "pcm profile", "profil_pcm"],
 };
 
-function buildDemoAssignments(companyId: string, participants: CompanyParticipant[]): CompanyAssignment[] {
-  return participants.flatMap((participant) =>
-    ["distress_drivers", "lencioni"].map((questionnaireKey) => ({
-      id: crypto.randomUUID(),
-      company_id: companyId,
-      respondent_profile_id: participant.id,
-      questionnaire_key: questionnaireKey,
-      target_type: "self" as const,
-      status: "assigned" as const,
-      submitted_at: null,
-      scored_at: null,
-    })),
-  );
-}
-
 export function RosterImporter({ companies, defaultCompanyId, lockCompany = false }: RosterImporterProps) {
   const router = useRouter();
   const [companyId, setCompanyId] = useState(defaultCompanyId || companies[0]?.id || "");
@@ -73,23 +56,6 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
       setCompanyId(defaultCompanyId);
     }
   }, [defaultCompanyId]);
-
-  useEffect(() => {
-    if (isDemoFallbackEnabled() && typeof window !== "undefined") {
-      const stored = localStorage.getItem("codrut_local_companies");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as CompanyOption[];
-          const map = new Map<string, CompanyOption>();
-          companies.forEach((c) => map.set(c.id, c));
-          parsed.forEach((c) => map.set(c.id, c));
-          setAllCompanies(Array.from(map.values()));
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
-  }, [companies]);
 
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -384,7 +350,6 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
       const results = importResult.email_results ?? [];
       setEmailResults(results);
       setLastImportedParticipantIds(importResult.participants.map((participant) => participant.id));
-      saveToLocalStorage(companyId, importResult.participants, buildDemoAssignments(companyId, importResult.participants));
       router.refresh();
       setImportState({
         status: "success",
@@ -465,39 +430,6 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     } finally {
       setResendingId(null);
     }
-  };
-
-  const saveToLocalStorage = (cId: string, participants: CompanyParticipant[], assignments: CompanyAssignment[]) => {
-    if (!isDemoFallbackEnabled()) return;
-    if (typeof window === "undefined") return;
-
-    // Load existing participants
-    const existingPStored = localStorage.getItem(`codrut_participants_${cId}`);
-    let combinedParticipants = [...participants];
-    if (existingPStored) {
-      try {
-        const parsed = JSON.parse(existingPStored) as CompanyParticipant[];
-        // Filter out duplicates by email
-        const newEmails = new Set(participants.map((p) => p.email.toLowerCase()));
-        combinedParticipants = [...parsed.filter((p) => !newEmails.has(p.email.toLowerCase())), ...participants];
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    localStorage.setItem(`codrut_participants_${cId}`, JSON.stringify(combinedParticipants));
-
-    // Load existing assignments
-    const existingAStored = localStorage.getItem(`codrut_assignments_${cId}`);
-    let combinedAssignments = [...assignments];
-    if (existingAStored) {
-      try {
-        const parsed = JSON.parse(existingAStored) as CompanyAssignment[];
-        combinedAssignments = [...parsed, ...assignments];
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    localStorage.setItem(`codrut_assignments_${cId}`, JSON.stringify(combinedAssignments));
   };
 
   return (
