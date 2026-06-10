@@ -31,9 +31,25 @@ from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
 workflow from another branch fails before images are built.
 
 Treat the `prod` GitHub Environment as the final approval and secret boundary.
-Use the internal staging or acceptance checklist before opening the release PR;
-do not use manual dispatch to promote unmerged feature refs or non-hotfix
-branches.
+Use the `VPS Staging Deployment` workflow or the acceptance checklist before
+opening the release PR; do not use manual dispatch to promote unmerged feature
+refs or non-hotfix branches.
+
+## Staging
+
+`VPS Staging Deployment` runs from `dev` when the repository variable
+`ENABLE_STAGING_DEPLOY` is set to `true`, and it can also be started manually
+with `workflow_dispatch`. It uses the `staging` GitHub Environment, so staging
+must have its own environment secrets before automatic deploys are enabled.
+
+If staging shares the same VPS host as production, set these staging-only
+environment secrets so it does not overwrite production Compose state:
+
+- `CODRUT_DEPLOY_DIR`, for example `/opt/codrut-platform-staging`
+- `CODRUT_COMPOSE_PROJECT_NAME`, for example `codrut-platform-staging`
+
+Prefer a separate staging host or database before real client data enters the
+system.
 
 ## Required Checks
 
@@ -64,15 +80,16 @@ or `hotfix/*`, and skips that source-branch check on non-production PRs.
 
 ## Images
 
-The deployment workflow separates build and deploy work:
+The deployment workflows separate build and deploy work:
 
-- `build-images` validates the production Compose config with placeholder
-  secrets, then builds and pushes backend/frontend images tagged with the
-  release commit SHA.
-- `deploy-vps` runs behind the `prod` GitHub Environment, consumes the exact
+- `_image-build.yml` builds backend/frontend images with BuildKit cache and can
+  either build-only for release gates or push SHA-tagged images for deploys.
+- `_deploy-vps.yml` runs behind the selected GitHub Environment, consumes the exact
   image refs from `build-images`, writes the VPS `.env`, pulls those images,
   migrates, recreates app services, asserts running image refs, and checks
   health.
+- `deploy-vps.yml` is the production caller. `deploy-staging.yml` is the staging
+  caller.
 
 Backend and frontend images are tagged with the release commit SHA:
 
@@ -99,6 +116,11 @@ Required GitHub secrets for the `VPS Deployment` workflow:
 - `CODRUT_EMAIL_FROM_NAME`
 - `CODRUT_EMAIL_BREVO_API_KEY`
 - `CODRUT_DB_VOLUME_PATH`
+
+Optional environment secrets:
+
+- `CODRUT_DEPLOY_DIR` defaults to `/opt/codrut-platform`.
+- `CODRUT_COMPOSE_PROJECT_NAME` defaults to `codrut-platform`.
 
 For the current single-host Compose deployment, the workflow derives
 `CODRUT_DATABASE_URL` from the `POSTGRES_*` secrets and writes the database into a

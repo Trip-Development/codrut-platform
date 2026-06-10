@@ -1,42 +1,37 @@
-name: VPS Production Deployment
+name: VPS Staging Deployment
 
 on:
   push:
     branches:
-      - prod
+      - dev
   workflow_dispatch:
-    inputs:
-      confirm_prod_ref:
-        description: Type prod to confirm this deployment is running from refs/heads/prod.
-        required: true
-        type: string
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: prod-vps-deploy
-  cancel-in-progress: false
+  group: staging-vps-deploy
+  cancel-in-progress: true
 
 jobs:
   build-images:
-    name: Build Production Images
+    name: Build Staging Images
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
     uses: ./.github/workflows/_image-build.yml
     with:
       push: true
-      tag: ${{ github.sha }}
+      tag: staging-${{ github.sha }}
     secrets: inherit
 
   deploy-vps:
-    name: Deploy to Hetzner VPS
+    name: Deploy to Staging VPS
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
     needs: build-images
     uses: ./.github/workflows/_deploy-vps.yml
     with:
-      environment: prod
+      environment: staging
       backend_image: ${{ needs.build-images.outputs.backend-image }}
       frontend_image: ${{ needs.build-images.outputs.frontend-image }}
       release_sha: ${{ needs.build-images.outputs.release-sha }}
-      require_prod_ref: true
-      prod_confirmation: ${{ github.event.inputs.confirm_prod_ref || '' }}
     secrets: inherit

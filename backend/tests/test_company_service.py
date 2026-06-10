@@ -77,6 +77,21 @@ class FakeCompanyRepository:
         self.companies_by_name[company.name] = company
         return company
 
+    async def delete_company(self, company: Company) -> None:
+        self.companies_by_id.pop(company.id, None)
+        self.companies_by_name.pop(company.name, None)
+        self.memberships = [
+            membership for membership in self.memberships if membership.company_id != company.id
+        ]
+        self.participants = [
+            participant for participant in self.participants if participant.company_id != company.id
+        ]
+        self.reporting_relationships = [
+            relationship
+            for relationship in self.reporting_relationships
+            if relationship.company_id != company.id
+        ]
+
     async def add_membership(self, membership: CompanyMembership) -> CompanyMembership:
         membership.id = uuid.uuid4()
         self.memberships.append(membership)
@@ -213,6 +228,43 @@ async def test_list_companies_only_returns_user_memberships() -> None:
     await service.create_company(other_owner_id, CompanyCreateRequest(name="Second"))
 
     assert await service.list_companies(owner_id) == [first]
+
+
+async def test_delete_company_removes_company_and_related_local_records() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana Pop", email="ana@example.com"),
+    )
+
+    await service.delete_company(owner_id, company.id)
+
+    assert await repository.get_company(company.id) is None
+    assert repository.memberships == []
+    assert repository.participants == []
+
+
+async def test_trainer_can_delete_any_company_without_membership() -> None:
+    repository = FakeCompanyRepository()
+    identity_repository = FakeIdentityRepository()
+    service = make_service(repository, identity_repository)
+    owner_id = uuid.uuid4()
+    trainer = User(
+        id=uuid.uuid4(),
+        email="trainer@example.com",
+        password_hash=hash_password("trainer-password-123"),
+        role=UserRole.trainer,
+    )
+    identity_repository.users_by_id[trainer.id] = trainer
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+
+    await service.delete_company(trainer.id, company.id)
+
+    assert await repository.get_company(company.id) is None
 
 
 async def test_create_participant_is_company_scoped_and_cleans_fields() -> None:
