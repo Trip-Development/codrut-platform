@@ -149,9 +149,88 @@ describe("frontend API adapter stubs", () => {
     await expect(resolveInviteBundle("expired-demo")).resolves.toMatchObject({
       state: "expired",
     });
-    await expect(resolveInviteBundle("missing")).resolves.toMatchObject({
+  });
+
+  it("resolves real secure invite links through the backend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: "ana@example.com",
+        full_name: "Ana Pop",
+        is_leadership: false,
+        already_registered: false,
+        project_id: "project-1",
+        project_name: "Leadership training sept 2026",
+        expires_at: "2026-09-30T21:00:00Z",
+        token_status: "active",
+        tasks: [
+          {
+            id: "assignment-1",
+            title: "Lencioni pentru echipa ta",
+            status: "not_started",
+            detail: "Raspuns pentru echipa din care faci parte.",
+            href: "/participant/questionnaires/lencioni?assignmentId=assignment-1",
+            assignmentId: "assignment-1",
+            targetLabel: "Leadership",
+            estimatedMinutes: 12,
+            questionnaireKey: "lencioni",
+          },
+        ],
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveInviteBundle("real-token")).resolves.toMatchObject({
+      state: "valid",
+      projectName: "Leadership training sept 2026",
+      participantEmail: "ana@example.com",
+      participantFullName: "Ana Pop",
+      isLeadership: false,
+      alreadyRegistered: false,
+      deadlineLabel: expect.stringContaining("2026"),
+      tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/invite/verify?token=real-token"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+  });
+
+  it("maps backend invite failures without falling back to demo data", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: {
+          code: "task_link_expired",
+          message: "Linkul a expirat.",
+        },
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveInviteBundle("expired-real")).resolves.toMatchObject({
+      state: "expired",
+      message: "Linkul a expirat.",
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("keeps demo invite tokens unavailable when demo fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveInviteBundle("demo-token")).resolves.toMatchObject({
       state: "not_found",
     });
+    await expect(resolveInviteBundle("expired-demo")).resolves.toMatchObject({
+      state: "not_found",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("uses seeded questionnaire response fallback for demo assignments", async () => {

@@ -6,32 +6,9 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { SessionBanner } from "@/components/shell/session-banner";
 import { TaskBundle } from "@/components/tasks/task-bundle";
 import { audienceAccessNote } from "@/api/auth";
-import { resolveInviteBundle } from "@/api/invites";
-import { isDemoFallbackEnabled } from "@/api/runtime";
+import { resolveInviteBundle, type InviteBundle } from "@/api/invites";
 
-type InviteTask = {
-  id: string;
-  title: string;
-  status: "not_started" | "in_progress" | "completed";
-  detail: string;
-  href: string;
-  assignmentId: string;
-  targetLabel: string;
-  estimatedMinutes: number;
-  questionnaireKey: string;
-};
-
-type VerifyData = {
-  email: string;
-  full_name: string;
-  is_leadership: boolean;
-  already_registered: boolean;
-  project_id?: string;
-  project_name: string;
-  expires_at?: string;
-  token_status?: "active";
-  tasks: InviteTask[];
-};
+type ValidInviteBundle = Extract<InviteBundle, { state: "valid" }>;
 
 type InvitePageProps = {
   params: Promise<{ token: string }>;
@@ -41,44 +18,25 @@ export default function InvitePage({ params }: InvitePageProps) {
   const { token } = use(params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<VerifyData | null>(null);
+  const [data, setData] = useState<ValidInviteBundle | null>(null);
 
   useEffect(() => {
     async function verify() {
       try {
-        if (isDemoFallbackEnabled() && (token === "demo-token" || token === "expired-demo")) {
-          const bundle = await resolveInviteBundle(token);
-          if (bundle.state !== "valid") {
-            throw new Error(bundle.message);
-          }
-          setData({
-            email: bundle.participantEmail,
-            full_name: "Participant demo",
-            is_leadership: false,
-            already_registered: false,
-            project_name: bundle.projectName,
-            tasks: bundle.tasks,
-          });
-          return;
+        const bundle = await resolveInviteBundle(token);
+        if (bundle.state !== "valid") {
+          throw new Error(bundle.message);
         }
 
-        const res = await fetch(`/api/auth/invite/verify?token=${encodeURIComponent(token)}`, {
-          credentials: "include",
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error?.message || "Invitația este nevalidă sau a expirat.");
-        }
-        const verifyData: VerifyData = await res.json();
-        setData(verifyData);
+        setData(bundle);
 
         sessionStorage.setItem(
           "codrut_invite",
           JSON.stringify({
-            email: verifyData.email,
+            email: bundle.participantEmail,
             token,
-            fullName: verifyData.full_name,
-            isLeadership: verifyData.is_leadership,
+            fullName: bundle.participantFullName,
+            isLeadership: bundle.isLeadership,
           })
         );
       } catch (err) {
@@ -132,14 +90,14 @@ export default function InvitePage({ params }: InvitePageProps) {
     );
   }
 
-  if (data.already_registered && data.is_leadership) {
+  if (data.alreadyRegistered && data.isLeadership) {
     return (
       <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
         <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <h1 className="font-display mt-8 text-2xl font-bold text-foreground">Cont deja existent</h1>
           <p className="mt-3 text-sm text-foreground/60 leading-6">
-            Ai creat deja un cont de Leadership pentru adresa de e-mail <strong className="text-foreground/80">{data.email}</strong>.
+            Ai creat deja un cont de Leadership pentru adresa de e-mail <strong className="text-foreground/80">{data.participantEmail}</strong>.
           </p>
           <div className="mt-8 space-y-3">
             <NextLink
@@ -173,41 +131,34 @@ export default function InvitePage({ params }: InvitePageProps) {
         </h1>
 
         <p className="mt-4 max-w-2xl text-base leading-7 text-foreground/65">
-          Acest link strânge toate chestionarele asociate e-mailului <strong className="text-foreground/80">{data.email}</strong> în proiectul <strong className="text-foreground/80">{data.project_name}</strong>{data.expires_at ? ` până la ${formatInviteDeadline(data.expires_at)}.` : "."}
+          Acest link strânge toate chestionarele asociate e-mailului <strong className="text-foreground/80">{data.participantEmail}</strong> în proiectul <strong className="text-foreground/80">{data.projectName}</strong>{data.expiresAt ? ` până la ${data.deadlineLabel}.` : "."}
         </p>
 
         <div className="mt-6">
-          <SessionBanner note={audienceAccessNote(data.is_leadership ? "participant" : "invitee")} />
+          <SessionBanner note={audienceAccessNote(data.isLeadership ? "participant" : "invitee")} />
         </div>
 
         <div className="mt-8">
           <TaskBundle
             tasks={data.tasks}
-            projectName={data.project_name}
-            participantEmail={data.email}
-            deadlineLabel={data.expires_at ? formatInviteDeadline(data.expires_at) : "finalul evaluării"}
+            projectName={data.projectName}
+            participantEmail={data.participantEmail}
+            deadlineLabel={data.deadlineLabel}
           />
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 sm:flex-row border-t border-[var(--border)] pt-8">
-          {data.is_leadership ? (
+        <div className="mt-10 flex flex-col gap-4 border-t border-[var(--border)] pt-8 sm:flex-row">
+          {data.isLeadership ? (
             <NextLink
               href="/register"
               className="tap-soft rounded-2xl bg-burgundy hover:bg-burgundy-dark px-6 py-4 text-center font-bold text-white shadow-md transition-colors"
             >
               Înregistrează cont Leadership
             </NextLink>
-          ) : (
-            <NextLink
-              href={data.tasks[0]?.href ?? "/participant/questionnaires"}
-              className="tap-soft rounded-2xl bg-burgundy hover:bg-burgundy-dark px-6 py-4 text-center font-bold text-white shadow-md transition-colors"
-            >
-              Începe completarea
-            </NextLink>
-          )}
+          ) : null}
           <NextLink
             href="/"
-            className="tap-soft rounded-2xl border border-[var(--border)] bg-surface hover:bg-surface-muted px-6 py-4 text-center font-bold text-foreground transition-colors"
+            className="tap-soft rounded-2xl border border-[var(--border)] bg-surface hover:bg-surface-muted px-6 py-4 text-center font-bold text-foreground transition-colors sm:ml-auto"
           >
             Pagina principală
           </NextLink>
@@ -215,17 +166,4 @@ export default function InvitePage({ params }: InvitePageProps) {
       </section>
     </main>
   );
-}
-
-function formatInviteDeadline(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "deadline-ul proiectului";
-  }
-
-  return new Intl.DateTimeFormat("ro-RO", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
 }
