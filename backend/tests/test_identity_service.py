@@ -13,7 +13,7 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
 )
 from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
-from codrut.modules.companies.models import Company, ParticipantProfile
+from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import RegisterRequest
 from codrut.modules.identity.service import IdentityService
@@ -75,12 +75,73 @@ async def test_verify_invite_token_success() -> None:
     assert result.full_name == "Test User"
     assert result.is_leadership is True
     assert result.already_registered is False
-    assert result.project_id == claims.company_id
+    assert result.project_id is None
     assert result.project_name == "Intake Iunie"
     assert result.expires_at.timestamp() == int(claims.expires_at.timestamp())
     assert result.token_status == "active"  # noqa: S105
     assert len(result.tasks) == 1
     assert result.tasks[0].id == str(mock_assignment.id)
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_token_uses_assignment_project_context() -> None:
+    settings = get_settings()
+    project_id = uuid.uuid4()
+    claims = TaskLinkClaims(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        assignment_ids=(uuid.uuid4(),),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    token = create_task_token(claims, settings)
+
+    mock_session = AsyncMock()
+    mock_profile = ParticipantProfile(
+        id=claims.respondent_profile_id,
+        company_id=claims.company_id,
+        user_id=None,
+        email="test@example.com",
+        full_name="Test User",
+    )
+    mock_result_profile = MagicMock()
+    mock_result_profile.scalar_one_or_none.return_value = mock_profile
+
+    mock_result_leadership = MagicMock()
+    mock_result_leadership.scalar.return_value = False
+
+    mock_assignment = QuestionnaireAssignment(
+        id=claims.assignment_ids[0],
+        company_id=claims.company_id,
+        project_id=project_id,
+        respondent_profile_id=claims.respondent_profile_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.invited,
+    )
+    mock_result_assignments = MagicMock()
+    mock_result_assignments.scalars.return_value.all.return_value = [mock_assignment]
+
+    mock_project = CompanyProject(
+        id=project_id,
+        company_id=claims.company_id,
+        name="Leadership septembrie",
+    )
+    mock_result_project = MagicMock()
+    mock_result_project.scalar_one_or_none.return_value = mock_project
+
+    mock_session.execute.side_effect = [
+        mock_result_profile,
+        _company_result(claims.company_id, name="Michelin"),
+        mock_result_leadership,
+        mock_result_assignments,
+        mock_result_project,
+    ]
+
+    service = IdentityService(mock_session)
+    result = await service.verify_invite_token(token)
+
+    assert result.project_id == project_id
+    assert result.project_name == "Leadership septembrie"
 
 
 @pytest.mark.asyncio
