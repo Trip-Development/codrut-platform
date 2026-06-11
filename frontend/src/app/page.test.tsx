@@ -29,7 +29,7 @@ describe("HomePage", () => {
     expect(screen.getByText("Codruț transformă trainingul în pași clari pentru fiecare om.")).toBeTruthy();
     expect(screen.getByText("Acasă")).toBeTruthy();
     expect(screen.getAllByText("Intră în cont").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Trainer login").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Autentificare trainer").length).toBeGreaterThan(0);
     expect(screen.getByText("Link sigur")).toBeTruthy();
     expect(screen.getByText("Continuitate după training, fără follow-up pierdut.")).toBeTruthy();
     expect(screen.queryByText("Tip 4")).toBeNull();

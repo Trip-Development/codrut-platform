@@ -224,6 +224,7 @@ class FormsService:
                         definition_schema=definition.schema,
                     )
                     assignment.status = AssignmentStatus.scored
+                    assignment.submitted_at = assignment.submitted_at or response.submitted_at
                     assignment.scored_at = response.submitted_at
                 except DomainError as e:
                     if e.code not in {"scoring_not_supported", "scoring_metadata_missing"}:

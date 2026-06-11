@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const companyTabs = [
   { key: "", label: "Sumar", shortLabel: "Sumar" },
-  { key: "/participants", label: "Roster", shortLabel: "Roster" },
+  { key: "/participants", label: "Participanți", shortLabel: "Participanți" },
   { key: "/invitations", label: "Invitații", shortLabel: "Invitații" },
   { key: "/org-chart", label: "Organigramă", shortLabel: "Org" },
   { key: "/teams", label: "Echipe", shortLabel: "Echipe" },

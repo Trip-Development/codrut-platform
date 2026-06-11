@@ -13,7 +13,7 @@ export default function UpdatePasswordPage() {
         </label>
         <button className="tap-soft mt-4 w-full rounded-xl bg-burgundy px-4 py-3 font-semibold text-white">Salvează parola</button>
         <p className="mt-5 text-center text-sm">
-          <Link href="/participant" className="font-semibold text-burgundy">Continuă la workspace</Link>
+          <Link href="/participant" className="font-semibold text-burgundy">Continuă în spațiul tău</Link>
         </p>
       </section>
     </main>

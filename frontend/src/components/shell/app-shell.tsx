@@ -146,7 +146,7 @@ export function AppShell({
         <div className="mb-8">
           <Link
             href="/"
-            className="tap-soft -m-2 block rounded-2xl p-2 transition-colors hover:bg-surface-muted"
+            className="tap-soft group -m-2 block rounded-2xl p-2 transition-colors hover:bg-surface-muted"
           >
             <BrandMark
               size="sm"
@@ -172,7 +172,7 @@ export function AppShell({
       <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b border-[var(--border)] bg-surface/90 px-4 py-3 shadow-sm backdrop-blur-xl md:hidden">
         <Link
           href="/"
-          className="tap-soft -m-2 block min-w-0 rounded-2xl p-2 transition-colors hover:bg-surface-muted"
+          className="tap-soft group -m-2 block min-w-0 rounded-2xl p-2 transition-colors hover:bg-surface-muted"
         >
             <BrandMark
               size="sm"
@@ -184,7 +184,7 @@ export function AppShell({
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="tap-soft rounded-xl border border-[var(--border)] bg-surface p-2.5 text-foreground/75 hover:bg-surface-muted"
-            aria-label="Toggle Navigation Menu"
+            aria-label="Deschide meniul de navigare"
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -201,7 +201,7 @@ export function AppShell({
           <nav
             className="animate-slide-in absolute bottom-0 left-0 top-0 flex h-full w-72 flex-col border-r border-[var(--border)] bg-[var(--shell-sidebar)] p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            aria-label="Mobile Drawer Navigation"
+            aria-label="Navigare mobilă"
           >
             <div className="mb-8 flex items-center justify-between">
                 <BrandMark
@@ -211,7 +211,7 @@ export function AppShell({
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="tap-soft rounded-xl p-1.5 text-foreground/50 hover:bg-surface-muted"
-                aria-label="Inchide meniul"
+                aria-label="Închide meniul"
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

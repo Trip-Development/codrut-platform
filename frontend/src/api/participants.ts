@@ -30,7 +30,7 @@ export async function getParticipantWorkspaceSummary(): Promise<ParticipantWorks
     cards: [
       {
         title: "De completat",
-        description: `${tasks.filter((task) => task.status !== "completed").length} task-uri active`,
+        description: `${tasks.filter((task) => task.status !== "completed").length} sarcini active`,
         meta: "Astăzi",
       },
       {
@@ -40,7 +40,7 @@ export async function getParticipantWorkspaceSummary(): Promise<ParticipantWorks
       },
       {
         title: "Fără cont",
-        description: "Linkul securizat strânge toate task-urile pentru emailul tău.",
+        description: "Linkul securizat strânge toate sarcinile pentru emailul tău.",
         meta: "Acces",
       },
     ],

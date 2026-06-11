@@ -283,7 +283,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Context global</p>
                 <h2 className="mt-1 text-lg font-semibold text-foreground">Invitațiile live se operează din companie</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
-                  Această pagină păstrează o privire agregată și șabloanele. Pentru a trimite emailuri, genera linkuri securizate sau verifica statusul unei persoane, deschide workspace-ul companiei și tabul Invitații.
+                  Această pagină păstrează o privire agregată și șabloanele. Pentru a trimite emailuri, genera linkuri securizate sau verifica statusul unei persoane, deschide spațiul companiei și tabul Invitații.
                 </p>
               </div>
               <Link
