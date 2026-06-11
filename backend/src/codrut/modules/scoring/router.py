@@ -40,10 +40,16 @@ async def get_assignment_scoring_result(
         forms_repo = FormsRepository(session)
         response = await forms_repo.get_response_by_assignment(assignment_id)
         if response is not None:
+            definition = await forms_repo.get_definition(
+                response.questionnaire_key,
+                version=response.questionnaire_version,
+            )
             result = await scoring_service.compute_and_save_score(
                 assignment_id=assignment_id,
                 questionnaire_key=response.questionnaire_key,
+                questionnaire_version=response.questionnaire_version,
                 answers=response.answers,
+                definition_schema=definition.schema if definition is not None else None,
             )
             await session.commit()
         else:

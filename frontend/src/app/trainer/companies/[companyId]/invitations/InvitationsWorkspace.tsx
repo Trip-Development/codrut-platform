@@ -330,7 +330,7 @@ export function InvitationsWorkspace({
           next.set(result.participant_id, result);
           return next;
         });
-        setMessage(result.email_sent ? `Email retrimis către ${result.email}.` : `Link pregătit pentru ${result.email}.`);
+        setMessage(formatResendMessage(result));
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invitația nu a putut fi retrimisă.");
@@ -600,6 +600,13 @@ export function InvitationsWorkspace({
       </section>
     </div>
   );
+}
+
+function formatResendMessage(result: RosterInviteResult): string {
+  if (result.email_sent) return `Email retrimis către ${result.email}.`;
+  if (result.error) return `Emailul nu a fost retrimis către ${result.email}: ${result.error}`;
+  if (result.invite_url) return `Link pregătit pentru ${result.email}.`;
+  return `Invitația nu a fost retrimisă către ${result.email}.`;
 }
 
 function InviteSummary({ label, value }: { label: string; value: string | number }) {
