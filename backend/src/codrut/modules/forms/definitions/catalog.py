@@ -1282,11 +1282,18 @@ def _boss_360_schema_from_icare(*, english: bool = False) -> DefinitionSchema:
     schema = deepcopy(ICARE_DEFINITION.schema)
     schema["audience"] = "participant"
     schema["response"] = {"mode": "person_feedback", "target": "person"}
+    schema["scoring"] = {
+        "method": "average_statement_scores_by_section",
+        "scale_min": 1,
+        "scale_max": 4,
+        "score_min": 0,
+        "score_unit": "percent",
+        "primary_result": "lowest_dimension",
+    }
     schema["instructions"] = (
         "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele "
         "iCARE observabile din perspectiva ta: autoevaluare, coleg sau raportor direct."
     )
-    schema.pop("scoring", None)
     if source := schema.get("source"):
         source["status"] = "approved"
 

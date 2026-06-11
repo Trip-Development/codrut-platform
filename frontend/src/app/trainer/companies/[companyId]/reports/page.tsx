@@ -38,8 +38,10 @@ export default async function CompanyReportsPage({
     .sort((first, second) => (second.submitted_at ?? "").localeCompare(first.submitted_at ?? ""));
   const lencioniCount = aggregate.lencioni_count;
   const driverCount = aggregate.driver_count;
+  const boss360Count = aggregate.boss_360_count;
   const lencioniAverages = aggregate.lencioni_averages;
   const driverAverages = aggregate.driver_averages;
+  const boss360Averages = aggregate.boss_360_averages;
   const totalAssigned = aggregate.total_assigned;
   const totalCompleted = aggregate.total_completed;
   const completionRate = aggregate.completion_rate;
@@ -106,7 +108,7 @@ export default async function CompanyReportsPage({
       </section>
 
       {/* Aggregated Visualizations Panel */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-3">
         {/* Lencioni Team Health Aggregation */}
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm flex flex-col justify-between">
           <div>
@@ -156,6 +158,47 @@ export default async function CompanyReportsPage({
           </div>
           <div className="mt-5 border-t border-[var(--border)] pt-3 text-[11px] text-foreground/50">
             * Scoruri de 8-9: disfuncție redusă. Scoruri sub 6: necesită atenție și intervenție imediată.
+          </div>
+        </section>
+
+        {/* 360 iCARE Feedback Aggregation */}
+        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-3">
+              <div>
+                <h3 className="font-bold text-foreground">Feedback 360 iCARE</h3>
+                <p className="text-xs text-foreground/50 mt-0.5">Media pe dimensiuni iCARE (scală 25-100%)</p>
+              </div>
+              <span className="rounded-full bg-burgundy/10 px-2.5 py-1 text-xs font-bold text-burgundy border border-burgundy/20">
+                {boss360Count} respondent(i)
+              </span>
+            </div>
+            {boss360Count === 0 ? (
+              <div className="py-12 text-center text-foreground/50 text-sm">
+                Niciun răspuns 360 completat {selectedProject ? "pentru acest proiect." : "pentru această companie."}
+              </div>
+            ) : boss360Count < 3 ? (
+              <div className="py-12 text-center text-foreground/50 text-sm italic">
+                Rezultatele agregate vor fi afișate după ce minim 3 respondenți completează feedback-ul 360 (în prezent: {boss360Count}).
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                {boss360Averages.map((item) => (
+                  <div key={item.id} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span className="text-foreground">{item.label}</span>
+                      <span className="text-foreground/70">{item.avg}%</span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-surface-muted overflow-hidden">
+                      <div className="h-full bg-emerald-600 transition-all" style={{ width: `${item.avg}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="mt-5 border-t border-[var(--border)] pt-3 text-[11px] text-foreground/50">
+            * Scala iCARE activă mapează Rar/Uneori/Frecvent/Întotdeauna la 25/50/75/100%.
           </div>
         </section>
 

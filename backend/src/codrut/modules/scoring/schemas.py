@@ -24,6 +24,8 @@ class CompanyReportAggregateResponse(BaseModel):
     completion_rate: int
     lencioni_count: int
     driver_count: int
+    boss_360_count: int
     lencioni_averages: list[ReportAverageResponse]
     driver_averages: list[ReportAverageResponse]
+    boss_360_averages: list[ReportAverageResponse]
     results: list[ScoringResultResponse]
