@@ -430,24 +430,24 @@ class CommunicationsService:
 
         campaign = {
             "videoHost": {
-                "provider": "Codrut watch page + Cloudflare R2",
+                "provider": "Codruț watch page + Cloudflare R2",
                 "status": "needs_upload",
                 "note": (
-                    "Emailul trimite thumbnail si CTA catre pagina Codrut; "
-                    "video-ul nu este redat direct in email."
+                    "Emailul trimite thumbnail și CTA către pagina Codruț; "
+                    "video-ul nu este redat direct în email."
                 ),
             },
             "template": {
-                "subject": "O idee practica pentru echipa ta, ${first_name}",
-                "personalization": "Prenumele se completeaza automat cand exista nume in baza.",
-                "ctaPrimary": "Programeaza o discutie",
-                "ctaSecondary": "Vreau sa fiu contactat",
+                "subject": "O idee practică pentru echipa ta, ${first_name}",
+                "personalization": "Prenumele se completează automat când există nume în bază.",
+                "ctaPrimary": "Programează o discuție",
+                "ctaSecondary": "Vreau să fiu contactat",
             },
             "recipients": [],
             "weeklyReport": {
-                "cadence": "Saptamanal",
+                "cadence": "Săptămânal",
                 "metrics": ["open rate", "click rate", "view rate"],
-                "notification": "Andrei primeste email/Telegram cu link catre raport.",
+                "notification": "Andrei primește email/Telegram cu link către raport.",
             },
         }
 
