@@ -67,6 +67,9 @@ Expected behavior:
 - `Generează linkuri securizate` creates links without sending email.
 - `Trimite invitații email` sends through the configured provider; in local dev,
   verify delivery in Mailpit at <http://localhost:8025>.
+- Permanent participant accounts are redirected to the PCM base task when it is
+  still required; the account page should link to the persisted PCM assignment,
+  not to an assignment-less questionnaire route.
 - Reports aggregate both Romanian and English questionnaire keys into the same
   Lencioni, Distress Drivers, and 360 iCARE buckets.
 

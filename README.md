@@ -41,6 +41,11 @@ The trainer workflow for the current client-ready build is:
 6. Participants complete questionnaires through account or secure-link access.
 7. Reports aggregate submitted/scored responses with confidentiality thresholds.
 
+Permanent participant accounts must complete the PCM base profile from a
+persisted assignment-backed task before continuing through the participant
+workspace. The account page uses the saved PCM task link when it exists, so
+save/submit stays connected to the database.
+
 The default assignment plan is generated from roster role groups, reporting
 relationships, and teams:
 
@@ -75,6 +80,7 @@ Focused checks for the current core workflow live in:
 - `backend/tests/test_assignment_invites.py`
 - `backend/tests/test_questionnaire_response_service.py`
 - `backend/tests/test_scoring_service.py`
+- `frontend/src/app/participant/account/AccountWorkspace.test.tsx`
 - `frontend/src/app/trainer/companies/[companyId]/invitations/InvitationsWorkspace.test.tsx`
 - `frontend/src/app/trainer/companies/[companyId]/reports/report-aggregation.test.ts`
 - `frontend/src/app/trainer/roster/roster-importer.test.tsx`
