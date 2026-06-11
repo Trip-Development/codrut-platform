@@ -2,8 +2,16 @@ import uuid
 
 import pytest
 
+from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
+from codrut.modules.assignments.models import (
+    AssignmentStatus,
+    AssignmentTargetType,
+    QuestionnaireAssignment,
+)
+from codrut.modules.companies.models import Company, ParticipantProfile
 from codrut.modules.forms.models import QuestionnaireKey
+from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.service import ScoringService
 
@@ -125,3 +133,127 @@ async def test_scoring_unsupported_key() -> None:
             questionnaire_key=QuestionnaireKey.boss_360,
             answers={},
         )
+
+
+async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Aggregate {uuid.uuid4().hex[:8]}")
+            other_company = Company(id=uuid.uuid4(), name=f"Other Aggregate {uuid.uuid4().hex[:8]}")
+            session.add_all([company, other_company])
+            await session.flush()
+
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Ana Aggregate",
+                email=f"ana-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            other_participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=other_company.id,
+                full_name="Other Aggregate",
+                email=f"other-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            session.add_all([participant, other_participant])
+            await session.flush()
+
+            lencioni_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            driver_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="distress_drivers",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            submitted_without_score = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="boss_360",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.submitted,
+            )
+            other_company_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=other_company.id,
+                respondent_profile_id=other_participant.id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            session.add_all(
+                [
+                    lencioni_assignment,
+                    driver_assignment,
+                    submitted_without_score,
+                    other_company_assignment,
+                ]
+            )
+            await session.flush()
+
+            session.add_all(
+                [
+                    ScoringResult(
+                        assignment_id=lencioni_assignment.id,
+                        primary_result="absence_of_trust",
+                        scores={
+                            "absence_of_trust": {"score": 6},
+                            "fear_of_conflict": {"score": 9},
+                            "lack_of_commitment": {"score": 8},
+                            "avoidance_of_accountability": {"score": 7},
+                            "inattention_to_results": {"score": 5},
+                        },
+                    ),
+                    ScoringResult(
+                        assignment_id=driver_assignment.id,
+                        primary_result="hurry_up",
+                        scores={
+                            "be_strong": 10,
+                            "be_perfect": "20",
+                            "try_hard": 30,
+                            "hurry_up": 40,
+                            "please_people": 50,
+                        },
+                    ),
+                    ScoringResult(
+                        assignment_id=other_company_assignment.id,
+                        primary_result="fear_of_conflict",
+                        scores={
+                            "absence_of_trust": {"score": 1},
+                            "fear_of_conflict": {"score": 1},
+                            "lack_of_commitment": {"score": 1},
+                            "avoidance_of_accountability": {"score": 1},
+                            "inattention_to_results": {"score": 1},
+                        },
+                    ),
+                ]
+            )
+            await session.flush()
+
+            aggregate = await ScoringService(session).get_company_report_aggregate(company.id)
+
+            assert aggregate.total_assigned == 3
+            assert aggregate.total_completed == 3
+            assert aggregate.completion_rate == 100
+            assert aggregate.lencioni_count == 1
+            assert aggregate.driver_count == 1
+            assert {result.assignment_id for result in aggregate.results} == {
+                lencioni_assignment.id,
+                driver_assignment.id,
+            }
+            assert aggregate.lencioni_averages[0].avg == 6
+            assert aggregate.driver_averages[1].avg == 20
+
+            await session.rollback()
+    finally:
+        await engine.dispose()

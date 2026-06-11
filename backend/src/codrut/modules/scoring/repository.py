@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.modules.assignments.models import QuestionnaireAssignment
 from codrut.modules.scoring.models import ScoringResult
 
 
@@ -19,6 +20,18 @@ class ScoringRepository:
         self.session.add(result)
         await self.session.flush()
         return result
+
+    async def list_company_assignment_results(
+        self,
+        company_id: UUID,
+    ) -> list[tuple[QuestionnaireAssignment, ScoringResult | None]]:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment, ScoringResult)
+            .outerjoin(ScoringResult, ScoringResult.assignment_id == QuestionnaireAssignment.id)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .order_by(QuestionnaireAssignment.created_at)
+        )
+        return [(assignment, scoring_result) for assignment, scoring_result in result.all()]
 
     async def delete_by_assignment(self, assignment_id: UUID) -> None:
         stmt = delete(ScoringResult).where(ScoringResult.assignment_id == assignment_id)
