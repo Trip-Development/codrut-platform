@@ -15,7 +15,12 @@ export default async function CompanyParticipantsPage({
 
   return (
     <div className="space-y-5">
-      <RosterImporter companies={[{ id: companyId, name: companyName }]} defaultCompanyId={companyId} lockCompany />
+      <RosterImporter
+        companies={[{ id: companyId, name: companyName }]}
+        defaultCompanyId={companyId}
+        existingParticipants={participants}
+        lockCompany
+      />
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="border-b border-[var(--border)] px-5 py-4">
