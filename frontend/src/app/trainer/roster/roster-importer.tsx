@@ -6,10 +6,6 @@ import * as XLSX from "xlsx";
 import {
   createCompany,
   importCompanyRoster,
-  resendParticipantInvitation,
-  sendParticipantInvitations,
-  type ParticipantInvitationMode,
-  type RosterInviteResult,
 } from "@/api/companies";
 import { normalizeReportsToName } from "@/api/roster-format";
 
@@ -97,19 +93,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     pcm_profile: "",
   });
 
-  const [emailResults, setEmailResults] = useState<RosterInviteResult[]>([]);
   const [lastImportedParticipantIds, setLastImportedParticipantIds] = useState<string[]>([]);
-  const [copiedResultId, setCopiedResultId] = useState<string | null>(null);
-  const [resendingId, setResendingId] = useState<string | null>(null);
-  const [deliveryState, setDeliveryState] = useState<{
-    status: "idle" | "sending" | "success" | "error";
-    mode: ParticipantInvitationMode | null;
-    message: string;
-  }>({
-    status: "idle",
-    mode: null,
-    message: "",
-  });
 
   const [importState, setImportState] = useState<{
     status: "idle" | "ready" | "importing" | "success" | "error";
@@ -129,10 +113,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     if (!file) return;
 
     setImportState({ status: "importing", message: "Se citește fișierul..." });
-    setEmailResults([]);
     setLastImportedParticipantIds([]);
-    setDeliveryState({ status: "idle", mode: null, message: "" });
-    setCopiedResultId(null);
     setEditedCells({});
     setEditingCellId(null);
 
@@ -370,10 +351,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     {
       key: "access",
       label: "Alege accesul",
-      detail:
-        deliveryState.status === "success"
-          ? deliveryState.message
-          : "Emailuri sau linkuri",
+      detail: "Din tabul Invitații",
       state: activeStep === "access" ? "current" : "upcoming",
     },
   ];
@@ -396,10 +374,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     if (!companyId || processedRows.length === 0 || hasCriticalErrors) return;
 
     setImportState({ status: "importing", message: "Se importă participanții..." });
-    setEmailResults([]);
     setLastImportedParticipantIds([]);
-    setDeliveryState({ status: "idle", mode: null, message: "" });
-    setCopiedResultId(null);
 
     try {
       const importResult = await importCompanyRoster(
@@ -413,87 +388,17 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
           "Profil PCM": r.pcm_profile,
         })),
       );
-      const results = importResult.email_results ?? [];
-      setEmailResults(results);
       setLastImportedParticipantIds(importResult.participants.map((participant) => participant.id));
       router.refresh();
       setImportState({
         status: "success",
-        message: `Import reușit: ${importResult.total_imported} participanți salvați. Alege mai jos cum trimiți accesul.`,
+        message: `Import reușit: ${importResult.total_imported} participanți salvați. Continuă în tabul Invitații pentru emailuri sau linkuri securizate.`,
       });
     } catch (error) {
       setImportState({
         status: "error",
         message: error instanceof Error ? error.message : "Importul rosterului a eșuat în backend.",
       });
-    }
-  };
-
-  const handleDeliverInvites = async (mode: ParticipantInvitationMode) => {
-    if (!companyId || lastImportedParticipantIds.length === 0) return;
-    setDeliveryState({
-      status: "sending",
-      mode,
-      message: mode === "email" ? "Se trimit emailurile..." : "Se generează linkurile securizate...",
-    });
-    setCopiedResultId(null);
-
-    try {
-      const result = await sendParticipantInvitations(companyId, {
-        participantIds: lastImportedParticipantIds,
-        mode,
-      });
-      setEmailResults(result.results);
-      router.refresh();
-      setDeliveryState({
-        status: "success",
-        mode,
-        message:
-          mode === "email"
-            ? `${result.emails_sent}/${result.total} emailuri trimise.`
-            : `${result.links_generated} linkuri securizate generate.`,
-      });
-    } catch (error) {
-      setDeliveryState({
-        status: "error",
-        mode,
-        message: error instanceof Error ? error.message : "Livrarea accesului a eșuat.",
-      });
-    }
-  };
-
-  const handleCopyLink = async (result: RosterInviteResult) => {
-    if (!result.invite_url || typeof navigator === "undefined") return;
-    try {
-      await navigator.clipboard.writeText(result.invite_url);
-      setCopiedResultId(result.participant_id);
-    } catch {
-      setDeliveryState({
-        status: "error",
-        mode: "secure_links",
-        message: "Linkul nu a putut fi copiat. Deschideți meniul contextual al browserului și copiați manual.",
-      });
-    }
-  };
-
-  const handleResend = async (participantId: string) => {
-    if (!companyId) return;
-    setResendingId(participantId);
-    try {
-      const result = await resendParticipantInvitation(companyId, participantId);
-      if (result) {
-        setEmailResults((prev) =>
-          prev.map((r) => (r.participant_id === participantId ? { ...r, ...result } : r)),
-        );
-      }
-    } catch (error) {
-      setDeliveryState({
-        status: "error",
-        mode: "email",
-        message: error instanceof Error ? error.message : "Retrimiterea invitației a eșuat.",
-      });
-    } finally {
-      setResendingId(null);
     }
   };
 
@@ -507,7 +412,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import roster</p>
             <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
-              Importul creează rosterul în companie. Abia după confirmare alegi dacă trimiți emailuri sau pregătești linkuri securizate.
+              Importul creează rosterul în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
             </p>
             <p className="mt-4 inline-flex rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
               Fără trimitere automată la import
@@ -606,105 +511,18 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acces participanți</p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">Roster salvat. Alege livrarea.</h3>
+              <h3 className="mt-1 text-base font-semibold text-foreground">Roster salvat. Continuă în Invitații.</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-foreground/62">
-                Acesta este un pas separat de import. Poți trimite invitațiile acum sau poți genera linkuri pentru distribuție manuală.
+                Am separat importul de livrare ca să nu trimiți accidental emailuri în timp ce cureți rosterul. În tabul Invitații vezi statusul persistent, trimiți emailuri, retrimiți individual și copiezi linkuri securizate.
               </p>
             </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <DeliveryChoice
-              title="Trimite emailuri"
-              detail="Folosește șablonul activ și salvează statusul de livrare pentru fiecare participant."
-              action={deliveryState.status === "sending" && deliveryState.mode === "email" ? "Se trimit..." : "Trimite emailuri"}
-              disabled={deliveryState.status === "sending"}
-              selected={deliveryState.mode === "email"}
-              onClick={() => handleDeliverInvites("email")}
-            />
-            <DeliveryChoice
-              title="Generează linkuri"
-              detail="Creează linkuri securizate fără expediere, potrivite pentru trimitere manuală sau test."
-              action={deliveryState.status === "sending" && deliveryState.mode === "secure_links" ? "Se generează..." : "Generează linkuri"}
-              disabled={deliveryState.status === "sending"}
-              selected={deliveryState.mode === "secure_links"}
-              onClick={() => handleDeliverInvites("secure_links")}
-            />
-          </div>
-          {deliveryState.message && (
-            <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${
-              deliveryState.status === "error" ? "bg-red-50 text-red-700" : deliveryState.status === "success" ? "bg-green-50 text-green-700" : "bg-burgundy/5 text-burgundy"
-            }`}>
-              {deliveryState.message}
-            </p>
-          )}
-        </section>
-      )}
-
-      {/* Delivery results table */}
-      {importState.status === "success" && emailResults.length > 0 && (
-        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-foreground">Rezultat livrare acces</h3>
-            <span className="text-xs text-foreground/50">
-              {emailResults.filter((r) => r.email_sent || r.delivery_mode === "secure_links").length}/{emailResults.length} pregătite
-            </span>
-          </div>
-          <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-            <table className="w-full text-xs">
-              <thead className="bg-background border-b border-[var(--border)]">
-                <tr>
-                  <th className="px-4 py-2.5 text-left font-bold text-foreground/70">Participant</th>
-                  <th className="px-4 py-2.5 text-left font-bold text-foreground/70">Email</th>
-                  <th className="px-4 py-2.5 text-center font-bold text-foreground/70">Status</th>
-                  <th className="px-4 py-2.5 text-right font-bold text-foreground/70">Acțiune</th>
-                </tr>
-              </thead>
-              <tbody>
-                {emailResults.map((r) => (
-                  <tr key={r.participant_id} className="border-b border-[var(--border)] transition-colors last:border-0 hover:bg-surface-muted/50">
-                    <td className="px-4 py-2.5 font-semibold text-foreground">{r.full_name}</td>
-                    <td className="px-4 py-2.5 text-foreground/70">{r.email}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      {r.delivery_mode === "secure_links" ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-blue-700 font-bold dark:bg-blue-900/30 dark:text-blue-300">
-                          Link generat
-                        </span>
-                      ) : r.email_sent ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-green-700 font-bold dark:bg-green-900/30 dark:text-green-400">
-                          Trimis
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-700 font-bold dark:bg-amber-900/30 dark:text-amber-400" title={r.error ?? ""}>
-                          Eșuat
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      {r.delivery_mode === "secure_links" && r.invite_url ? (
-                        <button
-                          type="button"
-                          onClick={() => handleCopyLink(r)}
-                          className="rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/50 hover:text-burgundy transition-all"
-                        >
-                          {copiedResultId === r.participant_id ? "Copiat" : "Copiază link"}
-                        </button>
-                      ) : !r.email_sent ? (
-                        <button
-                          type="button"
-                          disabled={resendingId === r.participant_id}
-                          onClick={() => handleResend(r.participant_id)}
-                          className="rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        >
-                          {resendingId === r.participant_id ? "Se trimite..." : "Retrimite"}
-                        </button>
-                      ) : (
-                        <span className="text-foreground/35">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <button
+              type="button"
+              onClick={() => router.push(`/trainer/companies/${companyId}/invitations`)}
+              className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700"
+            >
+              Deschide Invitații
+            </button>
           </div>
         </section>
       )}
@@ -990,42 +808,6 @@ function StatusDot({ tone }: { tone: "idle" | "ready" | "importing" | "success" 
             : "bg-foreground/35";
 
   return <span className={["h-2.5 w-2.5 rounded-full", toneClass].join(" ")} aria-hidden="true" />;
-}
-
-function DeliveryChoice({
-  title,
-  detail,
-  action,
-  disabled,
-  selected,
-  onClick,
-}: {
-  title: string;
-  detail: string;
-  action: string;
-  disabled: boolean;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "tap-soft group flex min-h-32 flex-col items-start justify-between rounded-xl border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-55",
-        selected ? "border-burgundy/45 ring-2 ring-burgundy/10" : "border-[var(--border)] hover:border-burgundy/35",
-      ].join(" ")}
-    >
-      <span>
-        <span className="block text-sm font-semibold text-foreground">{title}</span>
-        <span className="mt-1 block text-xs leading-5 text-foreground/58">{detail}</span>
-      </span>
-      <span className="mt-4 inline-flex rounded-lg bg-foreground px-3 py-1.5 text-xs font-bold text-background group-hover:bg-burgundy group-hover:text-white">
-        {action}
-      </span>
-    </button>
-  );
 }
 
 function RosterMetric({

@@ -5,6 +5,12 @@ on:
     branches:
       - dev
   workflow_dispatch:
+    inputs:
+      allow_non_dev_ref:
+        description: Allow a manual staging deploy from a non-dev ref.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -15,13 +21,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  guard-staging-ref:
+    name: Guard Staging Ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require dev ref unless explicitly overridden
+        shell: bash
+        env:
+          ALLOW_NON_DEV_REF: ${{ github.event.inputs.allow_non_dev_ref || 'false' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" == "refs/heads/dev" ]]; then
+            exit 0
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${ALLOW_NON_DEV_REF}" == "true" ]]; then
+            echo "Manual staging deploy override accepted for ${GITHUB_REF}."
+            exit 0
+          fi
+
+          echo "Staging deployments run from refs/heads/dev unless allow_non_dev_ref=true is set for manual dispatch; received ${GITHUB_REF}."
+          exit 1
+
   build-images:
     name: Build Staging Images
+    needs: guard-staging-ref
     if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
     uses: ./.github/workflows/_image-build.yml
     with:
       push: true
-      tag: staging-${{ github.sha }}
+      tag: sha-${{ github.sha }}
     secrets: inherit
 
   deploy-vps:
@@ -34,4 +64,5 @@ jobs:
       backend_image: ${{ needs.build-images.outputs.backend-image }}
       frontend_image: ${{ needs.build-images.outputs.frontend-image }}
       release_sha: ${{ needs.build-images.outputs.release-sha }}
+      app_environment: staging
     secrets: inherit

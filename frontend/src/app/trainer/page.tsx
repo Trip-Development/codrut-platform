@@ -64,7 +64,7 @@ function TrainerWorkspaceBar() {
     },
     {
       label: "Șabloane email",
-      detail: "Ajustează invitații, remindere și campanii.",
+      detail: "Ajustează textele reutilizabile. Trimiterea se face din companie.",
       href: "/trainer/email",
     },
     {
@@ -81,7 +81,7 @@ function TrainerWorkspaceBar() {
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Pregătire pilot</p>
           <h2 className="mt-1 text-xl font-semibold text-foreground">Instrumente de lucru</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
-            Pornește din companie, apoi gestionează rosterul, echipele, invitațiile, chestionarele și rapoartele fără să pierzi contextul clientului.
+            Pornește din companie, apoi gestionează rosterul, echipele, invitațiile, chestionarele și rapoartele fără să amesteci clienții.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">

@@ -176,7 +176,7 @@ export async function getTrainerDashboardSummary(
       {
         label: "Trimite reminder 360",
         detail: "Noua persoane nu au inceput task-ul confidential.",
-        href: "/trainer/email",
+        href: "/trainer/companies",
         urgency: "today",
       },
       {

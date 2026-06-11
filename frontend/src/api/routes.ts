@@ -93,8 +93,8 @@ export const trainerWorkflowRoutes: AudienceRoute[] = [
   },
   {
     href: "/trainer/email",
-    label: "Email si campanii",
-    description: "Invitatii, remindere si campanii video cu pagina Codrut de vizionare.",
+    label: "Sabloane email",
+    description: "Texte reutilizabile si arhiva globala; invitatiile se trimit din workspace-ul companiei.",
     audience: "trainer",
   },
 ];

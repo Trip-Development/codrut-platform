@@ -20,12 +20,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard-prod-ref:
+    name: Guard Production Ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require prod ref before image push
+        shell: bash
+        env:
+          CONFIRM_PROD_REF: ${{ github.event.inputs.confirm_prod_ref || '' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" != "refs/heads/prod" ]]; then
+            echo "Production deployment must run from refs/heads/prod before images are built; received ${GITHUB_REF}."
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${CONFIRM_PROD_REF}" != "prod" ]]; then
+            echo "Manual production deployments require confirm_prod_ref=prod."
+            exit 1
+          fi
+
   build-images:
     name: Build Production Images
+    needs: guard-prod-ref
     uses: ./.github/workflows/_image-build.yml
     with:
       push: true
-      tag: ${{ github.sha }}
+      tag: sha-${{ github.sha }}
     secrets: inherit
 
   deploy-vps:
@@ -37,6 +59,7 @@ jobs:
       backend_image: ${{ needs.build-images.outputs.backend-image }}
       frontend_image: ${{ needs.build-images.outputs.frontend-image }}
       release_sha: ${{ needs.build-images.outputs.release-sha }}
+      app_environment: production
       require_prod_ref: true
       prod_confirmation: ${{ github.event.inputs.confirm_prod_ref || '' }}
     secrets: inherit

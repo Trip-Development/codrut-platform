@@ -55,8 +55,8 @@ export default async function CompanyOverviewPage({
               step="3"
               title="Trimite invitații"
               detail="Expediază invitațiile și urmărește livrarea."
-              href="/trainer/email"
-              action="Deschide email"
+              href={`${basePath}/invitations`}
+              action="Deschide invitații"
             />
           </div>
         </section>
