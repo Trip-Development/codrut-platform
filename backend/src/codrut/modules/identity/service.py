@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,9 @@ from codrut.modules.identity.schemas import (
     RegisterRequest,
     SessionPrincipal,
 )
+
+if TYPE_CHECKING:
+    from codrut.modules.assignments.models import QuestionnaireAssignment
 
 
 @dataclass(frozen=True)
@@ -207,6 +211,11 @@ class IdentityService:
                 "Task link assignment scope is invalid.",
                 code="task_link_scope_mismatch",
             )
+        project_id, project_name = await self._invite_project_context(
+            claims.company_id,
+            company.name,
+            list(assignments_by_id.values()),
+        )
 
         tasks = []
         for assignment_id in claims.assignment_ids:
@@ -261,12 +270,39 @@ class IdentityService:
             full_name=profile.full_name,
             is_leadership=is_leadership,
             already_registered=already_registered,
-            project_id=claims.company_id,
-            project_name=company.name,
+            project_id=project_id,
+            project_name=project_name,
             expires_at=claims.expires_at,
             token_status="active",  # noqa: S106
             tasks=tasks,
         )
+
+    async def _invite_project_context(
+        self,
+        company_id: UUID,
+        company_name: str,
+        assignments: list["QuestionnaireAssignment"],
+    ) -> tuple[UUID | None, str]:
+        from sqlalchemy import select
+
+        from codrut.modules.companies.models import CompanyProject
+
+        project_ids = {
+            assignment.project_id for assignment in assignments if assignment.project_id is not None
+        }
+        if len(project_ids) != 1:
+            return None, company_name
+
+        project_id = next(iter(project_ids))
+        result = await self.repository.session.execute(
+            select(CompanyProject)
+            .where(CompanyProject.company_id == company_id)
+            .where(CompanyProject.id == project_id)
+        )
+        project = result.scalar_one_or_none()
+        if project is None:
+            return None, company_name
+        return project.id, project.name
 
     async def verify_invite_token_and_create_session(self, token: str) -> InviteVerifyResult:
         # 1. Verify the token using the existing verify_invite_token method

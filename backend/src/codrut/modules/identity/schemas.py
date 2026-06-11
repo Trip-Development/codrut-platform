@@ -30,7 +30,7 @@ class InviteVerifyResponse(BaseModel):
     full_name: str
     is_leadership: bool
     already_registered: bool
-    project_id: UUID
+    project_id: UUID | None = None
     project_name: str
     expires_at: datetime
     token_status: Literal["active"]
