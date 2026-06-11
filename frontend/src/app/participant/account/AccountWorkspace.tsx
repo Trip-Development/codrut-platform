@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import type { InviteTask } from "@/api/invites";
+
 type WorkspaceSummary = {
   projectName: string;
   participantFullName?: string;
@@ -9,6 +11,7 @@ type WorkspaceSummary = {
   participantEmail?: string | null;
   pcmBase?: string | null;
   pcmPhase?: string | null;
+  tasks?: InviteTask[];
 };
 
 type AccountWorkspaceProps = {
@@ -20,6 +23,9 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
   const name = summary.participantFullName || session.user.name || "Participant";
   const email = summary.participantEmail || "Email indisponibil";
   const company = summary.companyName || "Companie neasociată";
+  const pcmTask = summary.tasks?.find((task) => task.questionnaireKey === "pcm_base");
+  const pcmHref = pcmTask?.href ?? "/participant/questionnaires";
+  const pcmCtaLabel = pcmTask ? "Actualizează PCM" : "Vezi chestionarele";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -47,10 +53,10 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
             </p>
           </div>
           <Link
-            href="/participant/questionnaires/pcm_base"
+            href={pcmHref}
             className="tap-soft inline-flex justify-center rounded-2xl bg-burgundy px-4 py-3 text-sm font-bold text-white hover:bg-burgundy/90"
           >
-            Actualizează PCM
+            {pcmCtaLabel}
           </Link>
         </div>
 
