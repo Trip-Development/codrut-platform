@@ -45,6 +45,7 @@ type BackendParticipantWorkspaceSummary = {
 export async function getParticipantWorkspaceSummary(
   options: Pick<RequestInit, "headers"> = {},
 ): Promise<ParticipantWorkspaceSummary> {
+  let unavailableReason: string | undefined;
   try {
     const response = await fetch(`${getApiBaseUrl()}/participants/me/workspace`, {
       cache: "no-store",
@@ -54,12 +55,13 @@ export async function getParticipantWorkspaceSummary(
     if (response.ok) {
       return mapParticipantWorkspaceSummary((await response.json()) as BackendParticipantWorkspaceSummary);
     }
+    unavailableReason = await readWorkspaceError(response);
   } catch {
-    // Fall through to explicit demo fallback below when enabled.
+    unavailableReason = "Nu am putut încărca spațiul tău de lucru acum.";
   }
 
   if (!isDemoFallbackEnabled()) {
-    throw new Error("Participant workspace unavailable.");
+    return getUnavailableParticipantWorkspaceSummary(unavailableReason);
   }
 
   return getDemoParticipantWorkspaceSummary();
@@ -117,6 +119,50 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
       title: "Fără chestionare finalizate încă",
       description:
         "Când participantul are sarcini active, acest loc poate afișa un call-to-action și un sumar clar al pasului următor.",
+    },
+  };
+}
+
+async function readWorkspaceError(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: { message?: string } };
+    return body.error?.message || "Nu am putut încărca spațiul tău de lucru acum.";
+  } catch {
+    return "Nu am putut încărca spațiul tău de lucru acum.";
+  }
+}
+
+function getUnavailableParticipantWorkspaceSummary(reason?: string): ParticipantWorkspaceSummary {
+  return {
+    participantFullName: "Participant",
+    projectName: "Spațiul tău de lucru",
+    projectId: null,
+    companyName: "Codruț",
+    participantEmail: "",
+    deadlineLabel: "după ce profilul este sincronizat",
+    tasks: [],
+    cards: [
+      {
+        title: "Profil în verificare",
+        description: "Nu am găsit încă profilul de participant legat de acest cont.",
+        meta: "Cont",
+      },
+      {
+        title: "Sarcini",
+        description: "Chestionarele apar aici imediat ce invitația este legată corect.",
+        meta: "Assessment",
+      },
+      {
+        title: "Suport",
+        description: "Trimite trainerului adresa de email folosită pentru autentificare.",
+        meta: "Ajutor",
+      },
+    ],
+    emptyState: {
+      title: "Spațiul de participant nu este încă disponibil",
+      description:
+        reason ||
+        "Contul este activ, dar profilul de participant nu este conectat la o companie sau la un proiect.",
     },
   };
 }

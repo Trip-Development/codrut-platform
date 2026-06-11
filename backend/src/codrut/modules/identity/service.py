@@ -115,16 +115,23 @@ class IdentityService:
             )
         )
 
-        # 7. Link user to ParticipantProfile
         from sqlalchemy import select
 
+        from codrut.core.config import get_settings
+        from codrut.modules.communications.task_links import parse_task_token
         from codrut.modules.companies.models import ParticipantProfile
+
+        claims = parse_task_token(payload.token, get_settings())
         result = await self.repository.session.execute(
-            select(ParticipantProfile).where(ParticipantProfile.email == payload.email.lower())
+            select(ParticipantProfile).where(
+                ParticipantProfile.id == claims.respondent_profile_id,
+                ParticipantProfile.company_id == claims.company_id,
+            )
         )
         profile = result.scalar_one_or_none()
-        if profile is not None:
-            profile.user_id = user.id
+        if profile is None:
+            raise DomainError("Invitation respondent profile not found.", code="profile_not_found")
+        profile.user_id = user.id
 
         token = await self._create_session(user)
         return AuthResult(response=self._response(user), session_token=token)

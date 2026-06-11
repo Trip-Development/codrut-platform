@@ -303,7 +303,7 @@ async def test_register_success() -> None:
     mock_result_user_exists = MagicMock()
     mock_result_user_exists.scalar_one_or_none.return_value = None
 
-    # 6. select(ParticipantProfile) in register (to link the user_id)
+    # 6. select(ParticipantProfile) in register (to link the exact invite profile)
     mock_result_profile_link = MagicMock()
     mock_result_profile_link.scalar_one_or_none.return_value = mock_profile
 
@@ -328,6 +328,11 @@ async def test_register_success() -> None:
     assert auth_result.response.email == "test@example.com"
     assert auth_result.response.role == UserRole.participant
     assert mock_profile.user_id is not None
+    link_query = mock_session.execute.call_args_list[-1].args[0]
+    where_text = " ".join(str(clause) for clause in link_query._where_criteria)
+    assert "participant_profiles.email" not in where_text
+    assert "participant_profiles.id" in where_text
+    assert "participant_profiles.company_id" in where_text
 
 
 @pytest.mark.asyncio
