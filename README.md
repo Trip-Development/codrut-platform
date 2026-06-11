@@ -49,6 +49,10 @@ relationships, and teams:
 - 360 iCARE for managers, including self-review, peer manager feedback, and
   direct-report feedback.
 
+Romanian and English questionnaire variants share the same scoring buckets in
+reports: `lencioni`/`lencioni_en`, `distress_drivers`/`distress_drivers_en`,
+and `boss_360`/`boss_360_en`.
+
 Roster import must not send access automatically. Access delivery is a separate
 action so trainers can review assignments before links or emails are created.
 
@@ -72,6 +76,7 @@ Focused checks for the current core workflow live in:
 - `backend/tests/test_questionnaire_response_service.py`
 - `backend/tests/test_scoring_service.py`
 - `frontend/src/app/trainer/companies/[companyId]/invitations/InvitationsWorkspace.test.tsx`
+- `frontend/src/app/trainer/companies/[companyId]/reports/report-aggregation.test.ts`
 - `frontend/src/app/trainer/roster/roster-importer.test.tsx`
 - `frontend/src/components/questionnaires/questionnaire-runner.test.tsx`
 
