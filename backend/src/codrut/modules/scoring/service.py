@@ -38,6 +38,16 @@ COMPLETED_STATUSES = {
     AssignmentStatus.scored,
 }
 
+LENCIONI_REPORT_KEYS = {
+    QuestionnaireKey.lencioni.value,
+    QuestionnaireKey.lencioni_en.value,
+}
+
+DISTRESS_DRIVER_REPORT_KEYS = {
+    QuestionnaireKey.distress_drivers.value,
+    QuestionnaireKey.distress_drivers_en.value,
+}
+
 
 class ScoringService:
     def __init__(self, session: AsyncSession) -> None:
@@ -51,12 +61,20 @@ class ScoringService:
     async def get_company_report_aggregate(
         self,
         company_id: UUID,
+        project_id: UUID | None = None,
     ) -> CompanyReportAggregateResponse:
         company = await self.company_repository.get_company(company_id)
         if company is None:
             raise DomainError("Company not found.", code="company_not_found")
+        if project_id is not None:
+            project = await self.company_repository.get_project(company_id, project_id)
+            if project is None:
+                raise DomainError("Project not found in this company.", code="project_not_found")
 
-        assignment_results = await self.repository.list_company_assignment_results(company_id)
+        assignment_results = await self.repository.list_company_assignment_results(
+            company_id,
+            project_id,
+        )
         total_assigned = len(assignment_results)
         total_completed = sum(
             1
@@ -74,10 +92,10 @@ class ScoringService:
                 continue
 
             results.append(ScoringResultResponse.model_validate(result))
-            if assignment.questionnaire_key == QuestionnaireKey.lencioni.value:
+            if assignment.questionnaire_key in LENCIONI_REPORT_KEYS:
                 if _add_scores(lencioni_sums, result.scores):
                     lencioni_count += 1
-            elif assignment.questionnaire_key == QuestionnaireKey.distress_drivers.value:
+            elif assignment.questionnaire_key in DISTRESS_DRIVER_REPORT_KEYS:
                 if _add_scores(driver_sums, result.scores):
                     driver_count += 1
 

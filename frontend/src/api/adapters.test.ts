@@ -145,6 +145,7 @@ describe("frontend API adapter stubs", () => {
             {
               id: "assignment-1",
               company_id: "company-1",
+              project_id: null,
               respondent_profile_id: "participant-1",
               questionnaire_key: "lencioni",
               target_type: "self",
@@ -169,22 +170,71 @@ describe("frontend API adapter stubs", () => {
     expect(summary.validations.map((validation) => validation.label)).toContain("Date backend");
   });
 
-  it("returns participant workspace placeholder data", async () => {
+  it("maps participant workspace data from the backend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        participant_profile_id: "profile-1",
+        participant_full_name: "Ana Participant",
+        participant_email: "ana@example.com",
+        company_id: "company-1",
+        company_name: "Michelin",
+        project_id: "project-1",
+        project_name: "Leadership septembrie",
+        deadline_label: "30.09.2026",
+        pcm_base: "harmonizer",
+        pcm_phase: "thinker",
+        tasks: [
+          {
+            id: "assignment-1",
+            title: "Lencioni",
+            status: "not_started",
+            detail: "Completează formularul.",
+            href: "/participant/questionnaires/lencioni?assignmentId=assignment-1",
+            assignmentId: "assignment-1",
+            targetLabel: "Leadership",
+            estimatedMinutes: 12,
+            questionnaireKey: "lencioni",
+          },
+        ],
+        cards: [{ title: "De completat", description: "1 sarcini active", meta: "Acum" }],
+        empty_state: { title: "Nu ai sarcini active", description: "Revino mai târziu." },
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
     const summary = await getParticipantWorkspaceSummary();
 
-    expect(summary.cards).toHaveLength(3);
-    expect(summary.emptyState.title).toContain("Fără");
+    expect(summary).toMatchObject({
+      participantProfileId: "profile-1",
+      participantFullName: "Ana Participant",
+      participantEmail: "ana@example.com",
+      companyName: "Michelin",
+      projectName: "Leadership septembrie",
+      pcmBase: "harmonizer",
+      pcmPhase: "thinker",
+      tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
+      emptyState: expect.objectContaining({ title: "Nu ai sarcini active" }),
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/participants/me/workspace"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
     expect(questionnaires.map((definition) => definition.id)).toEqual(
-      expect.arrayContaining(["icare", "boss_360", "pcm_baseline", "phase"]),
+      expect.arrayContaining(["boss_360", "boss_360_en", "pcm_base", "phase"]),
     );
+    expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
-      estimatedItems: 5,
+      estimatedItems: 48,
     });
     await expect(listEmailSurfaceStubs()).resolves.toHaveLength(3);
   });
@@ -317,19 +367,17 @@ describe("frontend API adapter stubs", () => {
   it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
-    await expect(getQuestionnaireDefinition("boss_360")).resolves.toMatchObject({
-      key: "boss_360",
-      schema: {
-        sections: [
-          {
-            questions: expect.arrayContaining([
-              expect.objectContaining({ id: "boss_360_q01" }),
-            ]),
-          },
-        ],
-      },
-    });
+    const definition = await getQuestionnaireDefinition("boss_360");
 
+    expect(definition).toMatchObject({
+      key: "boss_360",
+      title: "Feedback 360 iCARE pentru manager",
+    });
+    expect(definition?.schema.sections[0]?.questions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "icare_inspiring_developing_people" }),
+      ]),
+    );
   });
 
   it("does not fall back to demo sessions when fallback is disabled", async () => {
@@ -422,6 +470,7 @@ describe("frontend API adapter stubs", () => {
           id: "company-1",
           name: "Michelin",
           participant_count: 8,
+          project_count: 2,
           assignment_count: 16,
           completed_count: 4,
           scored_count: 2,
@@ -435,6 +484,7 @@ describe("frontend API adapter stubs", () => {
         id: "company-1",
         name: "Michelin",
         participantCount: 8,
+        projectCount: 2,
         assignmentCount: 16,
         completedCount: 4,
         stage: "completion",
@@ -517,6 +567,7 @@ describe("frontend API adapter stubs", () => {
     await expect(
       sendParticipantInvitations("company-1", {
         participantIds: ["participant-1"],
+        projectId: "project-1",
         mode: "secure_links",
       }),
     ).resolves.toMatchObject({ links_generated: 1 });
@@ -538,6 +589,7 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
         body: JSON.stringify({
           participant_ids: ["participant-1"],
+          project_id: "project-1",
           mode: "secure_links",
           force_rotate: false,
         }),
@@ -569,13 +621,13 @@ describe("frontend API adapter stubs", () => {
       }),
     } as Response);
 
-    await expect(resendParticipantInvitation("company-1", "participant-1")).resolves.toMatchObject({
+    await expect(resendParticipantInvitation("company-1", "participant-1", "project-1")).resolves.toMatchObject({
       participant_id: "participant-1",
       email_sent: true,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/companies/company-1/participants/participant-1/resend-invite"),
+      expect.stringContaining("/companies/company-1/participants/participant-1/resend-invite?project_id=project-1"),
       expect.objectContaining({
         method: "POST",
         credentials: "include",
@@ -591,6 +643,7 @@ describe("frontend API adapter stubs", () => {
       json: async () => ({
         id: "assignment-1",
         company_id: "company-1",
+        project_id: "project-1",
         respondent_profile_id: "participant-1",
         questionnaire_key: "boss_360",
         target_type: "person",
@@ -612,6 +665,7 @@ describe("frontend API adapter stubs", () => {
 
     await expect(
       createCompanyAssignment("company-1", {
+        projectId: "project-1",
         respondentProfileId: "participant-1",
         questionnaireKey: "boss_360",
         targetType: "person",
@@ -630,6 +684,7 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
         body: JSON.stringify({
           respondent_profile_id: "participant-1",
+          project_id: "project-1",
           questionnaire_key: "boss_360",
           target_type: "person",
           target_person_id: "participant-2",
@@ -647,6 +702,7 @@ describe("frontend API adapter stubs", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          project_id: "project-1",
           scopes: [
             {
               id: "leadership",
@@ -690,20 +746,20 @@ describe("frontend API adapter stubs", () => {
         }),
       } as Response);
 
-    const plan = await getCompanyDefaultAssignmentPlan("company-1");
+    const plan = await getCompanyDefaultAssignmentPlan("company-1", {}, { projectId: "project-1" });
 
     expect(plan.assignments[0]).toMatchObject({
       respondent_profile_id: "participant-1",
       target_team_name: "Leadership",
     });
 
-    await expect(saveCompanyDefaultAssignmentPlan("company-1", plan.assignments)).resolves.toMatchObject({
+    await expect(saveCompanyDefaultAssignmentPlan("company-1", plan.assignments, "project-1")).resolves.toMatchObject({
       created_count: 1,
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("/companies/company-1/assignments/default-plan"),
+      expect.stringContaining("/companies/company-1/assignments/default-plan?project_id=project-1"),
       expect.objectContaining({
         cache: "no-store",
         credentials: "include",
@@ -711,11 +767,12 @@ describe("frontend API adapter stubs", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("/companies/company-1/assignments/default-plan"),
+      expect.stringContaining("/companies/company-1/assignments/default-plan?project_id=project-1"),
       expect.objectContaining({
         method: "POST",
         credentials: "include",
         body: JSON.stringify({
+          project_id: "project-1",
           assignments: [
             {
               respondent_profile_id: "participant-1",

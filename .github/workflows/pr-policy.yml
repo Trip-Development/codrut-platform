@@ -14,6 +14,7 @@ on:
       - unlabeled
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -62,6 +63,13 @@ jobs:
             exit 1
           fi
 
+  staging-promotion:
+    name: policy / staging-promotion
+    if: github.base_ref == 'prod' && github.head_ref == 'dev' && vars.ENABLE_STAGING_DEPLOY == 'true'
+    uses: ./.github/workflows/_staging-promotion-check.yml
+    with:
+      release_sha: ${{ github.event.pull_request.head.sha }}
+
   required:
     name: policy / required
     runs-on: ubuntu-latest
@@ -69,12 +77,14 @@ jobs:
     needs:
       - pr-hygiene
       - release-source
+      - staging-promotion
     steps:
       - name: Verify required policy checks
         shell: bash
         env:
           PR_HYGIENE_RESULT: ${{ needs['pr-hygiene'].result }}
           RELEASE_SOURCE_RESULT: ${{ needs['release-source'].result }}
+          STAGING_PROMOTION_RESULT: ${{ needs['staging-promotion'].result }}
         run: |
           set -euo pipefail
 
@@ -85,5 +95,10 @@ jobs:
 
           if [[ "${RELEASE_SOURCE_RESULT}" != "success" && "${RELEASE_SOURCE_RESULT}" != "skipped" ]]; then
             echo "RELEASE_SOURCE_RESULT=${RELEASE_SOURCE_RESULT}; expected success or skipped."
+            exit 1
+          fi
+
+          if [[ "${STAGING_PROMOTION_RESULT}" != "success" && "${STAGING_PROMOTION_RESULT}" != "skipped" ]]; then
+            echo "STAGING_PROMOTION_RESULT=${STAGING_PROMOTION_RESULT}; expected success or skipped."
             exit 1
           fi

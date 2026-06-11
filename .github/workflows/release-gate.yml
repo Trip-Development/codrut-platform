@@ -29,10 +29,12 @@ jobs:
 
   image-build:
     name: release / image-build
+    if: startsWith(github.head_ref, 'hotfix/')
     uses: ./.github/workflows/_image-build.yml
     with:
       push: false
       tag: release-gate-${{ github.event.pull_request.head.sha }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   required:
     name: release / required
@@ -50,9 +52,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          for check in PROD_COMPOSE_RESULT IMAGE_BUILD_RESULT; do
-            if [[ "${!check}" != "success" ]]; then
-              echo "${check}=${!check}; expected success."
+          if [[ "${PROD_COMPOSE_RESULT}" != "success" ]]; then
+            echo "PROD_COMPOSE_RESULT=${PROD_COMPOSE_RESULT}; expected success."
+            exit 1
+          fi
+
+          if [[ "${IMAGE_BUILD_RESULT}" != "success" && "${IMAGE_BUILD_RESULT}" != "skipped" ]]; then
+              echo "IMAGE_BUILD_RESULT=${IMAGE_BUILD_RESULT}; expected success for hotfix production PRs or skipped for dev releases."
               exit 1
-            fi
-          done
+          fi

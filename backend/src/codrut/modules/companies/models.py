@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    DateTime,
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,6 +28,13 @@ class CompanyMembershipRole(StrEnum):
     owner = "owner"
     trainer = "trainer"
     participant = "participant"
+
+
+class CompanyProjectStatus(StrEnum):
+    draft = "draft"
+    active = "active"
+    completed = "completed"
+    archived = "archived"
 
 
 class Company(TimestampMixin, Base):
@@ -49,6 +59,32 @@ class Company(TimestampMixin, Base):
         back_populates="company",
         cascade="all, delete-orphan",
     )
+    projects: Mapped[list[CompanyProject]] = relationship(
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+
+
+class CompanyProject(TimestampMixin, Base):
+    __tablename__ = "company_projects"
+    __table_args__ = (UniqueConstraint("company_id", "name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[CompanyProjectStatus] = mapped_column(
+        Enum(CompanyProjectStatus),
+        nullable=False,
+        default=CompanyProjectStatus.draft,
+    )
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    company: Mapped[Company] = relationship(back_populates="projects")
 
 
 class CompanyMembership(TimestampMixin, Base):

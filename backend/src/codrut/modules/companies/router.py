@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -13,6 +13,10 @@ from codrut.modules.companies.schemas import (
     CompanyAccessCodeRegistrationRequest,
     CompanyAccessCodeResponse,
     CompanyCreateRequest,
+    CompanyProjectCreateRequest,
+    CompanyProjectListItemResponse,
+    CompanyProjectResponse,
+    CompanyProjectUpdateRequest,
     CompanyResponse,
     CompanySummaryResponse,
     ParticipantCreateRequest,
@@ -49,6 +53,15 @@ async def list_company_summaries(
     return await CompanyService(session).list_company_summaries()
 
 
+@router.get("/projects", response_model=list[CompanyProjectListItemResponse])
+async def list_all_company_projects(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[CompanyProjectListItemResponse]:
+    require_trainer_principal(principal)
+    return await CompanyService(session).list_all_projects()
+
+
 @router.post("", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
 async def create_company(
     payload: CompanyCreateRequest,
@@ -69,6 +82,65 @@ async def delete_company(
 ) -> Response:
     require_trainer_principal(principal)
     await CompanyService(session).delete_company(principal.user_id, company_id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{company_id}/projects", response_model=list[CompanyProjectResponse])
+async def list_company_projects(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[CompanyProjectResponse]:
+    require_trainer_principal(principal)
+    return await CompanyService(session).list_projects(principal.user_id, company_id)
+
+
+@router.post(
+    "/{company_id}/projects",
+    response_model=CompanyProjectResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_company_project(
+    company_id: UUID,
+    payload: CompanyProjectCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CompanyProjectResponse:
+    require_trainer_principal(principal)
+    project = await CompanyService(session).create_project(principal.user_id, company_id, payload)
+    await session.commit()
+    return project
+
+
+@router.patch("/{company_id}/projects/{project_id}", response_model=CompanyProjectResponse)
+async def update_company_project(
+    company_id: UUID,
+    project_id: UUID,
+    payload: CompanyProjectUpdateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CompanyProjectResponse:
+    require_trainer_principal(principal)
+    project = await CompanyService(session).update_project(
+        principal.user_id,
+        company_id,
+        project_id,
+        payload,
+    )
+    await session.commit()
+    return project
+
+
+@router.delete("/{company_id}/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_company_project(
+    company_id: UUID,
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await CompanyService(session).delete_project(principal.user_id, company_id, project_id)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -154,11 +226,13 @@ async def list_participant_invitation_statuses(
     company_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> list[ParticipantInvitationStatusResponse]:
     require_trainer_principal(principal)
     return await CompanyService(session).list_participant_invitation_statuses(
         principal.user_id,
         company_id,
+        project_id,
     )
 
 
@@ -172,12 +246,14 @@ async def resend_participant_invite(
     participant_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> RosterImportResponse:
     require_trainer_principal(principal)
     result = await CompanyService(session).resend_invite(
         principal.user_id,
         company_id,
         participant_id,
+        project_id,
     )
     await session.commit()
     return result

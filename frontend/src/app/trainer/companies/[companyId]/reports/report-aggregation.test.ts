@@ -13,6 +13,7 @@ function assignment(
   return {
     id,
     company_id: "company-1",
+    project_id: null,
     respondent_profile_id: `participant-${id}`,
     questionnaire_key: questionnaireKey,
     target_type: "self",

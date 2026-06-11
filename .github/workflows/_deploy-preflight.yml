@@ -1,0 +1,90 @@
+name: Reusable Deploy Preflight
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: deploy / preflight
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
+      SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
+      CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
+      CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
+      CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
+      CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
+      CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
+      CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
+      CODRUT_EMAIL_BREVO_API_KEY: ${{ secrets.CODRUT_EMAIL_BREVO_API_KEY }}
+      CODRUT_HOST: ${{ secrets.CODRUT_HOST }}
+      TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
+      CODRUT_DB_VOLUME_PATH: ${{ secrets.CODRUT_DB_VOLUME_PATH }}
+    steps:
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_vars=(
+            SSH_PRIVATE_KEY
+            HETZNER_VPS_IP
+            SSH_USER
+            POSTGRES_DB
+            POSTGRES_USER
+            POSTGRES_PASSWORD
+            CODRUT_REDIS_URL
+            CODRUT_SESSION_SECRET
+            CODRUT_CORS_ORIGINS
+            CODRUT_PUBLIC_APP_URL
+            CODRUT_EMAIL_PROVIDER
+            CODRUT_EMAIL_FROM_ADDRESS
+            CODRUT_EMAIL_FROM_NAME
+            CODRUT_EMAIL_BREVO_API_KEY
+            CODRUT_HOST
+            TRAEFIK_ACME_EMAIL
+            CODRUT_DB_VOLUME_PATH
+          )
+
+          missing=()
+          for var_name in "${required_vars[@]}"; do
+            if [[ -z "${!var_name:-}" ]]; then
+              missing+=("${var_name}")
+            fi
+          done
+
+          if [[ "${#missing[@]}" -gt 0 ]]; then
+            printf 'Missing %s deployment secrets/config values:\n' "${DEPLOY_ENVIRONMENT}"
+            printf -- '- %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          try:
+              origins = json.loads(os.environ["CODRUT_CORS_ORIGINS"])
+          except json.JSONDecodeError as exc:
+              print(f"CODRUT_CORS_ORIGINS must be a JSON array: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
+
+          if not isinstance(origins, list) or not origins or not all(isinstance(origin, str) and origin for origin in origins):
+              print("CODRUT_CORS_ORIGINS must be a non-empty JSON array of origin strings.", file=sys.stderr)
+              raise SystemExit(1)
+          PY

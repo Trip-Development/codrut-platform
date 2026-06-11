@@ -14,6 +14,7 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.forms.definitions import (
     APPROVED_QUESTIONNAIRE_DEFINITIONS,
+    LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS,
     get_approved_questionnaire_definition,
 )
 from codrut.modules.forms.models import (
@@ -62,6 +63,8 @@ class FormsService:
         repository = self._require_repository()
         await self._seed_catalog_definitions(repository)
         definition = await repository.get_definition(key, version=version)
+        if definition is None and version is None and key in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
+            return _to_response(LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS[key])
         if definition is None:
             raise DomainError("Questionnaire definition not found.", code="definition_not_found")
         return _to_response(definition)
@@ -254,16 +257,12 @@ class FormsService:
 
     async def get_participant_onboarding(self, user_id: UUID) -> ParticipantOnboardingResponse:
         repository = self._require_repository()
-        profile = await repository.get_participant_for_user(user_id)
+        profile = await repository.get_permanent_participant_for_user(user_id)
         if profile is None:
             return ParticipantOnboardingResponse(required=False)
 
-        if not profile.pcm_base:
+        if not profile.pcm_base or not profile.pcm_phase:
             assignment = await self._ensure_pcm_assignment(profile.id, "pcm_base")
-            return _onboarding_response(assignment)
-
-        if not profile.pcm_phase:
-            assignment = await self._ensure_pcm_assignment(profile.id, "phase")
             return _onboarding_response(assignment)
 
         return ParticipantOnboardingResponse(required=False)
@@ -292,6 +291,7 @@ class FormsService:
         if questionnaire_key == QuestionnaireKey.pcm_base.value:
             profile.pcm_base = _clean_pcm_answer(answers.get("pcm_base"))
             profile.pcm_profile = profile.pcm_base
+            profile.pcm_phase = _clean_pcm_answer(answers.get("pcm_phase"))
         elif questionnaire_key == QuestionnaireKey.phase.value:
             profile.pcm_phase = _clean_pcm_answer(answers.get("pcm_phase"))
 
@@ -381,6 +381,8 @@ class FormsService:
                     active=True,
                 )
             )
+        for alias_key in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
+            await repository.deactivate_definitions_for_key(alias_key)
 
 
 def _to_response(definition: Any) -> QuestionnaireDefinitionResponse:

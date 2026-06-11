@@ -1,12 +1,19 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token, verify_password
-from codrut.modules.identity.models import AssignmentInvite, Session, User, UserRole
+from codrut.modules.identity.models import (
+    SHADOW_ACCOUNT_PASSWORD_HASH,
+    AssignmentInvite,
+    Session,
+    User,
+    UserRole,
+)
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import (
     AuthResponse,
@@ -15,6 +22,9 @@ from codrut.modules.identity.schemas import (
     RegisterRequest,
     SessionPrincipal,
 )
+
+if TYPE_CHECKING:
+    from codrut.modules.assignments.models import QuestionnaireAssignment
 
 
 @dataclass(frozen=True)
@@ -30,23 +40,23 @@ class InviteVerifyResult:
 
 
 def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
-    if questionnaire_key == "lencioni":
+    if questionnaire_key in {"lencioni", "lencioni_en"}:
         return (
             "Lencioni - Cele 5 disfuncții ale echipei",
             "Evaluează dinamica echipei pentru proiectul curent.",
             12,
         )
-    if questionnaire_key == "distress_drivers":
+    if questionnaire_key in {"distress_drivers", "distress_drivers_en"}:
         return (
             "Driveri de stres TA",
             "Identifică driverii care apar cel mai des în context de presiune.",
             10,
         )
-    if questionnaire_key == "boss_360":
+    if questionnaire_key in {"boss_360", "boss_360_en", "icare"}:
         return (
-            "Feedback 360",
-            "Oferă feedback pentru persoana indicată în această sarcină.",
-            10,
+            "Feedback 360 iCARE",
+            "Oferă feedback pentru managerul indicat în această sarcină.",
+            20,
         )
     if questionnaire_key == "pcm_base":
         return (
@@ -201,6 +211,11 @@ class IdentityService:
                 "Task link assignment scope is invalid.",
                 code="task_link_scope_mismatch",
             )
+        project_id, project_name = await self._invite_project_context(
+            claims.company_id,
+            company.name,
+            list(assignments_by_id.values()),
+        )
 
         tasks = []
         for assignment_id in claims.assignment_ids:
@@ -255,12 +270,39 @@ class IdentityService:
             full_name=profile.full_name,
             is_leadership=is_leadership,
             already_registered=already_registered,
-            project_id=claims.company_id,
-            project_name=company.name,
+            project_id=project_id,
+            project_name=project_name,
             expires_at=claims.expires_at,
             token_status="active",  # noqa: S106
             tasks=tasks,
         )
+
+    async def _invite_project_context(
+        self,
+        company_id: UUID,
+        company_name: str,
+        assignments: list["QuestionnaireAssignment"],
+    ) -> tuple[UUID | None, str]:
+        from sqlalchemy import select
+
+        from codrut.modules.companies.models import CompanyProject
+
+        project_ids = {
+            assignment.project_id for assignment in assignments if assignment.project_id is not None
+        }
+        if len(project_ids) != 1:
+            return None, company_name
+
+        project_id = next(iter(project_ids))
+        result = await self.repository.session.execute(
+            select(CompanyProject)
+            .where(CompanyProject.company_id == company_id)
+            .where(CompanyProject.id == project_id)
+        )
+        project = result.scalar_one_or_none()
+        if project is None:
+            return None, company_name
+        return project.id, project.name
 
     async def verify_invite_token_and_create_session(self, token: str) -> InviteVerifyResult:
         # 1. Verify the token using the existing verify_invite_token method
@@ -305,7 +347,7 @@ class IdentityService:
                 user = User(
                     id=uuid.uuid4(),
                     email=profile.email.lower(),
-                    password_hash="shadow_account_no_password",  # noqa: S106
+                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
                     role=UserRole.participant,
                 )
                 await self.repository.add_user(user)
@@ -360,6 +402,7 @@ class IdentityService:
         company_id: UUID,
         respondent_profile_id: UUID,
         assignment_ids: list[UUID] | None = None,
+        project_id: UUID | None = None,
         expires_in_days: int = 3650,
         force_rotate: bool = False,
     ) -> AssignmentInvite:
@@ -384,6 +427,7 @@ class IdentityService:
             company_id=company_id,
             respondent_profile_id=respondent_profile_id,
             assignment_ids=assignment_ids,
+            project_id=project_id,
         )
         if not assignment_ids:
             raise DomainError(
@@ -436,6 +480,7 @@ class IdentityService:
         company_id: UUID,
         respondent_profile_id: UUID,
         assignment_ids: list[UUID] | None,
+        project_id: UUID | None = None,
     ) -> list[UUID]:
         from sqlalchemy import select
 
@@ -452,6 +497,8 @@ class IdentityService:
             .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
             .where(QuestionnaireAssignment.status.in_(active_statuses))
         )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
 
         if assignment_ids is None:
             result = await self.repository.session.execute(stmt)

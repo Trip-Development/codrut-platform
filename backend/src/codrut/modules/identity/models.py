@@ -13,6 +13,8 @@ from codrut.core.database import Base, TimestampMixin
 if TYPE_CHECKING:
     from codrut.modules.companies.models import CompanyMembership, ParticipantProfile
 
+SHADOW_ACCOUNT_PASSWORD_HASH = "shadow_account_no_password"  # noqa: S105
+
 
 class UserRole(StrEnum):
     trainer = "trainer"

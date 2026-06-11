@@ -2,11 +2,13 @@ import uuid
 from typing import Any, cast
 
 import pytest
+from sqlalchemy import select
 
 from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssignmentAccessMode,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -16,7 +18,7 @@ from codrut.modules.forms.models import QuestionnaireResponse, QuestionnaireResp
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity import models as identity_models  # noqa: F401
-from codrut.modules.identity.models import User, UserRole
+from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User, UserRole
 
 
 class FakeFormsRepository:
@@ -197,15 +199,115 @@ async def test_submit_pcm_base_updates_participant_profile_without_scoring() -> 
             response = await FormsService(session).save_assignment_response(
                 user.id,
                 assignment.id,
-                QuestionnaireResponseSaveRequest(answers={"pcm_base": "harmonizer"}),
+                QuestionnaireResponseSaveRequest(
+                    answers={"pcm_base": "harmonizer", "pcm_phase": "thinker"}
+                ),
                 submit=True,
             )
 
             assert response.status == QuestionnaireResponseStatus.submitted
             assert assignment.status == AssignmentStatus.submitted
             assert profile.pcm_base == "harmonizer"
+            assert profile.pcm_phase == "thinker"
             assert profile.pcm_profile == "harmonizer"
             assert assignment.scored_at is None
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_participant_onboarding_creates_single_pcm_profile_task_for_permanent_user() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"pcm-onboarding-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"PCM Onboarding {uuid.uuid4().hex[:8]}",
+            )
+            session.add_all([user, company])
+            await session.flush()
+
+            profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="Permanent Participant",
+                email=user.email,
+            )
+            session.add(profile)
+            await session.flush()
+
+            onboarding = await FormsService(session).get_participant_onboarding(user.id)
+
+            assert onboarding.required is True
+            assert onboarding.questionnaire_key == "pcm_base"
+            assert onboarding.assignment_id is not None
+            assert onboarding.href == (
+                f"/participant/questionnaires/pcm_base?assignmentId={onboarding.assignment_id}"
+            )
+
+            assignment = (
+                await session.execute(
+                    select(QuestionnaireAssignment).where(
+                        QuestionnaireAssignment.id == onboarding.assignment_id
+                    )
+                )
+            ).scalar_one()
+            assert assignment.questionnaire_key == "pcm_base"
+            assert assignment.target_type == AssignmentTargetType.self_assessment
+            assert assignment.access_mode == AssignmentAccessMode.account_link
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_participant_onboarding_skips_shadow_secure_link_users() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"pcm-shadow-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+                role=UserRole.participant,
+            )
+            company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"PCM Shadow {uuid.uuid4().hex[:8]}",
+            )
+            session.add_all([user, company])
+            await session.flush()
+
+            profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="Shadow Participant",
+                email=user.email,
+            )
+            session.add(profile)
+            await session.flush()
+
+            onboarding = await FormsService(session).get_participant_onboarding(user.id)
+
+            assert onboarding.required is False
+
+            assignment_count = (
+                await session.execute(
+                    select(QuestionnaireAssignment).where(
+                        QuestionnaireAssignment.respondent_profile_id == profile.id
+                    )
+                )
+            ).scalars().all()
+            assert assignment_count == []
 
             await session.rollback()
     finally:

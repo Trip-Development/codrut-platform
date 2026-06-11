@@ -9,7 +9,7 @@ from codrut.modules.assignments.models import (
     AssignmentTargetType,
     QuestionnaireAssignment,
 )
-from codrut.modules.companies.models import Company, ParticipantProfile
+from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
 from codrut.modules.forms.models import QuestionnaireKey
 from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.scoring.models import ScoringResult
@@ -72,12 +72,12 @@ async def test_compute_and_save_score_lencioni() -> None:
     assert result.assignment_id == assignment_id
     assert result.scores["absence_of_trust"]["score"] == 8
     assert result.scores["absence_of_trust"]["interpretation"] == (
-        "Disfunctia probabil nu este o problema."
+        "Disfuncția probabil nu este o problemă."
     )
 
     assert result.scores["fear_of_conflict"]["score"] == 5
     assert result.scores["fear_of_conflict"]["interpretation"] == (
-        "Disfunctia trebuie probabil abordata."
+        "Disfuncția trebuie probabil abordată."
     )
 
     assert result.scores["lack_of_commitment"]["score"] == 3
@@ -159,9 +159,23 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
             session.add_all([participant, other_participant])
             await session.flush()
 
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership Septembrie",
+            )
+            other_project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Vânzări Octombrie",
+            )
+            session.add_all([project, other_project])
+            await session.flush()
+
             lencioni_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
+                project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="lencioni",
                 target_type=AssignmentTargetType.self_assessment,
@@ -170,6 +184,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
             driver_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
+                project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="distress_drivers",
                 target_type=AssignmentTargetType.self_assessment,
@@ -178,6 +193,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
             submitted_without_score = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
+                project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="boss_360",
                 target_type=AssignmentTargetType.self_assessment,
@@ -191,12 +207,22 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
+            other_project_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=other_project.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
             session.add_all(
                 [
                     lencioni_assignment,
                     driver_assignment,
                     submitted_without_score,
                     other_company_assignment,
+                    other_project_assignment,
                 ]
             )
             await session.flush()
@@ -236,23 +262,46 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                             "inattention_to_results": {"score": 1},
                         },
                     ),
+                    ScoringResult(
+                        assignment_id=other_project_assignment.id,
+                        primary_result="absence_of_trust",
+                        scores={
+                            "absence_of_trust": {"score": 15},
+                            "fear_of_conflict": {"score": 15},
+                            "lack_of_commitment": {"score": 15},
+                            "avoidance_of_accountability": {"score": 15},
+                            "inattention_to_results": {"score": 15},
+                        },
+                    ),
                 ]
             )
             await session.flush()
 
             aggregate = await ScoringService(session).get_company_report_aggregate(company.id)
 
-            assert aggregate.total_assigned == 3
-            assert aggregate.total_completed == 3
+            assert aggregate.total_assigned == 4
+            assert aggregate.total_completed == 4
             assert aggregate.completion_rate == 100
-            assert aggregate.lencioni_count == 1
+            assert aggregate.lencioni_count == 2
             assert aggregate.driver_count == 1
             assert {result.assignment_id for result in aggregate.results} == {
                 lencioni_assignment.id,
                 driver_assignment.id,
+                other_project_assignment.id,
             }
-            assert aggregate.lencioni_averages[0].avg == 6
+            assert aggregate.lencioni_averages[0].avg == 10.5
             assert aggregate.driver_averages[1].avg == 20
+
+            project_aggregate = await ScoringService(session).get_company_report_aggregate(
+                company.id,
+                project.id,
+            )
+
+            assert project_aggregate.total_assigned == 3
+            assert {result.assignment_id for result in project_aggregate.results} == {
+                lencioni_assignment.id,
+                driver_assignment.id,
+            }
 
             await session.rollback()
     finally:

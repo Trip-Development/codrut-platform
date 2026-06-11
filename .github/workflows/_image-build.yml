@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: ci
+      ref:
+        description: Git ref or SHA to check out before building images.
+        required: false
+        type: string
+        default: ""
     outputs:
       backend-image:
         value: ${{ jobs.images.outputs.backend-image }}
@@ -35,6 +40,8 @@ jobs:
       release-sha: ${{ steps.images.outputs.release-sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
@@ -61,7 +68,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          echo "release-sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "release-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "backend=ghcr.io/${OWNER}/${REPO}-backend:${TAG}" >> "$GITHUB_OUTPUT"
           echo "frontend=ghcr.io/${OWNER}/${REPO}-frontend:${TAG}" >> "$GITHUB_OUTPUT"
 

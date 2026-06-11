@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -101,9 +101,14 @@ async def list_company_assignments(
     company_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> list[AssignmentResponse]:
     require_trainer_principal(principal)
-    return await AssignmentService(session).list_assignments(principal.user_id, company_id)
+    return await AssignmentService(session).list_assignments(
+        principal.user_id,
+        company_id,
+        project_id,
+    )
 
 
 @router.get(
@@ -114,11 +119,13 @@ async def get_company_default_assignment_plan(
     company_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> AssignmentPlanResponse:
     require_trainer_principal(principal)
     return await AssignmentService(session).build_default_assignment_plan(
         principal.user_id,
         company_id,
+        project_id,
     )
 
 
@@ -131,8 +138,11 @@ async def save_company_assignment_plan(
     payload: AssignmentPlanSaveRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> AssignmentPlanSaveResponse:
     require_trainer_principal(principal)
+    if project_id is not None:
+        payload.project_id = project_id
     result = await AssignmentService(session).save_assignment_plan(
         principal.user_id,
         company_id,
@@ -150,9 +160,10 @@ async def get_company_report_aggregate(
     company_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> CompanyReportAggregateResponse:
     require_trainer_principal(principal)
-    return await ScoringService(session).get_company_report_aggregate(company_id)
+    return await ScoringService(session).get_company_report_aggregate(company_id, project_id)
 
 
 @router.post(
@@ -222,6 +233,7 @@ async def create_company_invitation(
         company_id=company_id,
         respondent_profile_id=payload.respondent_profile_id,
         assignment_ids=payload.assignment_ids,
+        project_id=payload.project_id,
         expires_in_days=payload.expires_in_days,
         force_rotate=payload.force_rotate,
     )

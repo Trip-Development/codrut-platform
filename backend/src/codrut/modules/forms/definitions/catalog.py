@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +24,12 @@ LIKERT_1_TO_3 = [
     {"value": 1, "label": "Rar"},
     {"value": 2, "label": "Uneori"},
     {"value": 3, "label": "De obicei"},
+]
+
+LIKERT_1_TO_3_EN = [
+    {"value": 1, "label": "Rarely"},
+    {"value": 2, "label": "Sometimes"},
+    {"value": 3, "label": "Usually"},
 ]
 
 DISTRESS_SCORE_0_TO_10 = [
@@ -52,6 +59,8 @@ def _statement_question(
     number: int,
     text: str,
     dysfunction: str,
+    *,
+    scale: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": f"lencioni_q{number:02d}",
@@ -59,7 +68,7 @@ def _statement_question(
         "type": "likert",
         "label": text,
         "required": True,
-        "scale": LIKERT_1_TO_3,
+        "scale": scale or LIKERT_1_TO_3,
         "scoring": {"group": dysfunction},
     }
 
@@ -75,14 +84,19 @@ def _boss360_question(number: int, text: str) -> dict[str, Any]:
     }
 
 
-def _distress_set(number: int, statements: dict[str, tuple[str, str]]) -> dict[str, Any]:
+def _distress_set(
+    number: int,
+    statements: dict[str, tuple[str, str]],
+    *,
+    instructions: str | None = None,
+) -> dict[str, Any]:
     return {
         "id": f"distress_set_{number:02d}",
         "code": f"SET{number}",
         "type": "statement_score_set",
         "label": f"Set {number}",
         "required": True,
-        "instructions": (
+        "instructions": instructions or (
             "Acordă fiecărei afirmații un scor între 0 și 10. Alege afirmația cea mai "
             "adevărată pentru tine cu 7-10, cea mai puțin adevărată cu 0-3, iar "
             "celelalte între aceste repere."
@@ -104,7 +118,7 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.lencioni,
     version=1,
     title="Chestionar de evaluare a echipei",
-    description="Evaluare Lencioni pentru cele cinci disfunctii ale unei echipe.",
+    description="Evaluare Lencioni pentru cele cinci disfuncții ale unei echipe.",
     schema={
         "schema_version": "questionnaire.v1",
         "source": {
@@ -114,101 +128,101 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
         },
         "response": {"mode": "team_assessment", "target": "team"},
         "instructions": (
-            "Utilizati scala pentru a indica modul in care fiecare declaratie se aplica "
-            "echipei. Evaluati sincer si fara sa va ganditi prea mult la raspunsuri."
+            "Utilizați scala pentru a indica modul în care fiecare declarație se aplică "
+            "echipei. Evaluați sincer și fără să vă gândiți prea mult la răspunsuri."
         ),
         "sections": [
             {
                 "id": "team_assessment",
-                "title": "Evaluare echipa",
+                "title": "Evaluare echipă",
                 "questions": [
                     _statement_question(
                         1,
-                        "Membrii echipei sunt pasionali si netematori in discutiile lor "
+                        "Membrii echipei sunt pasionați și netemători în discuțiile lor "
                         "asupra problemelor.",
                         "fear_of_conflict",
                     ),
                     _statement_question(
                         2,
-                        "Membrii echipei isi spun reciproc deficientele sau comportamentele "
+                        "Membrii echipei își spun reciproc deficiențele sau comportamentele "
                         "neproductive.",
                         "avoidance_of_accountability",
                     ),
                     _statement_question(
                         3,
-                        "Membrii echipei stiu ce lucreaza colegii lor si cum contribuie la "
+                        "Membrii echipei știu ce lucrează colegii lor și cum contribuie la "
                         "binele colectiv al echipei.",
                         "lack_of_commitment",
                     ),
                     _statement_question(
                         4,
-                        "Membrii echipei isi cer scuze repede unii altora atunci cand spun "
-                        "sau fac ceva necorespunzator sau daunator echipei.",
+                        "Membrii echipei își cer scuze repede unii altora atunci când spun "
+                        "sau fac ceva necorespunzător sau dăunător echipei.",
                         "absence_of_trust",
                     ),
                     _statement_question(
                         5,
-                        "Membrii echipei fac de buna voie sacrificii in departamentele sau "
-                        "domeniile lor de expertiza, pentru binele echipei.",
+                        "Membrii echipei fac de bună voie sacrificii în departamentele sau "
+                        "domeniile lor de expertiză, pentru binele echipei.",
                         "inattention_to_results",
                     ),
                     _statement_question(
                         6,
-                        "Membrii echipei isi recunosc deschis slabiciunile si greselile.",
+                        "Membrii echipei își recunosc deschis slăbiciunile și greșelile.",
                         "absence_of_trust",
                     ),
                     _statement_question(
                         7,
-                        "Intalnirile echipei sunt interesante, nu plictisitoare.",
+                        "Întâlnirile echipei sunt interesante, nu plictisitoare.",
                         "fear_of_conflict",
                     ),
                     _statement_question(
                         8,
-                        "Membrii echipei parasesc reuniunile increzatori ca ai lor colegi "
-                        "isi asuma cu totul deciziile convenite, chiar daca s-ar afla in "
-                        "dezacord initial.",
+                        "Membrii echipei părăsesc reuniunile încrezători că ai lor colegi "
+                        "își asumă cu totul deciziile convenite, chiar dacă s-ar afla în "
+                        "dezacord inițial.",
                         "lack_of_commitment",
                     ),
                     _statement_question(
                         9,
-                        "Moralul este afectat in mod semnificativ de esecul atingerii "
+                        "Moralul este afectat în mod semnificativ de eșecul atingerii "
                         "obiectivelor echipei.",
                         "inattention_to_results",
                     ),
                     _statement_question(
                         10,
-                        "In timpul intalnirilor echipei, problemele cele mai importante si "
+                        "În timpul întâlnirilor echipei, problemele cele mai importante și "
                         "dificile sunt puse pe masa pentru a fi rezolvate.",
                         "fear_of_conflict",
                     ),
                     _statement_question(
                         11,
-                        "Membrii echipei sunt profund ingrijorati de perspectiva de a-si "
-                        "dezamagi colegii.",
+                        "Membrii echipei sunt profund îngrijorați de perspectiva de a-și "
+                        "dezamăgi colegii.",
                         "avoidance_of_accountability",
                     ),
                     _statement_question(
                         12,
-                        "Membrii echipei stiu despre vietile personale ale celorlalti si se "
-                        "simt confortabil sa le discute.",
+                        "Membrii echipei știu despre viețile personale ale celorlalți și se "
+                        "simt confortabil să le discute.",
                         "absence_of_trust",
                     ),
                     _statement_question(
                         13,
-                        "Membrii echipei incheie discutiile cu hotarari si planuri de actiune "
-                        "clare si specifice.",
+                        "Membrii echipei încheie discuțiile cu hotărâri și planuri de acțiune "
+                        "clare și specifice.",
                         "lack_of_commitment",
                     ),
                     _statement_question(
                         14,
-                        "Membrii echipei se provoaca reciproc cu privire la planurile si "
-                        "abordarile lor.",
+                        "Membrii echipei se provoacă reciproc cu privire la planurile și "
+                        "abordările lor.",
                         "avoidance_of_accountability",
                     ),
                     _statement_question(
                         15,
-                        "Membrii echipei nu se grabesc sa obtina recunoastere pentru propria "
-                        "munca, dar se grabesc sa recunoasca meritele celorlalti.",
+                        "Membrii echipei nu se grăbesc să obțină recunoaștere pentru propria "
+                        "muncă, dar se grăbesc să recunoască meritele celorlalți.",
                         "inattention_to_results",
                     ),
                 ],
@@ -219,7 +233,7 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
             "groups": [
                 {
                     "id": "absence_of_trust",
-                    "label": "Absenta increderii",
+                    "label": "Absența încrederii",
                     "question_ids": ["lencioni_q04", "lencioni_q06", "lencioni_q12"],
                 },
                 {
@@ -234,19 +248,99 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
                 },
                 {
                     "id": "avoidance_of_accountability",
-                    "label": "Evitarea responsabilitatii",
+                    "label": "Evitarea responsabilității",
                     "question_ids": ["lencioni_q02", "lencioni_q11", "lencioni_q14"],
                 },
                 {
                     "id": "inattention_to_results",
-                    "label": "Neatentia la rezultate",
+                    "label": "Neatenția la rezultate",
                     "question_ids": ["lencioni_q05", "lencioni_q09", "lencioni_q15"],
                 },
             ],
             "interpretation": [
-                {"min": 8, "max": 9, "label": "Disfunctia probabil nu este o problema."},
-                {"min": 6, "max": 7, "label": "Disfunctia poate fi o problema."},
-                {"min": 3, "max": 5, "label": "Disfunctia trebuie probabil abordata."},
+                {"min": 8, "max": 9, "label": "Disfuncția probabil nu este o problemă."},
+                {"min": 6, "max": 7, "label": "Disfuncția poate fi o problemă."},
+                {"min": 3, "max": 5, "label": "Disfuncția trebuie probabil abordată."},
+            ],
+        },
+    },
+)
+
+
+LENCIONI_EN_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.lencioni_en,
+    version=1,
+    title="Team Assessment Questionnaire",
+    description="Lencioni assessment for the five dysfunctions of a team.",
+    schema={
+        "schema_version": "questionnaire.v1",
+        "audience": "team",
+        "source": {
+            "type": "pdf",
+            "path": "docs/questionnaires/lencioni.pdf",
+            "status": "approved",
+        },
+        "response": {"mode": "team_assessment", "target": "team"},
+        "instructions": (
+            "Use the scale to indicate how each statement applies to the team. "
+            "Answer honestly and avoid overthinking your responses."
+        ),
+        "sections": [
+            {
+                "id": "team_assessment",
+                "title": "Team assessment",
+                "questions": [
+                    _statement_question(1, "Team members are passionate and unguarded in their discussion of issues.", "fear_of_conflict", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(2, "Team members call out one another's deficiencies or unproductive behaviors.", "avoidance_of_accountability", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(3, "Team members know what their peers are working on and how they contribute to the collective good of the team.", "lack_of_commitment", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(4, "Team members quickly and genuinely apologize to one another when they say or do something inappropriate or damaging to the team.", "absence_of_trust", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(5, "Team members willingly make sacrifices in their departments or areas of expertise for the good of the team.", "inattention_to_results", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(6, "Team members openly admit their weaknesses and mistakes.", "absence_of_trust", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(7, "Team meetings are compelling and not boring.", "fear_of_conflict", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(8, "Team members leave meetings confident that their peers are completely committed to the decisions agreed on, even if there was initial disagreement.", "lack_of_commitment", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(9, "Morale is significantly affected by the failure to achieve team goals.", "inattention_to_results", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(10, "During team meetings, the most important and difficult issues are put on the table to be resolved.", "fear_of_conflict", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(11, "Team members are deeply concerned about the prospect of letting down their peers.", "avoidance_of_accountability", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(12, "Team members know about one another's personal lives and are comfortable discussing them.", "absence_of_trust", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(13, "Team members end discussions with clear and specific resolutions and calls to action.", "lack_of_commitment", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(14, "Team members challenge one another about their plans and approaches.", "avoidance_of_accountability", scale=LIKERT_1_TO_3_EN),
+                    _statement_question(15, "Team members are slow to seek credit for their own contributions but quick to recognize others.", "inattention_to_results", scale=LIKERT_1_TO_3_EN),
+                ],
+            },
+        ],
+        "scoring": {
+            "method": "sum_by_group",
+            "groups": [
+                {
+                    "id": "absence_of_trust",
+                    "label": "Absence of trust",
+                    "question_ids": ["lencioni_q04", "lencioni_q06", "lencioni_q12"],
+                },
+                {
+                    "id": "fear_of_conflict",
+                    "label": "Fear of conflict",
+                    "question_ids": ["lencioni_q01", "lencioni_q07", "lencioni_q10"],
+                },
+                {
+                    "id": "lack_of_commitment",
+                    "label": "Lack of commitment",
+                    "question_ids": ["lencioni_q03", "lencioni_q08", "lencioni_q13"],
+                },
+                {
+                    "id": "avoidance_of_accountability",
+                    "label": "Avoidance of accountability",
+                    "question_ids": ["lencioni_q02", "lencioni_q11", "lencioni_q14"],
+                },
+                {
+                    "id": "inattention_to_results",
+                    "label": "Inattention to results",
+                    "question_ids": ["lencioni_q05", "lencioni_q09", "lencioni_q15"],
+                },
+            ],
+            "interpretation": [
+                {"min": 8, "max": 9, "label": "The dysfunction is probably not a problem."},
+                {"min": 6, "max": 7, "label": "The dysfunction could be a problem."},
+                {"min": 3, "max": 5, "label": "The dysfunction probably needs to be addressed."},
             ],
         },
     },
@@ -256,14 +350,14 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
 PCM_BASE_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.pcm_base,
     version=1,
-    title="Baza ta PCM",
-    description="Alege tipul PCM care descrie cel mai bine baza ta de personalitate.",
+    title="Baza și faza ta PCM",
+    description="Alege baza și faza PCM care descriu profilul tău curent.",
     schema={
         "schema_version": "questionnaire.v1",
         "response": {"mode": "profile_onboarding", "target": "self"},
         "instructions": (
-            "Alege baza PCM identificată pentru tine. Dacă nu ești sigur, selectează "
-            "varianta confirmată în discuția cu trainerul."
+            "Alege baza PCM și faza PCM identificate pentru tine. Dacă nu ești sigur, "
+            "selectează varianta confirmată în discuția cu trainerul."
         ),
         "sections": [
             {
@@ -277,7 +371,15 @@ PCM_BASE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "label": "Care este baza ta PCM?",
                         "required": True,
                         "scale": PCM_TYPES,
-                    }
+                    },
+                    {
+                        "id": "pcm_phase",
+                        "code": "PCM-PHASE",
+                        "type": "single_choice",
+                        "label": "Care este faza ta PCM?",
+                        "required": True,
+                        "scale": PCM_TYPES,
+                    },
                 ],
             }
         ],
@@ -563,6 +665,161 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
 )
 
 
+DISTRESS_INSTRUCTIONS_EN = (
+    "Score each statement from 0 to 10. Mark the statement that is most true for "
+    "you with 7-10, the least true statement with 0-3, and place the others "
+    "between those anchors. Think about adult relationships and work context."
+)
+
+
+DISTRESS_DRIVERS_EN_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.distress_drivers_en,
+    version=1,
+    title="Resilience and TA Distress Drivers",
+    description="Self-assessment for Transactional Analysis distress drivers.",
+    schema={
+        "schema_version": "questionnaire.v1",
+        "audience": "leadership",
+        "source": {
+            "type": "pdf",
+            "path": "docs/questionnaires/distress_drivers.pdf",
+            "status": "approved",
+        },
+        "response": {"mode": "self_assessment", "target": "self"},
+        "instructions": DISTRESS_INSTRUCTIONS_EN,
+        "sections": [
+            {
+                "id": "driver_sets",
+                "title": "TA drivers",
+                "questions": [
+                    _distress_set(
+                        1,
+                        {
+                            "a": ("Resilience is a valuable resource", "be_strong"),
+                            "b": ("I like seeing people do everything they can to get things finished", "be_perfect"),
+                            "c": ("Considering the effort I put into things, I should achieve more", "try_hard"),
+                            "d": ("I find myself doing too many things at the last minute", "hurry_up"),
+                            "e": ("Overall, I adapt more to other people's wishes than they adapt to mine", "please_people"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        2,
+                        {
+                            "a": ("Superficiality and carelessness bother me", "be_perfect"),
+                            "b": ("I am interested in always being busy", "try_hard"),
+                            "c": ("When people say something too slowly, I feel like finishing the sentence for them", "hurry_up"),
+                            "d": ("I have enough imagination to guess what people need", "please_people"),
+                            "e": ("When someone becomes emotional, my reaction is often to make a joke", "be_strong"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        3,
+                        {
+                            "a": ("Even when my emotions are intense, I appear calm on the outside", "be_strong"),
+                            "b": ("If something must be done well, I prefer to do it myself", "be_perfect"),
+                            "c": ("I am more interested in starting and doing things than in finishing them", "try_hard"),
+                            "d": ("I often run out of time when I want to do many things", "hurry_up"),
+                            "e": ("I do not particularly like asking people for favors", "please_people"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        4,
+                        {
+                            "a": ("I do not mind things being difficult - I always find energy", "try_hard"),
+                            "b": ("I feel comfortable leaving for somewhere at the last minute", "hurry_up"),
+                            "c": ("If someone does not like me, I either try harder to be liked or withdraw", "please_people"),
+                            "d": ("It is rare for me to feel hurt", "be_strong"),
+                            "e": ("When something must be done properly, I prefer to do it myself", "be_perfect"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        5,
+                        {
+                            "a": ("I lose patience with slow people", "hurry_up"),
+                            "b": ("I usually prefer to consider people's wishes before making a decision", "please_people"),
+                            "c": ("I show a calm face even when I am annoyed or upset", "be_strong"),
+                            "d": ("I do not like looking for excuses for work done superficially", "be_perfect"),
+                            "e": ("There is something about reaching the end of a task that I do not like", "try_hard"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        6,
+                        {
+                            "a": ("I believe words should be used correctly", "be_perfect"),
+                            "b": ("I like to explore several options before I start", "try_hard"),
+                            "c": ("It suits me to already think about the next thing before finishing the first", "hurry_up"),
+                            "d": ("When I am sure someone likes me, I feel better", "please_people"),
+                            "e": ("I carry a lot without others realizing it", "be_strong"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        7,
+                        {
+                            "a": ("If I had 20% more time, I could relax more", "hurry_up"),
+                            "b": ("I often smile and nod when people speak with me", "please_people"),
+                            "c": ("When people get too enthusiastic, I prefer to stay rational and calm", "be_strong"),
+                            "d": ("I can do something well and still be critical of myself", "be_perfect"),
+                            "e": ("There are so many things to consider that finishing something can be difficult", "try_hard"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        8,
+                        {
+                            "a": ("I usually do not choose the easy option", "try_hard"),
+                            "b": ("I like having many things in progress at the same time", "hurry_up"),
+                            "c": ("I like to think I am attentive to others", "please_people"),
+                            "d": ("I avoid people who are too emotional", "be_strong"),
+                            "e": ("I easily see how something could be improved", "be_perfect"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        9,
+                        {
+                            "a": ("I rarely talk about my achievements or about how much I carry", "be_strong"),
+                            "b": ("It is hard for me to talk about my strengths, and I usually focus on weaknesses", "be_perfect"),
+                            "c": ("I like difficult problems; finding a solution gives me energy", "try_hard"),
+                            "d": ("I prefer to start and do things rather than sit around planning and talking about them", "hurry_up"),
+                            "e": ("In general, I adapt more to what others want from me", "please_people"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                    _distress_set(
+                        10,
+                        {
+                            "a": ("I often repeat myself because I feel I have not been understood", "try_hard"),
+                            "b": ("In general, I do more when I am under pressure", "hurry_up"),
+                            "c": ("I like discussing things with colleagues before making a final decision", "please_people"),
+                            "d": ("I rarely get upset because of people or situations", "be_strong"),
+                            "e": ("It comes very naturally to me to correct people and mistakes", "be_perfect"),
+                        },
+                        instructions=DISTRESS_INSTRUCTIONS_EN,
+                    ),
+                ],
+            },
+        ],
+        "scoring": {
+            "method": "sum_statement_scores_by_driver",
+            "drivers": [
+                {"id": "be_strong", "code": "BS", "label": "Be Strong"},
+                {"id": "be_perfect", "code": "BP", "label": "Be Perfect"},
+                {"id": "try_hard", "code": "TH", "label": "Try Hard"},
+                {"id": "hurry_up", "code": "HU", "label": "Hurry Up"},
+                {"id": "please_people", "code": "PP", "label": "Please People"},
+            ],
+            "primary_result": "highest_total",
+        },
+    },
+)
+
+
 BOSS_360_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.boss_360,
     version=1,
@@ -602,10 +859,17 @@ ICARE_4_POINT_SCALE = [
     {"value": 4, "label": "Întotdeauna"},
 ]
 
+ICARE_4_POINT_SCALE_EN = [
+    {"value": 1, "label": "Rarely"},
+    {"value": 2, "label": "Sometimes"},
+    {"value": 3, "label": "Frequently"},
+    {"value": 4, "label": "Always"},
+]
+
 ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.icare,
     version=1,
-    title="ICARE leadership behaviors",
+    title="Comportamente de leadership ICARE",
     description=(
         "Evaluare comportamentală pe atributele ICARE. Versiune provizorie cu scală în 4 trepte, "
         "pregătită pentru ajustarea scalei finale."
@@ -630,13 +894,13 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
         "sections": [
             {
                 "id": "inspiring",
-                "title": "Inspiring",
+                "title": "Inspirație",
                 "questions": [
                     {
                         "id": "icare_inspiring_developing_people",
                         "code": "ICARE-1.1",
                         "type": "statement_score_set",
-                        "label": "Developing people",
+                        "label": "Dezvoltarea oamenilor",
                         "required": True,
                         "instructions": "Dezvoltare continuă prin feedback constructiv, încurajare și follow-up.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -650,7 +914,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_inspiring_leading_by_example",
                         "code": "ICARE-1.2",
                         "type": "statement_score_set",
-                        "label": "Leading by example",
+                        "label": "Conducere prin exemplu",
                         "required": True,
                         "instructions": "Aliniere între valori, angajamente și comportamentul zilnic.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -664,7 +928,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_inspiring_engagement_environment",
                         "code": "ICARE-1.3",
                         "type": "statement_score_set",
-                        "label": "Creating an environment that drives engagement",
+                        "label": "Crearea unui mediu care stimulează implicarea",
                         "required": True,
                         "instructions": "Mediu sigur, energizant și orientat către contribuția fiecărui membru.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -678,13 +942,13 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
             },
             {
                 "id": "create_trust",
-                "title": "Create Trust",
+                "title": "Construirea încrederii",
                 "questions": [
                     {
                         "id": "icare_trust_collaboration",
                         "code": "ICARE-2.1",
                         "type": "statement_score_set",
-                        "label": "Advocate of collaboration",
+                        "label": "Promotor al colaborării",
                         "required": True,
                         "instructions": "Transparență, colaborare și prioritizarea interesului comun.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -698,7 +962,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_trust_inspired",
                         "code": "ICARE-2.2",
                         "type": "statement_score_set",
-                        "label": "Inspired",
+                        "label": "Inspirație împărtășită",
                         "required": True,
                         "instructions": "Sens, ambiție și angajament construite împreună cu echipa.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -712,7 +976,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_trust_reality",
                         "code": "ICARE-2.3",
                         "type": "statement_score_set",
-                        "label": "Anchored in reality",
+                        "label": "Ancorare în realitate",
                         "required": True,
                         "instructions": "Ascultare activă, informații relevante și realism onest.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -726,7 +990,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_trust_illuminating",
                         "code": "ICARE-2.4",
                         "type": "statement_score_set",
-                        "label": "Illuminating",
+                        "label": "Clarificare",
                         "required": True,
                         "instructions": "Claritate strategică în contexte complexe și incerte.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -740,13 +1004,13 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
             },
             {
                 "id": "awareness",
-                "title": "Awareness",
+                "title": "Conștientizare",
                 "questions": [
                     {
                         "id": "icare_awareness_humility",
                         "code": "ICARE-3.1",
                         "type": "statement_score_set",
-                        "label": "Humility",
+                        "label": "Modestie",
                         "required": True,
                         "instructions": "Feedback, limite personale și integrarea perspectivelor diferite.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -760,7 +1024,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_awareness_emotional_intelligence",
                         "code": "ICARE-3.2",
                         "type": "statement_score_set",
-                        "label": "Emotional and situational intelligence",
+                        "label": "Inteligență emoțională și situațională",
                         "required": True,
                         "instructions": "Autoreglare, interes autentic și adaptarea comunicării.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -774,7 +1038,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_awareness_open_world",
                         "code": "ICARE-3.3",
                         "type": "statement_score_set",
-                        "label": "Open to the world",
+                        "label": "Deschidere către lume",
                         "required": True,
                         "instructions": "Curiozitate, benchmarkuri externe și facilitarea schimbării.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -788,13 +1052,13 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
             },
             {
                 "id": "results",
-                "title": "Results",
+                "title": "Rezultate",
                 "questions": [
                     {
                         "id": "icare_results_ambitious",
                         "code": "ICARE-4.1",
                         "type": "statement_score_set",
-                        "label": "Openly ambitious for the company",
+                        "label": "Ambiție asumată pentru companie",
                         "required": True,
                         "instructions": "Inovație, asumarea riscului și învățare din performanță.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -808,7 +1072,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_results_caring",
                         "code": "ICARE-4.2",
                         "type": "statement_score_set",
-                        "label": "Caring equally for employees and customers",
+                        "label": "Grijă egală pentru angajați și clienți",
                         "required": True,
                         "instructions": "Echilibru între performanță, bunăstarea echipei și standarde realiste.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -822,7 +1086,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_results_agility",
                         "code": "ICARE-4.3",
                         "type": "statement_score_set",
-                        "label": "Entrepreneurial agility",
+                        "label": "Agilitate antreprenorială",
                         "required": True,
                         "instructions": "Testare rapidă, simplificare și conectarea rețelei externe la oportunități.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -836,13 +1100,13 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
             },
             {
                 "id": "empowerment",
-                "title": "Empowerment",
+                "title": "Împuternicire",
                 "questions": [
                     {
                         "id": "icare_empowerment_decision_making",
                         "code": "ICARE-5.1",
                         "type": "statement_score_set",
-                        "label": "On-the-ground decision-making",
+                        "label": "Decizie aproape de teren",
                         "required": True,
                         "instructions": "Autonomie, inițiativă și raportare transparentă.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -856,9 +1120,9 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_empowerment_collective_intelligence",
                         "code": "ICARE-5.2",
                         "type": "statement_score_set",
-                        "label": "Cultivating collective intelligence",
+                        "label": "Cultivarea inteligenței colective",
                         "required": True,
-                        "instructions": "Diversity, co-construcție, decizii asumate și refuzul compromisului facil.",
+                        "instructions": "Diversitate, co-construcție, decizii asumate și refuzul compromisului facil.",
                         "scale": ICARE_4_POINT_SCALE,
                         "statements": [
                             {"id": "icare_43", "code": "S1", "label": "Susține decizia finală chiar dacă diferă de propria opinie"},
@@ -870,7 +1134,7 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "id": "icare_empowerment_helping_team",
                         "code": "ICARE-5.3",
                         "type": "statement_score_set",
-                        "label": "Helping the team",
+                        "label": "Sprijinirea echipei",
                         "required": True,
                         "instructions": "Contribuție la dinamica echipei, deblocare și sharing de cunoaștere.",
                         "scale": ICARE_4_POINT_SCALE,
@@ -887,13 +1151,211 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
 )
 
 
+ICARE_SECTION_TITLES_EN = {
+    "inspiring": "Inspiring",
+    "create_trust": "Building Trust",
+    "awareness": "Awareness",
+    "results": "Results",
+    "empowerment": "Empowerment",
+}
+
+ICARE_QUESTION_COPY_EN = {
+    "icare_inspiring_developing_people": (
+        "Developing people",
+        "Continuous development through constructive feedback, encouragement, and follow-up.",
+    ),
+    "icare_inspiring_leading_by_example": (
+        "Leading by example",
+        "Alignment between values, commitments, and daily behavior.",
+    ),
+    "icare_inspiring_engagement_environment": (
+        "Creating an engaging environment",
+        "A safe, energizing environment oriented around each person's contribution.",
+    ),
+    "icare_trust_collaboration": (
+        "Promoting collaboration",
+        "Transparency, collaboration, and prioritizing the shared interest.",
+    ),
+    "icare_trust_inspired": (
+        "Shared inspiration",
+        "Meaning, ambition, and commitment built together with the team.",
+    ),
+    "icare_trust_reality": (
+        "Grounding in reality",
+        "Active listening, relevant information, and honest realism.",
+    ),
+    "icare_trust_illuminating": (
+        "Clarifying",
+        "Strategic clarity in complex and uncertain contexts.",
+    ),
+    "icare_awareness_humility": (
+        "Humility",
+        "Feedback, personal limits, and integrating perspectives different from one's own.",
+    ),
+    "icare_awareness_emotional_intelligence": (
+        "Emotional intelligence",
+        "Self-regulation, genuine interest in people, and adaptive communication.",
+    ),
+    "icare_awareness_open_world": (
+        "Openness to the world",
+        "External benchmarks, change, adjacent domains, and new technologies.",
+    ),
+    "icare_results_ambitious": (
+        "Ambition owned for the company",
+        "Innovation, responsible risk-taking, and learning from performance.",
+    ),
+    "icare_results_caring": (
+        "Equal care for employees and customers",
+        "Balance between performance, team wellbeing, and realistic standards.",
+    ),
+    "icare_results_agility": (
+        "Entrepreneurial agility",
+        "Rapid testing, simplification, and connecting the external network to opportunities.",
+    ),
+    "icare_empowerment_decision_making": (
+        "Decision-making close to the field",
+        "Autonomy, initiative, and transparent reporting.",
+    ),
+    "icare_empowerment_collective_intelligence": (
+        "Cultivating collective intelligence",
+        "Diversity, co-construction, committed decisions, and refusing easy compromise.",
+    ),
+    "icare_empowerment_helping_team": (
+        "Supporting the team",
+        "Contribution to team dynamics, unblocking others, and knowledge sharing.",
+    ),
+}
+
+ICARE_STATEMENT_LABELS_EN = {
+    "icare_01": "Gives constructive feedback",
+    "icare_02": "Supports development plans",
+    "icare_03": "Invests in their own continuous development",
+    "icare_04": "Acts in line with stated values",
+    "icare_05": "Honors commitments made to the team",
+    "icare_06": "Treats all team members with respect and fairness",
+    "icare_07": "Creates psychologically safe space for speaking up",
+    "icare_08": "Delegates with meaning, not just tasks",
+    "icare_09": "Recognizes individual contribution to team success",
+    "icare_10": "Checks shared understanding after discussions",
+    "icare_11": "Shares their own context and motivations",
+    "icare_12": "Prioritizes the shared interest over personal or local-team interest",
+    "icare_13": "Connects the team's work to a broader purpose",
+    "icare_14": "Co-creates bold ambitions with the team",
+    "icare_15": "Inspires through their own level of commitment",
+    "icare_16": "Listens actively before responding or deciding",
+    "icare_17": "Proactively shares relevant information",
+    "icare_18": "Acknowledges uncomfortable facts honestly",
+    "icare_19": "Communicates strategy and direction clearly",
+    "icare_20": "Provides clarity in ambiguous situations",
+    "icare_21": "Acts with clarity in complex and uncertain environments",
+    "icare_22": "Asks for feedback about their own behavior",
+    "icare_23": "Knows when to ask for help or admit they do not know",
+    "icare_24": "Integrates perspectives different from their own into decisions",
+    "icare_25": "Recognizes and manages their own emotions in interactions",
+    "icare_26": "Shows genuine interest in people as individuals",
+    "icare_27": "Adapts communication to the other person's style and needs",
+    "icare_28": "Actively looks for external benchmarks and trends",
+    "icare_29": "Embraces and facilitates change",
+    "icare_30": "Actively explores adjacent domains or new technologies",
+    "icare_31": "Proposes innovative and bold solutions",
+    "icare_32": "Promotes responsible risk-taking",
+    "icare_33": "Tracks performance and learns from failure",
+    "icare_34": "Balances performance pressure with team wellbeing",
+    "icare_35": "Pays attention to team members' work-life balance",
+    "icare_36": "Builds high standards grounded in reality",
+    "icare_37": "Tests and learns quickly",
+    "icare_38": "Delivers results faster through simplification and prioritization",
+    "icare_39": "Connects the external network to business opportunities",
+    "icare_40": "Delegates decision authority to the right level",
+    "icare_41": "Takes initiative and acts without waiting for permission",
+    "icare_42": "Sets clear objectives and reports results transparently",
+    "icare_43": "Supports the final decision even when it differs from their own opinion",
+    "icare_44": "Seeks and offers advice without imposing solutions",
+    "icare_45": "Rejects systematic compromise in favor of better solutions",
+    "icare_46": "Feeds the team's positive dynamics and energy",
+    "icare_47": "Helps unblock obstacles for colleagues in the team",
+    "icare_48": "Develops team capability through knowledge sharing",
+}
+
+
+def _boss_360_schema_from_icare(*, english: bool = False) -> DefinitionSchema:
+    schema = deepcopy(ICARE_DEFINITION.schema)
+    schema["audience"] = "participant"
+    schema["response"] = {"mode": "person_feedback", "target": "person"}
+    schema["instructions"] = (
+        "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele "
+        "iCARE observabile din perspectiva ta: autoevaluare, coleg sau raportor direct."
+    )
+    schema.pop("scoring", None)
+    if source := schema.get("source"):
+        source["status"] = "approved"
+
+    if not english:
+        return schema
+
+    schema["instructions"] = (
+        "Answer for the person named in the assignment. Evaluate observable iCARE "
+        "behaviors from your perspective: self-review, peer review, or direct-report feedback."
+    )
+    for section in schema["sections"]:
+        section["title"] = ICARE_SECTION_TITLES_EN.get(section["id"], section["title"])
+        for question in section["questions"]:
+            label, instructions = ICARE_QUESTION_COPY_EN[question["id"]]
+            question["label"] = label
+            question["instructions"] = instructions
+            question["scale"] = ICARE_4_POINT_SCALE_EN
+            for statement in question.get("statements", []):
+                statement["label"] = ICARE_STATEMENT_LABELS_EN[statement["id"]]
+    return schema
+
+
+BOSS_360_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.boss_360,
+    version=1,
+    title="Feedback 360 iCARE pentru manager",
+    description=(
+        "Feedback comportamental iCARE pentru manager, din perspectivă proprie, "
+        "de colegi manageri și de raportori direcți."
+    ),
+    schema=_boss_360_schema_from_icare(),
+)
+
+
+BOSS_360_EN_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.boss_360_en,
+    version=1,
+    title="iCARE 360 Feedback for Manager",
+    description=(
+        "iCARE behavioral feedback for a manager from self, manager peers, "
+        "and direct reports."
+    ),
+    schema=_boss_360_schema_from_icare(english=True),
+)
+
+
+ICARE_LEGACY_ALIAS_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.icare,
+    version=1,
+    title="Feedback 360 iCARE pentru manager",
+    description="Alias vechi pentru chestionarul canonic Feedback 360 iCARE.",
+    schema=_boss_360_schema_from_icare(),
+)
+
+
+LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS = {
+    QuestionnaireKey.icare.value: ICARE_LEGACY_ALIAS_DEFINITION,
+}
+
+
 APPROVED_QUESTIONNAIRE_DEFINITIONS = [
     PCM_BASE_DEFINITION,
     PCM_PHASE_DEFINITION,
     LENCIONI_DEFINITION,
+    LENCIONI_EN_DEFINITION,
     DISTRESS_DRIVERS_DEFINITION,
+    DISTRESS_DRIVERS_EN_DEFINITION,
     BOSS_360_DEFINITION,
-    ICARE_DEFINITION,
+    BOSS_360_EN_DEFINITION,
 ]
 
 
@@ -904,5 +1366,7 @@ def get_approved_questionnaire_definition(
     for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS:
         if definition.key == key_value:
             return definition
+    if key_value in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
+        return LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS[key_value]
     msg = f"No approved questionnaire definition for {key_value}"
     raise KeyError(msg)

@@ -8,6 +8,7 @@ export type CompanyListItem = {
   id: string;
   name: string;
   participantCount: number;
+  projectCount: number;
   assignmentCount: number;
   completedCount: number;
   stage: "setup" | "invites" | "completion" | "reporting";
@@ -19,6 +20,7 @@ type CompanySummaryResponse = {
   id: string;
   name: string;
   participant_count: number;
+  project_count: number;
   assignment_count: number;
   completed_count: number;
   scored_count: number;
@@ -37,9 +39,33 @@ export type CompanyParticipant = {
   user_id: string | null;
 };
 
+export type CompanyProjectStatus = "draft" | "active" | "completed" | "archived";
+
+export type CompanyProject = {
+  id: string;
+  company_id: string;
+  company_name?: string;
+  name: string;
+  description: string | null;
+  status: CompanyProjectStatus;
+  starts_at: string | null;
+  due_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CompanyProjectPayload = {
+  name?: string;
+  description?: string | null;
+  status?: CompanyProjectStatus;
+  startsAt?: string | null;
+  dueAt?: string | null;
+};
+
 export type CompanyAssignment = {
   id: string;
   company_id: string;
+  project_id: string | null;
   respondent_profile_id: string;
   questionnaire_key: string;
   target_type: "self" | "person" | "team";
@@ -59,6 +85,7 @@ export type CompanyAssignment = {
 };
 
 export type CreateCompanyAssignmentPayload = {
+  projectId?: string | null;
   respondentProfileId: string;
   questionnaireKey: string;
   targetType: CompanyAssignment["target_type"];
@@ -96,6 +123,7 @@ export type CompanyAssignmentPlanItem = {
 };
 
 export type CompanyAssignmentPlan = {
+  project_id: string | null;
   scopes: CompanyAssignmentPlanScope[];
   assignments: CompanyAssignmentPlanItem[];
   suggested_count: number;
@@ -165,6 +193,7 @@ export type CompanyTeamMembership = {
 export type CompanyDetail = {
   id: string;
   name: string;
+  projects: CompanyProject[];
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
   invitationStatuses: ParticipantInvitationStatus[];
@@ -181,6 +210,10 @@ export type CompanyDetail = {
 };
 
 export type ApiRequestOptions = Pick<RequestInit, "headers">;
+
+export type ProjectScopeOptions = {
+  projectId?: string | null;
+};
 
 export type ReportAverage = {
   id: string;
@@ -224,6 +257,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Date indisponibile.";
 }
 
+function projectQuery(scope: ProjectScopeOptions = {}): string {
+  return scope.projectId ? `?project_id=${encodeURIComponent(scope.projectId)}` : "";
+}
+
 // ---------------------------------------------------------------------------
 // Data fetchers
 // ---------------------------------------------------------------------------
@@ -255,10 +292,11 @@ export async function getCompanyParticipants(
 export async function getCompanyAssignments(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignment[]> {
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/companies/${companyId}/assignments`,
+      `${getApiBaseUrl()}/companies/${companyId}/assignments${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
     if (!response.ok) {
@@ -279,6 +317,7 @@ export async function getCompanyAssignments(
 export async function getCompanyReportAggregate(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<CompanyReportAggregate> {
   const emptyAggregate: CompanyReportAggregate = {
     total_assigned: 0,
@@ -293,7 +332,7 @@ export async function getCompanyReportAggregate(
 
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate`,
+      `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
     if (!response.ok) {
@@ -321,6 +360,7 @@ export async function createCompanyAssignment(
     credentials: "include",
     body: JSON.stringify({
       respondent_profile_id: payload.respondentProfileId,
+      project_id: payload.projectId ?? null,
       questionnaire_key: payload.questionnaireKey,
       target_type: payload.targetType,
       target_person_id: payload.targetPersonId ?? null,
@@ -340,8 +380,9 @@ export async function createCompanyAssignment(
 export async function getCompanyDefaultAssignmentPlan(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignmentPlan> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan`, {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery(scope)}`, {
     cache: "no-store",
     credentials: "include",
     ...options,
@@ -358,12 +399,14 @@ export async function getCompanyDefaultAssignmentPlan(
 export async function saveCompanyDefaultAssignmentPlan(
   companyId: string,
   assignments: CompanyAssignmentPlanItem[],
+  projectId?: string | null,
 ): Promise<CompanyAssignmentPlanSaveResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan`, {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery({ projectId })}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({
+      project_id: projectId ?? null,
       assignments: assignments.map((assignment) => ({
         respondent_profile_id: assignment.respondent_profile_id,
         questionnaire_key: assignment.questionnaire_key,
@@ -408,6 +451,87 @@ export async function getCompanyTeams(
       throw e;
     }
     return [];
+  }
+}
+
+export async function getCompanyProjects(
+  companyId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyProject[]> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+  if (!response.ok) {
+    if (!isDemoFallbackEnabled()) {
+      throw new Error(`Eroare server (${response.status}): Nu s-au putut obține proiectele.`);
+    }
+    return [];
+  }
+  return (await response.json()) as CompanyProject[];
+}
+
+export async function getAllCompanyProjects(
+  options: ApiRequestOptions = {},
+): Promise<CompanyProject[]> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/projects`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+  if (!response.ok) {
+    if (!isDemoFallbackEnabled()) {
+      throw new Error(`Eroare server (${response.status}): Nu s-au putut obține proiectele.`);
+    }
+    return [];
+  }
+  return (await response.json()) as CompanyProject[];
+}
+
+export async function createCompanyProject(
+  companyId: string,
+  payload: CompanyProjectPayload & { name: string },
+): Promise<CompanyProject> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(projectPayloadToApi(payload)),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as CompanyProject;
+}
+
+export async function updateCompanyProject(
+  companyId: string,
+  projectId: string,
+  payload: CompanyProjectPayload,
+): Promise<CompanyProject> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(projectPayloadToApi(payload)),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as CompanyProject;
+}
+
+export async function deleteCompanyProject(companyId: string, projectId: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
   }
 }
 
@@ -485,6 +609,7 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           id: company.id,
           name: company.name,
           participantCount: participants.length,
+          projectCount: 0,
           assignmentCount: assignments.length,
           completedCount,
           stage: deriveStage(assignments.length, completedCount),
@@ -494,6 +619,7 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           id: company.id,
           name: company.name,
           participantCount: 0,
+          projectCount: 0,
           assignmentCount: 0,
           completedCount: 0,
           stage: "setup" as const,
@@ -512,6 +638,7 @@ function companySummaryToListItem(summary: CompanySummaryResponse): CompanyListI
     id: summary.id,
     name: summary.name,
     participantCount: summary.participant_count,
+    projectCount: summary.project_count,
     assignmentCount: summary.assignment_count,
     completedCount: summary.completed_count,
     stage: summary.stage,
@@ -581,6 +708,7 @@ export async function sendParticipantInvitations(
   companyId: string,
   payload: {
     participantIds?: string[];
+    projectId?: string | null;
     mode: ParticipantInvitationMode;
     forceRotate?: boolean;
   },
@@ -591,6 +719,7 @@ export async function sendParticipantInvitations(
     credentials: "include",
     body: JSON.stringify({
       participant_ids: payload.participantIds,
+      project_id: payload.projectId ?? null,
       mode: payload.mode,
       force_rotate: payload.forceRotate ?? false,
     }),
@@ -607,9 +736,10 @@ export async function sendParticipantInvitations(
 export async function resendParticipantInvitation(
   companyId: string,
   participantId: string,
+  projectId?: string | null,
 ): Promise<RosterInviteResult | null> {
   const response = await fetch(
-    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite`,
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite${projectQuery({ projectId })}`,
     {
       method: "POST",
       credentials: "include",
@@ -628,9 +758,10 @@ export async function resendParticipantInvitation(
 export async function getCompanyInvitationStatuses(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<ParticipantInvitationStatus[]> {
   const response = await fetch(
-    `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status`,
+    `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status${projectQuery(scope)}`,
     { cache: "no-store", credentials: "include", ...options },
   );
   if (!response.ok) {
@@ -736,21 +867,24 @@ export async function getCompanyDetail(
   const company = map.get(companyId);
   if (!company) return null;
 
-  const [participantsResult, assignmentsResult, invitationStatusesResult, teamsResult] = await Promise.allSettled([
+  const [projectsResult, participantsResult, assignmentsResult, invitationStatusesResult, teamsResult] = await Promise.allSettled([
+    getCompanyProjects(companyId, options),
     getCompanyParticipants(companyId, options),
     getCompanyAssignments(companyId, options),
     getCompanyInvitationStatuses(companyId, options),
     getCompanyTeams(companyId, options),
   ]);
 
+  const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
   const participants = participantsResult.status === "fulfilled" ? participantsResult.value : [];
   const assignments = assignmentsResult.status === "fulfilled" ? assignmentsResult.value : [];
   const invitationStatuses = invitationStatusesResult.status === "fulfilled" ? invitationStatusesResult.value : [];
   const teams = teamsResult.status === "fulfilled" ? teamsResult.value : [];
   const dataErrors = [
+    projectsResult.status === "rejected" ? `Proiecte: ${errorMessage(projectsResult.reason)}` : null,
     participantsResult.status === "rejected" ? `Participanți: ${errorMessage(participantsResult.reason)}` : null,
-    assignmentsResult.status === "rejected" ? `Asignari: ${errorMessage(assignmentsResult.reason)}` : null,
-    invitationStatusesResult.status === "rejected" ? `Invitatii: ${errorMessage(invitationStatusesResult.reason)}` : null,
+    assignmentsResult.status === "rejected" ? `Asignări: ${errorMessage(assignmentsResult.reason)}` : null,
+    invitationStatusesResult.status === "rejected" ? `Invitații: ${errorMessage(invitationStatusesResult.reason)}` : null,
     teamsResult.status === "rejected" ? `Echipe: ${errorMessage(teamsResult.reason)}` : null,
   ].filter((error): error is string => Boolean(error));
 
@@ -767,6 +901,7 @@ export async function getCompanyDetail(
   return {
     id: company.id,
     name: company.name,
+    projects,
     participants,
     assignments,
     invitationStatuses,
@@ -784,4 +919,14 @@ export async function getCompanyDetail(
       pendingCount,
     },
   };
+}
+
+function projectPayloadToApi(payload: CompanyProjectPayload) {
+  const body: Record<string, string | null> = {};
+  if ("name" in payload) body.name = payload.name ?? "";
+  if ("description" in payload) body.description = payload.description ?? null;
+  if ("status" in payload) body.status = payload.status ?? "draft";
+  if ("startsAt" in payload) body.starts_at = payload.startsAt ?? null;
+  if ("dueAt" in payload) body.due_at = payload.dueAt ?? null;
+  return body;
 }

@@ -12,7 +12,7 @@ const fixtures = vi.hoisted(() => ({
   definition: {
     key: "lencioni",
     version: 1,
-    title: "Lencioni team assessment",
+    title: "Chestionar de evaluare a echipei",
     description: "Initial description",
     schema: {
       schema_version: "questionnaire.v1",
@@ -48,7 +48,7 @@ vi.mock("@/api/questionnaires", async (importOriginal) => {
     listQuestionnaireDefinitionStubs: vi.fn().mockResolvedValue([
       {
         id: "lencioni",
-        name: "Lencioni team assessment",
+        name: "Chestionar de evaluare a echipei",
         description: "Initial description",
         status: "active",
         version: 1,
@@ -67,10 +67,10 @@ describe("QuestionnairesWorkspace", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps typing local and debounces server saves", async () => {
+  it("keeps typing local until the trainer explicitly saves", async () => {
     render(<QuestionnairesWorkspace />);
 
-    const titleInput = await screen.findByDisplayValue("Lencioni team assessment");
+    const titleInput = await screen.findByDisplayValue("Chestionar de evaluare a echipei");
 
     fireEvent.change(titleInput, { target: { value: "L" } });
     fireEvent.change(titleInput, { target: { value: "Le" } });
@@ -78,7 +78,10 @@ describe("QuestionnairesWorkspace", () => {
 
     expect(titleInput).toHaveProperty("value", "Leadership");
     expect(screen.getAllByText("Leadership").some((element) => element.tagName === "H3")).toBe(true);
+    expect(screen.getByText("Modificări nesalvate")).toBeTruthy();
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
 
     await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
     expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
@@ -86,9 +89,18 @@ describe("QuestionnairesWorkspace", () => {
       expect.objectContaining({ title: "Leadership" }),
       1,
     );
+    expect(await screen.findByText("Salvat")).toBeTruthy();
   });
 
-  it("keeps nested question typing local and saves the latest schema", async () => {
+  it("keeps nested question typing stable during a slow explicit save", async () => {
+    let resolveSave: (definition: QuestionnaireDefinition) => void = () => {};
+    vi.mocked(updateQuestionnaireDefinitionOnServer).mockImplementation(
+      () =>
+        new Promise<QuestionnaireDefinition>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+
     render(<QuestionnairesWorkspace />);
 
     const questionInput = await screen.findByDisplayValue("Initial question");
@@ -98,8 +110,12 @@ describe("QuestionnairesWorkspace", () => {
     fireEvent.change(questionInput, { target: { value: "Proces clar pentru echipă" } });
 
     expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă");
-    expect(screen.queryByText("Se salvează...")).not.toBeNull();
+    expect(screen.getByText("Modificări nesalvate")).toBeTruthy();
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
+    expect(screen.getAllByText("Se salvează...").length).toBeGreaterThanOrEqual(1);
+    expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă");
 
     await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
     expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
@@ -119,6 +135,38 @@ describe("QuestionnairesWorkspace", () => {
       }),
       1,
     );
+    expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă");
+    resolveSave({
+      ...fixtures.definition,
+      schema: {
+        ...fixtures.definition.schema,
+        sections: [
+          {
+            ...fixtures.definition.schema.sections[0],
+            questions: [
+              {
+                ...fixtures.definition.schema.sections[0].questions[0],
+                label: "Proces clar pentru echipă",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
     expect(await screen.findByText("Salvat")).not.toBeNull();
+  });
+
+  it("can discard local questionnaire edits without touching the server", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    const descriptionInput = await screen.findByDisplayValue("Initial description");
+    fireEvent.change(descriptionInput, { target: { value: "Draft description" } });
+
+    expect(descriptionInput).toHaveProperty("value", "Draft description");
+    fireEvent.click(screen.getByRole("button", { name: "Revino la ultima versiune salvată" }));
+
+    expect(descriptionInput).toHaveProperty("value", "Initial description");
+    expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
   });
 });

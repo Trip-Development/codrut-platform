@@ -35,7 +35,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
     [companies],
   );
   const totalParticipants = companies.reduce((total, company) => total + company.participantCount, 0);
-  const totalAssignments = companies.reduce((total, company) => total + company.assignmentCount, 0);
+  const totalProjects = companies.reduce((total, company) => total + company.projectCount, 0);
   const activeCompanies = companies.filter((company) => !company.dataUnavailable).length;
 
   async function handleCreateCompany(event: FormEvent<HTMLFormElement>) {
@@ -69,8 +69,8 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
               <CompanySummary label="Companii" value={activeCompanies} />
+              <CompanySummary label="Proiecte" value={totalProjects} />
               <CompanySummary label="Participanți" value={totalParticipants} />
-              <CompanySummary label="Asignări" value={totalAssignments} />
             </div>
           </div>
           <form onSubmit={handleCreateCompany} className="flex flex-col justify-end gap-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
@@ -143,7 +143,7 @@ function CompanyCard({
           </div>
         </div>
         <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55 transition-colors group-hover:bg-burgundy/10 group-hover:text-burgundy">
-          {company.participantCount} pers.
+          {company.projectCount} proiecte
         </span>
       </div>
 
@@ -153,8 +153,8 @@ function CompanyCard({
         </p>
       ) : (
         <dl className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl bg-surface-muted/55 py-3 text-center">
+          <CompanyStat label="Proiecte" value={company.projectCount} />
           <CompanyStat label="Participanți" value={company.participantCount} />
-          <CompanyStat label="Asignări" value={company.assignmentCount} />
           <CompanyStat label="Finalizate" value={company.completedCount} />
         </dl>
       )}
@@ -220,6 +220,7 @@ function companyToListItem(company: CompanyIdentity): CompanyListItem {
     id: company.id,
     name: company.name,
     participantCount: 0,
+    projectCount: 0,
     assignmentCount: 0,
     completedCount: 0,
     stage: "setup",

@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from codrut.modules.companies.models import CompanyProjectStatus
+
 
 class CompanyCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
@@ -18,10 +20,45 @@ class CompanyResponse(BaseModel):
 
 class CompanySummaryResponse(CompanyResponse):
     participant_count: int = 0
+    project_count: int = 0
     assignment_count: int = 0
     completed_count: int = 0
     scored_count: int = 0
     stage: Literal["setup", "invites", "completion", "reporting"] = "setup"
+
+
+class CompanyProjectCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+    status: CompanyProjectStatus = CompanyProjectStatus.draft
+    starts_at: datetime | None = None
+    due_at: datetime | None = None
+
+
+class CompanyProjectUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+    status: CompanyProjectStatus | None = None
+    starts_at: datetime | None = None
+    due_at: datetime | None = None
+
+
+class CompanyProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    company_id: UUID
+    name: str
+    description: str | None
+    status: CompanyProjectStatus
+    starts_at: datetime | None
+    due_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CompanyProjectListItemResponse(CompanyProjectResponse):
+    company_name: str
 
 
 class CompanyAccessCodeCreateRequest(BaseModel):
@@ -117,6 +154,7 @@ class RosterImportResponse(BaseModel):
 
 class ParticipantInviteBatchRequest(BaseModel):
     participant_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=1000)
+    project_id: UUID | None = None
     mode: Literal["email", "secure_links"] = "email"
     force_rotate: bool = False
 

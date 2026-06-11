@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { getQuestionnaireDefinition } from "@/api/questionnaires";
+import { getQuestionnaireDefinition, getQuestionnaireResponse } from "@/api/questionnaires";
 import { QuestionnaireRunner } from "@/components/questionnaires/questionnaire-runner";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
@@ -16,7 +16,10 @@ export default async function ParticipantQuestionnaireRunPage({
 }: ParticipantQuestionnaireRunPageProps) {
   const { key } = await params;
   const { assignmentId } = await searchParams;
-  const definition = await getQuestionnaireDefinition(key);
+  const [definition, responseRecord] = await Promise.all([
+    getQuestionnaireDefinition(key),
+    assignmentId ? getQuestionnaireResponse(assignmentId) : Promise.resolve(null),
+  ]);
 
   return (
     <AppShell
@@ -28,7 +31,11 @@ export default async function ParticipantQuestionnaireRunPage({
       activeHref="/participant/questionnaires"
     >
       {definition ? (
-        <QuestionnaireRunner definition={definition} assignmentId={assignmentId} />
+        <QuestionnaireRunner
+          definition={definition}
+          assignmentId={assignmentId}
+          initialAnswers={responseRecord?.answers}
+        />
       ) : (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm max-w-lg mx-auto text-center space-y-4 my-8">
           <h2 className="text-xl font-bold text-foreground">Chestionarul nu este disponibil</h2>

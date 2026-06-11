@@ -79,6 +79,7 @@ class AssignmentRepository:
         self,
         *,
         company_id: UUID,
+        project_id: UUID | None,
         respondent_profile_id: UUID,
         questionnaire_key: str,
         target_type: str,
@@ -88,6 +89,7 @@ class AssignmentRepository:
         result = await self.session.execute(
             select(QuestionnaireAssignment)
             .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.project_id == project_id)
             .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
             .where(QuestionnaireAssignment.questionnaire_key == questionnaire_key)
             .where(QuestionnaireAssignment.target_type == target_type)
@@ -96,10 +98,17 @@ class AssignmentRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_assignments(self, company_id: UUID) -> list[QuestionnaireAssignment]:
+    async def list_assignments(
+        self,
+        company_id: UUID,
+        project_id: UUID | None = None,
+    ) -> list[QuestionnaireAssignment]:
+        stmt = select(QuestionnaireAssignment).where(
+            QuestionnaireAssignment.company_id == company_id
+        )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
         result = await self.session.execute(
-            select(QuestionnaireAssignment)
-            .where(QuestionnaireAssignment.company_id == company_id)
-            .order_by(QuestionnaireAssignment.created_at)
+            stmt.order_by(QuestionnaireAssignment.created_at)
         )
         return list(result.scalars().all())

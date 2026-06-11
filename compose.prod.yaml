@@ -30,7 +30,7 @@ services:
 
   backend:
     environment:
-      CODRUT_ENV: production
+      CODRUT_ENV: ${CODRUT_ENV:-production}
       CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET}
@@ -47,7 +47,7 @@ services:
 
   worker:
     environment:
-      CODRUT_ENV: production
+      CODRUT_ENV: ${CODRUT_ENV:-production}
       CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET}
@@ -71,5 +71,4 @@ volumes:
       type: none
       o: bind
       device: ${CODRUT_DB_VOLUME_PATH}
-
 

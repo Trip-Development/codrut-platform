@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCompanyDetail } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { StatCard } from "@/components/presentation/stat-card";
+import { CompanyProjectsPanel } from "./CompanyProjectsPanel";
 
 export default async function CompanyOverviewPage({
   params,
@@ -26,6 +27,7 @@ export default async function CompanyOverviewPage({
     .slice(0, 5);
 
   const participantMap = new Map(company.participants.map((p) => [p.id, p.full_name]));
+  const projectMap = new Map(company.projects.map((project) => [project.id, project.name]));
   const basePath = `/trainer/companies/${companyId}`;
 
   return (
@@ -68,9 +70,14 @@ export default async function CompanyOverviewPage({
           detail="Persoane active în companie."
         />
         <StatCard
+          label="Proiecte"
+          value={company.projects.length}
+          detail="Inițiative salvate pentru companie."
+        />
+        <StatCard
           label="Asignări"
           value={company.stats.totalAssignments}
-          detail="Chestionare asignate în total."
+          detail="Total pe proiecte și asignări istorice fără proiect."
         />
         <StatCard
           label="Rata completare"
@@ -86,6 +93,14 @@ export default async function CompanyOverviewPage({
         />
       </div>
 
+      <div className="mt-5">
+        <CompanyProjectsPanel
+          companyId={companyId}
+          initialProjects={company.projects}
+          assignments={company.assignments}
+        />
+      </div>
+
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         {/* Recent assignments */}
         <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
@@ -98,6 +113,7 @@ export default async function CompanyOverviewPage({
               <thead className="bg-surface-muted text-xs font-semibold uppercase tracking-[0.1em] text-foreground/50">
                 <tr>
                   <th className="px-5 py-3">Participant</th>
+                  <th className="px-5 py-3">Proiect</th>
                   <th className="px-5 py-3">Chestionar</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Data</th>
@@ -106,7 +122,7 @@ export default async function CompanyOverviewPage({
               <tbody className="divide-y divide-[var(--border)]">
                 {recentAssignments.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-6 text-center text-foreground/62">
+                    <td colSpan={5} className="px-5 py-6 text-center text-foreground/62">
                       Nicio asignare trimisă încă.
                     </td>
                   </tr>
@@ -115,6 +131,9 @@ export default async function CompanyOverviewPage({
                     <tr key={a.id} className="align-top">
                       <td className="px-5 py-4 font-semibold text-foreground">
                         {participantMap.get(a.respondent_profile_id) ?? "Necunoscut"}
+                      </td>
+                      <td className="px-5 py-4 text-foreground/62">
+                        {a.project_id ? projectMap.get(a.project_id) ?? "Proiect necunoscut" : "Fără proiect"}
                       </td>
                       <td className="px-5 py-4 text-foreground/62">{a.questionnaire_key}</td>
                       <td className="px-5 py-4">
