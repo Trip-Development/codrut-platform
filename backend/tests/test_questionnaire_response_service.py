@@ -3,7 +3,9 @@ from typing import Any, cast
 
 import pytest
 
+from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
+from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
@@ -14,6 +16,7 @@ from codrut.modules.forms.models import QuestionnaireResponse, QuestionnaireResp
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity import models as identity_models  # noqa: F401
+from codrut.modules.identity.models import User, UserRole
 
 
 class FakeFormsRepository:
@@ -95,6 +98,62 @@ async def test_submit_assignment_response_marks_response_and_assignment_submitte
     assert response.status == QuestionnaireResponseStatus.submitted
     assert assignment.status == AssignmentStatus.submitted
     assert assignment.submitted_at is not None
+
+
+async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"scored-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"Scored {uuid.uuid4().hex[:8]}",
+            )
+            session.add_all([user, company])
+            await session.flush()
+
+            profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="Scored Participant",
+                email=user.email,
+            )
+            session.add(profile)
+            await session.flush()
+
+            assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.assigned,
+            )
+            session.add(assignment)
+            await session.flush()
+
+            response = await FormsService(session).save_assignment_response(
+                user.id,
+                assignment.id,
+                QuestionnaireResponseSaveRequest(answers=complete_lencioni_answers()),
+                submit=True,
+            )
+
+            assert response.status == QuestionnaireResponseStatus.submitted
+            assert assignment.status == AssignmentStatus.scored
+            assert assignment.submitted_at is not None
+            assert assignment.scored_at is not None
+            assert assignment.scored_at == assignment.submitted_at
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
 
 
 async def test_save_assignment_response_rejects_missing_assignment() -> None:

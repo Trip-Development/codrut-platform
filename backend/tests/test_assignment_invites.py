@@ -296,6 +296,30 @@ async def test_verify_invite_token_expired() -> None:
 
 
 @pytest.mark.asyncio
+async def test_verify_invite_token_rejects_missing_persisted_invite() -> None:
+    company_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+
+    settings = get_settings()
+    claims = TaskLinkClaims(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        assignment_ids=(assignment_id,),
+        expires_at=datetime.now(UTC) + timedelta(days=5),
+    )
+    token = create_task_token(claims, settings)
+    session = FakeSession()
+    session.side_effects = [FakeScalarResult(None)]
+
+    service = IdentityService(session)
+    with pytest.raises(DomainError) as exc_info:
+        await service.verify_invite_token(token)
+
+    assert exc_info.value.code == "task_link_revoked"
+
+
+@pytest.mark.asyncio
 async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
