@@ -66,16 +66,17 @@ describe("frontend API adapter stubs", () => {
   it("builds trainer dashboard rows around companies from backend data", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/companies")) {
+      if (url.endsWith("/companies/summary")) {
         return {
           ok: true,
           json: async () => [
             {
               id: "company-1",
               name: "Michelin",
-              participantCount: 12,
-              assignmentCount: 10,
-              completedCount: 6,
+              participant_count: 12,
+              assignment_count: 10,
+              completed_count: 6,
+              scored_count: 3,
               stage: "completion",
             },
           ],
@@ -99,6 +100,7 @@ describe("frontend API adapter stubs", () => {
       }),
     ]);
     expect(Object.prototype.hasOwnProperty.call(summary.activeCompanies[0], "projectName")).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("builds trainer operations from backend data without localStorage roster state", async () => {
@@ -381,6 +383,10 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock
       .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response)
+      .mockResolvedValueOnce({
         ok: true,
         json: async () => [{ id: "company-1", name: "Michelin" }],
       } as Response)
@@ -400,6 +406,45 @@ describe("frontend API adapter stubs", () => {
         dataUnavailable: true,
       }),
     ]);
+  });
+
+  it("loads company cards from the aggregate summary endpoint without per-company fanout", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "company-1",
+          name: "Michelin",
+          participant_count: 8,
+          assignment_count: 16,
+          completed_count: 4,
+          scored_count: 2,
+          stage: "completion",
+        },
+      ],
+    } as Response);
+
+    await expect(getCompanyList()).resolves.toEqual([
+      {
+        id: "company-1",
+        name: "Michelin",
+        participantCount: 8,
+        assignmentCount: 16,
+        completedCount: 4,
+        stage: "completion",
+      },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/companies/summary"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
   });
 
   it("does not merge localStorage companies into the company list", async () => {

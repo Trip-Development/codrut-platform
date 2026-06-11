@@ -25,6 +25,7 @@ from codrut.modules.companies.schemas import (
     CompanyAccessCodeRegistrationRequest,
     CompanyAccessCodeResponse,
     CompanyCreateRequest,
+    CompanySummaryResponse,
     ParticipantCreateRequest,
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
@@ -59,6 +60,26 @@ class CompanyService:
 
     async def list_all_companies(self) -> list[Company]:
         return await self.repository.list_all_companies()
+
+    async def list_company_summaries(self) -> list[CompanySummaryResponse]:
+        return [
+            CompanySummaryResponse(
+                id=company.id,
+                name=company.name,
+                participant_count=participant_count,
+                assignment_count=assignment_count,
+                completed_count=completed_count,
+                scored_count=scored_count,
+                stage=_derive_company_stage(assignment_count, completed_count),
+            )
+            for (
+                company,
+                participant_count,
+                assignment_count,
+                completed_count,
+                scored_count,
+            ) in await self.repository.list_company_summaries()
+        ]
 
     async def create_company(self, owner_user_id: UUID, payload: CompanyCreateRequest) -> Company:
         name = payload.name.strip()
@@ -756,6 +777,19 @@ def _infer_roster_role_group(row: RosterImportRow) -> str:
     if any(token in position for token in ("manager", "director", "lead")):
         return "leadership"
     return "member"
+
+
+def _derive_company_stage(
+    assignment_count: int,
+    completed_count: int,
+) -> Literal["setup", "invites", "completion", "reporting"]:
+    if assignment_count == 0:
+        return "setup"
+    if completed_count == assignment_count:
+        return "reporting"
+    if completed_count > 0:
+        return "completion"
+    return "invites"
 
 
 def _new_access_code() -> str:

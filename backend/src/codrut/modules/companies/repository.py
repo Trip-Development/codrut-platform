@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.companies.models import (
@@ -28,6 +28,71 @@ class CompanyRepository:
     async def list_all_companies(self) -> list[Company]:
         result = await self.session.execute(select(Company).order_by(Company.name))
         return list(result.scalars().all())
+
+    async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int]]:
+        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+
+        completed_statuses = (
+            AssignmentStatus.submitted,
+            AssignmentStatus.validated,
+            AssignmentStatus.scored,
+        )
+        participant_counts = (
+            select(
+                ParticipantProfile.company_id.label("company_id"),
+                func.count(ParticipantProfile.id).label("participant_count"),
+            )
+            .group_by(ParticipantProfile.company_id)
+            .subquery()
+        )
+        assignment_counts = (
+            select(
+                QuestionnaireAssignment.company_id.label("company_id"),
+                func.count(QuestionnaireAssignment.id).label("assignment_count"),
+                func.sum(
+                    case(
+                        (QuestionnaireAssignment.status.in_(completed_statuses), 1),
+                        else_=0,
+                    )
+                ).label("completed_count"),
+                func.sum(
+                    case(
+                        (QuestionnaireAssignment.status == AssignmentStatus.scored, 1),
+                        else_=0,
+                    )
+                ).label("scored_count"),
+            )
+            .group_by(QuestionnaireAssignment.company_id)
+            .subquery()
+        )
+        result = await self.session.execute(
+            select(
+                Company,
+                func.coalesce(participant_counts.c.participant_count, 0),
+                func.coalesce(assignment_counts.c.assignment_count, 0),
+                func.coalesce(assignment_counts.c.completed_count, 0),
+                func.coalesce(assignment_counts.c.scored_count, 0),
+            )
+            .outerjoin(participant_counts, participant_counts.c.company_id == Company.id)
+            .outerjoin(assignment_counts, assignment_counts.c.company_id == Company.id)
+            .order_by(Company.name)
+        )
+        return [
+            (
+                company,
+                int(participant_count),
+                int(assignment_count),
+                int(completed_count),
+                int(scored_count),
+            )
+            for (
+                company,
+                participant_count,
+                assignment_count,
+                completed_count,
+                scored_count,
+            ) in result.all()
+        ]
 
     async def get_company(self, company_id: UUID) -> Company | None:
         result = await self.session.execute(select(Company).where(Company.id == company_id))

@@ -14,6 +14,7 @@ from codrut.modules.companies.schemas import (
     CompanyAccessCodeResponse,
     CompanyCreateRequest,
     CompanyResponse,
+    CompanySummaryResponse,
     ParticipantCreateRequest,
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
@@ -37,6 +38,15 @@ async def list_companies(
     require_trainer_principal(principal)
     # Trainers see all companies — they are trusted platform operators
     return await CompanyService(session).list_all_companies()
+
+
+@router.get("/summary", response_model=list[CompanySummaryResponse])
+async def list_company_summaries(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[CompanySummaryResponse]:
+    require_trainer_principal(principal)
+    return await CompanyService(session).list_company_summaries()
 
 
 @router.post("", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)

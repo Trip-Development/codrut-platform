@@ -1,115 +1,116 @@
 import Link from "next/link";
 
 import { getTrainerSession } from "@/api/auth-server";
+import { getCompanyList } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { getTrainerReports } from "@/api/trainer";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 
 export default async function TrainerReportsPage() {
   const requestOptions = await getServerApiRequestOptions();
-  const [trainer, reports] = await Promise.all([
+  const [trainer, companies] = await Promise.all([
     getTrainerSession(),
-    getTrainerReports(requestOptions),
+    getCompanyList(requestOptions),
   ]);
+  const reportingCompanies = companies
+    .filter((company) => !company.dataUnavailable)
+    .sort((a, b) => b.completedCount - a.completedCount || a.name.localeCompare(b.name, "ro"));
 
   return (
     <AppShell
       audience="trainer"
       eyebrow="Rapoarte"
-      title="Rapoarte de evaluare"
-      description="Sumarul complet al răspunsurilor primite. Inspectează rezultatele calculate pe disfuncționalități și profiluri de distress."
+      title="Rapoarte pe companie"
+      description="Rapoartele sunt organizate în workspace-ul fiecărei companii, ca să nu amesteci clienții, rosterul și progresul."
       navItems={trainerNavItems}
-      activeHref="/trainer/reports"
+      activeHref="/trainer/companies"
       userLabel={trainer.user.name}
       session={trainer}
     >
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-        <div className="border-b border-[var(--border)] px-5 py-4 bg-surface-muted/30">
-          <h2 className="text-lg font-semibold text-foreground">Sarcini și completări</h2>
-          <p className="mt-1 text-xs text-foreground/50">
-            Vezi scorurile calculate pentru evaluări PCM, Lencioni, 360 și distress drivers.
+      {reportingCompanies.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
+          <p className="text-base font-semibold text-foreground">Nu există rapoarte disponibile încă.</p>
+          <p className="mt-2 text-sm text-foreground/58">
+            Deschide o companie, importă rosterul și trimite invitațiile înainte de raportare.
           </p>
+          <Link
+            href="/trainer/companies"
+            className="tap-soft mt-5 inline-flex min-h-10 items-center justify-center rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700"
+          >
+            Deschide companiile
+          </Link>
+        </section>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {reportingCompanies.map((company) => {
+            const completion =
+              company.assignmentCount > 0
+                ? Math.round((company.completedCount / company.assignmentCount) * 100)
+                : 0;
+
+            return (
+              <article
+                key={company.id}
+                className="group flex min-h-60 flex-col rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-burgundy/24 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-burgundy/75">Companie</p>
+                    <h2 className="mt-1 truncate text-lg font-semibold text-foreground">{company.name}</h2>
+                  </div>
+                  <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55 group-hover:bg-burgundy/10 group-hover:text-burgundy">
+                    {stageLabel(company.stage)}
+                  </span>
+                </div>
+
+                <dl className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl bg-surface-muted/55 py-3 text-center">
+                  <ReportStat label="Roster" value={company.participantCount} />
+                  <ReportStat label="Asignări" value={company.assignmentCount} />
+                  <ReportStat label="Finalizate" value={company.completedCount} />
+                </dl>
+
+                <div className="mt-auto pt-5">
+                  <div className="flex items-center justify-between text-sm font-semibold text-foreground/62">
+                    <span>Completare</span>
+                    <span>{completion}%</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
+                    <div className="h-full rounded-full bg-burgundy" style={{ width: `${completion}%` }} />
+                  </div>
+                  <Link
+                    href={`/trainer/companies/${company.id}/reports`}
+                    className="tap-soft mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white hover:shadow-sm"
+                  >
+                    Deschide rapoartele companiei
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
         </div>
-
-        {reports.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-sm font-semibold text-foreground/60">Nu exista rapoarte disponibile momentan.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="border-b border-[var(--border)] bg-surface-muted/50 text-xs font-bold uppercase tracking-wider text-foreground/60">
-                <tr>
-                  <th className="px-5 py-4">Participant</th>
-                  <th className="px-5 py-4">Chestionar</th>
-                  <th className="px-5 py-4">Proiect</th>
-                  <th className="px-5 py-4">Status</th>
-                  <th className="px-5 py-4">Rezultat principal</th>
-                  <th className="px-5 py-4">Finalizat la</th>
-                  <th className="px-5 py-4 text-right">Actiuni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {reports.map((report) => {
-                  const dateLabel = report.submittedAt
-                    ? new Date(report.submittedAt).toLocaleDateString("ro-RO", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })
-                    : "-";
-                  const isScored = report.status === "scored";
-
-                  return (
-                    <tr
-                      key={report.assignmentId}
-                      className="hover:bg-surface-muted/30 transition-colors"
-                    >
-                      <td className="px-5 py-4">
-                        <span className="block font-bold text-foreground">{report.participantName}</span>
-                        <span className="block text-xs font-semibold text-foreground/50">
-                          {report.participantEmail}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="rounded-full bg-burgundy-50 dark:bg-burgundy/10 px-2.5 py-1 text-xs font-bold text-burgundy capitalize">
-                          {report.questionnaireKey.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 font-semibold text-foreground/70">{report.projectName}</td>
-                      <td className="px-5 py-4">
-                        <span
-                          className={[
-                            "rounded-full px-2.5 py-1 text-xs font-bold",
-                            isScored || report.primaryResult
-                              ? "bg-success/30 text-success-ink"
-                              : "bg-warning/30 text-warning-ink",
-                          ].join(" ")}
-                        >
-                          {report.primaryResult ? "calculat" : report.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 font-semibold text-foreground/70">
-                        {report.primaryResult ? report.primaryResult.replaceAll("_", " ") : "în așteptare"}
-                      </td>
-                      <td className="px-5 py-4 font-semibold text-foreground/60">{dateLabel}</td>
-                      <td className="px-5 py-4 text-right">
-                        <Link
-                          href={`/trainer/reports/${report.assignmentId}`}
-                          className="tap-soft inline-flex rounded-xl bg-burgundy px-4.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-burgundy-700 transition-colors"
-                        >
-                          Deschide raport
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      )}
     </AppShell>
   );
+}
+
+function ReportStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="px-3">
+      <p className="text-xs font-semibold text-foreground/45">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function stageLabel(stage: "setup" | "invites" | "completion" | "reporting"): string {
+  switch (stage) {
+    case "setup":
+      return "Configurare";
+    case "invites":
+      return "Invitații";
+    case "completion":
+      return "În lucru";
+    case "reporting":
+      return "Raportare";
+  }
 }
