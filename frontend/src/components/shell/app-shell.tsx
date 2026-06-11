@@ -144,10 +144,13 @@ export function AppShell({
     <div className={`app-min-height flex flex-col bg-background md:flex-row ${audience === "participant" ? "bg-vines-pattern" : ""}`}>
       <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--shell-sidebar)] p-6 shadow-sm backdrop-blur md:sticky md:top-0 md:flex">
         <div className="mb-8">
-          <Link href="/">
+          <Link
+            href="/"
+            className="tap-soft -m-2 block rounded-2xl p-2 transition-colors hover:bg-surface-muted"
+          >
             <BrandMark
               size="sm"
-              subtitle={isTrainer ? "Trainer dashboard" : "Participant workspace"}
+              subtitle={isTrainer ? "Spațiu trainer" : "Spațiu participant"}
             />
           </Link>
         </div>
@@ -167,7 +170,10 @@ export function AppShell({
       </aside>
 
       <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b border-[var(--border)] bg-surface/90 px-4 py-3 shadow-sm backdrop-blur-xl md:hidden">
-        <Link href="/">
+        <Link
+          href="/"
+          className="tap-soft -m-2 block min-w-0 rounded-2xl p-2 transition-colors hover:bg-surface-muted"
+        >
             <BrandMark
               size="sm"
               subtitle={isTrainer ? "Trainer" : "Participant"}

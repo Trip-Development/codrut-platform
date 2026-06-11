@@ -25,7 +25,7 @@ async def seed_pilot() -> None:
 
     trainer_email = _required_env("CODRUT_SEED_TRAINER_EMAIL").lower()
     trainer_password = _required_env("CODRUT_SEED_TRAINER_PASSWORD")
-    company_name = os.getenv("CODRUT_SEED_COMPANY_NAME", "Pilot Codrut").strip()
+    company_name = os.getenv("CODRUT_SEED_COMPANY_NAME", "Pilot Codruț").strip()
 
     async with SessionLocal() as session:
         user = (

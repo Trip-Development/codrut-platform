@@ -55,9 +55,9 @@ def _distress_set(number: int, statements: dict[str, tuple[str, str]]) -> dict[s
         "label": f"Set {number}",
         "required": True,
         "instructions": (
-            "Acorda fiecarei afirmatii un scor intre 0 si 10. Alege afirmatia cea mai "
-            "adevarata pentru tine cu 7-10, cea mai putin adevarata cu 0-3, iar "
-            "celelalte intre aceste repere."
+            "Acordă fiecărei afirmații un scor între 0 și 10. Alege afirmația cea mai "
+            "adevărată pentru tine cu 7-10, cea mai puțin adevărată cu 0-3, iar "
+            "celelalte între aceste repere."
         ),
         "scale": DISTRESS_SCORE_0_TO_10,
         "statements": [
@@ -239,9 +239,9 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
         },
         "response": {"mode": "self_assessment", "target": "self"},
         "instructions": (
-            "Pentru fiecare set, marcheaza afirmatia cea mai adevarata pentru tine cu "
-            "7-10, afirmatia cea mai putin adevarata cu 0-3, iar celelalte intre aceste "
-            "repere. Gandeste-te la relatii adulte si la contextul de lucru."
+            "Pentru fiecare set, marchează afirmația cea mai adevărată pentru tine cu "
+            "7-10, afirmația cea mai puțin adevărată cu 0-3, iar celelalte între aceste "
+            "repere. Gândește-te la relații adulte și la contextul de lucru."
         ),
         "sections": [
             {

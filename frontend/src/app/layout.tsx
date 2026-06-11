@@ -15,9 +15,9 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Codrut Platform",
-  description: "Assessment, coaching, and rollout management platform for Codrut.",
-  applicationName: "Codrut",
+  title: "Codruț Platform",
+  description: "Platformă pentru assessment, coaching și management de rollout Codruț.",
+  applicationName: "Codruț",
   icons: {
     icon: [
       { url: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },

@@ -11,7 +11,7 @@ export default async function TrainerQuestionnairesPage() {
       audience="trainer"
       eyebrow="Chestionare"
       title="Catalog chestionare și versiuni"
-      description="Coordonarea formelor Codrut-native: definitii versionate, persoane asignate, drafturi si submit-uri."
+      description="Coordonarea formelor Codruț-native: definiții versionate, persoane asignate, drafturi și submit-uri."
       navItems={trainerNavItems}
       activeHref="/trainer/questionnaires"
       userLabel={trainer.user.name}

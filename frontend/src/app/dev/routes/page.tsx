@@ -4,39 +4,38 @@ import { BrandMark } from "@/components/brand/brand-mark";
 
 const routeGroups = [
   {
-    title: "Trainer routes",
+    title: "Rute trainer",
     routes: [
-      ["/trainer", "Delivery dashboard"],
-      ["/trainer/companies", "Companies"],
-      ["/trainer/org", "Cross-company org"],
-      ["/trainer/questionnaires", "Questionnaires"],
+      ["/trainer", "Acasă livrare"],
+      ["/trainer/companies", "Companii"],
+      ["/trainer/questionnaires", "Chestionare"],
       ["/trainer/email", "Email"],
-      ["/trainer/reports", "Reports"],
+      ["/trainer/reports", "Index rapoarte companie"],
       ["/trainer/login", "Trainer login"],
     ],
   },
   {
-    title: "Participant and invite routes",
+    title: "Rute participant și invitații",
     routes: [
-      ["/invite/demo-token", "Valid secure invite"],
-      ["/invite/expired-demo", "Expired secure invite"],
-      ["/participant", "Task workspace"],
-      ["/participant/dashboard", "Dashboard"],
-      ["/participant/questionnaires", "Questionnaires"],
+      ["/invite/demo-token", "Invitație securizată validă"],
+      ["/invite/expired-demo", "Invitație securizată expirată"],
+      ["/participant", "Workspace sarcini"],
+      ["/participant/dashboard", "Acasă participant"],
+      ["/participant/questionnaires", "Chestionare"],
       ["/participant/chat", "Chat"],
       ["/participant/onboarding", "Onboarding"],
-      ["/participant/final-evaluation", "Final evaluation"],
-      ["/participant/account", "Account"],
+      ["/participant/final-evaluation", "Evaluare finală"],
+      ["/participant/account", "Cont"],
     ],
   },
 
   {
-    title: "Auth routes",
+    title: "Rute autentificare",
     routes: [
       ["/login", "Login"],
-      ["/register", "Register"],
-      ["/reset-password", "Reset password"],
-      ["/update-password", "Update password"],
+      ["/register", "Înregistrare"],
+      ["/reset-password", "Resetare parolă"],
+      ["/update-password", "Actualizare parolă"],
     ],
   },
 ];
@@ -46,15 +45,15 @@ export default function DevRoutesPage() {
     <main className="app-min-height bg-background px-4 py-10 text-foreground md:px-6">
       <section className="mx-auto max-w-6xl">
         <Link href="/" className="inline-flex">
-          <BrandMark subtitle="Prototype route index" />
+          <BrandMark subtitle="Index rute prototip" />
         </Link>
         <div className="mt-10 max-w-3xl">
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-burgundy">Dev access</p>
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-burgundy">Acces dev</p>
           <h1 className="mt-2 font-display text-4xl font-semibold text-foreground md:text-5xl">
-            Prototype routes
+            Rute prototip
           </h1>
           <p className="mt-3 text-base leading-7 text-foreground/65">
-            Internal route index for fast review while the public landing remains business-facing.
+            Index intern pentru verificare rapidă, în timp ce landing page-ul public rămâne orientat către business.
           </p>
         </div>
 

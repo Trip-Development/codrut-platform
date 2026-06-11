@@ -15,6 +15,16 @@ export type CompanyListItem = {
   dataError?: string;
 };
 
+type CompanySummaryResponse = {
+  id: string;
+  name: string;
+  participant_count: number;
+  assignment_count: number;
+  completed_count: number;
+  scored_count: number;
+  stage: CompanyListItem["stage"];
+};
+
 export type CompanyParticipant = {
   id: string;
   full_name: string;
@@ -211,6 +221,26 @@ export async function getCompanyTeams(
 // ---------------------------------------------------------------------------
 
 export async function getCompanyList(options: ApiRequestOptions = {}): Promise<CompanyListItem[]> {
+  const summaryResponse = await fetch(`${getApiBaseUrl()}/companies/summary`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  }).catch((error: unknown) => {
+    if (!isDemoFallbackEnabled()) {
+      throw error;
+    }
+    return null;
+  });
+
+  if (summaryResponse?.ok) {
+    const summaries = (await summaryResponse.json()) as CompanySummaryResponse[];
+    return summaries.map(companySummaryToListItem);
+  }
+
+  if (summaryResponse && !summaryResponse.ok && !isDemoFallbackEnabled() && summaryResponse.status !== 404) {
+    throw new Error(`Eroare server (${summaryResponse.status}): Nu s-a putut obține sumarul companiilor.`);
+  }
+
   let serverCompanies: Array<{ id: string; name: string }> = [];
   try {
     const companiesResponse = await fetch(`${getApiBaseUrl()}/companies`, {
@@ -236,8 +266,8 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
 
   if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
     map.set("demo-project", { id: "demo-project", name: "Client demo" });
-    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa directie" });
-    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienti trecuti" });
+    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa direcție" });
+    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienți trecuți" });
   } else {
     serverCompanies.forEach((c) => map.set(c.id, c));
   }
@@ -280,6 +310,17 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
   );
 
   return enriched;
+}
+
+function companySummaryToListItem(summary: CompanySummaryResponse): CompanyListItem {
+  return {
+    id: summary.id,
+    name: summary.name,
+    participantCount: summary.participant_count,
+    assignmentCount: summary.assignment_count,
+    completedCount: summary.completed_count,
+    stage: summary.stage,
+  };
 }
 
 export async function createCompany(name: string): Promise<{ id: string; name: string }> {
@@ -491,8 +532,8 @@ export async function getCompanyDetail(
 
   if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
     map.set("demo-project", { id: "demo-project", name: "Client demo" });
-    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa directie" });
-    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienti trecuti" });
+    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa direcție" });
+    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienți trecuți" });
   } else {
     serverCompanies.forEach((c) => map.set(c.id, c));
   }
@@ -512,7 +553,7 @@ export async function getCompanyDetail(
   const invitationStatuses = invitationStatusesResult.status === "fulfilled" ? invitationStatusesResult.value : [];
   const teams = teamsResult.status === "fulfilled" ? teamsResult.value : [];
   const dataErrors = [
-    participantsResult.status === "rejected" ? `Participanti: ${errorMessage(participantsResult.reason)}` : null,
+    participantsResult.status === "rejected" ? `Participanți: ${errorMessage(participantsResult.reason)}` : null,
     assignmentsResult.status === "rejected" ? `Asignari: ${errorMessage(assignmentsResult.reason)}` : null,
     invitationStatusesResult.status === "rejected" ? `Invitatii: ${errorMessage(invitationStatusesResult.reason)}` : null,
     teamsResult.status === "rejected" ? `Echipe: ${errorMessage(teamsResult.reason)}` : null,

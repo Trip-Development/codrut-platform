@@ -5,16 +5,15 @@ export type ShellNavItem = {
 };
 
 export const trainerNavItems: ShellNavItem[] = [
-  { href: "/trainer", label: "Dashboard", shortLabel: "Home" },
+  { href: "/trainer", label: "Acasă", shortLabel: "Acasă" },
   { href: "/trainer/companies", label: "Companii", shortLabel: "Co." },
   { href: "/trainer/questionnaires", label: "Chestionare", shortLabel: "Forms" },
   { href: "/trainer/email", label: "Șabloane email", shortLabel: "Email" },
-  { href: "/trainer/reports", label: "Rapoarte", shortLabel: "Reports" },
   { href: "/trainer/settings", label: "Setări", shortLabel: "Setări" },
 ];
 
 export const participantNavItems: ShellNavItem[] = [
-  { href: "/participant", label: "Dashboard", shortLabel: "Dash" },
+  { href: "/participant", label: "Acasă", shortLabel: "Acasă" },
   { href: "/participant/questionnaires", label: "Chestionare", shortLabel: "Forms" },
   { href: "/participant/chat", label: "Practică", shortLabel: "Practică" },
   { href: "/participant/final-evaluation", label: "Evaluare finală", shortLabel: "Final" },

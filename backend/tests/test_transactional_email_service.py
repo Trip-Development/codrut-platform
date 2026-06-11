@@ -77,7 +77,7 @@ async def test_send_assignment_invitation_uses_account_setup_for_leadership_part
     assert assignment.status == AssignmentStatus.invited
     assert assignment.invited_at is not None
     assert provider.sent_messages[0].to.value == "ana@example.com"
-    assert "Activeaza contul" in provider.sent_messages[0].html_body
+    assert "Activează contul" in provider.sent_messages[0].html_body
 
 
 async def test_send_assignment_invitation_uses_bundle_template_for_existing_account() -> None:

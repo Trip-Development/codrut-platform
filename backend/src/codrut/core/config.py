@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CODRUT_", env_file=".env", extra="ignore")
 
-    app_name: str = "Codrut Platform"
+    app_name: str = "Codruț Platform"
     env: str = "development"
     database_url: str = "postgresql+asyncpg://codrut:codrut@localhost:5432/codrut"
     redis_url: str = "redis://localhost:6379/0"
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     docs_enabled: bool = True
     email_provider: str = "test"
     email_from_address: str = "no-reply@codrut.local"
-    email_from_name: str = "Codrut Platform"
+    email_from_name: str = "Codruț Platform"
     email_brevo_api_key: SecretStr | None = None
     email_smtp_host: str = "mailpit"
     email_smtp_port: int = 1025
