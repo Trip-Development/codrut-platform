@@ -1,8 +1,6 @@
-import { getCompanyAssignments, getCompanyParticipants } from "@/api/companies";
-import { getScoringResult } from "@/api/trainer";
+import { getCompanyAssignments, getCompanyParticipants, getCompanyReportAggregate } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import Link from "next/link";
-import { buildReportAggregation } from "./report-aggregation";
 
 export default async function CompanyReportsPage({
   params,
@@ -11,40 +9,24 @@ export default async function CompanyReportsPage({
 }) {
   const { companyId } = await params;
   const requestOptions = await getServerApiRequestOptions();
-  const [assignments, participants] = await Promise.all([
+  const [assignments, participants, aggregate] = await Promise.all([
     getCompanyAssignments(companyId, requestOptions),
     getCompanyParticipants(companyId, requestOptions),
+    getCompanyReportAggregate(companyId, requestOptions),
   ]);
 
   const participantMap = new Map(participants.map((p) => [p.id, p]));
-
-  const reportableAssignments = assignments.filter(
-    (a) => a.status === "submitted" || a.status === "validated" || a.status === "scored",
-  );
-
-  // Fetch scoring results for all reportable assignments in parallel
-  const resultsList = await Promise.all(
-    reportableAssignments.map(async (a) => {
-      try {
-        const res = await getScoringResult(a.id, requestOptions);
-        return { assignmentId: a.id, result: res };
-      } catch {
-        return { assignmentId: a.id, result: null };
-      }
-    })
-  );
-
-  const resultMap = new Map(resultsList.map((item) => [item.assignmentId, item.result]));
-  const {
-    reportableAssignments: sortedReportableAssignments,
-    lencioniCount,
-    driverCount,
-    lencioniAverages,
-    driverAverages,
-    totalAssigned,
-    totalCompleted,
-    completionRate,
-  } = buildReportAggregation(assignments, resultMap);
+  const resultMap = new Map(aggregate.results.map((result) => [result.assignment_id, result]));
+  const sortedReportableAssignments = assignments
+    .filter((assignment) => resultMap.has(assignment.id))
+    .sort((first, second) => (second.submitted_at ?? "").localeCompare(first.submitted_at ?? ""));
+  const lencioniCount = aggregate.lencioni_count;
+  const driverCount = aggregate.driver_count;
+  const lencioniAverages = aggregate.lencioni_averages;
+  const driverAverages = aggregate.driver_averages;
+  const totalAssigned = aggregate.total_assigned;
+  const totalCompleted = aggregate.total_completed;
+  const completionRate = aggregate.completion_rate;
 
   return (
     <div className="space-y-6">
