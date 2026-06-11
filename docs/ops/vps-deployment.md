@@ -31,9 +31,32 @@ from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
 workflow from another branch fails before images are built.
 
 Treat the `prod` GitHub Environment as the final approval and secret boundary.
-Use the `VPS Staging Deployment` workflow or the acceptance checklist before
-opening the release PR; do not use manual dispatch to promote unmerged feature
-refs or non-hotfix branches.
+Use the acceptance checklist before opening the release PR; do not use manual
+dispatch to promote unmerged feature refs or non-hotfix branches. The staging
+workflow exists but is optional/deferred for the current client-ready push unless
+`ENABLE_STAGING_DEPLOY=true` is intentionally enabled.
+
+## Current Production Checkpoint
+
+The 2026-06-11 client-ready production checkpoint was:
+
+- Feature PR into `dev`, then release PR from `dev` into `prod`.
+- Production deployment through `VPS Production Deployment`.
+- Public health checks passed for:
+  - `${CODRUT_PUBLIC_APP_URL}/api/health/live`
+  - `${CODRUT_PUBLIC_APP_URL}/api/health/ready`
+- Public `/` and `/login` loaded without server-side exception digests.
+- Protected trainer and participant routes redirected to `/login` without
+  server-side exception digests.
+
+Core workflow verification for that checkpoint covered:
+
+- Roster import without automatic invite sending.
+- Default assignment plan generation and duplicate-safe save.
+- Secure link generation separate from email sending.
+- Local Mailpit transactional email smoke.
+- Questionnaire save/submit.
+- Lencioni, Distress Drivers, and 360 iCARE scoring/aggregation.
 
 ## Staging
 
