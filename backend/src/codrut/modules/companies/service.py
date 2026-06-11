@@ -60,8 +60,8 @@ class CompanyService:
         self.identity_repository = IdentityRepository(session)
         self.repository = CompanyRepository(session)
 
-    async def list_companies(self, user_id: UUID) -> list[Company]:
-        return await self.repository.list_companies_for_user(user_id)
+    async def list_companies(self, _user_id: UUID) -> list[Company]:
+        return await self.repository.list_all_companies()
 
     async def list_all_companies(self) -> list[Company]:
         return await self.repository.list_all_companies()

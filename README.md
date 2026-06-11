@@ -61,6 +61,11 @@ and `boss_360`/`boss_360_en`.
 Roster import must not send access automatically. Access delivery is a separate
 action so trainers can review assignments before links or emails are created.
 
+For the current operating model, trainer accounts are platform operators:
+company listing and company workspaces show all companies to all trainers.
+Membership records are still kept for ownership/history, but they do not scope
+trainer visibility at this stage.
+
 ## Local Verification
 
 Use the Docker Compose dev stack as the source of truth:
