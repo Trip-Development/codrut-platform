@@ -169,7 +169,7 @@ describe("TeamsWorkspace", () => {
       />,
     );
 
-    const derivedSection = screen.getByText("Structură recunoscută din roster").closest("section");
+    const derivedSection = screen.getByText("Structură recunoscută din participanți").closest("section");
     expect(derivedSection).toBeTruthy();
     expect(within(derivedSection as HTMLElement).getByText("Echipa Andrei Manager")).toBeTruthy();
     expect(within(derivedSection as HTMLElement).getAllByText("Ana Pop").length).toBeGreaterThan(0);

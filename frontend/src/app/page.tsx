@@ -56,9 +56,9 @@ const chatScenarios: Scenario[] = [
     conversation: [
       { sender: "user", text: "Cum gestionez distresul în timpul unui sprint extrem de aglomerat?" },
       { sender: "bot", text: "Când presiunea crește, primul pas este izolarea factorilor de distres. Ce anume te stresează cel mai mult în acest moment?" },
-      { sender: "user", text: "Am prea multe task-uri urgente și termene suprapuse." },
+      { sender: "user", text: "Am prea multe sarcini urgente și termene suprapuse." },
       { sender: "bot", text: "Înțeleg. Atunci când totul pare urgent, nimic nu mai este o prioritate clară. Îți recomand să selectezi o singură activitate critică pentru următoarele 90 de minute și să blochezi toate notificările. Cum ți se pare această abordare?" },
-      { sender: "user", text: "O să încerc asta chiar acum cu task-ul de design." },
+      { sender: "user", text: "O să încerc asta chiar acum cu sarcina de design." },
       { sender: "bot", text: "Perfect! Oprește notificările de Slack. Eu te voi întreba peste 90 de minute cum te simți. Spor la lucru!" }
     ]
   }
@@ -173,7 +173,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
           <Link
             href="/"
-            className="tap-soft -ml-2 min-w-0 rounded-2xl px-2 py-1 transition-colors hover:bg-surface-muted/80"
+            className="tap-soft group -ml-2 min-w-0 rounded-2xl px-2 py-1 transition-colors hover:bg-surface-muted/80"
           >
             <BrandMark subtitle="Platformă de coaching și training" />
           </Link>
@@ -223,7 +223,7 @@ export default function HomePage() {
               href="#contact"
               className="tap-soft hidden rounded-2xl bg-burgundy px-5 py-2.5 text-center text-sm font-bold text-white shadow-brand hover:bg-burgundy-700 md:block"
             >
-              Solicită Demo
+              Solicită demo
             </Link>
           </div>
         </div>
@@ -288,7 +288,7 @@ export default function HomePage() {
                 <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm">
                   <Image
                     src="/logo.png"
-                    alt="Codruț Logo"
+                    alt="Sigla Codruț"
                     fill
                     sizes="40px"
                     priority
@@ -303,7 +303,7 @@ export default function HomePage() {
                   </div>
                 </div>
               </div>
-              <span className="rounded-full bg-success/20 px-3 py-1 text-xs font-bold text-success-ink">Simulare Demo</span>
+              <span className="rounded-full bg-success/20 px-3 py-1 text-xs font-bold text-success-ink">Simulare demo</span>
             </div>
 
             {/* Chat Messages Simulator */}
@@ -405,7 +405,7 @@ export default function HomePage() {
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Coaching Continuu</h3>
             <p className="mt-3 text-sm leading-6 text-foreground/62">
-              Codruț ghidează zilnic fiecare lider prin întrebări, scenarii și micro-task-uri adaptate planului lor personal de acțiune.
+              Codruț ghidează zilnic fiecare lider prin întrebări, scenarii și micro-sarcini adaptate planului lor personal de acțiune.
             </p>
           </article>
           <article className="rounded-3xl border border-[var(--border)] bg-surface p-6 shadow-sm">
@@ -489,7 +489,7 @@ export default function HomePage() {
           <div>© {new Date().getFullYear()} Codruț. Toate drepturile rezervate.</div>
           <div className="flex gap-4">
             <Link href="/trainer/login" className="hover:text-burgundy">
-              Trainer login
+              Autentificare trainer
             </Link>
           </div>
         </div>

@@ -19,7 +19,7 @@ export default async function CompanyParticipantsPage({
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="border-b border-[var(--border)] px-5 py-4">
-          <p className="text-xs font-semibold text-burgundy/75">Roster</p>
+          <p className="text-xs font-semibold text-burgundy/75">Participanți</p>
           <h2 className="mt-1 text-xl font-semibold text-foreground">Persoane și status acces</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
             Coloane: nume, manager, poziție, locație, PCM, email.

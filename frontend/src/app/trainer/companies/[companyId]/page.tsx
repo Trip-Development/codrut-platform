@@ -34,20 +34,20 @@ export default async function CompanyOverviewPage({
         <section className="mb-5 rounded-2xl border border-burgundy/20 bg-burgundy/5 p-5 shadow-sm">
           <h3 className="text-lg font-semibold text-burgundy">Configurează compania</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/68">
-            Clientul există deja. Următorul pas este să adaugi rosterul, apoi echipele și invitațiile.
+            Clientul există deja. Următorul pas este să adaugi lista de participanți, apoi echipele și invitațiile.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <SetupStep
               step="1"
-              title="Încarcă rosterul"
+              title="Încarcă participanții"
               detail="Adaugă oamenii prin Excel sau CSV și leagă-i de companie."
               href={`${basePath}/participants`}
-              action="Import roster"
+              action="Import participanți"
             />
             <SetupStep
               step="2"
               title="Configurează echipe"
-              detail="Grupează rosterul în echipe de leadership sau funcționale."
+              detail="Grupează participanții în echipe de leadership sau funcționale."
               href={`${basePath}/teams`}
               action="Gestionează echipe"
             />
@@ -63,7 +63,7 @@ export default async function CompanyOverviewPage({
       )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Roster"
+          label="Participanți"
           value={company.stats.totalParticipants}
           detail="Persoane active în companie."
         />
@@ -139,7 +139,7 @@ export default async function CompanyOverviewPage({
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
           <p className="text-xs font-semibold text-burgundy/75">Acțiuni rapide</p>
           <div className="mt-4 space-y-3">
-            <QuickLink href={`${basePath}/participants`} label="Roster" detail="Import, verificare și acces participanți." />
+            <QuickLink href={`${basePath}/participants`} label="Participanți" detail="Import, verificare și acces participanți." />
             <QuickLink href={`${basePath}/org-chart`} label="Organigramă" detail="Validează ierarhia clientului." />
             <QuickLink href={`${basePath}/teams`} label="Echipe" detail="Echipe de leadership și funcționale." />
             <QuickLink href={`${basePath}/reports`} label="Rapoarte" detail="Asignări trimise și evaluate." />

@@ -26,7 +26,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
         setCompanies((current) => mergeCompanies(current, freshCompanies));
       })
       .catch(() => {
-        setMessage("Lista de companii din backend nu a putut fi reîmprospătată.");
+        setMessage("Lista de companii nu a putut fi reîmprospătată.");
       });
   }, []);
 
@@ -49,7 +49,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       const created = await createCompany(trimmedName);
       setCompanies((current) => mergeCompanies(current, [companyToListItem(created)]));
       setName("");
-      setMessage("Compania a fost creată în backend.");
+      setMessage("Compania a fost creată și salvată.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Compania nu a putut fi creată.");
     } finally {
@@ -62,14 +62,14 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="p-5 md:p-6">
-            <p className="text-sm font-semibold text-burgundy/75">Workspace clienți</p>
+            <p className="text-sm font-semibold text-burgundy/75">Spațiu clienți</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Companiile pornesc tot fluxul</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Intră în companie pentru roster, organigramă, echipe, invitații și rapoarte. Lista de aici rămâne scurtă, scanabilă și legată de datele salvate.
+              Intră în companie pentru lista de participanți, organigramă, echipe, invitații și rapoarte. Lista de aici rămâne scurtă, scanabilă și legată de datele salvate.
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
               <CompanySummary label="Companii" value={activeCompanies} />
-              <CompanySummary label="Roster" value={totalParticipants} />
+              <CompanySummary label="Participanți" value={totalParticipants} />
               <CompanySummary label="Asignări" value={totalAssignments} />
             </div>
           </div>
@@ -153,7 +153,7 @@ function CompanyCard({
         </p>
       ) : (
         <dl className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl bg-surface-muted/55 py-3 text-center">
-          <CompanyStat label="Roster" value={company.participantCount} />
+          <CompanyStat label="Participanți" value={company.participantCount} />
           <CompanyStat label="Asignări" value={company.assignmentCount} />
           <CompanyStat label="Finalizate" value={company.completedCount} />
         </dl>
@@ -176,7 +176,7 @@ function CompanyCard({
         href={`/trainer/companies/${company.id}`}
         className="tap-soft mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white hover:shadow-sm"
       >
-        Intră în workspace
+        Intră în spațiu
       </Link>
     </article>
   );

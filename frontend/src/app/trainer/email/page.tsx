@@ -17,7 +17,7 @@ export default async function TrainerEmailPage() {
       audience="trainer"
       eyebrow="Email"
       title="Șabloane email și arhivă globală"
-      description="Biblioteca de texte pentru invitații și remindere. Trimiterea și statusul operațional se gestionează din workspace-ul fiecărei companii."
+      description="Biblioteca de texte pentru invitații și remindere. Trimiterea și statusul operațional se gestionează din spațiul fiecărei companii."
       navItems={trainerNavItems}
       activeHref="/trainer/email"
       userLabel={trainer.user.name}

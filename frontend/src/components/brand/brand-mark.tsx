@@ -32,7 +32,7 @@ export function BrandMark({
       >
         <Image
           src="/logo.png"
-          alt="Codruț Logo"
+          alt="Sigla Codruț"
           fill
           sizes="(max-width: 768px) 40px, 56px"
           priority
@@ -41,8 +41,20 @@ export function BrandMark({
       </span>
       {showText ? (
         <span className="min-w-0 text-left">
-          <span className={`block truncate text-sm font-bold font-display ${tone === "inverted" ? "text-white" : "text-foreground"}`}>Codruț</span>
-          <span className={`block truncate text-xs font-semibold ${tone === "inverted" ? "text-white/68" : "text-foreground/55"}`}>{subtitle}</span>
+          <span
+            className={`block truncate text-sm font-bold font-display transition-colors ${
+              tone === "inverted" ? "text-white" : "text-foreground group-hover:text-burgundy"
+            }`}
+          >
+            Codruț
+          </span>
+          <span
+            className={`block truncate text-xs font-semibold transition-colors ${
+              tone === "inverted" ? "text-white/68" : "text-foreground/55 group-hover:text-burgundy/68"
+            }`}
+          >
+            {subtitle}
+          </span>
         </span>
       ) : null}
     </span>

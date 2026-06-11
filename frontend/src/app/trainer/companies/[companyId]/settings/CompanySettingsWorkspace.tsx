@@ -59,12 +59,12 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
             </div>
           </div>
           <div className="rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/62">
-            {company.stats.totalParticipants} în roster
+            {company.stats.totalParticipants} participanți
           </div>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SettingStat label="Roster" value={company.stats.totalParticipants} />
+          <SettingStat label="Participanți" value={company.stats.totalParticipants} />
           <SettingStat label="Asignări" value={company.stats.totalAssignments} />
           <SettingStat label="Completate" value={company.stats.completedAssignments} />
           <SettingStat label="Rată completare" value={`${company.stats.completionRate}%`} />
@@ -77,7 +77,7 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
             <p className="text-sm font-semibold text-foreground/52">Administrare</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Acțiuni asupra companiei</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Acțiunile sensibile sunt separate de fluxul zilnic de roster, organigramă și rapoarte.
+              Acțiunile sensibile sunt separate de fluxul zilnic de participanți, organigramă și rapoarte.
             </p>
           </div>
           <button
@@ -93,7 +93,7 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
           <div className="mt-5 rounded-xl border border-red-200 bg-red-50/70 p-4">
             <p className="text-sm font-semibold text-red-950">Șterge compania</p>
             <p className="mt-2 text-sm leading-6 text-red-900/72">
-              Ștergerea elimină compania împreună cu rosterul, organigrama, echipele, invitațiile și asignările legate de ea.
+              Ștergerea elimină compania împreună cu participanții, organigrama, echipele, invitațiile și asignările legate de ea.
             </p>
 
             <form onSubmit={handleDelete} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-end">

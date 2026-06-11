@@ -1,12 +1,34 @@
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   CompanyAssignment,
   CompanyParticipant,
+  CompanyTeam,
   ParticipantInvitationStatus,
   RosterInviteResult,
 } from "@/api/companies";
-import { buildInvitationRows } from "./InvitationsWorkspace";
+import { createCompanyAssignment } from "@/api/companies";
+import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
+import { buildInvitationRows, InvitationsWorkspace } from "./InvitationsWorkspace";
+
+vi.mock("@/api/companies", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/companies")>();
+  return {
+    ...original,
+    createCompanyAssignment: vi.fn(),
+    sendParticipantInvitations: vi.fn(),
+    resendParticipantInvitation: vi.fn(),
+  };
+});
+
+vi.mock("@/api/questionnaires", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/questionnaires")>();
+  return {
+    ...original,
+    listQuestionnaireDefinitionStubs: vi.fn(),
+  };
+});
 
 const participants: CompanyParticipant[] = [
   {
@@ -40,6 +62,8 @@ const assignments: CompanyAssignment[] = [
     respondent_profile_id: "andrei",
     questionnaire_key: "lencioni",
     target_type: "self",
+    target_person_id: null,
+    target_team_id: null,
     status: "invited",
     submitted_at: null,
     scored_at: null,
@@ -50,9 +74,20 @@ const assignments: CompanyAssignment[] = [
     respondent_profile_id: "ana",
     questionnaire_key: "lencioni",
     target_type: "self",
+    target_person_id: null,
+    target_team_id: null,
     status: "assigned",
     submitted_at: null,
     scored_at: null,
+  },
+];
+
+const teams: CompanyTeam[] = [
+  {
+    id: "team-1",
+    company_id: "company-1",
+    name: "Leadership",
+    type: "leadership",
   },
 ];
 
@@ -71,6 +106,11 @@ const invitationStatuses: ParticipantInvitationStatus[] = [
 ];
 
 describe("buildInvitationRows", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
   it("summarizes delivery, signup, and task state per company participant", () => {
     const rows = buildInvitationRows(participants, assignments, invitationStatuses, new Map());
 
@@ -130,5 +170,61 @@ describe("buildInvitationRows", () => {
       deliveryTone: "success",
       secureLinkUrl: "http://localhost:3000/invite/ana",
     });
+  });
+
+  it("creates a company assignment and updates the delivery table", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([
+      {
+        id: "boss_360",
+        name: "Boss 360",
+        description: "Feedback pentru manager.",
+        status: "active",
+        version: 1,
+        audience: "participant",
+      },
+    ]);
+    vi.mocked(createCompanyAssignment).mockResolvedValue({
+      id: "assignment-3",
+      company_id: "company-1",
+      respondent_profile_id: "ana",
+      questionnaire_key: "boss_360",
+      target_type: "person",
+      target_person_id: "andrei",
+      target_team_id: null,
+      status: "assigned",
+      submitted_at: null,
+      scored_at: null,
+    });
+
+    render(
+      <InvitationsWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        participants={participants}
+        assignments={[]}
+        invitationStatuses={[]}
+        teams={teams}
+      />,
+    );
+
+    await screen.findByRole("option", { name: "Boss 360" });
+
+    fireEvent.change(screen.getByLabelText("Persoană"), { target: { value: "ana" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Persoană/ }));
+    fireEvent.change(screen.getByLabelText("Persoana evaluată"), { target: { value: "andrei" } });
+    fireEvent.click(screen.getByRole("button", { name: "Creează asignarea" }));
+
+    await waitFor(() => {
+      expect(createCompanyAssignment).toHaveBeenCalledWith("company-1", {
+        respondentProfileId: "ana",
+        questionnaireKey: "boss_360",
+        targetType: "person",
+        targetPersonId: "andrei",
+        targetTeamId: null,
+      });
+    });
+
+    expect(await screen.findByText(/Asignare creată pentru Ana Pop/)).toBeTruthy();
+    expect(screen.getByText("boss_360 · despre Andrei Manager")).toBeTruthy();
   });
 });

@@ -43,9 +43,28 @@ export type CompanyAssignment = {
   respondent_profile_id: string;
   questionnaire_key: string;
   target_type: "self" | "person" | "team";
+  target_person_id: string | null;
+  target_team_id: string | null;
+  access_mode?: "account_link";
   status: "assigned" | "invited" | "started" | "submitted" | "validated" | "scored";
+  visibility_policy?: "trainer_raw_review" | "reviewed_anonymized";
+  due_at?: string | null;
+  invited_at?: string | null;
+  started_at?: string | null;
   submitted_at: string | null;
+  validated_at?: string | null;
   scored_at: string | null;
+  reminder_due_at?: string | null;
+  last_reminder_sent_at?: string | null;
+};
+
+export type CreateCompanyAssignmentPayload = {
+  respondentProfileId: string;
+  questionnaireKey: string;
+  targetType: CompanyAssignment["target_type"];
+  targetPersonId?: string | null;
+  targetTeamId?: string | null;
+  visibilityPolicy?: NonNullable<CompanyAssignment["visibility_policy"]>;
 };
 
 export type RosterInviteResult = {
@@ -190,6 +209,32 @@ export async function getCompanyAssignments(
     }
     return [];
   }
+}
+
+export async function createCompanyAssignment(
+  companyId: string,
+  payload: CreateCompanyAssignmentPayload,
+): Promise<CompanyAssignment> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      respondent_profile_id: payload.respondentProfileId,
+      questionnaire_key: payload.questionnaireKey,
+      target_type: payload.targetType,
+      target_person_id: payload.targetPersonId ?? null,
+      target_team_id: payload.targetTeamId ?? null,
+      visibility_policy: payload.visibilityPolicy ?? "trainer_raw_review",
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as CompanyAssignment;
 }
 
 export async function getCompanyTeams(

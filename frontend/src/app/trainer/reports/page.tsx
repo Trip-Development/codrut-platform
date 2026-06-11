@@ -21,7 +21,7 @@ export default async function TrainerReportsPage() {
       audience="trainer"
       eyebrow="Rapoarte"
       title="Rapoarte pe companie"
-      description="Rapoartele sunt organizate în workspace-ul fiecărei companii, ca să nu amesteci clienții, rosterul și progresul."
+      description="Rapoartele sunt organizate în spațiul fiecărei companii, ca să nu amesteci clienții, participanții și progresul."
       navItems={trainerNavItems}
       activeHref="/trainer/companies"
       userLabel={trainer.user.name}
@@ -31,7 +31,7 @@ export default async function TrainerReportsPage() {
         <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
           <p className="text-base font-semibold text-foreground">Nu există rapoarte disponibile încă.</p>
           <p className="mt-2 text-sm text-foreground/58">
-            Deschide o companie, importă rosterul și trimite invitațiile înainte de raportare.
+            Deschide o companie, importă lista de participanți și trimite invitațiile înainte de raportare.
           </p>
           <Link
             href="/trainer/companies"
@@ -64,7 +64,7 @@ export default async function TrainerReportsPage() {
                 </div>
 
                 <dl className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl bg-surface-muted/55 py-3 text-center">
-                  <ReportStat label="Roster" value={company.participantCount} />
+                  <ReportStat label="Participanți" value={company.participantCount} />
                   <ReportStat label="Asignări" value={company.assignmentCount} />
                   <ReportStat label="Finalizate" value={company.completedCount} />
                 </dl>

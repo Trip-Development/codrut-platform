@@ -12,6 +12,7 @@ import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
   addCompanyTeamMembership,
+  createCompanyAssignment,
   createCompany,
   createCompanyTeam,
   deleteCompany,
@@ -575,6 +576,63 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({
         method: "POST",
         credentials: "include",
+      }),
+    );
+  });
+
+  it("creates company assignments through the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "assignment-1",
+        company_id: "company-1",
+        respondent_profile_id: "participant-1",
+        questionnaire_key: "boss_360",
+        target_type: "person",
+        target_person_id: "participant-2",
+        target_team_id: null,
+        access_mode: "account_link",
+        status: "assigned",
+        visibility_policy: "trainer_raw_review",
+        due_at: null,
+        invited_at: null,
+        started_at: null,
+        submitted_at: null,
+        validated_at: null,
+        scored_at: null,
+        reminder_due_at: null,
+        last_reminder_sent_at: null,
+      }),
+    } as Response);
+
+    await expect(
+      createCompanyAssignment("company-1", {
+        respondentProfileId: "participant-1",
+        questionnaireKey: "boss_360",
+        targetType: "person",
+        targetPersonId: "participant-2",
+      }),
+    ).resolves.toMatchObject({
+      id: "assignment-1",
+      target_type: "person",
+      target_person_id: "participant-2",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/companies/company-1/assignments"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          respondent_profile_id: "participant-1",
+          questionnaire_key: "boss_360",
+          target_type: "person",
+          target_person_id: "participant-2",
+          target_team_id: null,
+          visibility_policy: "trainer_raw_review",
+        }),
       }),
     );
   });
