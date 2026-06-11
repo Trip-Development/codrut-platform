@@ -215,33 +215,34 @@ class AssignmentService:
                 direct_reports_by_manager.get(manager_id, []),
                 key=lambda item: participant_by_id[item].full_name,
             )
-            manager_team_ids = [manager_id, *direct_report_ids]
-            manager_team_name = f"Echipa {manager.full_name}"
-            persisted_team = teams_by_name.get(manager_team_name.casefold())
+            if direct_report_ids:
+                manager_team_ids = [manager_id, *direct_report_ids]
+                manager_team_name = f"Echipa {manager.full_name}"
+                persisted_team = teams_by_name.get(manager_team_name.casefold())
 
-            scopes.append(
-                AssignmentPlanScopeResponse(
-                    id=f"manager-team:{manager_id}",
-                    name=manager_team_name,
-                    type="manager_team",
-                    participant_ids=manager_team_ids,
-                )
-            )
-            for respondent_id in manager_team_ids:
-                plan_items.append(
-                    _plan_team_assignment(
-                        scope_id=f"manager-team:{manager_id}",
-                        scope_name=manager_team_name,
-                        scope_type="manager_team",
-                        respondent=participant_by_id[respondent_id],
-                        questionnaire_key="lencioni",
-                        team_id=persisted_team.id if persisted_team is not None else None,
-                        team_name=manager_team_name,
-                        team_type=TeamType.functional,
-                        team_member_ids=manager_team_ids,
-                        team_leader_id=manager_id,
+                scopes.append(
+                    AssignmentPlanScopeResponse(
+                        id=f"manager-team:{manager_id}",
+                        name=manager_team_name,
+                        type="manager_team",
+                        participant_ids=manager_team_ids,
                     )
                 )
+                for respondent_id in manager_team_ids:
+                    plan_items.append(
+                        _plan_team_assignment(
+                            scope_id=f"manager-team:{manager_id}",
+                            scope_name=manager_team_name,
+                            scope_type="manager_team",
+                            respondent=participant_by_id[respondent_id],
+                            questionnaire_key="lencioni",
+                            team_id=persisted_team.id if persisted_team is not None else None,
+                            team_name=manager_team_name,
+                            team_type=TeamType.functional,
+                            team_member_ids=manager_team_ids,
+                            team_leader_id=manager_id,
+                        )
+                    )
 
             scopes.append(
                 AssignmentPlanScopeResponse(
@@ -260,11 +261,10 @@ class AssignmentService:
                     questionnaire_key="distress_drivers",
                 )
             )
-            feedback_respondent_ids = [
-                manager_id,
-                *sorted(manager_ids - {manager_id}),
-                *direct_report_ids,
+            leadership_peer_ids = [
+                participant_id for participant_id in leadership_ids if participant_id != manager_id
             ]
+            feedback_respondent_ids = [manager_id, *leadership_peer_ids, *direct_report_ids]
             for respondent_id in dict.fromkeys(feedback_respondent_ids):
                 plan_items.append(
                     _plan_person_assignment(

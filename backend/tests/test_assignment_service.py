@@ -28,6 +28,7 @@ from codrut.modules.companies.models import (
     CompanyMembershipRole,
     CompanyProject,
     ParticipantProfile,
+    ParticipantReportingRelationship,
 )
 from codrut.modules.identity.models import User
 
@@ -48,6 +49,18 @@ class FakeAssignmentRepository:
         if team is None or team.company_id != company_id:
             return None
         return team
+
+    async def get_team_by_name(self, company_id: uuid.UUID, name: str) -> Team | None:
+        for team in self.teams.values():
+            if team.company_id == company_id and team.name == name:
+                return team
+        return None
+
+    async def list_teams(self, company_id: uuid.UUID) -> list[Team]:
+        return sorted(
+            [team for team in self.teams.values() if team.company_id == company_id],
+            key=lambda team: team.name,
+        )
 
     async def get_team_membership(
         self,
@@ -75,6 +88,43 @@ class FakeAssignmentRepository:
         self.assignments.append(assignment)
         return assignment
 
+    async def get_matching_assignment(
+        self,
+        *,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID | None,
+        respondent_profile_id: uuid.UUID,
+        questionnaire_key: str,
+        target_type: AssignmentTargetType,
+        target_person_id: uuid.UUID | None,
+        target_team_id: uuid.UUID | None,
+    ) -> QuestionnaireAssignment | None:
+        for assignment in self.assignments:
+            if (
+                assignment.company_id == company_id
+                and assignment.project_id == project_id
+                and assignment.respondent_profile_id == respondent_profile_id
+                and assignment.questionnaire_key == questionnaire_key
+                and assignment.target_type == target_type
+                and assignment.target_person_id == target_person_id
+                and assignment.target_team_id == target_team_id
+            ):
+                return assignment
+        return None
+
+    async def list_assignments(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID | None = None,
+    ) -> list[QuestionnaireAssignment]:
+        assignments = [
+            assignment
+            for assignment in self.assignments
+            if assignment.company_id == company_id
+            and (project_id is None or assignment.project_id == project_id)
+        ]
+        return assignments
+
 
 class FakeCompanyRepository:
     def __init__(self) -> None:
@@ -82,6 +132,7 @@ class FakeCompanyRepository:
         self.memberships: list[CompanyMembership] = []
         self.participants: dict[uuid.UUID, ParticipantProfile] = {}
         self.projects: dict[uuid.UUID, CompanyProject] = {}
+        self.reporting_relationships: list[ParticipantReportingRelationship] = []
 
     async def get_company(self, company_id: uuid.UUID) -> Company | None:
         return self.companies.get(company_id)
@@ -101,6 +152,23 @@ class FakeCompanyRepository:
         participant_id: uuid.UUID,
     ) -> ParticipantProfile | None:
         return self.participants.get(participant_id)
+
+    async def list_participants(self, company_id: uuid.UUID) -> list[ParticipantProfile]:
+        return [
+            participant
+            for participant in self.participants.values()
+            if participant.company_id == company_id
+        ]
+
+    async def list_reporting_relationships(
+        self,
+        company_id: uuid.UUID,
+    ) -> list[ParticipantReportingRelationship]:
+        return [
+            relationship
+            for relationship in self.reporting_relationships
+            if relationship.company_id == company_id
+        ]
 
     async def get_project(
         self,
@@ -430,6 +498,104 @@ async def test_create_assignment_rejects_project_from_another_company() -> None:
         )
 
     assert exc_info.value.code == "project_not_found"
+
+
+async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_teams() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    peer_id = uuid.uuid4()
+    member_id = uuid.uuid4()
+    lower_manager_id = uuid.uuid4()
+    lower_report_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Leadership Septembrie",
+    )
+    company_repository.participants[respondent_id].full_name = "Andrei Manager"
+    company_repository.participants[respondent_id].role_group = "leadership"
+    company_repository.participants[target_id].full_name = "Ioana Peer"
+    company_repository.participants[target_id].role_group = "leadership"
+    company_repository.participants[peer_id] = ParticipantProfile(
+        id=peer_id,
+        company_id=company_id,
+        full_name="Mara Peer",
+        email="mara@example.com",
+        role_group="leadership",
+    )
+    company_repository.participants[member_id] = ParticipantProfile(
+        id=member_id,
+        company_id=company_id,
+        full_name="Ana Report",
+        email="ana@example.com",
+        role_group="member",
+    )
+    company_repository.participants[lower_manager_id] = ParticipantProfile(
+        id=lower_manager_id,
+        company_id=company_id,
+        full_name="Bogdan Lead",
+        email="bogdan@example.com",
+        role_group="member",
+    )
+    company_repository.participants[lower_report_id] = ParticipantProfile(
+        id=lower_report_id,
+        company_id=company_id,
+        full_name="Dan Report",
+        email="dan@example.com",
+        role_group="member",
+    )
+    company_repository.reporting_relationships.extend(
+        [
+            ParticipantReportingRelationship(
+                company_id=company_id,
+                manager_profile_id=respondent_id,
+                participant_profile_id=member_id,
+            ),
+            ParticipantReportingRelationship(
+                company_id=company_id,
+                manager_profile_id=lower_manager_id,
+                participant_profile_id=lower_report_id,
+            ),
+        ]
+    )
+    assignment_repository.teams[uuid.uuid4()] = Team(
+        company_id=company_id,
+        name="Leadership",
+        type=TeamType.leadership,
+    )
+
+    plan = await service.build_default_assignment_plan(user_id, company_id, project_id)
+
+    manager_team_scopes = [scope.name for scope in plan.scopes if scope.type == "manager_team"]
+    assert manager_team_scopes == ["Echipa Andrei Manager", "Echipa Bogdan Lead"]
+    assert "Echipa Ioana Peer" not in manager_team_scopes
+    assert "Echipa Mara Peer" not in manager_team_scopes
+
+    andrei_360_respondents = {
+        item.respondent_profile_id
+        for item in plan.assignments
+        if item.questionnaire_key == "boss_360" and item.target_person_id == respondent_id
+    }
+    assert andrei_360_respondents == {respondent_id, target_id, peer_id, member_id}
+    assert lower_manager_id not in andrei_360_respondents
+
+    ioana_lencioni_team_assignments = [
+        item
+        for item in plan.assignments
+        if item.questionnaire_key == "lencioni"
+        and item.scope_name == "Echipa Ioana Peer"
+    ]
+    assert ioana_lencioni_team_assignments == []
 
 
 async def test_create_assignment_rejects_inactive_persisted_questionnaire_key() -> None:
