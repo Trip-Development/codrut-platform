@@ -93,6 +93,9 @@ class FakeCompanyRepository:
         }
         return [company for company in self.companies_by_name.values() if company.id in company_ids]
 
+    async def list_all_companies(self) -> list[Company]:
+        return sorted(self.companies_by_name.values(), key=lambda item: item.name)
+
     async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int, int]]:
         return [
             (
@@ -303,15 +306,15 @@ async def test_create_company_strips_name_and_rejects_duplicates() -> None:
         await service.create_company(owner_id, CompanyCreateRequest(name="Acme"))
 
 
-async def test_list_companies_only_returns_user_memberships() -> None:
+async def test_list_companies_returns_all_companies_for_trainers() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
     other_owner_id = uuid.uuid4()
     first = await service.create_company(owner_id, CompanyCreateRequest(name="First"))
-    await service.create_company(other_owner_id, CompanyCreateRequest(name="Second"))
+    second = await service.create_company(other_owner_id, CompanyCreateRequest(name="Second"))
 
-    assert await service.list_companies(owner_id) == [first]
+    assert await service.list_companies(owner_id) == [first, second]
 
 
 async def test_list_company_summaries_returns_operational_counts() -> None:
