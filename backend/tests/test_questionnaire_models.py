@@ -22,8 +22,11 @@ def test_questionnaire_keys_cover_current_workflow() -> None:
         "pcm_base",
         "phase",
         "lencioni",
+        "lencioni_en",
         "distress_drivers",
+        "distress_drivers_en",
         "boss_360",
+        "boss_360_en",
         "icare",
     }
 

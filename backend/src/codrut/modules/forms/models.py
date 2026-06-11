@@ -12,8 +12,11 @@ class QuestionnaireKey(StrEnum):
     pcm_base = "pcm_base"
     phase = "phase"
     lencioni = "lencioni"
+    lencioni_en = "lencioni_en"
     distress_drivers = "distress_drivers"
+    distress_drivers_en = "distress_drivers_en"
     boss_360 = "boss_360"
+    boss_360_en = "boss_360_en"
     icare = "icare"
 
 

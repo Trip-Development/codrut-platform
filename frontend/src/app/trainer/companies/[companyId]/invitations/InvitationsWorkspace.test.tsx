@@ -254,7 +254,7 @@ describe("buildInvitationRows", () => {
     });
 
     expect(await screen.findByText(/Asignare creată pentru Ana Pop/)).toBeTruthy();
-    expect(screen.getByText("boss_360 · despre Andrei Manager")).toBeTruthy();
+    expect(screen.getByText("Feedback 360 iCARE · despre Andrei Manager")).toBeTruthy();
   });
 
   it("generates a default assignment plan and saves only selected rows", async () => {
@@ -353,7 +353,7 @@ describe("buildInvitationRows", () => {
     expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, { projectId: "project-1" });
     expect(screen.getAllByText("Andrei Manager").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Ana Pop").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("lencioni")).toHaveLength(2);
+    expect(screen.getAllByText("Lencioni - evaluare echipă")).toHaveLength(2);
 
     fireEvent.click(screen.getByLabelText("Selectează asignarea pentru Ana Pop"));
     fireEvent.click(screen.getByRole("button", { name: "Salvează asignările bifate (1)" }));
@@ -368,7 +368,7 @@ describe("buildInvitationRows", () => {
       ], "project-1");
     });
     expect(await screen.findByText("1 asignări create, 0 deja existente.")).toBeTruthy();
-    expect(screen.getByText("lencioni · echipa selectată")).toBeTruthy();
+    expect(screen.getByText("Lencioni - evaluare echipă · echipa selectată")).toBeTruthy();
   });
 
   it("generates secure links, updates participant rows, and copies the active link", async () => {

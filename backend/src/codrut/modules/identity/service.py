@@ -40,23 +40,23 @@ class InviteVerifyResult:
 
 
 def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
-    if questionnaire_key == "lencioni":
+    if questionnaire_key in {"lencioni", "lencioni_en"}:
         return (
             "Lencioni - Cele 5 disfuncții ale echipei",
             "Evaluează dinamica echipei pentru proiectul curent.",
             12,
         )
-    if questionnaire_key == "distress_drivers":
+    if questionnaire_key in {"distress_drivers", "distress_drivers_en"}:
         return (
             "Driveri de stres TA",
             "Identifică driverii care apar cel mai des în context de presiune.",
             10,
         )
-    if questionnaire_key == "boss_360":
+    if questionnaire_key in {"boss_360", "boss_360_en", "icare"}:
         return (
-            "Feedback 360",
-            "Oferă feedback pentru persoana indicată în această sarcină.",
-            10,
+            "Feedback 360 iCARE",
+            "Oferă feedback pentru managerul indicat în această sarcină.",
+            20,
         )
     if questionnaire_key == "pcm_base":
         return (

@@ -38,6 +38,16 @@ COMPLETED_STATUSES = {
     AssignmentStatus.scored,
 }
 
+LENCIONI_REPORT_KEYS = {
+    QuestionnaireKey.lencioni.value,
+    QuestionnaireKey.lencioni_en.value,
+}
+
+DISTRESS_DRIVER_REPORT_KEYS = {
+    QuestionnaireKey.distress_drivers.value,
+    QuestionnaireKey.distress_drivers_en.value,
+}
+
 
 class ScoringService:
     def __init__(self, session: AsyncSession) -> None:
@@ -82,10 +92,10 @@ class ScoringService:
                 continue
 
             results.append(ScoringResultResponse.model_validate(result))
-            if assignment.questionnaire_key == QuestionnaireKey.lencioni.value:
+            if assignment.questionnaire_key in LENCIONI_REPORT_KEYS:
                 if _add_scores(lencioni_sums, result.scores):
                     lencioni_count += 1
-            elif assignment.questionnaire_key == QuestionnaireKey.distress_drivers.value:
+            elif assignment.questionnaire_key in DISTRESS_DRIVER_REPORT_KEYS:
                 if _add_scores(driver_sums, result.scores):
                     driver_count += 1
 

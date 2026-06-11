@@ -77,6 +77,8 @@ const seededAssignmentQuestionnaires: Record<string, string> = {
   "33333333-3333-4333-8333-333333333333": "lencioni",
 };
 
+const legacyHiddenQuestionnaireKeys = new Set(["icare"]);
+
 function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireDefinitionStub {
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const estimatedItems = questions.reduce((count, question) => {
@@ -101,7 +103,7 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
 const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   {
     id: "lencioni",
-    name: "Chestionar de evaluare a echipei",
+    name: "Lencioni - evaluare echipă (RO)",
     description: "15 itemi pentru evaluarea echipei pe cele cinci disfuncții Lencioni.",
     status: "active",
     version: 1,
@@ -110,8 +112,28 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
     estimatedItems: 15,
   },
   {
+    id: "lencioni_en",
+    name: "Lencioni Team Assessment (EN)",
+    description: "15 items for assessing the team against Lencioni's five dysfunctions.",
+    status: "active",
+    version: 1,
+    source: "docs/questionnaires/lencioni.pdf",
+    audience: "team",
+    estimatedItems: 15,
+  },
+  {
     id: "distress_drivers",
-    name: "Distress drivers",
+    name: "Driveri de stres TA (RO)",
+    description: "10 seturi de afirmații pentru autoevaluarea driverilor de stres TA.",
+    status: "active",
+    version: 1,
+    source: "docs/questionnaires/distress_drivers.pdf",
+    audience: "leadership",
+    estimatedItems: 50,
+  },
+  {
+    id: "distress_drivers_en",
+    name: "TA Distress Drivers (EN)",
     description: "10 scored statement sets for TA driver self-assessment.",
     status: "active",
     version: 1,
@@ -137,21 +159,20 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   },
   {
     id: "boss_360",
-    name: "Boss / manager 360",
-    description: "Prototype 360 feedback form for a direct manager.",
+    name: "Feedback 360 iCARE pentru manager (RO)",
+    description: "Feedback comportamental iCARE pentru manager din autoevaluare, colegi și raportori direcți.",
     status: "active",
     version: 1,
     audience: "participant",
-    estimatedItems: 5,
+    estimatedItems: 48,
   },
   {
-    id: "icare",
-    name: "Comportamente de leadership ICARE",
-    description: "48 de afirmații comportamentale grupate pe atributele și abilitățile ICARE.",
+    id: "boss_360_en",
+    name: "iCARE 360 Feedback for Manager (EN)",
+    description: "iCARE behavioral feedback for a manager from self, manager peers, and direct reports.",
     status: "active",
     version: 1,
-    source: "docs/questionnaires/ICARE_scala.xlsx",
-    audience: "leadership",
+    audience: "participant",
     estimatedItems: 48,
   },
 ];
@@ -529,6 +550,29 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
   },
 };
 
+fallbackDefinitionDetails.boss_360 = {
+  ...fallbackDefinitionDetails.icare,
+  key: "boss_360",
+  title: "Feedback 360 iCARE pentru manager",
+  description:
+    "Feedback comportamental iCARE pentru manager din autoevaluare, colegi și raportori direcți.",
+  schema: {
+    ...fallbackDefinitionDetails.icare.schema,
+    audience: "participant",
+    instructions:
+      "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele iCARE observabile din perspectiva ta.",
+    scoring: undefined,
+  },
+};
+
+fallbackDefinitionDetails.boss_360_en = {
+  ...fallbackDefinitionDetails.boss_360,
+  key: "boss_360_en",
+  title: "iCARE 360 Feedback for Manager",
+  description:
+    "iCARE behavioral feedback for a manager from self, manager peers, and direct reports.",
+};
+
 export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireDefinitionStub[]> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
@@ -539,7 +583,9 @@ export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireD
       return isDemoFallbackEnabled() ? fallbackDefinitions : [];
     }
     const serverDefs = (await response.json()) as QuestionnaireDefinition[];
-    return serverDefs.map(stubFromDefinition);
+    return serverDefs
+      .filter((definition) => !legacyHiddenQuestionnaireKeys.has(definition.key))
+      .map(stubFromDefinition);
   } catch (e) {
     console.error("Error listing definitions", e);
     return isDemoFallbackEnabled() ? fallbackDefinitions : [];
