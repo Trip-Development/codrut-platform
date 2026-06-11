@@ -141,6 +141,30 @@ export type CompanyDetail = {
 
 export type ApiRequestOptions = Pick<RequestInit, "headers">;
 
+export type ReportAverage = {
+  id: string;
+  label: string;
+  avg: number;
+};
+
+export type CompanyScoringResult = {
+  id: string;
+  assignment_id: string;
+  scores: Record<string, unknown>;
+  primary_result: string | null;
+};
+
+export type CompanyReportAggregate = {
+  total_assigned: number;
+  total_completed: number;
+  completion_rate: number;
+  lencioni_count: number;
+  driver_count: number;
+  lencioni_averages: ReportAverage[];
+  driver_averages: ReportAverage[];
+  results: CompanyScoringResult[];
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -208,6 +232,41 @@ export async function getCompanyAssignments(
       throw e;
     }
     return [];
+  }
+}
+
+export async function getCompanyReportAggregate(
+  companyId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyReportAggregate> {
+  const emptyAggregate: CompanyReportAggregate = {
+    total_assigned: 0,
+    total_completed: 0,
+    completion_rate: 0,
+    lencioni_count: 0,
+    driver_count: 0,
+    lencioni_averages: [],
+    driver_averages: [],
+    results: [],
+  };
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate`,
+      { cache: "no-store", credentials: "include", ...options },
+    );
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-au putut calcula rapoartele.`);
+      }
+      return emptyAggregate;
+    }
+    return (await response.json()) as CompanyReportAggregate;
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
+    return emptyAggregate;
   }
 }
 

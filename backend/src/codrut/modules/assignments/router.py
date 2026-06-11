@@ -19,6 +19,8 @@ from codrut.modules.assignments.schemas import (
 from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.scoring.schemas import CompanyReportAggregateResponse
+from codrut.modules.scoring.service import ScoringService
 
 router = APIRouter()
 
@@ -99,6 +101,19 @@ async def list_company_assignments(
 ) -> list[AssignmentResponse]:
     require_trainer_principal(principal)
     return await AssignmentService(session).list_assignments(principal.user_id, company_id)
+
+
+@router.get(
+    "/companies/{company_id}/reports/aggregate",
+    response_model=CompanyReportAggregateResponse,
+)
+async def get_company_report_aggregate(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CompanyReportAggregateResponse:
+    require_trainer_principal(principal)
+    return await ScoringService(session).get_company_report_aggregate(company_id)
 
 
 @router.post(
