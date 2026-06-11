@@ -77,6 +77,7 @@ describe("QuestionnairesWorkspace", () => {
     fireEvent.change(titleInput, { target: { value: "Leadership" } });
 
     expect(titleInput).toHaveProperty("value", "Leadership");
+    expect(screen.getAllByText("Leadership").some((element) => element.tagName === "H3")).toBe(true);
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
 
     await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
@@ -85,5 +86,39 @@ describe("QuestionnairesWorkspace", () => {
       expect.objectContaining({ title: "Leadership" }),
       1,
     );
+  });
+
+  it("keeps nested question typing local and saves the latest schema", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    const questionInput = await screen.findByDisplayValue("Initial question");
+
+    fireEvent.change(questionInput, { target: { value: "P" } });
+    fireEvent.change(questionInput, { target: { value: "Pr" } });
+    fireEvent.change(questionInput, { target: { value: "Proces clar pentru echipă" } });
+
+    expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă");
+    expect(screen.queryByText("Se salvează...")).not.toBeNull();
+    expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
+    expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+      "lencioni",
+      expect.objectContaining({
+        schema: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              questions: [
+                expect.objectContaining({
+                  label: "Proces clar pentru echipă",
+                }),
+              ],
+            }),
+          ],
+        }),
+      }),
+      1,
+    );
+    expect(await screen.findByText("Salvat")).not.toBeNull();
   });
 });

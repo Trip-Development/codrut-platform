@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listQuestionnaireDefinitionStubs,
   getQuestionnaireDefinition,
@@ -16,15 +16,38 @@ import {
 const destructiveButtonClass =
   "tap-soft rounded-lg border border-[#890505]/35 bg-transparent px-3 py-1.5 text-xs font-bold text-[#890505] shadow-none transition hover:bg-[#890505]/10 disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-transparent disabled:text-foreground/35 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+function estimateQuestionnaireItems(definition: QuestionnaireDefinition): number {
+  return definition.schema.sections.reduce((count, section) => {
+    return (
+      count +
+      section.questions.reduce((sectionCount, question) => {
+        return sectionCount + (question.statements?.length ?? 1);
+      }, 0)
+    );
+  }, 0);
+}
+
 export function QuestionnairesWorkspace() {
   const [stubs, setStubs] = useState<QuestionnaireDefinitionStub[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<number>(1);
   const [availableVersions, setAvailableVersions] = useState<number[]>([]);
   const [currentDefinition, setCurrentDefinition] = useState<QuestionnaireDefinition | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isCatalogLoading, setIsCatalogLoading] = useState<boolean>(false);
+  const [isDefinitionLoading, setIsDefinitionLoading] = useState<boolean>(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [categories, setCategories] = useState<string[]>([]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedKeyRef = useRef<string | null>(null);
+  const currentDefinitionRef = useRef<QuestionnaireDefinition | null>(null);
+  const definitionRequestRef = useRef(0);
+  const saveRequestRef = useRef(0);
+
+  useEffect(() => {
+    selectedKeyRef.current = selectedKey;
+  }, [selectedKey]);
 
   useEffect(() => {
     if (stubs.length > 0) {
@@ -43,23 +66,23 @@ export function QuestionnairesWorkspace() {
   const [newAudience, setNewAudience] = useState<"leadership" | "team" | "participant">("team");
 
   // Load stubs list
-  const loadStubs = async () => {
-    setIsLoading(true);
+  const loadStubs = useCallback(async () => {
+    setIsCatalogLoading(true);
     try {
       const list = await listQuestionnaireDefinitionStubs();
       setStubs(list);
-      if (list.length > 0 && !selectedKey) {
+      if (list.length > 0 && !selectedKeyRef.current) {
         setSelectedKey(list[0].id);
         setSelectedVersion(list[0].version ?? 1);
       }
     } finally {
-      setIsLoading(false);
+      setIsCatalogLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadStubs();
-  }, []);
+    void loadStubs();
+  }, [loadStubs]);
 
   // Sync available versions and load definition details when selected key or version changes
   useEffect(() => {
@@ -81,20 +104,32 @@ export function QuestionnairesWorkspace() {
     if (!allVersions.includes(selectedVersion)) {
       setSelectedVersion(allVersions[0]);
     }
-  }, [selectedKey, stubs]);
+  }, [selectedKey, selectedVersion, stubs]);
 
   useEffect(() => {
-    if (!selectedKey) return;
+    if (!selectedKey) {
+      currentDefinitionRef.current = null;
+      setCurrentDefinition(null);
+      return;
+    }
+    const requestId = definitionRequestRef.current + 1;
+    definitionRequestRef.current = requestId;
+
     const fetchDefinition = async () => {
-      setIsLoading(true);
+      setIsDefinitionLoading(true);
       try {
         const def = await getQuestionnaireDefinition(`${selectedKey}@${selectedVersion}`);
+        if (definitionRequestRef.current !== requestId) return;
+        currentDefinitionRef.current = def;
         setCurrentDefinition(def);
+        setSaveState("idle");
       } finally {
-        setIsLoading(false);
+        if (definitionRequestRef.current === requestId) {
+          setIsDefinitionLoading(false);
+        }
       }
     };
-    fetchDefinition();
+    void fetchDefinition();
   }, [selectedKey, selectedVersion]);
 
   useEffect(() => {
@@ -105,14 +140,32 @@ export function QuestionnairesWorkspace() {
     };
   }, []);
 
-  const handleSave = (updatedDef: QuestionnaireDefinition) => {
+  const queueSave = (updatedDef: QuestionnaireDefinition) => {
+    setSaveState("saving");
+
     setCurrentDefinition(updatedDef);
+    currentDefinitionRef.current = updatedDef;
+    setStubs((previousStubs) =>
+      previousStubs.map((stub) =>
+        stub.id === updatedDef.key && (stub.version ?? 1) === updatedDef.version
+          ? {
+              ...stub,
+              name: updatedDef.title,
+              description: updatedDef.description,
+              audience: updatedDef.schema.audience ?? stub.audience,
+              estimatedItems: estimateQuestionnaireItems(updatedDef),
+            }
+          : stub,
+      ),
+    );
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
     }
 
     saveTimerRef.current = setTimeout(() => {
+      const requestId = saveRequestRef.current + 1;
+      saveRequestRef.current = requestId;
       void updateQuestionnaireDefinitionOnServer(
         updatedDef.key,
         {
@@ -121,10 +174,25 @@ export function QuestionnairesWorkspace() {
           schema: updatedDef.schema,
         },
         updatedDef.version,
-      ).catch((e) => {
-        alert((e as Error).message ?? "Eroare la salvarea chestionarului.");
-      });
+      )
+        .then(() => {
+          if (saveRequestRef.current === requestId) {
+            setSaveState("saved");
+          }
+        })
+        .catch((e) => {
+          if (saveRequestRef.current === requestId) {
+            setSaveState("error");
+          }
+          alert((e as Error).message ?? "Eroare la salvarea chestionarului.");
+        });
     }, 450);
+  };
+
+  const updateDefinitionDraft = (updater: (current: QuestionnaireDefinition) => QuestionnaireDefinition) => {
+    const current = currentDefinitionRef.current;
+    if (!current) return;
+    queueSave(updater(current));
   };
 
   const handleSaveMetadata = (
@@ -132,15 +200,14 @@ export function QuestionnairesWorkspace() {
       audience?: "leadership" | "team" | "participant";
     },
   ) => {
-    if (!currentDefinition) return;
-    handleSave({
-      ...currentDefinition,
+    updateDefinitionDraft((definition) => ({
+      ...definition,
       ...fields,
       schema: {
-        ...currentDefinition.schema,
-        audience: fields.audience ?? currentDefinition.schema.audience,
+        ...definition.schema,
+        audience: fields.audience ?? definition.schema.audience,
       },
-    });
+    }));
   };
 
   const handleRenameDefinitionKey = () => {
@@ -148,14 +215,15 @@ export function QuestionnairesWorkspace() {
   };
 
   const handleCreateNewVersion = async () => {
-    if (!currentDefinition) return;
-    setIsLoading(true);
+    const draftDefinition = currentDefinitionRef.current;
+    if (!draftDefinition) return;
+    setIsDefinitionLoading(true);
     try {
       const saved = await createQuestionnaireDefinitionOnServer({
-        key: currentDefinition.key,
-        title: currentDefinition.title,
-        description: currentDefinition.description,
-        schema: currentDefinition.schema,
+        key: draftDefinition.key,
+        title: draftDefinition.title,
+        description: draftDefinition.description,
+        schema: draftDefinition.schema,
         active: true,
       });
       setSelectedVersion(saved.version);
@@ -163,7 +231,7 @@ export function QuestionnairesWorkspace() {
     } catch (e) {
       alert((e as Error).message ?? "Eroare la crearea unei noi versiuni.");
     } finally {
-      setIsLoading(false);
+      setIsDefinitionLoading(false);
     }
   };
 
@@ -175,7 +243,7 @@ export function QuestionnairesWorkspace() {
     );
     if (!confirmed) return;
 
-    setIsLoading(true);
+    setIsDefinitionLoading(true);
     try {
       await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
       const remaining = await listQuestionnaireDefinitionStubs();
@@ -186,13 +254,14 @@ export function QuestionnairesWorkspace() {
         setSelectedVersion(nextSelection.version ?? 1);
       } else {
         setSelectedKey(null);
+        currentDefinitionRef.current = null;
         setCurrentDefinition(null);
         setAvailableVersions([]);
       }
     } catch (e) {
       alert((e as Error).message ?? "Eroare la ștergerea/pensionarea chestionarului.");
     } finally {
-      setIsLoading(false);
+      setIsDefinitionLoading(false);
     }
   };
 
@@ -201,7 +270,7 @@ export function QuestionnairesWorkspace() {
     if (!newKey || !newTitle) return;
 
     const key = newKey.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-    setIsLoading(true);
+    setIsCatalogLoading(true);
     try {
       const saved = await createQuestionnaireDefinitionOnServer({
         key,
@@ -245,96 +314,102 @@ export function QuestionnairesWorkspace() {
     } catch (e) {
       alert((e as Error).message ?? "Eroare la crearea chestionarului.");
     } finally {
-      setIsLoading(false);
+      setIsCatalogLoading(false);
     }
   };
 
   // Section modifiers
   const handleAddSection = () => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const newSectionId = `sectiunea_${sections.length + 1}`;
-    sections.push({
-      id: newSectionId,
-      title: `Secțiunea ${sections.length + 1}`,
-      questions: [],
-    });
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const newSectionId = `sectiunea_${sections.length + 1}`;
+      sections.push({
+        id: newSectionId,
+        title: `Secțiunea ${sections.length + 1}`,
+        questions: [],
+      });
 
-    handleSave({
-      ...currentDefinition,
-      schema: {
-        ...currentDefinition.schema,
-        sections,
-      },
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
     });
   };
 
   const handleUpdateSectionTitle = (sectionIndex: number, title: string) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    sections[sectionIndex] = {
-      ...sections[sectionIndex],
-      title,
-    };
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      sections[sectionIndex] = {
+        ...sections[sectionIndex],
+        title,
+      };
 
-    handleSave({
-      ...currentDefinition,
-      schema: {
-        ...currentDefinition.schema,
-        sections,
-      },
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
     });
   };
 
   const handleDeleteSection = (sectionIndex: number) => {
-    if (!currentDefinition) return;
-    if (currentDefinition.schema.sections.length <= 1) {
+    const definition = currentDefinitionRef.current;
+    if (!definition) return;
+    if (definition.schema.sections.length <= 1) {
       alert("Chestionarul trebuie să aibă cel puțin o secțiune.");
       return;
     }
-    const sections = currentDefinition.schema.sections.filter((_, i) => i !== sectionIndex);
-    handleSave({
-      ...currentDefinition,
-      schema: {
-        ...currentDefinition.schema,
-        sections,
-      },
+    updateDefinitionDraft((current) => {
+      const sections = current.schema.sections.filter((_, i) => i !== sectionIndex);
+      return {
+        ...current,
+        schema: {
+          ...current.schema,
+          sections,
+        },
+      };
     });
   };
 
   // Question modifiers
   const handleAddQuestion = (sectionIndex: number) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const section = sections[sectionIndex];
-    const nextIndex = section.questions.length + 1;
-    const questionId = `${currentDefinition.key}_s${sectionIndex + 1}_q${nextIndex}_${Date.now().toString().slice(-4)}`;
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const section = sections[sectionIndex];
+      const nextIndex = section.questions.length + 1;
+      const questionId = `${definition.key}_s${sectionIndex + 1}_q${nextIndex}_${Date.now().toString().slice(-4)}`;
 
-    const newQuestion: QuestionnaireQuestion = {
-      id: questionId,
-      code: `Q${nextIndex}`,
-      type: "likert",
-      label: "Întrebare nouă. Faceți clic pentru a edita textul.",
-      required: true,
-      scale: [
-        { value: 1, label: "Rar" },
-        { value: 2, label: "Uneori" },
-        { value: 3, label: "De obicei" },
-      ],
-    };
+      const newQuestion: QuestionnaireQuestion = {
+        id: questionId,
+        code: `Q${nextIndex}`,
+        type: "likert",
+        label: "Întrebare nouă. Apasă pentru a edita textul.",
+        required: true,
+        scale: [
+          { value: 1, label: "Rar" },
+          { value: 2, label: "Uneori" },
+          { value: 3, label: "De obicei" },
+        ],
+      };
 
-    const questions = [...section.questions, newQuestion];
-    sections[sectionIndex] = {
-      ...section,
-      questions,
-    };
+      const questions = [...section.questions, newQuestion];
+      sections[sectionIndex] = {
+        ...section,
+        questions,
+      };
 
-    handleSave({
-      ...currentDefinition,
-      schema: {
-        ...currentDefinition.schema,
-        sections,
-      },
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
     });
   };
 
@@ -343,55 +418,57 @@ export function QuestionnairesWorkspace() {
     questionIndex: number,
     fields: Partial<QuestionnaireQuestion>
   ) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const section = sections[sectionIndex];
-    const questions = [...section.questions];
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const section = sections[sectionIndex];
+      const questions = [...section.questions];
 
-    questions[questionIndex] = {
-      ...questions[questionIndex],
-      ...fields,
-    };
+      questions[questionIndex] = {
+        ...questions[questionIndex],
+        ...fields,
+      };
 
-    sections[sectionIndex] = {
-      ...section,
-      questions,
-    };
+      sections[sectionIndex] = {
+        ...section,
+        questions,
+      };
 
-    handleSave({
-      ...currentDefinition,
-      schema: {
-        ...currentDefinition.schema,
-        sections,
-      },
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
     });
   };
 
   const handleDeleteQuestion = (sectionIndex: number, questionIndex: number) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const section = sections[sectionIndex];
-    const questions = section.questions.filter((_, i) => i !== questionIndex);
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const section = sections[sectionIndex];
+      const questions = section.questions.filter((_, i) => i !== questionIndex);
 
-    sections[sectionIndex] = {
-      ...section,
-      questions,
-    };
+      sections[sectionIndex] = {
+        ...section,
+        questions,
+      };
 
-    handleSave({
-      ...currentDefinition,
-      schema: {
-        ...currentDefinition.schema,
-        sections,
-      },
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
     });
   };
 
   // Statement list modifiers for Distress Drivers style statement set questions
   const handleAddStatement = (sectionIndex: number, questionIndex: number) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const question = sections[sectionIndex].questions[questionIndex];
+    const definition = currentDefinitionRef.current;
+    if (!definition) return;
+    const question = definition.schema.sections[sectionIndex].questions[questionIndex];
     const statements = [...(question.statements || [])];
     const nextCode = `S${statements.length + 1}`;
 
@@ -410,30 +487,61 @@ export function QuestionnairesWorkspace() {
     statementIndex: number,
     label: string
   ) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const question = sections[sectionIndex].questions[questionIndex];
-    const statements = [...(question.statements || [])];
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const section = sections[sectionIndex];
+      const questions = [...section.questions];
+      const question = questions[questionIndex];
+      const statements = [...(question.statements || [])];
 
-    statements[statementIndex] = {
-      ...statements[statementIndex],
-      label,
-    };
+      statements[statementIndex] = {
+        ...statements[statementIndex],
+        label,
+      };
 
-    handleUpdateQuestion(sectionIndex, questionIndex, { statements });
+      questions[questionIndex] = {
+        ...question,
+        statements,
+      };
+
+      sections[sectionIndex] = {
+        ...section,
+        questions,
+      };
+
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
+    });
   };
 
   const handleDeleteStatement = (sectionIndex: number, questionIndex: number, statementIndex: number) => {
-    if (!currentDefinition) return;
-    const sections = [...currentDefinition.schema.sections];
-    const question = sections[sectionIndex].questions[questionIndex];
+    const definition = currentDefinitionRef.current;
+    if (!definition) return;
+    const question = definition.schema.sections[sectionIndex].questions[questionIndex];
     const statements = (question.statements || []).filter((_, i) => i !== statementIndex);
 
     handleUpdateQuestion(sectionIndex, questionIndex, { statements });
   };
 
-  const selectedStub = stubs.find((s) => s.id === selectedKey);
+  const selectedStub =
+    stubs.find((s) => s.id === selectedKey && s.version === selectedVersion) ??
+    stubs.find((s) => s.id === selectedKey);
   const canDeleteSelected = !!selectedKey;
+  const isSaving = saveState === "saving";
+  const isEditorLoading = isDefinitionLoading && !currentDefinition;
+  const saveStateLabel =
+    saveState === "saving"
+      ? "Se salvează..."
+      : saveState === "saved"
+        ? "Salvat"
+        : saveState === "error"
+          ? "Eroare la salvare"
+          : null;
 
   return (
     <div className="space-y-6">
@@ -445,9 +553,10 @@ export function QuestionnairesWorkspace() {
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
+              disabled={isCatalogLoading}
               className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90"
             >
-              + Nou
+              {isCatalogLoading ? "Se încarcă..." : "+ Nou"}
             </button>
           </div>
 
@@ -457,13 +566,13 @@ export function QuestionnairesWorkspace() {
 
               return (
               <button
-                key={stub.id}
+                key={`${stub.id}-${stub.version ?? "fără-versiune"}`}
                 onClick={() => {
                   setSelectedKey(stub.id);
                   setSelectedVersion(stub.version ?? 1);
                 }}
                 className={`min-w-[16rem] max-w-[18rem] text-left p-3 rounded-xl border transition-all ${
-                  selectedKey === stub.id
+                  selectedKey === stub.id && selectedVersion === (stub.version ?? 1)
                     ? "bg-burgundy/10 border-burgundy/40 text-foreground"
                     : "bg-background border-[var(--border)] text-foreground/70 hover:border-burgundy/30"
                 }`}
@@ -499,7 +608,7 @@ export function QuestionnairesWorkspace() {
 
       {/* Main Content Area */}
       <main className="space-y-5">
-        {isLoading ? (
+        {isEditorLoading ? (
           <div className="flex items-center justify-center h-64 rounded-2xl border border-[var(--border)] bg-surface">
             <p className="text-sm font-semibold text-foreground/50">Se încarcă detaliile chestionarului...</p>
           </div>
@@ -515,6 +624,17 @@ export function QuestionnairesWorkspace() {
                   <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-bold text-foreground/60 border border-[var(--border)]">
                     {canDeleteSelected ? "Local editabil" : "Definiție de bază"}
                   </span>
+                  {saveStateLabel ? (
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
+                        saveState === "error"
+                          ? "border-[#890505]/35 bg-[#890505]/10 text-[#890505] dark:border-[#e35f5f]/45 dark:bg-[#890505]/22 dark:text-[#e35f5f]"
+                          : "border-success/25 bg-success/12 text-success-ink"
+                      }`}
+                    >
+                      {saveStateLabel}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
@@ -588,13 +708,14 @@ export function QuestionnairesWorkspace() {
                 <div className="flex flex-wrap gap-2 xl:justify-end">
                   <button
                     onClick={handleCreateNewVersion}
-                    className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                    disabled={isSaving || isDefinitionLoading}
+                    className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:text-foreground/35"
                   >
-                    Versiune Nouă (Clone)
+                    Versiune nouă (clonează)
                   </button>
                   <button
                     onClick={handleDeleteQuestionnaire}
-                    disabled={!canDeleteSelected}
+                    disabled={!canDeleteSelected || isSaving || isDefinitionLoading}
                     className={destructiveButtonClass}
                     title={
                       canDeleteSelected
@@ -611,15 +732,15 @@ export function QuestionnairesWorkspace() {
             {/* Instruction editor */}
             <div className="space-y-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-foreground/50">
-                Instrucțiuni Chestionar
+                Instrucțiuni chestionar
               </label>
               <textarea
                 value={currentDefinition.schema.instructions ?? ""}
                 onChange={(e) =>
-                  handleSave({
-                    ...currentDefinition,
-                    schema: { ...currentDefinition.schema, instructions: e.target.value },
-                  })
+                  updateDefinitionDraft((definition) => ({
+                    ...definition,
+                    schema: { ...definition.schema, instructions: e.target.value },
+                  }))
                 }
                 rows={2}
                 className="w-full rounded-xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-semibold text-foreground focus:border-burgundy/45"
@@ -635,7 +756,7 @@ export function QuestionnairesWorkspace() {
                   onClick={handleAddSection}
                   className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90"
                 >
-                  + Adaugă Secțiune
+                  + Adaugă secțiune
                 </button>
               </div>
 
@@ -668,7 +789,7 @@ export function QuestionnairesWorkspace() {
                   <div className="space-y-4">
                     {section.questions.length === 0 ? (
                       <p className="text-xs font-semibold text-foreground/45 text-center py-4">
-                        Nicio întrebare în această secțiune. Faceți clic pe butonul de mai sus pentru a adăuga una.
+                        Nicio întrebare în această secțiune. Apasă pe butonul de mai sus pentru a adăuga una.
                       </p>
                     ) : (
                       section.questions.map((question, qIndex) => (
@@ -708,7 +829,7 @@ export function QuestionnairesWorkspace() {
                                 }
                                 className="rounded-md border border-[var(--border)] bg-background px-2.5 py-1 text-xs font-semibold text-foreground"
                               >
-                                <option value="likert">Scarile Likert</option>
+                                <option value="likert">Scările Likert</option>
                                 <option value="statement_score_set">Set de afirmații</option>
                               </select>
                               <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75 select-none cursor-pointer">
@@ -799,7 +920,7 @@ export function QuestionnairesWorkspace() {
                                   onClick={() => handleAddStatement(sIndex, qIndex)}
                                   className="text-[11px] font-bold text-burgundy hover:underline"
                                 >
-                                  + Adaugă Afirmație
+                                  + Adaugă afirmație
                                 </button>
                               </div>
 
@@ -842,7 +963,7 @@ export function QuestionnairesWorkspace() {
           <div className="rounded-2xl border border-[var(--border)] bg-surface p-10 text-center shadow-sm">
             <p className="text-lg font-bold text-foreground">Catalog gol</p>
             <p className="mt-2 text-sm leading-6 text-foreground/60">
-              Faceți click pe Nou.
+              Apasă pe Nou.
             </p>
           </div>
         )}
@@ -855,10 +976,10 @@ export function QuestionnairesWorkspace() {
             onSubmit={handleAddQuestionnaire}
             className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-xl space-y-4"
           >
-            <h3 className="text-lg font-bold text-foreground">Adaugă Chestionar Nou</h3>
+            <h3 className="text-lg font-bold text-foreground">Adaugă chestionar nou</h3>
             
             <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Cod Unic (Slug / Categorie)</label>
+              <label className="text-xs font-bold text-foreground/60">Cod unic (slug / categorie)</label>
               <div className="flex gap-2">
                 <select
                   value={newKey}
@@ -929,7 +1050,7 @@ export function QuestionnairesWorkspace() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Audiență Target</label>
+              <label className="text-xs font-bold text-foreground/60">Audiență țintă</label>
               <select
                 value={newAudience}
                 onChange={(e) => setNewAudience(e.target.value as "leadership" | "team" | "participant")}
