@@ -38,10 +38,12 @@ export function QuestionnairesWorkspace() {
   const [isCatalogLoading, setIsCatalogLoading] = useState<boolean>(false);
   const [isDefinitionLoading, setIsDefinitionLoading] = useState<boolean>(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [isDirty, setIsDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedKeyRef = useRef<string | null>(null);
   const currentDefinitionRef = useRef<QuestionnaireDefinition | null>(null);
+  const persistedDefinitionRef = useRef<QuestionnaireDefinition | null>(null);
   const definitionRequestRef = useRef(0);
   const saveRequestRef = useRef(0);
 
@@ -121,8 +123,11 @@ export function QuestionnairesWorkspace() {
         const def = await getQuestionnaireDefinition(`${selectedKey}@${selectedVersion}`);
         if (definitionRequestRef.current !== requestId) return;
         currentDefinitionRef.current = def;
+        persistedDefinitionRef.current = def;
         setCurrentDefinition(def);
         setSaveState("idle");
+        setIsDirty(false);
+        setSaveError(null);
       } finally {
         if (definitionRequestRef.current === requestId) {
           setIsDefinitionLoading(false);
@@ -132,19 +137,12 @@ export function QuestionnairesWorkspace() {
     void fetchDefinition();
   }, [selectedKey, selectedVersion]);
 
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
-    };
-  }, []);
-
-  const queueSave = (updatedDef: QuestionnaireDefinition) => {
-    setSaveState("saving");
-
+  const applyDefinitionDraft = (updatedDef: QuestionnaireDefinition) => {
     setCurrentDefinition(updatedDef);
     currentDefinitionRef.current = updatedDef;
+    setIsDirty(true);
+    setSaveState("idle");
+    setSaveError(null);
     setStubs((previousStubs) =>
       previousStubs.map((stub) =>
         stub.id === updatedDef.key && (stub.version ?? 1) === updatedDef.version
@@ -158,41 +156,97 @@ export function QuestionnairesWorkspace() {
           : stub,
       ),
     );
+  };
 
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-    }
-
-    saveTimerRef.current = setTimeout(() => {
-      const requestId = saveRequestRef.current + 1;
-      saveRequestRef.current = requestId;
-      void updateQuestionnaireDefinitionOnServer(
-        updatedDef.key,
+  const handleSaveDraft = async () => {
+    const draft = currentDefinitionRef.current;
+    if (!draft || saveState === "saving" || !isDirty) return;
+    const requestId = saveRequestRef.current + 1;
+    saveRequestRef.current = requestId;
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      const saved = await updateQuestionnaireDefinitionOnServer(
+        draft.key,
         {
-          title: updatedDef.title,
-          description: updatedDef.description,
-          schema: updatedDef.schema,
+          title: draft.title,
+          description: draft.description,
+          schema: draft.schema,
         },
-        updatedDef.version,
-      )
-        .then(() => {
-          if (saveRequestRef.current === requestId) {
-            setSaveState("saved");
-          }
-        })
-        .catch((e) => {
-          if (saveRequestRef.current === requestId) {
-            setSaveState("error");
-          }
-          alert((e as Error).message ?? "Eroare la salvarea chestionarului.");
-        });
-    }, 450);
+        draft.version,
+      );
+      if (saveRequestRef.current !== requestId) return;
+      currentDefinitionRef.current = saved;
+      persistedDefinitionRef.current = saved;
+      setCurrentDefinition(saved);
+      setIsDirty(false);
+      setSaveState("saved");
+      setStubs((previousStubs) =>
+        previousStubs.map((stub) =>
+          stub.id === saved.key && (stub.version ?? 1) === saved.version
+            ? {
+                ...stub,
+                name: saved.title,
+                description: saved.description,
+                audience: saved.schema.audience ?? stub.audience,
+                estimatedItems: estimateQuestionnaireItems(saved),
+              }
+            : stub,
+        ),
+      );
+    } catch (error) {
+      if (saveRequestRef.current === requestId) {
+        setSaveState("error");
+        setSaveError(error instanceof Error ? error.message : "Chestionarul nu a putut fi salvat.");
+      }
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    const persisted = persistedDefinitionRef.current;
+    if (!persisted) return;
+    currentDefinitionRef.current = persisted;
+    setCurrentDefinition(persisted);
+    setIsDirty(false);
+    setSaveState("idle");
+    setSaveError(null);
+    setStubs((previousStubs) =>
+      previousStubs.map((stub) =>
+        stub.id === persisted.key && (stub.version ?? 1) === persisted.version
+          ? {
+              ...stub,
+              name: persisted.title,
+              description: persisted.description,
+              audience: persisted.schema.audience ?? stub.audience,
+              estimatedItems: estimateQuestionnaireItems(persisted),
+            }
+          : stub,
+      ),
+    );
+  };
+
+  const canDiscardDraftForNavigation = () => {
+    if (!isDirty || saveState === "saving") return true;
+    return window.confirm("Ai modificări nesalvate. Vrei să le pierzi și să schimbi chestionarul?");
+  };
+
+  const handleSelectDefinition = (key: string, version: number) => {
+    if (key === selectedKey && version === selectedVersion) return;
+    if (!canDiscardDraftForNavigation()) return;
+    setSelectedKey(key);
+    setSelectedVersion(version);
+  };
+
+  const handleSelectVersion = (version: number) => {
+    if (version === selectedVersion) return;
+    if (!canDiscardDraftForNavigation()) return;
+    setSelectedVersion(version);
   };
 
   const updateDefinitionDraft = (updater: (current: QuestionnaireDefinition) => QuestionnaireDefinition) => {
     const current = currentDefinitionRef.current;
     if (!current) return;
-    queueSave(updater(current));
+    applyDefinitionDraft(updater(current));
   };
 
   const handleSaveMetadata = (
@@ -255,6 +309,7 @@ export function QuestionnairesWorkspace() {
       } else {
         setSelectedKey(null);
         currentDefinitionRef.current = null;
+        persistedDefinitionRef.current = null;
         setCurrentDefinition(null);
         setAvailableVersions([]);
       }
@@ -541,7 +596,9 @@ export function QuestionnairesWorkspace() {
         ? "Salvat"
         : saveState === "error"
           ? "Eroare la salvare"
-          : null;
+          : isDirty
+            ? "Modificări nesalvate"
+            : null;
 
   return (
     <div className="space-y-6">
@@ -567,10 +624,7 @@ export function QuestionnairesWorkspace() {
               return (
               <button
                 key={`${stub.id}-${stub.version ?? "fără-versiune"}`}
-                onClick={() => {
-                  setSelectedKey(stub.id);
-                  setSelectedVersion(stub.version ?? 1);
-                }}
+                onClick={() => handleSelectDefinition(stub.id, stub.version ?? 1)}
                 className={`min-w-[16rem] max-w-[18rem] text-left p-3 rounded-xl border transition-all ${
                   selectedKey === stub.id && selectedVersion === (stub.version ?? 1)
                     ? "bg-burgundy/10 border-burgundy/40 text-foreground"
@@ -629,6 +683,8 @@ export function QuestionnairesWorkspace() {
                       className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
                         saveState === "error"
                           ? "border-[#890505]/35 bg-[#890505]/10 text-[#890505] dark:border-[#e35f5f]/45 dark:bg-[#890505]/22 dark:text-[#e35f5f]"
+                          : isDirty
+                            ? "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300"
                           : "border-success/25 bg-success/12 text-success-ink"
                       }`}
                     >
@@ -695,7 +751,7 @@ export function QuestionnairesWorkspace() {
                   <span className="block text-xs font-bold uppercase tracking-wider text-foreground/50">Versiune</span>
                   <select
                     value={selectedVersion}
-                    onChange={(e) => setSelectedVersion(Number(e.target.value))}
+                    onChange={(e) => handleSelectVersion(Number(e.target.value))}
                     className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground xl:w-48"
                   >
                     {availableVersions.map((v) => (
@@ -705,6 +761,29 @@ export function QuestionnairesWorkspace() {
                     ))}
                   </select>
                 </label>
+                <div className="flex flex-wrap gap-2 xl:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveDraft()}
+                    disabled={!isDirty || isSaving || isDefinitionLoading}
+                    className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {isSaving ? "Se salvează..." : "Salvează modificările"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDiscardDraft}
+                    disabled={!isDirty || isSaving || isDefinitionLoading}
+                    className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Revino la ultima versiune salvată
+                  </button>
+                </div>
+                {saveError ? (
+                  <p className="max-w-xs text-xs font-semibold leading-5 text-[#890505] dark:text-[#e35f5f]">
+                    {saveError}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2 xl:justify-end">
                   <button
                     onClick={handleCreateNewVersion}
