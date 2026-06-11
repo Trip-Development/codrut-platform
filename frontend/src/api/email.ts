@@ -235,9 +235,9 @@ export type CampaignOpsSummary = {
 
 export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
   return [
-    { id: "assessment-invites", name: "Invitatii assessment", lane: "transactional" },
+    { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },
     { id: "assessment-reminders", name: "Remindere assessment", lane: "transactional" },
-    { id: "video-campaigns", name: "Campaign video links", lane: "campaign" },
+    { id: "video-campaigns", name: "Campanii cu link video", lane: "campaign" },
   ];
 }
 

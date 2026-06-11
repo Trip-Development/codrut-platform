@@ -67,7 +67,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
       return {
         state: "not_found",
         token,
-        message: "Nu am gasit o invitatie activa pentru acest link.",
+        message: "Nu am găsit o invitație activă pentru acest link.",
       };
     }
 
@@ -84,7 +84,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
     return {
       state: "not_found",
       token,
-      message: "Nu am gasit o invitatie activa pentru acest link.",
+      message: "Nu am găsit o invitație activă pentru acest link.",
     };
   }
 
@@ -106,7 +106,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
           detail: "Răspuns pentru echipa din care faci parte.",
           href: "/participant/questionnaires/lencioni?assignmentId=11111111-1111-4111-8111-111111111111",
           assignmentId: "11111111-1111-4111-8111-111111111111",
-          targetLabel: "Echipa Operational",
+          targetLabel: "Echipa operațională",
           estimatedMinutes: 12,
           questionnaireKey: "lencioni",
         },
@@ -114,7 +114,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
           id: "boss-360",
           title: "360 pentru manager",
           status: "in_progress",
-          detail: "Feedback confidential pentru persoana catre care raportezi.",
+          detail: "Feedback confidențial pentru persoana către care raportezi.",
           href: "/participant/questionnaires/boss_360?assignmentId=22222222-2222-4222-8222-222222222222",
           assignmentId: "22222222-2222-4222-8222-222222222222",
           targetLabel: "Manager direct",
