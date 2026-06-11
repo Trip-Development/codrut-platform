@@ -130,7 +130,7 @@ def test_distress_drivers_english_definition_keeps_driver_scoring_contract() -> 
     assert first_set["statements"][0]["scoring"]["driver"] == "be_strong"
 
 
-def test_boss_360_definition_is_icare_form_complete_without_scoring_metadata() -> None:
+def test_boss_360_definition_is_icare_form_complete_with_section_scoring() -> None:
     definition = get_approved_questionnaire_definition(QuestionnaireKey.boss_360)
     questions = definition.schema["sections"][0]["questions"]
     statements = [
@@ -149,7 +149,14 @@ def test_boss_360_definition_is_icare_form_complete_without_scoring_metadata() -
         for question in section["questions"]
     }
     assert question_types == {"statement_score_set"}
-    assert "scoring" not in definition.schema
+    assert definition.schema["scoring"] == {
+        "method": "average_statement_scores_by_section",
+        "scale_min": 1,
+        "scale_max": 4,
+        "score_min": 0,
+        "score_unit": "percent",
+        "primary_result": "lowest_dimension",
+    }
 
 
 def test_boss_360_english_definition_uses_english_icare_copy() -> None:

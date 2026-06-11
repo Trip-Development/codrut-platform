@@ -234,8 +234,10 @@ export type CompanyReportAggregate = {
   completion_rate: number;
   lencioni_count: number;
   driver_count: number;
+  boss_360_count: number;
   lencioni_averages: ReportAverage[];
   driver_averages: ReportAverage[];
+  boss_360_averages: ReportAverage[];
   results: CompanyScoringResult[];
 };
 
@@ -325,8 +327,10 @@ export async function getCompanyReportAggregate(
     completion_rate: 0,
     lencioni_count: 0,
     driver_count: 0,
+    boss_360_count: 0,
     lencioni_averages: [],
     driver_averages: [],
+    boss_360_averages: [],
     results: [],
   };
 

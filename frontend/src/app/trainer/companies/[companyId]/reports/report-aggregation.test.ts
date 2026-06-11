@@ -40,6 +40,7 @@ describe("buildReportAggregation", () => {
       assignment("old", "lencioni", "scored", "2026-06-10T09:00:00Z"),
       assignment("new", "lencioni", "scored", "2026-06-11T09:00:00Z"),
       assignment("driver", "distress_drivers", "submitted", "2026-06-09T09:00:00Z"),
+      assignment("feedback", "boss_360", "scored", "2026-06-11T10:00:00Z"),
       assignment("pending", "lencioni", "assigned", null),
     ];
     const results = new Map<string, ScoringResultRecord | null>([
@@ -73,14 +74,24 @@ describe("buildReportAggregation", () => {
           please_people: 0,
         }),
       ],
+      [
+        "feedback",
+        result("feedback", {
+          inspiring: { score: 75 },
+          create_trust: { score: 80 },
+          awareness: { score: 65 },
+          results: { score: 90 },
+          empowerment: { score: 85 },
+        }),
+      ],
     ]);
 
     const aggregation = buildReportAggregation(assignments, results);
 
-    expect(aggregation.totalAssigned).toBe(4);
-    expect(aggregation.totalCompleted).toBe(3);
-    expect(aggregation.completionRate).toBe(75);
-    expect(aggregation.reportableAssignments.map((item) => item.id)).toEqual(["new", "old", "driver"]);
+    expect(aggregation.totalAssigned).toBe(5);
+    expect(aggregation.totalCompleted).toBe(4);
+    expect(aggregation.completionRate).toBe(80);
+    expect(aggregation.reportableAssignments.map((item) => item.id)).toEqual(["feedback", "new", "old", "driver"]);
     expect(aggregation.lencioniCount).toBe(2);
     expect(aggregation.lencioniAverages.find((item) => item.id === "absence_of_trust")).toMatchObject({
       avg: 7.5,
@@ -91,6 +102,10 @@ describe("buildReportAggregation", () => {
     expect(aggregation.driverCount).toBe(1);
     expect(aggregation.driverAverages.find((item) => item.id === "hurry_up")).toMatchObject({
       avg: 75,
+    });
+    expect(aggregation.boss360Count).toBe(1);
+    expect(aggregation.boss360Averages.find((item) => item.id === "awareness")).toMatchObject({
+      avg: 65,
     });
   });
 

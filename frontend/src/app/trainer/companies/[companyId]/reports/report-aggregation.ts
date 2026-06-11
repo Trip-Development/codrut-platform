@@ -17,7 +17,16 @@ export const driverLabels: Record<string, string> = {
   please_people: "Mulțumește-i pe alții (Please People)",
 };
 
+export const boss360Labels: Record<string, string> = {
+  inspiring: "Inspiring",
+  create_trust: "Construirea încrederii",
+  awareness: "Awareness",
+  results: "Results",
+  empowerment: "Empowerment",
+};
+
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
+const boss360Keys = new Set(["boss_360", "boss_360_en", "icare"]);
 
 export type ReportAverage = {
   id: string;
@@ -29,8 +38,10 @@ export type ReportAggregation = {
   reportableAssignments: CompanyAssignment[];
   lencioniCount: number;
   driverCount: number;
+  boss360Count: number;
   lencioniAverages: ReportAverage[];
   driverAverages: ReportAverage[];
+  boss360Averages: ReportAverage[];
   totalAssigned: number;
   totalCompleted: number;
   completionRate: number;
@@ -46,8 +57,10 @@ export function buildReportAggregation(
 
   const lencioniSums = zeroRecord(lencioniLabels);
   const driverSums = zeroRecord(driverLabels);
+  const boss360Sums = zeroRecord(boss360Labels);
   let lencioniCount = 0;
   let driverCount = 0;
+  let boss360Count = 0;
 
   for (const assignment of reportableAssignments) {
     const result = resultMap.get(assignment.id);
@@ -65,6 +78,13 @@ export function buildReportAggregation(
       for (const key of Object.keys(driverSums)) {
         driverSums[key] += Number(result.scores[key] || 0);
       }
+    } else if (boss360Keys.has(assignment.questionnaire_key)) {
+      boss360Count += 1;
+      for (const key of Object.keys(boss360Sums)) {
+        const value = result.scores[key];
+        const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
+        boss360Sums[key] += Number(score || 0);
+      }
     }
   }
 
@@ -75,8 +95,10 @@ export function buildReportAggregation(
     reportableAssignments,
     lencioniCount,
     driverCount,
+    boss360Count,
     lencioniAverages: averagesFromSums(lencioniSums, lencioniLabels, lencioniCount),
     driverAverages: averagesFromSums(driverSums, driverLabels, driverCount),
+    boss360Averages: averagesFromSums(boss360Sums, boss360Labels, boss360Count),
     totalAssigned,
     totalCompleted,
     completionRate: totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0,

@@ -3,7 +3,6 @@ import uuid
 import pytest
 
 from codrut.core.database import SessionLocal, engine
-from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
@@ -122,17 +121,33 @@ async def test_compute_and_save_score_distress_drivers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_scoring_unsupported_key() -> None:
+async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None:
     repo = FakeScoringRepository()
     service = ScoringService(session=None)  # type: ignore
     service.repository = repo
 
-    with pytest.raises(DomainError, match="has no scoring metadata"):
-        await service.compute_and_save_score(
-            assignment_id=uuid.uuid4(),
-            questionnaire_key=QuestionnaireKey.boss_360,
-            answers={},
-        )
+    assignment_id = uuid.uuid4()
+
+    from codrut.modules.forms.definitions.catalog import BOSS_360_DEFINITION
+
+    answers = {}
+    for section in BOSS_360_DEFINITION.schema.get("sections", []):
+        for question in section.get("questions", []):
+            for statement in question.get("statements", []):
+                score = 1 if section["id"] == "awareness" else 4
+                answers[f"{question['id']}:{statement['id']}"] = score
+
+    result = await service.compute_and_save_score(
+        assignment_id=assignment_id,
+        questionnaire_key=QuestionnaireKey.boss_360,
+        answers=answers,
+    )
+
+    assert result.assignment_id == assignment_id
+    assert result.scores["inspiring"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
+    assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 12}
+    assert result.scores["awareness"] == {"score": 25.0, "raw_avg": 1.0, "answered": 9}
+    assert result.primary_result == "awareness"
 
 
 async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results() -> None:
@@ -199,6 +214,16 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.submitted,
             )
+            boss_360_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="boss_360",
+                target_type=AssignmentTargetType.person,
+                target_person_id=participant.id,
+                status=AssignmentStatus.scored,
+            )
             other_company_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=other_company.id,
@@ -221,6 +246,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                     lencioni_assignment,
                     driver_assignment,
                     submitted_without_score,
+                    boss_360_assignment,
                     other_company_assignment,
                     other_project_assignment,
                 ]
@@ -252,6 +278,17 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                         },
                     ),
                     ScoringResult(
+                        assignment_id=boss_360_assignment.id,
+                        primary_result="awareness",
+                        scores={
+                            "inspiring": {"score": 80},
+                            "create_trust": {"score": 75},
+                            "awareness": {"score": 60},
+                            "results": {"score": 90},
+                            "empowerment": {"score": 85},
+                        },
+                    ),
+                    ScoringResult(
                         assignment_id=other_company_assignment.id,
                         primary_result="fear_of_conflict",
                         scores={
@@ -279,28 +316,32 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
 
             aggregate = await ScoringService(session).get_company_report_aggregate(company.id)
 
-            assert aggregate.total_assigned == 4
-            assert aggregate.total_completed == 4
+            assert aggregate.total_assigned == 5
+            assert aggregate.total_completed == 5
             assert aggregate.completion_rate == 100
             assert aggregate.lencioni_count == 2
             assert aggregate.driver_count == 1
+            assert aggregate.boss_360_count == 1
             assert {result.assignment_id for result in aggregate.results} == {
                 lencioni_assignment.id,
                 driver_assignment.id,
+                boss_360_assignment.id,
                 other_project_assignment.id,
             }
             assert aggregate.lencioni_averages[0].avg == 10.5
             assert aggregate.driver_averages[1].avg == 20
+            assert aggregate.boss_360_averages[0].avg == 80
 
             project_aggregate = await ScoringService(session).get_company_report_aggregate(
                 company.id,
                 project.id,
             )
 
-            assert project_aggregate.total_assigned == 3
+            assert project_aggregate.total_assigned == 4
             assert {result.assignment_id for result in project_aggregate.results} == {
                 lencioni_assignment.id,
                 driver_assignment.id,
+                boss_360_assignment.id,
             }
 
             await session.rollback()
