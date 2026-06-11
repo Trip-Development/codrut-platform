@@ -329,7 +329,7 @@ describe("buildInvitationRows", () => {
     expect(screen.getAllByText("Ana Pop").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("lencioni")).toHaveLength(2);
 
-    fireEvent.click(screen.getByLabelText(/Ana Pop/));
+    fireEvent.click(screen.getByLabelText("Selectează asignarea pentru Ana Pop"));
     fireEvent.click(screen.getByRole("button", { name: "Salvează asignările bifate (1)" }));
 
     await waitFor(() => {
@@ -353,7 +353,7 @@ describe("buildInvitationRows", () => {
     });
     vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
     vi.mocked(sendParticipantInvitations).mockResolvedValue({
-      total: 2,
+      total: 1,
       emails_sent: 0,
       emails_failed: 0,
       links_generated: 1,
@@ -381,12 +381,16 @@ describe("buildInvitationRows", () => {
       />,
     );
 
+    fireEvent.click(screen.getByLabelText("Selectează Ana Pop"));
     fireEvent.click(screen.getByRole("button", { name: "Generează linkuri securizate" }));
 
     await waitFor(() => {
-      expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", { mode: "secure_links" });
+      expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", {
+        mode: "secure_links",
+        participantIds: ["ana"],
+      });
     });
-    expect(await screen.findByText("1/2 linkuri securizate generate.")).toBeTruthy();
+    expect(await screen.findByText("1/1 linkuri securizate generate pentru persoanele selectate.")).toBeTruthy();
 
     const copyButtons = await screen.findAllByRole("button", { name: "Copiază link" });
     fireEvent.click(copyButtons.at(-1)!);
