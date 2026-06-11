@@ -67,6 +67,8 @@ Expected behavior:
 - `Generează linkuri securizate` creates links without sending email.
 - `Trimite invitații email` sends through the configured provider; in local dev,
   verify delivery in Mailpit at <http://localhost:8025>.
+- Reports aggregate both Romanian and English questionnaire keys into the same
+  Lencioni, Distress Drivers, and 360 iCARE buckets.
 
 This path is covered by `test_two_person_roster_generates_manager_member_default_plan`
 in `backend/tests/test_company_service.py`.
