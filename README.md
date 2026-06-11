@@ -73,6 +73,7 @@ Use the Docker Compose dev stack as the source of truth:
 ```sh
 docker compose -f compose.yaml -f compose.dev.yaml up -d
 docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest
+docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run python -m codrut.tools.smoke_mailpit
 docker compose -f compose.yaml -f compose.dev.yaml exec -T frontend pnpm typecheck
 docker compose -f compose.yaml -f compose.dev.yaml exec -T frontend pnpm lint
 docker compose -f compose.yaml -f compose.dev.yaml exec -T frontend pnpm build
