@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -116,3 +117,15 @@ class ParticipantInviteBatchResponse(BaseModel):
     emails_sent: int
     emails_failed: int
     links_generated: int
+
+
+class ParticipantInvitationStatusResponse(BaseModel):
+    participant_id: UUID
+    latest_delivery_mode: Literal["email", "secure_links"] | None = None
+    latest_email_status: str | None = None
+    latest_email_error: str | None = None
+    last_sent_at: datetime | None = None
+    email_send_count: int = 0
+    has_active_secure_link: bool = False
+    active_secure_link_expires_at: datetime | None = None
+    active_secure_link_url: str | None = None

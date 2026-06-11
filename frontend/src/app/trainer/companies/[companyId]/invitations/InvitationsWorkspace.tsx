@@ -7,6 +7,7 @@ import {
   sendParticipantInvitations,
   type CompanyAssignment,
   type CompanyParticipant,
+  type ParticipantInvitationStatus,
   type ParticipantInvitationMode,
   type RosterInviteResult,
 } from "@/api/companies";
@@ -16,6 +17,7 @@ type InvitationsWorkspaceProps = {
   companyName: string;
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
+  invitationStatuses: ParticipantInvitationStatus[];
 };
 
 type ParticipantInviteRow = {
@@ -27,6 +29,7 @@ type ParticipantInviteRow = {
   signedUp: boolean;
   deliveryLabel: string;
   deliveryTone: "default" | "success" | "warning" | "danger";
+  secureLinkUrl: string | null;
   nextAction: string;
 };
 
@@ -36,9 +39,13 @@ const activeInviteStatuses = new Set(["invited", "started", "submitted", "valida
 export function buildInvitationRows(
   participants: CompanyParticipant[],
   assignments: CompanyAssignment[],
+  invitationStatuses: ParticipantInvitationStatus[],
   resultsByParticipant: Map<string, RosterInviteResult>,
 ): ParticipantInviteRow[] {
   const assignmentsByParticipant = new Map<string, CompanyAssignment[]>();
+  const statusByParticipant = new Map(
+    invitationStatuses.map((status) => [status.participant_id, status]),
+  );
 
   for (const assignment of assignments) {
     assignmentsByParticipant.set(assignment.respondent_profile_id, [
@@ -49,6 +56,7 @@ export function buildInvitationRows(
 
   return participants.map((participant) => {
     const participantAssignments = assignmentsByParticipant.get(participant.id) ?? [];
+    const persistedStatus = statusByParticipant.get(participant.id);
     const result = resultsByParticipant.get(participant.id);
     const completedTasks = participantAssignments.filter((assignment) => completedStatuses.has(assignment.status)).length;
     const totalTasks = participantAssignments.length;
@@ -56,6 +64,7 @@ export function buildInvitationRows(
 
     let deliveryLabel = "Fără asignări";
     let deliveryTone: ParticipantInviteRow["deliveryTone"] = "default";
+    const secureLinkUrl = result?.invite_url ?? persistedStatus?.active_secure_link_url ?? null;
 
     if (result?.error) {
       deliveryLabel = "Eroare trimitere";
@@ -65,6 +74,18 @@ export function buildInvitationRows(
       deliveryTone = "success";
     } else if (result?.delivery_mode === "secure_links") {
       deliveryLabel = "Link securizat generat";
+      deliveryTone = "success";
+    } else if (persistedStatus?.latest_email_status === "failed" || persistedStatus?.latest_email_status === "bounced") {
+      deliveryLabel = "Eroare trimitere";
+      deliveryTone = "danger";
+    } else if (persistedStatus?.latest_email_status === "queued") {
+      deliveryLabel = "Email în coadă";
+      deliveryTone = "warning";
+    } else if (persistedStatus?.latest_email_status) {
+      deliveryLabel = "Email trimis";
+      deliveryTone = "success";
+    } else if (persistedStatus?.has_active_secure_link) {
+      deliveryLabel = "Link securizat activ";
       deliveryTone = "success";
     } else if (participantAssignments.some((assignment) => activeInviteStatuses.has(assignment.status))) {
       deliveryLabel = "Invitație activă";
@@ -93,6 +114,7 @@ export function buildInvitationRows(
       signedUp,
       deliveryLabel,
       deliveryTone,
+      secureLinkUrl,
       nextAction,
     };
   });
@@ -103,14 +125,16 @@ export function InvitationsWorkspace({
   companyName,
   participants,
   assignments,
+  invitationStatuses,
 }: InvitationsWorkspaceProps) {
   const [resultsByParticipant, setResultsByParticipant] = useState(new Map<string, RosterInviteResult>());
   const [message, setMessage] = useState<string | null>(null);
   const [sendingMode, setSendingMode] = useState<ParticipantInvitationMode | "resend" | null>(null);
+  const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
 
   const rows = useMemo(
-    () => buildInvitationRows(participants, assignments, resultsByParticipant),
-    [assignments, participants, resultsByParticipant],
+    () => buildInvitationRows(participants, assignments, invitationStatuses, resultsByParticipant),
+    [assignments, invitationStatuses, participants, resultsByParticipant],
   );
 
   const signedUpCount = rows.filter((row) => row.signedUp).length;
@@ -121,6 +145,7 @@ export function InvitationsWorkspace({
   async function handleSend(mode: ParticipantInvitationMode) {
     setSendingMode(mode);
     setMessage(null);
+    setCopiedParticipantId(null);
     try {
       const result = await sendParticipantInvitations(companyId, { mode });
       setResultsByParticipant((current) => {
@@ -145,6 +170,7 @@ export function InvitationsWorkspace({
   async function handleResend(participantId: string) {
     setSendingMode("resend");
     setMessage(null);
+    setCopiedParticipantId(null);
     try {
       const result = await resendParticipantInvitation(companyId, participantId);
       if (result) {
@@ -159,6 +185,17 @@ export function InvitationsWorkspace({
       setMessage(error instanceof Error ? error.message : "Invitația nu a putut fi retrimisă.");
     } finally {
       setSendingMode(null);
+    }
+  }
+
+  async function handleCopyLink(row: ParticipantInviteRow) {
+    if (!row.secureLinkUrl || typeof navigator === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(row.secureLinkUrl);
+      setCopiedParticipantId(row.participant.id);
+      setMessage(`Link securizat copiat pentru ${row.participant.full_name}.`);
+    } catch {
+      setMessage("Linkul nu a putut fi copiat automat. Copiază-l manual din browser.");
     }
   }
 
@@ -255,14 +292,25 @@ export function InvitationsWorkspace({
                     </td>
                     <td className="px-5 py-4 text-foreground/62">{row.nextAction}</td>
                     <td className="px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => void handleResend(row.participant.id)}
-                        disabled={sendingMode !== null || row.totalTasks === 0}
-                        className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        Retrimite
-                      </button>
+                      {row.secureLinkUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyLink(row)}
+                          disabled={sendingMode !== null}
+                          className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {copiedParticipantId === row.participant.id ? "Copiat" : "Copiază link"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleResend(row.participant.id)}
+                          disabled={sendingMode !== null || row.totalTasks === 0}
+                          className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          Retrimite
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

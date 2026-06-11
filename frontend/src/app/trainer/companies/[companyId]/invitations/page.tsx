@@ -16,6 +16,7 @@ export default async function CompanyInvitationsPage({
       companyName={company?.name ?? "Compania curentă"}
       participants={company?.participants ?? []}
       assignments={company?.assignments ?? []}
+      invitationStatuses={company?.invitationStatuses ?? []}
     />
   );
 }

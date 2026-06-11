@@ -16,6 +16,7 @@ from codrut.modules.assignments.models import (
     TeamType,
 )
 from codrut.modules.communications.email_provider import LocalEmailProvider
+from codrut.modules.communications.models import EmailSendStatus
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -618,6 +619,23 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
         invites = invite_result.scalars().all()
         assert len(invites) == 3
+
+        statuses = await service.list_participant_invitation_statuses(
+            trainer.id,
+            company.id,
+        )
+        statuses_by_participant = {status.participant_id: status for status in statuses}
+        assert len(statuses_by_participant) == 3
+        assert all(status.has_active_secure_link for status in statuses_by_participant.values())
+        assert all(
+            status.latest_email_status == EmailSendStatus.accepted
+            for status in statuses_by_participant.values()
+        )
+        assert all(status.email_send_count == 1 for status in statuses_by_participant.values())
+        assert all(
+            status.active_secure_link_url and "/invite/" in status.active_secure_link_url
+            for status in statuses_by_participant.values()
+        )
 
         identity_service = IdentityService(session)
         manager_invite = next(

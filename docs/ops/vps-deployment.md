@@ -41,6 +41,9 @@ refs or non-hotfix branches.
 `ENABLE_STAGING_DEPLOY` is set to `true`, and it can also be started manually
 with `workflow_dispatch`. It uses the `staging` GitHub Environment, so staging
 must have its own environment secrets before automatic deploys are enabled.
+Manual staging dispatch is guarded to `refs/heads/dev` by default; use the
+`allow_non_dev_ref=true` input only for an explicit test deployment from another
+branch.
 
 If staging shares the same VPS host as production, set these staging-only
 environment secrets so it does not overwrite production Compose state:
@@ -91,15 +94,18 @@ The deployment workflows separate build and deploy work:
 - `deploy-vps.yml` is the production caller. `deploy-staging.yml` is the staging
   caller.
 
-Backend and frontend images are tagged with the release commit SHA:
+Backend and frontend images are tagged with immutable `sha-<commit>` refs:
 
 ```text
-ghcr.io/<owner>/<repo>-backend:<sha>
-ghcr.io/<owner>/<repo>-frontend:<sha>
+ghcr.io/<owner>/<repo>-backend:sha-<sha>
+ghcr.io/<owner>/<repo>-frontend:sha-<sha>
 ```
 
 The VPS `.env` stores those SHA image refs in `BACKEND_IMAGE` and
 `FRONTEND_IMAGE`. It does not deploy `latest`.
+
+Production manual dispatch validates `refs/heads/prod` before any image build or
+push occurs. The reusable deploy workflow repeats that guard before SSH deploy.
 
 Required GitHub secrets for the `VPS Deployment` workflow:
 

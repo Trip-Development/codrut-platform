@@ -26,6 +26,7 @@ from codrut.modules.companies.schemas import (
     CompanyAccessCodeResponse,
     CompanyCreateRequest,
     ParticipantCreateRequest,
+    ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
     ReportingRelationshipImportResponse,
@@ -331,6 +332,11 @@ class CompanyService:
             invite_url = build_task_url(invite.token, settings)
 
             if mode == "secure_links":
+                now = datetime.now(UTC)
+                for assignment in assignments:
+                    if assignment.status == AssignmentStatus.assigned:
+                        assignment.status = AssignmentStatus.invited
+                    assignment.invited_at = assignment.invited_at or now
                 results.append(
                     RosterImportEmailResult(
                         participant_id=participant.id,
@@ -391,6 +397,95 @@ class CompanyService:
             ),
             links_generated=links_generated,
         )
+
+    async def list_participant_invitation_statuses(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+    ) -> list[ParticipantInvitationStatusResponse]:
+        from sqlalchemy import select
+
+        from codrut.core.config import get_settings
+        from codrut.modules.assignments.models import QuestionnaireAssignment
+        from codrut.modules.communications.models import EmailSend
+        from codrut.modules.communications.task_links import build_task_url
+        from codrut.modules.identity.models import AssignmentInvite
+
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+
+        participants = await self.repository.list_participants(company_id)
+        if not participants:
+            return []
+
+        participant_ids = {participant.id for participant in participants}
+
+        sends_result = await self.repository.session.execute(
+            select(EmailSend, QuestionnaireAssignment.respondent_profile_id)
+            .join(QuestionnaireAssignment, EmailSend.assignment_id == QuestionnaireAssignment.id)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id.in_(participant_ids))
+            .order_by(EmailSend.created_at.desc())
+        )
+
+        latest_send_by_participant: dict[UUID, EmailSend] = {}
+        send_count_by_participant: dict[UUID, int] = {}
+        for send, participant_id in sends_result.all():
+            send_count_by_participant[participant_id] = (
+                send_count_by_participant.get(participant_id, 0) + 1
+            )
+            latest_send_by_participant.setdefault(participant_id, send)
+
+        now = datetime.now(UTC)
+        invites_result = await self.repository.session.execute(
+            select(AssignmentInvite)
+            .where(AssignmentInvite.company_id == company_id)
+            .where(AssignmentInvite.respondent_profile_id.in_(participant_ids))
+            .where(AssignmentInvite.status == "active")
+            .where(AssignmentInvite.expires_at > now)
+            .order_by(AssignmentInvite.created_at.desc())
+        )
+
+        latest_invite_by_participant: dict[UUID, AssignmentInvite] = {}
+        for invite in invites_result.scalars().all():
+            latest_invite_by_participant.setdefault(invite.respondent_profile_id, invite)
+
+        statuses: list[ParticipantInvitationStatusResponse] = []
+        settings = get_settings()
+        for participant in participants:
+            latest_send = latest_send_by_participant.get(participant.id)
+            active_invite = latest_invite_by_participant.get(participant.id)
+            latest_delivery_mode: Literal["email", "secure_links"] | None = None
+            if latest_send is not None and (
+                active_invite is None or latest_send.created_at >= active_invite.created_at
+            ):
+                latest_delivery_mode = "email"
+            elif active_invite is not None:
+                latest_delivery_mode = "secure_links"
+
+            statuses.append(
+                ParticipantInvitationStatusResponse(
+                    participant_id=participant.id,
+                    latest_delivery_mode=latest_delivery_mode,
+                    latest_email_status=latest_send.status.value
+                    if latest_send is not None
+                    else None,
+                    latest_email_error=latest_send.error_details
+                    if latest_send is not None
+                    else None,
+                    last_sent_at=latest_send.created_at if latest_send is not None else None,
+                    email_send_count=send_count_by_participant.get(participant.id, 0),
+                    has_active_secure_link=active_invite is not None,
+                    active_secure_link_expires_at=active_invite.expires_at
+                    if active_invite is not None
+                    else None,
+                    active_secure_link_url=build_task_url(active_invite.token, settings)
+                    if active_invite is not None
+                    else None,
+                )
+            )
+
+        return statuses
 
     async def _ensure_default_assignments_for_participant(
         self,

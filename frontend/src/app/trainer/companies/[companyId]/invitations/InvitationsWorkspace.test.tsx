@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { CompanyAssignment, CompanyParticipant, RosterInviteResult } from "@/api/companies";
+import type {
+  CompanyAssignment,
+  CompanyParticipant,
+  ParticipantInvitationStatus,
+  RosterInviteResult,
+} from "@/api/companies";
 import { buildInvitationRows } from "./InvitationsWorkspace";
 
 const participants: CompanyParticipant[] = [
@@ -51,12 +56,26 @@ const assignments: CompanyAssignment[] = [
   },
 ];
 
+const invitationStatuses: ParticipantInvitationStatus[] = [
+  {
+    participant_id: "andrei",
+    latest_delivery_mode: "email",
+    latest_email_status: "accepted",
+    latest_email_error: null,
+    last_sent_at: "2026-06-11T12:00:00Z",
+    email_send_count: 1,
+    has_active_secure_link: true,
+    active_secure_link_expires_at: "2026-06-25T12:00:00Z",
+    active_secure_link_url: "http://localhost:3000/invite/andrei",
+  },
+];
+
 describe("buildInvitationRows", () => {
   it("summarizes delivery, signup, and task state per company participant", () => {
-    const rows = buildInvitationRows(participants, assignments, new Map());
+    const rows = buildInvitationRows(participants, assignments, invitationStatuses, new Map());
 
     expect(rows[0]).toMatchObject({
-      deliveryLabel: "Invitație activă",
+      deliveryLabel: "Email trimis",
       signedUp: true,
       completionLabel: "0/1",
     });
@@ -78,11 +97,38 @@ describe("buildInvitationRows", () => {
       invite_url: null,
     };
 
-    const rows = buildInvitationRows(participants, assignments, new Map([["ana", result]]));
+    const rows = buildInvitationRows(participants, assignments, invitationStatuses, new Map([["ana", result]]));
 
     expect(rows[1]).toMatchObject({
       deliveryLabel: "Email trimis",
       deliveryTone: "success",
+    });
+  });
+
+  it("uses persisted secure-link status when no email send exists", () => {
+    const rows = buildInvitationRows(
+      participants,
+      assignments,
+      [
+        {
+          participant_id: "ana",
+          latest_delivery_mode: "secure_links",
+          latest_email_status: null,
+          latest_email_error: null,
+          last_sent_at: null,
+          email_send_count: 0,
+          has_active_secure_link: true,
+          active_secure_link_expires_at: "2026-06-25T12:00:00Z",
+          active_secure_link_url: "http://localhost:3000/invite/ana",
+        },
+      ],
+      new Map(),
+    );
+
+    expect(rows[1]).toMatchObject({
+      deliveryLabel: "Link securizat activ",
+      deliveryTone: "success",
+      secureLinkUrl: "http://localhost:3000/invite/ana",
     });
   });
 });
