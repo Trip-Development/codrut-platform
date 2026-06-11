@@ -65,7 +65,7 @@ jobs:
 
   staging-promotion:
     name: policy / staging-promotion
-    if: github.base_ref == 'prod' && github.head_ref == 'dev'
+    if: github.base_ref == 'prod' && github.head_ref == 'dev' && vars.ENABLE_STAGING_DEPLOY == 'true'
     uses: ./.github/workflows/_staging-promotion-check.yml
     with:
       release_sha: ${{ github.event.pull_request.head.sha }}
