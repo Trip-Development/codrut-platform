@@ -181,7 +181,7 @@ describe("frontend API adapter stubs", () => {
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
     expect(questionnaires.map((definition) => definition.id)).toEqual(
-      expect.arrayContaining(["icare", "boss_360", "pcm_baseline", "phase"]),
+      expect.arrayContaining(["icare", "boss_360", "pcm_base", "phase"]),
     );
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",

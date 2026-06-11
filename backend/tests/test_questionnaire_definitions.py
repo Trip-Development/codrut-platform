@@ -74,10 +74,14 @@ def test_distress_driver_statement_mapping_matches_source_table() -> None:
 def test_pcm_definitions_use_the_six_process_communication_types() -> None:
     base = get_approved_questionnaire_definition(QuestionnaireKey.pcm_base)
     phase = get_approved_questionnaire_definition(QuestionnaireKey.phase)
+    base_questions = base.schema["sections"][0]["questions"]
 
-    assert base.schema["sections"][0]["questions"][0]["label"] == "Care este baza ta PCM?"
+    assert [question["label"] for question in base_questions] == [
+        "Care este baza ta PCM?",
+        "Care este faza ta PCM?",
+    ]
     assert phase.schema["sections"][0]["questions"][0]["label"] == "Care este faza ta PCM?"
-    assert {option["value"] for option in base.schema["sections"][0]["questions"][0]["scale"]} == {
+    assert {option["value"] for option in base_questions[0]["scale"]} == {
         "harmonizer",
         "thinker",
         "persister",
@@ -85,7 +89,15 @@ def test_pcm_definitions_use_the_six_process_communication_types() -> None:
         "rebel",
         "promoter",
     }
-    assert base.schema["sections"][0]["questions"][0]["type"] == "single_choice"
+    assert {option["value"] for option in base_questions[1]["scale"]} == {
+        "harmonizer",
+        "thinker",
+        "persister",
+        "imaginer",
+        "rebel",
+        "promoter",
+    }
+    assert {question["type"] for question in base_questions} == {"single_choice"}
     assert phase.schema["sections"][0]["questions"][0]["type"] == "single_choice"
 
 

@@ -256,14 +256,14 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
 PCM_BASE_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.pcm_base,
     version=1,
-    title="Baza ta PCM",
-    description="Alege tipul PCM care descrie cel mai bine baza ta de personalitate.",
+    title="Baza și faza ta PCM",
+    description="Alege baza și faza PCM care descriu profilul tău curent.",
     schema={
         "schema_version": "questionnaire.v1",
         "response": {"mode": "profile_onboarding", "target": "self"},
         "instructions": (
-            "Alege baza PCM identificată pentru tine. Dacă nu ești sigur, selectează "
-            "varianta confirmată în discuția cu trainerul."
+            "Alege baza PCM și faza PCM identificate pentru tine. Dacă nu ești sigur, "
+            "selectează varianta confirmată în discuția cu trainerul."
         ),
         "sections": [
             {
@@ -277,7 +277,15 @@ PCM_BASE_DEFINITION = ApprovedQuestionnaireDefinition(
                         "label": "Care este baza ta PCM?",
                         "required": True,
                         "scale": PCM_TYPES,
-                    }
+                    },
+                    {
+                        "id": "pcm_phase",
+                        "code": "PCM-PHASE",
+                        "type": "single_choice",
+                        "label": "Care este faza ta PCM?",
+                        "required": True,
+                        "scale": PCM_TYPES,
+                    },
                 ],
             }
         ],
