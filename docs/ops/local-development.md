@@ -76,6 +76,14 @@ Expected behavior:
 This path is covered by `test_two_person_roster_generates_manager_member_default_plan`
 in `backend/tests/test_company_service.py`.
 
+Run the transactional email smoke from the backend container to prove the
+configured provider can send to Mailpit and that Mailpit stores the delivered
+plain-text and HTML bodies:
+
+```sh
+docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run python -m codrut.tools.smoke_mailpit
+```
+
 ## Demo Fallback
 
 `CODRUT_FRONTEND_DEMO_FALLBACK=true` is only for intentionally browsing seeded prototype/demo surfaces. Keep it `false` when checking whether frontend routes are genuinely connected to backend auth and data.
