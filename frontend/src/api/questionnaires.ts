@@ -101,8 +101,8 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
 const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   {
     id: "lencioni",
-    name: "Lencioni team assessment",
-    description: "15 item team assessment with five dysfunction scoring groups.",
+    name: "Chestionar de evaluare a echipei",
+    description: "15 itemi pentru evaluarea echipei pe cele cinci disfuncții Lencioni.",
     status: "active",
     version: 1,
     source: "docs/questionnaires/lencioni.pdf",
@@ -146,8 +146,8 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   },
   {
     id: "icare",
-    name: "ICARE leadership behaviors",
-    description: "48 behavior statements grouped by ICARE attributes and abilities.",
+    name: "Comportamente de leadership ICARE",
+    description: "48 de afirmații comportamentale grupate pe atributele și abilitățile ICARE.",
     status: "active",
     version: 1,
     source: "docs/questionnaires/ICARE_scala.xlsx",
@@ -167,7 +167,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
   icare: {
     key: "icare",
     version: 1,
-    title: "ICARE leadership behaviors",
+    title: "Comportamente de leadership ICARE",
     description:
       "Evaluare comportamentală pe atributele ICARE. Versiune provizorie cu scală în 4 trepte, pregătită pentru ajustarea scalei finale.",
     schema: {
@@ -188,13 +188,13 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
       sections: [
         {
           id: "inspiring",
-          title: "Inspiring",
+          title: "Inspirație",
           questions: [
             {
               id: "icare_inspiring_developing_people",
               code: "ICARE-1.1",
               type: "statement_score_set",
-              label: "Developing people",
+              label: "Dezvoltarea oamenilor",
               required: true,
               instructions: "Dezvoltare continuă prin feedback constructiv, încurajare și follow-up.",
               scale: icareFourPointScale,
@@ -208,7 +208,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_inspiring_leading_by_example",
               code: "ICARE-1.2",
               type: "statement_score_set",
-              label: "Leading by example",
+              label: "Conducere prin exemplu",
               required: true,
               instructions: "Aliniere între valori, angajamente și comportamentul zilnic.",
               scale: icareFourPointScale,
@@ -222,7 +222,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_inspiring_engagement_environment",
               code: "ICARE-1.3",
               type: "statement_score_set",
-              label: "Creating an environment that drives engagement",
+              label: "Crearea unui mediu care stimulează implicarea",
               required: true,
               instructions: "Mediu sigur, energizant și orientat către contribuția fiecărui membru.",
               scale: icareFourPointScale,
@@ -236,13 +236,13 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         },
         {
           id: "create_trust",
-          title: "Create Trust",
+          title: "Construirea încrederii",
           questions: [
             {
               id: "icare_trust_collaboration",
               code: "ICARE-2.1",
               type: "statement_score_set",
-              label: "Advocate of collaboration",
+              label: "Promotor al colaborării",
               required: true,
               instructions: "Transparență, colaborare și prioritizarea interesului comun.",
               scale: icareFourPointScale,
@@ -256,7 +256,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_trust_inspired",
               code: "ICARE-2.2",
               type: "statement_score_set",
-              label: "Inspired",
+              label: "Inspirație împărtășită",
               required: true,
               instructions: "Sens, ambiție și angajament construite împreună cu echipa.",
               scale: icareFourPointScale,
@@ -270,7 +270,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_trust_reality",
               code: "ICARE-2.3",
               type: "statement_score_set",
-              label: "Anchored in reality",
+              label: "Ancorare în realitate",
               required: true,
               instructions: "Ascultare activă, informații relevante și realism onest.",
               scale: icareFourPointScale,
@@ -284,7 +284,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_trust_illuminating",
               code: "ICARE-2.4",
               type: "statement_score_set",
-              label: "Illuminating",
+              label: "Clarificare",
               required: true,
               instructions: "Claritate strategică în contexte complexe și incerte.",
               scale: icareFourPointScale,
@@ -298,13 +298,13 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         },
         {
           id: "awareness",
-          title: "Awareness",
+          title: "Conștientizare",
           questions: [
             {
               id: "icare_awareness_humility",
               code: "ICARE-3.1",
               type: "statement_score_set",
-              label: "Humility",
+              label: "Modestie",
               required: true,
               instructions: "Feedback, limite personale și integrarea perspectivelor diferite.",
               scale: icareFourPointScale,
@@ -318,7 +318,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_awareness_emotional_intelligence",
               code: "ICARE-3.2",
               type: "statement_score_set",
-              label: "Emotional and situational intelligence",
+              label: "Inteligență emoțională și situațională",
               required: true,
               instructions: "Autoreglare, interes autentic și adaptarea comunicării.",
               scale: icareFourPointScale,
@@ -332,7 +332,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_awareness_open_world",
               code: "ICARE-3.3",
               type: "statement_score_set",
-              label: "Open to the world",
+              label: "Deschidere către lume",
               required: true,
               instructions: "Curiozitate, benchmarkuri externe și facilitarea schimbării.",
               scale: icareFourPointScale,
@@ -346,13 +346,13 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         },
         {
           id: "results",
-          title: "Results",
+          title: "Rezultate",
           questions: [
             {
               id: "icare_results_ambitious",
               code: "ICARE-4.1",
               type: "statement_score_set",
-              label: "Openly ambitious for the company",
+              label: "Ambiție asumată pentru companie",
               required: true,
               instructions: "Inovație, asumarea riscului și învățare din performanță.",
               scale: icareFourPointScale,
@@ -366,7 +366,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_results_caring",
               code: "ICARE-4.2",
               type: "statement_score_set",
-              label: "Caring equally for employees and customers",
+              label: "Grijă egală pentru angajați și clienți",
               required: true,
               instructions: "Echilibru între performanță, bunăstarea echipei și standarde realiste.",
               scale: icareFourPointScale,
@@ -380,7 +380,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_results_agility",
               code: "ICARE-4.3",
               type: "statement_score_set",
-              label: "Entrepreneurial agility",
+              label: "Agilitate antreprenorială",
               required: true,
               instructions: "Testare rapidă, simplificare și conectarea rețelei externe la oportunități.",
               scale: icareFourPointScale,
@@ -394,13 +394,13 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         },
         {
           id: "empowerment",
-          title: "Empowerment",
+          title: "Împuternicire",
           questions: [
             {
               id: "icare_empowerment_decision_making",
               code: "ICARE-5.1",
               type: "statement_score_set",
-              label: "On-the-ground decision-making",
+              label: "Decizie aproape de teren",
               required: true,
               instructions: "Autonomie, inițiativă și raportare transparentă.",
               scale: icareFourPointScale,
@@ -414,9 +414,9 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_empowerment_collective_intelligence",
               code: "ICARE-5.2",
               type: "statement_score_set",
-              label: "Cultivating collective intelligence",
+              label: "Cultivarea inteligenței colective",
               required: true,
-              instructions: "Diversity, co-construcție, decizii asumate și refuzul compromisului facil.",
+              instructions: "Diversitate, co-construcție, decizii asumate și refuzul compromisului facil.",
               scale: icareFourPointScale,
               statements: [
                 { id: "icare_43", code: "S1", label: "Susține decizia finală chiar dacă diferă de propria opinie" },
@@ -428,7 +428,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "icare_empowerment_helping_team",
               code: "ICARE-5.3",
               type: "statement_score_set",
-              label: "Helping the team",
+              label: "Sprijinirea echipei",
               required: true,
               instructions: "Contribuție la dinamica echipei, deblocare și sharing de cunoaștere.",
               scale: icareFourPointScale,

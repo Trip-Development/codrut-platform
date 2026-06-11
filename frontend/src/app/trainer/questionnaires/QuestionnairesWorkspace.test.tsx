@@ -12,7 +12,7 @@ const fixtures = vi.hoisted(() => ({
   definition: {
     key: "lencioni",
     version: 1,
-    title: "Lencioni team assessment",
+    title: "Chestionar de evaluare a echipei",
     description: "Initial description",
     schema: {
       schema_version: "questionnaire.v1",
@@ -48,7 +48,7 @@ vi.mock("@/api/questionnaires", async (importOriginal) => {
     listQuestionnaireDefinitionStubs: vi.fn().mockResolvedValue([
       {
         id: "lencioni",
-        name: "Lencioni team assessment",
+        name: "Chestionar de evaluare a echipei",
         description: "Initial description",
         status: "active",
         version: 1,
@@ -70,7 +70,7 @@ describe("QuestionnairesWorkspace", () => {
   it("keeps typing local until the trainer explicitly saves", async () => {
     render(<QuestionnairesWorkspace />);
 
-    const titleInput = await screen.findByDisplayValue("Lencioni team assessment");
+    const titleInput = await screen.findByDisplayValue("Chestionar de evaluare a echipei");
 
     fireEvent.change(titleInput, { target: { value: "L" } });
     fireEvent.change(titleInput, { target: { value: "Le" } });
