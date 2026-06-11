@@ -13,8 +13,8 @@ export default async function ParticipantQuestionnairesPage() {
     <AppShell
       audience="participant"
       eyebrow="Chestionare"
-      title="Formele asignate tie"
-      description="Alege formularul primit prin linkul securizat. Layout-ul este gandit pentru completare rapida, fara zgomot vizual."
+      title="Formele asignate ție"
+      description="Alege formularul primit prin linkul securizat. Layout-ul este gândit pentru completare rapidă, fără zgomot vizual."
       navItems={participantNavItems}
       activeHref="/participant/questionnaires"
     >

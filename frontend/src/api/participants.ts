@@ -31,23 +31,23 @@ export async function getParticipantWorkspaceSummary(): Promise<ParticipantWorks
       {
         title: "De completat",
         description: `${tasks.filter((task) => task.status !== "completed").length} task-uri active`,
-        meta: "Astazi",
+        meta: "Astăzi",
       },
       {
-        title: "Confidential",
-        description: "Managerii evaluati nu vad raspunsuri individuale.",
+        title: "Confidențial",
+        description: "Managerii evaluați nu văd răspunsuri individuale.",
         meta: "Regula",
       },
       {
-        title: "Fara cont",
-        description: "Linkul securizat strange toate task-urile pentru emailul tau.",
+        title: "Fără cont",
+        description: "Linkul securizat strânge toate task-urile pentru emailul tău.",
         meta: "Acces",
       },
     ],
     emptyState: {
-      title: "Fara chestionare finalizate inca",
+      title: "Fără chestionare finalizate încă",
       description:
-        "Cand participantul are sarcini active, acest loc poate afisa un call-to-action si un sumar clar al pasului urmator.",
+        "Când participantul are sarcini active, acest loc poate afișa un call-to-action și un sumar clar al pasului următor.",
     },
   };
 }

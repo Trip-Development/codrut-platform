@@ -23,9 +23,9 @@ export function TaskBundle({
   if (tasks.length === 0) {
     return (
       <section className="rounded-2xl border border-[var(--border)] bg-surface px-5 py-7 text-center shadow-sm">
-        <p className="text-base font-semibold text-foreground">Nu exista sarcini active pentru acest proiect.</p>
+        <p className="text-base font-semibold text-foreground">Nu există sarcini active pentru acest proiect.</p>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-foreground/60">
-          Cand trainerul trimite invitatiile, task-urile apar aici grupate dupa email si proiect.
+          Când trainerul trimite invitațiile, task-urile apar aici grupate după email și proiect.
         </p>
       </section>
     );

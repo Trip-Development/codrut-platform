@@ -17,7 +17,7 @@ const sizeClasses = {
 export function BrandMark({
   size = "md",
   showText = true,
-  subtitle = "Training & Coaching Platform",
+  subtitle = "Platformă de training și coaching",
   className = "",
   tone = "default",
 }: BrandMarkProps) {
@@ -32,7 +32,7 @@ export function BrandMark({
       >
         <Image
           src="/logo.png"
-          alt="Codrut Logo"
+          alt="Codruț Logo"
           fill
           sizes="(max-width: 768px) 40px, 56px"
           priority
@@ -41,7 +41,7 @@ export function BrandMark({
       </span>
       {showText ? (
         <span className="min-w-0 text-left">
-          <span className={`block truncate text-sm font-bold font-display ${tone === "inverted" ? "text-white" : "text-foreground"}`}>Codrut</span>
+          <span className={`block truncate text-sm font-bold font-display ${tone === "inverted" ? "text-white" : "text-foreground"}`}>Codruț</span>
           <span className={`block truncate text-xs font-semibold ${tone === "inverted" ? "text-white/68" : "text-foreground/55"}`}>{subtitle}</span>
         </span>
       ) : null}

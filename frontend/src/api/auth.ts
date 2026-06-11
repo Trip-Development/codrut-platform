@@ -94,7 +94,7 @@ export async function getTrainerSession(): Promise<SessionState> {
       name: "Andrei",
       role: "trainer",
     },
-    message: "Sesiune demo trainer pana cand login-ul FastAPI este conectat complet in frontend.",
+    message: "Sesiune demo trainer până când login-ul FastAPI este conectat complet în frontend.",
   };
 }
 
@@ -113,18 +113,18 @@ export async function getParticipantSession(): Promise<SessionState> {
       name: "Leadership demo",
       role: "participant",
     },
-    message: "Sesiune demo leadership. Membrii invitati fara cont intra prin link securizat.",
+    message: "Sesiune demo leadership. Membrii invitați fără cont intră prin link securizat.",
   };
 }
 
 export function audienceAccessNote(audience: "trainer" | "participant" | "invitee"): string {
   if (audience === "trainer") {
-    return "Acces trainer: cont necesar in productie; demo fallback activ in prototip.";
+    return "Acces trainer: cont necesar în producție; demo fallback activ în prototip.";
   }
 
   if (audience === "participant") {
-    return "Leadership: cont necesar pentru progres persistent si sarcini recurente.";
+    return "Leadership: cont necesar pentru progres persistent și sarcini recurente.";
   }
 
-  return "Invitati fara cont: linkul securizat strange toate sarcinile proiectului pentru emailul primit.";
+  return "Invitați fără cont: linkul securizat strânge toate sarcinile proiectului pentru emailul primit.";
 }

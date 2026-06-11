@@ -54,21 +54,25 @@ function TrainerWorkspaceBar() {
   const shortcuts = [
     {
       label: "Companii",
+      step: "01",
       detail: "Adaugă clientul și gestionează workspace-ul complet.",
       href: "/trainer/companies",
     },
     {
       label: "Chestionare",
+      step: "02",
       detail: "Editează întrebări, scale și versiuni.",
       href: "/trainer/questionnaires",
     },
     {
       label: "Șabloane email",
+      step: "03",
       detail: "Ajustează textele reutilizabile. Trimiterea se face din companie.",
       href: "/trainer/email",
     },
     {
       label: "Rapoarte",
+      step: "04",
       detail: "Vezi rezultate agregate și scoruri.",
       href: "/trainer/reports",
     },
@@ -76,12 +80,12 @@ function TrainerWorkspaceBar() {
 
   return (
     <section className="mb-5 rounded-2xl border border-[var(--border)] bg-surface p-4 shadow-sm">
-      <div className="grid gap-4 xl:grid-cols-[minmax(18rem,1fr)_minmax(32rem,42rem)] xl:items-center">
+      <div className="grid gap-5 xl:grid-cols-[minmax(18rem,1fr)_minmax(32rem,44rem)] xl:items-center">
         <div className="min-w-0 max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Pregătire pilot</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">Instrumente de lucru</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Flux companie</p>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">Pornește din workspace-ul clientului</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
-            Pornește din companie, apoi gestionează rosterul, echipele, invitațiile, chestionarele și rapoartele fără să amesteci clienții.
+            Alege compania, apoi lucrează pe proiecte, roster, echipe, invitații și rapoarte în același context. Paginile globale rămân pentru configurări reutilizabile.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -89,9 +93,14 @@ function TrainerWorkspaceBar() {
             <Link
               key={shortcut.href}
               href={shortcut.href}
-              className="tap-soft flex min-h-20 flex-col justify-between rounded-xl border border-[var(--border)] bg-background px-3 py-3 hover:border-burgundy/45 hover:bg-surface-muted hover:text-burgundy"
+              className="tap-soft group flex min-h-24 flex-col justify-between rounded-xl border border-[var(--border)] bg-background px-3 py-3 transition hover:border-burgundy/45 hover:bg-surface-muted hover:shadow-sm"
             >
-              <p className="text-sm font-bold leading-5 text-foreground">{shortcut.label}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-bold leading-5 text-foreground group-hover:text-burgundy">{shortcut.label}</p>
+                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-bold text-foreground/45 group-hover:bg-burgundy-50 group-hover:text-burgundy dark:group-hover:bg-burgundy/10">
+                  {shortcut.step}
+                </span>
+              </div>
               <p className="mt-1 hidden text-xs leading-5 text-foreground/52 sm:block">{shortcut.detail}</p>
             </Link>
           ))}
@@ -135,7 +144,7 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-semibold text-foreground">{company.company}</h3>
           <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55">
-            {company.stage}
+            {companyStageLabel(company.stage)}
           </span>
         </div>
         <p className="mt-2 text-sm leading-6 text-foreground/62">{company.nextAction}</p>
@@ -170,6 +179,16 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
       </div>
     </article>
   );
+}
+
+function companyStageLabel(stage: TrainerCompanyRow["stage"]): string {
+  const labels: Record<TrainerCompanyRow["stage"], string> = {
+    setup: "Configurare",
+    invites: "Invitații",
+    completion: "Completare",
+    reporting: "Raportare",
+  };
+  return labels[stage];
 }
 
 function VisibilityPanel({

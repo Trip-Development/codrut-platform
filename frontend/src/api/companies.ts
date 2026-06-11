@@ -266,8 +266,8 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
 
   if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
     map.set("demo-project", { id: "demo-project", name: "Client demo" });
-    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa directie" });
-    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienti trecuti" });
+    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa direcție" });
+    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienți trecuți" });
   } else {
     serverCompanies.forEach((c) => map.set(c.id, c));
   }
@@ -532,8 +532,8 @@ export async function getCompanyDetail(
 
   if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
     map.set("demo-project", { id: "demo-project", name: "Client demo" });
-    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa directie" });
-    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienti trecuti" });
+    map.set("leadership-pilot", { id: "leadership-pilot", name: "Echipa direcție" });
+    map.set("past-client-video", { id: "past-client-video", name: "Campanie clienți trecuți" });
   } else {
     serverCompanies.forEach((c) => map.set(c.id, c));
   }
@@ -553,7 +553,7 @@ export async function getCompanyDetail(
   const invitationStatuses = invitationStatusesResult.status === "fulfilled" ? invitationStatusesResult.value : [];
   const teams = teamsResult.status === "fulfilled" ? teamsResult.value : [];
   const dataErrors = [
-    participantsResult.status === "rejected" ? `Participanti: ${errorMessage(participantsResult.reason)}` : null,
+    participantsResult.status === "rejected" ? `Participanți: ${errorMessage(participantsResult.reason)}` : null,
     assignmentsResult.status === "rejected" ? `Asignari: ${errorMessage(assignmentsResult.reason)}` : null,
     invitationStatusesResult.status === "rejected" ? `Invitatii: ${errorMessage(invitationStatusesResult.reason)}` : null,
     teamsResult.status === "rejected" ? `Echipe: ${errorMessage(teamsResult.reason)}` : null,

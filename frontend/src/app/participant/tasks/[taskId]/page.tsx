@@ -24,8 +24,8 @@ export default async function TaskRunnerPage({ params }: TaskRunnerPageProps) {
     <AppShell
       audience="participant"
       eyebrow="Sarcina"
-      title={definition?.title ?? "Sarcina indisponibila"}
-      description="Completeaza raspunsurile in ritmul tau. Draftul se salveaza automat pe masura ce selectezi optiunile."
+      title={definition?.title ?? "Sarcină indisponibilă"}
+      description="Completează răspunsurile în ritmul tău. Draftul se salvează automat pe măsură ce selectezi opțiunile."
       navItems={participantNavItems}
       activeHref="/participant"
     >
@@ -37,15 +37,15 @@ export default async function TaskRunnerPage({ params }: TaskRunnerPageProps) {
         />
       ) : (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-foreground">Sarcina nu este disponibila</h2>
+          <h2 className="text-lg font-bold text-foreground">Sarcina nu este disponibilă</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/65">
-            Nu am putut gasi chestionarul asociat acestei sarcini. Verifica daca linkul este corect sau contacteaza trainerul.
+            Nu am putut găsi chestionarul asociat acestei sarcini. Verifică dacă linkul este corect sau contactează trainerul.
           </p>
           <Link
             href="/participant"
             className="tap-soft mt-4 inline-flex rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white"
           >
-            Înapoi la Dashboard
+            Înapoi acasă
           </Link>
         </section>
       )}
