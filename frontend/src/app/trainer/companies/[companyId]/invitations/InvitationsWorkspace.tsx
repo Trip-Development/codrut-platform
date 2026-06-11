@@ -55,6 +55,8 @@ type ParticipantInviteRow = {
   nextAction: string;
 };
 
+type InvitationFilter = "all" | "ready" | "errors" | "no_assignments" | "not_signed_up";
+
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const activeInviteStatuses = new Set(["invited", "started", "submitted", "validated", "scored"]);
 
@@ -169,6 +171,8 @@ export function InvitationsWorkspace({
   const [message, setMessage] = useState<string | null>(null);
   const [sendingMode, setSendingMode] = useState<ParticipantInvitationMode | "resend" | null>(null);
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
+  const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("all");
 
   useEffect(() => {
     setAssignmentState(assignments);
@@ -226,6 +230,19 @@ export function InvitationsWorkspace({
     () => buildInvitationRows(participants, assignmentState, invitationStatuses, resultsByParticipant),
     [assignmentState, invitationStatuses, participants, resultsByParticipant],
   );
+  const filteredRows = useMemo(
+    () => rows.filter((row) => matchesInvitationFilter(row, invitationFilter)),
+    [invitationFilter, rows],
+  );
+  const selectableRows = useMemo(
+    () => filteredRows.filter((row) => row.totalTasks > 0),
+    [filteredRows],
+  );
+  const selectedRows = useMemo(
+    () => rows.filter((row) => selectedParticipantIds.has(row.participant.id)),
+    [rows, selectedParticipantIds],
+  );
+  const selectedReadyCount = selectedRows.filter((row) => row.totalTasks > 0).length;
   const participantsById = useMemo(
     () => new Map(participants.map((participant) => [participant.id, participant])),
     [participants],
@@ -249,6 +266,8 @@ export function InvitationsWorkspace({
   const completedCount = rows.filter((row) => row.totalTasks > 0 && row.completedTasks === row.totalTasks).length;
   const blockedCount = rows.filter((row) => row.deliveryTone === "danger" || row.totalTasks === 0).length;
   const participantsWithoutAssignments = rows.filter((row) => row.totalTasks === 0).length;
+  const visibleSelectedCount = filteredRows.filter((row) => selectedParticipantIds.has(row.participant.id)).length;
+  const allVisibleSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedParticipantIds.has(row.participant.id));
   const canCreateAssignment =
     participants.length > 0 &&
     questionnaires.length > 0 &&
@@ -395,12 +414,52 @@ export function InvitationsWorkspace({
     });
   }
 
+  function toggleParticipantSelection(participantId: string) {
+    setSelectedParticipantIds((current) => {
+      const next = new Set(current);
+      if (next.has(participantId)) {
+        next.delete(participantId);
+      } else {
+        next.add(participantId);
+      }
+      return next;
+    });
+  }
+
+  function setVisibleParticipantSelection(checked: boolean) {
+    setSelectedParticipantIds((current) => {
+      const next = new Set(current);
+      for (const row of selectableRows) {
+        if (checked) {
+          next.add(row.participant.id);
+        } else {
+          next.delete(row.participant.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function selectReadyUnsentParticipants() {
+    setInvitationFilter("ready");
+    setSelectedParticipantIds(
+      new Set(rows.filter((row) => matchesInvitationFilter(row, "ready")).map((row) => row.participant.id)),
+    );
+  }
+
   async function handleSend(mode: ParticipantInvitationMode) {
+    if (selectedReadyCount === 0) {
+      setMessage("Selectează cel puțin o persoană cu sarcini salvate înainte de trimitere.");
+      return;
+    }
     setSendingMode(mode);
     setMessage(null);
     setCopiedParticipantId(null);
+    const participantIds = selectedRows
+      .filter((row) => row.totalTasks > 0)
+      .map((row) => row.participant.id);
     try {
-      const result = await sendParticipantInvitations(companyId, { mode });
+      const result = await sendParticipantInvitations(companyId, { mode, participantIds });
       setResultsByParticipant((current) => {
         const next = new Map(current);
         for (const item of result.results) {
@@ -408,10 +467,11 @@ export function InvitationsWorkspace({
         }
         return next;
       });
+      setSelectedParticipantIds(new Set());
       setMessage(
         mode === "email"
-          ? `${result.emails_sent}/${result.total} emailuri trimise.`
-          : `${result.links_generated}/${result.total} linkuri securizate generate.`,
+          ? `${result.emails_sent}/${result.total} emailuri trimise către persoanele selectate.`
+          : `${result.links_generated}/${result.total} linkuri securizate generate pentru persoanele selectate.`,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invitațiile nu au putut fi trimise.");
@@ -470,10 +530,16 @@ export function InvitationsWorkspace({
             </div>
           </div>
           <div className="space-y-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
+            <div className="rounded-xl border border-[var(--border)] bg-background/70 px-3 py-2.5">
+              <p className="text-xs font-semibold text-foreground/48">Selecție pentru trimitere</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {selectedReadyCount} persoane cu sarcini
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => void handleSend("secure_links")}
-              disabled={sendingMode !== null || participants.length === 0}
+              disabled={sendingMode !== null || selectedReadyCount === 0}
               className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {sendingMode === "secure_links" ? "Se generează linkurile..." : "Generează linkuri securizate"}
@@ -481,13 +547,13 @@ export function InvitationsWorkspace({
             <button
               type="button"
               onClick={() => void handleSend("email")}
-              disabled={sendingMode !== null || participants.length === 0}
+              disabled={sendingMode !== null || selectedReadyCount === 0}
               className="tap-soft w-full rounded-xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
             >
               {sendingMode === "email" ? "Se trimit emailurile..." : "Trimite email invitații"}
             </button>
             <p className="text-xs leading-5 text-foreground/52">
-              Lista de participanți rămâne salvată separat. Trimiterea emailurilor sau generarea linkurilor se face explicit de aici.
+              Trimiterea folosește doar persoanele bifate în tabel. Persoanele fără sarcini salvate nu pot fi selectate.
             </p>
           </div>
         </div>
@@ -666,13 +732,67 @@ export function InvitationsWorkspace({
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="border-b border-[var(--border)] px-5 py-4">
-          <p className="text-xs font-semibold text-burgundy/75">Urmărire</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">Persoane invitate</h2>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold text-burgundy/75">Urmărire</p>
+              <h2 className="mt-1 text-xl font-semibold text-foreground">Persoane invitate</h2>
+              <p className="mt-2 text-sm text-foreground/58">
+                Bifează destinatarii înainte de a genera linkuri sau emailuri.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={selectReadyUnsentParticipants}
+                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+              >
+                Selectează netrimiși
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedParticipantIds(new Set())}
+                disabled={selectedParticipantIds.size === 0}
+                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Curăță selecția
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <FilterButton active={invitationFilter === "all"} onClick={() => setInvitationFilter("all")}>
+              Toți ({rows.length})
+            </FilterButton>
+            <FilterButton active={invitationFilter === "ready"} onClick={() => setInvitationFilter("ready")}>
+              Netrimiși ({rows.filter((row) => matchesInvitationFilter(row, "ready")).length})
+            </FilterButton>
+            <FilterButton active={invitationFilter === "errors"} onClick={() => setInvitationFilter("errors")}>
+              Erori ({rows.filter((row) => matchesInvitationFilter(row, "errors")).length})
+            </FilterButton>
+            <FilterButton active={invitationFilter === "no_assignments"} onClick={() => setInvitationFilter("no_assignments")}>
+              Fără sarcini ({participantsWithoutAssignments})
+            </FilterButton>
+            <FilterButton active={invitationFilter === "not_signed_up"} onClick={() => setInvitationFilter("not_signed_up")}>
+              Fără cont ({rows.filter((row) => matchesInvitationFilter(row, "not_signed_up")).length})
+            </FilterButton>
+          </div>
+          <p className="mt-3 text-xs font-semibold text-foreground/50">
+            {visibleSelectedCount} selectate în filtrul curent · {selectedReadyCount} pregătite pentru trimitere
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-surface-muted text-xs font-semibold uppercase tracking-[0.1em] text-foreground/50">
               <tr>
+                <th className="w-12 px-5 py-3">
+                  <input
+                    aria-label="Selectează persoanele vizibile"
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    disabled={selectableRows.length === 0}
+                    onChange={(event) => setVisibleParticipantSelection(event.target.checked)}
+                    className="h-4 w-4 rounded border-[var(--border)] accent-[#890505]"
+                  />
+                </th>
                 <th className="px-5 py-3">Persoană</th>
                 <th className="px-5 py-3">Livrare</th>
                 <th className="px-5 py-3">Cont</th>
@@ -684,13 +804,29 @@ export function InvitationsWorkspace({
             <tbody className="divide-y divide-[var(--border)]">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-6 text-center text-foreground/62">
+                  <td colSpan={7} className="px-5 py-6 text-center text-foreground/62">
                     Nu există persoane în lista de participanți.
                   </td>
                 </tr>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-6 text-center text-foreground/62">
+                    Nu există persoane pentru filtrul ales.
+                  </td>
+                </tr>
               ) : (
-                rows.map((row) => (
+                filteredRows.map((row) => (
                   <tr key={row.participant.id} className="align-top transition-colors hover:bg-surface-muted/40">
+                    <td className="px-5 py-4">
+                      <input
+                        aria-label={`Selectează ${row.participant.full_name}`}
+                        type="checkbox"
+                        checked={selectedParticipantIds.has(row.participant.id)}
+                        disabled={row.totalTasks === 0 || sendingMode !== null}
+                        onChange={() => toggleParticipantSelection(row.participant.id)}
+                        className="h-4 w-4 rounded border-[var(--border)] accent-[#890505] disabled:cursor-not-allowed disabled:opacity-35"
+                      />
+                    </td>
                     <td className="px-5 py-4">
                       <p className="font-semibold text-foreground">{row.participant.full_name}</p>
                       <p className="mt-1 text-xs text-foreground/50">{row.participant.email}</p>
@@ -742,6 +878,14 @@ export function InvitationsWorkspace({
       </section>
     </div>
   );
+}
+
+function matchesInvitationFilter(row: ParticipantInviteRow, filter: InvitationFilter): boolean {
+  if (filter === "ready") return row.totalTasks > 0 && row.deliveryTone !== "success";
+  if (filter === "errors") return row.deliveryTone === "danger";
+  if (filter === "no_assignments") return row.totalTasks === 0;
+  if (filter === "not_signed_up") return !row.signedUp;
+  return true;
 }
 
 function formatResendMessage(result: RosterInviteResult): string {
@@ -875,6 +1019,7 @@ function PlanAssignmentRow({
       ].join(" ")}
     >
       <input
+        aria-label={`Selectează asignarea pentru ${assignment.respondent_name}`}
         type="checkbox"
         checked={isExisting || selected}
         disabled={isExisting}
@@ -935,6 +1080,31 @@ function AssignmentSummary({ label, value }: { label: string; value: string | nu
       <p className="text-xs font-semibold text-foreground/48">{label}</p>
       <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
     </div>
+  );
+}
+
+function FilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "tap-soft rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
+        active
+          ? "border-burgundy bg-burgundy text-white"
+          : "border-[var(--border)] bg-background text-foreground/68 hover:border-burgundy/45 hover:text-burgundy",
+      ].join(" ")}
+    >
+      {children}
+    </button>
   );
 }
 
