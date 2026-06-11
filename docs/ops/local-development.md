@@ -39,6 +39,38 @@ uv run python -m codrut.tools.seed_pilot
 
 The seed command creates or updates the trainer account and makes it owner of the configured pilot company. It refuses to run in production unless `CODRUT_SEED_ALLOW_PRODUCTION=true` is explicitly set; do not use that override for normal pilot testing.
 
+## Core Workflow Smoke
+
+For a quick trainer workflow check, create a fake company and import a two-person
+roster with these exact headers:
+
+```text
+Name,email,Reports To,Position,Location,Profil PCM
+```
+
+Example rows:
+
+```text
+Vlad Soimu Manager,manager@example.com,,Manager,Bucuresti,Gânditor
+Vlad Soimu Membru,member@example.com,Vlad Soimu Manager,Membru echipă,Bucuresti,Armonizator
+```
+
+Expected behavior:
+
+- The manager imports as `leadership`; the member imports as `member`.
+- Importing the roster does not send access automatically.
+- The default assignment plan includes Lencioni for leadership and the manager
+  team, Distress Drivers for the manager only, and 360 iCARE for the manager
+  from self plus direct-report feedback.
+- Saving the plan is duplicate-safe; regenerating and saving again should not
+  create extra assignments.
+- `Generează linkuri securizate` creates links without sending email.
+- `Trimite invitații email` sends through the configured provider; in local dev,
+  verify delivery in Mailpit at <http://localhost:8025>.
+
+This path is covered by `test_two_person_roster_generates_manager_member_default_plan`
+in `backend/tests/test_company_service.py`.
+
 ## Demo Fallback
 
 `CODRUT_FRONTEND_DEMO_FALLBACK=true` is only for intentionally browsing seeded prototype/demo surfaces. Keep it `false` when checking whether frontend routes are genuinely connected to backend auth and data.

@@ -765,6 +765,123 @@ async def test_import_roster_rejects_duplicate_row_email() -> None:
 
 
 @pytest.mark.asyncio
+async def test_two_person_roster_generates_manager_member_default_plan() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name="Two Person Roster Company")
+            session.add_all([trainer, company])
+            await session.flush()
+            session.add(
+                CompanyMembership(
+                    company_id=company.id,
+                    user_id=trainer.id,
+                    role=CompanyMembershipRole.owner,
+                )
+            )
+            await session.flush()
+
+            service = CompanyService(session)
+            result = await service.import_roster(
+                trainer.id,
+                company.id,
+                RosterImportRequest(
+                    rows=[
+                        {
+                            "Name": "Vlad Soimu Manager",
+                            "Reports To": "",
+                            "Position": "Manager",
+                            "Location": "Bucharest",
+                            "email": "manager@example.com",
+                            "Profil PCM": "Gânditor",
+                        },
+                        {
+                            "Name": "Vlad Soimu Membru",
+                            "Reports To": "Vlad Soimu Manager",
+                            "Position": "Membru echipă",
+                            "Location": "Bucharest",
+                            "email": "member@example.com",
+                            "Profil PCM": "Armonizator",
+                        },
+                    ]
+                ),
+            )
+
+            manager, member = result.participants
+            assert manager.role_group == "leadership"
+            assert member.role_group == "member"
+
+            assignment_service = AssignmentService(session)
+            plan = await assignment_service.build_default_assignment_plan(trainer.id, company.id)
+            planned = {
+                (
+                    item.respondent_profile_id,
+                    item.questionnaire_key,
+                    item.target_type.value,
+                    item.target_person_id,
+                    item.target_team_type,
+                )
+                for item in plan.assignments
+            }
+
+            assert planned == {
+                (manager.id, "lencioni", "team", None, "leadership"),
+                (manager.id, "lencioni", "team", None, "functional"),
+                (member.id, "lencioni", "team", None, "functional"),
+                (manager.id, "distress_drivers", "self", None, None),
+                (manager.id, "boss_360", "person", manager.id, None),
+                (member.id, "boss_360", "person", manager.id, None),
+            }
+            assert not any(
+                item.questionnaire_key == "distress_drivers"
+                and item.respondent_profile_id == member.id
+                for item in plan.assignments
+            )
+
+            save_result = await assignment_service.save_assignment_plan(
+                trainer.id,
+                company.id,
+                payload=AssignmentPlanSaveRequest(
+                    assignments=[item.model_dump() for item in plan.assignments],
+                ),
+            )
+            assert save_result.created_count == len(planned)
+            assert save_result.existing_count == 0
+
+            repeated_save = await assignment_service.save_assignment_plan(
+                trainer.id,
+                company.id,
+                payload=AssignmentPlanSaveRequest(
+                    assignments=[item.model_dump() for item in plan.assignments],
+                ),
+            )
+            assert repeated_save.created_count == 0
+            assert repeated_save.existing_count == len(planned)
+
+            link_result = await service.send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(mode="secure_links"),
+            )
+            assert link_result.total == 2
+            assert link_result.links_generated == 2
+            assert link_result.emails_sent == 0
+            assert all(
+                result.invite_url and "/invite/" in result.invite_url
+                for result in link_result.results
+            )
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_import_roster_creates_invites_and_rank_specific_email_flows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
