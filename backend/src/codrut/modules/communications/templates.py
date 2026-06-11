@@ -39,16 +39,16 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     TransactionalTemplateKey.account_setup: TransactionalTemplate(
         key=TransactionalTemplateKey.account_setup,
         version=1,
-        subject="Activeaza contul Codrut pentru ${company_name}",
+        subject="Activează contul Codruț pentru ${company_name}",
         html_body=(
-            "<p>Buna, ${participant_name}.</p>"
-            "<p>${trainer_name} te-a invitat in Codrut pentru ${company_name}.</p>"
-            "<p><a href=\"${action_url}\">Activeaza contul si vezi sarcinile</a></p>"
+            "<p>Bună, ${participant_name}.</p>"
+            "<p>${trainer_name} te-a invitat în Codruț pentru ${company_name}.</p>"
+            "<p><a href=\"${action_url}\">Activează contul și vezi sarcinile</a></p>"
         ),
         text_body=(
-            "Buna, ${participant_name}.\n\n"
-            "${trainer_name} te-a invitat in Codrut pentru ${company_name}.\n"
-            "Activeaza contul si vezi sarcinile: ${action_url}"
+            "Bună, ${participant_name}.\n\n"
+            "${trainer_name} te-a invitat în Codruț pentru ${company_name}.\n"
+            "Activează contul și vezi sarcinile: ${action_url}"
         ),
         required_context=frozenset(
             {"participant_name", "trainer_name", "company_name", "action_url"}
@@ -57,15 +57,15 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     TransactionalTemplateKey.assignment_bundle: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_bundle,
         version=1,
-        subject="Ai chestionare Codrut de completat pentru ${company_name}",
+        subject="Ai chestionare Codruț de completat pentru ${company_name}",
         html_body=(
-            "<p>Buna, ${participant_name}.</p>"
-            "<p>Ai ${task_count} sarcini de assessment pregatite in Codrut.</p>"
+            "<p>Bună, ${participant_name}.</p>"
+            "<p>Ai ${task_count} sarcini de assessment pregătite în Codruț.</p>"
             "<p><a href=\"${action_url}\">Deschide sarcinile mele</a></p>"
         ),
         text_body=(
-            "Buna, ${participant_name}.\n\n"
-            "Ai ${task_count} sarcini de assessment pregatite in Codrut.\n"
+            "Bună, ${participant_name}.\n\n"
+            "Ai ${task_count} sarcini de assessment pregătite în Codruț.\n"
             "Deschide sarcinile mele: ${action_url}"
         ),
         required_context=frozenset(

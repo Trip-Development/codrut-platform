@@ -66,7 +66,7 @@ export class ParticipantPage {
   }
 
   async saveDraft() {
-    const btn = this.page.getByRole("button", { name: "Salveaza draft" });
+    const btn = this.page.getByRole("button", { name: "Salvează draft" });
     await expect(btn).toBeEnabled();
     await btn.click();
     // Wait for the draft saved confirmation text
@@ -74,15 +74,15 @@ export class ParticipantPage {
   }
 
   async submitResponse() {
-    const btn = this.page.getByRole("button", { name: "Trimite raspunsurile" });
+    const btn = this.page.getByRole("button", { name: "Trimite răspunsurile" });
     await expect(btn).toBeEnabled();
     await btn.click();
     // Verify confirmation screen is shown
-    await expect(this.page.locator("h3")).toContainText("Raspunsurile au fost trimise");
+    await expect(this.page.locator("h3")).toContainText("Răspunsurile au fost trimise");
   }
 
   async backToTasks() {
-    const btn = this.page.getByRole("link", { name: "Inapoi la sarcinile mele" });
+    const btn = this.page.getByRole("link", { name: "Înapoi la sarcinile mele" });
     await expect(btn).toBeVisible();
     await btn.click();
     await this.page.waitForLoadState("networkidle");

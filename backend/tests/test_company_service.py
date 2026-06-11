@@ -17,7 +17,7 @@ from codrut.modules.assignments.models import (
     TeamType,
 )
 from codrut.modules.communications.email_provider import LocalEmailProvider
-from codrut.modules.communications.models import EmailSendStatus
+from codrut.modules.communications.models import EmailSend, EmailSendStatus
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -665,15 +665,16 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         assert email_result.emails_sent == 3
         assert email_result.emails_failed == 0
         assert len(provider.sent_messages) == 3
-        assert (
-            sum("Activeaza contul" in message.html_body for message in provider.sent_messages) == 2
+        email_send_result = await session.execute(
+            select(EmailSend.template_key).where(EmailSend.recipient_email.in_([
+                "andrei.vacaru@tripdevelopment.ro",
+                "ilincacrb4825@gmail.com",
+                "vlad.soimu@yahoo.com",
+            ]))
         )
-        assert (
-            sum(
-                "Deschide sarcinile mele" in message.html_body for message in provider.sent_messages
-            )
-            == 1
-        )
+        template_keys = email_send_result.scalars().all()
+        assert template_keys.count("account_setup") == 2
+        assert template_keys.count("assignment_bundle") == 1
 
         team_result = await session.execute(
             select(Team)

@@ -7,9 +7,9 @@ from codrut.contracts.emails import EmailDeliveryStatus, EmailProviderKey
 
 class EmailTestSendRequest(BaseModel):
     to: EmailStr
-    subject: str = Field(default="Test Codrut email", min_length=1, max_length=180)
-    html_body: str = Field(default="<p>Test email din Codrut.</p>", min_length=1)
-    text_body: str = Field(default="Test email din Codrut.", min_length=1)
+    subject: str = Field(default="Test Codruț email", min_length=1, max_length=180)
+    html_body: str = Field(default="<p>Test email din Codruț.</p>", min_length=1)
+    text_body: str = Field(default="Test email din Codruț.", min_length=1)
 
 
 class EmailTestSendResponse(BaseModel):
@@ -99,4 +99,3 @@ class EmailOpsSummaryResponse(BaseModel):
     assessmentRows: list[AssessmentDeliveryRowResponse]
     rules: list[str]
     campaign: CampaignOpsSummaryResponse
-
