@@ -109,15 +109,31 @@ class FakeIdentityRepository:
         return self.users_by_id.get(user_id)
 
 
+class FakeFormsRepository:
+    def __init__(self) -> None:
+        self.active_keys: set[str] = set()
+        self.persisted_keys: set[str] = set()
+
+    async def get_definition(self, key: str) -> object | None:
+        if key in self.active_keys:
+            return object()
+        return None
+
+    async def get_latest_version(self, key: str) -> int:
+        return 1 if key in self.persisted_keys or key in self.active_keys else 0
+
+
 def make_assignment_service(
     *,
     assignment_repository: FakeAssignmentRepository,
     company_repository: FakeCompanyRepository,
+    forms_repository: FakeFormsRepository | None = None,
     identity_repository: FakeIdentityRepository | None = None,
 ) -> AssignmentService:
     service = AssignmentService(cast(Any, None))
     service.assignment_repository = cast(Any, assignment_repository)
     service.company_repository = cast(Any, company_repository)
+    service.forms_repository = cast(Any, forms_repository or FakeFormsRepository())
     service.identity_repository = cast(Any, identity_repository or FakeIdentityRepository())
     return service
 
@@ -255,7 +271,7 @@ async def test_create_assignment_requires_respondent_and_person_target_in_compan
             company_id,
             AssignmentCreateRequest(
                 respondent_profile_id=outside_participant_id,
-                questionnaire_key="boss_360",
+                questionnaire_key="lencioni",
                 target_type=AssignmentTargetType.self_assessment,
             ),
         )
@@ -266,7 +282,7 @@ async def test_create_assignment_requires_respondent_and_person_target_in_compan
             company_id,
             AssignmentCreateRequest(
                 respondent_profile_id=respondent_id,
-                questionnaire_key="boss_360",
+                questionnaire_key="lencioni",
                 target_type=AssignmentTargetType.person,
                 target_person_id=outside_participant_id,
             ),
@@ -277,7 +293,7 @@ async def test_create_assignment_requires_respondent_and_person_target_in_compan
         company_id,
         AssignmentCreateRequest(
             respondent_profile_id=respondent_id,
-            questionnaire_key="boss_360",
+            questionnaire_key="lencioni",
             target_type=AssignmentTargetType.person,
             target_person_id=target_id,
         ),
@@ -285,6 +301,85 @@ async def test_create_assignment_requires_respondent_and_person_target_in_compan
 
     assert assignment.respondent_profile_id == respondent_id
     assert assignment.target_person_id == target_id
+
+
+async def test_create_assignment_rejects_unknown_questionnaire_key() -> None:
+    (
+        service,
+        _assignment_repository,
+        _company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(
+            user_id,
+            company_id,
+            AssignmentCreateRequest(
+                respondent_profile_id=respondent_id,
+                questionnaire_key="boss_360",
+                target_type=AssignmentTargetType.self_assessment,
+            ),
+        )
+
+    assert exc_info.value.code == "definition_not_found"
+
+
+async def test_create_assignment_accepts_active_persisted_questionnaire_key() -> None:
+    (
+        service,
+        _assignment_repository,
+        _company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    service.forms_repository.active_keys.add("boss_360")
+
+    assignment = await service.create_assignment(
+        user_id,
+        company_id,
+        AssignmentCreateRequest(
+            respondent_profile_id=respondent_id,
+            questionnaire_key=" boss_360 ",
+            target_type=AssignmentTargetType.self_assessment,
+        ),
+    )
+
+    assert assignment.questionnaire_key == "boss_360"
+
+
+async def test_create_assignment_rejects_inactive_persisted_questionnaire_key() -> None:
+    (
+        service,
+        _assignment_repository,
+        _company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    service.forms_repository.persisted_keys.add("lencioni")
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(
+            user_id,
+            company_id,
+            AssignmentCreateRequest(
+                respondent_profile_id=respondent_id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.self_assessment,
+            ),
+        )
+
+    assert exc_info.value.code == "definition_not_found"
 
 
 async def test_create_assignment_requires_target_team_in_company() -> None:
