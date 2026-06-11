@@ -40,8 +40,8 @@ export default async function TrainerSettingsPage() {
           />
           <SettingsLink
             href="/trainer/email"
-            label="Email & invitații"
-            detail="Editează șabloane, verifică livrarea și pregătește testele Brevo."
+            label="Șabloane email"
+            detail="Editează textele reutilizabile. Livrarea invitațiilor se urmărește din workspace-ul companiei."
           />
         </aside>
       </div>
@@ -66,7 +66,7 @@ export default async function TrainerSettingsPage() {
         <SettingsPanel
           title="Notificări"
           items={[
-            "Emailurile operaționale se gestionează din tabul Email & invitații.",
+            "Emailurile operaționale se gestionează din tabul Invitații al companiei.",
             "Pentru pilot, notificările reale trebuie verificate întâi în mediu de test, apoi trimise prin furnizorul de email.",
             "Notificările Telegram/Calendly rămân integrare separată.",
           ]}

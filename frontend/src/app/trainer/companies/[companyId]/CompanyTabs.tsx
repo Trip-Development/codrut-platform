@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const companyTabs = [
   { key: "", label: "Sumar" },
   { key: "/participants", label: "Roster" },
+  { key: "/invitations", label: "Invitații" },
   { key: "/org-chart", label: "Organigramă" },
   { key: "/teams", label: "Echipe" },
   { key: "/reports", label: "Rapoarte" },
