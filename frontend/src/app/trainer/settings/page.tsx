@@ -28,7 +28,7 @@ export default async function TrainerSettingsPage() {
             <SettingRow label="Nume afișat" value={trainer.user.name} />
             <SettingRow label="Rol" value="Trainer / owner" />
             <SettingRow label="Sesiune" value={trainer.state === "authenticated" ? "Autentificat" : "Acces temporar"} />
-            <SettingRow label="Workspace implicit" value="Companii" />
+            <SettingRow label="Spațiu implicit" value="Companii" />
           </div>
         </section>
 
@@ -36,12 +36,12 @@ export default async function TrainerSettingsPage() {
           <SettingsLink
             href="/trainer/companies"
             label="Companii"
-            detail="Adaugă clienți, apoi gestionează roster, echipe, invitații și rapoarte per companie."
+            detail="Adaugă clienți, apoi gestionează participanți, echipe, invitații și rapoarte per companie."
           />
           <SettingsLink
             href="/trainer/email"
             label="Șabloane email"
-            detail="Editează textele reutilizabile. Livrarea invitațiilor se urmărește din workspace-ul companiei."
+            detail="Editează textele reutilizabile. Livrarea invitațiilor se urmărește din spațiul companiei."
           />
         </aside>
       </div>
@@ -52,7 +52,7 @@ export default async function TrainerSettingsPage() {
           items={[
             "Tema aleasă rămâne salvată între pagini.",
             "Navigarea principală pornește din Companii.",
-            "Rosterul este tratat ca acțiune în contextul companiei.",
+            "Lista de participanți este tratată ca acțiune în contextul companiei.",
           ]}
         />
         <SettingsPanel

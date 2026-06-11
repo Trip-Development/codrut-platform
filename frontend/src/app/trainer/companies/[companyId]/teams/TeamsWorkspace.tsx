@@ -191,9 +191,9 @@ export function TeamsWorkspace({
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="p-5 md:p-6">
             <p className="text-sm font-semibold text-burgundy/75">Structură echipe</p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Grupează rosterul în echipe clare</h2>
+            <h2 className="mt-1 text-xl font-semibold text-foreground">Grupează participanții în echipe clare</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Creează echipe de leadership sau funcționale, iar structura din manager direct este recunoscută automat din roster.
+              Creează echipe de leadership sau funcționale, iar structura din manager direct este recunoscută automat din lista de participanți.
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
               <TeamSummary label="Echipe" value={teams.length + derivedTeams.length} />
@@ -240,13 +240,13 @@ export function TeamsWorkspace({
 
       {participants.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
-          <p className="text-base font-semibold text-foreground">Rosterul este gol.</p>
+          <p className="text-base font-semibold text-foreground">Lista de participanți este goală.</p>
           <p className="mt-2 text-sm text-foreground/58">Importă participanții înainte de a construi echipe.</p>
         </section>
       ) : teams.length === 0 && derivedTeams.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
           <p className="text-base font-semibold text-foreground">Nu există echipe încă.</p>
-          <p className="mt-2 text-sm text-foreground/58">Creează prima echipă, apoi adaugă membrii din roster.</p>
+          <p className="mt-2 text-sm text-foreground/58">Creează prima echipă, apoi adaugă membrii din lista de participanți.</p>
         </section>
       ) : (
         <div className="space-y-5">
@@ -281,7 +281,7 @@ export function TeamsWorkspace({
           {derivedTeams.length > 0 ? (
             <section className="space-y-3">
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-foreground/48">Structură recunoscută din roster</h3>
+                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-foreground/48">Structură recunoscută din participanți</h3>
                 <p className="mt-1 text-sm text-foreground/58">
                   Carduri generate din leadership și din câmpul Manager direct. Nu modifică echipele salvate.
                 </p>

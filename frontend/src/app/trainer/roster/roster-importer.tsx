@@ -76,7 +76,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     } catch (error) {
       setImportState({
         status: "error",
-        message: error instanceof Error ? error.message : "Compania nu a putut fi creată în backend.",
+        message: error instanceof Error ? error.message : "Compania nu a putut fi creată în sistem.",
       });
     } finally {
       setIsCreatingCompany(false);
@@ -336,7 +336,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     },
     {
       key: "import",
-      label: "Salvează rosterul",
+      label: "Salvează participanții",
       detail:
         importState.status === "success"
           ? `${lastImportedParticipantIds.length} participanți salvați`
@@ -397,7 +397,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     } catch (error) {
       setImportState({
         status: "error",
-        message: error instanceof Error ? error.message : "Importul rosterului a eșuat în backend.",
+        message: error instanceof Error ? error.message : "Importul listei de participanți a eșuat în sistem.",
       });
     }
   };
@@ -409,10 +409,10 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="border-b border-[var(--border)] bg-background/55 p-5 lg:border-b-0 lg:border-r">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import roster</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
             <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
-              Importul creează rosterul în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
+              Importul creează lista de participanți în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
             </p>
             <p className="mt-4 inline-flex rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
               Fără trimitere automată la import
@@ -492,7 +492,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
             <p className="max-w-2xl text-sm leading-6 text-foreground/62">
-              Importul salvează doar rosterul. Trimiterea emailurilor sau generarea linkurilor se face separat după confirmare.
+              Importul salvează doar participanții. Trimiterea emailurilor sau generarea linkurilor se face separat după confirmare.
             </p>
             <button
               type="button"
@@ -500,7 +500,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
               onClick={handleImport}
               className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Salvează rosterul
+              Salvează participanții
             </button>
           </div>
         </section>
@@ -511,9 +511,9 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acces participanți</p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">Roster salvat. Continuă în Invitații.</h3>
+              <h3 className="mt-1 text-base font-semibold text-foreground">Participanți salvați. Continuă în Invitații.</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-foreground/62">
-                Am separat importul de livrare ca să nu trimiți accidental emailuri în timp ce cureți rosterul. În tabul Invitații vezi statusul persistent, trimiți emailuri, retrimiți individual și copiezi linkuri securizate.
+                Am separat importul de livrare ca să nu trimiți accidental emailuri în timp ce cureți lista de participanți. În tabul Invitații vezi statusul persistent, trimiți emailuri, retrimiți individual și copiezi linkuri securizate.
               </p>
             </div>
             <button
@@ -527,7 +527,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
         </section>
       )}
 
-      {/* Roster column mapping */}
+      {/* Participant column mapping */}
       {headers.length > 0 && importState.status === "ready" && (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
           <div>
@@ -608,7 +608,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
       {processedRows.length > 0 && importState.status === "ready" && (
         <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
           <div className="px-5 py-4 border-b border-[var(--border)]">
-            <h3 className="text-base font-semibold text-foreground">Previzualizare roster</h3>
+            <h3 className="text-base font-semibold text-foreground">Previzualizare participanți</h3>
             <p className="mt-1 text-sm leading-6 text-foreground/60">
               Dublu-click pe o celulă pentru corecții rapide înainte de salvare.
             </p>

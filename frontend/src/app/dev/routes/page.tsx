@@ -11,7 +11,7 @@ const routeGroups = [
       ["/trainer/questionnaires", "Chestionare"],
       ["/trainer/email", "Email"],
       ["/trainer/reports", "Index rapoarte companie"],
-      ["/trainer/login", "Trainer login"],
+      ["/trainer/login", "Autentificare trainer"],
     ],
   },
   {

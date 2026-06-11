@@ -55,7 +55,7 @@ function TrainerWorkspaceBar() {
     {
       label: "Companii",
       step: "01",
-      detail: "Adaugă clientul și gestionează workspace-ul complet.",
+      detail: "Adaugă clientul și gestionează spațiul complet.",
       href: "/trainer/companies",
     },
     {
@@ -83,7 +83,7 @@ function TrainerWorkspaceBar() {
       <div className="grid gap-5 xl:grid-cols-[minmax(18rem,1fr)_minmax(32rem,44rem)] xl:items-center">
         <div className="min-w-0 max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Flux companie</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">Pornește din workspace-ul clientului</h2>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">Pornește din spațiul clientului</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
             Alege compania, apoi lucrează pe proiecte, roster, echipe, invitații și rapoarte în același context. Paginile globale rămân pentru configurări reutilizabile.
           </p>

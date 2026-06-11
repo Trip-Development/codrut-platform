@@ -25,7 +25,7 @@ export function TaskBundle({
       <section className="rounded-2xl border border-[var(--border)] bg-surface px-5 py-7 text-center shadow-sm">
         <p className="text-base font-semibold text-foreground">Nu există sarcini active pentru acest proiect.</p>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-foreground/60">
-          Când trainerul trimite invitațiile, task-urile apar aici grupate după email și proiect.
+          Când trainerul trimite invitațiile, sarcinile apar aici grupate după email și proiect.
         </p>
       </section>
     );
@@ -49,7 +49,7 @@ export function TaskBundle({
             href={nextHref}
             className="tap-soft inline-flex justify-center rounded-2xl bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-brand hover:bg-burgundy-700"
           >
-            {progress.nextTask ? "Continuă următorul task" : "Vezi chestionarele"}
+            {progress.nextTask ? "Continuă următoarea sarcină" : "Vezi chestionarele"}
           </Link>
         </div>
         <div className="mt-4 flex items-center gap-3">

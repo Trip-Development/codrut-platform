@@ -66,7 +66,7 @@ describe("CompaniesWorkspace", () => {
 
     expect(screen.queryByRole("button", { name: /Șterge compania/i })).toBeNull();
     expect(screen.queryByText("În pregătire")).toBeNull();
-    expect(screen.getByRole("link", { name: "Intră în workspace" }).getAttribute("href")).toBe(
+    expect(screen.getByRole("link", { name: "Intră în spațiu" }).getAttribute("href")).toBe(
       "/trainer/companies/backend-company",
     );
   });
