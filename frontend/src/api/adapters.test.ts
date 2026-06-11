@@ -229,11 +229,12 @@ describe("frontend API adapter stubs", () => {
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
     expect(questionnaires.map((definition) => definition.id)).toEqual(
-      expect.arrayContaining(["icare", "boss_360", "pcm_base", "phase"]),
+      expect.arrayContaining(["boss_360", "boss_360_en", "pcm_base", "phase"]),
     );
+    expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
-      estimatedItems: 5,
+      estimatedItems: 48,
     });
     await expect(listEmailSurfaceStubs()).resolves.toHaveLength(3);
   });
@@ -366,19 +367,17 @@ describe("frontend API adapter stubs", () => {
   it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
-    await expect(getQuestionnaireDefinition("boss_360")).resolves.toMatchObject({
-      key: "boss_360",
-      schema: {
-        sections: [
-          {
-            questions: expect.arrayContaining([
-              expect.objectContaining({ id: "boss_360_q01" }),
-            ]),
-          },
-        ],
-      },
-    });
+    const definition = await getQuestionnaireDefinition("boss_360");
 
+    expect(definition).toMatchObject({
+      key: "boss_360",
+      title: "Feedback 360 iCARE pentru manager",
+    });
+    expect(definition?.schema.sections[0]?.questions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "icare_inspiring_developing_people" }),
+      ]),
+    );
   });
 
   it("does not fall back to demo sessions when fallback is disabled", async () => {

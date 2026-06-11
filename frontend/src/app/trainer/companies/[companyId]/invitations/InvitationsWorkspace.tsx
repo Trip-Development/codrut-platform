@@ -62,6 +62,15 @@ type InvitationFilter = "all" | "ready" | "errors" | "no_assignments" | "not_sig
 
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const activeInviteStatuses = new Set(["invited", "started", "submitted", "validated", "scored"]);
+const questionnaireLabels: Record<string, string> = {
+  lencioni: "Lencioni - evaluare echipă",
+  lencioni_en: "Lencioni Team Assessment",
+  distress_drivers: "Driveri de stres TA",
+  distress_drivers_en: "TA Distress Drivers",
+  boss_360: "Feedback 360 iCARE",
+  boss_360_en: "iCARE 360 Feedback",
+  icare: "Feedback 360 iCARE",
+};
 
 export function buildInvitationRows(
   participants: CompanyParticipant[],
@@ -1130,7 +1139,7 @@ function PlanAssignmentRow({
         <p className="mt-1 text-xs text-foreground/50">Respondent</p>
       </div>
       <div>
-        <p className="font-semibold text-foreground">{assignment.questionnaire_key}</p>
+        <p className="font-semibold text-foreground">{formatQuestionnaireLabel(assignment.questionnaire_key)}</p>
         <p className="mt-1 text-xs text-foreground/50">Chestionar</p>
       </div>
       <div className="min-w-0">
@@ -1156,6 +1165,10 @@ function formatTargetType(type: AssignmentTargetType): string {
   if (type === "person") return "Persoană";
   if (type === "team") return "Echipă";
   return "Autoevaluare";
+}
+
+function formatQuestionnaireLabel(key: string): string {
+  return questionnaireLabels[key] ?? key.replaceAll("_", " ");
 }
 
 function formatPlanTarget(assignment: CompanyAssignmentPlanItem): string {
@@ -1274,13 +1287,13 @@ function formatAssignmentLabel(
     const targetName = assignment.target_person_id
       ? participantsById.get(assignment.target_person_id)?.full_name
       : null;
-    return `${assignment.questionnaire_key} · despre ${targetName ?? "persoană"}`;
+    return `${formatQuestionnaireLabel(assignment.questionnaire_key)} · despre ${targetName ?? "persoană"}`;
   }
   if (assignment.target_type === "team") {
     const teamName = assignment.target_team_id ? teamsById.get(assignment.target_team_id)?.name : null;
-    return `${assignment.questionnaire_key} · echipa ${teamName ?? "selectată"}`;
+    return `${formatQuestionnaireLabel(assignment.questionnaire_key)} · echipa ${teamName ?? "selectată"}`;
   }
-  return `${assignment.questionnaire_key} · autoevaluare`;
+  return `${formatQuestionnaireLabel(assignment.questionnaire_key)} · autoevaluare`;
 }
 
 function StatusPill({

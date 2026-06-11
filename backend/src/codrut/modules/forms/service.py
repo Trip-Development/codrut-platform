@@ -14,6 +14,7 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.forms.definitions import (
     APPROVED_QUESTIONNAIRE_DEFINITIONS,
+    LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS,
     get_approved_questionnaire_definition,
 )
 from codrut.modules.forms.models import (
@@ -62,6 +63,8 @@ class FormsService:
         repository = self._require_repository()
         await self._seed_catalog_definitions(repository)
         definition = await repository.get_definition(key, version=version)
+        if definition is None and version is None and key in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
+            return _to_response(LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS[key])
         if definition is None:
             raise DomainError("Questionnaire definition not found.", code="definition_not_found")
         return _to_response(definition)
@@ -378,6 +381,8 @@ class FormsService:
                     active=True,
                 )
             )
+        for alias_key in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
+            await repository.deactivate_definitions_for_key(alias_key)
 
 
 def _to_response(definition: Any) -> QuestionnaireDefinitionResponse:
