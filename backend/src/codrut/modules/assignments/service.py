@@ -103,6 +103,7 @@ class AssignmentService:
         payload: AssignmentCreateRequest,
     ) -> QuestionnaireAssignment:
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, payload.project_id)
         _validate_target_shape(payload)
         questionnaire_key = payload.questionnaire_key.strip()
         await self._require_active_questionnaire_definition(questionnaire_key)
@@ -116,6 +117,7 @@ class AssignmentService:
         return await self.assignment_repository.add_assignment(
             QuestionnaireAssignment(
                 company_id=company_id,
+                project_id=payload.project_id,
                 respondent_profile_id=payload.respondent_profile_id,
                 questionnaire_key=questionnaire_key,
                 target_type=payload.target_type,
@@ -131,20 +133,27 @@ class AssignmentService:
         self,
         user_id: UUID,
         company_id: UUID,
+        project_id: UUID | None = None,
     ) -> list[QuestionnaireAssignment]:
         await self._require_company_manager(user_id, company_id)
-        return await self.assignment_repository.list_assignments(company_id)
+        await self._require_company_project(company_id, project_id)
+        return await self.assignment_repository.list_assignments(company_id, project_id)
 
     async def build_default_assignment_plan(
         self,
         user_id: UUID,
         company_id: UUID,
+        project_id: UUID | None = None,
     ) -> AssignmentPlanResponse:
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id)
         participants = await self.company_repository.list_participants(company_id)
         teams = await self.assignment_repository.list_teams(company_id)
         relationships = await self.company_repository.list_reporting_relationships(company_id)
-        existing_assignments = await self.assignment_repository.list_assignments(company_id)
+        existing_assignments = await self.assignment_repository.list_assignments(
+            company_id,
+            project_id,
+        )
 
         participant_by_id = {participant.id: participant for participant in participants}
         teams_by_name = {team.name.strip().casefold(): team for team in teams}
@@ -306,6 +315,7 @@ class AssignmentService:
 
         existing_count = sum(1 for item in plan_items if item.existing_assignment_id is not None)
         return AssignmentPlanResponse(
+            project_id=project_id,
             scopes=scopes,
             assignments=plan_items,
             suggested_count=len(plan_items),
@@ -319,13 +329,18 @@ class AssignmentService:
         payload: AssignmentPlanSaveRequest,
     ) -> AssignmentPlanSaveResponse:
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, payload.project_id)
         saved: list[QuestionnaireAssignment] = []
         seen_assignment_ids: set[UUID] = set()
         created_count = 0
         existing_count = 0
 
         for item in payload.assignments:
-            assignment, created = await self._create_or_get_planned_assignment(company_id, item)
+            assignment, created = await self._create_or_get_planned_assignment(
+                company_id,
+                payload.project_id,
+                item,
+            )
             if assignment.id in seen_assignment_ids:
                 continue
             seen_assignment_ids.add(assignment.id)
@@ -359,6 +374,7 @@ class AssignmentService:
     async def _create_or_get_planned_assignment(
         self,
         company_id: UUID,
+        project_id: UUID | None,
         item: AssignmentPlanSaveItem,
     ) -> tuple[QuestionnaireAssignment, bool]:
         await self._require_active_questionnaire_definition(item.questionnaire_key)
@@ -371,6 +387,7 @@ class AssignmentService:
 
         existing = await self.assignment_repository.get_matching_assignment(
             company_id=company_id,
+            project_id=project_id,
             respondent_profile_id=item.respondent_profile_id,
             questionnaire_key=item.questionnaire_key.strip(),
             target_type=item.target_type,
@@ -385,6 +402,7 @@ class AssignmentService:
             return existing, False
 
         payload = AssignmentCreateRequest(
+            project_id=project_id,
             respondent_profile_id=item.respondent_profile_id,
             questionnaire_key=item.questionnaire_key,
             target_type=item.target_type,
@@ -400,6 +418,7 @@ class AssignmentService:
         assignment = await self.assignment_repository.add_assignment(
             QuestionnaireAssignment(
                 company_id=company_id,
+                project_id=payload.project_id,
                 respondent_profile_id=payload.respondent_profile_id,
                 questionnaire_key=payload.questionnaire_key.strip(),
                 target_type=payload.target_type,
@@ -482,6 +501,20 @@ class AssignmentService:
             raise DomainError(
                 "Participant not found in this company.",
                 code="participant_not_found",
+            )
+
+    async def _require_company_project(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+    ) -> None:
+        if project_id is None:
+            return
+        project = await self.company_repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError(
+                "Project not found in this company.",
+                code="project_not_found",
             )
 
     async def _require_active_questionnaire_definition(self, questionnaire_key: str) -> None:

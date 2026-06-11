@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 
 import {
   createCompanyProject,
   deleteCompanyProject,
   updateCompanyProject,
+  type CompanyAssignment,
   type CompanyProject,
   type CompanyProjectStatus,
 } from "@/api/companies";
@@ -13,6 +15,7 @@ import {
 type CompanyProjectsPanelProps = {
   companyId: string;
   initialProjects: CompanyProject[];
+  assignments: CompanyAssignment[];
 };
 
 const statusOptions: Array<{ value: CompanyProjectStatus; label: string }> = [
@@ -29,7 +32,11 @@ const statusTone: Record<CompanyProjectStatus, string> = {
   archived: "bg-foreground/8 text-foreground/48",
 };
 
-export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProjectsPanelProps) {
+export function CompanyProjectsPanel({
+  companyId,
+  initialProjects,
+  assignments,
+}: CompanyProjectsPanelProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -42,6 +49,7 @@ export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProj
     () => projects.filter((project) => project.status === "active").length,
     [projects],
   );
+  const metricsByProject = useMemo(() => buildProjectMetrics(assignments), [assignments]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,7 +120,7 @@ export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProj
           <p className="text-xs font-semibold text-burgundy/75">Proiecte</p>
           <h2 className="mt-1 text-lg font-semibold text-foreground">Spațiul de lucru al companiei</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
-            Creează proiectele clientului aici. Participanții, invitațiile și rapoartele rămân legate de companie până la următoarea migrare pe proiect.
+            Creează proiectele clientului aici, apoi intră direct în planificarea asignărilor, invitații și rapoarte pentru fiecare proiect.
           </p>
           <div className="mt-4 space-y-3">
             <label className="block text-xs font-bold text-foreground/58">
@@ -174,11 +182,16 @@ export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProj
                 Niciun proiect creat încă.
               </div>
             ) : (
-              projects.map((project) => (
-                <article
-                  key={project.id}
-                  className="rounded-xl border border-[var(--border)] bg-background p-4 transition-colors hover:border-burgundy/30 hover:bg-surface-muted/45"
-                >
+              projects.map((project) => {
+                const metrics = metricsByProject.get(project.id) ?? {
+                  total: 0,
+                  completed: 0,
+                };
+                return (
+                  <article
+                    key={project.id}
+                    className="rounded-xl border border-[var(--border)] bg-background p-4 transition-colors hover:border-burgundy/30 hover:bg-surface-muted/45"
+                  >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h4 className="truncate text-sm font-semibold text-foreground">{project.name}</h4>
@@ -193,7 +206,23 @@ export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProj
                   {project.description ? (
                     <p className="mt-3 text-sm leading-6 text-foreground/62">{project.description}</p>
                   ) : null}
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-semibold text-foreground/58">
+                    <ProjectMetric label="Asignări" value={metrics.total} />
+                    <ProjectMetric label="Finalizate" value={metrics.completed} />
+                  </div>
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={`/trainer/companies/${companyId}/invitations?projectId=${project.id}`}
+                      className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                    >
+                      Invitații
+                    </Link>
+                    <Link
+                      href={`/trainer/companies/${companyId}/reports?projectId=${project.id}`}
+                      className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                    >
+                      Rapoarte
+                    </Link>
                     <select
                       value={project.status}
                       onChange={(event) => handleStatusChange(project, event.target.value as CompanyProjectStatus)}
@@ -216,7 +245,8 @@ export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProj
                     </button>
                   </div>
                 </article>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -227,6 +257,29 @@ export function CompanyProjectsPanel({ companyId, initialProjects }: CompanyProj
 
 function statusLabel(status: CompanyProjectStatus): string {
   return statusOptions.find((option) => option.value === status)?.label ?? status;
+}
+
+function ProjectMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg bg-surface-muted/60 px-3 py-2">
+      <p className="text-foreground/42">{label}</p>
+      <p className="mt-1 text-sm text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function buildProjectMetrics(assignments: CompanyAssignment[]) {
+  const metrics = new Map<string, { total: number; completed: number }>();
+  for (const assignment of assignments) {
+    if (!assignment.project_id) continue;
+    const current = metrics.get(assignment.project_id) ?? { total: 0, completed: 0 };
+    current.total += 1;
+    if (["submitted", "validated", "scored"].includes(assignment.status)) {
+      current.completed += 1;
+    }
+    metrics.set(assignment.project_id, current);
+  }
+  return metrics;
 }
 
 function formatDate(value: string | null): string | null {

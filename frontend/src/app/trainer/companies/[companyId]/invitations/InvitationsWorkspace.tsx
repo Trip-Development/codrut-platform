@@ -12,6 +12,7 @@ import {
   type CompanyAssignmentPlan,
   type CompanyAssignmentPlanItem,
   type CompanyParticipant,
+  type CompanyProject,
   type CompanyTeam,
   type CreateCompanyAssignmentPayload,
   type ParticipantInvitationStatus,
@@ -26,6 +27,8 @@ import {
 type InvitationsWorkspaceProps = {
   companyId: string;
   companyName: string;
+  projects: CompanyProject[];
+  selectedProjectId: string | null;
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
   invitationStatuses: ParticipantInvitationStatus[];
@@ -147,6 +150,8 @@ export function buildInvitationRows(
 export function InvitationsWorkspace({
   companyId,
   companyName,
+  projects,
+  selectedProjectId,
   participants,
   assignments,
   invitationStatuses,
@@ -173,10 +178,25 @@ export function InvitationsWorkspace({
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("all");
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  );
+  const hasProjects = projects.length > 0;
+  const canUseProjectActions = !hasProjects || selectedProjectId !== null;
 
   useEffect(() => {
     setAssignmentState(assignments);
   }, [assignments]);
+
+  useEffect(() => {
+    setPlan(null);
+    setSelectedPlanKeys(new Set());
+    setSelectedParticipantIds(new Set());
+    setResultsByParticipant(new Map());
+    setCopiedParticipantId(null);
+    setMessage(null);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -269,6 +289,7 @@ export function InvitationsWorkspace({
   const visibleSelectedCount = filteredRows.filter((row) => selectedParticipantIds.has(row.participant.id)).length;
   const allVisibleSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedParticipantIds.has(row.participant.id));
   const canCreateAssignment =
+    canUseProjectActions &&
     participants.length > 0 &&
     questionnaires.length > 0 &&
     Boolean(assignmentForm.respondentProfileId) &&
@@ -278,7 +299,7 @@ export function InvitationsWorkspace({
         Boolean(assignmentForm.targetPersonId) &&
         assignmentForm.targetPersonId !== assignmentForm.respondentProfileId) ||
       (assignmentForm.targetType === "team" && Boolean(assignmentForm.targetTeamId)));
-  const canSavePlan = selectedPlanItems.length > 0 && !planSaving;
+  const canSavePlan = canUseProjectActions && selectedPlanItems.length > 0 && !planSaving;
 
   function updateAssignmentForm(patch: Partial<AssignmentFormState>) {
     setAssignmentForm((current) => {
@@ -307,6 +328,7 @@ export function InvitationsWorkspace({
     setCopiedParticipantId(null);
 
     const payload: CreateCompanyAssignmentPayload = {
+      projectId: selectedProjectId,
       respondentProfileId: assignmentForm.respondentProfileId,
       questionnaireKey: assignmentForm.questionnaireKey,
       targetType: assignmentForm.targetType,
@@ -327,11 +349,19 @@ export function InvitationsWorkspace({
   }
 
   async function handleGeneratePlan() {
+    if (!canUseProjectActions) {
+      setMessage("Alege un proiect înainte de a genera planul de asignări.");
+      return;
+    }
     setPlanLoading(true);
     setMessage(null);
     setCopiedParticipantId(null);
     try {
-      const generated = await getCompanyDefaultAssignmentPlan(companyId);
+      const generated = await getCompanyDefaultAssignmentPlan(
+        companyId,
+        {},
+        { projectId: selectedProjectId },
+      );
       setPlan(generated);
       setSelectedPlanKeys(
         new Set(generated.assignments.filter((assignment) => assignment.selected).map((assignment) => assignment.key)),
@@ -354,7 +384,11 @@ export function InvitationsWorkspace({
     setMessage(null);
     setCopiedParticipantId(null);
     try {
-      const result = await saveCompanyDefaultAssignmentPlan(companyId, selectedPlanItems);
+      const result = await saveCompanyDefaultAssignmentPlan(
+        companyId,
+        selectedPlanItems,
+        selectedProjectId,
+      );
       const savedIdsByPlanKey = new Map(
         selectedPlanItems.map((assignment, index) => [assignment.key, result.assignments[index]?.id ?? null]),
       );
@@ -452,6 +486,10 @@ export function InvitationsWorkspace({
       setMessage("Selectează cel puțin o persoană cu sarcini salvate înainte de trimitere.");
       return;
     }
+    if (!canUseProjectActions) {
+      setMessage("Alege un proiect înainte de trimitere.");
+      return;
+    }
     setSendingMode(mode);
     setMessage(null);
     setCopiedParticipantId(null);
@@ -459,7 +497,11 @@ export function InvitationsWorkspace({
       .filter((row) => row.totalTasks > 0)
       .map((row) => row.participant.id);
     try {
-      const result = await sendParticipantInvitations(companyId, { mode, participantIds });
+      const result = await sendParticipantInvitations(companyId, {
+        mode,
+        participantIds,
+        projectId: selectedProjectId,
+      });
       setResultsByParticipant((current) => {
         const next = new Map(current);
         for (const item of result.results) {
@@ -485,7 +527,11 @@ export function InvitationsWorkspace({
     setMessage(null);
     setCopiedParticipantId(null);
     try {
-      const result = await resendParticipantInvitation(companyId, participantId);
+      if (!canUseProjectActions) {
+        setMessage("Alege un proiect înainte de retrimitere.");
+        return;
+      }
+      const result = await resendParticipantInvitation(companyId, participantId, selectedProjectId);
       if (result) {
         setResultsByParticipant((current) => {
           const next = new Map(current);
@@ -515,12 +561,21 @@ export function InvitationsWorkspace({
   return (
     <div className="space-y-5">
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+        <ProjectScopeSelector
+          companyId={companyId}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+        />
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="p-5 md:p-6">
-            <p className="text-sm font-semibold text-burgundy/75">Invitații companie</p>
+            <p className="text-sm font-semibold text-burgundy/75">
+              {selectedProject ? "Invitații proiect" : "Invitații companie"}
+            </p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Status invitații pentru {companyName}</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
-              Vezi cine are invitația activă, cine și-a creat contul, câte sarcini are și ce trebuie urmărit.
+              {selectedProject
+                ? `Lucrezi pe proiectul ${selectedProject.name}. Vezi cine are invitația activă, cine și-a creat contul și câte sarcini are în proiect.`
+                : "Vezi cine are invitația activă, cine și-a creat contul, câte sarcini are și ce trebuie urmărit."}
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-4">
               <InviteSummary label="Invitații active" value={activeInvites} />
@@ -539,7 +594,7 @@ export function InvitationsWorkspace({
             <button
               type="button"
               onClick={() => void handleSend("secure_links")}
-              disabled={sendingMode !== null || selectedReadyCount === 0}
+              disabled={!canUseProjectActions || sendingMode !== null || selectedReadyCount === 0}
               className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {sendingMode === "secure_links" ? "Se generează linkurile..." : "Generează linkuri securizate"}
@@ -547,13 +602,13 @@ export function InvitationsWorkspace({
             <button
               type="button"
               onClick={() => void handleSend("email")}
-              disabled={sendingMode !== null || selectedReadyCount === 0}
+              disabled={!canUseProjectActions || sendingMode !== null || selectedReadyCount === 0}
               className="tap-soft w-full rounded-xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
             >
               {sendingMode === "email" ? "Se trimit emailurile..." : "Trimite email invitații"}
             </button>
             <p className="text-xs leading-5 text-foreground/52">
-              Trimiterea folosește doar persoanele bifate în tabel. Persoanele fără sarcini salvate nu pot fi selectate.
+              Trimiterea folosește doar persoanele bifate în tabel și sarcinile din proiectul selectat. Persoanele fără sarcini salvate nu pot fi selectate.
             </p>
           </div>
         </div>
@@ -577,7 +632,7 @@ export function InvitationsWorkspace({
               <button
                 type="button"
                 onClick={() => void handleGeneratePlan()}
-                disabled={planLoading || participants.length === 0}
+                disabled={!canUseProjectActions || planLoading || participants.length === 0}
                 className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy hover:bg-burgundy/5 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {planLoading ? "Se generează planul..." : "Generează plan de asignări"}
@@ -886,6 +941,50 @@ function matchesInvitationFilter(row: ParticipantInviteRow, filter: InvitationFi
   if (filter === "no_assignments") return row.totalTasks === 0;
   if (filter === "not_signed_up") return !row.signedUp;
   return true;
+}
+
+function ProjectScopeSelector({
+  companyId,
+  projects,
+  selectedProjectId,
+}: {
+  companyId: string;
+  projects: CompanyProject[];
+  selectedProjectId: string | null;
+}) {
+  function handleChange(value: string) {
+    const suffix = value ? `?projectId=${encodeURIComponent(value)}` : "";
+    window.location.href = `/trainer/companies/${companyId}/invitations${suffix}`;
+  }
+
+  return (
+    <div className="border-b border-[var(--border)] bg-surface-muted/35 px-5 py-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold text-burgundy/75">Proiect curent</p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {selectedProjectId
+              ? projects.find((project) => project.id === selectedProjectId)?.name
+              : projects.length > 0
+                ? "Alege un proiect pentru planificare și trimitere"
+                : "Fără proiecte create încă"}
+          </p>
+        </div>
+        <select
+          value={selectedProjectId ?? ""}
+          onChange={(event) => handleChange(event.target.value)}
+          className="min-h-10 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none hover:border-burgundy/45 focus:border-burgundy/45"
+        >
+          <option value="">Toată compania</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 }
 
 function formatResendMessage(result: RosterInviteResult): string {

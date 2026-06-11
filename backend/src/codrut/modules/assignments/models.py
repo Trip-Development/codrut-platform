@@ -105,6 +105,11 @@ class QuestionnaireAssignment(TimestampMixin, Base):
         ForeignKey("companies.id", ondelete="CASCADE"),
         index=True,
     )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     respondent_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("participant_profiles.id", ondelete="CASCADE"),
         index=True,

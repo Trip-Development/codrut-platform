@@ -24,13 +24,16 @@ class ScoringRepository:
     async def list_company_assignment_results(
         self,
         company_id: UUID,
+        project_id: UUID | None = None,
     ) -> list[tuple[QuestionnaireAssignment, ScoringResult | None]]:
-        result = await self.session.execute(
+        stmt = (
             select(QuestionnaireAssignment, ScoringResult)
             .outerjoin(ScoringResult, ScoringResult.assignment_id == QuestionnaireAssignment.id)
             .where(QuestionnaireAssignment.company_id == company_id)
-            .order_by(QuestionnaireAssignment.created_at)
         )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
         return [(assignment, scoring_result) for assignment, scoring_result in result.all()]
 
     async def delete_by_assignment(self, assignment_id: UUID) -> None:

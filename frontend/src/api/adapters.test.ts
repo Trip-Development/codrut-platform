@@ -145,6 +145,7 @@ describe("frontend API adapter stubs", () => {
             {
               id: "assignment-1",
               company_id: "company-1",
+              project_id: null,
               respondent_profile_id: "participant-1",
               questionnaire_key: "lencioni",
               target_type: "self",
@@ -519,6 +520,7 @@ describe("frontend API adapter stubs", () => {
     await expect(
       sendParticipantInvitations("company-1", {
         participantIds: ["participant-1"],
+        projectId: "project-1",
         mode: "secure_links",
       }),
     ).resolves.toMatchObject({ links_generated: 1 });
@@ -540,6 +542,7 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
         body: JSON.stringify({
           participant_ids: ["participant-1"],
+          project_id: "project-1",
           mode: "secure_links",
           force_rotate: false,
         }),
@@ -571,13 +574,13 @@ describe("frontend API adapter stubs", () => {
       }),
     } as Response);
 
-    await expect(resendParticipantInvitation("company-1", "participant-1")).resolves.toMatchObject({
+    await expect(resendParticipantInvitation("company-1", "participant-1", "project-1")).resolves.toMatchObject({
       participant_id: "participant-1",
       email_sent: true,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/companies/company-1/participants/participant-1/resend-invite"),
+      expect.stringContaining("/companies/company-1/participants/participant-1/resend-invite?project_id=project-1"),
       expect.objectContaining({
         method: "POST",
         credentials: "include",
@@ -593,6 +596,7 @@ describe("frontend API adapter stubs", () => {
       json: async () => ({
         id: "assignment-1",
         company_id: "company-1",
+        project_id: "project-1",
         respondent_profile_id: "participant-1",
         questionnaire_key: "boss_360",
         target_type: "person",
@@ -614,6 +618,7 @@ describe("frontend API adapter stubs", () => {
 
     await expect(
       createCompanyAssignment("company-1", {
+        projectId: "project-1",
         respondentProfileId: "participant-1",
         questionnaireKey: "boss_360",
         targetType: "person",
@@ -632,6 +637,7 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
         body: JSON.stringify({
           respondent_profile_id: "participant-1",
+          project_id: "project-1",
           questionnaire_key: "boss_360",
           target_type: "person",
           target_person_id: "participant-2",
@@ -649,6 +655,7 @@ describe("frontend API adapter stubs", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          project_id: "project-1",
           scopes: [
             {
               id: "leadership",
@@ -692,20 +699,20 @@ describe("frontend API adapter stubs", () => {
         }),
       } as Response);
 
-    const plan = await getCompanyDefaultAssignmentPlan("company-1");
+    const plan = await getCompanyDefaultAssignmentPlan("company-1", {}, { projectId: "project-1" });
 
     expect(plan.assignments[0]).toMatchObject({
       respondent_profile_id: "participant-1",
       target_team_name: "Leadership",
     });
 
-    await expect(saveCompanyDefaultAssignmentPlan("company-1", plan.assignments)).resolves.toMatchObject({
+    await expect(saveCompanyDefaultAssignmentPlan("company-1", plan.assignments, "project-1")).resolves.toMatchObject({
       created_count: 1,
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("/companies/company-1/assignments/default-plan"),
+      expect.stringContaining("/companies/company-1/assignments/default-plan?project_id=project-1"),
       expect.objectContaining({
         cache: "no-store",
         credentials: "include",
@@ -713,11 +720,12 @@ describe("frontend API adapter stubs", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("/companies/company-1/assignments/default-plan"),
+      expect.stringContaining("/companies/company-1/assignments/default-plan?project_id=project-1"),
       expect.objectContaining({
         method: "POST",
         credentials: "include",
         body: JSON.stringify({
+          project_id: "project-1",
           assignments: [
             {
               respondent_profile_id: "participant-1",

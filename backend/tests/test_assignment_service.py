@@ -26,6 +26,7 @@ from codrut.modules.companies.models import (
     Company,
     CompanyMembership,
     CompanyMembershipRole,
+    CompanyProject,
     ParticipantProfile,
 )
 from codrut.modules.identity.models import User
@@ -80,6 +81,7 @@ class FakeCompanyRepository:
         self.companies: dict[uuid.UUID, Company] = {}
         self.memberships: list[CompanyMembership] = []
         self.participants: dict[uuid.UUID, ParticipantProfile] = {}
+        self.projects: dict[uuid.UUID, CompanyProject] = {}
 
     async def get_company(self, company_id: uuid.UUID) -> Company | None:
         return self.companies.get(company_id)
@@ -99,6 +101,16 @@ class FakeCompanyRepository:
         participant_id: uuid.UUID,
     ) -> ParticipantProfile | None:
         return self.participants.get(participant_id)
+
+    async def get_project(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> CompanyProject | None:
+        project = self.projects.get(project_id)
+        if project is None or project.company_id != company_id:
+            return None
+        return project
 
 
 class FakeIdentityRepository:
@@ -353,6 +365,71 @@ async def test_create_assignment_accepts_active_persisted_questionnaire_key() ->
     )
 
     assert assignment.questionnaire_key == "boss_360"
+
+
+async def test_create_assignment_persists_project_scope() -> None:
+    (
+        service,
+        _assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Leadership Septembrie",
+    )
+
+    assignment = await service.create_assignment(
+        user_id,
+        company_id,
+        AssignmentCreateRequest(
+            project_id=project_id,
+            respondent_profile_id=respondent_id,
+            questionnaire_key="lencioni",
+            target_type=AssignmentTargetType.self_assessment,
+        ),
+    )
+
+    assert assignment.project_id == project_id
+
+
+async def test_create_assignment_rejects_project_from_another_company() -> None:
+    (
+        service,
+        _assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=uuid.uuid4(),
+        name="Other",
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(
+            user_id,
+            company_id,
+            AssignmentCreateRequest(
+                project_id=project_id,
+                respondent_profile_id=respondent_id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.self_assessment,
+            ),
+        )
+
+    assert exc_info.value.code == "project_not_found"
 
 
 async def test_create_assignment_rejects_inactive_persisted_questionnaire_key() -> None:

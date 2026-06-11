@@ -42,6 +42,7 @@ class TeamMembershipResponse(BaseModel):
 
 
 class AssignmentCreateRequest(BaseModel):
+    project_id: UUID | None = None
     respondent_profile_id: UUID
     questionnaire_key: str = Field(min_length=1, max_length=120)
     target_type: AssignmentTargetType
@@ -55,6 +56,7 @@ class AssignmentResponse(BaseModel):
 
     id: UUID
     company_id: UUID
+    project_id: UUID | None
     respondent_profile_id: UUID
     questionnaire_key: str
     target_type: AssignmentTargetType
@@ -79,6 +81,7 @@ class AssignmentStatusUpdateRequest(BaseModel):
 
 class InvitationCreateRequest(BaseModel):
     respondent_profile_id: UUID
+    project_id: UUID | None = None
     assignment_ids: list[UUID] | None = None
     expires_in_days: int = 3650
     force_rotate: bool = False
@@ -125,6 +128,7 @@ class AssignmentPlanItemResponse(BaseModel):
 
 
 class AssignmentPlanResponse(BaseModel):
+    project_id: UUID | None = None
     scopes: list[AssignmentPlanScopeResponse]
     assignments: list[AssignmentPlanItemResponse]
     suggested_count: int
@@ -145,6 +149,7 @@ class AssignmentPlanSaveItem(BaseModel):
 
 
 class AssignmentPlanSaveRequest(BaseModel):
+    project_id: UUID | None = None
     assignments: list[AssignmentPlanSaveItem] = Field(default_factory=list)
 
 

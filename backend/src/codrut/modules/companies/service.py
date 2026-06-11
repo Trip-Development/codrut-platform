@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import secrets
 import string
 import unicodedata
@@ -44,6 +45,8 @@ from codrut.modules.companies.schemas import (
 from codrut.modules.identity.models import Session, User, UserRole
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import AuthResponse
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -344,6 +347,7 @@ class CompanyService:
             user_id=user_id,
             company=company,
             participants=participants,
+            project_id=None,
             mode="email",
             force_rotate=True,
         )
@@ -363,6 +367,7 @@ class CompanyService:
     ) -> ParticipantInviteBatchResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, payload.project_id)
         participants = await self.repository.list_participants(company_id)
 
         if payload.participant_ids is not None:
@@ -385,6 +390,7 @@ class CompanyService:
             user_id=user_id,
             company=company,
             participants=participants,
+            project_id=payload.project_id,
             mode=payload.mode,
             force_rotate=payload.force_rotate,
         )
@@ -395,6 +401,7 @@ class CompanyService:
         user_id: UUID,
         company: Company,
         participants: list[ParticipantProfile],
+        project_id: UUID | None,
         mode: Literal["email", "secure_links"],
         force_rotate: bool,
     ) -> ParticipantInviteBatchResponse:
@@ -423,6 +430,7 @@ class CompanyService:
             assignments = await self._list_active_assignments_for_participant(
                 company.id,
                 participant,
+                project_id,
             )
             if not assignments:
                 raise DomainError(
@@ -434,6 +442,7 @@ class CompanyService:
                 company_id=company.id,
                 respondent_profile_id=participant.id,
                 assignment_ids=[assignment.id for assignment in assignments],
+                project_id=project_id,
                 force_rotate=force_rotate,
             )
             invite_url = build_task_url(invite.token, settings)
@@ -509,17 +518,19 @@ class CompanyService:
         self,
         user_id: UUID,
         company_id: UUID,
+        project_id: UUID | None = None,
     ) -> list[ParticipantInvitationStatusResponse]:
         from sqlalchemy import select
 
         from codrut.core.config import get_settings
         from codrut.modules.assignments.models import QuestionnaireAssignment
         from codrut.modules.communications.models import EmailSend
-        from codrut.modules.communications.task_links import build_task_url
+        from codrut.modules.communications.task_links import build_task_url, parse_task_token
         from codrut.modules.identity.models import AssignmentInvite
 
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id)
 
         participants = await self.repository.list_participants(company_id)
         if not participants:
@@ -527,13 +538,16 @@ class CompanyService:
 
         participant_ids = {participant.id for participant in participants}
 
-        sends_result = await self.repository.session.execute(
+        sends_stmt = (
             select(EmailSend, QuestionnaireAssignment.respondent_profile_id)
             .join(QuestionnaireAssignment, EmailSend.assignment_id == QuestionnaireAssignment.id)
             .where(QuestionnaireAssignment.company_id == company_id)
             .where(QuestionnaireAssignment.respondent_profile_id.in_(participant_ids))
             .order_by(EmailSend.created_at.desc())
         )
+        if project_id is not None:
+            sends_stmt = sends_stmt.where(QuestionnaireAssignment.project_id == project_id)
+        sends_result = await self.repository.session.execute(sends_stmt)
 
         latest_send_by_participant: dict[UUID, EmailSend] = {}
         send_count_by_participant: dict[UUID, int] = {}
@@ -542,6 +556,19 @@ class CompanyService:
                 send_count_by_participant.get(participant_id, 0) + 1
             )
             latest_send_by_participant.setdefault(participant_id, send)
+
+        project_assignment_ids_by_participant: dict[UUID, set[UUID]] = {}
+        if project_id is not None:
+            assignments_result = await self.repository.session.execute(
+                select(QuestionnaireAssignment.id, QuestionnaireAssignment.respondent_profile_id)
+                .where(QuestionnaireAssignment.company_id == company_id)
+                .where(QuestionnaireAssignment.project_id == project_id)
+                .where(QuestionnaireAssignment.respondent_profile_id.in_(participant_ids))
+            )
+            for assignment_id, participant_id in assignments_result.all():
+                project_assignment_ids_by_participant.setdefault(participant_id, set()).add(
+                    assignment_id
+                )
 
         now = datetime.now(UTC)
         invites_result = await self.repository.session.execute(
@@ -554,11 +581,23 @@ class CompanyService:
         )
 
         latest_invite_by_participant: dict[UUID, AssignmentInvite] = {}
+        settings = get_settings()
         for invite in invites_result.scalars().all():
+            if project_id is not None:
+                try:
+                    claims = parse_task_token(invite.token, settings)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("Skipping invalid participant invite token: %s", exc)
+                    continue
+                project_assignment_ids = project_assignment_ids_by_participant.get(
+                    invite.respondent_profile_id,
+                    set(),
+                )
+                if not project_assignment_ids.intersection(claims.assignment_ids):
+                    continue
             latest_invite_by_participant.setdefault(invite.respondent_profile_id, invite)
 
         statuses: list[ParticipantInvitationStatusResponse] = []
-        settings = get_settings()
         for participant in participants:
             latest_send = latest_send_by_participant.get(participant.id)
             active_invite = latest_invite_by_participant.get(participant.id)
@@ -598,6 +637,7 @@ class CompanyService:
         self,
         company_id: UUID,
         participant: ParticipantProfile,
+        project_id: UUID | None = None,
     ) -> list:
         from codrut.modules.assignments.models import AssignmentStatus
 
@@ -610,7 +650,9 @@ class CompanyService:
         return [
             assignment
             for assignment in assignments
-            if assignment.company_id == company_id and assignment.status in active_statuses
+            if assignment.company_id == company_id
+            and assignment.status in active_statuses
+            and (project_id is None or assignment.project_id == project_id)
         ]
 
     async def resend_invite(
@@ -618,9 +660,11 @@ class CompanyService:
         user_id: UUID,
         company_id: UUID,
         participant_id: UUID,
+        project_id: UUID | None = None,
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id)
 
         participant = await self.repository.get_participant_by_id(participant_id)
         if participant is None or participant.company_id != company_id:
@@ -630,6 +674,7 @@ class CompanyService:
             user_id=user_id,
             company=company,
             participants=[participant],
+            project_id=project_id,
             mode="email",
             force_rotate=False,
         )
@@ -775,6 +820,17 @@ class CompanyService:
         if company is None:
             raise DomainError("Company not found.", code="company_not_found")
         return company
+
+    async def _require_company_project(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+    ) -> None:
+        if project_id is None:
+            return
+        project = await self.repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError("Project not found in this company.", code="project_not_found")
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
         membership = await self.repository.get_membership(company_id, user_id)

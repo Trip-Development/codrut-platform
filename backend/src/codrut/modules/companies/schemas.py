@@ -154,6 +154,7 @@ class RosterImportResponse(BaseModel):
 
 class ParticipantInviteBatchRequest(BaseModel):
     participant_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=1000)
+    project_id: UUID | None = None
     mode: Literal["email", "secure_links"] = "email"
     force_rotate: bool = False
 
