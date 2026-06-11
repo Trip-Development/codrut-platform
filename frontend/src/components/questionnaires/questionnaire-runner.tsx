@@ -6,11 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
+  type QuestionnaireAnswerValue,
   type QuestionnaireDefinition,
   type QuestionnaireQuestion,
 } from "@/api/questionnaires";
 
-type AnswerState = Record<string, number>;
+type AnswerState = Record<string, QuestionnaireAnswerValue>;
 
 type QuestionnaireRunnerProps = {
   definition: QuestionnaireDefinition;
@@ -49,7 +50,7 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
   const canSubmit = answeredCount === requiredAnswerKeys.length && Boolean(assignmentId);
   const isComplete = saveState === "submitted";
 
-  async function handleAnswerChange(key: string, value: number) {
+  async function handleAnswerChange(key: string, value: QuestionnaireAnswerValue) {
     if (isComplete) return;
     const newAnswers = { ...answers, [key]: value };
     setAnswers(newAnswers);
@@ -122,6 +123,12 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
                         ) : null}
                         {question.type === "likert" ? (
                           <LikertQuestion
+                            question={question}
+                            answers={answers}
+                            onAnswerChange={handleAnswerChange}
+                          />
+                        ) : question.type === "single_choice" ? (
+                          <SingleChoiceQuestion
                             question={question}
                             answers={answers}
                             onAnswerChange={handleAnswerChange}
@@ -223,7 +230,7 @@ function CompletionPanel({ answeredCount, total }: { answeredCount: number; tota
 type QuestionInputProps = {
   question: QuestionnaireQuestion;
   answers: AnswerState;
-  onAnswerChange: (key: string, value: number) => void;
+  onAnswerChange: (key: string, value: QuestionnaireAnswerValue) => void;
 };
 
 function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
@@ -245,6 +252,38 @@ function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProp
             ].join(" ")}
           >
             {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SingleChoiceQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
+  const key = answerKey(question);
+
+  return (
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      {question.scale.map((option) => {
+        const selected = answers[key] === option.value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            onClick={() => onAnswerChange(key, option.value)}
+            className={[
+              "tap-soft rounded-xl border px-3 py-3 text-left text-sm transition-colors",
+              selected
+                ? "border-burgundy bg-burgundy text-white shadow-sm"
+                : "border-[var(--border)] bg-background text-foreground/72 hover:border-burgundy/45 hover:text-burgundy",
+            ].join(" ")}
+          >
+            <span className="block font-bold">{option.label}</span>
+            {option.description ? (
+              <span className={["mt-1 block text-xs leading-5", selected ? "text-white/72" : "text-foreground/52"].join(" ")}>
+                {option.description}
+              </span>
+            ) : null}
           </button>
         );
       })}

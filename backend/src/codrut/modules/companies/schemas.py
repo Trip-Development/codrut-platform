@@ -93,6 +93,8 @@ class ParticipantResponse(BaseModel):
     location: str | None
     role_group: str | None
     pcm_profile: str | None
+    pcm_base: str | None = None
+    pcm_phase: str | None = None
 
 
 class RosterImportEmailResult(BaseModel):

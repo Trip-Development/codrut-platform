@@ -67,6 +67,47 @@ export type CreateCompanyAssignmentPayload = {
   visibilityPolicy?: NonNullable<CompanyAssignment["visibility_policy"]>;
 };
 
+export type CompanyAssignmentPlanScope = {
+  id: string;
+  name: string;
+  type: "leadership_team" | "manager_team" | "manager" | "member" | string;
+  participant_ids: string[];
+};
+
+export type CompanyAssignmentPlanItem = {
+  key: string;
+  scope_id: string;
+  scope_name: string;
+  scope_type: CompanyAssignmentPlanScope["type"];
+  respondent_profile_id: string;
+  respondent_name: string;
+  questionnaire_key: string;
+  target_type: CompanyAssignment["target_type"];
+  target_person_id: string | null;
+  target_person_name: string | null;
+  target_team_id: string | null;
+  target_team_name: string | null;
+  target_team_type: CompanyTeam["type"] | null;
+  target_team_member_ids: string[];
+  target_team_leader_id: string | null;
+  visibility_policy: NonNullable<CompanyAssignment["visibility_policy"]>;
+  selected: boolean;
+  existing_assignment_id: string | null;
+};
+
+export type CompanyAssignmentPlan = {
+  scopes: CompanyAssignmentPlanScope[];
+  assignments: CompanyAssignmentPlanItem[];
+  suggested_count: number;
+  existing_count: number;
+};
+
+export type CompanyAssignmentPlanSaveResponse = {
+  assignments: CompanyAssignment[];
+  created_count: number;
+  existing_count: number;
+};
+
 export type RosterInviteResult = {
   participant_id: string;
   email: string;
@@ -294,6 +335,56 @@ export async function createCompanyAssignment(
   }
 
   return (await response.json()) as CompanyAssignment;
+}
+
+export async function getCompanyDefaultAssignmentPlan(
+  companyId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyAssignmentPlan> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as CompanyAssignmentPlan;
+}
+
+export async function saveCompanyDefaultAssignmentPlan(
+  companyId: string,
+  assignments: CompanyAssignmentPlanItem[],
+): Promise<CompanyAssignmentPlanSaveResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      assignments: assignments.map((assignment) => ({
+        respondent_profile_id: assignment.respondent_profile_id,
+        questionnaire_key: assignment.questionnaire_key,
+        target_type: assignment.target_type,
+        target_person_id: assignment.target_person_id,
+        target_team_id: assignment.target_team_id,
+        target_team_name: assignment.target_team_name,
+        target_team_type: assignment.target_team_type,
+        target_team_member_ids: assignment.target_team_member_ids,
+        target_team_leader_id: assignment.target_team_leader_id,
+        visibility_policy: assignment.visibility_policy,
+      })),
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+
+  return (await response.json()) as CompanyAssignmentPlanSaveResponse;
 }
 
 export async function getCompanyTeams(

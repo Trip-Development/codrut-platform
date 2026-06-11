@@ -101,6 +101,8 @@ class ParticipantProfile(TimestampMixin, Base):
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role_group: Mapped[str | None] = mapped_column(String(255), nullable=True)
     pcm_profile: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pcm_base: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    pcm_phase: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     company: Mapped[Company] = relationship(back_populates="participants")
     user: Mapped[User | None] = relationship(back_populates="participant_profile")

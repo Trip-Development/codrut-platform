@@ -4,9 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   createCompanyAssignment,
+  getCompanyDefaultAssignmentPlan,
   resendParticipantInvitation,
+  saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
   type CompanyAssignment,
+  type CompanyAssignmentPlan,
+  type CompanyAssignmentPlanItem,
   type CompanyParticipant,
   type CompanyTeam,
   type CreateCompanyAssignmentPayload,
@@ -150,6 +154,10 @@ export function InvitationsWorkspace({
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireDefinitionStub[]>([]);
   const [questionnaireMessage, setQuestionnaireMessage] = useState<string | null>(null);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [plan, setPlan] = useState<CompanyAssignmentPlan | null>(null);
+  const [selectedPlanKeys, setSelectedPlanKeys] = useState<Set<string>>(new Set());
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planSaving, setPlanSaving] = useState(false);
   const [assignmentForm, setAssignmentForm] = useState<AssignmentFormState>({
     respondentProfileId: participants[0]?.id ?? "",
     questionnaireKey: "",
@@ -230,6 +238,11 @@ export function InvitationsWorkspace({
     () => participants.filter((participant) => participant.id !== assignmentForm.respondentProfileId),
     [assignmentForm.respondentProfileId, participants],
   );
+  const planGroups = useMemo(() => buildPlanGroups(plan), [plan]);
+  const selectedPlanItems = useMemo(
+    () => plan?.assignments.filter((assignment) => selectedPlanKeys.has(assignment.key)) ?? [],
+    [plan, selectedPlanKeys],
+  );
 
   const signedUpCount = rows.filter((row) => row.signedUp).length;
   const activeInvites = rows.filter((row) => row.deliveryTone === "success").length;
@@ -246,6 +259,7 @@ export function InvitationsWorkspace({
         Boolean(assignmentForm.targetPersonId) &&
         assignmentForm.targetPersonId !== assignmentForm.respondentProfileId) ||
       (assignmentForm.targetType === "team" && Boolean(assignmentForm.targetTeamId)));
+  const canSavePlan = selectedPlanItems.length > 0 && !planSaving;
 
   function updateAssignmentForm(patch: Partial<AssignmentFormState>) {
     setAssignmentForm((current) => {
@@ -291,6 +305,94 @@ export function InvitationsWorkspace({
     } finally {
       setAssignmentSaving(false);
     }
+  }
+
+  async function handleGeneratePlan() {
+    setPlanLoading(true);
+    setMessage(null);
+    setCopiedParticipantId(null);
+    try {
+      const generated = await getCompanyDefaultAssignmentPlan(companyId);
+      setPlan(generated);
+      setSelectedPlanKeys(
+        new Set(generated.assignments.filter((assignment) => assignment.selected).map((assignment) => assignment.key)),
+      );
+      setMessage(
+        generated.assignments.length > 0
+          ? `Plan generat: ${generated.suggested_count} sarcini propuse, ${generated.existing_count} deja existente.`
+          : "Nu există sarcini propuse pentru structura curentă.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Planul de asignări nu a putut fi generat.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
+  async function handleSavePlan() {
+    if (!canSavePlan) return;
+    setPlanSaving(true);
+    setMessage(null);
+    setCopiedParticipantId(null);
+    try {
+      const result = await saveCompanyDefaultAssignmentPlan(companyId, selectedPlanItems);
+      const savedIdsByPlanKey = new Map(
+        selectedPlanItems.map((assignment, index) => [assignment.key, result.assignments[index]?.id ?? null]),
+      );
+      setAssignmentState((current) => mergeAssignments(current, result.assignments));
+      setPlan((current) =>
+        current
+          ? {
+              ...current,
+              assignments: current.assignments.map((assignment) =>
+                selectedPlanKeys.has(assignment.key)
+                  ? {
+                      ...assignment,
+                      selected: false,
+                      existing_assignment_id: assignment.existing_assignment_id ?? savedIdsByPlanKey.get(assignment.key) ?? null,
+                    }
+                  : assignment,
+              ),
+              existing_count: current.existing_count + result.created_count,
+            }
+          : current,
+      );
+      setSelectedPlanKeys(new Set());
+      setMessage(`${result.created_count} asignări create, ${result.existing_count} deja existente.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Asignările selectate nu au putut fi salvate.");
+    } finally {
+      setPlanSaving(false);
+    }
+  }
+
+  function togglePlanItem(key: string) {
+    setSelectedPlanKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function togglePlanScope(scopeId: string, checked: boolean) {
+    const keys = plan?.assignments
+      .filter((assignment) => assignment.scope_id === scopeId && !assignment.existing_assignment_id)
+      .map((assignment) => assignment.key) ?? [];
+    setSelectedPlanKeys((current) => {
+      const next = new Set(current);
+      for (const key of keys) {
+        if (checked) {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+      }
+      return next;
+    });
   }
 
   async function handleSend(mode: ParticipantInvitationMode) {
@@ -370,19 +472,19 @@ export function InvitationsWorkspace({
           <div className="space-y-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
             <button
               type="button"
-              onClick={() => void handleSend("email")}
+              onClick={() => void handleSend("secure_links")}
               disabled={sendingMode !== null || participants.length === 0}
               className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {sendingMode === "email" ? "Se trimit emailurile..." : "Trimite emailuri"}
+              {sendingMode === "secure_links" ? "Se generează linkurile..." : "Generează linkuri securizate"}
             </button>
             <button
               type="button"
-              onClick={() => void handleSend("secure_links")}
+              onClick={() => void handleSend("email")}
               disabled={sendingMode !== null || participants.length === 0}
               className="tap-soft w-full rounded-xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {sendingMode === "secure_links" ? "Se generează linkurile..." : "Generează linkuri securizate"}
+              {sendingMode === "email" ? "Se trimit emailurile..." : "Trimite email invitații"}
             </button>
             <p className="text-xs leading-5 text-foreground/52">
               Lista de participanți rămâne salvată separat. Trimiterea emailurilor sau generarea linkurilor se face explicit de aici.
@@ -402,10 +504,49 @@ export function InvitationsWorkspace({
             <p className="text-sm font-semibold text-burgundy/75">Pregătire sarcini</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Configurează asignările înainte de trimitere</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
-              Alege persoana, chestionarul și ținta evaluării. Asignarea se salvează în sistem și apare imediat în lista de livrare.
+              Generează planul implicit, verifică rândurile propuse și salvează doar asignările bifate. Invitațiile se trimit separat.
             </p>
 
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void handleGeneratePlan()}
+                disabled={planLoading || participants.length === 0}
+                className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy hover:bg-burgundy/5 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {planLoading ? "Se generează planul..." : "Generează plan de asignări"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSavePlan()}
+                disabled={!canSavePlan}
+                className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {planSaving ? "Se salvează asignările..." : `Salvează asignările bifate (${selectedPlanItems.length})`}
+              </button>
+            </div>
+
+            {plan ? (
+              <AssignmentPlanList
+                groups={planGroups}
+                selectedKeys={selectedPlanKeys}
+                onToggleItem={togglePlanItem}
+                onToggleScope={togglePlanScope}
+              />
+            ) : (
+              <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-background/60 px-4 py-5 text-sm leading-6 text-foreground/58">
+                Planul implicit va grupa sarcinile pe leadership, echipe de manager și feedback 360. După generare poți debifa rândurile care nu trebuie salvate.
+              </div>
+            )}
+
+            <div className="mt-6 border-t border-[var(--border)] pt-5">
+              <p className="text-sm font-semibold text-foreground">Asignare punctuală</p>
+              <p className="mt-1 text-xs leading-5 text-foreground/52">
+                Folosește formularul doar pentru excepții care nu apar în planul implicit.
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
               <LabeledSelect
                 label="Persoană"
                 value={assignmentForm.respondentProfileId}
@@ -499,6 +640,7 @@ export function InvitationsWorkspace({
           <div className="flex flex-col justify-between gap-4 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 xl:border-l xl:border-t-0">
             <div className="space-y-3">
               <AssignmentSummary label="Asignări totale" value={assignmentState.length} />
+              <AssignmentSummary label="Bifate în plan" value={selectedPlanItems.length} />
               <AssignmentSummary label="Persoane fără sarcini" value={participantsWithoutAssignments} />
               <AssignmentSummary label="Chestionare active" value={questionnaires.length} />
             </div>
@@ -607,6 +749,175 @@ function formatResendMessage(result: RosterInviteResult): string {
   if (result.error) return `Emailul nu a fost retrimis către ${result.email}: ${result.error}`;
   if (result.invite_url) return `Link pregătit pentru ${result.email}.`;
   return `Invitația nu a fost retrimisă către ${result.email}.`;
+}
+
+type AssignmentPlanGroup = {
+  id: string;
+  name: string;
+  type: string;
+  assignments: CompanyAssignmentPlanItem[];
+};
+
+function buildPlanGroups(plan: CompanyAssignmentPlan | null): AssignmentPlanGroup[] {
+  if (!plan) return [];
+  const groups = new Map<string, AssignmentPlanGroup>();
+
+  for (const scope of plan.scopes) {
+    groups.set(scope.id, {
+      id: scope.id,
+      name: scope.name,
+      type: scope.type,
+      assignments: [],
+    });
+  }
+
+  for (const assignment of plan.assignments) {
+    const group = groups.get(assignment.scope_id) ?? {
+      id: assignment.scope_id,
+      name: assignment.scope_name,
+      type: assignment.scope_type,
+      assignments: [],
+    };
+    group.assignments.push(assignment);
+    groups.set(assignment.scope_id, group);
+  }
+
+  return Array.from(groups.values()).filter((group) => group.assignments.length > 0);
+}
+
+function mergeAssignments(current: CompanyAssignment[], incoming: CompanyAssignment[]): CompanyAssignment[] {
+  const merged = new Map(current.map((assignment) => [assignment.id, assignment]));
+  for (const assignment of incoming) {
+    merged.set(assignment.id, assignment);
+  }
+  return Array.from(merged.values());
+}
+
+function AssignmentPlanList({
+  groups,
+  selectedKeys,
+  onToggleItem,
+  onToggleScope,
+}: {
+  groups: AssignmentPlanGroup[];
+  selectedKeys: Set<string>;
+  onToggleItem: (key: string) => void;
+  onToggleScope: (scopeId: string, checked: boolean) => void;
+}) {
+  if (groups.length === 0) {
+    return (
+      <div className="mt-5 rounded-2xl border border-[var(--border)] bg-background/70 px-4 py-5 text-sm text-foreground/58">
+        Nu există rânduri de asignare în planul generat.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 space-y-4">
+      {groups.map((group) => {
+        const selectable = group.assignments.filter((assignment) => !assignment.existing_assignment_id);
+        const selectedCount = selectable.filter((assignment) => selectedKeys.has(assignment.key)).length;
+        const allSelected = selectable.length > 0 && selectedCount === selectable.length;
+
+        return (
+          <div key={group.id} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-background/75">
+            <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-surface-muted/55 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-foreground">{group.name}</p>
+                <p className="mt-1 text-xs font-semibold text-foreground/50">
+                  {formatScopeType(group.type)} · {group.assignments.length} rânduri
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs font-bold text-foreground/68">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  disabled={selectable.length === 0}
+                  onChange={(event) => onToggleScope(group.id, event.target.checked)}
+                  className="h-4 w-4 rounded border-[var(--border)] accent-[#890505]"
+                />
+                Selectează grupa
+              </label>
+            </div>
+            <div className="divide-y divide-[var(--border)]">
+              {group.assignments.map((assignment) => (
+                <PlanAssignmentRow
+                  key={assignment.key}
+                  assignment={assignment}
+                  selected={selectedKeys.has(assignment.key)}
+                  onToggle={() => onToggleItem(assignment.key)}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanAssignmentRow({
+  assignment,
+  selected,
+  onToggle,
+}: {
+  assignment: CompanyAssignmentPlanItem;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const isExisting = Boolean(assignment.existing_assignment_id);
+
+  return (
+    <label
+      className={[
+        "grid gap-3 px-4 py-3 text-sm md:grid-cols-[1.5rem_1.2fr_0.85fr_1fr] md:items-center",
+        isExisting ? "bg-surface-muted/35 text-foreground/48" : "cursor-pointer hover:bg-surface-muted/35",
+      ].join(" ")}
+    >
+      <input
+        type="checkbox"
+        checked={isExisting || selected}
+        disabled={isExisting}
+        onChange={onToggle}
+        className="mt-1 h-4 w-4 rounded border-[var(--border)] accent-[#890505] md:mt-0"
+      />
+      <div className="min-w-0">
+        <p className="font-semibold text-foreground">{assignment.respondent_name}</p>
+        <p className="mt-1 text-xs text-foreground/50">Respondent</p>
+      </div>
+      <div>
+        <p className="font-semibold text-foreground">{assignment.questionnaire_key}</p>
+        <p className="mt-1 text-xs text-foreground/50">Chestionar</p>
+      </div>
+      <div className="min-w-0">
+        <p className="font-semibold text-foreground">{formatPlanTarget(assignment)}</p>
+        <p className="mt-1 text-xs text-foreground/50">
+          {formatTargetType(assignment.target_type)}
+          {isExisting ? " · deja salvată" : ""}
+        </p>
+      </div>
+    </label>
+  );
+}
+
+function formatScopeType(type: string): string {
+  if (type === "leadership_team") return "Leadership";
+  if (type === "manager_team") return "Echipă manager";
+  if (type === "manager") return "Manager";
+  if (type === "member") return "Membru";
+  return type;
+}
+
+function formatTargetType(type: AssignmentTargetType): string {
+  if (type === "person") return "Persoană";
+  if (type === "team") return "Echipă";
+  return "Autoevaluare";
+}
+
+function formatPlanTarget(assignment: CompanyAssignmentPlanItem): string {
+  if (assignment.target_type === "person") return assignment.target_person_name ?? "Persoană";
+  if (assignment.target_type === "team") return assignment.target_team_name ?? "Echipă";
+  return assignment.respondent_name;
 }
 
 function InviteSummary({ label, value }: { label: string; value: string | number }) {

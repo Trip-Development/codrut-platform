@@ -80,7 +80,7 @@ class AssignmentStatusUpdateRequest(BaseModel):
 class InvitationCreateRequest(BaseModel):
     respondent_profile_id: UUID
     assignment_ids: list[UUID] | None = None
-    expires_in_days: int = 14
+    expires_in_days: int = 3650
     force_rotate: bool = False
 
 
@@ -94,3 +94,61 @@ class InvitationResponse(BaseModel):
     invite_url: str
     status: str
     expires_at: datetime
+
+
+class AssignmentPlanScopeResponse(BaseModel):
+    id: str
+    name: str
+    type: str
+    participant_ids: list[UUID]
+
+
+class AssignmentPlanItemResponse(BaseModel):
+    key: str
+    scope_id: str
+    scope_name: str
+    scope_type: str
+    respondent_profile_id: UUID
+    respondent_name: str
+    questionnaire_key: str
+    target_type: AssignmentTargetType
+    target_person_id: UUID | None = None
+    target_person_name: str | None = None
+    target_team_id: UUID | None = None
+    target_team_name: str | None = None
+    target_team_type: TeamType | None = None
+    target_team_member_ids: list[UUID] = Field(default_factory=list)
+    target_team_leader_id: UUID | None = None
+    visibility_policy: ResponseVisibilityPolicy = ResponseVisibilityPolicy.trainer_raw_review
+    selected: bool = True
+    existing_assignment_id: UUID | None = None
+
+
+class AssignmentPlanResponse(BaseModel):
+    scopes: list[AssignmentPlanScopeResponse]
+    assignments: list[AssignmentPlanItemResponse]
+    suggested_count: int
+    existing_count: int
+
+
+class AssignmentPlanSaveItem(BaseModel):
+    respondent_profile_id: UUID
+    questionnaire_key: str = Field(min_length=1, max_length=120)
+    target_type: AssignmentTargetType
+    target_person_id: UUID | None = None
+    target_team_id: UUID | None = None
+    target_team_name: str | None = Field(default=None, max_length=255)
+    target_team_type: TeamType | None = None
+    target_team_member_ids: list[UUID] = Field(default_factory=list)
+    target_team_leader_id: UUID | None = None
+    visibility_policy: ResponseVisibilityPolicy = ResponseVisibilityPolicy.trainer_raw_review
+
+
+class AssignmentPlanSaveRequest(BaseModel):
+    assignments: list[AssignmentPlanSaveItem] = Field(default_factory=list)
+
+
+class AssignmentPlanSaveResponse(BaseModel):
+    assignments: list[AssignmentResponse]
+    created_count: int
+    existing_count: int

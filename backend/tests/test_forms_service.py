@@ -6,8 +6,11 @@ def test_forms_service_lists_approved_definitions() -> None:
     definitions = FormsService().list_definitions()
 
     assert {definition.key for definition in definitions} == {
+        QuestionnaireKey.pcm_base,
+        QuestionnaireKey.phase,
         QuestionnaireKey.lencioni,
         QuestionnaireKey.distress_drivers,
+        QuestionnaireKey.boss_360,
         QuestionnaireKey.icare,
     }
 

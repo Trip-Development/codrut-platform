@@ -153,6 +153,17 @@ class CompanyRepository:
         await self.session.flush()
         return relationships
 
+    async def list_reporting_relationships(
+        self,
+        company_id: UUID,
+    ) -> list[ParticipantReportingRelationship]:
+        result = await self.session.execute(
+            select(ParticipantReportingRelationship).where(
+                ParticipantReportingRelationship.company_id == company_id
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_participant_by_company_email(
         self,
         company_id: UUID,

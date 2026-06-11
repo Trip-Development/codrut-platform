@@ -41,8 +41,6 @@ from codrut.modules.identity.models import Session, User, UserRole
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import AuthResponse
 
-DEFAULT_ROSTER_ASSIGNMENT_KEYS = ("distress_drivers", "lencioni")
-
 
 @dataclass(frozen=True)
 class CompanyAccessRegistrationResult:
@@ -192,9 +190,6 @@ class CompanyService:
             )
 
         from codrut.modules.assignments.models import (
-            AssignmentStatus,
-            AssignmentTargetType,
-            QuestionnaireAssignment,
             Team,
             TeamMembership,
             TeamMembershipRole,
@@ -227,22 +222,6 @@ class CompanyService:
                         role=TeamMembershipRole.leader,
                     )
                 )
-            await self.repository.session.flush()
-
-        assignments = [
-            QuestionnaireAssignment(
-                company_id=company.id,
-                respondent_profile_id=participant.id,
-                questionnaire_key=questionnaire_key,
-                target_type=AssignmentTargetType.self_assessment,
-                status=AssignmentStatus.assigned,
-            )
-            for participant in participants
-            for questionnaire_key in DEFAULT_ROSTER_ASSIGNMENT_KEYS
-        ]
-        if assignments:
-            for assignment in assignments:
-                self.repository.session.add(assignment)
             await self.repository.session.flush()
 
         if not payload.send_invites:
@@ -334,7 +313,7 @@ class CompanyService:
 
         results: list[RosterImportEmailResult] = []
         for participant in participants:
-            assignments = await self._ensure_default_assignments_for_participant(
+            assignments = await self._list_active_assignments_for_participant(
                 company.id,
                 participant,
             )
@@ -508,37 +487,24 @@ class CompanyService:
 
         return statuses
 
-    async def _ensure_default_assignments_for_participant(
+    async def _list_active_assignments_for_participant(
         self,
         company_id: UUID,
         participant: ParticipantProfile,
     ) -> list:
-        from codrut.modules.assignments.models import (
-            AssignmentStatus,
-            AssignmentTargetType,
-            QuestionnaireAssignment,
-        )
+        from codrut.modules.assignments.models import AssignmentStatus
 
         assignments = await self.repository.list_assignments_for_participant(participant.id)
-        existing_keys = {assignment.questionnaire_key for assignment in assignments}
-        created = False
-        for questionnaire_key in DEFAULT_ROSTER_ASSIGNMENT_KEYS:
-            if questionnaire_key in existing_keys:
-                continue
-            assignment = QuestionnaireAssignment(
-                company_id=company_id,
-                respondent_profile_id=participant.id,
-                questionnaire_key=questionnaire_key,
-                target_type=AssignmentTargetType.self_assessment,
-                status=AssignmentStatus.assigned,
-            )
-            self.repository.session.add(assignment)
-            assignments.append(assignment)
-            created = True
-
-        if created:
-            await self.repository.session.flush()
-        return assignments
+        active_statuses = {
+            AssignmentStatus.assigned,
+            AssignmentStatus.invited,
+            AssignmentStatus.started,
+        }
+        return [
+            assignment
+            for assignment in assignments
+            if assignment.company_id == company_id and assignment.status in active_statuses
+        ]
 
     async def resend_invite(
         self,

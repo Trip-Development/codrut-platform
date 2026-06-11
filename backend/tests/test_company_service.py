@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
@@ -22,6 +23,8 @@ from codrut.modules.assignments.models import (
     TeamMembership,
     TeamType,
 )
+from codrut.modules.assignments.schemas import AssignmentPlanSaveRequest
+from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.communications.email_provider import LocalEmailProvider
 from codrut.modules.communications.models import EmailSend, EmailSendStatus
 from codrut.modules.companies.models import (
@@ -648,13 +651,57 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
             select(QuestionnaireAssignment).where(QuestionnaireAssignment.company_id == company.id)
         )
         assignments = assignment_result.scalars().all()
-        assert len(assignments) == 6
-        assert {assignment.status for assignment in assignments} == {AssignmentStatus.assigned}
+        assert assignments == []
 
         invite_result = await session.execute(
             select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
         )
         assert invite_result.scalars().all() == []
+
+        with pytest.raises(DomainError) as exc_info:
+            await service.send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(mode="secure_links"),
+            )
+        assert exc_info.value.code == "no_assignments"
+
+        assignment_service = AssignmentService(session)
+        plan = await assignment_service.build_default_assignment_plan(trainer.id, company.id)
+        save_result = await assignment_service.save_assignment_plan(
+            trainer.id,
+            company.id,
+            payload=AssignmentPlanSaveRequest(
+                assignments=[item.model_dump() for item in plan.assignments],
+            ),
+        )
+        assert save_result.created_count == len(save_result.assignments)
+        assert save_result.existing_count == 0
+        assert {
+            (assignment.respondent_profile_id, assignment.questionnaire_key)
+            for assignment in save_result.assignments
+        }.issuperset(
+            {
+                (participants[0].id, "lencioni"),
+                (participants[0].id, "distress_drivers"),
+                (participants[0].id, "boss_360"),
+                (participants[2].id, "boss_360"),
+            }
+        )
+
+        repeated_plan = await assignment_service.build_default_assignment_plan(
+            trainer.id,
+            company.id,
+        )
+        repeated_save = await assignment_service.save_assignment_plan(
+            trainer.id,
+            company.id,
+            payload=AssignmentPlanSaveRequest(
+                assignments=[item.model_dump() for item in repeated_plan.assignments],
+            ),
+        )
+        assert repeated_save.created_count == 0
+        assert repeated_save.existing_count == len(repeated_save.assignments)
 
         link_result = await service.send_participant_invites(
             trainer.id,
@@ -719,6 +766,10 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
         invites = invite_result.scalars().all()
         assert len(invites) == 3
+        assert all(
+            invite.expires_at >= datetime.now(UTC) + timedelta(days=3600)
+            for invite in invites
+        )
 
         statuses = await service.list_participant_invitation_statuses(
             trainer.id,
@@ -748,7 +799,9 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         verify_manager = await identity_service.verify_invite_token(manager_invite.token)
         assert verify_manager.is_leadership is True
         assert verify_manager.already_registered is False
-        assert len(verify_manager.tasks) == 2
+        assert {"lencioni", "distress_drivers", "boss_360"}.issubset(
+            {task.questionnaireKey for task in verify_manager.tasks}
+        )
 
         registration_token = next(
             invite.token for invite in invites if invite.respondent_profile_id == participants[0].id
@@ -869,6 +922,16 @@ async def test_resend_invite_failure_preserves_existing_active_link(
                 ),
             )
             participant = roster.participants[0]
+
+            assignment_service = AssignmentService(session)
+            plan = await assignment_service.build_default_assignment_plan(trainer.id, company.id)
+            await assignment_service.save_assignment_plan(
+                trainer.id,
+                company.id,
+                payload=AssignmentPlanSaveRequest(
+                    assignments=[item.model_dump() for item in plan.assignments],
+                ),
+            )
 
             link_result = await service.send_participant_invites(
                 trainer.id,

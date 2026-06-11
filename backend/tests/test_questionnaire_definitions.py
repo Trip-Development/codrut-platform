@@ -7,8 +7,11 @@ from codrut.modules.forms.models import QuestionnaireKey
 
 def test_approved_questionnaire_catalog_contains_added_sources() -> None:
     assert {definition.key for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS} == {
+        QuestionnaireKey.pcm_base,
+        QuestionnaireKey.phase,
         QuestionnaireKey.lencioni,
         QuestionnaireKey.distress_drivers,
+        QuestionnaireKey.boss_360,
         QuestionnaireKey.icare,
     }
 
@@ -40,6 +43,8 @@ def test_distress_drivers_definition_has_sets_and_driver_scoring() -> None:
     assert len(sets) == 10
     assert all(question["type"] == "statement_score_set" for question in sets)
     assert all(len(question["statements"]) == 5 for question in sets)
+    assert definition.title == "Reziliență și driveri de stres TA"
+    assert sets[0]["statements"][0]["label"] == "Rezistența este o resursă valoroasă"
     assert {driver["id"] for driver in drivers} == {
         "be_strong",
         "be_perfect",
@@ -64,3 +69,31 @@ def test_distress_driver_statement_mapping_matches_source_table() -> None:
         "d": "hurry_up",
         "e": "please_people",
     }
+
+
+def test_pcm_definitions_use_the_six_process_communication_types() -> None:
+    base = get_approved_questionnaire_definition(QuestionnaireKey.pcm_base)
+    phase = get_approved_questionnaire_definition(QuestionnaireKey.phase)
+
+    assert base.schema["sections"][0]["questions"][0]["label"] == "Care este baza ta PCM?"
+    assert phase.schema["sections"][0]["questions"][0]["label"] == "Care este faza ta PCM?"
+    assert {option["value"] for option in base.schema["sections"][0]["questions"][0]["scale"]} == {
+        "harmonizer",
+        "thinker",
+        "persister",
+        "imaginer",
+        "rebel",
+        "promoter",
+    }
+    assert base.schema["sections"][0]["questions"][0]["type"] == "single_choice"
+    assert phase.schema["sections"][0]["questions"][0]["type"] == "single_choice"
+
+
+def test_boss_360_definition_is_form_complete_without_scoring_metadata() -> None:
+    definition = get_approved_questionnaire_definition(QuestionnaireKey.boss_360)
+    questions = definition.schema["sections"][0]["questions"]
+
+    assert definition.title == "Feedback 360 pentru manager"
+    assert len(questions) == 8
+    assert {question["type"] for question in questions} == {"likert"}
+    assert "scoring" not in definition.schema
