@@ -170,11 +170,59 @@ describe("frontend API adapter stubs", () => {
     expect(summary.validations.map((validation) => validation.label)).toContain("Date backend");
   });
 
-  it("returns participant workspace placeholder data", async () => {
+  it("maps participant workspace data from the backend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        participant_profile_id: "profile-1",
+        participant_full_name: "Ana Participant",
+        participant_email: "ana@example.com",
+        company_id: "company-1",
+        company_name: "Michelin",
+        project_id: "project-1",
+        project_name: "Leadership septembrie",
+        deadline_label: "30.09.2026",
+        pcm_base: "harmonizer",
+        pcm_phase: "thinker",
+        tasks: [
+          {
+            id: "assignment-1",
+            title: "Lencioni",
+            status: "not_started",
+            detail: "Completează formularul.",
+            href: "/participant/questionnaires/lencioni?assignmentId=assignment-1",
+            assignmentId: "assignment-1",
+            targetLabel: "Leadership",
+            estimatedMinutes: 12,
+            questionnaireKey: "lencioni",
+          },
+        ],
+        cards: [{ title: "De completat", description: "1 sarcini active", meta: "Acum" }],
+        empty_state: { title: "Nu ai sarcini active", description: "Revino mai târziu." },
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
     const summary = await getParticipantWorkspaceSummary();
 
-    expect(summary.cards).toHaveLength(3);
-    expect(summary.emptyState.title).toContain("Fără");
+    expect(summary).toMatchObject({
+      participantProfileId: "profile-1",
+      participantFullName: "Ana Participant",
+      participantEmail: "ana@example.com",
+      companyName: "Michelin",
+      projectName: "Leadership septembrie",
+      pcmBase: "harmonizer",
+      pcmPhase: "thinker",
+      tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
+      emptyState: expect.objectContaining({ title: "Nu ai sarcini active" }),
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/participants/me/workspace"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {

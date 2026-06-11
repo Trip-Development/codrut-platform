@@ -1,73 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect } from "react";
 
 type WorkspaceSummary = {
   projectName: string;
+  participantFullName?: string;
+  companyName?: string;
   participantEmail?: string | null;
+  pcmBase?: string | null;
+  pcmPhase?: string | null;
 };
 
 type AccountWorkspaceProps = {
   session: import("@/api/auth").SessionState;
   summary: WorkspaceSummary;
 };
-
-const pcmProfiles = [
-  {
-    type: "harmonizer",
-    name: "Empatic (Harmonizer)",
-    color: "var(--bloom-gold)",
-    channel: "Nutritiv (Cald, suportiv, empatic)",
-    need: "Relaționare și apreciere necondiționată a persoanei",
-    tip: "Fă-ți timp pentru conectarea personală înainte de task-uri și reîncarcă-ți bateriile într-un mediu primitor. Nu uita să ai grijă și de nevoile tale, nu doar de ale celorlalți.",
-    distress: "Tinde să facă greșeli din neatenție în încercarea de a mulțumi pe toată lumea și evită confruntările directe."
-  },
-  {
-    type: "thinker",
-    name: "Logician (Thinker)",
-    color: "var(--bloom-blue)",
-    channel: "Informativ/Întrebări (Logic, structurat, orientat pe fapte)",
-    need: "Recunoaștere a muncii și organizarea timpului / structură",
-    tip: "Planifică-ți agenda detaliat și bazează-te pe date clare în luarea deciziilor. Alocă-ți intervale dedicate de concentrare neîntreruptă pentru analiză.",
-    distress: "Poate deveni ultra-critic, micro-manageriază sau tinde să controleze excesiv detaliile nesemnificative."
-  },
-  {
-    type: "persister",
-    name: "Perseverent (Persister)",
-    color: "var(--bloom-green)",
-    channel: "Informativ/Întrebări/Opinii (Respectuos, axat pe principii și valori)",
-    need: "Recunoaștere a opiniilor și respect pentru convingeri/loialitate",
-    tip: "Angajează-te în proiecte aliniate cu valorile tale și oferă feedback bazat pe principii solide. Permite-ți să asculți opinii diferite fără a le percepe ca atacuri personale.",
-    distress: "Tinde să predice, să observe doar greșelile celorlalți sau să devină inflexibil în opinii."
-  },
-  {
-    type: "rebel",
-    name: "Spontan (Rebel)",
-    color: "var(--bloom-red)",
-    channel: "Emotiv (Ludic, energic, spontan)",
-    need: "Contact social și stimulare senzorială prin activități variate",
-    tip: "Adaugă elemente de joc (gamification) în activitățile de zi cu zi. Colaborează în moduri nestructurate și dinamice cu echipa ta pentru a-ți menține entuziasmul.",
-    distress: "Are tendința de a delega vina, de a se plânge că e plictisitor sau de a lăsa task-urile neterminate."
-  },
-  {
-    type: "imaginer",
-    name: "Reflexiv (Imaginer)",
-    color: "var(--bloom-blue)",
-    channel: "Directiv (Clar, concis, orientat pe instrucțiuni)",
-    need: "Solitudine, timp și spațiu pentru reflecție",
-    tip: "Alocă-ți un spațiu de lucru liniștit pentru a procesa ideile complexe în ritmul tău. Cere instrucțiuni scrise și concise atunci când colaborezi la proiecte mari.",
-    distress: "Se izolează complet, devine pasiv și poate fi copleșit de prea mulți stimuli sau interacțiuni sociale directe."
-  },
-  {
-    type: "promoter",
-    name: "Promotor (Promoter)",
-    color: "var(--bloom-red)",
-    channel: "Directiv (Orientat spre acțiune, energic)",
-    need: "Excitare/Acțiune și rezultate rapide",
-    tip: "Focalizează-te pe rezultate pe termen scurt, inițiază proiecte noi cu impact vizibil și asumă-ți riscuri calculate pentru a-ți păstra nivelul de adrenalină.",
-    distress: "Tinde să manipuleze pentru a obține ce dorește, creează situații de conflict artificiale sau lasă în urmă detalii importante."
-  }
-];
 
 const predefinedGoals = [
   "Ascultare activă",
@@ -83,8 +31,6 @@ const predefinedGoals = [
 export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"general" | "pcm" | "notifications" | "privacy">("general");
   
-  // Settings States loaded from localStorage on mount
-  const [selectedPcm, setSelectedPcm] = useState<string>("harmonizer");
   const [goals, setGoals] = useState<string[]>([
     "Ascultare activă",
     "Feedback asertiv",
@@ -97,19 +43,10 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
     emailWeekly: true,
     pushReminders: true,
   });
-  const [privacy, setPrivacy] = useState({
-    shareWithCoach: true,
-    benchmarkAnon: true,
-    visibleOnLeaderboard: false,
-  });
-
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   // Load preferences from localStorage on mount
   useEffect(() => {
-    const storedPcm = localStorage.getItem("codrut_account_pcm");
-    if (storedPcm) setSelectedPcm(storedPcm);
-
     const storedGoals = localStorage.getItem("codrut_account_goals");
     if (storedGoals) {
       try {
@@ -123,14 +60,7 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
     if (storedNotifications) {
       try {
         setNotifications(JSON.parse(storedNotifications));
-      } catch (e) {}
-    }
-
-    const storedPrivacy = localStorage.getItem("codrut_account_privacy");
-    if (storedPrivacy) {
-      try {
-        setPrivacy(JSON.parse(storedPrivacy));
-      } catch (e) {}
+      } catch {}
     }
   }, []);
 
@@ -164,12 +94,6 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
     triggerSaveNotification("Obiectiv personalizat adăugat!");
   };
 
-  const handlePcmChange = (type: string) => {
-    setSelectedPcm(type);
-    localStorage.setItem("codrut_account_pcm", type);
-    triggerSaveNotification("Profil PCM salvat!");
-  };
-
   const handleToggleNotification = (key: keyof typeof notifications) => {
     const updated = { ...notifications, [key]: !notifications[key] };
     setNotifications(updated);
@@ -177,17 +101,9 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
     triggerSaveNotification("Preferințe notificări actualizate!");
   };
 
-  const handleTogglePrivacy = (key: keyof typeof privacy) => {
-    const updated = { ...privacy, [key]: !privacy[key] };
-    setPrivacy(updated);
-    localStorage.setItem("codrut_account_privacy", JSON.stringify(updated));
-    triggerSaveNotification("Preferințe confidențialitate actualizate!");
-  };
-
-  const name = session.user.name || "Radu Georgescu";
-  const email = summary.participantEmail || "radu.georgescu@michelin.ro";
-  const company = summary.projectName.includes("Michelin") ? "Michelin România" : "Companie Parteneră";
-  const activePcmData = pcmProfiles.find((p) => p.type === selectedPcm) || pcmProfiles[0];
+  const name = summary.participantFullName || session.user.name || "Participant";
+  const email = summary.participantEmail || "Email indisponibil";
+  const company = summary.companyName || "Companie neasociată";
 
   return (
     <div className="relative">
@@ -337,7 +253,7 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
                 {/* Active Goals Checklist */}
                 {goals.length > 0 && (
                   <div className="pt-2">
-                    <span className="block text-xs font-bold uppercase tracking-wider text-foreground/45 mb-3">Priority Focus List</span>
+                    <span className="block text-xs font-bold uppercase tracking-wider text-foreground/45 mb-3">Lista de priorități</span>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {goals.map((goal, idx) => (
                         <div key={goal} className="flex items-center gap-3 p-3 rounded-2xl border border-[var(--border)] bg-surface-muted/20">
@@ -365,73 +281,40 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
           {activeTab === "pcm" && (
             <section className="rounded-3xl border border-[var(--border)] bg-surface p-6 md:p-8 shadow-sm space-y-6">
               <div>
-                <h3 className="font-display text-lg font-bold text-foreground">Structura Profilului Tău PCM</h3>
+                <h3 className="font-display text-lg font-bold text-foreground">Profilul tău PCM</h3>
                 <p className="text-sm text-foreground/62 mt-1">
-                  Rezultatele oficiale din evaluarea ta Process Communication Model. Profilul tău indică energia Bazei și Fazei curente.
+                  Baza și faza PCM se salvează din chestionarul oficial de profil. Nu completăm valori implicite în contul tău.
                 </p>
               </div>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                {/* Baza (Base) Card */}
-                <div className="p-6 rounded-3xl border border-[var(--border)] bg-surface-muted/20 space-y-4">
-                  <div className="flex items-center gap-3 border-b border-[var(--border)] pb-3">
-                    <span className="w-4 h-4 rounded-full bg-[var(--bloom-gold)] shrink-0" />
-                    <div>
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-burgundy">Baza ta PCM</span>
-                      <h4 className="text-base font-extrabold text-foreground">Empatic (Harmonizer)</h4>
-                    </div>
-                  </div>
-                  <div className="space-y-3 text-xs leading-normal">
-                    <p className="text-foreground/72">
-                      <strong className="text-foreground">Canal de Comunicare:</strong> Nutritiv (Cald, suportiv, empatic)
-                    </p>
-                    <p className="text-foreground/72">
-                      <strong className="text-foreground">Nevoie Psihologică:</strong> Relaționare și apreciere necondiționată a persoanei
-                    </p>
-                    <div className="pt-2 border-t border-[var(--border)]">
-                      <span className="block font-bold text-burgundy uppercase tracking-wider text-[10px] mb-1">Recomandare:</span>
-                      <p className="text-foreground/80 leading-relaxed">
-                        Fă-ți timp pentru conectarea personală înainte de task-uri și reîncarcă-ți bateriile într-un mediu primitor. Nu uita să ai grijă și de nevoile tale, nu doar de ale celorlalți.
-                      </p>
-                    </div>
-                    <div className="pt-2 border-t border-[var(--border)]">
-                      <span className="block font-bold text-foreground/55 uppercase tracking-wider text-[10px] mb-1">Sub stres (Distress):</span>
-                      <p className="text-foreground/72 italic">
-                        Tinde să facă greșeli din neatenție în încercarea de a mulțumi pe toată lumea și evită confruntările directe.
-                      </p>
-                    </div>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
+                <div className="rounded-3xl border border-[var(--border)] bg-surface-muted/25 p-5">
+                  <p className="text-xs font-bold uppercase tracking-wider text-burgundy">
+                    Chestionar de profil
+                  </p>
+                  <h4 className="mt-2 text-base font-extrabold text-foreground">
+                    Baza și faza PCM
+                  </h4>
+                  <p className="mt-2 text-sm leading-6 text-foreground/68">
+                    Pentru membrii permanenți, platforma cere automat acest chestionar la intrarea în dashboard dacă profilul PCM nu este complet. Răspunsurile sunt salvate în baza de date pe profilul tău de participant.
+                  </p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <ProfileFact label="Bază" value={formatPcmValue(summary.pcmBase)} />
+                    <ProfileFact label="Fază" value={formatPcmValue(summary.pcmPhase)} />
                   </div>
                 </div>
 
-                {/* Faza (Phase) Card */}
-                <div className="p-6 rounded-3xl border border-[var(--border)] bg-surface-muted/20 space-y-4">
-                  <div className="flex items-center gap-3 border-b border-[var(--border)] pb-3">
-                    <span className="w-4 h-4 rounded-full bg-[var(--bloom-blue)] shrink-0" />
-                    <div>
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-burgundy">Faza ta PCM</span>
-                      <h4 className="text-base font-extrabold text-foreground">Logician (Thinker)</h4>
-                    </div>
-                  </div>
-                  <div className="space-y-3 text-xs leading-normal">
-                    <p className="text-foreground/72">
-                      <strong className="text-foreground">Canal de Comunicare:</strong> Informativ/Întrebări (Logic, structurat, fapte)
-                    </p>
-                    <p className="text-foreground/72">
-                      <strong className="text-foreground">Nevoie Psihologică:</strong> Recunoaștere a muncii și organizarea timpului
-                    </p>
-                    <div className="pt-2 border-t border-[var(--border)]">
-                      <span className="block font-bold text-burgundy uppercase tracking-wider text-[10px] mb-1">Recomandare:</span>
-                      <p className="text-foreground/80 leading-relaxed">
-                        Planifică-ți agenda detaliat și bazează-te pe date clare în luarea deciziilor. Alocă-ți intervale dedicate de concentrare neîntreruptă pentru analiză.
-                      </p>
-                    </div>
-                    <div className="pt-2 border-t border-[var(--border)]">
-                      <span className="block font-bold text-foreground/55 uppercase tracking-wider text-[10px] mb-1">Sub stres (Distress):</span>
-                      <p className="text-foreground/72 italic">
-                        Poate deveni ultra-critic, micro-manageriază sau tinde să controleze excesiv detaliile nesemnificative.
-                      </p>
-                    </div>
-                  </div>
+                <div className="rounded-3xl border border-burgundy/20 bg-burgundy/5 p-5">
+                  <p className="text-sm font-bold text-foreground">Actualizare profil</p>
+                  <p className="mt-2 text-xs leading-5 text-foreground/62">
+                    Folosește formularul oficial când trainerul îți cere confirmarea bazei și fazei PCM.
+                  </p>
+                  <Link
+                    href="/participant/questionnaires/pcm_base"
+                    className="tap-soft mt-4 inline-flex w-full justify-center rounded-2xl bg-burgundy px-4 py-3 text-sm font-bold text-white hover:bg-burgundy/90"
+                  >
+                    Deschide chestionarul PCM
+                  </Link>
                 </div>
               </div>
             </section>
@@ -558,4 +441,25 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
       </div>
     </div>
   );
+}
+
+function ProfileFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-surface px-4 py-3">
+      <span className="block text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+        {label}
+      </span>
+      <span className="mt-1 block text-sm font-semibold text-foreground">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function formatPcmValue(value?: string | null): string {
+  if (!value) {
+    return "Necompletată";
+  }
+
+  return value.replace(/_/g, " ");
 }

@@ -1,16 +1,18 @@
 import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
 import { AccountWorkspace } from "./AccountWorkspace";
 
 export default async function ParticipantAccountPage() {
+  const requestOptions = await getServerApiRequestOptions();
   const [participant, summary] = await Promise.all([
     getParticipantSession(),
-    getParticipantWorkspaceSummary(),
+    getParticipantWorkspaceSummary(requestOptions),
   ]);
 
-  const name = participant.user.name || "Radu Georgescu";
+  const name = summary.participantFullName || participant.user.name || participant.user.id;
 
   return (
     <AppShell
