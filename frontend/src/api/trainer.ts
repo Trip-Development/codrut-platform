@@ -550,23 +550,23 @@ const fallbackScoringResults: Record<string, ScoringResultRecord> = {
     scores: {
       absence_of_trust: {
         score: 5,
-        interpretation: "Disfunctia trebuie probabil abordata.",
+        interpretation: "Disfuncția trebuie probabil abordată.",
       },
       fear_of_conflict: {
         score: 7,
-        interpretation: "Disfunctia poate fi o problema.",
+        interpretation: "Disfuncția poate fi o problemă.",
       },
       lack_of_commitment: {
         score: 8,
-        interpretation: "Disfunctia probabil nu este o problema.",
+        interpretation: "Disfuncția probabil nu este o problemă.",
       },
       avoidance_of_accountability: {
         score: 6,
-        interpretation: "Disfunctia poate fi o problema.",
+        interpretation: "Disfuncția poate fi o problemă.",
       },
       inattention_to_results: {
         score: 9,
-        interpretation: "Disfunctia probabil nu este o problema.",
+        interpretation: "Disfuncția probabil nu este o problemă.",
       },
     },
   },
@@ -577,23 +577,23 @@ const fallbackScoringResults: Record<string, ScoringResultRecord> = {
     scores: {
       absence_of_trust: {
         score: 8,
-        interpretation: "Disfunctia probabil nu este o problema.",
+        interpretation: "Disfuncția probabil nu este o problemă.",
       },
       fear_of_conflict: {
         score: 5,
-        interpretation: "Disfunctia trebuie probabil abordata.",
+        interpretation: "Disfuncția trebuie probabil abordată.",
       },
       lack_of_commitment: {
         score: 7,
-        interpretation: "Disfunctia poate fi o problema.",
+        interpretation: "Disfuncția poate fi o problemă.",
       },
       avoidance_of_accountability: {
         score: 8,
-        interpretation: "Disfunctia probabil nu este o problema.",
+        interpretation: "Disfuncția probabil nu este o problemă.",
       },
       inattention_to_results: {
         score: 9,
-        interpretation: "Disfunctia probabil nu este o problema.",
+        interpretation: "Disfuncția probabil nu este o problemă.",
       },
     },
   },

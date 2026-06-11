@@ -109,3 +109,33 @@ def test_boss_360_definition_is_form_complete_without_scoring_metadata() -> None
     assert len(questions) == 8
     assert {question["type"] for question in questions} == {"likert"}
     assert "scoring" not in definition.schema
+
+
+def test_icare_definition_uses_romanian_copy_without_changing_statement_ids() -> None:
+    definition = get_approved_questionnaire_definition(QuestionnaireKey.icare)
+    sections = definition.schema["sections"]
+    questions = [
+        question
+        for section in sections
+        for question in section["questions"]
+    ]
+    statements = [
+        statement
+        for question in questions
+        for statement in question["statements"]
+    ]
+
+    assert definition.title == "Comportamente de leadership ICARE"
+    assert [section["title"] for section in sections] == [
+        "Inspirație",
+        "Construirea încrederii",
+        "Conștientizare",
+        "Rezultate",
+        "Împuternicire",
+    ]
+    assert questions[0]["label"] == "Dezvoltarea oamenilor"
+    assert questions[-1]["label"] == "Sprijinirea echipei"
+    assert [statement["id"] for statement in statements] == [
+        f"icare_{number:02d}" for number in range(1, 49)
+    ]
+    assert len(statements) == 48

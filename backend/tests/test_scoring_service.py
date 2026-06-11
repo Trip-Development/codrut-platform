@@ -72,12 +72,12 @@ async def test_compute_and_save_score_lencioni() -> None:
     assert result.assignment_id == assignment_id
     assert result.scores["absence_of_trust"]["score"] == 8
     assert result.scores["absence_of_trust"]["interpretation"] == (
-        "Disfunctia probabil nu este o problema."
+        "Disfuncția probabil nu este o problemă."
     )
 
     assert result.scores["fear_of_conflict"]["score"] == 5
     assert result.scores["fear_of_conflict"]["interpretation"] == (
-        "Disfunctia trebuie probabil abordata."
+        "Disfuncția trebuie probabil abordată."
     )
 
     assert result.scores["lack_of_commitment"]["score"] == 3
