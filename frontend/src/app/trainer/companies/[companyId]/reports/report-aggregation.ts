@@ -26,6 +26,8 @@ export const boss360Labels: Record<string, string> = {
 };
 
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
+const lencioniKeys = new Set(["lencioni", "lencioni_en"]);
+const distressDriverKeys = new Set(["distress_drivers", "distress_drivers_en"]);
 const boss360Keys = new Set(["boss_360", "boss_360_en", "icare"]);
 
 export type ReportAverage = {
@@ -66,14 +68,14 @@ export function buildReportAggregation(
     const result = resultMap.get(assignment.id);
     if (!result?.scores) continue;
 
-    if (assignment.questionnaire_key === "lencioni") {
+    if (lencioniKeys.has(assignment.questionnaire_key)) {
       lencioniCount += 1;
       for (const key of Object.keys(lencioniSums)) {
         const value = result.scores[key];
         const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
         lencioniSums[key] += Number(score || 0);
       }
-    } else if (assignment.questionnaire_key === "distress_drivers") {
+    } else if (distressDriverKeys.has(assignment.questionnaire_key)) {
       driverCount += 1;
       for (const key of Object.keys(driverSums)) {
         driverSums[key] += Number(result.scores[key] || 0);

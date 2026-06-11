@@ -133,4 +133,53 @@ describe("buildReportAggregation", () => {
     expect(aggregation.lencioniCount).toBe(1);
     expect(aggregation.lencioniAverages.every((item) => item.avg === 9)).toBe(true);
   });
+
+  it("aggregates English questionnaire variants with the same scoring buckets", () => {
+    const aggregation = buildReportAggregation(
+      [
+        assignment("lencioni-en", "lencioni_en", "scored", "2026-06-11T09:00:00Z"),
+        assignment("driver-en", "distress_drivers_en", "scored", "2026-06-11T09:10:00Z"),
+        assignment("boss-en", "boss_360_en", "scored", "2026-06-11T09:20:00Z"),
+      ],
+      new Map([
+        [
+          "lencioni-en",
+          result("lencioni-en", {
+            absence_of_trust: { score: 8 },
+            fear_of_conflict: { score: 7 },
+            lack_of_commitment: { score: 6 },
+            avoidance_of_accountability: { score: 5 },
+            inattention_to_results: { score: 4 },
+          }),
+        ],
+        [
+          "driver-en",
+          result("driver-en", {
+            be_strong: 20,
+            be_perfect: 40,
+            try_hard: 60,
+            hurry_up: 80,
+            please_people: 100,
+          }),
+        ],
+        [
+          "boss-en",
+          result("boss-en", {
+            inspiring: { score: 70 },
+            create_trust: { score: 75 },
+            awareness: { score: 80 },
+            results: { score: 85 },
+            empowerment: { score: 90 },
+          }),
+        ],
+      ]),
+    );
+
+    expect(aggregation.lencioniCount).toBe(1);
+    expect(aggregation.lencioniAverages.find((item) => item.id === "absence_of_trust")).toMatchObject({ avg: 8 });
+    expect(aggregation.driverCount).toBe(1);
+    expect(aggregation.driverAverages.find((item) => item.id === "please_people")).toMatchObject({ avg: 100 });
+    expect(aggregation.boss360Count).toBe(1);
+    expect(aggregation.boss360Averages.find((item) => item.id === "empowerment")).toMatchObject({ avg: 90 });
+  });
 });
