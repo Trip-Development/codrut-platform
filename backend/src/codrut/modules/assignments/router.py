@@ -182,6 +182,8 @@ async def create_company_invitation(
         assignments_result = await session.execute(
             select(QuestionnaireAssignment)
             .where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id == payload.respondent_profile_id)
             .where(QuestionnaireAssignment.status == AssignmentStatus.assigned)
         )
         assignments = assignments_result.scalars().all()
