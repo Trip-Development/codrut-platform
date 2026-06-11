@@ -45,6 +45,7 @@ jobs:
     name: Build Production Images
     needs:
       - guard-prod-ref
+      - deploy-preflight
       - resolve-release-source
       - resolve-images
     if: needs.resolve-images.outputs.images-exist != 'true'
@@ -53,6 +54,14 @@ jobs:
       push: true
       tag: sha-${{ needs.resolve-release-source.outputs.source-sha }}
       ref: ${{ needs.resolve-release-source.outputs.source-sha }}
+    secrets: inherit
+
+  deploy-preflight:
+    name: Validate Production Deploy Config
+    needs: guard-prod-ref
+    uses: ./.github/workflows/_deploy-preflight.yml
+    with:
+      environment: prod
     secrets: inherit
 
   resolve-release-source:
@@ -138,10 +147,11 @@ jobs:
     name: Deploy to Hetzner VPS
     needs:
       - build-images
+      - deploy-preflight
       - guard-prod-ref
       - resolve-images
       - resolve-release-source
-    if: always() && needs.guard-prod-ref.result == 'success' && needs.resolve-images.result == 'success' && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
+    if: always() && needs.guard-prod-ref.result == 'success' && needs.deploy-preflight.result == 'success' && needs.resolve-images.result == 'success' && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
     uses: ./.github/workflows/_deploy-vps.yml
     with:
       environment: prod

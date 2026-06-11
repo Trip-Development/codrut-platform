@@ -46,7 +46,9 @@ jobs:
 
   build-images:
     name: Build Staging Images
-    needs: guard-staging-ref
+    needs:
+      - guard-staging-ref
+      - deploy-preflight
     if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
     uses: ./.github/workflows/_image-build.yml
     with:
@@ -54,10 +56,21 @@ jobs:
       tag: sha-${{ github.sha }}
     secrets: inherit
 
+  deploy-preflight:
+    name: Validate Staging Deploy Config
+    needs: guard-staging-ref
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
+    uses: ./.github/workflows/_deploy-preflight.yml
+    with:
+      environment: staging
+    secrets: inherit
+
   deploy-vps:
     name: Deploy to Staging VPS
     if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
-    needs: build-images
+    needs:
+      - build-images
+      - deploy-preflight
     uses: ./.github/workflows/_deploy-vps.yml
     with:
       environment: staging
