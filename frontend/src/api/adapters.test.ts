@@ -16,10 +16,12 @@ import {
   createCompany,
   createCompanyTeam,
   deleteCompany,
+  getCompanyDefaultAssignmentPlan,
   getCompanyList,
   getCompanyTeamMemberships,
   importCompanyRoster,
   resendParticipantInvitation,
+  saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
 } from "./companies";
 import {
@@ -284,10 +286,11 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
     await expect(
-      saveQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
+      saveQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1, pcm_base: "thinker" }),
     ).resolves.toMatchObject({
       status: "draft",
       questionnaire_key: "lencioni",
+      answers: { q1: 1, pcm_base: "thinker" },
     });
     await expect(
       submitQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
@@ -632,6 +635,101 @@ describe("frontend API adapter stubs", () => {
           target_person_id: "participant-2",
           target_team_id: null,
           visibility_policy: "trainer_raw_review",
+        }),
+      }),
+    );
+  });
+
+  it("gets and saves the default company assignment plan through the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          scopes: [
+            {
+              id: "leadership",
+              name: "Leadership",
+              type: "leadership_team",
+              participant_ids: ["participant-1"],
+            },
+          ],
+          assignments: [
+            {
+              key: "leadership:participant-1:lencioni:team:Leadership",
+              scope_id: "leadership",
+              scope_name: "Leadership",
+              scope_type: "leadership_team",
+              respondent_profile_id: "participant-1",
+              respondent_name: "Ana",
+              questionnaire_key: "lencioni",
+              target_type: "team",
+              target_person_id: null,
+              target_person_name: null,
+              target_team_id: null,
+              target_team_name: "Leadership",
+              target_team_type: "leadership",
+              target_team_member_ids: ["participant-1"],
+              target_team_leader_id: null,
+              visibility_policy: "trainer_raw_review",
+              selected: true,
+              existing_assignment_id: null,
+            },
+          ],
+          suggested_count: 1,
+          existing_count: 0,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          assignments: [{ id: "assignment-1", target_type: "team" }],
+          created_count: 1,
+          existing_count: 0,
+        }),
+      } as Response);
+
+    const plan = await getCompanyDefaultAssignmentPlan("company-1");
+
+    expect(plan.assignments[0]).toMatchObject({
+      respondent_profile_id: "participant-1",
+      target_team_name: "Leadership",
+    });
+
+    await expect(saveCompanyDefaultAssignmentPlan("company-1", plan.assignments)).resolves.toMatchObject({
+      created_count: 1,
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/companies/company-1/assignments/default-plan"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/companies/company-1/assignments/default-plan"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          assignments: [
+            {
+              respondent_profile_id: "participant-1",
+              questionnaire_key: "lencioni",
+              target_type: "team",
+              target_person_id: null,
+              target_team_id: null,
+              target_team_name: "Leadership",
+              target_team_type: "leadership",
+              target_team_member_ids: ["participant-1"],
+              target_team_leader_id: null,
+              visibility_policy: "trainer_raw_review",
+            },
+          ],
         }),
       }),
     );

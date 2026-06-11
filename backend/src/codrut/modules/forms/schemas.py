@@ -55,3 +55,10 @@ class QuestionnaireResponseResponse(BaseModel):
     questionnaire_version: int
     status: QuestionnaireResponseStatus
     answers: dict[str, Any]
+
+
+class ParticipantOnboardingResponse(BaseModel):
+    required: bool
+    questionnaire_key: str | None = None
+    assignment_id: UUID | None = None
+    href: str | None = None

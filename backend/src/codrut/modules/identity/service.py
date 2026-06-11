@@ -29,6 +29,40 @@ class InviteVerifyResult:
     session_token: str | None
 
 
+def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
+    if questionnaire_key == "lencioni":
+        return (
+            "Lencioni - Cele 5 disfuncții ale echipei",
+            "Evaluează dinamica echipei pentru proiectul curent.",
+            12,
+        )
+    if questionnaire_key == "distress_drivers":
+        return (
+            "Driveri de stres TA",
+            "Identifică driverii care apar cel mai des în context de presiune.",
+            10,
+        )
+    if questionnaire_key == "boss_360":
+        return (
+            "Feedback 360",
+            "Oferă feedback pentru persoana indicată în această sarcină.",
+            10,
+        )
+    if questionnaire_key == "pcm_base":
+        return (
+            "Baza ta PCM",
+            "Confirmă baza ta PCM pentru profilul de participant.",
+            2,
+        )
+    if questionnaire_key == "phase":
+        return (
+            "Faza ta PCM",
+            "Confirmă faza PCM curentă pentru profilul de participant.",
+            2,
+        )
+    return ("Chestionar", "Completează formularul atribuit.", 10)
+
+
 class IdentityService:
     def __init__(self, session: AsyncSession) -> None:
         self.repository = IdentityRepository(session)
@@ -171,7 +205,7 @@ class IdentityService:
         tasks = []
         for assignment_id in claims.assignment_ids:
             ass = assignments_by_id[assignment_id]
-            target_label = "Self Assessment"
+            target_label = "Autoevaluare"
             if ass.target_type == "team" and ass.target_team_id:
                 team_result = await self.repository.session.execute(
                     select(Team)
@@ -200,14 +234,7 @@ class IdentityService:
                 "scored": "completed",
             }
             task_status = status_map.get(ass.status.value, "not_started")
-            est_minutes = 12 if ass.questionnaire_key == "lencioni" else 10
-
-            if ass.questionnaire_key == "lencioni":
-                title = "Lencioni (Cele 5 Disfunctionalitati)"
-                detail = "Raspuns pentru functionalitatea echipei."
-            else:
-                title = "Distress Drivers (Factori de stres)"
-                detail = "Identifica factorii tai majori de stres."
+            title, detail, est_minutes = _invite_task_copy(ass.questionnaire_key)
 
             tasks.append(
                 InviteTask(
@@ -333,7 +360,7 @@ class IdentityService:
         company_id: UUID,
         respondent_profile_id: UUID,
         assignment_ids: list[UUID] | None = None,
-        expires_in_days: int = 14,
+        expires_in_days: int = 3650,
         force_rotate: bool = False,
     ) -> AssignmentInvite:
         from sqlalchemy import select

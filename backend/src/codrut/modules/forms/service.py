@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -5,18 +6,25 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
-from codrut.modules.assignments.models import AssignmentStatus
+from codrut.modules.assignments.models import (
+    AssignmentAccessMode,
+    AssignmentStatus,
+    AssignmentTargetType,
+    QuestionnaireAssignment,
+)
 from codrut.modules.forms.definitions import (
     APPROVED_QUESTIONNAIRE_DEFINITIONS,
     get_approved_questionnaire_definition,
 )
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
+    QuestionnaireKey,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
 from codrut.modules.forms.repository import FormsRepository
 from codrut.modules.forms.schemas import (
+    ParticipantOnboardingResponse,
     QuestionnaireDefinitionCreateRequest,
     QuestionnaireDefinitionResponse,
     QuestionnaireDefinitionUpdateRequest,
@@ -209,6 +217,11 @@ class FormsService:
         if submit:
             response.status = QuestionnaireResponseStatus.submitted
             response.submitted_at = response.submitted_at or datetime.now(UTC)
+            await self._apply_profile_answer_side_effects(
+                assignment,
+                definition.key,
+                payload.answers,
+            )
 
             session = getattr(repository, "session", None)
             if session is not None:
@@ -239,10 +252,80 @@ class FormsService:
             assignment.started_at = assignment.started_at or datetime.now(UTC)
         return _response_to_schema(response)
 
+    async def get_participant_onboarding(self, user_id: UUID) -> ParticipantOnboardingResponse:
+        repository = self._require_repository()
+        profile = await repository.get_participant_for_user(user_id)
+        if profile is None:
+            return ParticipantOnboardingResponse(required=False)
+
+        if not profile.pcm_base:
+            assignment = await self._ensure_pcm_assignment(profile.id, "pcm_base")
+            return _onboarding_response(assignment)
+
+        if not profile.pcm_phase:
+            assignment = await self._ensure_pcm_assignment(profile.id, "phase")
+            return _onboarding_response(assignment)
+
+        return ParticipantOnboardingResponse(required=False)
+
     def _require_repository(self) -> FormsRepository:
         if self.repository is None:
             raise RuntimeError("FormsService requires a database session for response operations")
         return self.repository
+
+    async def _apply_profile_answer_side_effects(
+        self,
+        assignment: QuestionnaireAssignment,
+        questionnaire_key: str,
+        answers: dict[str, Any],
+    ) -> None:
+        if questionnaire_key not in {QuestionnaireKey.pcm_base.value, QuestionnaireKey.phase.value}:
+            return
+
+        repository = self._require_repository()
+        profile = await repository.get_participant_by_profile_id(
+            assignment.respondent_profile_id
+        )
+        if profile is None:
+            return
+
+        if questionnaire_key == QuestionnaireKey.pcm_base.value:
+            profile.pcm_base = _clean_pcm_answer(answers.get("pcm_base"))
+            profile.pcm_profile = profile.pcm_base
+        elif questionnaire_key == QuestionnaireKey.phase.value:
+            profile.pcm_phase = _clean_pcm_answer(answers.get("pcm_phase"))
+
+    async def _ensure_pcm_assignment(
+        self,
+        participant_profile_id: UUID,
+        questionnaire_key: str,
+    ) -> QuestionnaireAssignment:
+        repository = self._require_repository()
+        profile = await repository.get_participant_by_profile_id(
+            participant_profile_id
+        )
+        if profile is None:
+            raise DomainError("Participant profile not found.", code="profile_not_found")
+
+        assignment = await repository.get_pcm_assignment(
+            company_id=profile.company_id,
+            participant_profile_id=profile.id,
+            questionnaire_key=questionnaire_key,
+        )
+        if assignment is not None:
+            return assignment
+
+        assignment = QuestionnaireAssignment(
+            company_id=profile.company_id,
+            respondent_profile_id=profile.id,
+            questionnaire_key=questionnaire_key,
+            target_type=AssignmentTargetType.self_assessment,
+            access_mode=AssignmentAccessMode.account_link,
+            status=AssignmentStatus.assigned,
+        )
+        repository.session.add(assignment)
+        await repository.session.flush()
+        return assignment
 
     async def _seed_catalog_definitions(self, repository: FormsRepository) -> None:
         for catalog_definition in APPROVED_QUESTIONNAIRE_DEFINITIONS:
@@ -250,15 +333,51 @@ class FormsService:
                 catalog_definition.key,
                 version=catalog_definition.version,
             )
-            if existing is not None:
+            if existing is None:
+                await repository.add_definition(
+                    QuestionnaireDefinition(
+                        key=catalog_definition.key,
+                        version=catalog_definition.version,
+                        title=catalog_definition.title,
+                        description=catalog_definition.description,
+                        schema=deepcopy(catalog_definition.schema),
+                        active=True,
+                    )
+                )
                 continue
+
+            if (
+                existing.title == catalog_definition.title
+                and (existing.description or "") == catalog_definition.description
+                and existing.schema == catalog_definition.schema
+                and existing.active
+            ):
+                continue
+
+            has_submissions = await repository.has_submitted_responses(
+                existing.key,
+                existing.version,
+            )
+            if not has_submissions:
+                existing.title = catalog_definition.title
+                existing.description = catalog_definition.description
+                existing.schema = deepcopy(catalog_definition.schema)
+                existing.active = True
+                await repository.deactivate_definitions_for_key(
+                    existing.key,
+                    except_version=existing.version,
+                )
+                continue
+
+            next_version = await repository.get_latest_version(catalog_definition.key) + 1
+            await repository.deactivate_definitions_for_key(catalog_definition.key)
             await repository.add_definition(
                 QuestionnaireDefinition(
                     key=catalog_definition.key,
-                    version=catalog_definition.version,
+                    version=next_version,
                     title=catalog_definition.title,
                     description=catalog_definition.description,
-                    schema=catalog_definition.schema,
+                    schema=deepcopy(catalog_definition.schema),
                     active=True,
                 )
             )
@@ -277,6 +396,19 @@ def _to_response(definition: Any) -> QuestionnaireDefinitionResponse:
 
 def _response_to_schema(response: QuestionnaireResponse) -> QuestionnaireResponseResponse:
     return QuestionnaireResponseResponse.model_validate(response)
+
+
+def _onboarding_response(assignment: QuestionnaireAssignment) -> ParticipantOnboardingResponse:
+    return ParticipantOnboardingResponse(
+        required=True,
+        questionnaire_key=assignment.questionnaire_key,
+        assignment_id=assignment.id,
+        href=f"/participant/questionnaires/{assignment.questionnaire_key}?assignmentId={assignment.id}",
+    )
+
+
+def _clean_pcm_answer(value: Any) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _validate_submit_answers(schema: dict, answers: dict) -> None:
@@ -299,8 +431,8 @@ def _validate_submit_answers(schema: dict, answers: dict) -> None:
         )
 
 
-def _allowed_answer_values(schema: dict) -> dict[str, set[int]]:
-    values: dict[str, set[int]] = {}
+def _allowed_answer_values(schema: dict) -> dict[str, set[Any]]:
+    values: dict[str, set[Any]] = {}
     for section in schema.get("sections", []):
         for question in section.get("questions", []):
             question_id = question["id"]

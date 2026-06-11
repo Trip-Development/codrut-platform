@@ -12,8 +12,9 @@ export type QuestionnaireDefinitionStub = {
 };
 
 export type QuestionnaireScaleOption = {
-  value: number;
+  value: number | string;
   label: string;
+  description?: string;
 };
 
 export type QuestionnaireStatement = {
@@ -26,13 +27,15 @@ export type QuestionnaireStatement = {
 export type QuestionnaireQuestion = {
   id: string;
   code: string;
-  type: "likert" | "statement_score_set";
+  type: "likert" | "statement_score_set" | "single_choice";
   label: string;
   required: boolean;
   instructions?: string;
   scale: QuestionnaireScaleOption[];
   statements?: QuestionnaireStatement[];
 };
+
+export type QuestionnaireAnswerValue = number | string;
 
 export type QuestionnaireSection = {
   id: string;
@@ -65,7 +68,7 @@ export type QuestionnaireResponseRecord = {
   questionnaire_key: string;
   questionnaire_version: number;
   status: "draft" | "submitted";
-  answers: Record<string, number>;
+  answers: Record<string, QuestionnaireAnswerValue>;
 };
 
 const seededAssignmentQuestionnaires: Record<string, string> = {
@@ -674,7 +677,7 @@ export async function getQuestionnaireResponse(
 
 export async function saveQuestionnaireResponse(
   assignmentId: string,
-  answers: Record<string, number>,
+  answers: Record<string, QuestionnaireAnswerValue>,
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "draft");
@@ -700,7 +703,7 @@ export async function saveQuestionnaireResponse(
 
 export async function submitQuestionnaireResponse(
   assignmentId: string,
-  answers: Record<string, number>,
+  answers: Record<string, QuestionnaireAnswerValue>,
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "submitted");
@@ -742,7 +745,7 @@ function normalizeResponseError(error: unknown, fallbackMessage: string): Error 
 
 function seededQuestionnaireResponse(
   assignmentId: string,
-  answers: Record<string, number>,
+  answers: Record<string, QuestionnaireAnswerValue>,
   status: "draft" | "submitted",
 ): QuestionnaireResponseRecord {
   const questionnaireKey = seededAssignmentQuestionnaires[assignmentId];

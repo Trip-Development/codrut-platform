@@ -49,6 +49,7 @@ const mockDefinition: QuestionnaireDefinition = {
 describe("QuestionnaireRunner", () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
   });
 
   it("renders questionnaire instructions, questions, and action buttons", () => {
@@ -77,6 +78,43 @@ describe("QuestionnaireRunner", () => {
     // Verifies that auto-save API gets triggered in the background
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
+    });
+  });
+
+  it("renders single-choice questions and saves string answers", async () => {
+    const singleChoiceDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      schema: {
+        ...mockDefinition.schema,
+        sections: [
+          {
+            id: "pcm",
+            title: "Profil PCM",
+            questions: [
+              {
+                id: "pcm_base",
+                code: "PCM-BASE",
+                type: "single_choice",
+                label: "Care este baza ta PCM?",
+                required: true,
+                scale: [
+                  { value: "harmonizer", label: "Armonizator", description: "Orientat către relații." },
+                  { value: "thinker", label: "Gânditor", description: "Orientat către structură." },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    render(<QuestionnaireRunner definition={singleChoiceDefinition} assignmentId="pcm-assignment" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Gânditor/ }));
+
+    expect(screen.getByText("100% completat")).toBeTruthy();
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith("pcm-assignment", {
+      pcm_base: "thinker",
     });
   });
 });

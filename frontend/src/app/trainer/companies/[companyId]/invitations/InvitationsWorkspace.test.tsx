@@ -8,7 +8,13 @@ import type {
   ParticipantInvitationStatus,
   RosterInviteResult,
 } from "@/api/companies";
-import { createCompanyAssignment, resendParticipantInvitation, sendParticipantInvitations } from "@/api/companies";
+import {
+  createCompanyAssignment,
+  getCompanyDefaultAssignmentPlan,
+  resendParticipantInvitation,
+  saveCompanyDefaultAssignmentPlan,
+  sendParticipantInvitations,
+} from "@/api/companies";
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
 import { buildInvitationRows, InvitationsWorkspace } from "./InvitationsWorkspace";
 
@@ -17,6 +23,8 @@ vi.mock("@/api/companies", async (importOriginal) => {
   return {
     ...original,
     createCompanyAssignment: vi.fn(),
+    getCompanyDefaultAssignmentPlan: vi.fn(),
+    saveCompanyDefaultAssignmentPlan: vi.fn(),
     sendParticipantInvitations: vi.fn(),
     resendParticipantInvitation: vi.fn(),
   };
@@ -226,6 +234,115 @@ describe("buildInvitationRows", () => {
 
     expect(await screen.findByText(/Asignare creată pentru Ana Pop/)).toBeTruthy();
     expect(screen.getByText("boss_360 · despre Andrei Manager")).toBeTruthy();
+  });
+
+  it("generates a default assignment plan and saves only selected rows", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(getCompanyDefaultAssignmentPlan).mockResolvedValue({
+      scopes: [
+        {
+          id: "leadership",
+          name: "Leadership",
+          type: "leadership_team",
+          participant_ids: ["andrei", "ana"],
+        },
+      ],
+      assignments: [
+        {
+          key: "leadership:andrei:lencioni:team:Leadership",
+          scope_id: "leadership",
+          scope_name: "Leadership",
+          scope_type: "leadership_team",
+          respondent_profile_id: "andrei",
+          respondent_name: "Andrei Manager",
+          questionnaire_key: "lencioni",
+          target_type: "team",
+          target_person_id: null,
+          target_person_name: null,
+          target_team_id: null,
+          target_team_name: "Leadership",
+          target_team_type: "leadership",
+          target_team_member_ids: ["andrei", "ana"],
+          target_team_leader_id: null,
+          visibility_policy: "trainer_raw_review",
+          selected: true,
+          existing_assignment_id: null,
+        },
+        {
+          key: "leadership:ana:lencioni:team:Leadership",
+          scope_id: "leadership",
+          scope_name: "Leadership",
+          scope_type: "leadership_team",
+          respondent_profile_id: "ana",
+          respondent_name: "Ana Pop",
+          questionnaire_key: "lencioni",
+          target_type: "team",
+          target_person_id: null,
+          target_person_name: null,
+          target_team_id: null,
+          target_team_name: "Leadership",
+          target_team_type: "leadership",
+          target_team_member_ids: ["andrei", "ana"],
+          target_team_leader_id: null,
+          visibility_policy: "trainer_raw_review",
+          selected: true,
+          existing_assignment_id: null,
+        },
+      ],
+      suggested_count: 2,
+      existing_count: 0,
+    });
+    vi.mocked(saveCompanyDefaultAssignmentPlan).mockResolvedValue({
+      created_count: 1,
+      existing_count: 0,
+      assignments: [
+        {
+          id: "assignment-3",
+          company_id: "company-1",
+          respondent_profile_id: "andrei",
+          questionnaire_key: "lencioni",
+          target_type: "team",
+          target_person_id: null,
+          target_team_id: null,
+          status: "assigned",
+          submitted_at: null,
+          scored_at: null,
+        },
+      ],
+    });
+
+    render(
+      <InvitationsWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        participants={participants}
+        assignments={[]}
+        invitationStatuses={[]}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generează plan de asignări" }));
+
+    expect(await screen.findAllByText("Leadership")).toHaveLength(3);
+    expect(screen.getAllByText("Andrei Manager").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Ana Pop").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("lencioni")).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText(/Ana Pop/));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează asignările bifate (1)" }));
+
+    await waitFor(() => {
+      expect(saveCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", [
+        expect.objectContaining({
+          respondent_profile_id: "andrei",
+          questionnaire_key: "lencioni",
+          target_type: "team",
+        }),
+      ]);
+    });
+    expect(await screen.findByText("1 asignări create, 0 deja existente.")).toBeTruthy();
+    expect(screen.getByText("lencioni · echipa selectată")).toBeTruthy();
   });
 
   it("generates secure links, updates participant rows, and copies the active link", async () => {
