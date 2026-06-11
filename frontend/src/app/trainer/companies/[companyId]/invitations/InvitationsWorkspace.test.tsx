@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   CompanyAssignment,
   CompanyParticipant,
+  CompanyProject,
   CompanyTeam,
   ParticipantInvitationStatus,
   RosterInviteResult,
@@ -63,10 +64,25 @@ const participants: CompanyParticipant[] = [
   },
 ];
 
+const projects: CompanyProject[] = [
+  {
+    id: "project-1",
+    company_id: "company-1",
+    name: "Leadership Septembrie",
+    description: null,
+    status: "active",
+    starts_at: null,
+    due_at: null,
+    created_at: "2026-06-11T09:00:00Z",
+    updated_at: "2026-06-11T09:00:00Z",
+  },
+];
+
 const assignments: CompanyAssignment[] = [
   {
     id: "assignment-1",
     company_id: "company-1",
+    project_id: "project-1",
     respondent_profile_id: "andrei",
     questionnaire_key: "lencioni",
     target_type: "self",
@@ -79,6 +95,7 @@ const assignments: CompanyAssignment[] = [
   {
     id: "assignment-2",
     company_id: "company-1",
+    project_id: "project-1",
     respondent_profile_id: "ana",
     questionnaire_key: "lencioni",
     target_type: "self",
@@ -194,6 +211,7 @@ describe("buildInvitationRows", () => {
     vi.mocked(createCompanyAssignment).mockResolvedValue({
       id: "assignment-3",
       company_id: "company-1",
+      project_id: "project-1",
       respondent_profile_id: "ana",
       questionnaire_key: "boss_360",
       target_type: "person",
@@ -208,6 +226,8 @@ describe("buildInvitationRows", () => {
       <InvitationsWorkspace
         companyId="company-1"
         companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
         participants={participants}
         assignments={[]}
         invitationStatuses={[]}
@@ -224,6 +244,7 @@ describe("buildInvitationRows", () => {
 
     await waitFor(() => {
       expect(createCompanyAssignment).toHaveBeenCalledWith("company-1", {
+        projectId: "project-1",
         respondentProfileId: "ana",
         questionnaireKey: "boss_360",
         targetType: "person",
@@ -239,6 +260,7 @@ describe("buildInvitationRows", () => {
   it("generates a default assignment plan and saves only selected rows", async () => {
     vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
     vi.mocked(getCompanyDefaultAssignmentPlan).mockResolvedValue({
+      project_id: "project-1",
       scopes: [
         {
           id: "leadership",
@@ -299,6 +321,7 @@ describe("buildInvitationRows", () => {
         {
           id: "assignment-3",
           company_id: "company-1",
+          project_id: "project-1",
           respondent_profile_id: "andrei",
           questionnaire_key: "lencioni",
           target_type: "team",
@@ -315,6 +338,8 @@ describe("buildInvitationRows", () => {
       <InvitationsWorkspace
         companyId="company-1"
         companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
         participants={participants}
         assignments={[]}
         invitationStatuses={[]}
@@ -325,6 +350,7 @@ describe("buildInvitationRows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generează plan de asignări" }));
 
     expect(await screen.findAllByText("Leadership")).toHaveLength(3);
+    expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, { projectId: "project-1" });
     expect(screen.getAllByText("Andrei Manager").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Ana Pop").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("lencioni")).toHaveLength(2);
@@ -339,7 +365,7 @@ describe("buildInvitationRows", () => {
           questionnaire_key: "lencioni",
           target_type: "team",
         }),
-      ]);
+      ], "project-1");
     });
     expect(await screen.findByText("1 asignări create, 0 deja existente.")).toBeTruthy();
     expect(screen.getByText("lencioni · echipa selectată")).toBeTruthy();
@@ -374,6 +400,8 @@ describe("buildInvitationRows", () => {
       <InvitationsWorkspace
         companyId="company-1"
         companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
@@ -388,6 +416,7 @@ describe("buildInvitationRows", () => {
       expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", {
         mode: "secure_links",
         participantIds: ["ana"],
+        projectId: "project-1",
       });
     });
     expect(await screen.findByText("1/1 linkuri securizate generate pentru persoanele selectate.")).toBeTruthy();
@@ -417,6 +446,8 @@ describe("buildInvitationRows", () => {
       <InvitationsWorkspace
         companyId="company-1"
         companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
@@ -427,7 +458,7 @@ describe("buildInvitationRows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retrimite" }));
 
     await waitFor(() => {
-      expect(resendParticipantInvitation).toHaveBeenCalledWith("company-1", "ana");
+      expect(resendParticipantInvitation).toHaveBeenCalledWith("company-1", "ana", "project-1");
     });
     expect(await screen.findByText("Emailul nu a fost retrimis către ana@example.com: provider unavailable")).toBeTruthy();
     expect(screen.getByText("Eroare trimitere")).toBeTruthy();

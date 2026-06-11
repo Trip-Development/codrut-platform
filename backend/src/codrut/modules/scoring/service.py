@@ -51,12 +51,20 @@ class ScoringService:
     async def get_company_report_aggregate(
         self,
         company_id: UUID,
+        project_id: UUID | None = None,
     ) -> CompanyReportAggregateResponse:
         company = await self.company_repository.get_company(company_id)
         if company is None:
             raise DomainError("Company not found.", code="company_not_found")
+        if project_id is not None:
+            project = await self.company_repository.get_project(company_id, project_id)
+            if project is None:
+                raise DomainError("Project not found in this company.", code="project_not_found")
 
-        assignment_results = await self.repository.list_company_assignment_results(company_id)
+        assignment_results = await self.repository.list_company_assignment_results(
+            company_id,
+            project_id,
+        )
         total_assigned = len(assignment_results)
         total_completed = sum(
             1

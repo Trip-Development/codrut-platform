@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -226,11 +226,13 @@ async def list_participant_invitation_statuses(
     company_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> list[ParticipantInvitationStatusResponse]:
     require_trainer_principal(principal)
     return await CompanyService(session).list_participant_invitation_statuses(
         principal.user_id,
         company_id,
+        project_id,
     )
 
 
@@ -244,12 +246,14 @@ async def resend_participant_invite(
     participant_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
 ) -> RosterImportResponse:
     require_trainer_principal(principal)
     result = await CompanyService(session).resend_invite(
         principal.user_id,
         company_id,
         participant_id,
+        project_id,
     )
     await session.commit()
     return result

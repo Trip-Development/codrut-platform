@@ -65,6 +65,7 @@ export type CompanyProjectPayload = {
 export type CompanyAssignment = {
   id: string;
   company_id: string;
+  project_id: string | null;
   respondent_profile_id: string;
   questionnaire_key: string;
   target_type: "self" | "person" | "team";
@@ -84,6 +85,7 @@ export type CompanyAssignment = {
 };
 
 export type CreateCompanyAssignmentPayload = {
+  projectId?: string | null;
   respondentProfileId: string;
   questionnaireKey: string;
   targetType: CompanyAssignment["target_type"];
@@ -121,6 +123,7 @@ export type CompanyAssignmentPlanItem = {
 };
 
 export type CompanyAssignmentPlan = {
+  project_id: string | null;
   scopes: CompanyAssignmentPlanScope[];
   assignments: CompanyAssignmentPlanItem[];
   suggested_count: number;
@@ -208,6 +211,10 @@ export type CompanyDetail = {
 
 export type ApiRequestOptions = Pick<RequestInit, "headers">;
 
+export type ProjectScopeOptions = {
+  projectId?: string | null;
+};
+
 export type ReportAverage = {
   id: string;
   label: string;
@@ -250,6 +257,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Date indisponibile.";
 }
 
+function projectQuery(scope: ProjectScopeOptions = {}): string {
+  return scope.projectId ? `?project_id=${encodeURIComponent(scope.projectId)}` : "";
+}
+
 // ---------------------------------------------------------------------------
 // Data fetchers
 // ---------------------------------------------------------------------------
@@ -281,10 +292,11 @@ export async function getCompanyParticipants(
 export async function getCompanyAssignments(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignment[]> {
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/companies/${companyId}/assignments`,
+      `${getApiBaseUrl()}/companies/${companyId}/assignments${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
     if (!response.ok) {
@@ -305,6 +317,7 @@ export async function getCompanyAssignments(
 export async function getCompanyReportAggregate(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<CompanyReportAggregate> {
   const emptyAggregate: CompanyReportAggregate = {
     total_assigned: 0,
@@ -319,7 +332,7 @@ export async function getCompanyReportAggregate(
 
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate`,
+      `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
     if (!response.ok) {
@@ -347,6 +360,7 @@ export async function createCompanyAssignment(
     credentials: "include",
     body: JSON.stringify({
       respondent_profile_id: payload.respondentProfileId,
+      project_id: payload.projectId ?? null,
       questionnaire_key: payload.questionnaireKey,
       target_type: payload.targetType,
       target_person_id: payload.targetPersonId ?? null,
@@ -366,8 +380,9 @@ export async function createCompanyAssignment(
 export async function getCompanyDefaultAssignmentPlan(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignmentPlan> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan`, {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery(scope)}`, {
     cache: "no-store",
     credentials: "include",
     ...options,
@@ -384,12 +399,14 @@ export async function getCompanyDefaultAssignmentPlan(
 export async function saveCompanyDefaultAssignmentPlan(
   companyId: string,
   assignments: CompanyAssignmentPlanItem[],
+  projectId?: string | null,
 ): Promise<CompanyAssignmentPlanSaveResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan`, {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery({ projectId })}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({
+      project_id: projectId ?? null,
       assignments: assignments.map((assignment) => ({
         respondent_profile_id: assignment.respondent_profile_id,
         questionnaire_key: assignment.questionnaire_key,
@@ -691,6 +708,7 @@ export async function sendParticipantInvitations(
   companyId: string,
   payload: {
     participantIds?: string[];
+    projectId?: string | null;
     mode: ParticipantInvitationMode;
     forceRotate?: boolean;
   },
@@ -701,6 +719,7 @@ export async function sendParticipantInvitations(
     credentials: "include",
     body: JSON.stringify({
       participant_ids: payload.participantIds,
+      project_id: payload.projectId ?? null,
       mode: payload.mode,
       force_rotate: payload.forceRotate ?? false,
     }),
@@ -717,9 +736,10 @@ export async function sendParticipantInvitations(
 export async function resendParticipantInvitation(
   companyId: string,
   participantId: string,
+  projectId?: string | null,
 ): Promise<RosterInviteResult | null> {
   const response = await fetch(
-    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite`,
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite${projectQuery({ projectId })}`,
     {
       method: "POST",
       credentials: "include",
@@ -738,9 +758,10 @@ export async function resendParticipantInvitation(
 export async function getCompanyInvitationStatuses(
   companyId: string,
   options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
 ): Promise<ParticipantInvitationStatus[]> {
   const response = await fetch(
-    `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status`,
+    `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status${projectQuery(scope)}`,
     { cache: "no-store", credentials: "include", ...options },
   );
   if (!response.ok) {

@@ -360,6 +360,7 @@ class IdentityService:
         company_id: UUID,
         respondent_profile_id: UUID,
         assignment_ids: list[UUID] | None = None,
+        project_id: UUID | None = None,
         expires_in_days: int = 3650,
         force_rotate: bool = False,
     ) -> AssignmentInvite:
@@ -384,6 +385,7 @@ class IdentityService:
             company_id=company_id,
             respondent_profile_id=respondent_profile_id,
             assignment_ids=assignment_ids,
+            project_id=project_id,
         )
         if not assignment_ids:
             raise DomainError(
@@ -436,6 +438,7 @@ class IdentityService:
         company_id: UUID,
         respondent_profile_id: UUID,
         assignment_ids: list[UUID] | None,
+        project_id: UUID | None = None,
     ) -> list[UUID]:
         from sqlalchemy import select
 
@@ -452,6 +455,8 @@ class IdentityService:
             .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
             .where(QuestionnaireAssignment.status.in_(active_statuses))
         )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
 
         if assignment_ids is None:
             result = await self.repository.session.execute(stmt)
