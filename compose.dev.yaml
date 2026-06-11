@@ -48,7 +48,7 @@ services:
       CODRUT_REDIS_URL: redis://redis:6379/0
       CODRUT_SESSION_SECRET: local-development-secret
       CODRUT_CORS_ORIGINS: '["http://localhost","http://localhost:3000","http://localhost:8000"]'
-      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-test}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-mailpit}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-no-reply@codrut.local}
       CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Codrut Platform}
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-}
@@ -85,7 +85,7 @@ services:
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
       CODRUT_REDIS_URL: redis://redis:6379/0
       CODRUT_SESSION_SECRET: local-development-secret
-      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-test}
+      CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:-mailpit}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:-no-reply@codrut.local}
       CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Codrut Platform}
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY:-}

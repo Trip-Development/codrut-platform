@@ -225,6 +225,33 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("returns a participant workspace recovery state when the backend profile is unavailable", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: {
+          code: "participant_profile_not_found",
+          message: "Participant profile not found for this account.",
+        },
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await getParticipantWorkspaceSummary();
+
+    expect(summary).toMatchObject({
+      participantFullName: "Participant",
+      projectName: "Spațiul tău de lucru",
+      tasks: [],
+      emptyState: {
+        title: "Spațiul de participant nu este încă disponibil",
+        description: "Participant profile not found for this account.",
+      },
+    });
+  });
+
   it("keeps questionnaire and email surfaces explicit", async () => {
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
