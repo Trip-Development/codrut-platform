@@ -43,22 +43,111 @@ jobs:
 
   build-images:
     name: Build Production Images
-    needs: guard-prod-ref
+    needs:
+      - guard-prod-ref
+      - resolve-release-source
+      - resolve-images
+    if: needs.resolve-images.outputs.images-exist != 'true'
     uses: ./.github/workflows/_image-build.yml
     with:
       push: true
-      tag: sha-${{ github.sha }}
+      tag: sha-${{ needs.resolve-release-source.outputs.source-sha }}
+      ref: ${{ needs.resolve-release-source.outputs.source-sha }}
     secrets: inherit
+
+  resolve-release-source:
+    name: Resolve Release Source
+    needs: guard-prod-ref
+    runs-on: ubuntu-latest
+    outputs:
+      source-sha: ${{ steps.source.outputs.source-sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select source SHA
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          read -r -a commit_line <<< "$(git rev-list --parents -n 1 "${GITHUB_SHA}")"
+          source_sha="${GITHUB_SHA}"
+          if [[ "${#commit_line[@]}" -ge 3 ]]; then
+            source_sha="${commit_line[2]}"
+          fi
+
+          echo "source-sha=${source_sha}" >> "$GITHUB_OUTPUT"
+          echo "Using ${source_sha} as the immutable deployment source."
+
+  resolve-images:
+    name: Resolve Candidate Images
+    needs:
+      - guard-prod-ref
+      - resolve-release-source
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image: ${{ steps.images.outputs.backend }}
+      frontend-image: ${{ steps.images.outputs.frontend }}
+      images-exist: ${{ steps.check.outputs.images-exist }}
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Lowercase Repository Name
+        id: repo-name
+        shell: bash
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "repo=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Set Candidate Image Refs
+        id: images
+        shell: bash
+        env:
+          OWNER: ${{ steps.repo-name.outputs.owner }}
+          REPO: ${{ steps.repo-name.outputs.repo }}
+          TAG: sha-${{ needs.resolve-release-source.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          echo "backend=ghcr.io/${OWNER}/${REPO}-backend:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "frontend=ghcr.io/${OWNER}/${REPO}-frontend:${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Check Candidate Image Availability
+        id: check
+        shell: bash
+        env:
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
+          FRONTEND_IMAGE: ${{ steps.images.outputs.frontend }}
+        run: |
+          set -euo pipefail
+
+          if docker manifest inspect "${BACKEND_IMAGE}" >/dev/null 2>&1 && docker manifest inspect "${FRONTEND_IMAGE}" >/dev/null 2>&1; then
+            echo "images-exist=true" >> "$GITHUB_OUTPUT"
+            echo "Found previously built candidate images."
+            exit 0
+          fi
+
+          echo "images-exist=false" >> "$GITHUB_OUTPUT"
+          echo "Candidate images are missing; production will build them before deployment."
 
   deploy-vps:
     name: Deploy to Hetzner VPS
-    needs: build-images
+    needs:
+      - build-images
+      - guard-prod-ref
+      - resolve-images
+      - resolve-release-source
+    if: always() && needs.guard-prod-ref.result == 'success' && needs.resolve-images.result == 'success' && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
     uses: ./.github/workflows/_deploy-vps.yml
     with:
       environment: prod
-      backend_image: ${{ needs.build-images.outputs.backend-image }}
-      frontend_image: ${{ needs.build-images.outputs.frontend-image }}
-      release_sha: ${{ needs.build-images.outputs.release-sha }}
+      backend_image: ${{ needs.resolve-images.outputs.backend-image }}
+      frontend_image: ${{ needs.resolve-images.outputs.frontend-image }}
+      release_sha: ${{ needs.resolve-release-source.outputs.source-sha }}
       app_environment: production
       require_prod_ref: true
       prod_confirmation: ${{ github.event.inputs.confirm_prod_ref || '' }}
