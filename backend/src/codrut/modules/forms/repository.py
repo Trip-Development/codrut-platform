@@ -10,6 +10,7 @@ from codrut.modules.forms.models import (
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
+from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User
 
 
 class FormsRepository:
@@ -35,6 +36,15 @@ class FormsRepository:
     async def get_participant_for_user(self, user_id: UUID) -> ParticipantProfile | None:
         result = await self.session.execute(
             select(ParticipantProfile).where(ParticipantProfile.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_permanent_participant_for_user(self, user_id: UUID) -> ParticipantProfile | None:
+        result = await self.session.execute(
+            select(ParticipantProfile)
+            .join(User, User.id == ParticipantProfile.user_id)
+            .where(ParticipantProfile.user_id == user_id)
+            .where(User.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH)
         )
         return result.scalar_one_or_none()
 

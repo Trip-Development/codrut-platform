@@ -6,7 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token, verify_password
-from codrut.modules.identity.models import AssignmentInvite, Session, User, UserRole
+from codrut.modules.identity.models import (
+    SHADOW_ACCOUNT_PASSWORD_HASH,
+    AssignmentInvite,
+    Session,
+    User,
+    UserRole,
+)
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import (
     AuthResponse,
@@ -305,7 +311,7 @@ class IdentityService:
                 user = User(
                     id=uuid.uuid4(),
                     email=profile.email.lower(),
-                    password_hash="shadow_account_no_password",  # noqa: S106
+                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
                     role=UserRole.participant,
                 )
                 await self.repository.add_user(user)

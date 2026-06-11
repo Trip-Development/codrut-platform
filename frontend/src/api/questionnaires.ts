@@ -120,11 +120,13 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
     estimatedItems: 50,
   },
   {
-    id: "pcm_baseline",
-    name: "PCM baseline",
-    description: "Source pending. Will use the same versioned definition format.",
-    status: "planned",
+    id: "pcm_base",
+    name: "Baza și faza PCM",
+    description: "Alegere ghidată pentru baza și faza PCM din profilul participantului.",
+    status: "active",
+    version: 1,
     audience: "leadership",
+    estimatedItems: 2,
   },
   {
     id: "phase",

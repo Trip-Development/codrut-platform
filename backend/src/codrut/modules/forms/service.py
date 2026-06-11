@@ -254,16 +254,12 @@ class FormsService:
 
     async def get_participant_onboarding(self, user_id: UUID) -> ParticipantOnboardingResponse:
         repository = self._require_repository()
-        profile = await repository.get_participant_for_user(user_id)
+        profile = await repository.get_permanent_participant_for_user(user_id)
         if profile is None:
             return ParticipantOnboardingResponse(required=False)
 
-        if not profile.pcm_base:
+        if not profile.pcm_base or not profile.pcm_phase:
             assignment = await self._ensure_pcm_assignment(profile.id, "pcm_base")
-            return _onboarding_response(assignment)
-
-        if not profile.pcm_phase:
-            assignment = await self._ensure_pcm_assignment(profile.id, "phase")
             return _onboarding_response(assignment)
 
         return ParticipantOnboardingResponse(required=False)
@@ -292,6 +288,7 @@ class FormsService:
         if questionnaire_key == QuestionnaireKey.pcm_base.value:
             profile.pcm_base = _clean_pcm_answer(answers.get("pcm_base"))
             profile.pcm_profile = profile.pcm_base
+            profile.pcm_phase = _clean_pcm_answer(answers.get("pcm_phase"))
         elif questionnaire_key == QuestionnaireKey.phase.value:
             profile.pcm_phase = _clean_pcm_answer(answers.get("pcm_phase"))
 
