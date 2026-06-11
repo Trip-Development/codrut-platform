@@ -263,7 +263,11 @@ describe("frontend API adapter stubs", () => {
       status: "active",
       estimatedItems: 48,
     });
-    await expect(listEmailSurfaceStubs()).resolves.toHaveLength(3);
+    await expect(listEmailSurfaceStubs()).resolves.toEqual([
+      { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },
+      { id: "assessment-reminders", name: "Remindere assessment", lane: "transactional" },
+      { id: "video-campaigns", name: "Campanii cu link video", lane: "campaign" },
+    ]);
   });
 
   it("resolves invite bundle fallback states", async () => {
@@ -271,6 +275,13 @@ describe("frontend API adapter stubs", () => {
       state: "valid",
       projectName: "Intake Iunie",
       participantEmail: "participant@companie.ro",
+      tasks: [
+        expect.objectContaining({ targetLabel: "Echipa operațională" }),
+        expect.objectContaining({
+          detail: "Feedback confidențial pentru persoana către care raportezi.",
+        }),
+        expect.any(Object),
+      ],
     });
     await expect(resolveInviteBundle("expired-demo")).resolves.toMatchObject({
       state: "expired",
@@ -352,9 +363,11 @@ describe("frontend API adapter stubs", () => {
 
     await expect(resolveInviteBundle("demo-token")).resolves.toMatchObject({
       state: "not_found",
+      message: "Nu am găsit o invitație activă pentru acest link.",
     });
     await expect(resolveInviteBundle("expired-demo")).resolves.toMatchObject({
       state: "not_found",
+      message: "Nu am găsit o invitație activă pentru acest link.",
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
