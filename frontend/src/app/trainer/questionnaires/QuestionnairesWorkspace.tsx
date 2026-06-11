@@ -898,7 +898,10 @@ export function QuestionnairesWorkspace() {
                               ))}
                               <button
                                 onClick={() => {
-                                  const nextVal = question.scale.length > 0 ? Math.max(...question.scale.map(o => o.value)) + 1 : 1;
+                                  const numericValues = question.scale
+                                    .map((option) => option.value)
+                                    .filter((value): value is number => typeof value === "number");
+                                  const nextVal = numericValues.length > 0 ? Math.max(...numericValues) + 1 : 1;
                                   const newScale = [...question.scale, { value: nextVal, label: `Opțiune ${nextVal}` }];
                                   handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                 }}

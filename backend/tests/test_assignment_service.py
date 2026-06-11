@@ -321,7 +321,7 @@ async def test_create_assignment_rejects_unknown_questionnaire_key() -> None:
             company_id,
             AssignmentCreateRequest(
                 respondent_profile_id=respondent_id,
-                questionnaire_key="boss_360",
+                questionnaire_key="unknown_questionnaire",
                 target_type=AssignmentTargetType.self_assessment,
             ),
         )

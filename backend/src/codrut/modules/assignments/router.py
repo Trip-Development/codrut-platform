@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from codrut.api.dependencies import current_principal, db_session
 from codrut.modules.assignments.schemas import (
     AssignmentCreateRequest,
+    AssignmentPlanResponse,
+    AssignmentPlanSaveRequest,
+    AssignmentPlanSaveResponse,
     AssignmentResponse,
     AssignmentStatusUpdateRequest,
     InvitationCreateRequest,
@@ -101,6 +104,42 @@ async def list_company_assignments(
 ) -> list[AssignmentResponse]:
     require_trainer_principal(principal)
     return await AssignmentService(session).list_assignments(principal.user_id, company_id)
+
+
+@router.get(
+    "/companies/{company_id}/assignments/default-plan",
+    response_model=AssignmentPlanResponse,
+)
+async def get_company_default_assignment_plan(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AssignmentPlanResponse:
+    require_trainer_principal(principal)
+    return await AssignmentService(session).build_default_assignment_plan(
+        principal.user_id,
+        company_id,
+    )
+
+
+@router.post(
+    "/companies/{company_id}/assignments/default-plan",
+    response_model=AssignmentPlanSaveResponse,
+)
+async def save_company_assignment_plan(
+    company_id: UUID,
+    payload: AssignmentPlanSaveRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AssignmentPlanSaveResponse:
+    require_trainer_principal(principal)
+    result = await AssignmentService(session).save_assignment_plan(
+        principal.user_id,
+        company_id,
+        payload,
+    )
+    await session.commit()
+    return result
 
 
 @router.get(

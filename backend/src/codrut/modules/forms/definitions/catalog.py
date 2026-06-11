@@ -30,6 +30,23 @@ DISTRESS_SCORE_0_TO_10 = [
     for value in range(0, 11)
 ]
 
+BOSS_360_SCALE = [
+    {"value": 1, "label": "Rar"},
+    {"value": 2, "label": "Uneori"},
+    {"value": 3, "label": "Des"},
+    {"value": 4, "label": "Foarte des"},
+    {"value": 5, "label": "Aproape întotdeauna"},
+]
+
+PCM_TYPES = [
+    {"value": "harmonizer", "label": "Armonizator", "description": "Cald, empatic, orientat către relații și armonie."},
+    {"value": "thinker", "label": "Gânditor", "description": "Logic, organizat, atent la structură și date."},
+    {"value": "persister", "label": "Perseverent", "description": "Consecvent, valoric, atent la principii și calitate."},
+    {"value": "imaginer", "label": "Imaginator", "description": "Reflexiv, calm, orientat către spațiu interior și claritate."},
+    {"value": "rebel", "label": "Rebel", "description": "Spontan, creativ, energizat de joc și reacții autentice."},
+    {"value": "promoter", "label": "Promotor", "description": "Direct, pragmatic, orientat către acțiune și oportunități."},
+]
+
 
 def _statement_question(
     number: int,
@@ -44,6 +61,17 @@ def _statement_question(
         "required": True,
         "scale": LIKERT_1_TO_3,
         "scoring": {"group": dysfunction},
+    }
+
+
+def _boss360_question(number: int, text: str) -> dict[str, Any]:
+    return {
+        "id": f"boss_360_q{number:02d}",
+        "code": f"360-{number}",
+        "type": "likert",
+        "label": text,
+        "required": True,
+        "scale": BOSS_360_SCALE,
     }
 
 
@@ -225,11 +253,75 @@ LENCIONI_DEFINITION = ApprovedQuestionnaireDefinition(
 )
 
 
+PCM_BASE_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.pcm_base,
+    version=1,
+    title="Baza ta PCM",
+    description="Alege tipul PCM care descrie cel mai bine baza ta de personalitate.",
+    schema={
+        "schema_version": "questionnaire.v1",
+        "response": {"mode": "profile_onboarding", "target": "self"},
+        "instructions": (
+            "Alege baza PCM identificată pentru tine. Dacă nu ești sigur, selectează "
+            "varianta confirmată în discuția cu trainerul."
+        ),
+        "sections": [
+            {
+                "id": "pcm_base",
+                "title": "Profil PCM",
+                "questions": [
+                    {
+                        "id": "pcm_base",
+                        "code": "PCM-BASE",
+                        "type": "single_choice",
+                        "label": "Care este baza ta PCM?",
+                        "required": True,
+                        "scale": PCM_TYPES,
+                    }
+                ],
+            }
+        ],
+    },
+)
+
+
+PCM_PHASE_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.phase,
+    version=1,
+    title="Faza ta PCM",
+    description="Alege faza PCM activă în profilul tău curent.",
+    schema={
+        "schema_version": "questionnaire.v1",
+        "response": {"mode": "profile_onboarding", "target": "self"},
+        "instructions": (
+            "Alege faza PCM curentă, așa cum a fost stabilită în evaluarea sau "
+            "discuția ta de profil."
+        ),
+        "sections": [
+            {
+                "id": "pcm_phase",
+                "title": "Faza PCM",
+                "questions": [
+                    {
+                        "id": "pcm_phase",
+                        "code": "PCM-PHASE",
+                        "type": "single_choice",
+                        "label": "Care este faza ta PCM?",
+                        "required": True,
+                        "scale": PCM_TYPES,
+                    }
+                ],
+            }
+        ],
+    },
+)
+
+
 DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.distress_drivers,
     version=1,
-    title="Resilience and Transactional Analysis Drivers",
-    description="Self-assessment pentru driverii de stres din Transactional Analysis.",
+    title="Reziliență și driveri de stres TA",
+    description="Autoevaluare pentru driverii de stres din Analiza Tranzacțională.",
     schema={
         "schema_version": "questionnaire.v1",
         "source": {
@@ -246,26 +338,26 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
         "sections": [
             {
                 "id": "driver_sets",
-                "title": "TA drivers",
+                "title": "Driveri TA",
                 "questions": [
                     _distress_set(
                         1,
                         {
-                            "a": ("Endurance is a valuable asset", "be_strong"),
+                            "a": ("Rezistența este o resursă valoroasă", "be_strong"),
                             "b": (
-                                "I like to see people doing their best to get things done",
+                                "Îmi place să văd oamenii făcând tot ce pot pentru a duce lucrurile la bun sfârșit",
                                 "be_perfect",
                             ),
                             "c": (
-                                "Considering all the effort I put into things I should get more done",
+                                "Având în vedere efortul pe care îl pun în lucruri, ar trebui să reușesc mai mult",
                                 "try_hard",
                             ),
                             "d": (
-                                "I find myself doing too many things at the last minute",
+                                "Mă trezesc făcând prea multe lucruri în ultimul moment",
                                 "hurry_up",
                             ),
                             "e": (
-                                "On balance, I adapt more to other people's wishes than they do to mine",
+                                "Per total, mă adaptez mai mult dorințelor altora decât se adaptează ei dorințelor mele",
                                 "please_people",
                             ),
                         },
@@ -273,18 +365,18 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                     _distress_set(
                         2,
                         {
-                            "a": ("Casualness and carelessness bother me", "be_perfect"),
-                            "b": ("It is keeping busy that interests me", "try_hard"),
+                            "a": ("Mă deranjează superficialitatea și neglijența", "be_perfect"),
+                            "b": ("Mă interesează să fiu mereu ocupat", "try_hard"),
                             "c": (
-                                "When people are slow about saying something, I want to finish their sentence",
+                                "Când oamenii spun ceva prea încet, îmi vine să le termin eu propoziția",
                                 "hurry_up",
                             ),
                             "d": (
-                                "I have a fair amount of imagination when it comes to guessing what people need",
+                                "Am destulă imaginație când vine vorba să ghicesc de ce au nevoie oamenii",
                                 "please_people",
                             ),
                             "e": (
-                                "When someone gets emotional, my reaction is often to make a joke of it",
+                                "Când cineva devine emoțional, reacția mea este adesea să fac o glumă",
                                 "be_strong",
                             ),
                         },
@@ -293,42 +385,42 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                         3,
                         {
                             "a": (
-                                "Even when my feelings run high, I show a calm exterior",
+                                "Chiar și când emoțiile mele sunt intense, în exterior par calm",
                                 "be_strong",
                             ),
                             "b": (
-                                "If something needs to be done well, I would rather do it myself",
+                                "Dacă ceva trebuie făcut bine, prefer să îl fac eu",
                                 "be_perfect",
                             ),
                             "c": (
-                                "I'm more interested in doing things than finishing them",
+                                "Sunt mai interesat să încep și să fac lucruri decât să le finalizez",
                                 "try_hard",
                             ),
                             "d": (
-                                "I often run out of time when I want to get lots of things done",
+                                "Rămân adesea fără timp când vreau să fac multe lucruri",
                                 "hurry_up",
                             ),
-                            "e": ("I don't really like asking people for favours", "please_people"),
+                            "e": ("Nu îmi place prea mult să cer favoruri oamenilor", "please_people"),
                         },
                     ),
                     _distress_set(
                         4,
                         {
                             "a": (
-                                "I don't mind things being hard - I can always find the energy",
+                                "Nu mă deranjează ca lucrurile să fie grele - găsesc mereu energie",
                                 "try_hard",
                             ),
                             "b": (
-                                "I am comfortable leaving it to the last minute to get to a place",
+                                "Mă simt confortabil să las plecarea spre un loc pe ultimul moment",
                                 "hurry_up",
                             ),
                             "c": (
-                                "If someone doesn't like me, I either try harder to get them to like me or walk away",
+                                "Dacă cineva nu mă place, fie încerc mai mult să mă placă, fie mă retrag",
                                 "please_people",
                             ),
-                            "d": ("It's rare for me to feel hurt", "be_strong"),
+                            "d": ("Mi se întâmplă rar să mă simt rănit", "be_strong"),
                             "e": (
-                                "If it's a question of doing something properly, I'd rather do it myself",
+                                "Dacă este vorba să fac ceva cum trebuie, prefer să îl fac eu",
                                 "be_perfect",
                             ),
                         },
@@ -336,18 +428,18 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                     _distress_set(
                         5,
                         {
-                            "a": ("I get impatient with slow people", "hurry_up"),
+                            "a": ("Îmi pierd răbdarea cu oamenii lenți", "hurry_up"),
                             "b": (
-                                "Normally I prefer to take people's wishes into account before reaching a decision",
+                                "De obicei prefer să țin cont de dorințele oamenilor înainte de a lua o decizie",
                                 "please_people",
                             ),
                             "c": (
-                                "I show a calm face, even when I am annoyed or upset",
+                                "Arăt o față calmă, chiar și când sunt enervat sau supărat",
                                 "be_strong",
                             ),
-                            "d": ("I don't like to make excuses for shoddy work", "be_perfect"),
+                            "d": ("Nu îmi place să caut scuze pentru o muncă făcută superficial", "be_perfect"),
                             "e": (
-                                "There's something about coming to the end of something that I don't like",
+                                "Este ceva la momentul în care ajung la finalul unui lucru care nu îmi place",
                                 "try_hard",
                             ),
                         },
@@ -355,18 +447,18 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                     _distress_set(
                         6,
                         {
-                            "a": ("I believe words should be used correctly", "be_perfect"),
+                            "a": ("Cred că vorbele ar trebui folosite corect", "be_perfect"),
                             "b": (
-                                "I like to explore a variety of options before getting started",
+                                "Îmi place să explorez mai multe opțiuni înainte să încep",
                                 "try_hard",
                             ),
                             "c": (
-                                "It's quite like me to be already thinking of the next thing before I've finished the first",
+                                "Mi se potrivește să mă gândesc deja la următorul lucru înainte să îl termin pe primul",
                                 "hurry_up",
                             ),
-                            "d": ("When I'm sure someone likes me, I feel better", "please_people"),
+                            "d": ("Când sunt sigur că cineva mă place, mă simt mai bine", "please_people"),
                             "e": (
-                                "I put up with a great deal without anyone realising it",
+                                "Duc foarte multe fără ca ceilalți să își dea seama",
                                 "be_strong",
                             ),
                         },
@@ -374,21 +466,21 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                     _distress_set(
                         7,
                         {
-                            "a": ("If I had 20% more time I could relax more", "hurry_up"),
+                            "a": ("Dacă aș avea cu 20% mai mult timp, m-aș putea relaxa mai mult", "hurry_up"),
                             "b": (
-                                "I often smile and nod when people talk to me",
+                                "Zâmbesc și aprob des din cap când oamenii vorbesc cu mine",
                                 "please_people",
                             ),
                             "c": (
-                                "When people get overly excited, I prefer to stay rational and cool",
+                                "Când oamenii se entuziasmează prea tare, prefer să rămân rațional și calm",
                                 "be_strong",
                             ),
                             "d": (
-                                "I can do something well and still be critical of myself",
+                                "Pot face ceva bine și totuși să fiu critic cu mine",
                                 "be_perfect",
                             ),
                             "e": (
-                                "There are so many things to consider it can be hard to finalise something",
+                                "Sunt atât de multe lucruri de luat în calcul încât poate fi greu să finalizez ceva",
                                 "try_hard",
                             ),
                         },
@@ -396,37 +488,37 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                     _distress_set(
                         8,
                         {
-                            "a": ("I don't usually go for the easy option", "try_hard"),
+                            "a": ("De obicei nu aleg varianta ușoară", "try_hard"),
                             "b": (
-                                "I like to have a lot of things on the go at any one time",
+                                "Îmi place să am multe lucruri în desfășurare în același timp",
                                 "hurry_up",
                             ),
-                            "c": ("I like to think I am considerate", "please_people"),
-                            "d": ("I avoid people who are overly emotional", "be_strong"),
-                            "e": ("I can see easily how something can be improved", "be_perfect"),
+                            "c": ("Îmi place să cred că sunt atent la ceilalți", "please_people"),
+                            "d": ("Evit oamenii care sunt prea emoționali", "be_strong"),
+                            "e": ("Văd ușor cum poate fi îmbunătățit ceva", "be_perfect"),
                         },
                     ),
                     _distress_set(
                         9,
                         {
                             "a": (
-                                "I rarely talk about my achievements or how much I have to put up with",
+                                "Vorbesc rar despre realizările mele sau despre cât de multe duc",
                                 "be_strong",
                             ),
                             "b": (
-                                "I find it difficult to talk about my strengths and usually focus on my weaknesses",
+                                "Îmi este greu să vorbesc despre punctele mele forte și de obicei mă concentrez pe slăbiciuni",
                                 "be_perfect",
                             ),
                             "c": (
-                                "I enjoy difficult problems; I feel energised to find a solution",
+                                "Îmi plac problemele dificile; mă energizează să găsesc o soluție",
                                 "try_hard",
                             ),
                             "d": (
-                                "I'd rather get on and do things than sit planning and talking about them",
+                                "Prefer să mă apuc și să fac lucruri decât să stau să le planific și să vorbesc despre ele",
                                 "hurry_up",
                             ),
                             "e": (
-                                "Generally, I fit in more with what other people want from me",
+                                "În general, mă adaptez mai mult la ceea ce vor ceilalți de la mine",
                                 "please_people",
                             ),
                         },
@@ -435,20 +527,20 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
                         10,
                         {
                             "a": (
-                                "I often repeat myself because I think I've not been understood",
+                                "Mă repet adesea pentru că am impresia că nu am fost înțeles",
                                 "try_hard",
                             ),
-                            "b": ("Generally, I get more done when up against it", "hurry_up"),
+                            "b": ("În general, fac mai multe când sunt sub presiune", "hurry_up"),
                             "c": (
-                                "I like to discuss things with colleagues before I make a final decision",
+                                "Îmi place să discut lucrurile cu colegii înainte să iau o decizie finală",
                                 "please_people",
                             ),
                             "d": (
-                                "I rarely get upset by people or situations",
+                                "Mă supăr rar din cauza oamenilor sau situațiilor",
                                 "be_strong",
                             ),
                             "e": (
-                                "Correcting people and mistakes comes very naturally to me",
+                                "Îmi vine foarte natural să corectez oamenii și greșelile",
                                 "be_perfect",
                             ),
                         },
@@ -459,14 +551,46 @@ DISTRESS_DRIVERS_DEFINITION = ApprovedQuestionnaireDefinition(
         "scoring": {
             "method": "sum_statement_scores_by_driver",
             "drivers": [
-                {"id": "be_strong", "code": "BS", "label": "Be Strong"},
-                {"id": "be_perfect", "code": "BP", "label": "Be Perfect"},
-                {"id": "try_hard", "code": "TH", "label": "Try Hard"},
-                {"id": "hurry_up", "code": "HU", "label": "Hurry Up"},
-                {"id": "please_people", "code": "PP", "label": "Please People"},
+                {"id": "be_strong", "code": "BS", "label": "Fii puternic"},
+                {"id": "be_perfect", "code": "BP", "label": "Fii perfect"},
+                {"id": "try_hard", "code": "TH", "label": "Străduiește-te"},
+                {"id": "hurry_up", "code": "HU", "label": "Grăbește-te"},
+                {"id": "please_people", "code": "PP", "label": "Fă pe plac"},
             ],
             "primary_result": "highest_total",
         },
+    },
+)
+
+
+BOSS_360_DEFINITION = ApprovedQuestionnaireDefinition(
+    key=QuestionnaireKey.boss_360,
+    version=1,
+    title="Feedback 360 pentru manager",
+    description="Feedback comportamental pentru manager, din perspectiva proprie, a colegilor și a raportorilor direcți.",
+    schema={
+        "schema_version": "questionnaire.v1",
+        "response": {"mode": "person_feedback", "target": "person"},
+        "instructions": (
+            "Răspunde pentru persoana indicată în sarcină. Alege frecvența care "
+            "descrie cel mai bine comportamentul observat în activitatea curentă."
+        ),
+        "sections": [
+            {
+                "id": "manager_feedback",
+                "title": "Comportamente manageriale",
+                "questions": [
+                    _boss360_question(1, "Setează direcții clare și explică rațiunea deciziilor."),
+                    _boss360_question(2, "Ascultă activ și verifică înțelegerea înainte de a decide."),
+                    _boss360_question(3, "Oferă feedback concret, respectuos și util."),
+                    _boss360_question(4, "Delegă responsabilități cu așteptări și criterii clare."),
+                    _boss360_question(5, "Își asumă responsabilitatea pentru propriile decizii."),
+                    _boss360_question(6, "Încurajează colaborarea între oameni și echipe."),
+                    _boss360_question(7, "Gestionează tensiunile fără a evita conversațiile dificile."),
+                    _boss360_question(8, "Recunoaște contribuțiile și susține dezvoltarea oamenilor."),
+                ],
+            }
+        ],
     },
 )
 
@@ -764,8 +888,11 @@ ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
 
 
 APPROVED_QUESTIONNAIRE_DEFINITIONS = [
+    PCM_BASE_DEFINITION,
+    PCM_PHASE_DEFINITION,
     LENCIONI_DEFINITION,
     DISTRESS_DRIVERS_DEFINITION,
+    BOSS_360_DEFINITION,
     ICARE_DEFINITION,
 ]
 

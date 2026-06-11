@@ -127,7 +127,7 @@ async def test_scoring_unsupported_key() -> None:
     service = ScoringService(session=None)  # type: ignore
     service.repository = repo
 
-    with pytest.raises(DomainError, match="No scoring definition for key"):
+    with pytest.raises(DomainError, match="has no scoring metadata"):
         await service.compute_and_save_score(
             assignment_id=uuid.uuid4(),
             questionnaire_key=QuestionnaireKey.boss_360,

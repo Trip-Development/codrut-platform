@@ -105,26 +105,36 @@ class ScoringService:
     async def compute_and_save_score(
         self,
         assignment_id: UUID,
-        questionnaire_key: QuestionnaireKey,
+        questionnaire_key: QuestionnaireKey | str,
         answers: dict[str, Any],
         *,
         questionnaire_version: int | None = None,
         definition_schema: dict[str, Any] | None = None,
     ) -> ScoringResult:
         if definition_schema is None:
+            key_value = (
+                questionnaire_key.value
+                if isinstance(questionnaire_key, QuestionnaireKey)
+                else questionnaire_key
+            )
             try:
                 definition = get_approved_questionnaire_definition(questionnaire_key)
             except KeyError as e:
                 raise DomainError(
-                    f"No scoring definition for key: {questionnaire_key.value}",
+                    f"No scoring definition for key: {key_value}",
                     code="scoring_not_supported",
-            ) from e
+                ) from e
             definition_schema = definition.schema
 
         scoring_meta = definition_schema.get("scoring")
         if not scoring_meta:
+            key_value = (
+                questionnaire_key.value
+                if isinstance(questionnaire_key, QuestionnaireKey)
+                else questionnaire_key
+            )
             raise DomainError(
-                f"Questionnaire {questionnaire_key.value} has no scoring metadata.",
+                f"Questionnaire {key_value} has no scoring metadata.",
                 code="scoring_metadata_missing",
             )
 

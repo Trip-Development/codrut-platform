@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.modules.forms.schemas import (
+    ParticipantOnboardingResponse,
     QuestionnaireDefinitionCreateRequest,
     QuestionnaireDefinitionResponse,
     QuestionnaireDefinitionUpdateRequest,
@@ -18,6 +19,18 @@ from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 
 router = APIRouter()
+
+
+@router.get("/participant/onboarding", response_model=ParticipantOnboardingResponse)
+async def get_participant_onboarding(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> ParticipantOnboardingResponse:
+    if principal.role != UserRole.participant:
+        return ParticipantOnboardingResponse(required=False)
+    response = await FormsService(session).get_participant_onboarding(principal.user_id)
+    await session.commit()
+    return response
 
 
 @router.get("/definitions", response_model=list[QuestionnaireDefinitionResponse])

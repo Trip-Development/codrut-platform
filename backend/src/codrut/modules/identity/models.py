@@ -73,6 +73,6 @@ class AssignmentInvite(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    token: Mapped[str] = mapped_column(String(512), unique=True, index=True, nullable=False)
+    token: Mapped[str] = mapped_column(String(2048), unique=True, index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

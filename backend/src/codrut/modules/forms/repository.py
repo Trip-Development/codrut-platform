@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.modules.assignments.models import QuestionnaireAssignment
+from codrut.modules.assignments.models import AssignmentTargetType, QuestionnaireAssignment
 from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
@@ -29,6 +29,37 @@ class FormsRepository:
             )
             .where(QuestionnaireAssignment.id == assignment_id)
             .where(ParticipantProfile.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_participant_for_user(self, user_id: UUID) -> ParticipantProfile | None:
+        result = await self.session.execute(
+            select(ParticipantProfile).where(ParticipantProfile.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_participant_by_profile_id(
+        self,
+        participant_profile_id: UUID,
+    ) -> ParticipantProfile | None:
+        result = await self.session.execute(
+            select(ParticipantProfile).where(ParticipantProfile.id == participant_profile_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_pcm_assignment(
+        self,
+        *,
+        company_id: UUID,
+        participant_profile_id: UUID,
+        questionnaire_key: str,
+    ) -> QuestionnaireAssignment | None:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id == participant_profile_id)
+            .where(QuestionnaireAssignment.questionnaire_key == questionnaire_key)
+            .where(QuestionnaireAssignment.target_type == AssignmentTargetType.self_assessment)
         )
         return result.scalar_one_or_none()
 

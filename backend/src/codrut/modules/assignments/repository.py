@@ -21,6 +21,12 @@ class AssignmentRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_team_by_name(self, company_id: UUID, name: str) -> Team | None:
+        result = await self.session.execute(
+            select(Team).where(Team.company_id == company_id).where(Team.name == name)
+        )
+        return result.scalar_one_or_none()
+
     async def list_teams(self, company_id: UUID) -> list[Team]:
         result = await self.session.execute(
             select(Team).where(Team.company_id == company_id).order_by(Team.name)
@@ -66,6 +72,27 @@ class AssignmentRepository:
             select(QuestionnaireAssignment)
             .where(QuestionnaireAssignment.company_id == company_id)
             .where(QuestionnaireAssignment.id == assignment_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_matching_assignment(
+        self,
+        *,
+        company_id: UUID,
+        respondent_profile_id: UUID,
+        questionnaire_key: str,
+        target_type: str,
+        target_person_id: UUID | None,
+        target_team_id: UUID | None,
+    ) -> QuestionnaireAssignment | None:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
+            .where(QuestionnaireAssignment.questionnaire_key == questionnaire_key)
+            .where(QuestionnaireAssignment.target_type == target_type)
+            .where(QuestionnaireAssignment.target_person_id == target_person_id)
+            .where(QuestionnaireAssignment.target_team_id == target_team_id)
         )
         return result.scalar_one_or_none()
 

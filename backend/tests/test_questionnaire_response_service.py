@@ -156,6 +156,62 @@ async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> N
         await engine.dispose()
 
 
+async def test_submit_pcm_base_updates_participant_profile_without_scoring() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"pcm-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"PCM {uuid.uuid4().hex[:8]}",
+            )
+            session.add_all([user, company])
+            await session.flush()
+
+            profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="PCM Participant",
+                email=user.email,
+            )
+            session.add(profile)
+            await session.flush()
+
+            assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key="pcm_base",
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.assigned,
+            )
+            session.add(assignment)
+            await session.flush()
+
+            response = await FormsService(session).save_assignment_response(
+                user.id,
+                assignment.id,
+                QuestionnaireResponseSaveRequest(answers={"pcm_base": "harmonizer"}),
+                submit=True,
+            )
+
+            assert response.status == QuestionnaireResponseStatus.submitted
+            assert assignment.status == AssignmentStatus.submitted
+            assert profile.pcm_base == "harmonizer"
+            assert profile.pcm_profile == "harmonizer"
+            assert assignment.scored_at is None
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
 async def test_save_assignment_response_rejects_missing_assignment() -> None:
     service = make_service(FakeFormsRepository(None))
 
