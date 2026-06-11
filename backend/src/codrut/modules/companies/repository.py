@@ -7,6 +7,7 @@ from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
     CompanyMembership,
+    CompanyProject,
     ParticipantProfile,
     ParticipantReportingRelationship,
 )
@@ -29,7 +30,7 @@ class CompanyRepository:
         result = await self.session.execute(select(Company).order_by(Company.name))
         return list(result.scalars().all())
 
-    async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int]]:
+    async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int, int]]:
         from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
 
         completed_statuses = (
@@ -65,15 +66,25 @@ class CompanyRepository:
             .group_by(QuestionnaireAssignment.company_id)
             .subquery()
         )
+        project_counts = (
+            select(
+                CompanyProject.company_id.label("company_id"),
+                func.count(CompanyProject.id).label("project_count"),
+            )
+            .group_by(CompanyProject.company_id)
+            .subquery()
+        )
         result = await self.session.execute(
             select(
                 Company,
                 func.coalesce(participant_counts.c.participant_count, 0),
+                func.coalesce(project_counts.c.project_count, 0),
                 func.coalesce(assignment_counts.c.assignment_count, 0),
                 func.coalesce(assignment_counts.c.completed_count, 0),
                 func.coalesce(assignment_counts.c.scored_count, 0),
             )
             .outerjoin(participant_counts, participant_counts.c.company_id == Company.id)
+            .outerjoin(project_counts, project_counts.c.company_id == Company.id)
             .outerjoin(assignment_counts, assignment_counts.c.company_id == Company.id)
             .order_by(Company.name)
         )
@@ -81,6 +92,7 @@ class CompanyRepository:
             (
                 company,
                 int(participant_count),
+                int(project_count),
                 int(assignment_count),
                 int(completed_count),
                 int(scored_count),
@@ -88,6 +100,7 @@ class CompanyRepository:
             for (
                 company,
                 participant_count,
+                project_count,
                 assignment_count,
                 completed_count,
                 scored_count,
@@ -109,6 +122,55 @@ class CompanyRepository:
 
     async def delete_company(self, company: Company) -> None:
         await self.session.delete(company)
+        await self.session.flush()
+
+    async def list_projects(self, company_id: UUID) -> list[CompanyProject]:
+        result = await self.session.execute(
+            select(CompanyProject)
+            .where(CompanyProject.company_id == company_id)
+            .order_by(CompanyProject.created_at.desc(), CompanyProject.name)
+        )
+        return list(result.scalars().all())
+
+    async def list_all_projects(self) -> list[tuple[CompanyProject, str]]:
+        result = await self.session.execute(
+            select(CompanyProject, Company.name)
+            .join(Company, Company.id == CompanyProject.company_id)
+            .order_by(CompanyProject.created_at.desc(), CompanyProject.name)
+        )
+        return [(project, company_name) for project, company_name in result.all()]
+
+    async def get_project(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> CompanyProject | None:
+        result = await self.session.execute(
+            select(CompanyProject)
+            .where(CompanyProject.company_id == company_id)
+            .where(CompanyProject.id == project_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_project_by_name(
+        self,
+        company_id: UUID,
+        name: str,
+    ) -> CompanyProject | None:
+        result = await self.session.execute(
+            select(CompanyProject)
+            .where(CompanyProject.company_id == company_id)
+            .where(CompanyProject.name == name)
+        )
+        return result.scalar_one_or_none()
+
+    async def add_project(self, project: CompanyProject) -> CompanyProject:
+        self.session.add(project)
+        await self.session.flush()
+        return project
+
+    async def delete_project(self, project: CompanyProject) -> None:
+        await self.session.delete(project)
         await self.session.flush()
 
     async def add_membership(self, membership: CompanyMembership) -> CompanyMembership:

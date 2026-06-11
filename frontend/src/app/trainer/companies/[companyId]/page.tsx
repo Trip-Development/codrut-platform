@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCompanyDetail } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { StatCard } from "@/components/presentation/stat-card";
+import { CompanyProjectsPanel } from "./CompanyProjectsPanel";
 
 export default async function CompanyOverviewPage({
   params,
@@ -68,6 +69,11 @@ export default async function CompanyOverviewPage({
           detail="Persoane active în companie."
         />
         <StatCard
+          label="Proiecte"
+          value={company.projects.length}
+          detail="Inițiative salvate pentru companie."
+        />
+        <StatCard
           label="Asignări"
           value={company.stats.totalAssignments}
           detail="Chestionare asignate în total."
@@ -84,6 +90,10 @@ export default async function CompanyOverviewPage({
           value={company.stats.scoredCount}
           detail="Asignări cu scoring finalizat."
         />
+      </div>
+
+      <div className="mt-5">
+        <CompanyProjectsPanel companyId={companyId} initialProjects={company.projects} />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">

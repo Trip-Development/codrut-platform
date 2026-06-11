@@ -8,6 +8,7 @@ export type CompanyListItem = {
   id: string;
   name: string;
   participantCount: number;
+  projectCount: number;
   assignmentCount: number;
   completedCount: number;
   stage: "setup" | "invites" | "completion" | "reporting";
@@ -19,6 +20,7 @@ type CompanySummaryResponse = {
   id: string;
   name: string;
   participant_count: number;
+  project_count: number;
   assignment_count: number;
   completed_count: number;
   scored_count: number;
@@ -35,6 +37,29 @@ export type CompanyParticipant = {
   role_group: string | null;
   pcm_profile: string | null;
   user_id: string | null;
+};
+
+export type CompanyProjectStatus = "draft" | "active" | "completed" | "archived";
+
+export type CompanyProject = {
+  id: string;
+  company_id: string;
+  company_name?: string;
+  name: string;
+  description: string | null;
+  status: CompanyProjectStatus;
+  starts_at: string | null;
+  due_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CompanyProjectPayload = {
+  name?: string;
+  description?: string | null;
+  status?: CompanyProjectStatus;
+  startsAt?: string | null;
+  dueAt?: string | null;
 };
 
 export type CompanyAssignment = {
@@ -165,6 +190,7 @@ export type CompanyTeamMembership = {
 export type CompanyDetail = {
   id: string;
   name: string;
+  projects: CompanyProject[];
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
   invitationStatuses: ParticipantInvitationStatus[];
@@ -411,6 +437,87 @@ export async function getCompanyTeams(
   }
 }
 
+export async function getCompanyProjects(
+  companyId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyProject[]> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+  if (!response.ok) {
+    if (!isDemoFallbackEnabled()) {
+      throw new Error(`Eroare server (${response.status}): Nu s-au putut obține proiectele.`);
+    }
+    return [];
+  }
+  return (await response.json()) as CompanyProject[];
+}
+
+export async function getAllCompanyProjects(
+  options: ApiRequestOptions = {},
+): Promise<CompanyProject[]> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/projects`, {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+  if (!response.ok) {
+    if (!isDemoFallbackEnabled()) {
+      throw new Error(`Eroare server (${response.status}): Nu s-au putut obține proiectele.`);
+    }
+    return [];
+  }
+  return (await response.json()) as CompanyProject[];
+}
+
+export async function createCompanyProject(
+  companyId: string,
+  payload: CompanyProjectPayload & { name: string },
+): Promise<CompanyProject> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(projectPayloadToApi(payload)),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as CompanyProject;
+}
+
+export async function updateCompanyProject(
+  companyId: string,
+  projectId: string,
+  payload: CompanyProjectPayload,
+): Promise<CompanyProject> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(projectPayloadToApi(payload)),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as CompanyProject;
+}
+
+export async function deleteCompanyProject(companyId: string, projectId: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Aggregated fetchers
 // ---------------------------------------------------------------------------
@@ -485,6 +592,7 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           id: company.id,
           name: company.name,
           participantCount: participants.length,
+          projectCount: 0,
           assignmentCount: assignments.length,
           completedCount,
           stage: deriveStage(assignments.length, completedCount),
@@ -494,6 +602,7 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
           id: company.id,
           name: company.name,
           participantCount: 0,
+          projectCount: 0,
           assignmentCount: 0,
           completedCount: 0,
           stage: "setup" as const,
@@ -512,6 +621,7 @@ function companySummaryToListItem(summary: CompanySummaryResponse): CompanyListI
     id: summary.id,
     name: summary.name,
     participantCount: summary.participant_count,
+    projectCount: summary.project_count,
     assignmentCount: summary.assignment_count,
     completedCount: summary.completed_count,
     stage: summary.stage,
@@ -736,21 +846,24 @@ export async function getCompanyDetail(
   const company = map.get(companyId);
   if (!company) return null;
 
-  const [participantsResult, assignmentsResult, invitationStatusesResult, teamsResult] = await Promise.allSettled([
+  const [projectsResult, participantsResult, assignmentsResult, invitationStatusesResult, teamsResult] = await Promise.allSettled([
+    getCompanyProjects(companyId, options),
     getCompanyParticipants(companyId, options),
     getCompanyAssignments(companyId, options),
     getCompanyInvitationStatuses(companyId, options),
     getCompanyTeams(companyId, options),
   ]);
 
+  const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
   const participants = participantsResult.status === "fulfilled" ? participantsResult.value : [];
   const assignments = assignmentsResult.status === "fulfilled" ? assignmentsResult.value : [];
   const invitationStatuses = invitationStatusesResult.status === "fulfilled" ? invitationStatusesResult.value : [];
   const teams = teamsResult.status === "fulfilled" ? teamsResult.value : [];
   const dataErrors = [
+    projectsResult.status === "rejected" ? `Proiecte: ${errorMessage(projectsResult.reason)}` : null,
     participantsResult.status === "rejected" ? `Participanți: ${errorMessage(participantsResult.reason)}` : null,
-    assignmentsResult.status === "rejected" ? `Asignari: ${errorMessage(assignmentsResult.reason)}` : null,
-    invitationStatusesResult.status === "rejected" ? `Invitatii: ${errorMessage(invitationStatusesResult.reason)}` : null,
+    assignmentsResult.status === "rejected" ? `Asignări: ${errorMessage(assignmentsResult.reason)}` : null,
+    invitationStatusesResult.status === "rejected" ? `Invitații: ${errorMessage(invitationStatusesResult.reason)}` : null,
     teamsResult.status === "rejected" ? `Echipe: ${errorMessage(teamsResult.reason)}` : null,
   ].filter((error): error is string => Boolean(error));
 
@@ -767,6 +880,7 @@ export async function getCompanyDetail(
   return {
     id: company.id,
     name: company.name,
+    projects,
     participants,
     assignments,
     invitationStatuses,
@@ -784,4 +898,14 @@ export async function getCompanyDetail(
       pendingCount,
     },
   };
+}
+
+function projectPayloadToApi(payload: CompanyProjectPayload) {
+  const body: Record<string, string | null> = {};
+  if ("name" in payload) body.name = payload.name ?? "";
+  if ("description" in payload) body.description = payload.description ?? null;
+  if ("status" in payload) body.status = payload.status ?? "draft";
+  if ("startsAt" in payload) body.starts_at = payload.startsAt ?? null;
+  if ("dueAt" in payload) body.due_at = payload.dueAt ?? null;
+  return body;
 }

@@ -16,6 +16,7 @@ from codrut.modules.companies.models import (
     CompanyAccessCode,
     CompanyMembership,
     CompanyMembershipRole,
+    CompanyProject,
     ParticipantProfile,
     ParticipantReportingRelationship,
 )
@@ -25,6 +26,9 @@ from codrut.modules.companies.schemas import (
     CompanyAccessCodeRegistrationRequest,
     CompanyAccessCodeResponse,
     CompanyCreateRequest,
+    CompanyProjectCreateRequest,
+    CompanyProjectListItemResponse,
+    CompanyProjectUpdateRequest,
     CompanySummaryResponse,
     ParticipantCreateRequest,
     ParticipantInvitationStatusResponse,
@@ -65,6 +69,7 @@ class CompanyService:
                 id=company.id,
                 name=company.name,
                 participant_count=participant_count,
+                project_count=project_count,
                 assignment_count=assignment_count,
                 completed_count=completed_count,
                 scored_count=scored_count,
@@ -73,6 +78,7 @@ class CompanyService:
             for (
                 company,
                 participant_count,
+                project_count,
                 assignment_count,
                 completed_count,
                 scored_count,
@@ -98,6 +104,107 @@ class CompanyService:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         await self.repository.delete_company(company)
+
+    async def list_all_projects(self) -> list[CompanyProjectListItemResponse]:
+        return [
+            CompanyProjectListItemResponse(
+                id=project.id,
+                company_id=project.company_id,
+                company_name=company_name,
+                name=project.name,
+                description=project.description,
+                status=project.status,
+                starts_at=project.starts_at,
+                due_at=project.due_at,
+                created_at=project.created_at,
+                updated_at=project.updated_at,
+            )
+            for project, company_name in await self.repository.list_all_projects()
+        ]
+
+    async def list_projects(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+    ) -> list[CompanyProject]:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        return await self.repository.list_projects(company_id)
+
+    async def create_project(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        payload: CompanyProjectCreateRequest,
+    ) -> CompanyProject:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        name = payload.name.strip()
+        existing = await self.repository.get_project_by_name(company_id, name)
+        if existing is not None:
+            raise DomainError(
+                "A project with this name already exists for this company.",
+                code="project_exists",
+            )
+        _validate_project_dates(payload.starts_at, payload.due_at)
+        return await self.repository.add_project(
+            CompanyProject(
+                company_id=company_id,
+                name=name,
+                description=_clean_optional(payload.description),
+                status=payload.status,
+                starts_at=payload.starts_at,
+                due_at=payload.due_at,
+            )
+        )
+
+    async def update_project(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        payload: CompanyProjectUpdateRequest,
+    ) -> CompanyProject:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        project = await self.repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError("Project not found.", code="project_not_found")
+
+        if "name" in payload.model_fields_set and payload.name is not None:
+            name = payload.name.strip()
+            existing = await self.repository.get_project_by_name(company_id, name)
+            if existing is not None and existing.id != project.id:
+                raise DomainError(
+                    "A project with this name already exists for this company.",
+                    code="project_exists",
+                )
+            project.name = name
+        if "description" in payload.model_fields_set:
+            project.description = _clean_optional(payload.description)
+        if "status" in payload.model_fields_set and payload.status is not None:
+            project.status = payload.status
+        if "starts_at" in payload.model_fields_set:
+            project.starts_at = payload.starts_at
+        if "due_at" in payload.model_fields_set:
+            project.due_at = payload.due_at
+
+        _validate_project_dates(project.starts_at, project.due_at)
+        await self.repository.session.flush()
+        return project
+
+    async def delete_project(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> None:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        project = await self.repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError("Project not found.", code="project_not_found")
+        await self.repository.delete_project(project)
 
     async def list_participants(self, user_id: UUID, company_id: UUID) -> list[ParticipantProfile]:
         await self._require_company(company_id)
@@ -692,6 +799,14 @@ def _clean_optional(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _validate_project_dates(starts_at: datetime | None, due_at: datetime | None) -> None:
+    if starts_at is not None and due_at is not None and due_at < starts_at:
+        raise DomainError(
+            "Project due date cannot be before its start date.",
+            code="invalid_project_dates",
+        )
 
 
 _TOP_LEVEL_REPORTS_TO_VALUES = {
