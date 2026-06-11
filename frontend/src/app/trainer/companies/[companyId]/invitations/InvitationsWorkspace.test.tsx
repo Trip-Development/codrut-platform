@@ -8,7 +8,7 @@ import type {
   ParticipantInvitationStatus,
   RosterInviteResult,
 } from "@/api/companies";
-import { createCompanyAssignment } from "@/api/companies";
+import { createCompanyAssignment, resendParticipantInvitation, sendParticipantInvitations } from "@/api/companies";
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
 import { buildInvitationRows, InvitationsWorkspace } from "./InvitationsWorkspace";
 
@@ -226,5 +226,89 @@ describe("buildInvitationRows", () => {
 
     expect(await screen.findByText(/Asignare creată pentru Ana Pop/)).toBeTruthy();
     expect(screen.getByText("boss_360 · despre Andrei Manager")).toBeTruthy();
+  });
+
+  it("generates secure links, updates participant rows, and copies the active link", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(sendParticipantInvitations).mockResolvedValue({
+      total: 2,
+      emails_sent: 0,
+      emails_failed: 0,
+      links_generated: 1,
+      results: [
+        {
+          participant_id: "ana",
+          email: "ana@example.com",
+          full_name: "Ana Pop",
+          delivery_mode: "secure_links",
+          email_sent: false,
+          error: null,
+          invite_url: "http://localhost:3000/invite/ana-token",
+        },
+      ],
+    });
+
+    render(
+      <InvitationsWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generează linkuri securizate" }));
+
+    await waitFor(() => {
+      expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", { mode: "secure_links" });
+    });
+    expect(await screen.findByText("1/2 linkuri securizate generate.")).toBeTruthy();
+
+    const copyButtons = await screen.findAllByRole("button", { name: "Copiază link" });
+    fireEvent.click(copyButtons.at(-1)!);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/invite/ana-token");
+    });
+    expect(await screen.findByText("Link securizat copiat pentru Ana Pop.")).toBeTruthy();
+  });
+
+  it("resends one participant invitation and surfaces backend delivery failures", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(resendParticipantInvitation).mockResolvedValue({
+      participant_id: "ana",
+      email: "ana@example.com",
+      full_name: "Ana Pop",
+      delivery_mode: "email",
+      email_sent: false,
+      error: "provider unavailable",
+      invite_url: null,
+    });
+
+    render(
+      <InvitationsWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Retrimite" }));
+
+    await waitFor(() => {
+      expect(resendParticipantInvitation).toHaveBeenCalledWith("company-1", "ana");
+    });
+    expect(await screen.findByText("Emailul nu a fost retrimis către ana@example.com: provider unavailable")).toBeTruthy();
+    expect(screen.getByText("Eroare trimitere")).toBeTruthy();
   });
 });

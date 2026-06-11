@@ -2,22 +2,7 @@ import { getCompanyAssignments, getCompanyParticipants } from "@/api/companies";
 import { getScoringResult } from "@/api/trainer";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import Link from "next/link";
-
-const lencioniLabels: Record<string, string> = {
-  absence_of_trust: "Absența încrederii (Trust)",
-  fear_of_conflict: "Teama de conflict (Conflict)",
-  lack_of_commitment: "Lipsa angajamentului (Commitment)",
-  avoidance_of_accountability: "Evitarea responsabilității (Accountability)",
-  inattention_to_results: "Neatenția la rezultate (Results)",
-};
-
-const driverLabels: Record<string, string> = {
-  be_strong: "Fii Puternic (Be Strong)",
-  be_perfect: "Fii Perfect (Be Perfect)",
-  try_hard: "Străduiește-te (Try Hard)",
-  hurry_up: "Grăbește-te (Hurry Up)",
-  please_people: "Mulțumește-i pe alții (Please People)",
-};
+import { buildReportAggregation } from "./report-aggregation";
 
 export default async function CompanyReportsPage({
   params,
@@ -33,9 +18,9 @@ export default async function CompanyReportsPage({
 
   const participantMap = new Map(participants.map((p) => [p.id, p]));
 
-  const reportableAssignments = assignments
-    .filter((a) => a.status === "submitted" || a.status === "validated" || a.status === "scored")
-    .sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""));
+  const reportableAssignments = assignments.filter(
+    (a) => a.status === "submitted" || a.status === "validated" || a.status === "scored",
+  );
 
   // Fetch scoring results for all reportable assignments in parallel
   const resultsList = await Promise.all(
@@ -50,68 +35,16 @@ export default async function CompanyReportsPage({
   );
 
   const resultMap = new Map(resultsList.map((item) => [item.assignmentId, item.result]));
-
-  // 1. Calculate Lencioni Aggregates
-  const lencioniSums = {
-    absence_of_trust: 0,
-    fear_of_conflict: 0,
-    lack_of_commitment: 0,
-    avoidance_of_accountability: 0,
-    inattention_to_results: 0,
-  };
-  let lencioniCount = 0;
-
-  // 2. Calculate Distress Drivers Aggregates
-  const driverSums = {
-    be_strong: 0,
-    be_perfect: 0,
-    try_hard: 0,
-    hurry_up: 0,
-    please_people: 0,
-  };
-  let driverCount = 0;
-
-  reportableAssignments.forEach((a) => {
-    const res = resultMap.get(a.id);
-    if (!res || !res.scores) return;
-
-    if (a.questionnaire_key === "lencioni") {
-      lencioniCount++;
-      Object.keys(lencioniSums).forEach((key) => {
-        const valObj = res.scores[key];
-        const val = typeof valObj === "object" && valObj !== null ? (valObj as { score?: unknown }).score : valObj;
-        lencioniSums[key as keyof typeof lencioniSums] += Number(val || 0);
-      });
-    } else if (a.questionnaire_key === "distress_drivers") {
-      driverCount++;
-      Object.keys(driverSums).forEach((key) => {
-        const val = res.scores[key];
-        driverSums[key as keyof typeof driverSums] += Number(val || 0);
-      });
-    }
-  });
-
-  const lencioniAverages = Object.entries(lencioniSums).map(([key, sum]) => {
-    const avg = lencioniCount > 0 ? sum / lencioniCount : 0;
-    return {
-      id: key,
-      label: lencioniLabels[key] || key,
-      avg: Number(avg.toFixed(1)),
-    };
-  });
-
-  const driverAverages = Object.entries(driverSums).map(([key, sum]) => {
-    const avg = driverCount > 0 ? sum / driverCount : 0;
-    return {
-      id: key,
-      label: driverLabels[key] || key,
-      avg: Number(avg.toFixed(1)),
-    };
-  });
-
-  const totalAssigned = assignments.length;
-  const totalCompleted = reportableAssignments.length;
-  const completionRate = totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0;
+  const {
+    reportableAssignments: sortedReportableAssignments,
+    lencioniCount,
+    driverCount,
+    lencioniAverages,
+    driverAverages,
+    totalAssigned,
+    totalCompleted,
+    completionRate,
+  } = buildReportAggregation(assignments, resultMap);
 
   return (
     <div className="space-y-6">
@@ -272,14 +205,14 @@ export default async function CompanyReportsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {reportableAssignments.length === 0 ? (
+              {sortedReportableAssignments.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-foreground/62">
                     Niciun raport individual disponibil momentan pentru această companie.
                   </td>
                 </tr>
               ) : (
-                reportableAssignments.map((a) => {
+                sortedReportableAssignments.map((a) => {
                   const participant = participantMap.get(a.respondent_profile_id);
                   const res = resultMap.get(a.id);
                   const formattedResult = res?.primary_result ? res.primary_result.replaceAll("_", " ") : "În așteptare";

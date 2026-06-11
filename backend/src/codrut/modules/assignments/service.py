@@ -21,6 +21,8 @@ from codrut.modules.assignments.schemas import (
 )
 from codrut.modules.companies.models import CompanyMembershipRole
 from codrut.modules.companies.repository import CompanyRepository
+from codrut.modules.forms.definitions import get_approved_questionnaire_definition
+from codrut.modules.forms.repository import FormsRepository
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.repository import IdentityRepository
 
@@ -29,6 +31,7 @@ class AssignmentService:
     def __init__(self, session: AsyncSession) -> None:
         self.assignment_repository = AssignmentRepository(session)
         self.company_repository = CompanyRepository(session)
+        self.forms_repository = FormsRepository(session)
         self.identity_repository = IdentityRepository(session)
 
     async def create_team(
@@ -92,6 +95,8 @@ class AssignmentService:
     ) -> QuestionnaireAssignment:
         await self._require_company_manager(user_id, company_id)
         _validate_target_shape(payload)
+        questionnaire_key = payload.questionnaire_key.strip()
+        await self._require_active_questionnaire_definition(questionnaire_key)
         await self._require_company_participant(company_id, payload.respondent_profile_id)
         if payload.target_person_id is not None:
             await self._require_company_participant(company_id, payload.target_person_id)
@@ -103,7 +108,7 @@ class AssignmentService:
             QuestionnaireAssignment(
                 company_id=company_id,
                 respondent_profile_id=payload.respondent_profile_id,
-                questionnaire_key=payload.questionnaire_key.strip(),
+                questionnaire_key=questionnaire_key,
                 target_type=payload.target_type,
                 target_person_id=payload.target_person_id,
                 target_team_id=payload.target_team_id,
@@ -167,6 +172,25 @@ class AssignmentService:
                 "Participant not found in this company.",
                 code="participant_not_found",
             )
+
+    async def _require_active_questionnaire_definition(self, questionnaire_key: str) -> None:
+        definition = await self.forms_repository.get_definition(questionnaire_key)
+        if definition is not None:
+            return
+
+        if await self.forms_repository.get_latest_version(questionnaire_key) > 0:
+            raise DomainError(
+                "Questionnaire definition not found.",
+                code="definition_not_found",
+            )
+
+        try:
+            get_approved_questionnaire_definition(questionnaire_key)
+        except KeyError as exc:
+            raise DomainError(
+                "Questionnaire definition not found.",
+                code="definition_not_found",
+            ) from exc
 
 
 def _validate_target_shape(payload: AssignmentCreateRequest) -> None:
