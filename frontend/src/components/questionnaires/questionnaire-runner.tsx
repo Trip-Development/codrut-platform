@@ -162,7 +162,7 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
             disabled={!assignmentId || saveState === "saving" || isComplete}
             onClick={saveDraft}
           >
-            Salveaza draft
+            Salvează draft
           </button>
           <button
             type="button"
@@ -170,13 +170,13 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
             disabled={!canSubmit || saveState === "saving" || isComplete}
             onClick={submit}
           >
-            Trimite raspunsurile
+            Trimite răspunsurile
           </button>
         </div>
         <p className="mt-3 text-xs leading-5 text-foreground/55">
           {assignmentId
             ? statusMessage(saveState)
-            : "Linkul demo nu are inca un assignment real pentru salvare."}
+            : "Linkul demo nu are încă un assignment real pentru salvare."}
         </p>
       </aside>
     </div>
@@ -184,11 +184,11 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
 }
 
 function statusMessage(status: "idle" | "saving" | "saved" | "submitted" | "error"): string {
-  if (status === "saving") return "Se salveaza...";
+  if (status === "saving") return "Se salvează...";
   if (status === "saved") return "Draft salvat.";
-  if (status === "submitted") return "Raspunsuri trimise. Poti reveni la lista de sarcini.";
-  if (status === "error") return "A aparut o eroare la salvare.";
-  return "Poti salva un draft oricand si poti trimite dupa ce ai completat toate campurile.";
+  if (status === "submitted") return "Răspunsuri trimise. Poți reveni la lista de sarcini.";
+  if (status === "error") return "A apărut o eroare la salvare.";
+  return "Poți salva un draft oricând și poți trimite după ce ai completat toate câmpurile.";
 }
 
 function CompletionPanel({ answeredCount, total }: { answeredCount: number; total: number }) {
@@ -197,17 +197,17 @@ function CompletionPanel({ answeredCount, total }: { answeredCount: number; tota
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/35 text-xl font-semibold text-success-ink">
         <CheckIcon />
       </div>
-      <h3 className="mt-5 text-2xl font-semibold text-foreground">Raspunsurile au fost trimise</h3>
+      <h3 className="mt-5 text-2xl font-semibold text-foreground">Răspunsurile au fost trimise</h3>
       <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-foreground/62">
-        Am inregistrat {answeredCount}/{total} raspunsuri pentru acest task. Persoana evaluata nu vede raspunsuri
-        individuale; trainerul lucreaza cu raportarea configurata pentru proiect.
+        Am înregistrat {answeredCount}/{total} răspunsuri pentru acest task. Persoana evaluată nu vede răspunsuri
+        individuale; trainerul lucrează cu raportarea configurată pentru proiect.
       </p>
       <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
         <Link
           href="/participant"
           className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-semibold text-white"
         >
-          Inapoi la sarcinile mele
+          Înapoi la sarcinile mele
         </Link>
         <Link
           href="/participant/questionnaires"

@@ -442,7 +442,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
     key: "boss_360",
     version: 1,
     title: "Feedback 360 pentru manager",
-    description: "Formular scurt de feedback confidential pentru persoana catre care raportezi.",
+    description: "Formular scurt de feedback confidențial pentru persoana către care raportezi.",
     schema: {
       schema_version: "questionnaire.v1",
       source: {
@@ -451,7 +451,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         status: "provisional",
       },
       instructions:
-        "Raspunde concret si echilibrat. Persoana evaluata nu primeste raspunsurile individuale.",
+        "Răspunde concret și echilibrat. Persoana evaluată nu primește răspunsurile individuale.",
       sections: [
         {
           id: "manager_feedback",
@@ -461,7 +461,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "boss_360_q01",
               code: "Q1",
               type: "likert",
-              label: "Managerul meu clarifica asteptarile si prioritatile.",
+              label: "Managerul meu clarifică așteptările și prioritățile.",
               required: true,
               scale: [
                 { value: 1, label: "Rar" },
@@ -473,7 +473,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "boss_360_q02",
               code: "Q2",
               type: "likert",
-              label: "Managerul meu ofera feedback util si la timp.",
+              label: "Managerul meu oferă feedback util și la timp.",
               required: true,
               scale: [
                 { value: 1, label: "Rar" },
@@ -485,7 +485,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "boss_360_q03",
               code: "Q3",
               type: "likert",
-              label: "Managerul meu creeaza spatiu pentru intrebari si opinii diferite.",
+              label: "Managerul meu creează spațiu pentru întrebări și opinii diferite.",
               required: true,
               scale: [
                 { value: 1, label: "Rar" },
@@ -497,7 +497,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "boss_360_q04",
               code: "Q4",
               type: "likert",
-              label: "Managerul meu sustine colaborarea in echipa.",
+              label: "Managerul meu susține colaborarea în echipă.",
               required: true,
               scale: [
                 { value: 1, label: "Rar" },
@@ -509,7 +509,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "boss_360_q05",
               code: "Q5",
               type: "likert",
-              label: "Managerul meu gestioneaza tensiunile intr-un mod constructiv.",
+              label: "Managerul meu gestionează tensiunile într-un mod constructiv.",
               required: true,
               scale: [
                 { value: 1, label: "Rar" },
@@ -715,12 +715,12 @@ export async function submitQuestionnaireResponse(
     });
 
     if (!response.ok) {
-      throw await responseError(response, "Nu am putut trimite raspunsurile.");
+      throw await responseError(response, "Nu am putut trimite răspunsurile.");
     }
 
     return (await response.json()) as QuestionnaireResponseRecord;
   } catch (error) {
-    throw normalizeResponseError(error, "Nu am putut trimite raspunsurile.");
+    throw normalizeResponseError(error, "Nu am putut trimite răspunsurile.");
   }
 }
 
@@ -748,7 +748,7 @@ function seededQuestionnaireResponse(
   const questionnaireKey = seededAssignmentQuestionnaires[assignmentId];
 
   if (!questionnaireKey) {
-    throw new Error(status === "draft" ? "Nu am putut salva draftul." : "Nu am putut trimite raspunsurile.");
+    throw new Error(status === "draft" ? "Nu am putut salva draftul." : "Nu am putut trimite răspunsurile.");
   }
 
   return {

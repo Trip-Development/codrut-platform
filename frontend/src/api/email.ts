@@ -23,21 +23,21 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
     id: "account_setup",
     baseKey: "account_setup",
     version: 1,
-    name: "Invitatie inrolare",
-    subject: "Activeaza contul Codrut pentru {company_name}",
+    name: "Invitație înrolare",
+    subject: "Activează contul Codruț pentru {company_name}",
     lane: "transactional",
     placeholders: ["{participant_name}", "{trainer_name}", "{company_name}", "{action_url}"],
-    body: `<p>Buna, {participant_name}.</p><p>{trainer_name} te-a invitat in Codrut pentru {company_name}.</p><p><a href="{action_url}">Activeaza contul si vezi sarcinile</a></p>`
+    body: `<p>Bună, {participant_name}.</p><p>{trainer_name} te-a invitat în Codruț pentru {company_name}.</p><p><a href="{action_url}">Activează contul și vezi sarcinile</a></p>`
   },
   {
     id: "assignment_bundle",
     baseKey: "assignment_bundle",
     version: 1,
     name: "Sarcini de completat",
-    subject: "Ai chestionare Codrut de completat pentru {company_name}",
+    subject: "Ai chestionare Codruț de completat pentru {company_name}",
     lane: "transactional",
     placeholders: ["{participant_name}", "{company_name}", "{task_count}", "{action_url}"],
-    body: `<p>Buna, {participant_name}.</p><p>Ai {task_count} sarcini de assessment pregatite in Codrut.</p><p><a href="{action_url}">Deschide sarcinile mele</a></p>`
+    body: `<p>Bună, {participant_name}.</p><p>Ai {task_count} sarcini de assessment pregătite în Codruț.</p><p><a href="{action_url}">Deschide sarcinile mele</a></p>`
   }
 ];
 
@@ -51,7 +51,7 @@ function backendToFrontendTemplate(b: any): EmailTemplate {
     id: b.id || `${b.key}@${b.version}`,
     baseKey: b.key,
     version: b.version,
-    name: b.key === "account_setup" ? "Invitatie inrolare" : b.key === "assignment_bundle" ? "Sarcini de completat" : b.key,
+    name: b.key === "account_setup" ? "Invitație înrolare" : b.key === "assignment_bundle" ? "Sarcini de completat" : b.key,
     subject,
     body,
     lane: b.audience === "campaign" ? "campaign" : "transactional",
@@ -256,35 +256,35 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
     console.error("Error fetching email ops summary, using fallback data", e);
     return {
       metrics: [
-        { label: "Invitatii trimise", value: "0", detail: "Conturi lideri si linkuri securizate membri." },
-        { label: "Au intrat in app", value: "0", detail: "Click pe link sau autentificare cont." },
+        { label: "Invitații trimise", value: "0", detail: "Conturi lideri și linkuri securizate membri." },
+        { label: "Au intrat în app", value: "0", detail: "Click pe link sau autentificare cont." },
         { label: "Completate", value: "0", detail: "Toate task-urile din bundle finalizate." },
-        { label: "Reminder azi", value: "0", detail: "Invitati sau inceputi fara submit." },
+        { label: "Reminder azi", value: "0", detail: "Invitați sau începuți fără submit." },
       ],
       assessmentRows: [],
       rules: [
-        "Liderii primesc email de cont si pot reveni la task-uri.",
-        "Membrii fara cont primesc link securizat per proiect, valabil pana la deadline.",
-        "Reminderul se trimite pentru status invitat sau inceput, nu pentru task finalizat.",
-        "Emailurile nu includ raspunsuri confidentiale, doar linkuri si status operational.",
+        "Liderii primesc email de cont și pot reveni la task-uri.",
+        "Membrii fără cont primesc link securizat per proiect, valabil până la deadline.",
+        "Reminderul se trimite pentru status invitat sau început, nu pentru task finalizat.",
+        "Emailurile nu includ răspunsuri confidențiale, doar linkuri și status operațional.",
       ],
       campaign: {
         videoHost: {
-          provider: "Codrut watch page + Cloudflare R2",
+          provider: "Codruț watch page + Cloudflare R2",
           status: "needs_upload",
-          note: "Emailul trimite thumbnail si CTA catre pagina Codrut; video-ul nu este redat direct in email.",
+          note: "Emailul trimite thumbnail și CTA către pagina Codruț; video-ul nu este redat direct în email.",
         },
         template: {
-          subject: "O idee practica pentru echipa ta, ${first_name}",
-          personalization: "Prenumele se completeaza automat cand exista nume in baza.",
-          ctaPrimary: "Programeaza o discutie",
-          ctaSecondary: "Vreau sa fiu contactat",
+          subject: "O idee practică pentru echipa ta, ${first_name}",
+          personalization: "Prenumele se completează automat când există nume în bază.",
+          ctaPrimary: "Programează o discuție",
+          ctaSecondary: "Vreau să fiu contactat",
         },
         recipients: [],
         weeklyReport: {
-          cadence: "Saptamanal",
+          cadence: "Săptămânal",
           metrics: ["open rate", "click rate", "view rate"],
-          notification: "Andrei primeste email/Telegram cu link catre raport.",
+          notification: "Andrei primește email/Telegram cu link către raport.",
         },
       },
     };

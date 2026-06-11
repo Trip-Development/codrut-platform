@@ -170,7 +170,7 @@ describe("frontend API adapter stubs", () => {
     const summary = await getParticipantWorkspaceSummary();
 
     expect(summary.cards).toHaveLength(3);
-    expect(summary.emptyState.title).toContain("Fara");
+    expect(summary.emptyState.title).toContain("Fără");
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {
@@ -214,7 +214,7 @@ describe("frontend API adapter stubs", () => {
             id: "assignment-1",
             title: "Lencioni pentru echipa ta",
             status: "not_started",
-            detail: "Raspuns pentru echipa din care faci parte.",
+            detail: "Răspuns pentru echipa din care faci parte.",
             href: "/participant/questionnaires/lencioni?assignmentId=assignment-1",
             assignmentId: "assignment-1",
             targetLabel: "Leadership",
@@ -307,7 +307,7 @@ describe("frontend API adapter stubs", () => {
     ).rejects.toThrow("Nu am putut salva draftul.");
     await expect(
       submitQuestionnaireResponse("11111111-1111-4111-8111-111111111111", { q1: 1 }),
-    ).rejects.toThrow("Nu am putut trimite raspunsurile.");
+    ).rejects.toThrow("Nu am putut trimite răspunsurile.");
   });
 
   it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {

@@ -18,6 +18,13 @@ type Scenario = {
   conversation: Message[];
 };
 
+const landingNavItems = [
+  { key: "top", href: "#top", label: "Acasă" },
+  { key: "metodologie", href: "#metodologie", label: "Metodologie" },
+  { key: "impact", href: "#impact", label: "Măsurarea impactului" },
+  { key: "companii", href: "#companii", label: "Pentru organizații" },
+] as const;
+
 const chatScenarios: Scenario[] = [
   {
     title: "Cum deleg pregătirea unui raport important?",
@@ -62,7 +69,7 @@ export default function HomePage() {
   const [displayedMessages, setDisplayedMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState<boolean>(false);
 
-  const [activeSection, setActiveSection] = useState<string>("home");
+  const [activeSection, setActiveSection] = useState<string>("top");
   const [hoveredSection, setHoveredSection] = useState<string>("");
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0, opacity: 0 });
   const navRef = useRef<HTMLDivElement>(null);
@@ -93,9 +100,9 @@ export default function HomePage() {
     });
 
     const handleScroll = () => {
-      // Clear active highlight when scrolled to top
+      // Keep the first nav item active while the hero is in view.
       if (window.scrollY < 80) {
-        setActiveSection("home");
+        setActiveSection("top");
       }
     };
     window.addEventListener("scroll", handleScroll);
@@ -115,7 +122,7 @@ export default function HomePage() {
       return;
     }
 
-    const activeEl = navRef.current.querySelector(`a[href="#${visibleSection}"]`) as HTMLAnchorElement;
+    const activeEl = navRef.current.querySelector(`[data-section="${visibleSection}"]`) as HTMLAnchorElement;
     if (activeEl) {
       setIndicatorStyle({
         left: activeEl.offsetLeft,
@@ -164,8 +171,11 @@ export default function HomePage() {
     <main id="top" className="bg-vines-pattern app-min-height bg-background text-foreground">
       <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] bg-surface/88 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
-          <Link href="/" className="min-w-0">
-            <BrandMark subtitle="Platformă de Coaching & Training" />
+          <Link
+            href="/"
+            className="tap-soft -ml-2 min-w-0 rounded-2xl px-2 py-1 transition-colors hover:bg-surface-muted/80"
+          >
+            <BrandMark subtitle="Platformă de coaching și training" />
           </Link>
 
           <nav
@@ -182,58 +192,23 @@ export default function HomePage() {
                 opacity: indicatorStyle.opacity,
               }}
             />
-            <Link
-              href="#top"
-              onMouseEnter={() => setHoveredSection("home")}
-              onMouseLeave={() => setHoveredSection("")}
-              onClick={() => setActiveSection("home")}
-              className={`tap-soft relative z-10 rounded-full px-4 py-2 text-sm font-bold transition-colors duration-200 ${
-                visibleSection === "home"
-                  ? "text-burgundy"
-                  : "text-foreground/62 hover:text-burgundy"
-              }`}
-            >
-              Home
-            </Link>
-            <Link
-              href="#metodologie"
-              onMouseEnter={() => setHoveredSection("metodologie")}
-              onMouseLeave={() => setHoveredSection("")}
-              onClick={() => setActiveSection("metodologie")}
-              className={`tap-soft relative z-10 rounded-full px-4 py-2 text-sm font-bold transition-colors duration-200 ${
-                visibleSection === "metodologie"
-                  ? "text-burgundy"
-                  : "text-foreground/62 hover:text-burgundy"
-              }`}
-            >
-              Metodologie
-            </Link>
-            <Link
-              href="#impact"
-              onMouseEnter={() => setHoveredSection("impact")}
-              onMouseLeave={() => setHoveredSection("")}
-              onClick={() => setActiveSection("impact")}
-              className={`tap-soft relative z-10 rounded-full px-4 py-2 text-sm font-bold transition-colors duration-200 ${
-                visibleSection === "impact"
-                  ? "text-burgundy"
-                  : "text-foreground/62 hover:text-burgundy"
-              }`}
-            >
-              Măsurare Impact
-            </Link>
-            <Link
-              href="#companii"
-              onMouseEnter={() => setHoveredSection("companii")}
-              onMouseLeave={() => setHoveredSection("")}
-              onClick={() => setActiveSection("companii")}
-              className={`tap-soft relative z-10 rounded-full px-4 py-2 text-sm font-bold transition-colors duration-200 ${
-                visibleSection === "companii"
-                  ? "text-burgundy"
-                  : "text-foreground/62 hover:text-burgundy"
-              }`}
-            >
-              Pentru Organizații
-            </Link>
+            {landingNavItems.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                data-section={item.key}
+                onMouseEnter={() => setHoveredSection(item.key)}
+                onMouseLeave={() => setHoveredSection("")}
+                onClick={() => setActiveSection(item.key)}
+                className={`tap-soft relative z-10 rounded-full px-4 py-2 text-sm font-bold transition-colors duration-200 ${
+                  visibleSection === item.key
+                    ? "text-burgundy"
+                    : "text-foreground/62 hover:text-burgundy"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
 
           <div className="flex items-center gap-3">
@@ -262,7 +237,7 @@ export default function HomePage() {
             Noul standard în dezvoltarea echipelor
           </span>
           <h1 className="font-display mt-4 text-5xl font-semibold leading-[1.03] text-foreground md:text-7xl">
-            Codrut transforma trainingul in pasi clari pentru fiecare om.
+            Codruț transformă trainingul în pași clari pentru fiecare om.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-foreground/68 md:text-xl md:leading-9">
             O platformă de coaching continuu și follow-up ghidat, susținută de traineri acreditați, concepută pentru a asigura că abilitățile învățate în workshop-uri devin obiceiuri durabile în organizația ta.
@@ -398,7 +373,7 @@ export default function HomePage() {
         <div className="max-w-3xl">
           <span className="text-xs font-bold uppercase tracking-wider text-burgundy">O abordare structurată</span>
           <h2 className="font-display mt-2 text-4xl font-semibold text-foreground md:text-5xl">
-            Simplu la suprafata, structurat in spate.
+            Simplu la suprafață, structurat în spate.
           </h2>
           <p className="mt-4 text-lg leading-8 text-foreground/65">
             Multe programe de training eșuează pentru că participanții se întorc la vechile obiceiuri a doua zi. Codruț acoperă această breșă prin micro-coaching ghidat, transformând teoria de leadership în acțiuni recurente evaluate în timp real.
@@ -452,7 +427,7 @@ export default function HomePage() {
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-burgundy">Performanță dovedită</span>
               <h2 className="font-display mt-2 text-4xl font-semibold text-foreground">
-                Continuitate dupa training, fara follow-up pierdut.
+                Continuitate după training, fără follow-up pierdut.
               </h2>
               <p className="mt-4 text-base leading-7 text-foreground/65">
                 Vrem ca antrenamentul tău corporate să își demonstreze eficiența. Platforma monitorizează automat completările, trimite remindere inteligente și oferă o imagine clară asupra modului în care conceptele se aplică în munca de zi cu zi.

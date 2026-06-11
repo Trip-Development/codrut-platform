@@ -25,12 +25,13 @@ describe("HomePage", () => {
   it("renders the business landing and access paths", () => {
     render(<HomePage />);
 
-    expect(screen.getAllByText("Codrut").length).toBeGreaterThan(0);
-    expect(screen.getByText("Codrut transforma trainingul in pasi clari pentru fiecare om.")).toBeTruthy();
+    expect(screen.getAllByText("Codruț").length).toBeGreaterThan(0);
+    expect(screen.getByText("Codruț transformă trainingul în pași clari pentru fiecare om.")).toBeTruthy();
+    expect(screen.getByText("Acasă")).toBeTruthy();
     expect(screen.getAllByText("Intră în cont").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Trainer login").length).toBeGreaterThan(0);
     expect(screen.getByText("Link sigur")).toBeTruthy();
-    expect(screen.getByText("Continuitate dupa training, fara follow-up pierdut.")).toBeTruthy();
+    expect(screen.getByText("Continuitate după training, fără follow-up pierdut.")).toBeTruthy();
     expect(screen.queryByText("Tip 4")).toBeNull();
     expect(screen.queryByText("Workflow campanie")).toBeNull();
   });
