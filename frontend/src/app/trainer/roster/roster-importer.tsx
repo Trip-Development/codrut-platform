@@ -6,6 +6,10 @@ import * as XLSX from "xlsx";
 import {
   createCompany,
   importCompanyRoster,
+  sendParticipantInvitations,
+  type CompanyParticipant,
+  type ParticipantInvitationMode,
+  type RosterInviteResult,
 } from "@/api/companies";
 import { normalizeReportsToName } from "@/api/roster-format";
 
@@ -18,6 +22,7 @@ type RosterImporterProps = {
   companies: CompanyOption[];
   defaultCompanyId?: string;
   lockCompany?: boolean;
+  existingParticipants?: Pick<CompanyParticipant, "id" | "full_name" | "email">[];
 };
 
 type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile";
@@ -42,7 +47,12 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   pcm_profile: ["profil pcm", "pcm", "pcm profile", "profil_pcm"],
 };
 
-export function RosterImporter({ companies, defaultCompanyId, lockCompany = false }: RosterImporterProps) {
+export function RosterImporter({
+  companies,
+  defaultCompanyId,
+  lockCompany = false,
+  existingParticipants = [],
+}: RosterImporterProps) {
   const router = useRouter();
   const [companyId, setCompanyId] = useState(defaultCompanyId || companies[0]?.id || "");
   const [allCompanies, setAllCompanies] = useState<CompanyOption[]>(companies);
@@ -94,6 +104,18 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
   });
 
   const [lastImportedParticipantIds, setLastImportedParticipantIds] = useState<string[]>([]);
+  const [accessState, setAccessState] = useState<{
+    status: "idle" | "sending" | "success" | "error";
+    mode: ParticipantInvitationMode | null;
+    message: string | null;
+    results: RosterInviteResult[];
+  }>({
+    status: "idle",
+    mode: null,
+    message: null,
+    results: [],
+  });
+  const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
 
   const [importState, setImportState] = useState<{
     status: "idle" | "ready" | "importing" | "success" | "error";
@@ -114,6 +136,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
 
     setImportState({ status: "importing", message: "Se citește fișierul..." });
     setLastImportedParticipantIds([]);
+    resetAccessState();
     setEditedCells({});
     setEditingCellId(null);
 
@@ -232,6 +255,8 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
     
     const emailsInFile = new Map<string, number[]>();
     const namesInFile = new Set<string>();
+    const existingEmails = new Set(existingParticipants.map((participant) => participant.email.trim().toLowerCase()));
+    const existingNames = new Set(existingParticipants.map((participant) => participant.full_name.trim().toLowerCase()));
 
     processedRows.forEach((row, idx) => {
       if (row.full_name) {
@@ -257,6 +282,15 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
         if (!row.email.includes("@")) {
           errors.push({ rowIndex: idx, name, field: "email", error: "Formatul emailului este invalid.", type: "critical" });
         }
+        if (existingEmails.has(row.email.trim().toLowerCase())) {
+          errors.push({
+            rowIndex: idx,
+            name,
+            field: "email",
+            error: "Există deja un participant cu acest email în companie.",
+            type: "critical",
+          });
+        }
         const dups = emailsInFile.get(row.email.trim().toLowerCase());
         if (dups && dups.length > 1) {
           errors.push({
@@ -267,6 +301,15 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
             type: "critical",
           });
         }
+      }
+      if (row.full_name && existingNames.has(row.full_name.trim().toLowerCase())) {
+        errors.push({
+          rowIndex: idx,
+          name,
+          field: "full_name",
+          error: "Există deja un participant cu acest nume în companie. Verifică dacă este aceeași persoană.",
+          type: "warning",
+        });
       }
       if (row.reports_to_name) {
         const mgrKey = row.reports_to_name.trim().toLowerCase();
@@ -291,7 +334,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
       }
     });
     return errors;
-  }, [processedRows]);
+  }, [existingParticipants, processedRows]);
 
   const hasCriticalErrors = validationErrors.some((e) => e.type === "critical");
   const criticalErrorCount = validationErrors.filter((error) => error.type === "critical").length;
@@ -375,6 +418,7 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
 
     setImportState({ status: "importing", message: "Se importă participanții..." });
     setLastImportedParticipantIds([]);
+    resetAccessState();
 
     try {
       const importResult = await importCompanyRoster(
@@ -399,6 +443,69 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
         status: "error",
         message: error instanceof Error ? error.message : "Importul listei de participanți a eșuat în sistem.",
       });
+    }
+  };
+
+  const resetAccessState = () => {
+    setAccessState({
+      status: "idle",
+      mode: null,
+      message: null,
+      results: [],
+    });
+    setCopiedParticipantId(null);
+  };
+
+  const handleSendAccess = async (mode: ParticipantInvitationMode) => {
+    if (!companyId || lastImportedParticipantIds.length === 0) return;
+
+    setAccessState({
+      status: "sending",
+      mode,
+      message: mode === "email" ? "Se trimit invitațiile email..." : "Se generează linkurile securizate...",
+      results: [],
+    });
+    setCopiedParticipantId(null);
+
+    try {
+      const result = await sendParticipantInvitations(companyId, {
+        participantIds: lastImportedParticipantIds,
+        mode,
+      });
+      setAccessState({
+        status: "success",
+        mode,
+        message:
+          mode === "email"
+            ? `${result.emails_sent}/${result.total} emailuri trimise. ${result.emails_failed} eșuate.`
+            : `${result.links_generated}/${result.total} linkuri securizate generate.`,
+        results: result.results,
+      });
+      router.refresh();
+    } catch (error) {
+      setAccessState({
+        status: "error",
+        mode,
+        message: error instanceof Error ? error.message : "Accesul participanților nu a putut fi pregătit.",
+        results: [],
+      });
+    }
+  };
+
+  const handleCopyAccessLink = async (result: RosterInviteResult) => {
+    if (!result.invite_url || typeof navigator === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(result.invite_url);
+      setCopiedParticipantId(result.participant_id);
+      setAccessState((current) => ({
+        ...current,
+        message: `Link securizat copiat pentru ${result.full_name}.`,
+      }));
+    } catch {
+      setAccessState((current) => ({
+        ...current,
+        message: "Linkul nu a putut fi copiat automat. Copiază-l din tabul Invitații.",
+      }));
     }
   };
 
@@ -508,21 +615,108 @@ export function RosterImporter({ companies, defaultCompanyId, lockCompany = fals
 
       {importState.status === "success" && lastImportedParticipantIds.length > 0 && (
         <section className="rounded-2xl border border-burgundy/20 bg-surface p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)]">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acces participanți</p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">Participanți salvați. Continuă în Invitații.</h3>
+              <h3 className="mt-1 text-base font-semibold text-foreground">Participanți salvați. Alege cum le dai acces.</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-foreground/62">
-                Am separat importul de livrare ca să nu trimiți accidental emailuri în timp ce cureți lista de participanți. În tabul Invitații vezi statusul persistent, trimiți emailuri, retrimiți individual și copiezi linkuri securizate.
+                Am importat {lastImportedParticipantIds.length} participanți fără trimitere automată. Poți genera linkuri securizate pentru verificare manuală sau poți trimite invitații email doar către această listă importată acum.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={accessState.status === "sending"}
+                  onClick={() => handleSendAccess("secure_links")}
+                  className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {accessState.status === "sending" && accessState.mode === "secure_links"
+                    ? "Se generează..."
+                    : "Generează linkuri securizate"}
+                </button>
+                <button
+                  type="button"
+                  disabled={accessState.status === "sending"}
+                  onClick={() => handleSendAccess("email")}
+                  className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {accessState.status === "sending" && accessState.mode === "email"
+                    ? "Se trimit..."
+                    : "Trimite invitații email"}
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => router.push(`/trainer/companies/${companyId}/invitations`)}
-              className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700"
-            >
-              Deschide Invitații
-            </button>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-background p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Status acces</p>
+                  <p className="mt-1 text-xs leading-5 text-foreground/56">
+                    Statusul complet, retrimiterile și istoricul rămân în tabul Invitații.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/trainer/companies/${companyId}/invitations`)}
+                  className="tap-soft shrink-0 rounded-lg border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                >
+                  Invitații
+                </button>
+              </div>
+
+              {accessState.message ? (
+                <p
+                  className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                    accessState.status === "error"
+                      ? "border-red-200 bg-red-50 text-red-800"
+                      : "border-success/25 bg-success/10 text-success-ink"
+                  }`}
+                >
+                  {accessState.message}
+                </p>
+              ) : (
+                <p className="mt-3 rounded-xl border border-[var(--border)] bg-surface-muted/45 px-3 py-2 text-xs font-semibold text-foreground/56">
+                  Nicio livrare pornită încă.
+                </p>
+              )}
+
+              {accessState.results.length > 0 ? (
+                <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
+                  {accessState.results.map((result) => (
+                    <div
+                      key={result.participant_id}
+                      className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{result.full_name}</p>
+                          <p className="truncate text-xs text-foreground/50">{result.email}</p>
+                          <p
+                            className={`mt-1 text-xs font-semibold ${
+                              result.error ? "text-red-700" : "text-success-ink"
+                            }`}
+                          >
+                            {result.error
+                              ? result.error
+                              : result.email_sent
+                                ? "Email trimis"
+                                : "Link securizat pregătit"}
+                          </p>
+                        </div>
+                        {result.invite_url ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyAccessLink(result)}
+                            className="tap-soft shrink-0 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                          >
+                            {copiedParticipantId === result.participant_id ? "Copiat" : "Copiază"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
       )}

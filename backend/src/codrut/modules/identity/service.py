@@ -339,7 +339,6 @@ class IdentityService:
         from sqlalchemy import select
 
         from codrut.core.config import get_settings
-        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
         from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
         from codrut.modules.companies.models import ParticipantProfile
 
@@ -353,7 +352,19 @@ class IdentityService:
         if profile is None:
             raise DomainError("Participant profile not found.", code="profile_not_found")
 
-        # 2. Check if there is already an active invite
+        # 2. Resolve and scope-check assignment IDs before invite reuse or revocation.
+        assignment_ids = await self._resolve_invite_assignment_ids(
+            company_id=company_id,
+            respondent_profile_id=respondent_profile_id,
+            assignment_ids=assignment_ids,
+        )
+        if not assignment_ids:
+            raise DomainError(
+                "Cannot create invitation without active assignments.",
+                code="no_active_assignments",
+            )
+
+        # 3. Check if there is already an active invite
         if not force_rotate:
             active_invite = await self.repository.get_active_invite_by_respondent(
                 company_id, respondent_profile_id
@@ -364,48 +375,13 @@ class IdentityService:
                     from codrut.modules.communications.task_links import parse_task_token
                     claims = parse_task_token(active_invite.token, settings)
                     
-                    assignments_result = await self.repository.session.execute(
-                        select(QuestionnaireAssignment.id)
-                        .where(QuestionnaireAssignment.company_id == company_id)
-                        .where(
-                            QuestionnaireAssignment.respondent_profile_id
-                            == respondent_profile_id
-                        )
-                        .where(QuestionnaireAssignment.status.in_({
-                            AssignmentStatus.assigned,
-                            AssignmentStatus.invited,
-                            AssignmentStatus.started,
-                        }))
-                    )
-                    curr_ids = [r[0] for r in assignments_result.all()]
-                    target_ids = assignment_ids if assignment_ids is not None else curr_ids
-                    if set(claims.assignment_ids) == set(target_ids):
+                    if set(claims.assignment_ids) == set(assignment_ids):
                         return active_invite
                 except Exception:  # noqa: S110
                     pass
 
-        # 3. Invalidate previous active invites
+        # 4. Invalidate previous active invites
         await self.repository.invalidate_invites_for_respondent(company_id, respondent_profile_id)
-
-        # 4. Resolve assignment IDs
-        if assignment_ids is None:
-            assignments_result = await self.repository.session.execute(
-                select(QuestionnaireAssignment.id)
-                .where(QuestionnaireAssignment.company_id == company_id)
-                .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
-                .where(QuestionnaireAssignment.status.in_({
-                    AssignmentStatus.assigned,
-                    AssignmentStatus.invited,
-                    AssignmentStatus.started,
-                }))
-            )
-            assignment_ids = [r[0] for r in assignments_result.all()]
-
-        if not assignment_ids:
-            raise DomainError(
-                "Cannot create invitation without active assignments.",
-                code="no_active_assignments",
-            )
 
         # 5. Generate secure token claims
         expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
@@ -427,6 +403,44 @@ class IdentityService:
             expires_at=expires_at,
         )
         return await self.repository.add_invite(invite)
+
+    async def _resolve_invite_assignment_ids(
+        self,
+        company_id: UUID,
+        respondent_profile_id: UUID,
+        assignment_ids: list[UUID] | None,
+    ) -> list[UUID]:
+        from sqlalchemy import select
+
+        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+
+        active_statuses = {
+            AssignmentStatus.assigned,
+            AssignmentStatus.invited,
+            AssignmentStatus.started,
+        }
+        stmt = (
+            select(QuestionnaireAssignment.id)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id == respondent_profile_id)
+            .where(QuestionnaireAssignment.status.in_(active_statuses))
+        )
+
+        if assignment_ids is None:
+            result = await self.repository.session.execute(stmt)
+            return list(result.scalars().all())
+
+        requested_ids = list(dict.fromkeys(assignment_ids))
+        result = await self.repository.session.execute(
+            stmt.where(QuestionnaireAssignment.id.in_(requested_ids))
+        )
+        resolved_ids = set(result.scalars().all())
+        if set(requested_ids) != resolved_ids:
+            raise DomainError(
+                "Invitation assignments must belong to the respondent and company.",
+                code="assignment_scope_mismatch",
+            )
+        return [assignment_id for assignment_id in requested_ids if assignment_id in resolved_ids]
 
     async def invalidate_invite(
         self,
