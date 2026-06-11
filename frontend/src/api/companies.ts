@@ -48,6 +48,18 @@ export type RosterInviteResult = {
   invite_url: string | null;
 };
 
+export type ParticipantInvitationStatus = {
+  participant_id: string;
+  latest_delivery_mode: "email" | "secure_links" | null;
+  latest_email_status: string | null;
+  latest_email_error: string | null;
+  last_sent_at: string | null;
+  email_send_count: number;
+  has_active_secure_link: boolean;
+  active_secure_link_expires_at: string | null;
+  active_secure_link_url: string | null;
+};
+
 export type RosterImportResponse = {
   participants: CompanyParticipant[];
   email_results: RosterInviteResult[];
@@ -85,6 +97,7 @@ export type CompanyDetail = {
   name: string;
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
+  invitationStatuses: ParticipantInvitationStatus[];
   teams: CompanyTeam[];
   dataErrors?: string[];
   stats: {
@@ -376,6 +389,23 @@ export async function resendParticipantInvitation(
   return data.email_results[0] ?? null;
 }
 
+export async function getCompanyInvitationStatuses(
+  companyId: string,
+  options: ApiRequestOptions = {},
+): Promise<ParticipantInvitationStatus[]> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status`,
+    { cache: "no-store", credentials: "include", ...options },
+  );
+  if (!response.ok) {
+    if (!isDemoFallbackEnabled()) {
+      throw new Error(`Eroare server (${response.status}): Nu s-a putut obține statusul invitațiilor.`);
+    }
+    return [];
+  }
+  return (await response.json()) as ParticipantInvitationStatus[];
+}
+
 export async function createCompanyTeam(
   companyId: string,
   payload: { name: string; type: CompanyTeam["type"] },
@@ -470,18 +500,21 @@ export async function getCompanyDetail(
   const company = map.get(companyId);
   if (!company) return null;
 
-  const [participantsResult, assignmentsResult, teamsResult] = await Promise.allSettled([
+  const [participantsResult, assignmentsResult, invitationStatusesResult, teamsResult] = await Promise.allSettled([
     getCompanyParticipants(companyId, options),
     getCompanyAssignments(companyId, options),
+    getCompanyInvitationStatuses(companyId, options),
     getCompanyTeams(companyId, options),
   ]);
 
   const participants = participantsResult.status === "fulfilled" ? participantsResult.value : [];
   const assignments = assignmentsResult.status === "fulfilled" ? assignmentsResult.value : [];
+  const invitationStatuses = invitationStatusesResult.status === "fulfilled" ? invitationStatusesResult.value : [];
   const teams = teamsResult.status === "fulfilled" ? teamsResult.value : [];
   const dataErrors = [
     participantsResult.status === "rejected" ? `Participanti: ${errorMessage(participantsResult.reason)}` : null,
     assignmentsResult.status === "rejected" ? `Asignari: ${errorMessage(assignmentsResult.reason)}` : null,
+    invitationStatusesResult.status === "rejected" ? `Invitatii: ${errorMessage(invitationStatusesResult.reason)}` : null,
     teamsResult.status === "rejected" ? `Echipe: ${errorMessage(teamsResult.reason)}` : null,
   ].filter((error): error is string => Boolean(error));
 
@@ -500,6 +533,7 @@ export async function getCompanyDetail(
     name: company.name,
     participants,
     assignments,
+    invitationStatuses,
     teams,
     dataErrors: dataErrors.length > 0 ? dataErrors : undefined,
     stats: {

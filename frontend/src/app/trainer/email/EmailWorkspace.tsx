@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   listEmailTemplatesOnServer,
@@ -35,9 +36,8 @@ type EmailWorkspaceProps = {
 };
 
 export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("delivery");
+  const [activeTab, setActiveTab] = useState<TabKey>("templates");
   const [summary, setSummary] = useState<EmailOpsSummary>(initialSummary);
-  const [resendingId, setResendingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const refreshSummary = async () => {
@@ -48,21 +48,6 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       setSummary(fresh);
     } finally {
       setIsRefreshing(false);
-    }
-  };
-
-  const handleResendRow = async (row: AssessmentDeliveryRow) => {
-    if (resendingId) return;
-    setResendingId(row.id);
-    try {
-      const { getApiBaseUrl } = await import("@/api/runtime");
-      await fetch(
-        `${getApiBaseUrl()}/companies/${row.company_id}/participants/${row.id}/resend-invite`,
-        { method: "POST", credentials: "include" }
-      );
-      await refreshSummary();
-    } finally {
-      setResendingId(null);
     }
   };
 
@@ -269,16 +254,6 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
     <div className="space-y-6">
       <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-px">
         <button
-          onClick={() => setActiveTab("delivery")}
-          className={`px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "delivery"
-              ? "border-burgundy text-burgundy bg-burgundy/5"
-              : "border-transparent text-foreground/60 hover:text-foreground hover:bg-surface-muted/50"
-          }`}
-        >
-          Livrare invitații
-        </button>
-        <button
           onClick={() => setActiveTab("templates")}
           className={`px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all border-b-2 ${
             activeTab === "templates"
@@ -288,10 +263,38 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
         >
           Șabloane email
         </button>
+        <button
+          onClick={() => setActiveTab("delivery")}
+          className={`px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all border-b-2 ${
+            activeTab === "delivery"
+              ? "border-burgundy text-burgundy bg-burgundy/5"
+              : "border-transparent text-foreground/60 hover:text-foreground hover:bg-surface-muted/50"
+          }`}
+        >
+          Arhivă globală
+        </button>
       </div>
 
       {activeTab === "delivery" && (
         <div className="space-y-5">
+          <section className="rounded-2xl border border-burgundy/20 bg-burgundy/5 p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Context global</p>
+                <h2 className="mt-1 text-lg font-semibold text-foreground">Invitațiile live se operează din companie</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
+                  Această pagină păstrează o privire agregată și șabloanele. Pentru a trimite emailuri, genera linkuri securizate sau verifica statusul unei persoane, deschide workspace-ul companiei și tabul Invitații.
+                </p>
+              </div>
+              <Link
+                href="/trainer/companies"
+                className="tap-soft inline-flex justify-center rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700"
+              >
+                Deschide companii
+              </Link>
+            </div>
+          </section>
+
           {/* Metrics summary grid */}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {summary.metrics.map((metric) => (
@@ -322,7 +325,6 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     <th className="px-5 py-3">Status livrare</th>
                     <th className="px-5 py-3">Reminder</th>
                     <th className="px-5 py-3">Următorul pas</th>
-                    <th className="px-5 py-3">Acțiune</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
@@ -356,18 +358,6 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                         </span>
                       </td>
                       <td className="px-5 py-4 text-foreground/62 font-medium">{row.nextAction}</td>
-                      <td className="px-5 py-4">
-                        {(row.delivery === "draft" || row.delivery === "failed") && (
-                          <button
-                            type="button"
-                            disabled={resendingId === row.id}
-                            onClick={() => handleResendRow(row)}
-                            className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {resendingId === row.id ? "Se trimite..." : "Retrimite"}
-                          </button>
-                        )}
-                      </td>
                     </tr>
                   ))}
                 </tbody>

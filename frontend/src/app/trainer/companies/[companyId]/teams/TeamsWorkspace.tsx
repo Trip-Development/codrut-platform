@@ -17,6 +17,104 @@ type TeamsWorkspaceProps = {
   initialMembershipsByTeam: Record<string, CompanyTeamMembership[]>;
 };
 
+type TeamMemberEntry = {
+  membership: Pick<CompanyTeamMembership, "id" | "role">;
+  participant: CompanyParticipant;
+};
+
+type DerivedTeam = {
+  id: string;
+  name: string;
+  type: CompanyTeam["type"];
+  source: "leadership" | "reports_to";
+  members: TeamMemberEntry[];
+};
+
+const rootManagerNames = new Set(["", "-", "—", "---", "root", "radacina", "rădăcină", "fara manager", "fără manager"]);
+
+function normalizedName(value: string | null | undefined) {
+  return (value ?? "").trim().toLocaleLowerCase("ro-RO");
+}
+
+function isRootManagerName(value: string | null | undefined) {
+  return rootManagerNames.has(normalizedName(value));
+}
+
+export function deriveOrganizationTeams(
+  participants: CompanyParticipant[],
+  teams: CompanyTeam[],
+): DerivedTeam[] {
+  const derivedTeams: DerivedTeam[] = [];
+  const hasPersistedLeadership = teams.some((team) => team.type === "leadership");
+  const participantByName = new Map(
+    participants.map((participant) => [normalizedName(participant.full_name), participant]),
+  );
+
+  if (!hasPersistedLeadership) {
+    const leadershipMembers = participants.filter((participant) => participant.role_group === "leadership");
+    if (leadershipMembers.length > 0) {
+      derivedTeams.push({
+        id: "derived-leadership",
+        name: "Leadership",
+        type: "leadership",
+        source: "leadership",
+        members: leadershipMembers.map((participant) => ({
+          membership: {
+            id: `derived-leadership-${participant.id}`,
+            role: "leader",
+          },
+          participant,
+        })),
+      });
+    }
+  }
+
+  const directReportsByManager = new Map<string, CompanyParticipant[]>();
+  for (const participant of participants) {
+    if (isRootManagerName(participant.reports_to_name)) continue;
+
+    const managerKey = normalizedName(participant.reports_to_name);
+    if (!managerKey) continue;
+
+    directReportsByManager.set(managerKey, [
+      ...(directReportsByManager.get(managerKey) ?? []),
+      participant,
+    ]);
+  }
+
+  for (const [managerKey, directReports] of directReportsByManager) {
+    const manager = participantByName.get(managerKey);
+    const managerName = manager?.full_name ?? directReports[0]?.reports_to_name ?? "Manager";
+    const members: TeamMemberEntry[] = [
+      ...(manager
+        ? [
+            {
+              membership: { id: `derived-manager-${manager.id}`, role: "leader" as const },
+              participant: manager,
+            },
+          ]
+        : []),
+      ...directReports.map((participant) => ({
+        membership: {
+          id: `derived-report-${participant.id}`,
+          role: "member" as const,
+        },
+        participant,
+      })),
+    ];
+
+    derivedTeams.push({
+      id: `derived-manager-${managerKey}`,
+      name: `Echipa ${managerName}`,
+      type: "functional",
+      source: "reports_to",
+      members,
+    });
+  }
+
+  return derivedTeams;
+}
+
 export function TeamsWorkspace({
   companyId,
   initialTeams,
@@ -38,7 +136,10 @@ export function TeamsWorkspace({
     () => Object.values(membershipsByTeam).reduce((total, memberships) => total + memberships.length, 0),
     [membershipsByTeam],
   );
-  const unassignedParticipantCount = Math.max(participants.length - assignedMemberCount, 0);
+  const derivedTeams = useMemo(
+    () => deriveOrganizationTeams(participants, teams),
+    [participants, teams],
+  );
 
   async function handleCreateTeam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,12 +193,12 @@ export function TeamsWorkspace({
             <p className="text-sm font-semibold text-burgundy/75">Structură echipe</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Grupează rosterul în echipe clare</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Creează echipe de leadership sau funcționale, apoi adaugă oameni din roster. Fiecare card arată doar membrii confirmați.
+              Creează echipe de leadership sau funcționale, iar structura din manager direct este recunoscută automat din roster.
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <TeamSummary label="Echipe" value={teams.length} />
+              <TeamSummary label="Echipe" value={teams.length + derivedTeams.length} />
               <TeamSummary label="Membri în echipe" value={assignedMemberCount} />
-              <TeamSummary label="Disponibili" value={unassignedParticipantCount} />
+              <TeamSummary label="Automate" value={derivedTeams.length} />
             </div>
           </div>
           <form onSubmit={handleCreateTeam} className="space-y-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
@@ -142,30 +243,56 @@ export function TeamsWorkspace({
           <p className="text-base font-semibold text-foreground">Rosterul este gol.</p>
           <p className="mt-2 text-sm text-foreground/58">Importă participanții înainte de a construi echipe.</p>
         </section>
-      ) : teams.length === 0 ? (
+      ) : teams.length === 0 && derivedTeams.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
           <p className="text-base font-semibold text-foreground">Nu există echipe încă.</p>
           <p className="mt-2 text-sm text-foreground/58">Creează prima echipă, apoi adaugă membrii din roster.</p>
         </section>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {teams.map((team) => (
-            <TeamCard
-              key={team.id}
-              team={team}
-              participants={participants}
-              members={(membershipsByTeam[team.id] ?? [])
-                .map((membership) => ({
-                  membership,
-                  participant: participantById.get(membership.participant_profile_id),
-                }))
-                .filter(
-                  (entry): entry is { membership: CompanyTeamMembership; participant: CompanyParticipant } =>
-                    Boolean(entry.participant),
-                )}
-              onAddMember={handleAddMember}
-            />
-          ))}
+        <div className="space-y-5">
+          {teams.length > 0 ? (
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-foreground/48">Echipe salvate</h3>
+                <p className="mt-1 text-sm text-foreground/58">Echipe create explicit și folosite pentru asignări.</p>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {teams.map((team) => (
+                  <TeamCard
+                    key={team.id}
+                    team={team}
+                    participants={participants}
+                    members={(membershipsByTeam[team.id] ?? [])
+                      .map((membership) => ({
+                        membership,
+                        participant: participantById.get(membership.participant_profile_id),
+                      }))
+                      .filter(
+                        (entry): entry is { membership: CompanyTeamMembership; participant: CompanyParticipant } =>
+                          Boolean(entry.participant),
+                      )}
+                    onAddMember={handleAddMember}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {derivedTeams.length > 0 ? (
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-foreground/48">Structură recunoscută din roster</h3>
+                <p className="mt-1 text-sm text-foreground/58">
+                  Carduri generate din leadership și din câmpul Manager direct. Nu modifică echipele salvate.
+                </p>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {derivedTeams.map((team) => (
+                  <DerivedTeamCard key={team.id} team={team} />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
     </div>
@@ -178,6 +305,40 @@ function TeamSummary({ label, value }: { label: string; value: string | number }
       <p className="text-xs font-semibold text-foreground/48">{label}</p>
       <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
     </div>
+  );
+}
+
+function DerivedTeamCard({ team }: { team: DerivedTeam }) {
+  return (
+    <article className="flex min-h-[20rem] flex-col rounded-2xl border border-dashed border-burgundy/24 bg-surface p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold text-foreground">{team.name}</h2>
+          <p className="mt-1 text-xs font-semibold text-foreground/50">
+            {team.members.length} membri recunoscuți automat
+          </p>
+        </div>
+        <span className="rounded-full border border-burgundy/20 bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
+          {team.source === "leadership" ? "Leadership" : "Manager direct"}
+        </span>
+      </div>
+
+      <div className="mt-4 flex-1">
+        <div className="max-h-64 divide-y divide-[var(--border)] overflow-y-auto pr-1">
+          {team.members.map(({ membership, participant }) => (
+            <div key={membership.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">{participant.full_name}</p>
+                <p className="truncate text-xs text-foreground/50">{participant.position ?? "Membru"}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-foreground/50">
+                {membership.role === "leader" ? "Lider" : "Membru"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </article>
   );
 }
 

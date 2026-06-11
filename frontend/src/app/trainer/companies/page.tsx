@@ -12,7 +12,7 @@ export default async function TrainerCompaniesPage() {
       audience="trainer"
       eyebrow="Companii"
       title="Companiile tale"
-      description="Lista companiilor cu care lucrezi, statusul fiecarui proiect si progresul operational."
+      description="Lista companiilor cu care lucrezi, statusul fiecărei companii și progresul operațional."
       navItems={trainerNavItems}
       activeHref="/trainer/companies"
     >

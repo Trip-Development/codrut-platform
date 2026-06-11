@@ -54,7 +54,51 @@ describe("frontend API adapter stubs", () => {
     const summary = await getTrainerDashboardSummary();
 
     expect(summary.stats).toHaveLength(4);
+    expect(summary.stats[0]).toMatchObject({ label: "Companii" });
     expect(summary.cards.map((card) => card.title)).toContain("Email");
+    expect(summary.activeCompanies[0]).toMatchObject({
+      id: "demo-project",
+      company: "Client demo",
+    });
+    expect(Object.prototype.hasOwnProperty.call(summary.activeCompanies[0], "projectName")).toBe(false);
+  });
+
+  it("builds trainer dashboard rows around companies from backend data", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/companies")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "company-1",
+              name: "Michelin",
+              participantCount: 12,
+              assignmentCount: 10,
+              completedCount: 6,
+              stage: "completion",
+            },
+          ],
+        } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await getTrainerDashboardSummary();
+
+    expect(summary.stats[0]).toMatchObject({
+      label: "Companii",
+      value: 1,
+    });
+    expect(summary.activeCompanies).toEqual([
+      expect.objectContaining({
+        id: "company-1",
+        company: "Michelin",
+        href: "/trainer/companies/company-1",
+      }),
+    ]);
+    expect(Object.prototype.hasOwnProperty.call(summary.activeCompanies[0], "projectName")).toBe(false);
   });
 
   it("builds trainer operations from backend data without localStorage roster state", async () => {

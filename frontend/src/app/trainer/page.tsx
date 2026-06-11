@@ -3,7 +3,7 @@ import Link from "next/link";
 import { audienceAccessNote } from "@/api/auth";
 import { getTrainerSession } from "@/api/auth-server";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { getTrainerDashboardSummary, type TrainerAction, type TrainerProjectRow } from "@/api/trainer";
+import { getTrainerDashboardSummary, type TrainerAction, type TrainerCompanyRow } from "@/api/trainer";
 import { StatCard } from "@/components/presentation/stat-card";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
@@ -36,7 +36,7 @@ export default async function TrainerDashboardPage() {
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <DeliveryTable projects={summary.activeProjects} />
+        <DeliveryTable companies={summary.activeCompanies} />
         <aside className="space-y-4">
           <VisibilityPanel
             trainerRawAccess={summary.visibility.trainerRawAccess}
@@ -54,7 +54,7 @@ function TrainerWorkspaceBar() {
   const shortcuts = [
     {
       label: "Companii",
-      detail: "Adaugă clientul și gestionează proiectul complet.",
+      detail: "Adaugă clientul și gestionează workspace-ul complet.",
       href: "/trainer/companies",
     },
     {
@@ -64,7 +64,7 @@ function TrainerWorkspaceBar() {
     },
     {
       label: "Șabloane email",
-      detail: "Ajustează invitații, remindere și campanii.",
+      detail: "Ajustează textele reutilizabile. Trimiterea se face din companie.",
       href: "/trainer/email",
     },
     {
@@ -76,23 +76,23 @@ function TrainerWorkspaceBar() {
 
   return (
     <section className="mb-5 rounded-2xl border border-[var(--border)] bg-surface p-4 shadow-sm">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="max-w-2xl">
+      <div className="grid gap-4 xl:grid-cols-[minmax(18rem,1fr)_minmax(32rem,42rem)] xl:items-center">
+        <div className="min-w-0 max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Pregătire pilot</p>
           <h2 className="mt-1 text-xl font-semibold text-foreground">Instrumente de lucru</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
-            Pornește din companie, apoi gestionează rosterul, echipele, invitațiile, chestionarele și rapoartele fără să pierzi contextul clientului.
+            Pornește din companie, apoi gestionează rosterul, echipele, invitațiile, chestionarele și rapoartele fără să amesteci clienții.
           </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[42rem] xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {shortcuts.map((shortcut) => (
             <Link
               key={shortcut.href}
               href={shortcut.href}
-              className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-3 hover:border-burgundy/45 hover:text-burgundy"
+              className="tap-soft flex min-h-20 flex-col justify-between rounded-xl border border-[var(--border)] bg-background px-3 py-3 hover:border-burgundy/45 hover:bg-surface-muted hover:text-burgundy"
             >
-              <p className="text-sm font-bold text-foreground">{shortcut.label}</p>
-              <p className="mt-1 text-xs leading-5 text-foreground/52">{shortcut.detail}</p>
+              <p className="text-sm font-bold leading-5 text-foreground">{shortcut.label}</p>
+              <p className="mt-1 hidden text-xs leading-5 text-foreground/52 sm:block">{shortcut.detail}</p>
             </Link>
           ))}
         </div>
@@ -101,7 +101,7 @@ function TrainerWorkspaceBar() {
   );
 }
 
-function DeliveryTable({ projects }: { projects: TrainerProjectRow[] }) {
+function DeliveryTable({ companies }: { companies: TrainerCompanyRow[] }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
       <div className="border-b border-[var(--border)] px-5 py-4">
@@ -112,31 +112,36 @@ function DeliveryTable({ projects }: { projects: TrainerProjectRow[] }) {
         </p>
       </div>
       <div className="divide-y divide-[var(--border)]">
-        {projects.map((project) => (
-          <ProjectRow key={project.id} project={project} />
-        ))}
+        {companies.length === 0 ? (
+          <p className="px-5 py-6 text-sm font-semibold text-foreground/58">
+            Nu există companii active încă. Adaugă prima companie ca să pornești rosterul și invitațiile.
+          </p>
+        ) : (
+          companies.map((company) => (
+            <CompanyRow key={company.id} company={company} />
+          ))
+        )}
       </div>
     </section>
   );
 }
 
-function ProjectRow({ project }: { project: TrainerProjectRow }) {
-  const completion = project.total > 0 ? Math.round((project.completed / project.total) * 100) : 0;
+function CompanyRow({ company }: { company: TrainerCompanyRow }) {
+  const completion = company.total > 0 ? Math.round((company.completed / company.total) * 100) : 0;
 
   return (
     <article className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_13rem] lg:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold text-foreground">{project.company}</h3>
+          <h3 className="text-base font-semibold text-foreground">{company.company}</h3>
           <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55">
-            {project.stage}
+            {company.stage}
           </span>
         </div>
-        <p className="mt-1 text-sm font-semibold text-burgundy">{project.projectName}</p>
-        <p className="mt-2 text-sm leading-6 text-foreground/62">{project.nextAction}</p>
+        <p className="mt-2 text-sm leading-6 text-foreground/62">{company.nextAction}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {project.blockers.length > 0 ? (
-            project.blockers.map((blocker) => (
+          {company.blockers.length > 0 ? (
+            company.blockers.map((blocker) => (
               <span key={blocker} className="rounded-full bg-burgundy-50 dark:bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
                 {blocker}
               </span>
@@ -150,14 +155,14 @@ function ProjectRow({ project }: { project: TrainerProjectRow }) {
       </div>
       <div>
         <div className="flex items-center justify-between text-sm font-semibold text-foreground/62">
-          <span>{project.completed}/{project.total}</span>
+          <span>{company.completed}/{company.total}</span>
           <span>{completion}%</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
           <div className="h-full rounded-full bg-burgundy" style={{ width: `${completion}%` }} />
         </div>
         <Link
-          href={`/trainer/companies/${project.id}`}
+          href={`/trainer/companies/${company.id}`}
           className="tap-soft mt-3 inline-flex w-full justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
         >
           Deschide compania

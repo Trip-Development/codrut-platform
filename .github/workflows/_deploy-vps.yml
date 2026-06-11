@@ -15,6 +15,10 @@ on:
       release_sha:
         required: true
         type: string
+      app_environment:
+        required: false
+        type: string
+        default: production
       require_prod_ref:
         required: false
         type: boolean
@@ -58,6 +62,7 @@ jobs:
       - name: Deploy via SSH
         env:
           DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          APP_ENVIRONMENT: ${{ inputs.app_environment }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
           SSH_USER: ${{ secrets.SSH_USER || 'root' }}
@@ -90,6 +95,7 @@ jobs:
             SSH_USER
             FRONTEND_IMAGE
             BACKEND_IMAGE
+            APP_ENVIRONMENT
             POSTGRES_DB
             POSTGRES_USER
             POSTGRES_PASSWORD
@@ -154,7 +160,7 @@ jobs:
           POSTGRES_DB=$POSTGRES_DB
           POSTGRES_USER=$POSTGRES_USER
           POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-          CODRUT_ENV=production
+          CODRUT_ENV=$APP_ENVIRONMENT
           CODRUT_DATABASE_URL=$DERIVED_DATABASE_URL
           CODRUT_REDIS_URL=$CODRUT_REDIS_URL
           CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
