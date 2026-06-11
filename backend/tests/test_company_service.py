@@ -5,6 +5,12 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from codrut.contracts.emails import (
+    EmailDeliveryStatus,
+    EmailMessage,
+    EmailProviderKey,
+    EmailSendResult,
+)
 from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
@@ -39,6 +45,18 @@ from codrut.modules.companies.service import CompanyService, hash_company_access
 from codrut.modules.identity.models import AssignmentInvite, Session, User, UserRole
 from codrut.modules.identity.schemas import RegisterRequest, SessionPrincipal
 from codrut.modules.identity.service import IdentityService
+
+
+class FailingEmailProvider(LocalEmailProvider):
+    async def send(self, message: EmailMessage) -> EmailSendResult:
+        self.sent_messages.append(message)
+        return EmailSendResult(
+            provider=EmailProviderKey.test,
+            status=EmailDeliveryStatus.failed,
+            message_id="test:failed",
+            recipient=message.to,
+            error_details="provider unavailable",
+        )
 
 
 class FakeSession:
@@ -800,6 +818,88 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
 
         await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_resend_invite_failure_preserves_existing_active_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = FailingEmailProvider()
+    monkeypatch.setattr(
+        "codrut.modules.communications.email_provider.build_email_provider",
+        lambda _settings: provider,
+    )
+
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name="Resend Failure Company")
+            session.add_all([trainer, company])
+            await session.flush()
+            session.add(
+                CompanyMembership(
+                    company_id=company.id,
+                    user_id=trainer.id,
+                    role=CompanyMembershipRole.owner,
+                )
+            )
+            await session.flush()
+
+            service = CompanyService(session)
+            roster = await service.import_roster(
+                trainer.id,
+                company.id,
+                RosterImportRequest(
+                    rows=[
+                        {
+                            "Name": "Manager Ana",
+                            "Reports To": "",
+                            "Position": "Manager",
+                            "Location": "Bucharest",
+                            "email": "manager.ana@example.com",
+                            "Profil PCM": "",
+                        },
+                    ]
+                ),
+            )
+            participant = roster.participants[0]
+
+            link_result = await service.send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(mode="secure_links"),
+            )
+            assert link_result.links_generated == 1
+
+            invite_result = await session.execute(
+                select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+            )
+            existing_invite = invite_result.scalar_one()
+
+            resend_result = await service.resend_invite(trainer.id, company.id, participant.id)
+
+            assert resend_result.emails_sent == 0
+            assert resend_result.emails_failed == 1
+            assert provider.sent_messages
+
+            invite_result = await session.execute(
+                select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+            )
+            invites = invite_result.scalars().all()
+            assert len(invites) == 1
+            assert invites[0].id == existing_invite.id
+            assert invites[0].token == existing_invite.token
+            assert invites[0].status == "active"
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
 
 
 async def test_create_access_code_returns_plain_code_once_and_stores_hash() -> None:

@@ -558,7 +558,7 @@ class CompanyService:
             company=company,
             participants=[participant],
             mode="email",
-            force_rotate=True,
+            force_rotate=False,
         )
         return RosterImportResponse(
             participants=[participant],

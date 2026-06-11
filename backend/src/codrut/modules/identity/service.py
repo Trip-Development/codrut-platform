@@ -107,14 +107,15 @@ class IdentityService:
                 select(AssignmentInvite).where(AssignmentInvite.token == token)
             )
             invite = invite_result.scalar_one_or_none()
-            if invite is not None:
-                if invite.status != "active":
-                    raise DomainError(
-                        "Task link has been revoked or used.",
-                        code="task_link_revoked",
-                    )
-                if invite.expires_at <= datetime.now(UTC):
-                    raise DomainError("Task link has expired.", code="task_link_expired")
+            if invite is None:
+                raise DomainError("Task link is no longer active.", code="task_link_revoked")
+            if invite.status != "active":
+                raise DomainError(
+                    "Task link has been revoked or used.",
+                    code="task_link_revoked",
+                )
+            if invite.expires_at <= datetime.now(UTC):
+                raise DomainError("Task link has expired.", code="task_link_expired")
 
         # Find the participant profile associated with the claims
         result = await self.repository.session.execute(
