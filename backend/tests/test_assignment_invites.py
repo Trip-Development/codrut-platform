@@ -88,20 +88,20 @@ async def test_create_invite_success() -> None:
     )
     result_profile = FakeScalarResult(profile)
 
-    # 2. get_active_invite_by_respondent lookup -> None
+    # 2. QuestionnaireAssignment scope lookup
+    result_assignments = FakeScalarsResult([assignment_id])
+
+    # 3. get_active_invite_by_respondent lookup -> None
     result_active_invite = FakeScalarsResult(None)
 
-    # 3. invalidate_invites_for_respondent lookup -> returns empty list
+    # 4. invalidate_invites_for_respondent lookup -> returns empty list
     result_invalidate_invite = FakeScalarsResult([])
-
-    # 4. QuestionnaireAssignment lookup
-    result_assignments = FakeScalarResult((assignment_id,))
 
     session.side_effects = [
         result_profile,
+        result_assignments,
         result_active_invite,
         result_invalidate_invite,
-        result_assignments,
     ]
 
     service = IdentityService(session)
@@ -136,7 +136,10 @@ async def test_create_invite_idempotency_reuses_active_invite() -> None:
     )
     result_profile = FakeScalarResult(profile)
 
-    # 2. get_active_invite_by_respondent lookup -> returns existing active invite
+    # 2. QuestionnaireAssignment scope lookup
+    result_assignments = FakeScalarsResult([assignment_id])
+
+    # 3. get_active_invite_by_respondent lookup -> returns existing active invite
     settings = get_settings()
     claims = TaskLinkClaims(
         company_id=company_id,
@@ -154,13 +157,10 @@ async def test_create_invite_idempotency_reuses_active_invite() -> None:
     )
     result_active_invite = FakeScalarsResult(existing_invite)
 
-    # 3. QuestionnaireAssignment lookup
-    result_assignments = FakeScalarResult((assignment_id,))
-
     session.side_effects = [
         result_profile,
-        result_active_invite,
         result_assignments,
+        result_active_invite,
     ]
 
     service = IdentityService(session)
@@ -191,7 +191,10 @@ async def test_create_invite_force_rotate_invalidates_previous_invites() -> None
     )
     result_profile = FakeScalarResult(profile)
 
-    # 2. invalidate_invites_for_respondent lookup -> returns existing active invite to revoke
+    # 2. QuestionnaireAssignment scope lookup
+    result_assignments = FakeScalarsResult([assignment_id])
+
+    # 3. invalidate_invites_for_respondent lookup -> returns existing active invite to revoke
     existing_invite = AssignmentInvite(
         company_id=company_id,
         respondent_profile_id=respondent_id,
@@ -201,13 +204,10 @@ async def test_create_invite_force_rotate_invalidates_previous_invites() -> None
     )
     result_to_invalidate = FakeScalarsResult([existing_invite])
 
-    # 3. QuestionnaireAssignment lookup
-    result_assignments = FakeScalarResult((assignment_id,))
-
     session.side_effects = [
         result_profile,
-        result_to_invalidate,
         result_assignments,
+        result_to_invalidate,
     ]
 
     service = IdentityService(session)
@@ -222,6 +222,36 @@ async def test_create_invite_force_rotate_invalidates_previous_invites() -> None
     assert invite.status == "active"
     assert invite != existing_invite
     assert len(session.added_models) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_invite_rejects_explicit_assignment_outside_respondent_scope() -> None:
+    company_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    other_assignment_id = uuid.uuid4()
+
+    session = FakeSession()
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        email="test@example.com",
+        full_name="Test User",
+    )
+    session.side_effects = [
+        FakeScalarResult(profile),
+        FakeScalarsResult([]),
+    ]
+
+    service = IdentityService(session)
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_invite(
+            company_id=company_id,
+            respondent_profile_id=respondent_id,
+            assignment_ids=[other_assignment_id],
+        )
+
+    assert exc_info.value.code == "assignment_scope_mismatch"
+    assert session.added_models == []
 
 
 @pytest.mark.asyncio
