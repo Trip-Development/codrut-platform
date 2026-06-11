@@ -16,6 +16,14 @@ class CompanyResponse(BaseModel):
     name: str
 
 
+class CompanySummaryResponse(CompanyResponse):
+    participant_count: int = 0
+    assignment_count: int = 0
+    completed_count: int = 0
+    scored_count: int = 0
+    stage: Literal["setup", "invites", "completion", "reporting"] = "setup"
+
+
 class CompanyAccessCodeCreateRequest(BaseModel):
     label: str | None = Field(default=None, max_length=255)
 

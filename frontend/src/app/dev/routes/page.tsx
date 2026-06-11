@@ -8,10 +8,9 @@ const routeGroups = [
     routes: [
       ["/trainer", "Delivery dashboard"],
       ["/trainer/companies", "Companies"],
-      ["/trainer/org", "Cross-company org"],
       ["/trainer/questionnaires", "Questionnaires"],
       ["/trainer/email", "Email"],
-      ["/trainer/reports", "Reports"],
+      ["/trainer/reports", "Company reports index"],
       ["/trainer/login", "Trainer login"],
     ],
   },

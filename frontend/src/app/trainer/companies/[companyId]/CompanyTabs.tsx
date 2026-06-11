@@ -4,21 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const companyTabs = [
-  { key: "", label: "Sumar" },
-  { key: "/participants", label: "Roster" },
-  { key: "/invitations", label: "Invitații" },
-  { key: "/org-chart", label: "Organigramă" },
-  { key: "/teams", label: "Echipe" },
-  { key: "/reports", label: "Rapoarte" },
-  { key: "/settings", label: "Setări" },
+  { key: "", label: "Sumar", shortLabel: "Sumar" },
+  { key: "/participants", label: "Roster", shortLabel: "Roster" },
+  { key: "/invitations", label: "Invitații", shortLabel: "Invitații" },
+  { key: "/org-chart", label: "Organigramă", shortLabel: "Org" },
+  { key: "/teams", label: "Echipe", shortLabel: "Echipe" },
+  { key: "/reports", label: "Rapoarte", shortLabel: "Rapoarte" },
+  { key: "/settings", label: "Setări", shortLabel: "Setări" },
 ];
 
 export function CompanyTabs({ basePath }: { basePath: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="mb-6 rounded-xl border border-[var(--border)] bg-surface px-2 py-2 shadow-sm" aria-label="Navigare companie">
-      <div className="flex flex-wrap gap-1">
+    <nav
+      className="mb-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm"
+      aria-label="Navigare companie"
+    >
+      <div className="flex items-center gap-1 overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {companyTabs.map((tab) => {
           const href = `${basePath}${tab.key}`;
           const isActive = tab.key === "" ? pathname === basePath : pathname.startsWith(href);
@@ -29,13 +32,14 @@ export function CompanyTabs({ basePath }: { basePath: string }) {
               href={href}
               aria-current={isActive ? "page" : undefined}
               className={[
-                "tap-soft rounded-lg px-3.5 py-2 text-sm font-semibold transition-all",
+                "tap-soft group relative inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl px-3.5 py-2 text-sm font-semibold transition-all sm:px-4",
                 isActive
-                  ? "bg-burgundy text-white shadow-sm shadow-burgundy/10"
+                  ? "bg-foreground text-background shadow-sm"
                   : "text-foreground/58 hover:bg-surface-muted hover:text-foreground",
               ].join(" ")}
             >
-              {tab.label}
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.shortLabel}</span>
             </Link>
           );
         })}

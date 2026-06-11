@@ -5,11 +5,12 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from codrut.core.database import SessionLocal
+from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
     AssignmentStatus,
+    AssignmentTargetType,
     QuestionnaireAssignment,
     Team,
     TeamMembership,
@@ -65,6 +66,12 @@ class FakeCompanyRepository:
             if membership.user_id == user_id
         }
         return [company for company in self.companies_by_name.values() if company.id in company_ids]
+
+    async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int]]:
+        return [
+            (company, 4, 6, 3, 1)
+            for company in sorted(self.companies_by_name.values(), key=lambda item: item.name)
+        ]
 
     async def get_company(self, company_id: uuid.UUID) -> Company | None:
         return self.companies_by_id.get(company_id)
@@ -229,6 +236,80 @@ async def test_list_companies_only_returns_user_memberships() -> None:
     await service.create_company(other_owner_id, CompanyCreateRequest(name="Second"))
 
     assert await service.list_companies(owner_id) == [first]
+
+
+async def test_list_company_summaries_returns_operational_counts() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    await service.create_company(owner_id, CompanyCreateRequest(name="Second"))
+    first = await service.create_company(owner_id, CompanyCreateRequest(name="First"))
+
+    summaries = await service.list_company_summaries()
+
+    assert [summary.name for summary in summaries] == ["First", "Second"]
+    assert summaries[0].id == first.id
+    assert summaries[0].participant_count == 4
+    assert summaries[0].assignment_count == 6
+    assert summaries[0].completed_count == 3
+    assert summaries[0].scored_count == 1
+    assert summaries[0].stage == "completion"
+
+
+@pytest.mark.asyncio
+async def test_list_company_summaries_counts_roster_and_assignments_from_database() -> None:
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Summary Company {uuid.uuid4().hex[:8]}")
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            first_participant = ParticipantProfile(
+                company_id=company.id,
+                full_name="Ana Pop",
+                email=f"ana-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            second_participant = ParticipantProfile(
+                company_id=company.id,
+                full_name="Mihai Pop",
+                email=f"mihai-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            session.add_all([company, trainer, first_participant, second_participant])
+            await session.flush()
+            session.add_all(
+                [
+                    QuestionnaireAssignment(
+                        company_id=company.id,
+                        respondent_profile_id=first_participant.id,
+                        questionnaire_key="lencioni",
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.submitted,
+                    ),
+                    QuestionnaireAssignment(
+                        company_id=company.id,
+                        respondent_profile_id=second_participant.id,
+                        questionnaire_key="distress_drivers",
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.assigned,
+                    ),
+                ]
+            )
+            await session.flush()
+
+            summaries = await CompanyService(session).list_company_summaries()
+            summary = next(item for item in summaries if item.id == company.id)
+
+            assert summary.participant_count == 2
+            assert summary.assignment_count == 2
+            assert summary.completed_count == 1
+            assert summary.scored_count == 0
+            assert summary.stage == "completion"
+            await session.rollback()
+    finally:
+        await engine.dispose()
 
 
 async def test_delete_company_removes_company_and_related_local_records() -> None:
