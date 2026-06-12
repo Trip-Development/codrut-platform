@@ -63,6 +63,11 @@ class Company(TimestampMixin, Base):
         back_populates="company",
         cascade="all, delete-orphan",
     )
+    project_memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="company",
+        cascade="all, delete-orphan",
+        overlaps="participant,project_memberships",
+    )
 
 
 class CompanyProject(TimestampMixin, Base):
@@ -88,6 +93,10 @@ class CompanyProject(TimestampMixin, Base):
     form_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     company: Mapped[Company] = relationship(back_populates="projects")
+    memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 
 class CompanyMembership(TimestampMixin, Base):
@@ -156,6 +165,50 @@ class ParticipantProfile(TimestampMixin, Base):
         cascade="all, delete-orphan",
         foreign_keys="ParticipantReportingRelationship.participant_profile_id",
         uselist=False,
+    )
+    project_memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="participant",
+        cascade="all, delete-orphan",
+        overlaps="company,project_memberships",
+    )
+
+
+class ProjectMembership(TimestampMixin, Base):
+    __tablename__ = "project_memberships"
+    __table_args__ = (
+        UniqueConstraint("project_id", "participant_profile_id"),
+        ForeignKeyConstraint(
+            ["company_id", "participant_profile_id"],
+            ["participant_profiles.company_id", "participant_profiles.id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        index=True,
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    reports_to_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    position: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role_group: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    company: Mapped[Company] = relationship(
+        back_populates="project_memberships",
+        overlaps="participant,project_memberships",
+    )
+    project: Mapped[CompanyProject] = relationship(back_populates="memberships")
+    participant: Mapped[ParticipantProfile] = relationship(
+        back_populates="project_memberships",
+        overlaps="company,project_memberships",
     )
 
 

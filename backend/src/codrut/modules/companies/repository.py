@@ -10,6 +10,7 @@ from codrut.modules.companies.models import (
     CompanyProject,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectMembership,
 )
 
 
@@ -193,6 +194,44 @@ class CompanyRepository:
             .order_by(ParticipantProfile.full_name)
         )
         return list(result.scalars().all())
+
+    async def list_project_memberships(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> list[tuple[ProjectMembership, ParticipantProfile]]:
+        result = await self.session.execute(
+            select(ProjectMembership, ParticipantProfile)
+            .join(
+                ParticipantProfile,
+                ParticipantProfile.id == ProjectMembership.participant_profile_id,
+            )
+            .where(ProjectMembership.company_id == company_id)
+            .where(ProjectMembership.project_id == project_id)
+            .where(ProjectMembership.active.is_(True))
+            .order_by(ParticipantProfile.full_name)
+        )
+        return [(membership, participant) for membership, participant in result.all()]
+
+    async def get_project_membership(
+        self,
+        project_id: UUID,
+        participant_profile_id: UUID,
+    ) -> ProjectMembership | None:
+        result = await self.session.execute(
+            select(ProjectMembership)
+            .where(ProjectMembership.project_id == project_id)
+            .where(ProjectMembership.participant_profile_id == participant_profile_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def add_project_membership(
+        self,
+        membership: ProjectMembership,
+    ) -> ProjectMembership:
+        self.session.add(membership)
+        await self.session.flush()
+        return membership
 
     async def replace_reporting_relationships(
         self,

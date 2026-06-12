@@ -115,6 +115,7 @@ class RosterImportRow(BaseModel):
 class RosterImportRequest(BaseModel):
     rows: list[RosterImportRow] = Field(min_length=1, max_length=1000)
     send_invites: bool = False
+    project_id: UUID | None = None
 
 
 class ReportingRelationshipIssue(BaseModel):
@@ -146,6 +147,25 @@ class ParticipantResponse(BaseModel):
     pcm_base: str | None = None
     pcm_phase: str | None = None
     anonymous_name: str | None = None
+
+
+class ProjectMembershipResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    company_id: UUID
+    project_id: UUID
+    participant_profile_id: UUID
+    reports_to_name: str | None
+    position: str | None
+    location: str | None
+    role_group: str | None
+    active: bool
+    notes: str | None
+
+
+class ProjectParticipantResponse(ParticipantResponse):
+    project_membership_id: UUID
 
 
 class RosterImportEmailResult(BaseModel):

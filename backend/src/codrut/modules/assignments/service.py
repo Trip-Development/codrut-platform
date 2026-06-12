@@ -148,8 +148,19 @@ class AssignmentService:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, project_id)
         participants = await self.company_repository.list_participants(company_id)
+        project_memberships = (
+            await self.company_repository.list_project_memberships(company_id, project_id)
+            if project_id is not None
+            else []
+        )
+        if project_id is not None:
+            participants = [participant for _membership, participant in project_memberships]
         teams = await self.assignment_repository.list_teams(company_id)
-        relationships = await self.company_repository.list_reporting_relationships(company_id)
+        relationships = (
+            await self.company_repository.list_reporting_relationships(company_id)
+            if project_id is None
+            else []
+        )
         existing_assignments = await self.assignment_repository.list_assignments(
             company_id,
             project_id,
@@ -158,15 +169,29 @@ class AssignmentService:
         participant_by_id = {participant.id: participant for participant in participants}
         teams_by_name = {team.name.strip().casefold(): team for team in teams}
         direct_reports_by_manager: dict[UUID, list[UUID]] = {}
-        for relationship in relationships:
-            if (
-                relationship.manager_profile_id not in participant_by_id
-                or relationship.participant_profile_id not in participant_by_id
-            ):
-                continue
-            direct_reports_by_manager.setdefault(relationship.manager_profile_id, []).append(
-                relationship.participant_profile_id
-            )
+        if project_id is not None:
+            participant_by_name = {
+                participant.full_name.strip().casefold(): participant
+                for participant in participants
+            }
+            for membership, participant in project_memberships:
+                reports_to_name = (membership.reports_to_name or "").strip()
+                if not reports_to_name:
+                    continue
+                manager = participant_by_name.get(reports_to_name.casefold())
+                if manager is None or manager.id == participant.id:
+                    continue
+                direct_reports_by_manager.setdefault(manager.id, []).append(participant.id)
+        else:
+            for relationship in relationships:
+                if (
+                    relationship.manager_profile_id not in participant_by_id
+                    or relationship.participant_profile_id not in participant_by_id
+                ):
+                    continue
+                direct_reports_by_manager.setdefault(relationship.manager_profile_id, []).append(
+                    relationship.participant_profile_id
+                )
 
         manager_ids = set(direct_reports_by_manager)
         manager_ids.update(

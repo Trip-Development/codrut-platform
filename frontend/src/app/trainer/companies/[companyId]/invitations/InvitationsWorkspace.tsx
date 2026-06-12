@@ -1056,7 +1056,6 @@ function matchesInvitationFilter(row: ParticipantInviteRow, filter: InvitationFi
 }
 
 function ProjectScopeSelector({
-  companyId,
   projects,
   selectedProjectId,
 }: {
@@ -1065,8 +1064,7 @@ function ProjectScopeSelector({
   selectedProjectId: string | null;
 }) {
   function handleChange(value: string) {
-    const suffix = value ? `?projectId=${encodeURIComponent(value)}` : "";
-    window.location.href = `/trainer/companies/${companyId}/invitations${suffix}`;
+    window.location.href = value ? `/trainer/projects/${value}/invitations` : "/trainer/projects";
   }
 
   return (
@@ -1087,7 +1085,7 @@ function ProjectScopeSelector({
           onChange={(event) => handleChange(event.target.value)}
           className="min-h-10 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none hover:border-burgundy/45 focus:border-burgundy/45"
         >
-          <option value="">Toată compania</option>
+          <option value="">Alege proiect</option>
           {projects.map((project) => (
             <option key={project.id} value={project.id}>
               {project.name}

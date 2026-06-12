@@ -41,7 +41,7 @@ export default async function TrainerSettingsPage() {
           <SettingsLink
             href="/trainer/email"
             label="Șabloane email"
-            detail="Editează textele reutilizabile. Livrarea invitațiilor se urmărește din spațiul companiei."
+            detail="Editează textele reutilizabile. Livrarea invitațiilor se urmărește din spațiul proiectului."
           />
         </aside>
       </div>

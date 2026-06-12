@@ -48,11 +48,25 @@ export function CompanyProjectsPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const activeProjects = useMemo(
     () => projects.filter((project) => project.status === "active").length,
     [projects],
   );
+  const visibleProjects = useMemo(
+    () =>
+      projects
+        .filter((project) => showArchived || project.status !== "archived")
+        .sort((first, second) => {
+          const rank = (status: CompanyProjectStatus) => status === "active" ? 0 : status === "draft" ? 1 : status === "completed" ? 2 : 3;
+          const rankDiff = rank(first.status) - rank(second.status);
+          if (rankDiff !== 0) return rankDiff;
+          return (second.updated_at ?? "").localeCompare(first.updated_at ?? "");
+        }),
+    [projects, showArchived],
+  );
+  const archivedCount = projects.filter((project) => project.status === "archived").length;
   const metricsByProject = useMemo(() => buildProjectMetrics(assignments), [assignments]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -133,7 +147,7 @@ export function CompanyProjectsPanel({
       <div className="grid gap-0 xl:grid-cols-[22rem_minmax(0,1fr)]">
         <form onSubmit={handleCreate} className="border-b border-[var(--border)] p-5 xl:border-b-0 xl:border-r">
           <p className="text-xs font-semibold text-burgundy/75">Proiecte</p>
-          <h2 className="mt-1 text-lg font-semibold text-foreground">Spațiul de lucru al companiei</h2>
+          <h2 className="mt-1 text-lg font-semibold text-foreground">Proiectele companiei</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
             Creează proiectul înainte de import. Datele proiectului descriu programul, iar fereastra formularelor controlează când linkurile sunt active.
           </p>
@@ -233,15 +247,24 @@ export function CompanyProjectsPanel({
                 {projects.length} proiecte, {activeProjects} active
               </h3>
             </div>
+            {archivedCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowArchived((current) => !current)}
+                className="tap-soft rounded-full border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-bold text-foreground/62 hover:border-burgundy/35 hover:text-burgundy"
+              >
+                {showArchived ? "Ascunde arhiva" : `Arată arhiva (${archivedCount})`}
+              </button>
+            ) : null}
           </div>
 
           <div className="mt-4 space-y-3">
-            {projects.length === 0 ? (
+            {visibleProjects.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[var(--border)] bg-background/70 p-5 text-sm text-foreground/58">
                 Niciun proiect creat încă.
               </div>
             ) : (
-              projects.map((project) => {
+              visibleProjects.map((project) => {
                 const metrics = metricsByProject.get(project.id) ?? {
                   total: 0,
                   completed: 0,
@@ -261,7 +284,8 @@ export function CompanyProjectsPanel({
                         {projectTypeLabel(project.project_type)} · formulare {formatDate(project.form_opens_at) ?? "oricând"} - {formatDate(project.form_closes_at) ?? "fără expirare"}
                       </p>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone[project.status]}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone[project.status]}`}>
+                      {project.status === "active" ? <span className="h-2 w-2 rounded-full bg-green-500" /> : null}
                       {statusLabel(project.status)}
                     </span>
                   </div>
@@ -274,19 +298,19 @@ export function CompanyProjectsPanel({
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Link
-                      href={`/trainer/companies/${companyId}/participants?projectId=${project.id}`}
+                      href={`/trainer/projects/${project.id}/participants`}
                       className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                     >
                       Participanți
                     </Link>
                     <Link
-                      href={`/trainer/companies/${companyId}/invitations?projectId=${project.id}`}
+                      href={`/trainer/projects/${project.id}/invitations`}
                       className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                     >
                       Invitații
                     </Link>
                     <Link
-                      href={`/trainer/companies/${companyId}/reports?projectId=${project.id}`}
+                      href={`/trainer/projects/${project.id}/reports`}
                       className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                     >
                       Rapoarte

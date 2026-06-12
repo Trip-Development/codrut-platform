@@ -116,6 +116,7 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const isTrainer = audience === "trainer";
 
   const handleLogout = async () => {
@@ -174,21 +175,42 @@ export function AppShell({
           {renderNavLinks()}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-4 border-t border-[var(--border)] pt-6">
+        <div className="relative mt-auto flex flex-col gap-3 border-t border-[var(--border)] pt-6">
           <div className="flex items-center justify-between gap-3">
-            <div className="max-w-[130px] truncate rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/75">
-              {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
-            </div>
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              className="tap-soft flex min-w-0 flex-1 items-center justify-between gap-2 rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/75 hover:border-burgundy/30 hover:text-burgundy"
+              aria-expanded={accountMenuOpen}
+            >
+              <span className="truncate">{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</span>
+              <svg className={`h-3.5 w-3.5 shrink-0 transition-transform ${accountMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
             <ThemeToggle />
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="tap-soft rounded-2xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground/68 transition hover:border-burgundy/35 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLoggingOut ? "Se iese..." : "Ieși din cont"}
-          </button>
+          {accountMenuOpen ? (
+            <div className="absolute bottom-full left-0 right-0 mb-3 rounded-2xl border border-[var(--border)] bg-surface p-2 shadow-lg">
+              <Link
+                href={isTrainer ? "/trainer/settings" : "/participant/account"}
+                className="tap-soft block rounded-xl px-3 py-2 text-sm font-semibold text-foreground/68 hover:bg-surface-muted hover:text-foreground"
+              >
+                Setări cont
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="tap-soft mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span>{isLoggingOut ? "Se iese..." : "Deconectare"}</span>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9.75m9 0-3-3m3 3-3 3" />
+                </svg>
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
 
@@ -252,9 +274,9 @@ export function AppShell({
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="tap-soft mt-3 w-full rounded-2xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground/68 transition hover:border-burgundy/35 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
+                className="tap-soft mt-3 w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isLoggingOut ? "Se iese..." : "Ieși din cont"}
+                {isLoggingOut ? "Se iese..." : "Deconectare"}
               </button>
             </div>
           </nav>

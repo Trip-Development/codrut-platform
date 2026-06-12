@@ -94,7 +94,7 @@ export const trainerWorkflowRoutes: AudienceRoute[] = [
   {
     href: "/trainer/email",
     label: "Șabloane email",
-    description: "Texte reutilizabile și arhiva globală; invitațiile se trimit din workspace-ul companiei.",
+    description: "Texte reutilizabile și arhiva globală; invitațiile se trimit din workspace-ul proiectului.",
     audience: "trainer",
   },
 ];
