@@ -8,9 +8,7 @@ def test_forms_service_lists_approved_definitions() -> None:
     assert {definition.key for definition in definitions} == {
         QuestionnaireKey.pcm_base,
         QuestionnaireKey.lencioni,
-        QuestionnaireKey.lencioni_en,
         QuestionnaireKey.distress_drivers,
-        QuestionnaireKey.distress_drivers_en,
         QuestionnaireKey.boss_360,
     }
 
