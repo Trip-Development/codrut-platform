@@ -330,7 +330,12 @@ class CompanyService:
                 participant.anonymous_name = new_anonymous_name()
 
             if payload.project_id is not None:
-                await self._upsert_project_membership(company_id, payload.project_id, participant, row)
+                await self._upsert_project_membership(
+                    company_id,
+                    payload.project_id,
+                    participant,
+                    row,
+                )
             participants.append(participant)
 
         if payload.project_id is None:
@@ -421,7 +426,9 @@ class CompanyService:
                 participant.id for _membership, participant in project_memberships
             }
             participants = [
-                participant for participant in participants if participant.id in project_participant_ids
+                participant
+                for participant in participants
+                if participant.id in project_participant_ids
             ]
 
         if payload.participant_ids is not None:
@@ -635,7 +642,10 @@ class CompanyService:
 
         participants = await self.repository.list_participants(company_id)
         if project_id is not None:
-            project_memberships = await self.repository.list_project_memberships(company_id, project_id)
+            project_memberships = await self.repository.list_project_memberships(
+                company_id,
+                project_id,
+            )
             participants = [participant for _membership, participant in project_memberships]
         if not participants:
             return []
