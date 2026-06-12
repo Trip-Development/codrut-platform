@@ -125,6 +125,7 @@ describe("RosterImporter", () => {
           "PCM Fază": "",
         },
       ],
+      { projectId: null },
     );
 
     expect(await screen.findByText("Participanți salvați. Alege cum le dai acces.")).not.toBeNull();
@@ -233,14 +234,18 @@ describe("RosterImporter", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
 
     await waitFor(() => expect(importCompanyRoster).toHaveBeenCalledTimes(1));
-    expect(importCompanyRoster).toHaveBeenCalledWith("company-1", [
-      expect.objectContaining({
-        Name: "Vlad Manager",
-        email: "vlad@example.com",
-        "PCM Bază": "Gânditor",
-        "PCM Fază": "Perseverent",
-      }),
-    ]);
+    expect(importCompanyRoster).toHaveBeenCalledWith(
+      "company-1",
+      [
+        expect.objectContaining({
+          Name: "Vlad Manager",
+          email: "vlad@example.com",
+          "PCM Bază": "Gânditor",
+          "PCM Fază": "Perseverent",
+        }),
+      ],
+      { projectId: null },
+    );
   });
 
   it("imports real roster rows with an embedded PCM matrix and ignores only standalone legend rows", async () => {
@@ -291,26 +296,30 @@ describe("RosterImporter", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
 
     await waitFor(() => expect(importCompanyRoster).toHaveBeenCalledTimes(1));
-    expect(importCompanyRoster).toHaveBeenCalledWith("company-1", [
-      expect.objectContaining({
-        Name: "Titus Julien Botis",
-        email: "titus@example.com",
-        "PCM Bază": "Gânditor",
-        "PCM Fază": "Perseverent",
-      }),
-      expect.objectContaining({
-        Name: "Denisa Stirb",
-        email: "denisa@example.com",
-        "PCM Bază": "",
-        "PCM Fază": "",
-      }),
-      expect.objectContaining({
-        Name: "Hailong Yan",
-        email: "hailong@example.com",
-        "PCM Bază": "",
-        "PCM Fază": "",
-      }),
-    ]);
+    expect(importCompanyRoster).toHaveBeenCalledWith(
+      "company-1",
+      [
+        expect.objectContaining({
+          Name: "Titus Julien Botis",
+          email: "titus@example.com",
+          "PCM Bază": "Gânditor",
+          "PCM Fază": "Perseverent",
+        }),
+        expect.objectContaining({
+          Name: "Denisa Stirb",
+          email: "denisa@example.com",
+          "PCM Bază": "",
+          "PCM Fază": "",
+        }),
+        expect.objectContaining({
+          Name: "Hailong Yan",
+          email: "hailong@example.com",
+          "PCM Bază": "",
+          "PCM Fază": "",
+        }),
+      ],
+      { projectId: null },
+    );
   });
 
   it("auto-maps common Romanian roster column variants", async () => {
@@ -345,14 +354,18 @@ describe("RosterImporter", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
 
     await waitFor(() => expect(importCompanyRoster).toHaveBeenCalledTimes(1));
-    expect(importCompanyRoster).toHaveBeenCalledWith("company-1", [
-      expect.objectContaining({
-        Name: "Ana Pop",
-        "Reports To": "",
-        Position: "Manager",
-        Location: "București",
-        email: "ana@example.com",
-      }),
-    ]);
+    expect(importCompanyRoster).toHaveBeenCalledWith(
+      "company-1",
+      [
+        expect.objectContaining({
+          Name: "Ana Pop",
+          "Reports To": "",
+          Position: "Manager",
+          Location: "București",
+          email: "ana@example.com",
+        }),
+      ],
+      { projectId: null },
+    );
   });
 });

@@ -29,6 +29,7 @@ from codrut.modules.companies.models import (
     CompanyProject,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectMembership,
 )
 from codrut.modules.identity.models import User
 
@@ -132,6 +133,7 @@ class FakeCompanyRepository:
         self.memberships: list[CompanyMembership] = []
         self.participants: dict[uuid.UUID, ParticipantProfile] = {}
         self.projects: dict[uuid.UUID, CompanyProject] = {}
+        self.project_memberships: list[ProjectMembership] = []
         self.reporting_relationships: list[ParticipantReportingRelationship] = []
 
     async def get_company(self, company_id: uuid.UUID) -> Company | None:
@@ -158,6 +160,20 @@ class FakeCompanyRepository:
             participant
             for participant in self.participants.values()
             if participant.company_id == company_id
+        ]
+
+    async def list_project_memberships(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> list[tuple[ProjectMembership, ParticipantProfile]]:
+        return [
+            (membership, self.participants[membership.participant_profile_id])
+            for membership in self.project_memberships
+            if membership.company_id == company_id
+            and membership.project_id == project_id
+            and membership.active
+            and membership.participant_profile_id in self.participants
         ]
 
     async def list_reporting_relationships(
@@ -568,6 +584,26 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
             ),
         ]
     )
+    for participant in company_repository.participants.values():
+        manager_name = None
+        for relationship in company_repository.reporting_relationships:
+            if relationship.participant_profile_id == participant.id:
+                manager_name = company_repository.participants[
+                    relationship.manager_profile_id
+                ].full_name
+                break
+        company_repository.project_memberships.append(
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=participant.id,
+                reports_to_name=manager_name,
+                position=None,
+                location=None,
+                role_group=participant.role_group,
+                active=True,
+            )
+        )
     assignment_repository.teams[uuid.uuid4()] = Team(
         company_id=company_id,
         name="Leadership",

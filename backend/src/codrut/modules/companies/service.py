@@ -21,6 +21,7 @@ from codrut.modules.companies.models import (
     CompanyProject,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectMembership,
 )
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.companies.schemas import (
@@ -36,6 +37,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
+    ProjectParticipantResponse,
     ReportingRelationshipImportResponse,
     ReportingRelationshipIssue,
     RosterImportEmailResult,
@@ -235,6 +237,23 @@ class CompanyService:
         await self._ensure_anonymous_names(participants)
         return participants
 
+    async def list_project_participants(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> list[ProjectParticipantResponse]:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id)
+        memberships = await self.repository.list_project_memberships(company_id, project_id)
+        participants = [participant for _membership, participant in memberships]
+        await self._ensure_anonymous_names(participants)
+        return [
+            _project_participant_response(membership, participant)
+            for membership, participant in memberships
+        ]
+
     async def create_participant(
         self,
         user_id: UUID,
@@ -274,6 +293,7 @@ class CompanyService:
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, payload.project_id)
         rows = [_normalize_roster_row(row) for row in payload.rows]
         seen_emails: set[str] = set()
         for row in rows:
@@ -284,24 +304,14 @@ class CompanyService:
                 )
             seen_emails.add(row.email)
 
-        existing_emails = {
-            participant.email.lower()
-            for participant in await self.repository.list_participants(company_id)
-        }
-        duplicate_existing_email = next(
-            (row.email for row in rows if row.email in existing_emails),
-            None,
-        )
-        if duplicate_existing_email is not None:
-            raise DomainError(
-                f"Participant already exists for this company: {duplicate_existing_email}",
-                code="participant_exists",
-            )
-
         participants: list[ParticipantProfile] = []
         for row in rows:
-            participants.append(
-                await self.repository.add_participant(
+            participant = await self.repository.get_participant_by_company_email(
+                company_id,
+                row.email,
+            )
+            if participant is None:
+                participant = await self.repository.add_participant(
                     ParticipantProfile(
                         company_id=company_id,
                         full_name=row.full_name,
@@ -316,15 +326,21 @@ class CompanyService:
                         anonymous_name=new_anonymous_name(),
                     )
                 )
-            )
+            elif not participant.anonymous_name:
+                participant.anonymous_name = new_anonymous_name()
 
-        reporting_result = await self.import_reporting_relationships(user_id, company_id)
-        if reporting_result.issues:
-            first_issue = reporting_result.issues[0]
-            raise DomainError(
-                f"Roster reporting relationships are invalid: {first_issue.message}",
-                code=first_issue.code,
-            )
+            if payload.project_id is not None:
+                await self._upsert_project_membership(company_id, payload.project_id, participant, row)
+            participants.append(participant)
+
+        if payload.project_id is None:
+            reporting_result = await self.import_reporting_relationships(user_id, company_id)
+            if reporting_result.issues:
+                first_issue = reporting_result.issues[0]
+                raise DomainError(
+                    f"Roster reporting relationships are invalid: {first_issue.message}",
+                    code=first_issue.code,
+                )
 
         from codrut.modules.assignments.models import (
             Team,
@@ -374,7 +390,7 @@ class CompanyService:
             user_id=user_id,
             company=company,
             participants=participants,
-            project_id=None,
+            project_id=payload.project_id,
             mode="email",
             force_rotate=True,
         )
@@ -396,6 +412,17 @@ class CompanyService:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, payload.project_id)
         participants = await self.repository.list_participants(company_id)
+        if payload.project_id is not None:
+            project_memberships = await self.repository.list_project_memberships(
+                company_id,
+                payload.project_id,
+            )
+            project_participant_ids = {
+                participant.id for _membership, participant in project_memberships
+            }
+            participants = [
+                participant for participant in participants if participant.id in project_participant_ids
+            ]
 
         if payload.participant_ids is not None:
             requested_ids = set(payload.participant_ids)
@@ -431,6 +458,36 @@ class CompanyService:
             changed = True
         if changed:
             await self.repository.session.flush()
+
+    async def _upsert_project_membership(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+        participant: ParticipantProfile,
+        row: RosterImportRow,
+    ) -> ProjectMembership:
+        membership = await self.repository.get_project_membership(project_id, participant.id)
+        if membership is None:
+            membership = await self.repository.add_project_membership(
+                ProjectMembership(
+                    company_id=company_id,
+                    project_id=project_id,
+                    participant_profile_id=participant.id,
+                    reports_to_name=row.reports_to_name,
+                    position=row.position,
+                    location=row.location,
+                    role_group=_infer_roster_role_group(row),
+                    active=True,
+                )
+            )
+        else:
+            membership.reports_to_name = row.reports_to_name
+            membership.position = row.position
+            membership.location = row.location
+            membership.role_group = _infer_roster_role_group(row)
+            membership.active = True
+            await self.repository.session.flush()
+        return membership
 
     async def _dispatch_participant_invites(
         self,
@@ -577,6 +634,9 @@ class CompanyService:
         await self._require_company_project(company_id, project_id)
 
         participants = await self.repository.list_participants(company_id)
+        if project_id is not None:
+            project_memberships = await self.repository.list_project_memberships(company_id, project_id)
+            participants = [participant for _membership, participant in project_memberships]
         if not participants:
             return []
 
@@ -899,6 +959,28 @@ def _clean_optional(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _project_participant_response(
+    membership: ProjectMembership,
+    participant: ParticipantProfile,
+) -> ProjectParticipantResponse:
+    return ProjectParticipantResponse(
+        id=participant.id,
+        company_id=participant.company_id,
+        user_id=participant.user_id,
+        full_name=participant.full_name,
+        email=participant.email,
+        reports_to_name=membership.reports_to_name,
+        position=membership.position,
+        location=membership.location,
+        role_group=membership.role_group,
+        pcm_profile=participant.pcm_profile,
+        pcm_base=participant.pcm_base,
+        pcm_phase=participant.pcm_phase,
+        anonymous_name=participant.anonymous_name,
+        project_membership_id=membership.id,
+    )
 
 
 def _validate_date_window(

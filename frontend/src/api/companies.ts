@@ -29,6 +29,7 @@ type CompanySummaryResponse = {
 
 export type CompanyParticipant = {
   id: string;
+  project_membership_id?: string;
   full_name: string;
   email: string;
   reports_to_name: string | null;
@@ -288,6 +289,31 @@ export async function getCompanyParticipants(
     if (!response.ok) {
       if (!isDemoFallbackEnabled()) {
         throw new Error(`Eroare server (${response.status}): Nu s-au putut obține participanții.`);
+      }
+      return [];
+    }
+    return (await response.json()) as CompanyParticipant[];
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
+    return [];
+  }
+}
+
+export async function getProjectParticipants(
+  companyId: string,
+  projectId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyParticipant[]> {
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/participants`,
+      { cache: "no-store", credentials: "include", ...options },
+    );
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-au putut obține participanții proiectului.`);
       }
       return [];
     }
@@ -696,8 +722,10 @@ export async function importCompanyRoster(
     Location: string;
     email: string;
     "Profil PCM": string;
+    "PCM Bază"?: string;
+    "PCM Fază"?: string;
   }>,
-  options: { sendInvites?: boolean } = {},
+  options: { sendInvites?: boolean; projectId?: string | null } = {},
 ): Promise<RosterImportResponse> {
   const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/roster`, {
     method: "POST",
@@ -706,6 +734,7 @@ export async function importCompanyRoster(
     body: JSON.stringify({
       rows,
       send_invites: options.sendInvites ?? false,
+      project_id: options.projectId ?? null,
     }),
   });
 

@@ -36,6 +36,7 @@ from codrut.modules.companies.models import (
     CompanyProjectStatus,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectMembership,
 )
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.companies.schemas import (
@@ -83,6 +84,7 @@ class FakeCompanyRepository:
         self.memberships: list[CompanyMembership] = []
         self.participants: list[ParticipantProfile] = []
         self.projects: list[CompanyProject] = []
+        self.project_memberships: list[ProjectMembership] = []
         self.reporting_relationships: list[ParticipantReportingRelationship] = []
 
     async def list_companies_for_user(self, user_id: uuid.UUID) -> list[Company]:
@@ -136,6 +138,11 @@ class FakeCompanyRepository:
             if relationship.company_id != company.id
         ]
         self.projects = [project for project in self.projects if project.company_id != company.id]
+        self.project_memberships = [
+            membership
+            for membership in self.project_memberships
+            if membership.company_id != company.id
+        ]
 
     async def list_projects(self, company_id: uuid.UUID) -> list[CompanyProject]:
         return [project for project in self.projects if project.company_id == company_id]
@@ -198,6 +205,42 @@ class FakeCompanyRepository:
         return [
             participant for participant in self.participants if participant.company_id == company_id
         ]
+
+    async def list_project_memberships(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> list[tuple[ProjectMembership, ParticipantProfile]]:
+        participants_by_id = {participant.id: participant for participant in self.participants}
+        return [
+            (membership, participants_by_id[membership.participant_profile_id])
+            for membership in self.project_memberships
+            if membership.company_id == company_id
+            and membership.project_id == project_id
+            and membership.active
+            and membership.participant_profile_id in participants_by_id
+        ]
+
+    async def get_project_membership(
+        self,
+        project_id: uuid.UUID,
+        participant_profile_id: uuid.UUID,
+    ) -> ProjectMembership | None:
+        for membership in self.project_memberships:
+            if (
+                membership.project_id == project_id
+                and membership.participant_profile_id == participant_profile_id
+            ):
+                return membership
+        return None
+
+    async def add_project_membership(
+        self,
+        membership: ProjectMembership,
+    ) -> ProjectMembership:
+        membership.id = uuid.uuid4()
+        self.project_memberships.append(membership)
+        return membership
 
     async def replace_reporting_relationships(
         self,
@@ -765,6 +808,68 @@ async def test_import_roster_rejects_duplicate_row_email() -> None:
                 ]
             ),
         )
+
+
+async def test_project_roster_reuses_company_participants_and_stores_project_context() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    first_project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership Iunie"),
+    )
+    second_project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership Septembrie"),
+    )
+
+    first_import = await service.import_roster(
+        owner_id,
+        company.id,
+        RosterImportRequest(
+            project_id=first_project.id,
+            rows=[
+                {
+                    "Name": "Vlad Manager",
+                    "Reports To": "",
+                    "Position": "Manager",
+                    "Location": "București",
+                    "email": "vlad@example.com",
+                }
+            ],
+        ),
+    )
+    second_import = await service.import_roster(
+        owner_id,
+        company.id,
+        RosterImportRequest(
+            project_id=second_project.id,
+            rows=[
+                {
+                    "Name": "Vlad Manager",
+                    "Reports To": "",
+                    "Position": "Director",
+                    "Location": "Zalău",
+                    "email": "VLAD@example.com",
+                }
+            ],
+        ),
+    )
+
+    assert first_import.participants[0].id == second_import.participants[0].id
+    assert len(repository.participants) == 1
+    assert len(repository.project_memberships) == 2
+
+    first_roster = await service.list_project_participants(owner_id, company.id, first_project.id)
+    second_roster = await service.list_project_participants(owner_id, company.id, second_project.id)
+
+    assert first_roster[0].position == "Manager"
+    assert first_roster[0].location == "București"
+    assert second_roster[0].position == "Director"
+    assert second_roster[0].location == "Zalău"
 
 
 @pytest.mark.asyncio

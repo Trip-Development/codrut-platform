@@ -36,29 +36,29 @@ export default async function CompanyOverviewPage({
         <section className="mb-5 rounded-2xl border border-burgundy/20 bg-burgundy/5 p-5 shadow-sm">
           <h3 className="text-lg font-semibold text-burgundy">Configurează compania</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/68">
-            Clientul există deja. Următorul pas este să adaugi lista de participanți, apoi echipele și invitațiile.
+            Clientul există deja. Următorul pas este să creezi un proiect; rosterul, asignările și invitațiile se lucrează din proiect.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <SetupStep
               step="1"
-              title="Încarcă participanții"
-              detail="Adaugă oamenii prin Excel sau CSV și leagă-i de companie."
-              href={`${basePath}/participants`}
-              action="Import participanți"
+              title="Creează proiect"
+              detail="Definește inițiativa, departamentul sau cohorta de lucru."
+              href={basePath}
+              action="Vezi proiecte"
             />
             <SetupStep
               step="2"
-              title="Configurează echipe"
-              detail="Grupează participanții în echipe de leadership sau funcționale."
-              href={`${basePath}/teams`}
-              action="Gestionează echipe"
+              title="Importă roster"
+              detail="Intră în proiect și salvează oamenii doar pentru acel proiect."
+              href={basePath}
+              action="Alege proiect"
             />
             <SetupStep
               step="3"
               title="Trimite invitații"
-              detail="Expediază invitațiile și urmărește livrarea."
-              href={`${basePath}/invitations`}
-              action="Deschide invitații"
+              detail="Generează planul și trimite emailurile din workspace-ul proiectului."
+              href={basePath}
+              action="Deschide proiect"
             />
           </div>
         </section>
@@ -156,12 +156,10 @@ export default async function CompanyOverviewPage({
 
         {/* Quick actions */}
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-          <p className="text-xs font-semibold text-burgundy/75">Acțiuni rapide</p>
+          <p className="text-xs font-semibold text-burgundy/75">Administrare companie</p>
           <div className="mt-4 space-y-3">
-            <QuickLink href={`${basePath}/participants`} label="Participanți" detail="Import, verificare și acces participanți." />
-            <QuickLink href={`${basePath}/org-chart`} label="Organigramă" detail="Validează ierarhia clientului." />
-            <QuickLink href={`${basePath}/teams`} label="Echipe" detail="Echipe de leadership și funcționale." />
-            <QuickLink href={`${basePath}/reports`} label="Rapoarte" detail="Asignări trimise și evaluate." />
+            <QuickLink href={`${basePath}/settings`} label="Setări companie" detail="Nume, administrare și ștergere companie." />
+            <QuickLink href="/trainer/projects" label="Toate proiectele" detail="Filtrează proiectele active și arhivate." />
           </div>
         </section>
       </div>
