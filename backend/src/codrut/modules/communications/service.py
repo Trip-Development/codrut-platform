@@ -241,19 +241,23 @@ class CommunicationsService:
                 key=k.value,
                 version=catalog_template.version,
             )
-            if existing is not None:
-                continue
-            await repository.add_template(
-                EmailTemplate(
-                    key=k.value,
-                    version=catalog_template.version,
-                    subject=catalog_template.subject,
-                    html_body=catalog_template.html_body,
-                    text_body=catalog_template.text_body,
-                    variables=list(catalog_template.required_context),
-                    audience="participant",
-                    active=True,
+            if existing is None:
+                existing = await repository.add_template(
+                    EmailTemplate(
+                        key=k.value,
+                        version=catalog_template.version,
+                        subject=catalog_template.subject,
+                        html_body=catalog_template.html_body,
+                        text_body=catalog_template.text_body,
+                        variables=list(catalog_template.required_context),
+                        audience="participant",
+                        active=True,
+                    )
                 )
+            existing.active = True
+            await repository.deactivate_templates_for_key(
+                k.value,
+                except_version=catalog_template.version,
             )
 
     async def get_email_ops_summary(self) -> dict:

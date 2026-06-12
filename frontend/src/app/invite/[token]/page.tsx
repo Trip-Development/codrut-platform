@@ -3,9 +3,7 @@
 import { use, useEffect, useState } from "react";
 import NextLink from "next/link";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { SessionBanner } from "@/components/shell/session-banner";
 import { TaskBundle } from "@/components/tasks/task-bundle";
-import { audienceAccessNote } from "@/api/auth";
 import { resolveInviteBundle, type InviteBundle } from "@/api/invites";
 
 type ValidInviteBundle = Extract<InviteBundle, { state: "valid" }>;
@@ -119,6 +117,35 @@ export default function InvitePage({ params }: InvitePageProps) {
     );
   }
 
+  if (data.isLeadership && !data.alreadyRegistered) {
+    return (
+      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
+          <BrandMark size="lg" showText={false} className="mx-auto" />
+          <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-burgundy">Cont Leadership</p>
+          <h1 className="font-display mt-3 text-2xl font-bold text-foreground">Activează contul înainte de chestionare</h1>
+          <p className="mt-3 text-sm text-foreground/60 leading-6">
+            Invitația pentru <strong className="text-foreground/80">{data.participantEmail}</strong> este pregătită. Creează contul ca să vezi dashboardul tău de participant și sarcinile proiectului.
+          </p>
+          <div className="mt-8 space-y-3">
+            <NextLink
+              href="/register"
+              className="tap-soft block w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
+            >
+              Înregistrează cont Leadership
+            </NextLink>
+            <NextLink
+              href="/"
+              className="tap-soft block w-full rounded-2xl border border-[var(--border)] bg-surface hover:bg-surface-muted px-4 py-3.5 font-bold text-foreground transition-colors text-center"
+            >
+              Pagina principală
+            </NextLink>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10 text-foreground">
       <section className="w-full max-w-3xl rounded-[2.5rem] border border-[var(--border)] bg-surface/90 p-8 shadow-brand backdrop-blur md:p-10">
@@ -132,12 +159,8 @@ export default function InvitePage({ params }: InvitePageProps) {
         </h1>
 
         <p className="mt-4 max-w-2xl text-base leading-7 text-foreground/65">
-          Acest link strânge chestionarele pentru proiectul <strong className="text-foreground/80">{data.projectName}</strong>. Vei lucra ca <strong className="text-foreground/80">{data.anonymousName ?? "participant anonim"}</strong>, asociat profilului tău securizat.
+          Acest link strânge chestionarele pentru proiectul <strong className="text-foreground/80">{data.projectName}</strong>. Vei lucra ca <strong className="text-foreground/80">{data.anonymousName ?? "participant anonim"}</strong>.
         </p>
-
-        <div className="mt-6">
-          <SessionBanner note={audienceAccessNote(data.isLeadership ? "participant" : "invitee")} />
-        </div>
 
         <div className="mt-8">
           <TaskBundle

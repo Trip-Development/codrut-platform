@@ -838,6 +838,7 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
                 (manager.id, "lencioni", "team", None, "functional"),
                 (member.id, "lencioni", "team", None, "functional"),
                 (manager.id, "distress_drivers", "self", None, None),
+                (manager.id, "pcm_base", "self", None, None),
                 (manager.id, "boss_360", "person", manager.id, None),
                 (member.id, "boss_360", "person", manager.id, None),
             }

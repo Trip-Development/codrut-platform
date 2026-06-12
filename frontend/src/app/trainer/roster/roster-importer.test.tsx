@@ -8,6 +8,13 @@ const router = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
 }));
+const workbookState = vi.hoisted(() => ({
+  rows: [
+    ["Name", "email", "Reports To", "Position", "Location", "Profil PCM"],
+    ["Ana Pop", "ana@example.com", "", "Manager", "București", "PCM rebel"],
+  ] as unknown[][],
+  sheet: {} as Record<string, unknown>,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
@@ -16,13 +23,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("xlsx", () => ({
   read: vi.fn(() => ({
     SheetNames: ["Roster"],
-    Sheets: { Roster: {} },
+    Sheets: { Roster: workbookState.sheet },
   })),
   utils: {
-    sheet_to_json: vi.fn(() => [
-      ["Name", "email", "Reports To", "Position", "Location", "Profil PCM"],
-      ["Ana Pop", "ana@example.com", "", "Manager", "București", "PCM rebel"],
-    ]),
+    sheet_to_json: vi.fn(() => workbookState.rows),
+    encode_cell: vi.fn(({ r, c }: { r: number; c: number }) => `${String.fromCharCode(65 + c)}${r + 1}`),
   },
 }));
 
@@ -40,6 +45,11 @@ describe("RosterImporter", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    workbookState.rows = [
+      ["Name", "email", "Reports To", "Position", "Location", "Profil PCM"],
+      ["Ana Pop", "ana@example.com", "", "Manager", "București", "PCM rebel"],
+    ];
+    workbookState.sheet = {};
   });
 
   it("imports the roster first, then explicitly generates secure links for imported participants", async () => {
@@ -110,7 +120,7 @@ describe("RosterImporter", () => {
           Position: "Manager",
           Location: "București",
           email: "ana@example.com",
-          "Profil PCM": "PCM rebel",
+          "Profil PCM": "",
           "PCM Bază": "",
           "PCM Fază": "",
         },
@@ -159,5 +169,52 @@ describe("RosterImporter", () => {
     const importButton = screen.getByRole("button", { name: "Salvează participanții" }) as HTMLButtonElement;
     expect(importButton.disabled).toBe(true);
     expect(importCompanyRoster).not.toHaveBeenCalled();
+  });
+
+  it("derives PCM base and phase only from the color-coded PCM matrix", async () => {
+    workbookState.rows = [
+      ["Name", "email", "Reports To", "Position", "Location", "PCM 1", "PCM 2", "PCM 3", "PCM 4", "PCM 5", "PCM 6"],
+      ["Vlad Manager", "vlad@example.com", "", "Manager", "București", "Promotor ()", "Perseverent ()", "Empatic ()", "Ganditor ()", "Rebel ()", "Imaginator ()"],
+    ];
+    workbookState.sheet = {
+      I2: { s: { fill: { fgColor: { rgb: "FF00B0F0" } } } },
+      G2: { s: { fill: { fgColor: { rgb: "FFFFFF00" } } } },
+    };
+
+    vi.mocked(importCompanyRoster).mockResolvedValue({
+      participants: [],
+      email_results: [],
+      total_imported: 1,
+      emails_sent: 0,
+      emails_failed: 0,
+    });
+
+    const { container } = render(
+      <RosterImporter
+        companies={[{ id: "company-1", name: "Michelin" }]}
+        defaultCompanyId="company-1"
+        lockCompany
+      />,
+    );
+
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(["fake"], "pcm.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })],
+      },
+    });
+
+    expect(await screen.findByText("Gânditor")).not.toBeNull();
+    expect(screen.getAllByText("Perseverent").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
+
+    await waitFor(() => expect(importCompanyRoster).toHaveBeenCalledTimes(1));
+    expect(importCompanyRoster).toHaveBeenCalledWith("company-1", [
+      expect.objectContaining({
+        Name: "Vlad Manager",
+        email: "vlad@example.com",
+        "PCM Bază": "Gânditor",
+        "PCM Fază": "Perseverent",
+      }),
+    ]);
   });
 });

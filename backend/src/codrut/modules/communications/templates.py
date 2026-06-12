@@ -57,25 +57,26 @@ class TransactionalTemplate:
 TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] = {
     TransactionalTemplateKey.account_setup: TransactionalTemplate(
         key=TransactionalTemplateKey.account_setup,
-        version=1,
-        subject="Invitație Codruț: activează contul pentru ${company_name}",
+        version=2,
+        subject="Codruț: activează contul pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
-            + f"<h1 {HEADING_STYLE}>Activează contul pentru ${{company_name}}</h1>"
+            + f"<h1 {HEADING_STYLE}>Contul tău Codruț este pregătit</h1>"
             + f"<p {GREETING_STYLE}>Bună, ${{participant_name}}.</p>"
-            + f"<p {BODY_COPY_STYLE}>${{trainer_name}} te-a invitat în Codruț. După "
-            + "activare vei vedea dashboardul tău de participant și sarcinile "
-            + "pregătite pentru proiect.</p>"
+            + f"<p {BODY_COPY_STYLE}>${{trainer_name}} te-a invitat în spațiul de evaluare "
+            + "pentru ${company_name}. Pentru rolul tău, primul pas este activarea contului. "
+            + "După înregistrare vei vedea dashboardul tău și sarcinile proiectului.</p>"
             + '<p style="margin:24px 0;"><a href="${action_url}" '
             + f'style="{PRIMARY_BUTTON_STYLE}">Activează contul</a></p>'
             + f"<p {HELP_TEXT_STYLE}>Dacă butonul nu funcționează, copiază linkul în "
-            + "browser: ${action_url}</p>"
+            + "browser. Linkul este personal și nu trebuie redirecționat: ${action_url}</p>"
             + EMAIL_SHELL_CLOSE
         ),
         text_body=(
             "Bună, ${participant_name}.\n\n"
             "${trainer_name} te-a invitat în Codruț pentru ${company_name}.\n"
-            "Activează contul și vezi sarcinile pregătite pentru proiect: ${action_url}"
+            "Activează contul înainte de a vedea sarcinile proiectului: ${action_url}\n\n"
+            "Linkul este personal și nu trebuie redirecționat."
         ),
         required_context=frozenset(
             {"participant_name", "trainer_name", "company_name", "action_url"}
@@ -83,25 +84,26 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     ),
     TransactionalTemplateKey.assignment_bundle: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_bundle,
-        version=1,
-        subject="Chestionarele tale Codruț pentru ${company_name}",
+        version=2,
+        subject="Codruț: ai ${task_count} chestionare pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
-            + f"<h1 {HEADING_STYLE}>Ai ${{task_count}} chestionare de completat</h1>"
+            + f"<h1 {HEADING_STYLE}>Chestionarele tale sunt pregătite</h1>"
             + f"<p {GREETING_STYLE}>Bună, ${{participant_name}}.</p>"
-            + f"<p {BODY_COPY_STYLE}>Pentru ${{company_name}}, trainerul a pregătit "
-            + "sarcinile tale într-un link securizat. Răspunsurile sunt tratate "
-            + "confidențial și folosite în agregare.</p>"
+            + f"<p {BODY_COPY_STYLE}>Pentru ${{company_name}}, ai ${{task_count}} chestionare "
+            + "de completat într-un link securizat. Nu ai nevoie de cont. Răspunsurile sunt "
+            + "confidențiale și sunt folosite doar în evaluarea proiectului.</p>"
             + '<p style="margin:24px 0;"><a href="${action_url}" '
             + f'style="{PRIMARY_BUTTON_STYLE}">Deschide chestionarele</a></p>'
             + f"<p {HELP_TEXT_STYLE}>Dacă butonul nu funcționează, copiază linkul în "
-            + "browser: ${action_url}</p>"
+            + "browser. Linkul este personal și nu trebuie redirecționat: ${action_url}</p>"
             + EMAIL_SHELL_CLOSE
         ),
         text_body=(
             "Bună, ${participant_name}.\n\n"
-            "Ai ${task_count} sarcini de assessment pregătite în Codruț.\n"
-            "Deschide sarcinile mele: ${action_url}"
+            "Ai ${task_count} chestionare Codruț pentru ${company_name}.\n"
+            "Deschide chestionarele aici: ${action_url}\n\n"
+            "Nu ai nevoie de cont. Linkul este personal și nu trebuie redirecționat."
         ),
         required_context=frozenset(
             {"participant_name", "company_name", "task_count", "action_url"}
