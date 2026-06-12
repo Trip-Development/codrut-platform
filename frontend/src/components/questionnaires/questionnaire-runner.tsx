@@ -242,7 +242,7 @@ type QuestionInputProps = {
 
 function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
   return (
-    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+    <div data-testid="question-response-group" className="mt-4 grid gap-2 sm:grid-cols-3">
       {question.scale.map((option) => {
         const key = answerKey(question);
         const selected = answers[key] === option.value;
@@ -270,7 +270,7 @@ function SingleChoiceQuestion({ question, answers, onAnswerChange }: QuestionInp
   const key = answerKey(question);
 
   return (
-    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+    <div data-testid="question-response-group" className="mt-4 grid gap-2 sm:grid-cols-2">
       {question.scale.map((option) => {
         const selected = answers[key] === option.value;
         return (
@@ -313,7 +313,7 @@ function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInp
               <span className="mr-2 font-semibold text-burgundy">{statement.code}.</span>
               {statement.label}
             </p>
-            <div className="mt-3 grid gap-2 md:grid-cols-4">
+            <div data-testid="question-response-group" className="mt-3 grid gap-2 md:grid-cols-4">
               {scale.map((option) => {
                 const selected = answers[key] === option.value;
                 return (
