@@ -217,4 +217,117 @@ describe("RosterImporter", () => {
       }),
     ]);
   });
+
+  it("imports real roster rows with an embedded PCM matrix and ignores only standalone legend rows", async () => {
+    workbookState.rows = [
+      ["Name", "Reports To", "Position", "Location", "email", "Profil PCM", "", "", "", "", "", ""],
+      ["Titus Julien Botis", "", "Directeur Site de Zalau", "Zalau", "titus@example.com", "Titus Botis", "Ganditor ()", "Perseverent ()", "Promotor ()", "Empatic ()", "Imaginator ()", "Rebel ()"],
+      ["Denisa Stirb", "AdrianDemle", "Tehnician uniformitate", "Zalau", "denisa@example.com", "Legend", "", "", "", "", "", ""],
+      ["Hailong Yan", "AdrianDemle", "Process Industrialisator", "Zalau", "hailong@example.com", "Base", "", "", "", "", "", ""],
+      ["Legend", "", "", "", "", "", "", "", "", "", "", ""],
+      ["Base", "", "", "", "", "", "", "", "", "", "", ""],
+      ["Base & Phase", "", "", "", "", "", "", "", "", "", "", ""],
+      ["Phase", "", "", "", "", "", "", "", "", "", "", ""],
+      ["Stage", "", "", "", "", "", "", "", "", "", "", ""],
+    ];
+    workbookState.sheet = {
+      G2: { s: { fill: { fgColor: { rgb: "FF00B0F0" } } } },
+      H2: { s: { fill: { fgColor: { rgb: "FFFFFF00" } } } },
+    };
+
+    vi.mocked(importCompanyRoster).mockResolvedValue({
+      participants: [],
+      email_results: [],
+      total_imported: 3,
+      emails_sent: 0,
+      emails_failed: 0,
+    });
+
+    const { container } = render(
+      <RosterImporter
+        companies={[{ id: "company-1", name: "Michelin" }]}
+        defaultCompanyId="company-1"
+        lockCompany
+      />,
+    );
+
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(["fake"], "michelin.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })],
+      },
+    });
+
+    expect(await screen.findByText(/Am încărcat 3 rânduri/)).not.toBeNull();
+    expect(screen.getByText("Titus Julien Botis")).not.toBeNull();
+    expect(screen.getAllByText("Denisa Stirb").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Hailong Yan").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Lipsă obligatoriu")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
+
+    await waitFor(() => expect(importCompanyRoster).toHaveBeenCalledTimes(1));
+    expect(importCompanyRoster).toHaveBeenCalledWith("company-1", [
+      expect.objectContaining({
+        Name: "Titus Julien Botis",
+        email: "titus@example.com",
+        "PCM Bază": "Gânditor",
+        "PCM Fază": "Perseverent",
+      }),
+      expect.objectContaining({
+        Name: "Denisa Stirb",
+        email: "denisa@example.com",
+        "PCM Bază": "",
+        "PCM Fază": "",
+      }),
+      expect.objectContaining({
+        Name: "Hailong Yan",
+        email: "hailong@example.com",
+        "PCM Bază": "",
+        "PCM Fază": "",
+      }),
+    ]);
+  });
+
+  it("auto-maps common Romanian roster column variants", async () => {
+    workbookState.rows = [
+      ["Nume complet", "Reports To / Manager", "Poziție / Rol", "Locație", "Adresă Email"],
+      ["Ana Pop", "", "Manager", "București", "ana@example.com"],
+    ];
+
+    vi.mocked(importCompanyRoster).mockResolvedValue({
+      participants: [],
+      email_results: [],
+      total_imported: 1,
+      emails_sent: 0,
+      emails_failed: 0,
+    });
+
+    const { container } = render(
+      <RosterImporter
+        companies={[{ id: "company-1", name: "Michelin" }]}
+        defaultCompanyId="company-1"
+        lockCompany
+      />,
+    );
+
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(["fake"], "ro.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })],
+      },
+    });
+
+    expect(await screen.findByText(/Am încărcat 1 rânduri/)).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
+
+    await waitFor(() => expect(importCompanyRoster).toHaveBeenCalledTimes(1));
+    expect(importCompanyRoster).toHaveBeenCalledWith("company-1", [
+      expect.objectContaining({
+        Name: "Ana Pop",
+        "Reports To": "",
+        Position: "Manager",
+        Location: "București",
+        email: "ana@example.com",
+      }),
+    ]);
+  });
 });
