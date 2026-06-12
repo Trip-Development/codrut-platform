@@ -12,7 +12,22 @@ export class ParticipantPage {
     await this.page.waitForLoadState("networkidle");
   }
 
+  async acceptConsentIfShown() {
+    const consentButton = this.page.getByRole("button", { name: "Continuă la chestionare" });
+    if (!(await consentButton.isVisible())) {
+      return;
+    }
+
+    await this.page
+      .getByLabel("Accept regulile de confidențialitate și prelucrare a datelor pentru completarea chestionarelor Codruț.")
+      .check();
+    await expect(consentButton).toBeEnabled();
+    await consentButton.click();
+    await this.page.waitForLoadState("networkidle");
+  }
+
   async startFilling() {
+    await this.acceptConsentIfShown();
     const button = this.page.getByRole("link", { name: "Continuă următoarea sarcină" });
     await expect(button).toBeVisible();
     await button.click();
@@ -20,6 +35,7 @@ export class ParticipantPage {
   }
 
   async startNextTask() {
+    await this.acceptConsentIfShown();
     const continuaLink = this.page.getByRole("link", { name: "Continuă următoarea sarcină" });
     if (await continuaLink.isVisible()) {
       await continuaLink.click();
@@ -76,6 +92,9 @@ export class ParticipantPage {
   async submitResponse() {
     const btn = this.page.getByRole("button", { name: "Trimite răspunsurile" });
     await expect(btn).toBeEnabled();
+    this.page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
     await btn.click();
     // Verify confirmation screen is shown
     await expect(this.page.locator("h3")).toContainText("Răspunsurile au fost trimise");
