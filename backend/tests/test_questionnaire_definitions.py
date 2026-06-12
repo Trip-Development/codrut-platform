@@ -9,9 +9,7 @@ def test_approved_questionnaire_catalog_contains_added_sources() -> None:
     assert {definition.key for definition in APPROVED_QUESTIONNAIRE_DEFINITIONS} == {
         QuestionnaireKey.pcm_base,
         QuestionnaireKey.lencioni,
-        QuestionnaireKey.lencioni_en,
         QuestionnaireKey.distress_drivers,
-        QuestionnaireKey.distress_drivers_en,
         QuestionnaireKey.boss_360,
     }
 
