@@ -30,17 +30,23 @@ class CompanySummaryResponse(CompanyResponse):
 class CompanyProjectCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
+    project_type: str | None = Field(default=None, max_length=120)
     status: CompanyProjectStatus = CompanyProjectStatus.draft
     starts_at: datetime | None = None
     due_at: datetime | None = None
+    form_opens_at: datetime | None = None
+    form_closes_at: datetime | None = None
 
 
 class CompanyProjectUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
+    project_type: str | None = Field(default=None, max_length=120)
     status: CompanyProjectStatus | None = None
     starts_at: datetime | None = None
     due_at: datetime | None = None
+    form_opens_at: datetime | None = None
+    form_closes_at: datetime | None = None
 
 
 class CompanyProjectResponse(BaseModel):
@@ -50,9 +56,12 @@ class CompanyProjectResponse(BaseModel):
     company_id: UUID
     name: str
     description: str | None
+    project_type: str | None
     status: CompanyProjectStatus
     starts_at: datetime | None
     due_at: datetime | None
+    form_opens_at: datetime | None
+    form_closes_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

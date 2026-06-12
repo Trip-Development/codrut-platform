@@ -322,6 +322,7 @@ async def test_register_success() -> None:
         email="test@example.com",
         password="securepassword123",
         token=token,
+        terms_accepted=True,
     )
     auth_result = await service.register(payload)
 
@@ -333,6 +334,23 @@ async def test_register_success() -> None:
     assert "participant_profiles.email" not in where_text
     assert "participant_profiles.id" in where_text
     assert "participant_profiles.company_id" in where_text
+
+
+@pytest.mark.asyncio
+async def test_register_requires_terms_acceptance() -> None:
+    mock_session = AsyncMock()
+    service = IdentityService(mock_session)
+    payload = RegisterRequest(
+        email="test@example.com",
+        password="securepassword123",
+        token="token",
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.register(payload)
+
+    assert exc_info.value.code == "terms_required"
+    mock_session.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -386,6 +404,7 @@ async def test_register_forbidden_for_non_leadership() -> None:
         email="test@example.com",
         password="securepassword123",
         token=token,
+        terms_accepted=True,
     )
 
     with pytest.raises(DomainError) as exc_info:
@@ -443,6 +462,7 @@ async def test_register_mismatched_email() -> None:
         email="attacker@example.com",
         password="securepassword123",
         token=token,
+        terms_accepted=True,
     )
 
     with pytest.raises(DomainError) as exc_info:

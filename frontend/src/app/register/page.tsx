@@ -17,6 +17,8 @@ const generateNickname = (name: string) => {
     .replace(/^_+|_+$/g, "");        // trim leading/trailing underscores
 };
 
+const TERMS_VERSION = "privacy-2026-06-12";
+
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,7 @@ export default function RegisterPage() {
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -80,6 +83,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!termsAccepted) {
+      setError("Trebuie să accepți termenii de confidențialitate înainte de înregistrare.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -92,6 +100,8 @@ export default function RegisterPage() {
           email,
           password,
           token,
+          terms_accepted: termsAccepted,
+          terms_version: TERMS_VERSION,
         }),
       });
 
@@ -250,9 +260,22 @@ export default function RegisterPage() {
             />
           </div>
 
+          <label className="flex gap-3 rounded-2xl border border-[var(--border)] bg-surface-muted/70 p-4 text-left">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(event) => setTermsAccepted(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-[var(--border)] accent-burgundy"
+            />
+            <span className="text-xs font-semibold leading-5 text-foreground/65">
+              Confirm că am citit și accept regulile de confidențialitate și prelucrare a datelor pentru utilizarea
+              platformei Codruț.
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !termsAccepted}
             className="tap-soft mt-2.5 w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark disabled:bg-burgundy/50 px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md flex items-center justify-center gap-2"
           >
             {submitting ? (

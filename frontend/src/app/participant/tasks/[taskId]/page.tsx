@@ -36,6 +36,7 @@ export default async function TaskRunnerPage({ params }: TaskRunnerPageProps) {
           definition={definition}
           assignmentId={taskId}
           initialAnswers={responseRecord?.answers}
+          initialStatus={responseRecord?.status}
         />
       ) : (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">

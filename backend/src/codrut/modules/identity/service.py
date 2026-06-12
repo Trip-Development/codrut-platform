@@ -18,6 +18,7 @@ from codrut.modules.identity.models import (
 from codrut.modules.identity.repository import IdentityRepository, hash_session_token
 from codrut.modules.identity.schemas import (
     AuthResponse,
+    ConsentRequest,
     InviteVerifyResponse,
     LoginRequest,
     RegisterRequest,
@@ -73,6 +74,12 @@ class IdentityService:
         self.repository = IdentityRepository(session)
 
     async def register(self, payload: RegisterRequest) -> AuthResult:
+        if not payload.terms_accepted:
+            raise DomainError(
+                "Privacy and confidentiality terms must be accepted before registration.",
+                code="terms_required",
+            )
+
         # 1. Verify the invite token
         verify_result = await self.verify_invite_token(payload.token)
 
@@ -107,6 +114,8 @@ class IdentityService:
                 email=payload.email.lower(),
                 password_hash=hash_password(payload.password),
                 role=UserRole.participant,
+                terms_accepted_at=datetime.now(UTC),
+                terms_version=payload.terms_version,
             )
         )
 
@@ -378,6 +387,23 @@ class IdentityService:
     async def logout(self, token: str) -> None:
         await self.repository.delete_session_by_token(token)
 
+    async def accept_terms(self, user_id: UUID, payload: ConsentRequest) -> AuthResponse:
+        if not payload.terms_accepted:
+            raise DomainError(
+                "Privacy and confidentiality terms must be accepted.",
+                code="terms_required",
+            )
+
+        from sqlalchemy import select
+
+        result = await self.repository.session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise DomainError("Authenticated user was not found.", code="user_not_found")
+        user.terms_accepted_at = datetime.now(UTC)
+        user.terms_version = payload.terms_version
+        return self._response(user)
+
     async def principal_from_session_token(self, token: str) -> SessionPrincipal | None:
         user = await self.repository.get_user_by_session_token(token)
         if user is None:
@@ -386,6 +412,8 @@ class IdentityService:
             user_id=user.id,
             email=user.email,
             role=user.role,
+            terms_accepted_at=user.terms_accepted_at,
+            terms_version=user.terms_version,
             session_token=token,
         )
 
@@ -402,7 +430,13 @@ class IdentityService:
 
     @staticmethod
     def _response(user: User) -> AuthResponse:
-        return AuthResponse(user_id=user.id, email=user.email, role=user.role)
+        return AuthResponse(
+            user_id=user.id,
+            email=user.email,
+            role=user.role,
+            terms_accepted_at=user.terms_accepted_at,
+            terms_version=user.terms_version,
+        )
 
     async def create_invite(
         self,
@@ -411,6 +445,7 @@ class IdentityService:
         assignment_ids: list[UUID] | None = None,
         project_id: UUID | None = None,
         expires_in_days: int = 3650,
+        expires_at: datetime | None = None,
         force_rotate: bool = False,
     ) -> AssignmentInvite:
         from sqlalchemy import select
@@ -462,7 +497,7 @@ class IdentityService:
         await self.repository.invalidate_invites_for_respondent(company_id, respondent_profile_id)
 
         # 5. Generate secure token claims
-        expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
+        expires_at = expires_at or datetime.now(UTC) + timedelta(days=expires_in_days)
         claims = TaskLinkClaims(
             company_id=company_id,
             respondent_profile_id=respondent_profile_id,

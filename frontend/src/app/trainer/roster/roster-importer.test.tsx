@@ -135,10 +135,35 @@ describe("RosterImporter", () => {
     await waitFor(() => expect(sendParticipantInvitations).toHaveBeenCalledTimes(1));
     expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", {
       participantIds: ["participant-1"],
+      projectId: null,
       mode: "secure_links",
     });
     expect(await screen.findByText("1/1 linkuri securizate generate.")).not.toBeNull();
     expect(screen.getByText("Link securizat pregătit")).not.toBeNull();
+  });
+
+  it("blocks company workspace import until a destination project exists", async () => {
+    const { container } = render(
+      <RosterImporter
+        companies={[{ id: "company-1", name: "Michelin" }]}
+        defaultCompanyId="company-1"
+        requireProject
+        lockCompany
+      />,
+    );
+
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File(["fake"], "roster.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })],
+      },
+    });
+
+    expect(await screen.findByText("Am încărcat 1 rânduri. Vă rugăm să validați maparea coloanelor și corectitudinea datelor.")).not.toBeNull();
+    expect(await screen.findByText(/Creează un proiect înainte de import/)).not.toBeNull();
+    const importButton = screen.getByRole("button", { name: "Salvează participanții" }) as HTMLButtonElement;
+    expect(importButton.disabled).toBe(true);
+    fireEvent.click(importButton);
+    expect(importCompanyRoster).not.toHaveBeenCalled();
   });
 
   it("warns before submit when an uploaded email already exists in the company", async () => {

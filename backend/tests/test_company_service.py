@@ -835,7 +835,6 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
 
             assert planned == {
                 (manager.id, "lencioni", "team", None, "leadership"),
-                (manager.id, "lencioni", "team", None, "functional"),
                 (member.id, "lencioni", "team", None, "functional"),
                 (manager.id, "distress_drivers", "self", None, None),
                 (manager.id, "pcm_base", "self", None, None),
@@ -1126,6 +1125,7 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
                 email=participants[0].email,
                 password=registration_password,
                 token=registration_token,
+                terms_accepted=True,
             )
         )
         assert register_result.response.email == participants[0].email
