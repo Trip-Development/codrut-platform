@@ -40,7 +40,11 @@ export function CompanyProjectsPanel({
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [projectType, setProjectType] = useState("team_coaching");
+  const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [formOpenDate, setFormOpenDate] = useState("");
+  const [formCloseDate, setFormCloseDate] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -62,13 +66,21 @@ export function CompanyProjectsPanel({
       const created = await createCompanyProject(companyId, {
         name: trimmedName,
         description,
+        projectType,
         status: "draft",
+        startsAt: dateInputToIso(startDate),
         dueAt: dateInputToIso(dueDate),
+        formOpensAt: dateInputToIso(formOpenDate),
+        formClosesAt: dateInputToIso(formCloseDate),
       });
       setProjects((current) => [created, ...current]);
       setName("");
       setDescription("");
+      setProjectType("team_coaching");
+      setStartDate("");
       setDueDate("");
+      setFormOpenDate("");
+      setFormCloseDate("");
       setMessage("Proiectul a fost salvat.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Proiectul nu a putut fi salvat.");
@@ -84,9 +96,12 @@ export function CompanyProjectsPanel({
       const updated = await updateCompanyProject(companyId, project.id, {
         name: project.name,
         description: project.description,
+        projectType: project.project_type,
         status,
         startsAt: project.starts_at,
         dueAt: project.due_at,
+        formOpensAt: project.form_opens_at,
+        formClosesAt: project.form_closes_at,
       });
       setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
@@ -120,7 +135,7 @@ export function CompanyProjectsPanel({
           <p className="text-xs font-semibold text-burgundy/75">Proiecte</p>
           <h2 className="mt-1 text-lg font-semibold text-foreground">Spațiul de lucru al companiei</h2>
           <p className="mt-2 text-sm leading-6 text-foreground/62">
-            Creează proiectele clientului aici, apoi intră direct în planificarea asignărilor, invitații și rapoarte pentru fiecare proiect.
+            Creează proiectul înainte de import. Datele proiectului descriu programul, iar fereastra formularelor controlează când linkurile sunt active.
           </p>
           <div className="mt-4 space-y-3">
             <label className="block text-xs font-bold text-foreground/58">
@@ -133,14 +148,58 @@ export function CompanyProjectsPanel({
               />
             </label>
             <label className="block text-xs font-bold text-foreground/58">
-              Data țintă
-              <input
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-                type="date"
+              Tip proiect
+              <select
+                value={projectType}
+                onChange={(event) => setProjectType(event.target.value)}
                 className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
-              />
+              >
+                <option value="team_coaching">Team coaching</option>
+                <option value="individual_coaching">Individual coaching</option>
+                <option value="leadership_program">Leadership program</option>
+                <option value="custom">Personalizat</option>
+              </select>
             </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-bold text-foreground/58">
+                Start proiect
+                <input
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  type="date"
+                  className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                />
+              </label>
+              <label className="block text-xs font-bold text-foreground/58">
+                Final proiect
+                <input
+                  value={dueDate}
+                  onChange={(event) => setDueDate(event.target.value)}
+                  type="date"
+                  className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                />
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-bold text-foreground/58">
+                Formulare active din
+                <input
+                  value={formOpenDate}
+                  onChange={(event) => setFormOpenDate(event.target.value)}
+                  type="date"
+                  className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                />
+              </label>
+              <label className="block text-xs font-bold text-foreground/58">
+                Formulare active până la
+                <input
+                  value={formCloseDate}
+                  onChange={(event) => setFormCloseDate(event.target.value)}
+                  type="date"
+                  className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                />
+              </label>
+            </div>
             <label className="block text-xs font-bold text-foreground/58">
               Notițe
               <textarea
@@ -198,6 +257,9 @@ export function CompanyProjectsPanel({
                       <p className="mt-1 text-xs font-semibold text-foreground/45">
                         {formatDate(project.starts_at) ?? "Fără start"} · {formatDate(project.due_at) ?? "Fără termen"}
                       </p>
+                      <p className="mt-2 text-xs font-semibold text-burgundy/70">
+                        {projectTypeLabel(project.project_type)} · formulare {formatDate(project.form_opens_at) ?? "oricând"} - {formatDate(project.form_closes_at) ?? "fără expirare"}
+                      </p>
                     </div>
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone[project.status]}`}>
                       {statusLabel(project.status)}
@@ -211,6 +273,12 @@ export function CompanyProjectsPanel({
                     <ProjectMetric label="Finalizate" value={metrics.completed} />
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={`/trainer/companies/${companyId}/participants?projectId=${project.id}`}
+                      className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                    >
+                      Participanți
+                    </Link>
                     <Link
                       href={`/trainer/companies/${companyId}/invitations?projectId=${project.id}`}
                       className="tap-soft min-h-9 rounded-lg border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
@@ -257,6 +325,13 @@ export function CompanyProjectsPanel({
 
 function statusLabel(status: CompanyProjectStatus): string {
   return statusOptions.find((option) => option.value === status)?.label ?? status;
+}
+
+function projectTypeLabel(value: string | null): string {
+  if (value === "individual_coaching") return "Individual coaching";
+  if (value === "leadership_program") return "Leadership program";
+  if (value === "custom") return "Personalizat";
+  return "Team coaching";
 }
 
 function ProjectMetric({ label, value }: { label: string; value: number }) {

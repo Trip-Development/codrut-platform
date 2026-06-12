@@ -32,6 +32,11 @@ class User(TimestampMixin, Base):
         nullable=False,
         default=UserRole.participant,
     )
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    terms_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     sessions: Mapped[list[Session]] = relationship(
         back_populates="user",

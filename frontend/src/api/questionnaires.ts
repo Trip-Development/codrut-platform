@@ -22,6 +22,7 @@ export type QuestionnaireStatement = {
   code: string;
   label: string;
   scoring?: Record<string, string>;
+  scale?: QuestionnaireScaleOption[];
 };
 
 export type QuestionnaireQuestion = {

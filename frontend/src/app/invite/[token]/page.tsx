@@ -12,11 +12,17 @@ type InvitePageProps = {
   params: Promise<{ token: string }>;
 };
 
+const TERMS_VERSION = "privacy-2026-06-12";
+
 export default function InvitePage({ params }: InvitePageProps) {
   const { token } = use(params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ValidInviteBundle | null>(null);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [consentSaved, setConsentSaved] = useState(false);
+  const [consentSubmitting, setConsentSubmitting] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   useEffect(() => {
     async function verify() {
@@ -47,6 +53,30 @@ export default function InvitePage({ params }: InvitePageProps) {
     }
     verify();
   }, [token]);
+
+  const handleAcceptTerms = async () => {
+    setConsentError(null);
+    setConsentSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          terms_accepted: true,
+          terms_version: TERMS_VERSION,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error?.message || "Nu am putut salva acordul de confidențialitate.");
+      }
+      setConsentSaved(true);
+    } catch (err) {
+      setConsentError(err instanceof Error ? err.message : "Nu am putut salva acordul de confidențialitate.");
+    } finally {
+      setConsentSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -141,6 +171,54 @@ export default function InvitePage({ params }: InvitePageProps) {
               Pagina principală
             </NextLink>
           </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!consentSaved) {
+    return (
+      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="w-full max-w-xl rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 shadow-brand md:p-10">
+          <BrandMark size="lg" showText={false} className="mx-auto" />
+          <p className="mt-8 text-center text-xs font-bold uppercase tracking-[0.18em] text-burgundy">
+            Acces securizat
+          </p>
+          <h1 className="font-display mt-3 text-center text-2xl font-bold text-foreground">
+            Confirmă confidențialitatea înainte de chestionare
+          </h1>
+          <p className="mt-4 text-center text-sm leading-6 text-foreground/60">
+            Vei răspunde ca <strong className="text-foreground/80">{data.anonymousName ?? "participant anonim"}</strong>
+            {" "}pentru proiectul <strong className="text-foreground/80">{data.projectName}</strong>. Răspunsurile sunt
+            folosite doar în cadrul evaluării stabilite cu trainerul.
+          </p>
+
+          <label className="mt-7 flex gap-3 rounded-2xl border border-[var(--border)] bg-surface-muted/70 p-4 text-left">
+            <input
+              type="checkbox"
+              checked={termsChecked}
+              onChange={(event) => setTermsChecked(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-[var(--border)] accent-burgundy"
+            />
+            <span className="text-sm font-semibold leading-6 text-foreground/66">
+              Accept regulile de confidențialitate și prelucrare a datelor pentru completarea chestionarelor Codruț.
+            </span>
+          </label>
+
+          {consentError ? (
+            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300">
+              {consentError}
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleAcceptTerms}
+            disabled={!termsChecked || consentSubmitting}
+            className="tap-soft mt-5 w-full rounded-2xl bg-burgundy px-4 py-3.5 font-bold text-white transition-colors hover:bg-burgundy-dark disabled:bg-burgundy/50"
+          >
+            {consentSubmitting ? "Se salvează..." : "Continuă la chestionare"}
+          </button>
         </section>
       </main>
     );

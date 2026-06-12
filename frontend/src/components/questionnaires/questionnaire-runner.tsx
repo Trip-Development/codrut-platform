@@ -17,20 +17,23 @@ type QuestionnaireRunnerProps = {
   definition: QuestionnaireDefinition;
   assignmentId?: string;
   initialAnswers?: AnswerState;
+  initialStatus?: "draft" | "submitted";
 };
 
 function answerKey(question: QuestionnaireQuestion, statementId?: string): string {
   return statementId ? `${question.id}:${statementId}` : question.id;
 }
 
-export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }: QuestionnaireRunnerProps) {
+export function QuestionnaireRunner({ definition, assignmentId, initialAnswers, initialStatus = "draft" }: QuestionnaireRunnerProps) {
   const [answers, setAnswers] = useState<AnswerState>(initialAnswers ?? {});
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "submitted" | "error">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "submitted" | "error">(
+    initialStatus === "submitted" ? "submitted" : "idle",
+  );
 
   useEffect(() => {
     setAnswers(initialAnswers ?? {});
-    setSaveState("idle");
-  }, [initialAnswers, assignmentId]);
+    setSaveState(initialStatus === "submitted" ? "submitted" : "idle");
+  }, [initialAnswers, initialStatus, assignmentId]);
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const requiredAnswerKeys = useMemo(
     () =>
@@ -79,6 +82,10 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers }
 
   async function submit() {
     if (!canSubmit || !assignmentId) return;
+    const confirmed = window.confirm(
+      "Trimiți răspunsurile finale? După trimitere nu le mai poți modifica decât dacă trainerul redeschide sarcina.",
+    );
+    if (!confirmed) return;
     setSaveState("saving");
     try {
       await submitQuestionnaireResponse(assignmentId, answers);
@@ -296,29 +303,41 @@ function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInp
     <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)]">
       {(question.statements ?? []).map((statement) => {
         const key = answerKey(question, statement.id);
+        const scale = statement.scale?.length ? statement.scale : question.scale;
         return (
           <div
             key={statement.id}
-            className="grid gap-3 border-b border-[var(--border)] bg-surface px-4 py-3.5 last:border-b-0 md:grid-cols-[1fr_11rem] md:items-center"
+            className="border-b border-[var(--border)] bg-surface px-4 py-4 last:border-b-0"
           >
             <p className="text-sm font-medium leading-6 text-foreground/72">
               <span className="mr-2 font-semibold text-burgundy">{statement.code}.</span>
               {statement.label}
             </p>
-            <select
-              value={answers[key] ?? ""}
-              onChange={(event) => onAnswerChange(key, Number(event.target.value))}
-              className="min-h-10 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground"
-            >
-              <option value="" disabled>
-                Alege scorul
-              </option>
-              {question.scale.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="mt-3 grid gap-2 md:grid-cols-4">
+              {scale.map((option) => {
+                const selected = answers[key] === option.value;
+                return (
+                  <button
+                    key={String(option.value)}
+                    type="button"
+                    onClick={() => onAnswerChange(key, option.value)}
+                    className={[
+                      "tap-soft min-h-[4.5rem] rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
+                      selected
+                        ? "border-burgundy bg-burgundy text-white shadow-sm"
+                        : "border-[var(--border)] bg-background text-foreground/70 hover:border-burgundy/45 hover:bg-surface-muted/60 hover:text-burgundy",
+                    ].join(" ")}
+                  >
+                    <span className="block text-sm font-bold">{option.label}</span>
+                    {option.description ? (
+                      <span className={["mt-1 block leading-5", selected ? "text-white/76" : "text-foreground/56"].join(" ")}>
+                        {option.description}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       })}

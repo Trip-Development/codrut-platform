@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   listQuestionnaireDefinitionStubs,
   getQuestionnaireDefinition,
@@ -11,6 +11,7 @@ import {
   type QuestionnaireDefinitionStub,
   type QuestionnaireDefinition,
   type QuestionnaireQuestion,
+  type QuestionnaireScaleOption,
 } from "@/api/questionnaires";
 
 const destructiveButtonClass =
@@ -28,6 +29,28 @@ function estimateQuestionnaireItems(definition: QuestionnaireDefinition): number
     );
   }, 0);
 }
+
+function cloneScale(scale: QuestionnaireScaleOption[]): QuestionnaireScaleOption[] {
+  return scale.map((option) => ({ ...option }));
+}
+
+function scaleSignature(scale: QuestionnaireScaleOption[]): string {
+  return JSON.stringify(
+    scale.map((option) => ({
+      value: option.value,
+      label: option.label,
+      description: option.description ?? "",
+    })),
+  );
+}
+
+type ScaleGroup = {
+  key: string;
+  type: QuestionnaireQuestion["type"];
+  title: string;
+  questionCount: number;
+  scale: QuestionnaireScaleOption[];
+};
 
 export function QuestionnairesWorkspace() {
   const [stubs, setStubs] = useState<QuestionnaireDefinitionStub[]>([]);
@@ -586,6 +609,31 @@ export function QuestionnairesWorkspace() {
   const selectedStub =
     stubs.find((s) => s.id === selectedKey && s.version === selectedVersion) ??
     stubs.find((s) => s.id === selectedKey);
+  const scaleGroups = useMemo<ScaleGroup[]>(() => {
+    if (!currentDefinition) return [];
+
+    const groups = new Map<string, ScaleGroup>();
+    currentDefinition.schema.sections.forEach((section) => {
+      section.questions.forEach((question) => {
+        if (!question.scale?.length) return;
+        const key = `${question.type}:${scaleSignature(question.scale)}`;
+        const existing = groups.get(key);
+        if (existing) {
+          existing.questionCount += 1;
+          return;
+        }
+        groups.set(key, {
+          key,
+          type: question.type,
+          title: question.scale.map((option) => option.label).join(" / "),
+          questionCount: 1,
+          scale: cloneScale(question.scale),
+        });
+      });
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.questionCount - a.questionCount);
+  }, [currentDefinition]);
   const canDeleteSelected = !!selectedKey;
   const isSaving = saveState === "saving";
   const isEditorLoading = isDefinitionLoading && !currentDefinition;
@@ -599,6 +647,31 @@ export function QuestionnairesWorkspace() {
           : isDirty
             ? "Modificări nesalvate"
             : null;
+
+  const handleUpdateScaleGroup = (
+    group: ScaleGroup,
+    updater: (scale: QuestionnaireScaleOption[]) => QuestionnaireScaleOption[],
+  ) => {
+    const previousSignature = scaleSignature(group.scale);
+    updateDefinitionDraft((definition) => ({
+      ...definition,
+      schema: {
+        ...definition.schema,
+        sections: definition.schema.sections.map((section) => ({
+          ...section,
+          questions: section.questions.map((question) => {
+            if (question.type !== group.type || scaleSignature(question.scale) !== previousSignature) {
+              return question;
+            }
+            return {
+              ...question,
+              scale: updater(cloneScale(group.scale)),
+            };
+          }),
+        })),
+      },
+    }));
+  };
 
   return (
     <div className="space-y-6">
@@ -827,6 +900,100 @@ export function QuestionnairesWorkspace() {
               />
             </div>
 
+            {scaleGroups.length > 0 ? (
+              <section className="rounded-xl border border-[var(--border)] bg-background p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">Scări globale de răspuns</h3>
+                    <p className="mt-1 max-w-2xl text-xs leading-5 text-foreground/52">
+                      Editează aici opțiunile folosite în mai multe întrebări. Modificările se aplică tuturor
+                      întrebărilor care au exact aceeași scară.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[var(--border)] bg-surface-muted px-2.5 py-1 text-[11px] font-bold text-foreground/55">
+                    {scaleGroups.length} {scaleGroups.length === 1 ? "scară" : "scări"}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {scaleGroups.map((group) => (
+                    <div key={group.key} className="rounded-lg border border-[var(--border)] bg-surface p-3">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-foreground">{group.title}</p>
+                          <p className="mt-0.5 text-[11px] font-semibold text-foreground/45">
+                            {group.questionCount} {group.questionCount === 1 ? "întrebare" : "întrebări"} ·{" "}
+                            {group.type === "statement_score_set" ? "set de afirmații" : "Likert"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleUpdateScaleGroup(group, (scale) => {
+                              const numericValues = scale
+                                .map((option) => option.value)
+                                .filter((value): value is number => typeof value === "number");
+                              const nextValue = numericValues.length > 0 ? Math.max(...numericValues) + 1 : 1;
+                              return [...scale, { value: nextValue, label: `Opțiune ${nextValue}` }];
+                            })
+                          }
+                          className="tap-soft rounded-lg border border-dashed border-[var(--border)] px-2.5 py-1 text-[11px] font-bold text-foreground/60 hover:border-burgundy/45 hover:text-burgundy"
+                        >
+                          + Adaugă opțiune
+                        </button>
+                      </div>
+                      <div className="grid gap-2">
+                        {group.scale.map((option, optionIndex) => (
+                          <div
+                            key={`${group.key}-${optionIndex}`}
+                            className="grid gap-2 rounded-lg border border-[var(--border)] bg-surface-muted px-2.5 py-2 text-xs md:grid-cols-[3rem_10rem_minmax(0,1fr)_2rem] md:items-center"
+                          >
+                            <span className="font-bold text-burgundy">{option.value}</span>
+                            <input
+                              type="text"
+                              value={option.label}
+                              onChange={(event) =>
+                                handleUpdateScaleGroup(group, (scale) => {
+                                  scale[optionIndex] = { ...scale[optionIndex], label: event.target.value };
+                                  return scale;
+                                })
+                              }
+                              className="rounded-md border border-[var(--border)] bg-background px-2 py-1 font-semibold text-foreground/75 focus:border-burgundy/45 focus:outline-none"
+                              placeholder="Etichetă"
+                            />
+                            <input
+                              type="text"
+                              value={option.description ?? ""}
+                              onChange={(event) =>
+                                handleUpdateScaleGroup(group, (scale) => {
+                                  scale[optionIndex] = {
+                                    ...scale[optionIndex],
+                                    description: event.target.value || undefined,
+                                  };
+                                  return scale;
+                                })
+                              }
+                              className="rounded-md border border-[var(--border)] bg-background px-2 py-1 font-medium text-foreground/70 focus:border-burgundy/45 focus:outline-none"
+                              placeholder="Descriere opțională"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateScaleGroup(group, (scale) => scale.filter((_, index) => index !== optionIndex))
+                              }
+                              className="text-foreground/40 hover:text-red-700 font-bold"
+                              aria-label={`Șterge opțiunea ${option.label}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             {/* Sections & Questions Editor */}
             <div className="space-y-5">
               <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
@@ -947,12 +1114,19 @@ export function QuestionnairesWorkspace() {
 
                           {/* Likert Scale configuration */}
                           <div className="border-t border-[var(--border)] pt-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-2">
-                              Opțiuni de răspuns (Scară de notare)
-                            </p>
-                            <div className="flex flex-wrap gap-2 items-center">
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">
+                                  Scară locală
+                                </p>
+                                <p className="mt-1 text-[11px] font-medium text-foreground/48">
+                                  Ajustează doar întrebarea curentă. Pentru o scară comună, folosește panoul global de mai sus.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid gap-2">
                               {question.scale.map((opt, optIndex) => (
-                                <div key={optIndex} className="flex items-center gap-1 bg-surface-muted rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs">
+                                <div key={optIndex} className="grid gap-2 rounded-lg border border-[var(--border)] bg-surface-muted px-2.5 py-2 text-xs md:grid-cols-[3rem_10rem_minmax(0,1fr)_2rem] md:items-center">
                                   <span className="font-bold text-burgundy">{opt.value}</span>
                                   <input
                                     type="text"
@@ -962,20 +1136,34 @@ export function QuestionnairesWorkspace() {
                                       newScale[optIndex] = { ...newScale[optIndex], label: e.target.value };
                                       handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                     }}
-                                    className="bg-transparent border-0 font-semibold p-0 w-24 text-foreground/75 focus:outline-none focus:ring-0 text-xs"
+                                    className="rounded-md border border-[var(--border)] bg-background px-2 py-1 font-semibold text-foreground/75 focus:border-burgundy/45 focus:outline-none text-xs"
+                                    placeholder="Etichetă"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={opt.description ?? ""}
+                                    onChange={(e) => {
+                                      const newScale = [...question.scale];
+                                      newScale[optIndex] = { ...newScale[optIndex], description: e.target.value || undefined };
+                                      handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
+                                    }}
+                                    className="rounded-md border border-[var(--border)] bg-background px-2 py-1 font-medium text-foreground/70 focus:border-burgundy/45 focus:outline-none text-xs"
+                                    placeholder="Descriere opțională pentru această opțiune"
                                   />
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       const newScale = question.scale.filter((_, i) => i !== optIndex);
                                       handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                     }}
-                                    className="text-foreground/40 hover:text-red-700 ml-1 font-bold"
+                                    className="text-foreground/40 hover:text-red-700 font-bold"
                                   >
                                     ×
                                   </button>
                                 </div>
                               ))}
                               <button
+                                type="button"
                                 onClick={() => {
                                   const numericValues = question.scale
                                     .map((option) => option.value)

@@ -820,499 +820,1167 @@ DISTRESS_DRIVERS_EN_DEFINITION = ApprovedQuestionnaireDefinition(
 )
 
 
-BOSS_360_DEFINITION = ApprovedQuestionnaireDefinition(
-    key=QuestionnaireKey.boss_360,
-    version=1,
-    title="Feedback 360 pentru manager",
-    description="Feedback comportamental pentru manager, din perspectiva proprie, a colegilor și a raportorilor direcți.",
-    schema={
-        "schema_version": "questionnaire.v1",
-        "response": {"mode": "person_feedback", "target": "person"},
-        "instructions": (
-            "Răspunde pentru persoana indicată în sarcină. Alege frecvența care "
-            "descrie cel mai bine comportamentul observat în activitatea curentă."
-        ),
-        "sections": [
-            {
-                "id": "manager_feedback",
-                "title": "Comportamente manageriale",
-                "questions": [
-                    _boss360_question(1, "Setează direcții clare și explică rațiunea deciziilor."),
-                    _boss360_question(2, "Ascultă activ și verifică înțelegerea înainte de a decide."),
-                    _boss360_question(3, "Oferă feedback concret, respectuos și util."),
-                    _boss360_question(4, "Delegă responsabilități cu așteptări și criterii clare."),
-                    _boss360_question(5, "Își asumă responsabilitatea pentru propriile decizii."),
-                    _boss360_question(6, "Încurajează colaborarea între oameni și echipe."),
-                    _boss360_question(7, "Gestionează tensiunile fără a evita conversațiile dificile."),
-                    _boss360_question(8, "Recunoaște contribuțiile și susține dezvoltarea oamenilor."),
-                ],
-            }
-        ],
-    },
-)
-
-
-ICARE_4_POINT_SCALE = [
-    {"value": 1, "label": "Rar"},
-    {"value": 2, "label": "Uneori"},
-    {"value": 3, "label": "Frecvent"},
-    {"value": 4, "label": "Întotdeauna"},
-]
-
-ICARE_4_POINT_SCALE_EN = [
-    {"value": 1, "label": "Rarely"},
-    {"value": 2, "label": "Sometimes"},
-    {"value": 3, "label": "Frequently"},
-    {"value": 4, "label": "Always"},
-]
-
-ICARE_DEFINITION = ApprovedQuestionnaireDefinition(
-    key=QuestionnaireKey.icare,
-    version=1,
-    title="Comportamente de leadership ICARE",
-    description=(
-        "Evaluare comportamentală pe atributele ICARE. Versiune provizorie cu scală în 4 trepte, "
-        "pregătită pentru ajustarea scalei finale."
-    ),
-    schema={
-        "schema_version": "questionnaire.v1",
-        "audience": "leadership",
-        "source": {
-            "type": "xlsx",
-            "path": "docs/questionnaires/ICARE_scala.xlsx",
-            "status": "provisional",
-        },
-        "instructions": (
-            "Alege frecvența care descrie cel mai bine comportamentul observat. "
-            "Scala curentă are 4 opțiuni și poate fi modificată fără rescrierea itemilor."
-        ),
-        "scoring": {
-            "scale_status": "provisional_4_point",
-            "source_columns_used": ["2; Rar / 25%", "3; Uneori / 50%", "4; Frecvent / 75%", "5; Întotdeauna / 100%"],
-            "source_column_excluded_for_now": "1; Niciodată / 0%",
-        },
-        "sections": [
-            {
-                "id": "inspiring",
-                "title": "Inspirație",
-                "questions": [
-                    {
-                        "id": "icare_inspiring_developing_people",
-                        "code": "ICARE-1.1",
-                        "type": "statement_score_set",
-                        "label": "Dezvoltarea oamenilor",
-                        "required": True,
-                        "instructions": "Dezvoltare continuă prin feedback constructiv, încurajare și follow-up.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_01", "code": "S1", "label": "Oferă feedback constructiv"},
-                            {"id": "icare_02", "code": "S2", "label": "Sprijină planurile de dezvoltare"},
-                            {"id": "icare_03", "code": "S3", "label": "Se implică în propria dezvoltare continuă"},
-                        ],
-                    },
-                    {
-                        "id": "icare_inspiring_leading_by_example",
-                        "code": "ICARE-1.2",
-                        "type": "statement_score_set",
-                        "label": "Conducere prin exemplu",
-                        "required": True,
-                        "instructions": "Aliniere între valori, angajamente și comportamentul zilnic.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_04", "code": "S1", "label": "Acționează conform valorilor declarate"},
-                            {"id": "icare_05", "code": "S2", "label": "Respectă angajamentele asumate față de echipă"},
-                            {"id": "icare_06", "code": "S3", "label": "Tratează toți membrii echipei cu respect și echitate"},
-                        ],
-                    },
-                    {
-                        "id": "icare_inspiring_engagement_environment",
-                        "code": "ICARE-1.3",
-                        "type": "statement_score_set",
-                        "label": "Crearea unui mediu care stimulează implicarea",
-                        "required": True,
-                        "instructions": "Mediu sigur, energizant și orientat către contribuția fiecărui membru.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_07", "code": "S1", "label": "Creează spațiu psihologic sigur pentru exprimare"},
-                            {"id": "icare_08", "code": "S2", "label": "Delegă cu sens, nu doar cu sarcini"},
-                            {"id": "icare_09", "code": "S3", "label": "Recunoaște contribuția individuală la succesul echipei"},
-                        ],
-                    },
-                ],
-            },
-            {
-                "id": "create_trust",
-                "title": "Construirea încrederii",
-                "questions": [
-                    {
-                        "id": "icare_trust_collaboration",
-                        "code": "ICARE-2.1",
-                        "type": "statement_score_set",
-                        "label": "Promotor al colaborării",
-                        "required": True,
-                        "instructions": "Transparență, colaborare și prioritizarea interesului comun.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_10", "code": "S1", "label": "Verifică înțelegerea comună după discuții"},
-                            {"id": "icare_11", "code": "S2", "label": "Împărtășește context și motivații proprii"},
-                            {"id": "icare_12", "code": "S3", "label": "Prioritizează interesul comun față de cel personal sau al echipei"},
-                        ],
-                    },
-                    {
-                        "id": "icare_trust_inspired",
-                        "code": "ICARE-2.2",
-                        "type": "statement_score_set",
-                        "label": "Inspirație împărtășită",
-                        "required": True,
-                        "instructions": "Sens, ambiție și angajament construite împreună cu echipa.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_13", "code": "S1", "label": "Conectează munca echipei la un scop mai larg"},
-                            {"id": "icare_14", "code": "S2", "label": "Co-construiește ambiții îndrăznețe cu echipa"},
-                            {"id": "icare_15", "code": "S3", "label": "Inspiră prin propriul nivel de angajament"},
-                        ],
-                    },
-                    {
-                        "id": "icare_trust_reality",
-                        "code": "ICARE-2.3",
-                        "type": "statement_score_set",
-                        "label": "Ancorare în realitate",
-                        "required": True,
-                        "instructions": "Ascultare activă, informații relevante și realism onest.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_16", "code": "S1", "label": "Ascultă activ înainte de a răspunde sau decide"},
-                            {"id": "icare_17", "code": "S2", "label": "Împărtășește informații relevante proactiv"},
-                            {"id": "icare_18", "code": "S3", "label": "Recunoaște faptele neplăcute cu onestitate"},
-                        ],
-                    },
-                    {
-                        "id": "icare_trust_illuminating",
-                        "code": "ICARE-2.4",
-                        "type": "statement_score_set",
-                        "label": "Clarificare",
-                        "required": True,
-                        "instructions": "Claritate strategică în contexte complexe și incerte.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_19", "code": "S1", "label": "Comunică strategia și direcția cu claritate"},
-                            {"id": "icare_20", "code": "S2", "label": "Oferă claritate în situații de ambiguitate"},
-                            {"id": "icare_21", "code": "S3", "label": "Acționează cu claritate în medii complexe și incerte"},
-                        ],
-                    },
-                ],
-            },
-            {
-                "id": "awareness",
-                "title": "Conștientizare",
-                "questions": [
-                    {
-                        "id": "icare_awareness_humility",
-                        "code": "ICARE-3.1",
-                        "type": "statement_score_set",
-                        "label": "Modestie",
-                        "required": True,
-                        "instructions": "Feedback, limite personale și integrarea perspectivelor diferite.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_22", "code": "S1", "label": "Solicită feedback despre propriul comportament"},
-                            {"id": "icare_23", "code": "S2", "label": "Știe când să ceară ajutor sau să admită că nu știe"},
-                            {"id": "icare_24", "code": "S3", "label": "Integrează perspectivele diferite de a sa în decizii"},
-                        ],
-                    },
-                    {
-                        "id": "icare_awareness_emotional_intelligence",
-                        "code": "ICARE-3.2",
-                        "type": "statement_score_set",
-                        "label": "Inteligență emoțională și situațională",
-                        "required": True,
-                        "instructions": "Autoreglare, interes autentic și adaptarea comunicării.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_25", "code": "S1", "label": "Recunoaște și gestionează propriile emoții în interacțiuni"},
-                            {"id": "icare_26", "code": "S2", "label": "Arată interes autentic față de oameni ca indivizi"},
-                            {"id": "icare_27", "code": "S3", "label": "Adaptează comunicarea la stilul și nevoile interlocutorului"},
-                        ],
-                    },
-                    {
-                        "id": "icare_awareness_open_world",
-                        "code": "ICARE-3.3",
-                        "type": "statement_score_set",
-                        "label": "Deschidere către lume",
-                        "required": True,
-                        "instructions": "Curiozitate, benchmarkuri externe și facilitarea schimbării.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_28", "code": "S1", "label": "Caută activ benchmarkuri și tendințe externe"},
-                            {"id": "icare_29", "code": "S2", "label": "Îmbrățișează și facilitează schimbarea"},
-                            {"id": "icare_30", "code": "S3", "label": "Explorează activ domenii adiacente sau noi tehnologii"},
-                        ],
-                    },
-                ],
-            },
-            {
-                "id": "results",
-                "title": "Rezultate",
-                "questions": [
-                    {
-                        "id": "icare_results_ambitious",
-                        "code": "ICARE-4.1",
-                        "type": "statement_score_set",
-                        "label": "Ambiție asumată pentru companie",
-                        "required": True,
-                        "instructions": "Inovație, asumarea riscului și învățare din performanță.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_31", "code": "S1", "label": "Propune soluții inovatoare și îndrăznețe"},
-                            {"id": "icare_32", "code": "S2", "label": "Promovează asumarea responsabilă a riscului"},
-                            {"id": "icare_33", "code": "S3", "label": "Urmărește performanța și învață din eșecuri"},
-                        ],
-                    },
-                    {
-                        "id": "icare_results_caring",
-                        "code": "ICARE-4.2",
-                        "type": "statement_score_set",
-                        "label": "Grijă egală pentru angajați și clienți",
-                        "required": True,
-                        "instructions": "Echilibru între performanță, bunăstarea echipei și standarde realiste.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_34", "code": "S1", "label": "Echilibrează presiunile de performanță cu bunăstarea echipei"},
-                            {"id": "icare_35", "code": "S2", "label": "Acordă atenție echilibrului muncă-viață al membrilor echipei"},
-                            {"id": "icare_36", "code": "S3", "label": "Construiește standarde înalte bazate pe înțelegerea realității"},
-                        ],
-                    },
-                    {
-                        "id": "icare_results_agility",
-                        "code": "ICARE-4.3",
-                        "type": "statement_score_set",
-                        "label": "Agilitate antreprenorială",
-                        "required": True,
-                        "instructions": "Testare rapidă, simplificare și conectarea rețelei externe la oportunități.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_37", "code": "S1", "label": "Testează și învață rapid (test & learn)"},
-                            {"id": "icare_38", "code": "S2", "label": "Livrează rezultate mai rapid prin simplificare și prioritizare"},
-                            {"id": "icare_39", "code": "S3", "label": "Conectează rețeaua externă la oportunități de business"},
-                        ],
-                    },
-                ],
-            },
-            {
-                "id": "empowerment",
-                "title": "Împuternicire",
-                "questions": [
-                    {
-                        "id": "icare_empowerment_decision_making",
-                        "code": "ICARE-5.1",
-                        "type": "statement_score_set",
-                        "label": "Decizie aproape de teren",
-                        "required": True,
-                        "instructions": "Autonomie, inițiativă și raportare transparentă.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_40", "code": "S1", "label": "Delegă autoritatea decizională la nivelul potrivit"},
-                            {"id": "icare_41", "code": "S2", "label": "Ia inițiativă și acționează fără să aștepte permisiunea"},
-                            {"id": "icare_42", "code": "S3", "label": "Setează obiective clare și raportează transparent rezultatele"},
-                        ],
-                    },
-                    {
-                        "id": "icare_empowerment_collective_intelligence",
-                        "code": "ICARE-5.2",
-                        "type": "statement_score_set",
-                        "label": "Cultivarea inteligenței colective",
-                        "required": True,
-                        "instructions": "Diversitate, co-construcție, decizii asumate și refuzul compromisului facil.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_43", "code": "S1", "label": "Susține decizia finală chiar dacă diferă de propria opinie"},
-                            {"id": "icare_44", "code": "S2", "label": "Caută și oferă sfaturi fără a impune soluții"},
-                            {"id": "icare_45", "code": "S3", "label": "Refuză compromisul sistematic în favoarea soluțiilor mai bune"},
-                        ],
-                    },
-                    {
-                        "id": "icare_empowerment_helping_team",
-                        "code": "ICARE-5.3",
-                        "type": "statement_score_set",
-                        "label": "Sprijinirea echipei",
-                        "required": True,
-                        "instructions": "Contribuție la dinamica echipei, deblocare și sharing de cunoaștere.",
-                        "scale": ICARE_4_POINT_SCALE,
-                        "statements": [
-                            {"id": "icare_46", "code": "S1", "label": "Alimentează dinamica și energia pozitivă a echipei"},
-                            {"id": "icare_47", "code": "S2", "label": "Facilitează deblocarea obstacolelor pentru colegii din echipă"},
-                            {"id": "icare_48", "code": "S3", "label": "Dezvoltă competențele echipei prin sharing de cunoaștere"},
-                        ],
-                    },
-                ],
-            },
-        ],
-    },
-)
-
-
-ICARE_SECTION_TITLES_EN = {
-    "inspiring": "Inspiring",
-    "create_trust": "Building Trust",
-    "awareness": "Awareness",
-    "results": "Results",
-    "empowerment": "Empowerment",
-}
-
-ICARE_QUESTION_COPY_EN = {
-    "icare_inspiring_developing_people": (
-        "Developing people",
-        "Continuous development through constructive feedback, encouragement, and follow-up.",
-    ),
-    "icare_inspiring_leading_by_example": (
-        "Leading by example",
-        "Alignment between values, commitments, and daily behavior.",
-    ),
-    "icare_inspiring_engagement_environment": (
-        "Creating an engaging environment",
-        "A safe, energizing environment oriented around each person's contribution.",
-    ),
-    "icare_trust_collaboration": (
-        "Promoting collaboration",
-        "Transparency, collaboration, and prioritizing the shared interest.",
-    ),
-    "icare_trust_inspired": (
-        "Shared inspiration",
-        "Meaning, ambition, and commitment built together with the team.",
-    ),
-    "icare_trust_reality": (
-        "Grounding in reality",
-        "Active listening, relevant information, and honest realism.",
-    ),
-    "icare_trust_illuminating": (
-        "Clarifying",
-        "Strategic clarity in complex and uncertain contexts.",
-    ),
-    "icare_awareness_humility": (
-        "Humility",
-        "Feedback, personal limits, and integrating perspectives different from one's own.",
-    ),
-    "icare_awareness_emotional_intelligence": (
-        "Emotional intelligence",
-        "Self-regulation, genuine interest in people, and adaptive communication.",
-    ),
-    "icare_awareness_open_world": (
-        "Openness to the world",
-        "External benchmarks, change, adjacent domains, and new technologies.",
-    ),
-    "icare_results_ambitious": (
-        "Ambition owned for the company",
-        "Innovation, responsible risk-taking, and learning from performance.",
-    ),
-    "icare_results_caring": (
-        "Equal care for employees and customers",
-        "Balance between performance, team wellbeing, and realistic standards.",
-    ),
-    "icare_results_agility": (
-        "Entrepreneurial agility",
-        "Rapid testing, simplification, and connecting the external network to opportunities.",
-    ),
-    "icare_empowerment_decision_making": (
-        "Decision-making close to the field",
-        "Autonomy, initiative, and transparent reporting.",
-    ),
-    "icare_empowerment_collective_intelligence": (
-        "Cultivating collective intelligence",
-        "Diversity, co-construction, committed decisions, and refusing easy compromise.",
-    ),
-    "icare_empowerment_helping_team": (
-        "Supporting the team",
-        "Contribution to team dynamics, unblocking others, and knowledge sharing.",
-    ),
-}
-
-ICARE_STATEMENT_LABELS_EN = {
-    "icare_01": "Gives constructive feedback",
-    "icare_02": "Supports development plans",
-    "icare_03": "Invests in their own continuous development",
-    "icare_04": "Acts in line with stated values",
-    "icare_05": "Honors commitments made to the team",
-    "icare_06": "Treats all team members with respect and fairness",
-    "icare_07": "Creates psychologically safe space for speaking up",
-    "icare_08": "Delegates with meaning, not just tasks",
-    "icare_09": "Recognizes individual contribution to team success",
-    "icare_10": "Checks shared understanding after discussions",
-    "icare_11": "Shares their own context and motivations",
-    "icare_12": "Prioritizes the shared interest over personal or local-team interest",
-    "icare_13": "Connects the team's work to a broader purpose",
-    "icare_14": "Co-creates bold ambitions with the team",
-    "icare_15": "Inspires through their own level of commitment",
-    "icare_16": "Listens actively before responding or deciding",
-    "icare_17": "Proactively shares relevant information",
-    "icare_18": "Acknowledges uncomfortable facts honestly",
-    "icare_19": "Communicates strategy and direction clearly",
-    "icare_20": "Provides clarity in ambiguous situations",
-    "icare_21": "Acts with clarity in complex and uncertain environments",
-    "icare_22": "Asks for feedback about their own behavior",
-    "icare_23": "Knows when to ask for help or admit they do not know",
-    "icare_24": "Integrates perspectives different from their own into decisions",
-    "icare_25": "Recognizes and manages their own emotions in interactions",
-    "icare_26": "Shows genuine interest in people as individuals",
-    "icare_27": "Adapts communication to the other person's style and needs",
-    "icare_28": "Actively looks for external benchmarks and trends",
-    "icare_29": "Embraces and facilitates change",
-    "icare_30": "Actively explores adjacent domains or new technologies",
-    "icare_31": "Proposes innovative and bold solutions",
-    "icare_32": "Promotes responsible risk-taking",
-    "icare_33": "Tracks performance and learns from failure",
-    "icare_34": "Balances performance pressure with team wellbeing",
-    "icare_35": "Pays attention to team members' work-life balance",
-    "icare_36": "Builds high standards grounded in reality",
-    "icare_37": "Tests and learns quickly",
-    "icare_38": "Delivers results faster through simplification and prioritization",
-    "icare_39": "Connects the external network to business opportunities",
-    "icare_40": "Delegates decision authority to the right level",
-    "icare_41": "Takes initiative and acts without waiting for permission",
-    "icare_42": "Sets clear objectives and reports results transparently",
-    "icare_43": "Supports the final decision even when it differs from their own opinion",
-    "icare_44": "Seeks and offers advice without imposing solutions",
-    "icare_45": "Rejects systematic compromise in favor of better solutions",
-    "icare_46": "Feeds the team's positive dynamics and energy",
-    "icare_47": "Helps unblock obstacles for colleagues in the team",
-    "icare_48": "Develops team capability through knowledge sharing",
-}
+ICARE_SOURCE_SECTIONS = [{'id': 'inspiring',
+  'title': 'Inspiră (Inspiring)',
+  'questions': [{'id': 'icare_01_dezvolta_oamenii',
+                 'code': 'ICARE-1',
+                 'type': 'statement_score_set',
+                 'label': 'Dezvoltă oamenii',
+                 'required': True,
+                 'instructions': 'Ne asigurăm de dezvoltarea continuă a noastră, a colegilor și a '
+                                 'echipelor. Facem asta printr-un angajament personal față de '
+                                 'dezvoltare, prin feedback continuu, onest și constructiv. Lăudăm '
+                                 'și încurajăm progresul și reușitele.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_01',
+                                 'code': 'S1',
+                                 'label': 'Oferă feedback constructiv',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu oferă feedback sau îl evită '
+                                                           'complet.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Oferă feedback rar, doar când i se '
+                                                           'cere.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Oferă feedback destul de des, dar vag, '
+                                                           'fără exemple concrete.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Oferă feedback regulat, cu exemple '
+                                                           'concrete și pe un ton constructiv.'}]},
+                                {'id': 'icare_02',
+                                 'code': 'S2',
+                                 'label': 'Sprijină planurile de dezvoltare',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu face sesiuni de coaching sau '
+                                                           'mentoring prin care să își ajute '
+                                                           'colegii să crească.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'A făcut una sau două sesiuni în care a '
+                                                           'ghidat un coleg să ia decizii sau să '
+                                                           'se dezvolte.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Are conversații despre dezvoltare și '
+                                                           'propune resurse sau oportunități '
+                                                           'concrete care îi ajută pe oameni să '
+                                                           'crească.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Face împreună cu oamenii planuri de '
+                                                           'dezvoltare personalizate, alocă timp '
+                                                           'pentru mentoring și verifică periodic '
+                                                           'progresul.'}]},
+                                {'id': 'icare_03',
+                                 'code': 'S3',
+                                 'label': 'Se implică în propria dezvoltare continuă',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu caută să învețe lucruri noi.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Participă la training-urile '
+                                                           'obligatorii, dar nu aplică ce învață.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Caută destul de des să se '
+                                                           'îmbunătățească, dar fără un plan '
+                                                           'clar.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Caută activ feedback și ocazii de '
+                                                           'învățare și aplică ce învață.'}]}]},
+                {'id': 'icare_02_conduce_prin_puterea_exemplului',
+                 'code': 'ICARE-2',
+                 'type': 'statement_score_set',
+                 'label': 'Conduce prin puterea exemplului',
+                 'required': True,
+                 'instructions': 'Oferim constant un exemplu de autenticitate și sinceritate. Ne '
+                                 'aliniem faptele cu vorbele.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_04',
+                                 'code': 'S1',
+                                 'label': 'Acționează conform valorilor declarate',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Spune una și face alta.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acționează conform valorilor doar când '
+                                                           'este observat.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'De cele mai multe ori faptele se '
+                                                           'potrivesc cu vorbele, cu unele '
+                                                           'excepții.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Vorbele și faptele se potrivesc '
+                                                           'constant; există exemple concrete care '
+                                                           'arată asta.'}]},
+                                {'id': 'icare_05',
+                                 'code': 'S2',
+                                 'label': 'Respectă angajamentele asumate față de echipă',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Ratează frecvent termene sau '
+                                                           'promisiuni față de echipă, fără să '
+                                                           'anunțe.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Își respectă angajamentele doar când i '
+                                                           'se reamintește sau anunță târziu că nu '
+                                                           'a reușit.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Își respectă angajamentele în general, '
+                                                           'dar excepțiile le comunică târziu.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Își respectă angajamentele, iar dacă '
+                                                           'ceva se schimbă, anunță din timp.'}]},
+                                {'id': 'icare_06',
+                                 'code': 'S3',
+                                 'label': 'Tratează toți membrii echipei cu respect și echitate',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Se poartă vizibil diferit cu oamenii, '
+                                                           'în funcție de poziția lor în companie '
+                                                           'și de preferințele sale.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Se poartă într-un fel în ședințe și în '
+                                                           'alt fel în discuțiile private.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Tratează oamenii echitabil în general, '
+                                                           'cu excepții rare.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Tratează toți oamenii cu respect, '
+                                                           'indiferent de nivel sau context.'}]}]},
+                {'id': 'icare_03_creeaza_un_mediu_care_stimuleaza_implicarea',
+                 'code': 'ICARE-3',
+                 'type': 'statement_score_set',
+                 'label': 'Creează un mediu care stimulează implicarea',
+                 'required': True,
+                 'instructions': 'Construim împreună un mediu care stimulează implicarea, '
+                                 'încurajează asumarea de riscuri și ne eliberează energiile.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_07',
+                                 'code': 'S1',
+                                 'label': 'Creează spațiu psihologic sigur pentru exprimare',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Critică, ignoră sau ridiculizează '
+                                                           'opiniile diferite de ale sale.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Nu descurajează exprimarea, dar nici '
+                                                           'nu o încurajează.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Invită oamenii să-și spună părerea, '
+                                                           'dar mai ales în cadru formal.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Încurajează constant oamenii să '
+                                                           'vorbească deschis și primește bine '
+                                                           'opiniile contrare.'}]},
+                                {'id': 'icare_08',
+                                 'code': 'S2',
+                                 'label': 'Delegă cu sens, nu doar cu sarcini',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Dă sarcini fără context; echipa '
+                                                           'execută fără să înțeleagă de ce.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Explică pe scurt ce trebuie făcut, dar '
+                                                           'nu și de ce.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Oferă deseori context la delegare, dar '
+                                                           'nu de fiecare dată.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Delegă explicând scopul, așteptările '
+                                                           'și cât de multă autonomie are '
+                                                           'persoana.'}]},
+                                {'id': 'icare_09',
+                                 'code': 'S3',
+                                 'label': 'Recunoaște contribuția individuală la succesul echipei',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Succesul e prezentat ca al lui sau al '
+                                                           'conducerii; oamenii care au muncit nu '
+                                                           'sunt menționați.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Recunoaște contribuțiile individuale '
+                                                           'doar la evaluările formale.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Laudă deseori oamenii, dar la modul '
+                                                           'general („bravo tuturor”), nu pe '
+                                                           'fiecare pentru ce a făcut.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Recunoaște regulat și concret '
+                                                           'contribuția fiecăruia la rezultatul '
+                                                           'echipei.'}]}]}]},
+ {'id': 'create_trust',
+  'title': 'Construiește încredere (Create Trust)',
+  'questions': [{'id': 'icare_04_promotor_al_colaborarii',
+                 'code': 'ICARE-4',
+                 'type': 'statement_score_set',
+                 'label': 'Promotor al colaborării',
+                 'required': True,
+                 'instructions': 'Construim încredere prin transparență și prin înțelegerea clară '
+                                 'a contextului și motivațiilor celuilalt. Colaborăm activ cu '
+                                 'colegii, clienții, furnizorii și partenerii pentru rezultate '
+                                 'durabile. Interesul companiei trece înaintea celui individual și '
+                                 'al propriei echipe.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_10',
+                                 'code': 'S1',
+                                 'label': 'Verifică înțelegerea comună după discuții',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Pleacă din discuții fără să verifice '
+                                                           'dacă toți au înțeles la fel.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Verifică înțelegerea doar când apar '
+                                                           'deja probleme.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Verifică deseori punctele cheie, dar '
+                                                           'nu constant.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Se asigură de fiecare dată că toți au '
+                                                           'înțeles la fel punctele importante.'}]},
+                                {'id': 'icare_11',
+                                 'code': 'S2',
+                                 'label': 'Împărtășește context și motivații proprii',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu explică niciodată motivele din '
+                                                           'spatele deciziilor sau priorităților '
+                                                           'sale.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Oferă context doar când este întrebat '
+                                                           'direct.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Explică deseori raționamentul '
+                                                           'deciziilor, mai ales la cele '
+                                                           'importante.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Explică mai mereu din proprie '
+                                                           'inițiativă contextul și motivele '
+                                                           'deciziilor sale.'}]},
+                                {'id': 'icare_12',
+                                 'code': 'S3',
+                                 'label': 'Prioritizează interesul comun față de cel personal sau '
+                                          'al echipei',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Ia decizii doar în beneficiul propriu '
+                                                           'sau al echipei sale.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Ține cont de interesul companiei doar '
+                                                           'când există presiune din afară.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Pune deseori interesul companiei pe '
+                                                           'primul loc, dar nu și în situațiile '
+                                                           'dificile.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Alege constant soluțiile bune pentru '
+                                                           'companie, chiar dacă sunt mai grele '
+                                                           'pentru echipa lui.'}]}]},
+                {'id': 'icare_05_ancorat_in_realitate',
+                 'code': 'ICARE-5',
+                 'type': 'statement_score_set',
+                 'label': 'Ancorat în realitate',
+                 'required': True,
+                 'instructions': 'Construim încredere ascultând activ, împărtășind informații și '
+                                 'lucrând împreună pe teren. Recunoaștem faptele cu onestitate și '
+                                 'modestie.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_13',
+                                 'code': 'S1',
+                                 'label': 'Ascultă activ înainte de a răspunde sau decide',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Întrerupe frecvent sau își pregătește '
+                                                           'răspunsul în timp ce celălalt '
+                                                           'vorbește.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Ascultă până la capăt, dar nu verifică '
+                                                           'dacă a înțeles corect.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Reformulează deseori ce a auzit, ca să '
+                                                           'verifice că a înțeles.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Ascultă fără să întrerupă, pune '
+                                                           'întrebări de clarificare și poate reda '
+                                                           'corect punctul de vedere al '
+                                                           'celuilalt.'}]},
+                                {'id': 'icare_14',
+                                 'code': 'S2',
+                                 'label': 'Împărtășește informații relevante proactiv',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Ține informațiile pentru el, '
+                                                           'intenționat sau din neglijență.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Dă informații doar când este întrebat '
+                                                           'direct.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Transmite deseori informațiile utile, '
+                                                           'dar nu are un obicei constant.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Transmite din timp informațiile '
+                                                           'relevante, astfel încât nimeni să nu '
+                                                           'fie luat prin surprindere.'}]},
+                                {'id': 'icare_15',
+                                 'code': 'S3',
+                                 'label': 'Recunoaște faptele neplăcute cu onestitate',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Evită sau minimizează problemele ca să '
+                                                           'păstreze aparențele.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Recunoaște problemele doar când nu mai '
+                                                           'pot fi evitate.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Vorbește deseori despre problemele '
+                                                           'reale, dar cu ezitare.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Numește problemele direct și la timp, '
+                                                           'fără să dramatizeze.'}]}]},
+                {'id': 'icare_06_aduce_claritate',
+                 'code': 'ICARE-6',
+                 'type': 'statement_score_set',
+                 'label': 'Aduce claritate',
+                 'required': True,
+                 'instructions': 'Ne ghidăm după scopul, valorile și strategia noastră, care ne '
+                                 'ajută să ne înțelegem și să ne aliniem echipele și organizația. '
+                                 'Acționăm cu ușurință într-un mediu complex și incert.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_16',
+                                 'code': 'S1',
+                                 'label': 'Comunică strategia și direcția cu claritate',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu vorbește cu echipa despre strategie '
+                                                           'sau direcție.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Transmite informații despre direcție '
+                                                           'doar când i se cere de sus.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Explică deseori direcția, dar mesajul '
+                                                           'nu e mereu coerent.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Comunică des și clar direcția și o '
+                                                           'leagă de munca de zi cu zi a '
+                                                           'echipei.'}]},
+                                {'id': 'icare_17',
+                                 'code': 'S2',
+                                 'label': 'Oferă claritate în situații de ambiguitate',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'În situații neclare transmite '
+                                                           'nesiguranță sau evită subiectul.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Recunoaște că situația e neclară, dar '
+                                                           'nu oferă o direcție de acțiune.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Oferă deseori claritate în situații '
+                                                           'ambigue, dar nu de fiecare dată.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Spune clar ce se știe, ce nu se știe '
+                                                           'și care sunt pașii următori.'}]},
+                                {'id': 'icare_18',
+                                 'code': 'S3',
+                                 'label': 'Acționează cu claritate în medii complexe și incerte',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'În situații complexe se blochează sau '
+                                                           'intră vizibil în panică.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acționează în incertitudine doar când '
+                                                           'nu are altă opțiune.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Se descurcă deseori în situații '
+                                                           'complexe, fără disconfort major.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Acționează calm și structurat în '
+                                                           'situații complexe și incerte.'}]}]}]},
+ {'id': 'awareness',
+  'title': 'Conștientizare (Awareness)',
+  'questions': [{'id': 'icare_07_modestie',
+                 'code': 'ICARE-7',
+                 'type': 'statement_score_set',
+                 'label': 'Modestie',
+                 'required': True,
+                 'instructions': 'O înțelegere onestă și vie a propriei persoane ne permite să ne '
+                                 'dezvoltăm abilitățile și comportamentele. Cerem regulat feedback '
+                                 'cu scopul de a ne îmbunătăți. Putem avea îndoieli, dar apoi '
+                                 'decidem și acționăm fără ezitare.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_19',
+                                 'code': 'S1',
+                                 'label': 'Solicită feedback despre propriul comportament',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu cere niciodată feedback și îl '
+                                                           'respinge când îl primește.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acceptă feedback dacă i se oferă, dar '
+                                                           'nu îl caută.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Cere feedback deseori, dar fără '
+                                                           'întrebări concrete și fără să revină '
+                                                           'asupra lui.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Cere regulat feedback de la colegi și '
+                                                           'superiori, cu întrebări concrete, și '
+                                                           'schimbă ceva în urma lui.'}]},
+                                {'id': 'icare_20',
+                                 'code': 'S2',
+                                 'label': 'Știe când să ceară ajutor sau să admită că nu știe',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu admite  că nu știe, chiar daca '
+                                                           'altii observa asta si ii spun; preferă '
+                                                           'să dea răspunsuri greșite.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Își recunoaște lacunele doar când le '
+                                                           'observă alții. '},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Recunoaște deseori că nu știe, dar '
+                                                           'preferă să se descurce singur.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Cere ajutor din timp atunci când '
+                                                           'subiectul îi depășește competența.'}]},
+                                {'id': 'icare_21',
+                                 'code': 'S3',
+                                 'label': 'Integrează perspectivele diferite de a sa în decizii',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Ignoră sau desconsideră părerile care '
+                                                           'îl contrazic.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Ascultă părerile diferite, dar rar le '
+                                                           'folosește în decizii.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Ține deseori cont de părerile altora, '
+                                                           'mai ales când sunt bine argumentate.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Caută activ păreri diferite înainte de '
+                                                           'deciziile importante și le '
+                                                           'folosește.'}]}]},
+                {'id': 'icare_08_inteligenta_emotionala_si_situationala',
+                 'code': 'ICARE-8',
+                 'type': 'statement_score_set',
+                 'label': 'Inteligență emoțională și situațională',
+                 'required': True,
+                 'instructions': 'Inteligența emoțională și situațională ne permite să înțelegem '
+                                 'și să ne adaptăm la oameni și situații diferite. Ne pasă sincer '
+                                 'unii de alții.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_22',
+                                 'code': 'S1',
+                                 'label': 'Recunoaște și gestionează propriile emoții în '
+                                          'interacțiuni',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Emoțiile lui afectează vizibil '
+                                                           'discuțiile: ton, reacții, decizii.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Se stăpânește la suprafață, dar sub '
+                                                           'presiune tensiunea răbufnește.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Își dă seama când e afectat emoțional '
+                                                           'și deseori reușește să se calmeze.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Își gestionează bine emoțiile, '
+                                                           'inclusiv sub presiune.'}]},
+                                {'id': 'icare_23',
+                                 'code': 'S2',
+                                 'label': 'Arată interes autentic față de oameni ca indivizi',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Discută doar despre sarcini, niciodată '
+                                                           'despre oameni.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Se interesează de oameni doar în cadru '
+                                                           'formal (evaluări, discuții 1-la-1).'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Se interesează deseori de contextul '
+                                                           'personal al colegilor.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Cunoaște oamenii din echipă și ține '
+                                                           'cont de situația fiecăruia; oamenii se '
+                                                           'simt tratați ca persoane, nu ca '
+                                                           'resurse.'}]},
+                                {'id': 'icare_24',
+                                 'code': 'S3',
+                                 'label': 'Adaptează comunicarea la stilul și nevoile '
+                                          'interlocutorului',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Comunică la fel cu toată lumea, '
+                                                           'indiferent de persoană sau situație.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Își adaptează comunicarea doar când '
+                                                           'are timp și nu e sub presiune.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Își adaptează deseori stilul în '
+                                                           'funcție de persoană.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Își adaptează constant tonul, ritmul '
+                                                           'și mesajul la omul din fața lui.'}]}]},
+                {'id': 'icare_09_deschis_catre_lume',
+                 'code': 'ICARE-9',
+                 'type': 'statement_score_set',
+                 'label': 'Deschis către lume',
+                 'required': True,
+                 'instructions': 'Suntem curioși să înțelegem lumea din jur și căutăm activ repere '
+                                 'externe, cu atenție specială la tot ce ține de digital și de '
+                                 'noile tehnologii. Încurajăm schimbarea și ne adaptăm la ea.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_25',
+                                 'code': 'S1',
+                                 'label': 'Caută activ benchmarkuri și tendințe externe',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu urmărește deloc ce se întâmplă în '
+                                                           'industrie sau în afara companiei.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Se uită la exemple din exterior doar '
+                                                           'când i le aduc alții.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Urmărește deseori tendințele din '
+                                                           'exterior, dar fără un obicei '
+                                                           'constant.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Urmărește constant tendințele '
+                                                           'relevante și le aduce în discuțiile cu '
+                                                           'echipa.'}]},
+                                {'id': 'icare_26',
+                                 'code': 'S2',
+                                 'label': 'Îmbrățișează și facilitează schimbarea',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Se opune schimbării și influențează '
+                                                           'negativ atitudinea echipei.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acceptă schimbarea când e impusă, fără '
+                                                           'să o susțină.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Acceptă schimbarea fără rezistență și '
+                                                           'deseori o susține.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Susține activ schimbarea și ajută '
+                                                           'echipa să treacă prin ea.'}]},
+                                {'id': 'icare_27',
+                                 'code': 'S3',
+                                 'label': 'Explorează activ domenii adiacente sau noi tehnologii',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu iese deloc din domeniul lui de '
+                                                           'expertiză.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Explorează lucruri noi doar când au '
+                                                           'legătură directă cu un proiect '
+                                                           'curent.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Explorează deseori subiecte noi din '
+                                                           'curiozitate, fără un scop anume.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Explorează constant domenii și '
+                                                           'tehnologii noi și aduce idei utile în '
+                                                           'echipă.'}]}]}]},
+ {'id': 'results',
+  'title': 'Rezultate (Results)',
+  'questions': [{'id': 'icare_10_ambitios_pentru_companie',
+                 'code': 'ICARE-10',
+                 'type': 'statement_score_set',
+                 'label': 'Ambițios pentru companie',
+                 'required': True,
+                 'instructions': 'Gândim la scară mare și suntem ambițioși pentru companie. '
+                                 'Promovăm activ asumarea de riscuri, inovația și soluțiile '
+                                 'îndrăznețe. Încurajăm schimbarea și vrem să fim în frunte. '
+                                 'Urmărim rezultate excelente și durabile. Ne facem timp să '
+                                 'evaluăm reușitele și să învățăm din eșecuri.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_28',
+                                 'code': 'S1',
+                                 'label': 'Propune soluții inovatoare și îndrăznețe',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu propune niciodată soluții noi; '
+                                                           'merge doar pe metode deja verificate.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Propune soluții noi doar când cele '
+                                                           'vechi au eșuat clar.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Propune  idei noi, dar cu reținere și '
+                                                           'fără să le susțină până la capăt.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Propune regulat soluții noi, le '
+                                                           'argumentează și e dispus să le '
+                                                           'testeze.'}]},
+                                {'id': 'icare_29',
+                                 'code': 'S2',
+                                 'label': 'Promovează asumarea responsabilă a riscului',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Descurajează orice asumare de risc, '
+                                                           'oricât de mică.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Tolerează riscurile asumate de alții, '
+                                                           'dar nu le susține.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Susține deseori asumarea de riscuri, '
+                                                           'dacă există o plasă de siguranță.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Încurajează riscurile calculate și '
+                                                           'tratează eșecul ca pe o ocazie de '
+                                                           'învățare.'}]},
+                                {'id': 'icare_30',
+                                 'code': 'S3',
+                                 'label': 'Urmărește performanța și învață din eșecuri',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu analizează eșecurile și nu învață '
+                                                           'nimic din ele.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Analizează eșecurile doar când îl '
+                                                           'obligă procesele companiei.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Face deseori retrospective, mai ales '
+                                                           'după eșecurile mari.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Face retrospective regulate, cu lecții '
+                                                           'clare și acțiuni de îmbunătățire.'}]}]},
+                {'id': 'icare_11_grija_egala_pentru_angajati_si_clienti',
+                 'code': 'ICARE-11',
+                 'type': 'statement_score_set',
+                 'label': 'Grijă egală pentru angajați și clienți',
+                 'required': True,
+                 'instructions': 'Credem cu tărie că satisfacția angajaților este temelia '
+                                 'satisfacției și loialității clienților. Avem standarde înalte, '
+                                 'bazate pe o bună înțelegere a mediului și a realității echipelor '
+                                 'din teren. Suntem atenți la echilibrul muncă–viață al fiecăruia.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_31',
+                                 'code': 'S1',
+                                 'label': 'Echilibrează presiunile de performanță cu bunăstarea '
+                                          'echipei',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Pune presiune de performanță fără să '
+                                                           'țină cont de starea echipei.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Se gândește la starea echipei doar '
+                                                           'când apare o problemă gravă (ex: '
+                                                           'burnout).'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Echilibrează deseori cerințele de '
+                                                           'performanță cu nevoile echipei.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Observă din timp semnele de '
+                                                           'suprasolicitare și ajustează sarcinile '
+                                                           'înainte să apară probleme.'}]},
+                                {'id': 'icare_32',
+                                 'code': 'S2',
+                                 'label': 'Acordă atenție echilibrului muncă-viață al membrilor '
+                                          'echipei',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Ignoră complet semnele de dezechilibru '
+                                                           'între muncă și viața personală.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Reacționează doar când dezechilibrul '
+                                                           'devine evident (absențe, demisii).'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Vorbește deseori despre importanța '
+                                                           'echilibrului, dar fără acțiuni '
+                                                           'concrete.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Discută regulat cu oamenii despre '
+                                                           'echilibru și ajustează sarcinile când '
+                                                           'e nevoie.'}]},
+                                {'id': 'icare_33',
+                                 'code': 'S3',
+                                 'label': 'Construiește standarde înalte bazate pe înțelegerea '
+                                          'realității',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Impune standarde rupte de realitatea '
+                                                           'echipei.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Stabilește standardele după cum i se '
+                                                           'pare lui rezonabil, fără să consulte '
+                                                           'echipa.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Consultă deseori echipa înainte să '
+                                                           'stabilească standardele.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Stabilește standarde ambițioase și '
+                                                           'realiste, bazate pe ce poate echipa cu '
+                                                           'adevărat.'}]}]},
+                {'id': 'icare_12_agilitate_antreprenoriala',
+                 'code': 'ICARE-12',
+                 'type': 'statement_score_set',
+                 'label': 'Agilitate antreprenorială',
+                 'required': True,
+                 'instructions': 'Lucrăm ca și cum am fi proprietarii companiei. Pentru că '
+                                 'interacționăm cu o rețea extinsă în interiorul și în afara '
+                                 'companiei, obținem rezultate mai rapide și mai bune, inclusiv '
+                                 'prin testare și învățare rapidă.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_34',
+                                 'code': 'S1',
+                                 'label': 'Testează și învață rapid (test & learn)',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Planifică la nesfârșit și evită '
+                                                           'testele rapide.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Testează doar când are mandat clar și '
+                                                           'timp suficient.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Testează deseori soluții noi, dar lent '
+                                                           'și nestructurat.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Testează rapid, măsoară rezultatele și '
+                                                           'ajustează din mers.'}]},
+                                {'id': 'icare_35',
+                                 'code': 'S2',
+                                 'label': 'Livrează rezultate mai rapid prin simplificare și '
+                                          'prioritizare',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Menține procese complicate; viteza nu '
+                                                           'e o prioritate.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Simplifică doar când vine presiune '
+                                                           'puternică din afară.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Găsește deseori ocazii de simplificare '
+                                                           'și le rezolvă.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Simplifică în mod constant procesele '
+                                                           'și elimină pașii care nu aduc '
+                                                           'valoare.'}]},
+                                {'id': 'icare_36',
+                                 'code': 'S3',
+                                 'label': 'Conectează rețeaua externă la oportunități de business',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu folosește deloc rețeaua externă ca '
+                                                           'sursă de oportunități.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Găsește oportunități în rețeaua '
+                                                           'externă doar întâmplător.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Caută deseori oportunități în rețeaua '
+                                                           'externă, când are un obiectiv clar.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Își construiește deliberat rețeaua și '
+                                                           'aduce din ea oportunități concrete de '
+                                                           'business.'}]}]}]},
+ {'id': 'empowerment',
+  'title': 'Responsabilizare (Empowerment)',
+  'questions': [{'id': 'icare_13_decizii_cat_mai_aproape_de_teren',
+                 'code': 'ICARE-13',
+                 'type': 'statement_score_set',
+                 'label': 'Decizii cât mai aproape de teren',
+                 'required': True,
+                 'instructions': 'Responsabilizarea reală a fiecăruia dintre noi și a echipelor '
+                                 'noastre face parte din felul în care lucrăm. Acționăm autonom, '
+                                 'luăm inițiativa și ne asumăm riscuri inteligente. Luăm deciziile '
+                                 'cât mai aproape de teren, ne stabilim obiective într-un cadru '
+                                 'clar și ne raportăm rezultatele.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_37',
+                                 'code': 'S1',
+                                 'label': 'Delegă autoritatea decizională la nivelul potrivit',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Toate deciziile trec prin el, '
+                                                           'indiferent cât de mici.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Delegă deciziile minore, dar păstrează '
+                                                           'controlul asupra majorității.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Delegă deseori deciziile operaționale, '
+                                                           'dar le păstrează pe cele importante.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Lasă deciziile la nivelul cel mai '
+                                                           'apropiat de realitate, cu reguli clare '
+                                                           'despre cine ce decide.'}]},
+                                {'id': 'icare_38',
+                                 'code': 'S2',
+                                 'label': 'Ia inițiativă și acționează fără să aștepte permisiunea',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Așteaptă aprobare pentru orice '
+                                                           'acțiune, chiar și pentru cele '
+                                                           'mărunte.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acționează fără aprobare doar în '
+                                                           'urgențe clare.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Ia deseori inițiativa, mai ales când '
+                                                           'riscul e mic.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Acționează din proprie inițiativă în '
+                                                           'aria lui de responsabilitate și '
+                                                           'raportează transparent ce a făcut.'}]},
+                                {'id': 'icare_39',
+                                 'code': 'S3',
+                                 'label': 'Setează obiective clare și raportează transparent '
+                                          'rezultatele',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Obiectivele sunt vagi sau lipsesc; '
+                                                           'rezultatele nu sunt raportate.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Stabilește obiective și raportează '
+                                                           'doar când i se cere.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Stabilește obiective clare, dar '
+                                                           'raportează mai ales veștile bune.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Stabilește obiective clare și '
+                                                           'raportează regulat, inclusiv când '
+                                                           'lucrurile merg prost.'}]}]},
+                {'id': 'icare_14_cultiva_inteligenta_colectiva',
+                 'code': 'ICARE-14',
+                 'type': 'statement_score_set',
+                 'label': 'Cultivă inteligența colectivă',
+                 'required': True,
+                 'instructions': 'Încurajăm diversitatea și cultivăm talentele complementare în '
+                                 'interiorul echipelor și între ele. Construim un spațiu sigur în '
+                                 'care fiecare poate vorbi deschis și este inclus. Putem fi în '
+                                 'dezacord într-un mod pozitiv și constructiv, iar odată decizia '
+                                 'luată, o susținem chiar dacă diferă de punctul nostru de vedere. '
+                                 'Construim soluții împreună, clarificăm procesele de decizie, '
+                                 'cerem sfaturi și refuzăm compromisul facil.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_40',
+                                 'code': 'S1',
+                                 'label': 'Susține decizia finală chiar dacă diferă de propria '
+                                          'opinie',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Sabotează sau subminează deciziile cu '
+                                                           'care nu e de acord.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acceptă deciziile, dar își exprimă '
+                                                           'dezacordul pe la colțuri.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Susține deseori deciziile, dar fără '
+                                                           'convingere vizibilă.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Susține deschis decizia finală chiar '
+                                                           'dacă a avut altă părere, și spune asta '
+                                                           'explicit.'}]},
+                                {'id': 'icare_41',
+                                 'code': 'S2',
+                                 'label': 'Caută și oferă sfaturi fără a impune soluții',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Impune soluțiile proprii și nu cere '
+                                                           'niciodată sfatul altora.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Cere sfaturi, dar le ignoră în decizia '
+                                                           'finală.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Cere deseori sfaturi, dar le folosește '
+                                                           'doar când îi convin.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Cere sfaturi din surse diverse și se '
+                                                           'vede în decizii că ține cont de '
+                                                           'ele.'}]},
+                                {'id': 'icare_42',
+                                 'code': 'S3',
+                                 'label': 'Refuză compromisul sistematic în favoarea soluțiilor '
+                                          'mai bune',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Merge mereu pe compromis ca să evite '
+                                                           'conflictul.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Acceptă compromisul ca soluție '
+                                                           'implicită când apare un dezacord.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Caută deseori soluții mai bune decât '
+                                                           'compromisul, dar cedează la presiune.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Insistă pe soluția care îndeplinește '
+                                                           'criteriile esențiale, nu pe '
+                                                           'compromisul care mulțumește pe toți '
+                                                           'câte puțin.'}]}]},
+                {'id': 'icare_15_ajuta_echipa',
+                 'code': 'ICARE-15',
+                 'type': 'statement_score_set',
+                 'label': 'Ajută echipa',
+                 'required': True,
+                 'instructions': 'Ne folosim abilitățile și talentele pentru a contribui la '
+                                 'rezultatele echipei. Ca să fim agili și să accelerăm progresul, '
+                                 'lăsăm decizia să fie luată la nivelul potrivit. Toți contribuim '
+                                 'activ la dinamica și dezvoltarea echipei.',
+                 'scale': [{'value': 1, 'label': '1'},
+                           {'value': 2, 'label': '2'},
+                           {'value': 3, 'label': '3'},
+                           {'value': 4, 'label': '4'}],
+                 'statements': [{'id': 'icare_43',
+                                 'code': 'S1',
+                                 'label': 'Alimentează dinamica și energia pozitivă a echipei',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Prezența lui scade energia echipei: '
+                                                           'negativism, critică, cinism.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Are o contribuție neutră la energia '
+                                                           'echipei.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Contribuie deseori la energia '
+                                                           'pozitivă, mai ales în momentele bune.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Aduce constant energie pozitivă; '
+                                                           'echipa îl vede ca pe un factor de '
+                                                           'motivare.'}]},
+                                {'id': 'icare_44',
+                                 'code': 'S2',
+                                 'label': 'Facilitează deblocarea obstacolelor pentru colegii din '
+                                          'echipă',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Nu se implică în problemele altora; '
+                                                           'fiecare se descurcă singur.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Ajută la deblocare doar când i se cere '
+                                                           'direct.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Ajută deseori când observă că cineva e '
+                                                           'blocat.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Urmărește activ progresul echipei și '
+                                                           'intervine din proprie inițiativă când '
+                                                           'apar blocaje.'}]},
+                                {'id': 'icare_45',
+                                 'code': 'S3',
+                                 'label': 'Dezvoltă competențele echipei prin sharing de '
+                                          'cunoaștere',
+                                 'scale': [{'value': 1,
+                                            'label': '1',
+                                            'description': 'Ține cunoștințele pentru el; nu le '
+                                                           'împarte cu echipa.'},
+                                           {'value': 2,
+                                            'label': '2',
+                                            'description': 'Împărtășește ce știe doar când i se '
+                                                           'cere explicit.'},
+                                           {'value': 3,
+                                            'label': '3',
+                                            'description': 'Face deseori sesiuni informale în care '
+                                                           'împărtășește ce știe.'},
+                                           {'value': 4,
+                                            'label': '4',
+                                            'description': 'Creează ocazii regulate de învățare '
+                                                           '(sesiuni, documentație, mentorat), ca '
+                                                           'expertiza lui să fie accesibilă '
+                                                           'tuturor.'}]}]}]}]
 
 
 def _boss_360_schema_from_icare(*, english: bool = False) -> DefinitionSchema:
-    schema = deepcopy(ICARE_DEFINITION.schema)
-    schema["audience"] = "participant"
-    schema["response"] = {"mode": "person_feedback", "target": "person"}
-    schema["scoring"] = {
-        "method": "average_statement_scores_by_section",
-        "scale_min": 1,
-        "scale_max": 4,
-        "score_min": 0,
-        "score_unit": "percent",
-        "primary_result": "lowest_dimension",
+    schema: DefinitionSchema = {
+        "schema_version": "questionnaire.v1",
+        "audience": "participant",
+        "source": {
+            "type": "xlsx",
+            "path": "docs/questionnaires/icare_360.xlsx",
+            "status": "approved",
+            "calculation_sheet": "Agregare 360",
+        },
+        "response": {"mode": "person_feedback", "target": "person"},
+        "instructions": (
+            "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele "
+            "iCARE observabile din perspectiva ta: autoevaluare, coleg manager sau raportor direct. "
+            "Opțiunile sunt propozițiile din materialul sursă; secțiunea N/A este ignorată în această versiune."
+        ),
+        "sections": deepcopy(ICARE_SOURCE_SECTIONS),
+        "scoring": {
+            "method": "average_statement_scores_by_section",
+            "scale_min": 1,
+            "scale_max": 4,
+            "score_min": 0,
+            "score_unit": "percent",
+            "primary_result": "lowest_dimension",
+            "source_sheet": "Agregare 360",
+        },
     }
-    schema["instructions"] = (
-        "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele "
-        "iCARE observabile din perspectiva ta: autoevaluare, coleg sau raportor direct."
-    )
-    if source := schema.get("source"):
-        source["status"] = "approved"
-
-    if not english:
-        return schema
-
-    schema["instructions"] = (
-        "Answer for the person named in the assignment. Evaluate observable iCARE "
-        "behaviors from your perspective: self-review, peer review, or direct-report feedback."
-    )
-    for section in schema["sections"]:
-        section["title"] = ICARE_SECTION_TITLES_EN.get(section["id"], section["title"])
-        for question in section["questions"]:
-            label, instructions = ICARE_QUESTION_COPY_EN[question["id"]]
-            question["label"] = label
-            question["instructions"] = instructions
-            question["scale"] = ICARE_4_POINT_SCALE_EN
-            for statement in question.get("statements", []):
-                statement["label"] = ICARE_STATEMENT_LABELS_EN[statement["id"]]
+    if english:
+        schema["instructions"] = (
+            "Answer for the person named in the assignment. The Romanian iCARE source "
+            "wording is the approved current questionnaire."
+        )
     return schema
 
 
@@ -1332,10 +2000,7 @@ BOSS_360_EN_DEFINITION = ApprovedQuestionnaireDefinition(
     key=QuestionnaireKey.boss_360_en,
     version=1,
     title="iCARE 360 Feedback for Manager",
-    description=(
-        "iCARE behavioral feedback for a manager from self, manager peers, "
-        "and direct reports."
-    ),
+    description="Compatibility alias; new projects use the Romanian source-backed iCARE/360 definition.",
     schema=_boss_360_schema_from_icare(english=True),
 )
 

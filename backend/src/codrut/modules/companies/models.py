@@ -76,6 +76,7 @@ class CompanyProject(TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    project_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[CompanyProjectStatus] = mapped_column(
         Enum(CompanyProjectStatus),
         nullable=False,
@@ -83,6 +84,8 @@ class CompanyProject(TimestampMixin, Base):
     )
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    form_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    form_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     company: Mapped[Company] = relationship(back_populates="projects")
 

@@ -50,9 +50,12 @@ export type CompanyProject = {
   company_name?: string;
   name: string;
   description: string | null;
+  project_type: string | null;
   status: CompanyProjectStatus;
   starts_at: string | null;
   due_at: string | null;
+  form_opens_at: string | null;
+  form_closes_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -60,9 +63,12 @@ export type CompanyProject = {
 export type CompanyProjectPayload = {
   name?: string;
   description?: string | null;
+  projectType?: string | null;
   status?: CompanyProjectStatus;
   startsAt?: string | null;
   dueAt?: string | null;
+  formOpensAt?: string | null;
+  formClosesAt?: string | null;
 };
 
 export type CompanyAssignment = {
@@ -932,8 +938,11 @@ function projectPayloadToApi(payload: CompanyProjectPayload) {
   const body: Record<string, string | null> = {};
   if ("name" in payload) body.name = payload.name ?? "";
   if ("description" in payload) body.description = payload.description ?? null;
+  if ("projectType" in payload) body.project_type = payload.projectType ?? null;
   if ("status" in payload) body.status = payload.status ?? "draft";
   if ("startsAt" in payload) body.starts_at = payload.startsAt ?? null;
   if ("dueAt" in payload) body.due_at = payload.dueAt ?? null;
+  if ("formOpensAt" in payload) body.form_opens_at = payload.formOpensAt ?? null;
+  if ("formClosesAt" in payload) body.form_closes_at = payload.formClosesAt ?? null;
   return body;
 }

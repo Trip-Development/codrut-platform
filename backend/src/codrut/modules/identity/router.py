@@ -8,6 +8,7 @@ from codrut.api.dependencies import current_principal, db_session
 from codrut.core.config import get_settings
 from codrut.modules.identity.schemas import (
     AuthResponse,
+    ConsentRequest,
     InviteVerifyResponse,
     LoginRequest,
     RegisterRequest,
@@ -53,6 +54,17 @@ async def login(
     await session.commit()
     _set_session_cookie(response, result.session_token)
     return result.response
+
+
+@router.post("/consent", response_model=AuthResponse)
+async def consent(
+    payload: ConsentRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AuthResponse:
+    result = await IdentityService(session).accept_terms(principal.user_id, payload)
+    await session.commit()
+    return result
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

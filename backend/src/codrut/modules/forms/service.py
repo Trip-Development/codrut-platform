@@ -203,6 +203,11 @@ class FormsService:
             assignment.questionnaire_key,
         )
         response = await repository.get_response_by_assignment(assignment_id)
+        if response is not None and response.status == QuestionnaireResponseStatus.submitted:
+            raise DomainError(
+                "Submitted responses are locked. Ask the trainer to reopen this assignment.",
+                code="response_locked",
+            )
         if submit:
             _validate_submit_answers(definition.schema, payload.answers)
         if response is None:
