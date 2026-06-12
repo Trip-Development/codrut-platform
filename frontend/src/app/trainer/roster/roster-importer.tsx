@@ -43,11 +43,11 @@ const FIELD_LABELS: Record<DbField, string> = {
 };
 
 const FIELD_ALIASES: Record<DbField, string[]> = {
-  full_name: ["name", "nume", "full name", "nume complet", "participant", "client"],
+  full_name: ["name", "nume", "full name", "nume complet", "participant", "client", "nume si prenume", "nume participant"],
   email: ["email", "e-mail", "mail", "adresa email", "adresa de email"],
-  reports_to_name: ["reports to", "reports_to", "manager", "reports_to_name", "sefi", "boss"],
-  position: ["position", "role", "rol", "pozitie", "functie", "job title"],
-  location: ["location", "locatie", "oras", "city"],
+  reports_to_name: ["reports to", "reports_to", "manager", "reports_to_name", "sefi", "boss", "raporteaza catre", "manager direct"],
+  position: ["position", "role", "rol", "pozitie", "functie", "job title", "post", "titlu"],
+  location: ["location", "locatie", "oras", "city", "site", "punct lucru"],
   pcm_profile: [],
   pcm_base: [],
   pcm_phase: [],
@@ -71,6 +71,8 @@ const PCM_DISPLAY_BY_VALUE: Record<string, string> = {
   rebel: "Rebel",
 };
 
+const LEGEND_ROW_LABELS = new Set(["legend", "base", "base & phase", "base si phase", "base and phase", "phase", "stage"]);
+
 function normalizeHeader(value: string): string {
   return value
     .normalize("NFD")
@@ -78,6 +80,44 @@ function normalizeHeader(value: string): string {
     .toLowerCase()
     .replace(/[()]/g, "")
     .trim();
+}
+
+function buildRosterHeaders(headerRow: unknown[], rows: unknown[][]): string[] {
+  const maxCols = Math.max(headerRow.length, ...rows.map((row) => row.length));
+  const headers: string[] = [];
+  let pcmMatrixColumnCount = 0;
+  let afterPcmProfile = false;
+
+  for (let colIdx = 0; colIdx < maxCols; colIdx += 1) {
+    const rawHeader = String(headerRow[colIdx] ?? "").trim();
+    if (rawHeader) {
+      headers.push(rawHeader);
+      afterPcmProfile = normalizeHeader(rawHeader) === "profil pcm";
+      continue;
+    }
+
+    if (afterPcmProfile) {
+      pcmMatrixColumnCount += 1;
+      headers.push(`PCM ${pcmMatrixColumnCount}`);
+    } else {
+      headers.push(`Coloana ${colIdx + 1}`);
+    }
+  }
+
+  return headers;
+}
+
+function isLegendOnlyRow(row: unknown[], headers: string[]): boolean {
+  const nameIndex = headers.findIndex((header) => ["name", "nume", "nume complet"].includes(normalizeHeader(header)));
+  const emailIndex = headers.findIndex((header) => ["email", "e-mail", "mail", "adresa email", "adresa de email"].includes(normalizeHeader(header)));
+  const firstCell = normalizeHeader(String(row[0] ?? ""));
+  const hasName = nameIndex >= 0 && String(row[nameIndex] ?? "").trim().length > 0;
+  const hasEmail = emailIndex >= 0 && String(row[emailIndex] ?? "").trim().length > 0;
+
+  if (firstCell && LEGEND_ROW_LABELS.has(firstCell)) return true;
+  if (hasName || hasEmail) return false;
+
+  return row.some((cell) => LEGEND_ROW_LABELS.has(normalizeHeader(String(cell ?? ""))));
 }
 
 function inferPcmFromMatrix(
@@ -231,39 +271,48 @@ export function RosterImporter({
           return;
         }
 
-        let rawHeaders = rawSheetData[0].map((h) => String(h).trim()).filter(Boolean);
+        let rawHeaders = buildRosterHeaders(rawSheetData[0], rawSheetData.slice(1));
         let dataRows = rawSheetData.slice(1);
+        let firstDataSheetRowIndex = 1;
         const startsWithPcmTitle =
-          rawHeaders.length <= 1 && normalizeHeader(rawHeaders[0] ?? "") === "profil pcm";
+          rawHeaders.filter((header) => !header.startsWith("Coloana ")).length <= 1 && normalizeHeader(rawHeaders[0] ?? "") === "profil pcm";
         if (startsWithPcmTitle) {
-          const possibleHeaders = rawSheetData[1]?.map((h) => String(h).trim()) ?? [];
+          const possibleHeaders = buildRosterHeaders(rawSheetData[1] ?? [], rawSheetData.slice(2));
           const hasRosterHeader = possibleHeaders.some((header) =>
             ["email", "e-mail", "mail", "name", "nume"].includes(normalizeHeader(header)),
           );
           if (hasRosterHeader) {
-            rawHeaders = possibleHeaders.filter(Boolean);
+            rawHeaders = possibleHeaders;
             dataRows = rawSheetData.slice(2);
+            firstDataSheetRowIndex = 2;
           } else {
             rawHeaders = ["Name", "PCM 1", "PCM 2", "PCM 3", "PCM 4", "PCM 5", "PCM 6"];
             dataRows = rawSheetData.slice(1);
+            firstDataSheetRowIndex = 1;
           }
         }
 
         // Convert rows to key-value objects
-        const objects: Record<string, string>[] = dataRows
-          .map((row, rowOffset) => {
-            const obj: Record<string, string> = {};
-            rawHeaders.forEach((header, colIdx) => {
-              obj[header] = row[colIdx] !== undefined ? String(row[colIdx]).trim() : "";
-            });
-            const pcmFromMatrix = inferPcmFromMatrix(worksheet, rawHeaders, row, rowOffset + 1);
-            if (pcmFromMatrix.base) obj["PCM Bază"] = pcmFromMatrix.base;
-            if (pcmFromMatrix.phase) obj["PCM Fază"] = pcmFromMatrix.phase;
-            // Only keep rows that have some content
-            const hasContent = Object.values(obj).some((val) => val.length > 0);
-            return hasContent ? obj : null;
-          })
-          .filter((row): row is Record<string, string> => row !== null);
+        const objects: Record<string, string>[] = [];
+        for (let rowOffset = 0; rowOffset < dataRows.length; rowOffset += 1) {
+          const row = dataRows[rowOffset];
+          if (isLegendOnlyRow(row, rawHeaders)) {
+            continue;
+          }
+
+          const obj: Record<string, string> = {};
+          rawHeaders.forEach((header, colIdx) => {
+            obj[header] = row[colIdx] !== undefined ? String(row[colIdx]).trim() : "";
+          });
+          const pcmFromMatrix = inferPcmFromMatrix(worksheet, rawHeaders, row, firstDataSheetRowIndex + rowOffset);
+          if (pcmFromMatrix.base) obj["PCM Bază"] = pcmFromMatrix.base;
+          if (pcmFromMatrix.phase) obj["PCM Fază"] = pcmFromMatrix.phase;
+          // Only keep rows that have some content
+          const hasContent = Object.values(obj).some((val) => val.length > 0);
+          if (hasContent) {
+            objects.push(obj);
+          }
+        }
 
         if (objects.length === 0) {
           setImportState({ status: "error", message: "Nu s-au găsit date valide sub rândul de antet." });
@@ -288,8 +337,12 @@ export function RosterImporter({
 
         MAPPING_FIELDS.forEach((field) => {
           const aliases = FIELD_ALIASES[field];
-          const matchedHeader = derivedHeaders.find((h) =>
-            aliases.some((alias) => h.toLowerCase() === alias.toLowerCase() || h.toLowerCase().includes(alias.toLowerCase()))
+          const matchedHeader = derivedHeaders.find((header) =>
+            aliases.some((alias) => {
+              const normalizedHeader = normalizeHeader(header).replace(/[_/.-]+/g, " ");
+              const normalizedAlias = normalizeHeader(alias).replace(/[_/.-]+/g, " ");
+              return normalizedHeader === normalizedAlias || normalizedHeader.includes(normalizedAlias);
+            })
           );
           if (matchedHeader) {
             detectedMappings[field] = matchedHeader;
