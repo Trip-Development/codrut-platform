@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token, verify_password
+from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.identity.models import (
     SHADOW_ACCOUNT_PASSWORD_HASH,
     AssignmentInvite,
@@ -52,22 +53,16 @@ def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
             "Identifică driverii care apar cel mai des în context de presiune.",
             10,
         )
-    if questionnaire_key in {"boss_360", "boss_360_en", "icare"}:
+    if questionnaire_key in {"boss_360", "icare"}:
         return (
-            "Feedback 360 iCARE",
+            "iCARE 360 pentru manager",
             "Oferă feedback pentru managerul indicat în această sarcină.",
             20,
         )
     if questionnaire_key == "pcm_base":
         return (
-            "Baza ta PCM",
-            "Confirmă baza ta PCM pentru profilul de participant.",
-            2,
-        )
-    if questionnaire_key == "phase":
-        return (
-            "Faza ta PCM",
-            "Confirmă faza PCM curentă pentru profilul de participant.",
+            "Baza și faza ta PCM",
+            "Confirmă baza și faza PCM pentru profilul tău de participant.",
             2,
         )
     return ("Chestionar", "Completează formularul atribuit.", 10)
@@ -180,6 +175,9 @@ class IdentityService:
                 "Task link does not match respondent scope.",
                 code="task_link_scope_mismatch",
             )
+        if not profile.anonymous_name:
+            profile.anonymous_name = new_anonymous_name()
+            await self.repository.session.flush()
 
         company_result = await self.repository.session.execute(
             select(Company).where(Company.id == claims.company_id)
@@ -264,7 +262,7 @@ class IdentityService:
                     title=title,
                     status=task_status,
                     detail=detail,
-                    href=f"/participant/questionnaires/{ass.questionnaire_key}?assignmentId={ass.id}",
+                    href=f"/participant/questionnaires/{ass.questionnaire_key}?assignmentId={ass.id}&access=secure",
                     assignmentId=str(ass.id),
                     targetLabel=target_label,
                     estimatedMinutes=est_minutes,
@@ -275,6 +273,7 @@ class IdentityService:
         return InviteVerifyResponse(
             email=profile.email,
             full_name=profile.full_name,
+            anonymous_name=profile.anonymous_name,
             is_leadership=is_leadership,
             already_registered=already_registered,
             project_id=project_id,

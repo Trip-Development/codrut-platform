@@ -36,6 +36,9 @@ export type CompanyParticipant = {
   location: string | null;
   role_group: string | null;
   pcm_profile: string | null;
+  pcm_base?: string | null;
+  pcm_phase?: string | null;
+  anonymous_name?: string | null;
   user_id: string | null;
 };
 

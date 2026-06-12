@@ -55,6 +55,7 @@ type ParticipantInviteRow = {
   deliveryLabel: string;
   deliveryTone: "default" | "success" | "warning" | "danger";
   secureLinkUrl: string | null;
+  secureLinkExpiresAt: string | null;
   nextAction: string;
 };
 
@@ -67,8 +68,7 @@ const questionnaireLabels: Record<string, string> = {
   lencioni_en: "Lencioni Team Assessment",
   distress_drivers: "Driveri de stres TA",
   distress_drivers_en: "TA Distress Drivers",
-  boss_360: "Feedback 360 iCARE",
-  boss_360_en: "iCARE 360 Feedback",
+  boss_360: "iCARE 360 pentru manager",
   icare: "Feedback 360 iCARE",
 };
 
@@ -101,6 +101,7 @@ export function buildInvitationRows(
     let deliveryLabel = "Fără asignări";
     let deliveryTone: ParticipantInviteRow["deliveryTone"] = "default";
     const secureLinkUrl = result?.invite_url ?? persistedStatus?.active_secure_link_url ?? null;
+    const secureLinkExpiresAt = persistedStatus?.active_secure_link_expires_at ?? null;
 
     if (result?.error) {
       deliveryLabel = "Eroare trimitere";
@@ -151,6 +152,7 @@ export function buildInvitationRows(
       deliveryLabel,
       deliveryTone,
       secureLinkUrl,
+      secureLinkExpiresAt,
       nextAction,
     };
   });
@@ -657,12 +659,15 @@ export function InvitationsWorkspace({
             </div>
 
             {plan ? (
-              <AssignmentPlanList
-                groups={planGroups}
-                selectedKeys={selectedPlanKeys}
-                onToggleItem={togglePlanItem}
-                onToggleScope={togglePlanScope}
-              />
+              <>
+                <AssignmentPlanList
+                  groups={planGroups}
+                  selectedKeys={selectedPlanKeys}
+                  onToggleItem={togglePlanItem}
+                  onToggleScope={togglePlanScope}
+                />
+                <AssignmentMatrix assignments={plan.assignments} selectedKeys={selectedPlanKeys} />
+              </>
             ) : (
               <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-background/60 px-4 py-5 text-sm leading-6 text-foreground/58">
                 Planul implicit va grupa sarcinile pe leadership, echipe de manager și feedback 360. După generare poți debifa rândurile care nu trebuie salvate.
@@ -892,11 +897,18 @@ export function InvitationsWorkspace({
                       />
                     </td>
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-foreground">{row.participant.full_name}</p>
+                      <p className="font-semibold text-foreground">{formatParticipantIdentity(row.participant)}</p>
                       <p className="mt-1 text-xs text-foreground/50">{row.participant.email}</p>
                     </td>
                     <td className="px-5 py-4">
-                      <StatusPill tone={row.deliveryTone}>{row.deliveryLabel}</StatusPill>
+                      <div className="space-y-1">
+                        <StatusPill tone={row.deliveryTone} active={row.deliveryTone === "success"}>{row.deliveryLabel}</StatusPill>
+                        {row.secureLinkExpiresAt ? (
+                          <p className="text-xs font-semibold text-foreground/45">
+                            Expiră: {formatDateTime(row.secureLinkExpiresAt)}
+                          </p>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <StatusPill tone={row.signedUp ? "success" : "warning"}>
@@ -941,6 +953,48 @@ export function InvitationsWorkspace({
         </div>
       </section>
     </div>
+  );
+}
+
+function AssignmentMatrix({
+  assignments,
+  selectedKeys,
+}: {
+  assignments: CompanyAssignmentPlanItem[];
+  selectedKeys: Set<string>;
+}) {
+  return (
+    <details className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)] bg-background/70">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-foreground hover:bg-surface-muted/45">
+        Vezi matricea completă de asignări
+      </summary>
+      <div className="max-h-80 overflow-auto border-t border-[var(--border)]">
+        <table className="min-w-full text-left text-xs">
+          <thead className="sticky top-0 bg-surface-muted text-foreground/55">
+            <tr>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Respondent</th>
+              <th className="px-4 py-2">Chestionar</th>
+              <th className="px-4 py-2">Țintă</th>
+              <th className="px-4 py-2">Grup</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border)]">
+            {assignments.map((assignment) => (
+              <tr key={assignment.key} className="hover:bg-surface-muted/35">
+                <td className="px-4 py-2 font-semibold">
+                  {assignment.existing_assignment_id ? "Salvat" : selectedKeys.has(assignment.key) ? "Bifat" : "Nebifat"}
+                </td>
+                <td className="px-4 py-2">{assignment.respondent_name}</td>
+                <td className="px-4 py-2">{formatQuestionnaireLabel(assignment.questionnaire_key)}</td>
+                <td className="px-4 py-2">{formatPlanTarget(assignment)}</td>
+                <td className="px-4 py-2">{assignment.scope_name}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 
@@ -1001,6 +1055,21 @@ function formatResendMessage(result: RosterInviteResult): string {
   if (result.error) return `Emailul nu a fost retrimis către ${result.email}: ${result.error}`;
   if (result.invite_url) return `Link pregătit pentru ${result.email}.`;
   return `Invitația nu a fost retrimisă către ${result.email}.`;
+}
+
+function formatParticipantIdentity(participant: CompanyParticipant): string {
+  const anonymousName = participant.anonymous_name ?? "Anonim";
+  return `${anonymousName} (${participant.full_name})`;
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "dată indisponibilă";
+  return new Intl.DateTimeFormat("ro-RO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 type AssignmentPlanGroup = {
@@ -1298,9 +1367,11 @@ function formatAssignmentLabel(
 
 function StatusPill({
   tone,
+  active = false,
   children,
 }: {
   tone: ParticipantInviteRow["deliveryTone"];
+  active?: boolean;
   children: React.ReactNode;
 }) {
   const className =
@@ -1312,5 +1383,10 @@ function StatusPill({
           ? "bg-burgundy-50 text-burgundy dark:bg-burgundy/10"
           : "bg-surface-muted text-foreground/58";
 
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${className}`}>{children}</span>;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${className}`}>
+      {active ? <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.85)]" aria-hidden="true" /> : null}
+      {children}
+    </span>
+  );
 }

@@ -36,6 +36,7 @@ export default function InvitePage({ params }: InvitePageProps) {
             email: bundle.participantEmail,
             token,
             fullName: bundle.participantFullName,
+            anonymousName: bundle.anonymousName,
             isLeadership: bundle.isLeadership,
           })
         );
@@ -131,7 +132,7 @@ export default function InvitePage({ params }: InvitePageProps) {
         </h1>
 
         <p className="mt-4 max-w-2xl text-base leading-7 text-foreground/65">
-          Acest link strânge toate chestionarele asociate e-mailului <strong className="text-foreground/80">{data.participantEmail}</strong> în proiectul <strong className="text-foreground/80">{data.projectName}</strong>{data.expiresAt ? ` până la ${data.deadlineLabel}.` : "."}
+          Acest link strânge chestionarele pentru proiectul <strong className="text-foreground/80">{data.projectName}</strong>. Vei lucra ca <strong className="text-foreground/80">{data.anonymousName ?? "participant anonim"}</strong>, asociat profilului tău securizat.
         </p>
 
         <div className="mt-6">
@@ -143,7 +144,6 @@ export default function InvitePage({ params }: InvitePageProps) {
             tasks={data.tasks}
             projectName={data.projectName}
             participantEmail={data.participantEmail}
-            deadlineLabel={data.deadlineLabel}
           />
         </div>
 

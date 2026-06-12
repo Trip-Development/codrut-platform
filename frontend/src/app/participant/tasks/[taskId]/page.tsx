@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getQuestionnaireDefinition, getQuestionnaireResponse } from "@/api/questionnaires";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { QuestionnaireRunner } from "@/components/questionnaires/questionnaire-runner";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
@@ -11,9 +12,10 @@ type TaskRunnerPageProps = {
 
 export default async function TaskRunnerPage({ params }: TaskRunnerPageProps) {
   const { taskId } = await params;
+  const requestOptions = await getServerApiRequestOptions();
 
   // 1. Fetch the response for this assignment to find the questionnaire key and version
-  const responseRecord = await getQuestionnaireResponse(taskId);
+  const responseRecord = await getQuestionnaireResponse(taskId, requestOptions);
 
   // 2. Fetch the corresponding questionnaire definition based on the key
   const definition = responseRecord

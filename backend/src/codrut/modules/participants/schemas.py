@@ -16,6 +16,7 @@ class ParticipantWorkspaceSummary(BaseModel):
     participant_profile_id: UUID
     participant_full_name: str
     participant_email: str
+    anonymous_name: str | None = None
     company_id: UUID
     company_name: str
     project_id: UUID | None

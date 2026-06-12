@@ -86,6 +86,8 @@ class ParticipantCreateRequest(BaseModel):
     location: str | None = Field(default=None, max_length=255)
     role_group: str | None = Field(default=None, max_length=255)
     pcm_profile: str | None = Field(default=None, max_length=255)
+    pcm_base: str | None = Field(default=None, max_length=80)
+    pcm_phase: str | None = Field(default=None, max_length=80)
 
 
 class RosterImportRow(BaseModel):
@@ -97,6 +99,8 @@ class RosterImportRow(BaseModel):
     location: str | None = Field(default=None, alias="Location", max_length=255)
     email: EmailStr = Field(alias="email")
     pcm_profile: str | None = Field(default=None, alias="Profil PCM", max_length=255)
+    pcm_base: str | None = Field(default=None, alias="PCM Bază", max_length=80)
+    pcm_phase: str | None = Field(default=None, alias="PCM Fază", max_length=80)
 
 
 class RosterImportRequest(BaseModel):
@@ -132,6 +136,7 @@ class ParticipantResponse(BaseModel):
     pcm_profile: str | None
     pcm_base: str | None = None
     pcm_phase: str | None = None
+    anonymous_name: str | None = None
 
 
 class RosterImportEmailResult(BaseModel):
