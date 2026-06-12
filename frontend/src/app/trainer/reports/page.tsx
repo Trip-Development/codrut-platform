@@ -78,10 +78,10 @@ export default async function TrainerReportsPage() {
                     <div className="h-full rounded-full bg-burgundy" style={{ width: `${completion}%` }} />
                   </div>
                   <Link
-                    href={`/trainer/companies/${company.id}/reports`}
+                    href="/trainer/projects"
                     className="tap-soft mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white hover:shadow-sm"
                   >
-                    Deschide rapoartele companiei
+                    Deschide proiectele
                   </Link>
                 </div>
               </article>

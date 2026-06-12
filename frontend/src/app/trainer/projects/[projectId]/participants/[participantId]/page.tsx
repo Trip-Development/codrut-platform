@@ -7,5 +7,5 @@ type TrainerParticipantReportPageProps = {
 export default async function TrainerParticipantReportPage({ params }: TrainerParticipantReportPageProps) {
   const { projectId } = await params;
 
-  redirect(`/trainer/companies/${projectId}/reports`);
+  redirect(`/trainer/projects/${projectId}/reports`);
 }

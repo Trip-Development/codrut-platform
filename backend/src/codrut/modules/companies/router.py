@@ -24,6 +24,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
     ParticipantResponse,
+    ProjectParticipantResponse,
     ReportingRelationshipImportResponse,
     RosterImportRequest,
     RosterImportResponse,
@@ -153,6 +154,24 @@ async def list_company_participants(
 ) -> list[ParticipantResponse]:
     require_trainer_principal(principal)
     return await CompanyService(session).list_participants(principal.user_id, company_id)
+
+
+@router.get(
+    "/{company_id}/projects/{project_id}/participants",
+    response_model=list[ProjectParticipantResponse],
+)
+async def list_project_participants(
+    company_id: UUID,
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[ProjectParticipantResponse]:
+    require_trainer_principal(principal)
+    return await CompanyService(session).list_project_participants(
+        principal.user_id,
+        company_id,
+        project_id,
+    )
 
 
 @router.post(

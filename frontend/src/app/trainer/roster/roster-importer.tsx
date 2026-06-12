@@ -605,6 +605,7 @@ export function RosterImporter({
           "PCM Bază": r.pcm_base,
           "PCM Fază": r.pcm_phase,
         })),
+        { projectId: selectedProject?.id ?? null },
       );
       setLastImportedParticipantIds(importResult.participants.map((participant) => participant.id));
       router.refresh();
@@ -858,7 +859,7 @@ export function RosterImporter({
                 </div>
                 <button
                   type="button"
-                  onClick={() => router.push(`/trainer/companies/${companyId}/invitations`)}
+                  onClick={() => router.push(selectedProject ? `/trainer/projects/${selectedProject.id}/invitations` : `/trainer/companies/${companyId}`)}
                   className="tap-soft shrink-0 rounded-lg border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                 >
                   Invitații

@@ -12,9 +12,30 @@ const statusTone: Record<CompanyProjectStatus, string> = {
   archived: "bg-foreground/8 text-foreground/48",
 };
 
-export default async function TrainerProjectsPage() {
+export default async function TrainerProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; company?: string; status?: string; type?: string }>;
+}) {
+  const filters = await searchParams;
   const projects = await getAllCompanyProjects(await getServerApiRequestOptions());
+  const query = (filters.q ?? "").trim().toLowerCase();
+  const filteredProjects = projects
+    .filter((project) => !query || `${project.name} ${project.company_name ?? ""}`.toLowerCase().includes(query))
+    .filter((project) => !filters.company || project.company_id === filters.company)
+    .filter((project) => !filters.status || project.status === filters.status)
+    .filter((project) => !filters.type || project.project_type === filters.type)
+    .sort((first, second) => {
+      const statusRank = (status: CompanyProjectStatus) => status === "active" ? 0 : status === "draft" ? 1 : status === "completed" ? 2 : 3;
+      const rankDiff = statusRank(first.status) - statusRank(second.status);
+      if (rankDiff !== 0) return rankDiff;
+      return (second.updated_at ?? "").localeCompare(first.updated_at ?? "");
+    });
   const activeCount = projects.filter((project) => project.status === "active").length;
+  const companies = Array.from(
+    new Map(projects.map((project) => [project.company_id, project.company_name ?? "Companie"])).entries(),
+  ).sort((first, second) => first[1].localeCompare(second[1]));
+  const projectTypes = Array.from(new Set(projects.map((project) => project.project_type).filter(Boolean))).sort();
 
   return (
     <AppShell
@@ -34,6 +55,35 @@ export default async function TrainerProjectsPage() {
           </div>
         </section>
 
+        <form className="grid gap-3 rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm md:grid-cols-4">
+          <input
+            name="q"
+            defaultValue={filters.q ?? ""}
+            placeholder="Caută proiect sau companie"
+            className="min-h-11 rounded-xl border border-[var(--border)] bg-background px-3 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45"
+          />
+          <select name="company" defaultValue={filters.company ?? ""} className="min-h-11 rounded-xl border border-[var(--border)] bg-background px-3 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45">
+            <option value="">Toate companiile</option>
+            {companies.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+          <select name="status" defaultValue={filters.status ?? ""} className="min-h-11 rounded-xl border border-[var(--border)] bg-background px-3 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45">
+            <option value="">Toate statusurile</option>
+            <option value="active">Active</option>
+            <option value="draft">În pregătire</option>
+            <option value="completed">Finalizate</option>
+            <option value="archived">Arhivate</option>
+          </select>
+          <div className="flex gap-2">
+            <select name="type" defaultValue={filters.type ?? ""} className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-background px-3 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45">
+              <option value="">Toate tipurile</option>
+              {projectTypes.map((type) => <option key={type} value={type ?? ""}>{type}</option>)}
+            </select>
+            <button type="submit" className="tap-soft rounded-xl bg-burgundy px-4 text-sm font-bold text-white hover:bg-burgundy-700">
+              Filtrează
+            </button>
+          </div>
+        </form>
+
         {projects.length === 0 ? (
           <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
             <p className="text-base font-semibold text-foreground">Nu există proiecte încă.</p>
@@ -49,10 +99,10 @@ export default async function TrainerProjectsPage() {
           </section>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {projects.map((project) => (
+            {filteredProjects.map((project) => (
               <Link
                 key={project.id}
-                href={`/trainer/companies/${project.company_id}`}
+                href={`/trainer/projects/${project.id}`}
                 className="tap-soft group rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-burgundy/30 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -74,7 +124,7 @@ export default async function TrainerProjectsPage() {
                   <ProjectMeta label="Termen" value={formatDate(project.due_at) ?? "---"} />
                 </div>
                 <p className="mt-4 text-sm font-semibold text-burgundy group-hover:text-burgundy-700">
-                  Deschide spațiul companiei
+                  Deschide proiectul
                 </p>
               </Link>
             ))}
