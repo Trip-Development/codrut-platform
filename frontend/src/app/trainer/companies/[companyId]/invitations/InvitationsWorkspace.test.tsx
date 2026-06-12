@@ -235,6 +235,7 @@ describe("buildInvitationRows", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Configurează asignări avansat" }));
     await screen.findByRole("option", { name: "Boss 360" });
 
     fireEvent.change(screen.getByLabelText("Persoană"), { target: { value: "ana" } });
@@ -347,6 +348,7 @@ describe("buildInvitationRows", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Configurează asignări avansat" }));
     fireEvent.click(screen.getByRole("button", { name: "Generează plan de asignări" }));
 
     expect(await screen.findAllByText("Leadership")).not.toHaveLength(0);
@@ -419,7 +421,7 @@ describe("buildInvitationRows", () => {
         projectId: "project-1",
       });
     });
-    expect(await screen.findByText("1/1 linkuri securizate generate pentru persoanele selectate.")).toBeTruthy();
+    expect(await screen.findByText("1/1 linkuri securizate generate.")).toBeTruthy();
 
     const copyButtons = await screen.findAllByRole("button", { name: "Copiază link" });
     fireEvent.click(copyButtons.at(-1)!);
@@ -428,6 +430,60 @@ describe("buildInvitationRows", () => {
       expect(writeText).toHaveBeenCalledWith("http://localhost:3000/invite/ana-token");
     });
     expect(await screen.findByText("Link securizat copiat pentru Ana Pop.")).toBeTruthy();
+  });
+
+  it("sends email invites to all participants with saved assignments from the invited people tab", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(sendParticipantInvitations).mockResolvedValue({
+      total: 2,
+      emails_sent: 2,
+      emails_failed: 0,
+      links_generated: 0,
+      results: [
+        {
+          participant_id: "andrei",
+          email: "andrei@example.com",
+          full_name: "Andrei Manager",
+          delivery_mode: "email",
+          email_sent: true,
+          error: null,
+          invite_url: null,
+        },
+        {
+          participant_id: "ana",
+          email: "ana@example.com",
+          full_name: "Ana Pop",
+          delivery_mode: "email",
+          email_sent: true,
+          error: null,
+          invite_url: null,
+        },
+      ],
+    });
+
+    render(
+      <InvitationsWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trimite email tuturor" }));
+
+    await waitFor(() => {
+      expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", {
+        mode: "email",
+        participantIds: ["andrei", "ana"],
+        projectId: "project-1",
+      });
+    });
+    expect(await screen.findByText("2/2 emailuri trimise.")).toBeTruthy();
   });
 
   it("resends one participant invitation and surfaces backend delivery failures", async () => {

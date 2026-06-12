@@ -390,7 +390,7 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
 
     class ScopedFakeSession(FakeSession):
         async def execute(self, query: Any) -> Any:
-            if len(self.side_effects) == 1:
+            if len(self.side_effects) == 2:
                 where_text = " ".join(str(clause) for clause in query._where_criteria)
                 assert "participant_profiles.email" not in where_text
                 assert "participant_profiles.id" in where_text
@@ -405,6 +405,7 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
         FakeScalarResult(False),
         FakeScalarsResult([assignment]),
         FakeScalarResult(profile),
+        FakeScalarResult(None),
     ]
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)
@@ -415,4 +416,69 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
     assert len(result.response.tasks) == 1
     assert profile.user_id is not None
     assert any(isinstance(model, User) for model in session.added_models)
+    assert any(isinstance(model, Session) for model in session.added_models)
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_for_non_leadership_reuses_existing_email_user() -> None:
+    company_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+
+    settings = get_settings()
+    expires_at = datetime.now(UTC) + timedelta(days=5)
+    token = create_task_token(
+        TaskLinkClaims(
+            company_id=company_id,
+            respondent_profile_id=respondent_id,
+            assignment_ids=(assignment_id,),
+            expires_at=expires_at,
+        ),
+        settings,
+    )
+    invite = AssignmentInvite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        token=token,
+        status="active",
+        expires_at=expires_at,
+    )
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        email="known.member@example.com",
+        full_name="Known Member",
+    )
+    existing_user = User(
+        id=user_id,
+        email="known.member@example.com",
+        password_hash="existing",  # noqa: S106
+        role="participant",
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.invited,
+    )
+
+    session = FakeSession()
+    session.side_effects = [
+        FakeScalarResult(invite),
+        FakeScalarResult(profile),
+        FakeScalarResult(Company(id=company_id, name="Michelin")),
+        FakeScalarResult(False),
+        FakeScalarsResult([assignment]),
+        FakeScalarResult(profile),
+        FakeScalarResult(existing_user),
+    ]
+
+    result = await IdentityService(session).verify_invite_token_and_create_session(token)
+
+    assert result.session_token
+    assert profile.user_id == user_id
+    assert not any(isinstance(model, User) for model in session.added_models)
     assert any(isinstance(model, Session) for model in session.added_models)

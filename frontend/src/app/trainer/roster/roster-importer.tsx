@@ -28,6 +28,8 @@ type RosterImporterProps = {
 type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile" | "pcm_base" | "pcm_phase";
 type FlowStepKey = "upload" | "review" | "import" | "access";
 type FlowStepState = "complete" | "current" | "upcoming" | "error";
+const MAPPING_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location"];
+const PREVIEW_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location", "pcm_base", "pcm_phase"];
 
 const FIELD_LABELS: Record<DbField, string> = {
   full_name: "Nume Complet (Obligatoriu)",
@@ -35,9 +37,9 @@ const FIELD_LABELS: Record<DbField, string> = {
   reports_to_name: "Raportează Către / Manager (Opțional)",
   position: "Poziție / Rol (Opțional)",
   location: "Locație (Opțional)",
-  pcm_profile: "Profil PCM legacy (Opțional)",
-  pcm_base: "PCM Bază (Opțional)",
-  pcm_phase: "PCM Fază (Opțional)",
+  pcm_profile: "Profil PCM",
+  pcm_base: "PCM Bază (din matrice)",
+  pcm_phase: "PCM Fază (din matrice)",
 };
 
 const FIELD_ALIASES: Record<DbField, string[]> = {
@@ -46,12 +48,12 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   reports_to_name: ["reports to", "reports_to", "manager", "reports_to_name", "sefi", "boss"],
   position: ["position", "role", "rol", "pozitie", "functie", "job title"],
   location: ["location", "locatie", "oras", "city"],
-  pcm_profile: ["profil pcm", "pcm", "pcm profile", "profil_pcm"],
-  pcm_base: ["pcm baza", "pcm bază", "baza pcm", "bază pcm", "base pcm", "pcm base"],
-  pcm_phase: ["pcm faza", "pcm fază", "faza pcm", "fază pcm", "phase pcm", "pcm phase"],
+  pcm_profile: [],
+  pcm_base: [],
+  pcm_phase: [],
 };
 
-const PCM_TYPE_HEADERS = [
+const PCM_TYPE_VALUES = [
   "ganditor",
   "perseverent",
   "promotor",
@@ -60,7 +62,7 @@ const PCM_TYPE_HEADERS = [
   "rebel",
 ] as const;
 
-const PCM_DISPLAY_BY_HEADER: Record<string, string> = {
+const PCM_DISPLAY_BY_VALUE: Record<string, string> = {
   ganditor: "Gânditor",
   perseverent: "Perseverent",
   promotor: "Promotor",
@@ -81,19 +83,27 @@ function normalizeHeader(value: string): string {
 function inferPcmFromMatrix(
   worksheet: XLSX.WorkSheet,
   headers: string[],
-  zeroBasedDataRowIndex: number,
+  row: unknown[],
+  zeroBasedSheetRowIndex: number,
 ): { base: string; phase: string } {
   let base = "";
   let phase = "";
-  headers.forEach((header, colIdx) => {
-    const normalized = normalizeHeader(header);
-    if (!PCM_TYPE_HEADERS.includes(normalized as (typeof PCM_TYPE_HEADERS)[number])) return;
-    const address = XLSX.utils.encode_cell({ r: zeroBasedDataRowIndex + 1, c: colIdx });
+  const maxCols = Math.max(headers.length, row.length);
+  for (let colIdx = 0; colIdx < maxCols; colIdx += 1) {
+    const address = XLSX.utils.encode_cell({ r: zeroBasedSheetRowIndex, c: colIdx });
     const cell = worksheet[address] as (XLSX.CellObject & { s?: { fill?: { fgColor?: { rgb?: string }; patternType?: string } } }) | undefined;
     const rgb = cell?.s?.fill?.fgColor?.rgb?.replace(/^FF/i, "").toUpperCase();
-    const pcmLabel = PCM_DISPLAY_BY_HEADER[normalized] ?? header;
+    const normalizedCell = normalizeHeader(
+      cell?.w ?? cell?.v?.toString() ?? row[colIdx]?.toString() ?? "",
+    );
+    const normalizedHeader = normalizeHeader(headers[colIdx] ?? "");
+    const pcmKey =
+      PCM_TYPE_VALUES.find((value) => normalizedCell.startsWith(value)) ??
+      PCM_TYPE_VALUES.find((value) => normalizedHeader === value);
+    if (!pcmKey) continue;
+    const pcmLabel = PCM_DISPLAY_BY_VALUE[pcmKey];
 
-    if (!rgb) return;
+    if (!rgb) continue;
     const isCyanBase = rgb.startsWith("00B0F0") || rgb.startsWith("00AEEF") || rgb.startsWith("00BFFF");
     const isGreenBoth = rgb.startsWith("92D050") || rgb.startsWith("A9D18E") || rgb.startsWith("70AD47");
     const isYellowPhase = rgb.startsWith("FFFF00") || rgb.startsWith("FFF200") || rgb.startsWith("FFD966");
@@ -106,7 +116,7 @@ function inferPcmFromMatrix(
     } else if (isYellowPhase) {
       phase = pcmLabel;
     }
-  });
+  }
   return { base, phase };
 }
 
@@ -221,8 +231,23 @@ export function RosterImporter({
           return;
         }
 
-        const rawHeaders = rawSheetData[0].map((h) => String(h).trim()).filter(Boolean);
-        const dataRows = rawSheetData.slice(1);
+        let rawHeaders = rawSheetData[0].map((h) => String(h).trim()).filter(Boolean);
+        let dataRows = rawSheetData.slice(1);
+        const startsWithPcmTitle =
+          rawHeaders.length <= 1 && normalizeHeader(rawHeaders[0] ?? "") === "profil pcm";
+        if (startsWithPcmTitle) {
+          const possibleHeaders = rawSheetData[1]?.map((h) => String(h).trim()) ?? [];
+          const hasRosterHeader = possibleHeaders.some((header) =>
+            ["email", "e-mail", "mail", "name", "nume"].includes(normalizeHeader(header)),
+          );
+          if (hasRosterHeader) {
+            rawHeaders = possibleHeaders.filter(Boolean);
+            dataRows = rawSheetData.slice(2);
+          } else {
+            rawHeaders = ["Name", "PCM 1", "PCM 2", "PCM 3", "PCM 4", "PCM 5", "PCM 6"];
+            dataRows = rawSheetData.slice(1);
+          }
+        }
 
         // Convert rows to key-value objects
         const objects: Record<string, string>[] = dataRows
@@ -231,7 +256,7 @@ export function RosterImporter({
             rawHeaders.forEach((header, colIdx) => {
               obj[header] = row[colIdx] !== undefined ? String(row[colIdx]).trim() : "";
             });
-            const pcmFromMatrix = inferPcmFromMatrix(worksheet, rawHeaders, rowOffset + 1);
+            const pcmFromMatrix = inferPcmFromMatrix(worksheet, rawHeaders, row, rowOffset + 1);
             if (pcmFromMatrix.base) obj["PCM Bază"] = pcmFromMatrix.base;
             if (pcmFromMatrix.phase) obj["PCM Fază"] = pcmFromMatrix.phase;
             // Only keep rows that have some content
@@ -261,7 +286,7 @@ export function RosterImporter({
           pcm_phase: "",
         };
 
-        (Object.keys(FIELD_ALIASES) as DbField[]).forEach((field) => {
+        MAPPING_FIELDS.forEach((field) => {
           const aliases = FIELD_ALIASES[field];
           const matchedHeader = derivedHeaders.find((h) =>
             aliases.some((alias) => h.toLowerCase() === alias.toLowerCase() || h.toLowerCase().includes(alias.toLowerCase()))
@@ -277,6 +302,8 @@ export function RosterImporter({
           const emailCol = rawHeaders.find((h) => h.toLowerCase().includes("email") || h.toLowerCase().includes("mail"));
           detectedMappings.email = emailCol || rawHeaders[1];
         }
+        detectedMappings.pcm_base = "PCM Bază";
+        detectedMappings.pcm_phase = "PCM Fază";
 
         setMappings(detectedMappings);
         setImportState({
@@ -502,7 +529,7 @@ export function RosterImporter({
           Position: r.position,
           Location: r.location,
           email: r.email,
-          "Profil PCM": r.pcm_profile,
+          "Profil PCM": "",
           "PCM Bază": r.pcm_base,
           "PCM Fază": r.pcm_phase,
         })),
@@ -807,7 +834,7 @@ export function RosterImporter({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(Object.keys(FIELD_LABELS) as DbField[]).map((field) => (
+            {MAPPING_FIELDS.map((field) => (
               <label key={field} className="block rounded-xl border border-[var(--border)] bg-background p-3 transition-colors hover:border-burgundy/25 hover:bg-surface-muted/40">
                 <span className="text-xs font-bold text-foreground/70">{FIELD_LABELS[field]}</span>
                 <select
@@ -893,7 +920,6 @@ export function RosterImporter({
                   <th className="px-5 py-3">Reports To / Manager</th>
                   <th className="px-5 py-3">Poziție / Rol</th>
                   <th className="px-5 py-3">Locație</th>
-                  <th className="px-5 py-3">PCM legacy</th>
                   <th className="px-5 py-3">PCM bază</th>
                   <th className="px-5 py-3">PCM fază</th>
                 </tr>
@@ -904,7 +930,7 @@ export function RosterImporter({
                     <td className="px-5 py-3 font-semibold text-foreground/45 text-center">{rIdx + 1}</td>
 
                     {/* Render fields with double click inline editing support */}
-                    {(Object.keys(FIELD_LABELS) as DbField[]).map((field) => {
+                    {PREVIEW_FIELDS.map((field) => {
                       const isEditing = editingCellId?.rowIndex === rIdx && editingCellId?.field === field;
                       const hasError = validationErrors.some((e) => e.rowIndex === rIdx && e.field === field);
                       const isRequired = field === "full_name" || field === "email";
