@@ -261,6 +261,16 @@ class AssignmentService:
                     questionnaire_key="distress_drivers",
                 )
             )
+            if not manager.pcm_base or not manager.pcm_phase:
+                plan_items.append(
+                    _plan_self_assignment(
+                        scope_id=f"manager:{manager_id}",
+                        scope_name=manager.full_name,
+                        scope_type="manager",
+                        respondent=manager,
+                        questionnaire_key="pcm_base",
+                    )
+                )
             leadership_peer_ids = [
                 participant_id for participant_id in leadership_ids if participant_id != manager_id
             ]

@@ -349,14 +349,15 @@ class IdentityService:
                 user = user_result.scalar_one_or_none()
             
             if user is None:
-                # Create a shadow user
-                user = User(
-                    id=uuid.uuid4(),
-                    email=profile.email.lower(),
-                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
-                    role=UserRole.participant,
-                )
-                await self.repository.add_user(user)
+                user = await self.repository.get_user_by_email(profile.email)
+                if user is None:
+                    user = User(
+                        id=uuid.uuid4(),
+                        email=profile.email.lower(),
+                        password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+                        role=UserRole.participant,
+                    )
+                    await self.repository.add_user(user)
                 profile.user_id = user.id
 
             # Create session for this user

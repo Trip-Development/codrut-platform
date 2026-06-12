@@ -70,6 +70,7 @@ const questionnaireLabels: Record<string, string> = {
   distress_drivers_en: "TA Distress Drivers",
   boss_360: "iCARE 360 pentru manager",
   icare: "Feedback 360 iCARE",
+  pcm_base: "Baza și faza PCM",
 };
 
 export function buildInvitationRows(
@@ -189,6 +190,7 @@ export function InvitationsWorkspace({
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("all");
+  const [showAdvancedAssignments, setShowAdvancedAssignments] = useState(false);
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
@@ -492,9 +494,9 @@ export function InvitationsWorkspace({
     );
   }
 
-  async function handleSend(mode: ParticipantInvitationMode) {
-    if (selectedReadyCount === 0) {
-      setMessage("Selectează cel puțin o persoană cu sarcini salvate înainte de trimitere.");
+  async function dispatchInvitations(mode: ParticipantInvitationMode, participantIds: string[], emptyMessage: string) {
+    if (participantIds.length === 0) {
+      setMessage(emptyMessage);
       return;
     }
     if (!canUseProjectActions) {
@@ -504,9 +506,6 @@ export function InvitationsWorkspace({
     setSendingMode(mode);
     setMessage(null);
     setCopiedParticipantId(null);
-    const participantIds = selectedRows
-      .filter((row) => row.totalTasks > 0)
-      .map((row) => row.participant.id);
     try {
       const result = await sendParticipantInvitations(companyId, {
         mode,
@@ -523,14 +522,30 @@ export function InvitationsWorkspace({
       setSelectedParticipantIds(new Set());
       setMessage(
         mode === "email"
-          ? `${result.emails_sent}/${result.total} emailuri trimise către persoanele selectate.`
-          : `${result.links_generated}/${result.total} linkuri securizate generate pentru persoanele selectate.`,
+          ? `${result.emails_sent}/${result.total} emailuri trimise.`
+          : `${result.links_generated}/${result.total} linkuri securizate generate.`,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invitațiile nu au putut fi trimise.");
     } finally {
       setSendingMode(null);
     }
+  }
+
+  async function handleSend(mode: ParticipantInvitationMode) {
+    if (selectedReadyCount === 0) {
+      setMessage("Selectează cel puțin o persoană cu sarcini salvate înainte de trimitere.");
+      return;
+    }
+    const participantIds = selectedRows
+      .filter((row) => row.totalTasks > 0)
+      .map((row) => row.participant.id);
+    await dispatchInvitations(mode, participantIds, "Selectează cel puțin o persoană cu sarcini salvate înainte de trimitere.");
+  }
+
+  async function handleSendAll(mode: ParticipantInvitationMode) {
+    const participantIds = rows.filter((row) => row.totalTasks > 0).map((row) => row.participant.id);
+    await dispatchInvitations(mode, participantIds, "Nu există persoane cu sarcini salvate pentru trimitere.");
   }
 
   async function handleResend(participantId: string) {
@@ -631,6 +646,23 @@ export function InvitationsWorkspace({
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-surface-muted/35 px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-burgundy/75">Pregătire sarcini</p>
+            <h2 className="mt-1 text-xl font-semibold text-foreground">Asignări înainte de trimitere</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-foreground/58">
+              Generează și salvează planul implicit doar când trebuie să ajustezi sarcinile. Pentru trimitere rapidă folosește tabul Persoane invitate.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedAssignments((current) => !current)}
+            className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+          >
+            {showAdvancedAssignments ? "Ascunde avansat" : "Configurează asignări avansat"}
+          </button>
+        </div>
+        {showAdvancedAssignments ? (
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="p-5 md:p-6">
             <p className="text-sm font-semibold text-burgundy/75">Pregătire sarcini</p>
@@ -797,6 +829,7 @@ export function InvitationsWorkspace({
             </div>
           </div>
         </div>
+        ) : null}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
@@ -810,6 +843,22 @@ export function InvitationsWorkspace({
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={() => void handleSendAll("email")}
+                disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
+                className="tap-soft rounded-xl bg-burgundy px-3 py-2 text-xs font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {sendingMode === "email" ? "Se trimit..." : "Trimite email tuturor"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSendAll("secure_links")}
+                disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
+                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {sendingMode === "secure_links" ? "Se generează..." : "Generează linkuri tuturor"}
+              </button>
               <button
                 type="button"
                 onClick={selectReadyUnsentParticipants}

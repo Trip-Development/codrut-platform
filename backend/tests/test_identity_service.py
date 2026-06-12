@@ -493,6 +493,8 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
     # 4. verify_invite_token_and_create_session - load profile again
     mock_result_profile_again = MagicMock()
     mock_result_profile_again.scalar_one_or_none.return_value = mock_profile
+    mock_result_existing_user = MagicMock()
+    mock_result_existing_user.scalar_one_or_none.return_value = None
 
     mock_session.execute.side_effect = [
         mock_result_profile,
@@ -500,6 +502,7 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
         mock_result_leadership,
         mock_result_assignments,
         mock_result_profile_again,
+        mock_result_existing_user,
     ]
 
     service = IdentityService(mock_session)

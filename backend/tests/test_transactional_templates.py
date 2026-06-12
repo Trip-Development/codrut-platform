@@ -22,6 +22,7 @@ def test_account_setup_template_renders_email_message() -> None:
     )
 
     assert message.to.value == "ana@example.com"
+    assert template.version == 2
     assert "Demo" in message.subject
     assert "Ana" in message.html_body
     assert "https://app.codrut.ro/invite/token" in message.text_body
@@ -40,7 +41,8 @@ def test_assignment_bundle_template_renders_task_count() -> None:
         },
     )
 
-    assert "Chestionarele tale Codruț" in message.subject
+    assert template.version == 2
+    assert "3 chestionare" in message.subject
     assert "3 chestionare" in message.html_body
 
 

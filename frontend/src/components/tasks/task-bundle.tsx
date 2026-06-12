@@ -41,7 +41,7 @@ export function TaskBundle({
             <h2 className="mt-1.5 text-2xl font-semibold text-foreground">Sarcinile tale</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
               {participantEmail ? `${participantEmail} · ` : null}
-              Link activ. Răspunsurile sunt asociate profilului tău securizat, fără cont complet.
+              Link activ. Răspunsurile sunt salvate securizat pentru acest proiect.
             </p>
           </div>
           <Link

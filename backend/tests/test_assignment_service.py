@@ -597,6 +597,28 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
     ]
     assert ioana_lencioni_team_assignments == []
 
+    andrei_pcm_assignments = [
+        item
+        for item in plan.assignments
+        if item.questionnaire_key == "pcm_base"
+        and item.respondent_profile_id == respondent_id
+    ]
+    assert len(andrei_pcm_assignments) == 1
+
+    company_repository.participants[respondent_id].pcm_base = "Gânditor"
+    company_repository.participants[respondent_id].pcm_phase = "Perseverent"
+    plan_without_pcm_gap = await service.build_default_assignment_plan(
+        user_id,
+        company_id,
+        project_id,
+    )
+    assert not [
+        item
+        for item in plan_without_pcm_gap.assignments
+        if item.questionnaire_key == "pcm_base"
+        and item.respondent_profile_id == respondent_id
+    ]
+
 
 async def test_create_assignment_rejects_inactive_persisted_questionnaire_key() -> None:
     (

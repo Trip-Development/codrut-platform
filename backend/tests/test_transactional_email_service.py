@@ -149,6 +149,12 @@ async def test_send_assignment_invitation_persists_error_details_on_failure() ->
         def scalar_one_or_none(self):
             return db_template
 
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [db_template]
+
     session = MagicMock()
     session.execute = AsyncMock(return_value=FakeResult())
     session.add = MagicMock()
