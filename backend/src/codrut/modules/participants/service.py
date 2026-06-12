@@ -11,6 +11,7 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
     Team,
 )
+from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
 from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
@@ -26,6 +27,9 @@ class ParticipantWorkspaceService:
 
     async def get_workspace_summary(self, user_id: UUID) -> ParticipantWorkspaceSummary:
         profile, company = await self._get_profile_and_company(user_id)
+        if not profile.anonymous_name:
+            profile.anonymous_name = new_anonymous_name()
+            await self.session.flush()
         assignments = await self._list_assignments(profile)
         projects = await self._get_projects(assignments)
         teams = await self._get_teams(assignments)
@@ -48,6 +52,7 @@ class ParticipantWorkspaceService:
             participant_profile_id=profile.id,
             participant_full_name=profile.full_name,
             participant_email=profile.email,
+            anonymous_name=profile.anonymous_name,
             company_id=company.id,
             company_name=company.name,
             project_id=project_id,

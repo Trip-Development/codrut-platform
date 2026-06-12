@@ -33,6 +33,7 @@ async def seed_e2e_state() -> None:
             "alice.popescu@e2etest.com",
             "bob.ionescu@e2etest.com",
             "charlie.vasilescu@e2etest.com",
+            "test@gmail.com",
         ]
         await session.execute(delete(User).where(User.email.in_(test_emails)))
         await session.commit()
@@ -106,19 +107,40 @@ async def seed_e2e_state() -> None:
         # 3. Create three participants
         participants_data = [
             {
+                "name": "Participant Demo",
+                "email": "test@gmail.com",
+                "pcm": "Gânditor",
+                "pcm_base": "Gânditor",
+                "pcm_phase": "Perseverent",
+                "anonymous_name": "CuriousSoap2121",
+                "with_account": True,
+            },
+            {
                 "name": "Alice Popescu",
                 "email": "alice.popescu@e2etest.com",
                 "pcm": "Thinker",
+                "pcm_base": "Gânditor",
+                "pcm_phase": "Gânditor",
+                "anonymous_name": "BrightCedar3184",
+                "with_account": False,
             },
             {
                 "name": "Bob Ionescu",
                 "email": "bob.ionescu@e2etest.com",
                 "pcm": "Persister",
+                "pcm_base": "Perseverent",
+                "pcm_phase": "Promotor",
+                "anonymous_name": "CalmHarbor5271",
+                "with_account": False,
             },
             {
                 "name": "Charlie Vasilescu",
                 "email": "charlie.vasilescu@e2etest.com",
                 "pcm": "Harmonizer",
+                "pcm_base": "Empatic",
+                "pcm_phase": "Imaginator",
+                "anonymous_name": "WarmSignal8032",
+                "with_account": False,
             },
         ]
         
@@ -126,15 +148,35 @@ async def seed_e2e_state() -> None:
         
         print("--- SEEDED E2E PARTICIPANTS ---")
         for p_data in participants_data:
+            user_id = None
+            if p_data["with_account"]:
+                demo_password = os.getenv(
+                    "CODRUT_SEED_DEMO_PARTICIPANT_PASSWORD",
+                    "replace-with-a-long-test-password",
+                )
+                demo_user = User(
+                    id=uuid.uuid4(),
+                    email=p_data["email"],
+                    password_hash=hash_password(demo_password),
+                    role=UserRole.participant,
+                )
+                session.add(demo_user)
+                await session.flush()
+                user_id = demo_user.id
+
             profile = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=company.id,
+                user_id=user_id,
                 full_name=p_data["name"],
                 email=p_data["email"],
                 reports_to_name=None,
                 position="Member",
                 location="Bucharest",
-                pcm_profile=p_data["pcm"]
+                pcm_profile=p_data["pcm"],
+                pcm_base=p_data["pcm_base"],
+                pcm_phase=p_data["pcm_phase"],
+                anonymous_name=p_data["anonymous_name"],
             )
             session.add(profile)
             await session.flush()

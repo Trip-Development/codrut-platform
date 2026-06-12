@@ -10,6 +10,7 @@ export type ParticipantWorkspaceCard = {
 export type ParticipantWorkspaceSummary = {
   participantProfileId?: string;
   participantFullName: string;
+  anonymousName?: string | null;
   projectName: string;
   projectId?: string | null;
   companyName: string;
@@ -29,6 +30,7 @@ type BackendParticipantWorkspaceSummary = {
   participant_profile_id: string;
   participant_full_name: string;
   participant_email: string;
+  anonymous_name?: string | null;
   company_id: string;
   company_name: string;
   project_id: string | null;
@@ -73,6 +75,7 @@ function mapParticipantWorkspaceSummary(
   return {
     participantProfileId: data.participant_profile_id,
     participantFullName: data.participant_full_name,
+    anonymousName: data.anonymous_name,
     projectName: data.project_name,
     projectId: data.project_id,
     companyName: data.company_name,
@@ -92,6 +95,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
 
   return {
     participantFullName: bundle.state === "valid" ? bundle.participantFullName : "Participant demo",
+    anonymousName: bundle.state === "valid" ? bundle.anonymousName : "CuriousSoap2121",
     projectName: bundle.state === "valid" ? bundle.projectName : "Proiect demo",
     projectId: null,
     companyName: "Companie demo",
@@ -135,6 +139,7 @@ async function readWorkspaceError(response: Response): Promise<string> {
 function getUnavailableParticipantWorkspaceSummary(reason?: string): ParticipantWorkspaceSummary {
   return {
     participantFullName: "Participant",
+    anonymousName: null,
     projectName: "Spațiul tău de lucru",
     projectId: null,
     companyName: "Codruț",

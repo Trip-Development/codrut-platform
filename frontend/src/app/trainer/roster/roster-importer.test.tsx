@@ -111,6 +111,8 @@ describe("RosterImporter", () => {
           Location: "București",
           email: "ana@example.com",
           "Profil PCM": "PCM rebel",
+          "PCM Bază": "",
+          "PCM Fază": "",
         },
       ],
     );

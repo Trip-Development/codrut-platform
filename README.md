@@ -41,22 +41,34 @@ The trainer workflow for the current client-ready build is:
 6. Participants complete questionnaires through account or secure-link access.
 7. Reports aggregate submitted/scored responses with confidentiality thresholds.
 
-Permanent participant accounts must complete the PCM base profile from a
-persisted assignment-backed task before continuing through the participant
-workspace. The account page uses the saved PCM task link when it exists, so
-save/submit stays connected to the database.
+Permanent participant accounts complete one PCM task, `Bază și fază PCM`, when
+base or phase is missing from the roster. The account page uses the saved PCM
+task link when it exists, so save/submit stays connected to the database.
 
 The default assignment plan is generated from roster role groups, reporting
 relationships, and teams:
 
 - Lencioni for the leadership team and manager teams.
 - Distress Drivers self-assessment for managers/leadership only.
-- 360 iCARE for managers, including self-review, peer manager feedback, and
+- iCARE 360 for managers, including self-review, peer manager feedback, and
   direct-report feedback.
 
 Romanian and English questionnaire variants share the same scoring buckets in
 reports: `lencioni`/`lencioni_en`, `distress_drivers`/`distress_drivers_en`,
-and `boss_360`/`boss_360_en`.
+and canonical iCARE 360 on `boss_360`. The legacy `icare` key resolves as an
+alias for compatibility, but it is not listed as a separate active
+questionnaire. The separate PCM phase questionnaire and English iCARE 360
+surface are retired from the active catalog.
+
+Roster import accepts explicit `PCM Bază` and `PCM Fază` columns. The frontend
+also detects the legacy six-column color-coded PCM matrix when cell styles are
+available, while `Profil PCM` remains a legacy fallback only.
+
+Participant profiles have a persistent anonymous display name such as
+`CuriousSoap2121`. Trainer views show it with the real identity for traceability;
+participant views emphasize the anonymous name. Managers sign up and use the
+participant dashboard; members can complete assigned forms through secure links
+without the full dashboard shell.
 
 Roster import must not send access automatically. Access delivery is a separate
 action so trainers can review assignments before links or emails are created.
@@ -93,4 +105,4 @@ Focused checks for the current core workflow live in:
 - `frontend/src/components/questionnaires/questionnaire-runner.test.tsx`
 
 See `docs/ops/local-development.md` for local accounts, Mailpit, and the
-two-person roster smoke test.
+three-row roster smoke test.

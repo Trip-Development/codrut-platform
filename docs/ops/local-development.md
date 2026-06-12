@@ -41,37 +41,47 @@ The seed command creates or updates the trainer account and makes it owner of th
 
 ## Core Workflow Smoke
 
-For a quick trainer workflow check, create a fake company and import a two-person
+For a quick trainer workflow check, create a fake company and import a three-row
 roster with these exact headers:
 
 ```text
-Name,email,Reports To,Position,Location,Profil PCM
+Name,email,Reports To,Position,Location,PCM Bază,PCM Fază
 ```
 
 Example rows:
 
 ```text
-Vlad Soimu Manager,manager@example.com,,Manager,Bucuresti,Gânditor
-Vlad Soimu Membru,member@example.com,Vlad Soimu Manager,Membru echipă,Bucuresti,Armonizator
+Vlad Soimu Manager,vlad.soimu2@gmail.com,,Manager,Bucuresti,Gânditor,Perseverent
+Vlad Soimu Membru,vlad.soimu@yahoo.com,Vlad Soimu Manager,Membru echipă,Bucuresti,Empatic,Promotor
+Ilinca Member,ilincacrb4825@gmail.com,Vlad Soimu Manager,Membru echipă,Bucuresti,Rebel,Imaginator
 ```
+
+The same workbook is generated locally at
+`/Users/vladul/Downloads/codrut-roster-test-pcm.xlsx` during the current smoke
+setup.
 
 Expected behavior:
 
 - The manager imports as `leadership`; the member imports as `member`.
 - Importing the roster does not send access automatically.
 - The default assignment plan includes Lencioni for leadership and the manager
-  team, Distress Drivers for the manager only, and 360 iCARE for the manager
+  team, Distress Drivers for the manager only, and iCARE 360 for the manager
   from self plus direct-report feedback.
 - Saving the plan is duplicate-safe; regenerating and saving again should not
   create extra assignments.
 - `Generează linkuri securizate` creates links without sending email.
 - `Trimite invitații email` sends through the configured provider; in local dev,
   verify delivery in Mailpit at <http://localhost:8025>.
-- Permanent participant accounts are redirected to the PCM base task when it is
-  still required; the account page should link to the persisted PCM assignment,
-  not to an assignment-less questionnaire route.
+- Permanent participant accounts are redirected to the combined PCM base/phase
+  task when either value is missing; the account page should link to the
+  persisted PCM assignment, not to an assignment-less questionnaire route.
+- Trainer invitation rows show active secure links with a green status dot and
+  their expiry date. Participant secure-link pages do not display expiry dates.
+- Managers receive account setup emails and then use the participant dashboard.
+  Members receive secure form links and see form-only pages.
 - Reports aggregate both Romanian and English questionnaire keys into the same
-  Lencioni, Distress Drivers, and 360 iCARE buckets.
+  Lencioni and Distress Drivers buckets, plus canonical Romanian iCARE 360 on
+  `boss_360`.
 
 This path is covered by `test_two_person_roster_generates_manager_member_default_plan`
 in `backend/tests/test_company_service.py`.

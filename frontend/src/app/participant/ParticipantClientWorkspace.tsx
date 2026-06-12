@@ -12,6 +12,8 @@ type ParticipantClientWorkspaceProps = {
   summaryData: {
     projectName: string;
     companyName?: string;
+    participantFullName?: string;
+    anonymousName?: string | null;
     participantEmail: string;
     deadlineLabel: string;
     pcmBase?: string | null;
@@ -36,7 +38,9 @@ const statusCopy: Record<InviteTask["status"], { label: string; helper: string }
 };
 
 export function ParticipantClientWorkspace({ session, summaryData }: ParticipantClientWorkspaceProps) {
-  const firstName = session.user.name?.split(" ")[0] || "bun venit";
+  const realIdentity = summaryData.participantFullName || session.user.name || summaryData.participantEmail;
+  const anonymousIdentity = summaryData.anonymousName || "Profil anonim";
+  const displayIdentity = `${anonymousIdentity}${realIdentity ? ` (${realIdentity})` : ""}`;
   const pendingTasks = summaryData.tasks.filter((task) => task.status !== "completed");
   const completedTasksCount = summaryData.tasks.length - pendingTasks.length;
   const tasksProgressPct =
@@ -47,11 +51,11 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
     <AppShell
       audience="participant"
       eyebrow={summaryData.projectName}
-      title={`Bună, ${firstName}`}
-      description="Ai aici doar sarcinile și informațiile salvate pentru proiectul curent. Completează chestionarele active, iar progresul se actualizează din baza de date."
+      title={`Bună, ${anonymousIdentity}`}
+      description="Lucrezi sub identitate anonimă. Completează chestionarele active, iar progresul se actualizează din baza de date."
       navItems={participantNavItems}
       activeHref="/participant"
-      userLabel={firstName}
+      userLabel={anonymousIdentity}
     >
       <div className="space-y-7">
         <section className="rounded-[1.75rem] border border-burgundy/16 bg-surface/94 p-5 shadow-[0_22px_60px_rgba(137,5,5,0.10)] backdrop-blur md:p-7">
@@ -66,7 +70,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                     {pendingTasks.length > 0 ? "Chestionare active" : "Ești la zi"}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-                    Fiecare sarcină vine din invitațiile pregătite de trainer pentru compania și proiectul curent.
+                    Fiecare sarcină vine din invitațiile pregătite de trainer. Identitatea afișată pentru acest proiect este <strong className="text-foreground">{displayIdentity}</strong>.
                   </p>
                 </div>
                 <div className="w-fit rounded-2xl bg-burgundy px-4 py-3 text-white shadow-brand">
@@ -121,8 +125,8 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
               </div>
               <div className="mt-4 grid gap-3 text-sm">
                 <ContextRow label="Companie" value={summaryData.companyName || "Companie neasociată"} />
+                <ContextRow label="Identitate anonimă" value={displayIdentity} />
                 <ContextRow label="Email" value={summaryData.participantEmail || "Email indisponibil"} />
-                <ContextRow label="Termen" value={summaryData.deadlineLabel} />
               </div>
             </aside>
           </div>

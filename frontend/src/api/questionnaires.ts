@@ -77,7 +77,7 @@ const seededAssignmentQuestionnaires: Record<string, string> = {
   "33333333-3333-4333-8333-333333333333": "lencioni",
 };
 
-const legacyHiddenQuestionnaireKeys = new Set(["icare"]);
+const legacyHiddenQuestionnaireKeys = new Set(["icare", "phase", "boss_360_en"]);
 
 function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireDefinitionStub {
   const questions = definition.schema.sections.flatMap((section) => section.questions);
@@ -151,25 +151,9 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
     estimatedItems: 2,
   },
   {
-    id: "phase",
-    name: "Phase",
-    description: "Source pending. Will use the same reusable questionnaire renderer.",
-    status: "planned",
-    audience: "leadership",
-  },
-  {
     id: "boss_360",
-    name: "Feedback 360 iCARE pentru manager (RO)",
+    name: "iCARE 360 pentru manager",
     description: "Feedback comportamental iCARE pentru manager din autoevaluare, colegi și raportori direcți.",
-    status: "active",
-    version: 1,
-    audience: "participant",
-    estimatedItems: 48,
-  },
-  {
-    id: "boss_360_en",
-    name: "iCARE 360 Feedback for Manager (EN)",
-    description: "iCARE behavioral feedback for a manager from self, manager peers, and direct reports.",
     status: "active",
     version: 1,
     audience: "participant",
@@ -699,6 +683,7 @@ export async function deleteQuestionnaireDefinitionOnServer(
 
 export async function getQuestionnaireResponse(
   assignmentId: string,
+  options: RequestInit = {},
 ): Promise<QuestionnaireResponseRecord | null> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return {
@@ -715,6 +700,10 @@ export async function getQuestionnaireResponse(
     const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
       cache: "no-store",
       credentials: "include",
+      ...options,
+      headers: {
+        ...(options.headers ?? {}),
+      },
     });
     if (!response.ok) return null;
     return (await response.json()) as QuestionnaireResponseRecord;
