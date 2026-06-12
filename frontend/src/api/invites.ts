@@ -21,6 +21,7 @@ export type InviteBundle =
       projectName: string;
       participantEmail: string;
       participantFullName: string;
+      anonymousName?: string | null;
       isLeadership: boolean;
       alreadyRegistered: boolean;
       deadlineLabel: string;
@@ -43,6 +44,7 @@ export type InviteBundle =
 type BackendInviteVerifyResponse = {
   email: string;
   full_name: string;
+  anonymous_name?: string | null;
   is_leadership: boolean;
   already_registered: boolean;
   project_id?: string;
@@ -95,6 +97,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
       projectName: "Intake Iunie",
       participantEmail: "participant@companie.ro",
       participantFullName: "Participant demo",
+      anonymousName: "CuriousSoap2121",
       isLeadership: false,
       alreadyRegistered: false,
       deadlineLabel: "deadline-ul proiectului",
@@ -104,7 +107,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
           title: "Lencioni pentru echipa ta",
           status: "not_started",
           detail: "Răspuns pentru echipa din care faci parte.",
-          href: "/participant/questionnaires/lencioni?assignmentId=11111111-1111-4111-8111-111111111111",
+          href: "/participant/questionnaires/lencioni?assignmentId=11111111-1111-4111-8111-111111111111&access=secure",
           assignmentId: "11111111-1111-4111-8111-111111111111",
           targetLabel: "Echipa operațională",
           estimatedMinutes: 12,
@@ -115,7 +118,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
           title: "360 pentru manager",
           status: "in_progress",
           detail: "Feedback confidențial pentru persoana către care raportezi.",
-          href: "/participant/questionnaires/boss_360?assignmentId=22222222-2222-4222-8222-222222222222",
+          href: "/participant/questionnaires/boss_360?assignmentId=22222222-2222-4222-8222-222222222222&access=secure",
           assignmentId: "22222222-2222-4222-8222-222222222222",
           targetLabel: "Manager direct",
           estimatedMinutes: 10,
@@ -126,7 +129,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
           title: "Lencioni pentru direcție",
           status: "completed",
           detail: "Task finalizat pentru demo-ul de progres.",
-          href: "/participant/questionnaires/lencioni?assignmentId=33333333-3333-4333-8333-333333333333",
+          href: "/participant/questionnaires/lencioni?assignmentId=33333333-3333-4333-8333-333333333333&access=secure",
           assignmentId: "33333333-3333-4333-8333-333333333333",
           targetLabel: "Echipa de direcție",
           estimatedMinutes: 12,
@@ -174,6 +177,7 @@ async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> 
     projectName: data.project_name,
     participantEmail: data.email,
     participantFullName: data.full_name,
+    anonymousName: data.anonymous_name,
     isLeadership: data.is_leadership,
     alreadyRegistered: data.already_registered,
     deadlineLabel: data.expires_at ? formatInviteDeadline(data.expires_at) : "finalul evaluării",

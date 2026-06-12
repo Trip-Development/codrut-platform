@@ -40,8 +40,8 @@ def test_assignment_bundle_template_renders_task_count() -> None:
         },
     )
 
-    assert "chestionare Codruț" in message.subject
-    assert "3 sarcini" in message.html_body
+    assert "Chestionarele tale Codruț" in message.subject
+    assert "3 chestionare" in message.html_body
 
 
 def test_template_render_rejects_missing_context() -> None:

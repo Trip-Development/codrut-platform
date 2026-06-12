@@ -25,7 +25,7 @@ type RosterImporterProps = {
   existingParticipants?: Pick<CompanyParticipant, "id" | "full_name" | "email">[];
 };
 
-type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile";
+type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile" | "pcm_base" | "pcm_phase";
 type FlowStepKey = "upload" | "review" | "import" | "access";
 type FlowStepState = "complete" | "current" | "upcoming" | "error";
 
@@ -35,7 +35,9 @@ const FIELD_LABELS: Record<DbField, string> = {
   reports_to_name: "Raportează Către / Manager (Opțional)",
   position: "Poziție / Rol (Opțional)",
   location: "Locație (Opțional)",
-  pcm_profile: "Profil PCM (Opțional)",
+  pcm_profile: "Profil PCM legacy (Opțional)",
+  pcm_base: "PCM Bază (Opțional)",
+  pcm_phase: "PCM Fază (Opțional)",
 };
 
 const FIELD_ALIASES: Record<DbField, string[]> = {
@@ -45,7 +47,68 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   position: ["position", "role", "rol", "pozitie", "functie", "job title"],
   location: ["location", "locatie", "oras", "city"],
   pcm_profile: ["profil pcm", "pcm", "pcm profile", "profil_pcm"],
+  pcm_base: ["pcm baza", "pcm bază", "baza pcm", "bază pcm", "base pcm", "pcm base"],
+  pcm_phase: ["pcm faza", "pcm fază", "faza pcm", "fază pcm", "phase pcm", "pcm phase"],
 };
+
+const PCM_TYPE_HEADERS = [
+  "ganditor",
+  "perseverent",
+  "promotor",
+  "empatic",
+  "imaginator",
+  "rebel",
+] as const;
+
+const PCM_DISPLAY_BY_HEADER: Record<string, string> = {
+  ganditor: "Gânditor",
+  perseverent: "Perseverent",
+  promotor: "Promotor",
+  empatic: "Empatic",
+  imaginator: "Imaginator",
+  rebel: "Rebel",
+};
+
+function normalizeHeader(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[()]/g, "")
+    .trim();
+}
+
+function inferPcmFromMatrix(
+  worksheet: XLSX.WorkSheet,
+  headers: string[],
+  zeroBasedDataRowIndex: number,
+): { base: string; phase: string } {
+  let base = "";
+  let phase = "";
+  headers.forEach((header, colIdx) => {
+    const normalized = normalizeHeader(header);
+    if (!PCM_TYPE_HEADERS.includes(normalized as (typeof PCM_TYPE_HEADERS)[number])) return;
+    const address = XLSX.utils.encode_cell({ r: zeroBasedDataRowIndex + 1, c: colIdx });
+    const cell = worksheet[address] as (XLSX.CellObject & { s?: { fill?: { fgColor?: { rgb?: string }; patternType?: string } } }) | undefined;
+    const rgb = cell?.s?.fill?.fgColor?.rgb?.replace(/^FF/i, "").toUpperCase();
+    const pcmLabel = PCM_DISPLAY_BY_HEADER[normalized] ?? header;
+
+    if (!rgb) return;
+    const isCyanBase = rgb.startsWith("00B0F0") || rgb.startsWith("00AEEF") || rgb.startsWith("00BFFF");
+    const isGreenBoth = rgb.startsWith("92D050") || rgb.startsWith("A9D18E") || rgb.startsWith("70AD47");
+    const isYellowPhase = rgb.startsWith("FFFF00") || rgb.startsWith("FFF200") || rgb.startsWith("FFD966");
+
+    if (isGreenBoth) {
+      base = pcmLabel;
+      phase = pcmLabel;
+    } else if (isCyanBase) {
+      base = pcmLabel;
+    } else if (isYellowPhase) {
+      phase = pcmLabel;
+    }
+  });
+  return { base, phase };
+}
 
 export function RosterImporter({
   companies,
@@ -101,6 +164,8 @@ export function RosterImporter({
     position: "",
     location: "",
     pcm_profile: "",
+    pcm_base: "",
+    pcm_phase: "",
   });
 
   const [lastImportedParticipantIds, setLastImportedParticipantIds] = useState<string[]>([]);
@@ -144,7 +209,7 @@ export function RosterImporter({
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
+        const workbook = XLSX.read(data, { type: "array", cellStyles: true });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
 
@@ -161,11 +226,14 @@ export function RosterImporter({
 
         // Convert rows to key-value objects
         const objects: Record<string, string>[] = dataRows
-          .map((row) => {
+          .map((row, rowOffset) => {
             const obj: Record<string, string> = {};
             rawHeaders.forEach((header, colIdx) => {
               obj[header] = row[colIdx] !== undefined ? String(row[colIdx]).trim() : "";
             });
+            const pcmFromMatrix = inferPcmFromMatrix(worksheet, rawHeaders, rowOffset + 1);
+            if (pcmFromMatrix.base) obj["PCM Bază"] = pcmFromMatrix.base;
+            if (pcmFromMatrix.phase) obj["PCM Fază"] = pcmFromMatrix.phase;
             // Only keep rows that have some content
             const hasContent = Object.values(obj).some((val) => val.length > 0);
             return hasContent ? obj : null;
@@ -177,7 +245,8 @@ export function RosterImporter({
           return;
         }
 
-        setHeaders(rawHeaders);
+        const derivedHeaders = Array.from(new Set([...rawHeaders, "PCM Bază", "PCM Fază"]));
+        setHeaders(derivedHeaders);
         setRawRows(objects);
 
         // Auto-detect column mapping
@@ -188,11 +257,13 @@ export function RosterImporter({
           position: "",
           location: "",
           pcm_profile: "",
+          pcm_base: "",
+          pcm_phase: "",
         };
 
         (Object.keys(FIELD_ALIASES) as DbField[]).forEach((field) => {
           const aliases = FIELD_ALIASES[field];
-          const matchedHeader = rawHeaders.find((h) =>
+          const matchedHeader = derivedHeaders.find((h) =>
             aliases.some((alias) => h.toLowerCase() === alias.toLowerCase() || h.toLowerCase().includes(alias.toLowerCase()))
           );
           if (matchedHeader) {
@@ -242,6 +313,8 @@ export function RosterImporter({
       position: getVal("position"),
       location: getVal("location"),
       pcm_profile: getVal("pcm_profile"),
+      pcm_base: getVal("pcm_base"),
+      pcm_phase: getVal("pcm_phase"),
     };
   }, [editedCells, mappings]);
 
@@ -323,12 +396,12 @@ export function RosterImporter({
           });
         }
       }
-      if (!row.pcm_profile) {
+      if (!row.pcm_base || !row.pcm_phase) {
         errors.push({
           rowIndex: idx,
           name,
-          field: "pcm_profile",
-          error: "Profil PCM necompletat (participantul nu va primi evaluări PCM).",
+          field: !row.pcm_base ? "pcm_base" : "pcm_phase",
+          error: "PCM bază/fază este incomplet. Participantul poate completa chestionarul PCM ulterior.",
           type: "warning",
         });
       }
@@ -430,6 +503,8 @@ export function RosterImporter({
           Location: r.location,
           email: r.email,
           "Profil PCM": r.pcm_profile,
+          "PCM Bază": r.pcm_base,
+          "PCM Fază": r.pcm_phase,
         })),
       );
       setLastImportedParticipantIds(importResult.participants.map((participant) => participant.id));
@@ -818,7 +893,9 @@ export function RosterImporter({
                   <th className="px-5 py-3">Reports To / Manager</th>
                   <th className="px-5 py-3">Poziție / Rol</th>
                   <th className="px-5 py-3">Locație</th>
-                  <th className="px-5 py-3">Profil PCM</th>
+                  <th className="px-5 py-3">PCM legacy</th>
+                  <th className="px-5 py-3">PCM bază</th>
+                  <th className="px-5 py-3">PCM fază</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">

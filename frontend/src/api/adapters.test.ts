@@ -26,6 +26,7 @@ import {
 } from "./companies";
 import {
   getQuestionnaireDefinition,
+  getQuestionnaireResponse,
   listQuestionnaireDefinitionStubs,
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
@@ -256,8 +257,10 @@ describe("frontend API adapter stubs", () => {
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
     expect(questionnaires.map((definition) => definition.id)).toEqual(
-      expect.arrayContaining(["boss_360", "boss_360_en", "pcm_base", "phase"]),
+      expect.arrayContaining(["boss_360", "pcm_base"]),
     );
+    expect(questionnaires.map((definition) => definition.id)).not.toContain("phase");
+    expect(questionnaires.map((definition) => definition.id)).not.toContain("boss_360_en");
     expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
@@ -389,6 +392,41 @@ describe("frontend API adapter stubs", () => {
       questionnaire_key: "lencioni",
     });
 
+  });
+
+  it("passes server-provided auth headers when loading an assignment draft", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "response-1",
+        assignment_id: "assignment-1",
+        questionnaire_key: "lencioni",
+        questionnaire_version: 1,
+        status: "draft",
+        answers: { q1: 2 },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getQuestionnaireResponse("assignment-1", {
+        headers: { Cookie: "codrut_session=session-token" },
+      }),
+    ).resolves.toMatchObject({
+      status: "draft",
+      answers: { q1: 2 },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/forms/assignments/assignment-1/response"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+        headers: { Cookie: "codrut_session=session-token" },
+      }),
+    );
   });
 
   it("does not report seeded questionnaire saves as successful outside demo mode", async () => {

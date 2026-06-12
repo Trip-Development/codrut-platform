@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token
+from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -212,7 +213,9 @@ class CompanyService:
     async def list_participants(self, user_id: UUID, company_id: UUID) -> list[ParticipantProfile]:
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
-        return await self.repository.list_participants(company_id)
+        participants = await self.repository.list_participants(company_id)
+        await self._ensure_anonymous_names(participants)
+        return participants
 
     async def create_participant(
         self,
@@ -239,6 +242,9 @@ class CompanyService:
                 location=_clean_optional(payload.location),
                 role_group=_clean_optional(payload.role_group),
                 pcm_profile=_clean_optional(payload.pcm_profile),
+                pcm_base=_clean_optional(payload.pcm_base),
+                pcm_phase=_clean_optional(payload.pcm_phase),
+                anonymous_name=new_anonymous_name(),
             )
         )
 
@@ -286,7 +292,10 @@ class CompanyService:
                         position=row.position,
                         location=row.location,
                         role_group=_infer_roster_role_group(row),
-                        pcm_profile=row.pcm_profile,
+                        pcm_profile=row.pcm_profile or row.pcm_base,
+                        pcm_base=row.pcm_base,
+                        pcm_phase=row.pcm_phase,
+                        anonymous_name=new_anonymous_name(),
                     )
                 )
             )
@@ -394,6 +403,16 @@ class CompanyService:
             mode=payload.mode,
             force_rotate=payload.force_rotate,
         )
+
+    async def _ensure_anonymous_names(self, participants: list[ParticipantProfile]) -> None:
+        changed = False
+        for participant in participants:
+            if participant.anonymous_name:
+                continue
+            participant.anonymous_name = new_anonymous_name()
+            changed = True
+        if changed:
+            await self.repository.session.flush()
 
     async def _dispatch_participant_invites(
         self,
@@ -904,6 +923,8 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
         location=_clean_optional(row.location),
         email=row.email.lower(),
         pcm_profile=_clean_optional(row.pcm_profile),
+        pcm_base=_clean_optional(row.pcm_base),
+        pcm_phase=_clean_optional(row.pcm_phase),
     )
 
 
@@ -935,6 +956,8 @@ def _new_access_code() -> str:
         "".join(secrets.choice(alphabet) for _ in range(4))
         for _ in range(3)
     )
+
+
 
 
 def hash_company_access_code(code: str) -> str:

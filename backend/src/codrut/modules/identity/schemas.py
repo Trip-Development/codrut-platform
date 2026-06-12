@@ -28,6 +28,7 @@ class InviteTask(BaseModel):
 class InviteVerifyResponse(BaseModel):
     email: EmailStr
     full_name: str
+    anonymous_name: str | None = None
     is_leadership: bool
     already_registered: bool
     project_id: UUID | None = None

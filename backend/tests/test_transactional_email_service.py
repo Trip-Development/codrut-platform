@@ -95,7 +95,7 @@ async def test_send_assignment_invitation_uses_bundle_template_for_existing_acco
         ),
     )
 
-    assert "3 sarcini" in provider.sent_messages[0].html_body
+    assert "3 chestionare" in provider.sent_messages[0].html_body
 
 
 async def test_send_assignment_invitation_does_not_stamp_failed_send() -> None:

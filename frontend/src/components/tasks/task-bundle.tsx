@@ -6,7 +6,7 @@ type TaskBundleProps = {
   tasks: InviteTask[];
   projectName: string;
   participantEmail?: string;
-  deadlineLabel: string;
+  deadlineLabel?: string;
   compact?: boolean;
 };
 
@@ -14,7 +14,6 @@ export function TaskBundle({
   tasks,
   projectName,
   participantEmail,
-  deadlineLabel,
   compact = false,
 }: TaskBundleProps) {
   const progress = inviteTaskProgress(tasks);
@@ -42,7 +41,7 @@ export function TaskBundle({
             <h2 className="mt-1.5 text-2xl font-semibold text-foreground">Sarcinile tale</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
               {participantEmail ? `${participantEmail} · ` : null}
-              Link valid până la {deadlineLabel}. Răspunsurile sunt asociate emailului, fără cont.
+              Link activ. Răspunsurile sunt asociate profilului tău securizat, fără cont complet.
             </p>
           </div>
           <Link
