@@ -228,7 +228,7 @@ class AssignmentService:
                         participant_ids=manager_team_ids,
                     )
                 )
-                for respondent_id in manager_team_ids:
+                for respondent_id in direct_report_ids:
                     plan_items.append(
                         _plan_team_assignment(
                             scope_id=f"manager-team:{manager_id}",

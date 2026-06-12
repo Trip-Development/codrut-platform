@@ -39,6 +39,7 @@ export default async function ParticipantQuestionnaireRunPage({
               definition={definition}
               assignmentId={assignmentId}
               initialAnswers={responseRecord?.answers}
+              initialStatus={responseRecord?.status}
             />
           ) : (
             <section className="rounded-2xl border border-[var(--border)] bg-surface p-6 text-center shadow-sm">
@@ -64,6 +65,7 @@ export default async function ParticipantQuestionnaireRunPage({
           definition={definition}
           assignmentId={assignmentId}
           initialAnswers={responseRecord?.answers}
+          initialStatus={responseRecord?.status}
         />
       ) : (
         <section className="rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm max-w-lg mx-auto text-center space-y-4 my-8">

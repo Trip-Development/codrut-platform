@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +28,17 @@ const fixtures = vi.hoisted(() => ({
               code: "Q1",
               type: "likert",
               label: "Initial question",
+              required: true,
+              scale: [
+                { value: 1, label: "Rar" },
+                { value: 2, label: "Des" },
+              ],
+            },
+            {
+              id: "q2",
+              code: "Q2",
+              type: "likert",
+              label: "Second question",
               required: true,
               scale: [
                 { value: 1, label: "Rar" },
@@ -125,9 +136,8 @@ describe("QuestionnairesWorkspace", () => {
           sections: [
             expect.objectContaining({
               questions: [
-                expect.objectContaining({
-                  label: "Proces clar pentru echipă",
-                }),
+                expect.objectContaining({ label: "Proces clar pentru echipă" }),
+                expect.any(Object),
               ],
             }),
           ],
@@ -168,5 +178,46 @@ describe("QuestionnairesWorkspace", () => {
 
     expect(descriptionInput).toHaveProperty("value", "Initial description");
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
+  });
+
+  it("edits a shared answer scale globally for matching questions", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    const globalPanel = await screen.findByText("Scări globale de răspuns");
+    const scaleCard = globalPanel.closest("section");
+    expect(scaleCard).not.toBeNull();
+
+    const labelInput = within(scaleCard as HTMLElement).getAllByDisplayValue("Rar")[0];
+    fireEvent.change(labelInput, { target: { value: "Foarte rar" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
+
+    await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
+    expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+      "lencioni",
+      expect.objectContaining({
+        schema: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              questions: [
+                expect.objectContaining({
+                  scale: [
+                    expect.objectContaining({ label: "Foarte rar" }),
+                    expect.objectContaining({ label: "Des" }),
+                  ],
+                }),
+                expect.objectContaining({
+                  scale: [
+                    expect.objectContaining({ label: "Foarte rar" }),
+                    expect.objectContaining({ label: "Des" }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      }),
+      1,
+    );
   });
 });

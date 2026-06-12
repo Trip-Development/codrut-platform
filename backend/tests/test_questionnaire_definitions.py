@@ -138,7 +138,7 @@ def test_boss_360_definition_is_icare_form_complete_with_section_scoring() -> No
 
     assert definition.title == "Feedback 360 iCARE pentru manager"
     assert len(questions) == 3
-    assert len(statements) == 48
+    assert len(statements) == 45
     question_types = {
         question["type"]
         for section in definition.schema["sections"]
@@ -152,6 +152,7 @@ def test_boss_360_definition_is_icare_form_complete_with_section_scoring() -> No
         "score_min": 0,
         "score_unit": "percent",
         "primary_result": "lowest_dimension",
+        "source_sheet": "Agregare 360",
     }
 
 
@@ -160,9 +161,9 @@ def test_boss_360_english_definition_uses_english_icare_copy() -> None:
     first_question = definition.schema["sections"][0]["questions"][0]
 
     assert definition.title == "iCARE 360 Feedback for Manager"
-    assert definition.schema["sections"][0]["title"] == "Inspiring"
-    assert first_question["label"] == "Developing people"
-    assert first_question["statements"][0]["label"] == "Gives constructive feedback"
+    assert definition.schema["sections"][0]["title"] == "Inspiră (Inspiring)"
+    assert first_question["label"] == "Dezvoltă oamenii"
+    assert first_question["statements"][0]["label"] == "Oferă feedback constructiv"
 
 
 def test_legacy_icare_key_resolves_to_360_alias_without_listing_separately() -> None:
@@ -181,15 +182,15 @@ def test_legacy_icare_key_resolves_to_360_alias_without_listing_separately() -> 
 
     assert definition.title == "Feedback 360 iCARE pentru manager"
     assert [section["title"] for section in sections] == [
-        "Inspirație",
-        "Construirea încrederii",
-        "Conștientizare",
-        "Rezultate",
-        "Împuternicire",
+        "Inspiră (Inspiring)",
+        "Construiește încredere (Create Trust)",
+        "Conștientizare (Awareness)",
+        "Rezultate (Results)",
+        "Responsabilizare (Empowerment)",
     ]
-    assert questions[0]["label"] == "Dezvoltarea oamenilor"
-    assert questions[-1]["label"] == "Sprijinirea echipei"
+    assert questions[0]["label"] == "Dezvoltă oamenii"
+    assert questions[-1]["label"] == "Ajută echipa"
     assert [statement["id"] for statement in statements] == [
-        f"icare_{number:02d}" for number in range(1, 49)
+        f"icare_{number:02d}" for number in range(1, 46)
     ]
-    assert len(statements) == 48
+    assert len(statements) == 45

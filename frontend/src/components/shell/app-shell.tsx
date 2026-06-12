@@ -8,6 +8,7 @@ import { ThemeToggle } from "../theme/theme-toggle";
 import type { ShellNavItem } from "./nav";
 import { SessionBanner } from "./session-banner";
 import type { SessionState } from "@/api/auth";
+import { getApiBaseUrl } from "@/api/runtime";
 
 type AppShellProps = {
   audience: "trainer" | "participant";
@@ -114,7 +115,21 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isTrainer = audience === "trainer";
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await fetch(`${getApiBaseUrl()}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      window.location.href = "/";
+    }
+  };
 
   const renderNavLinks = () => (
     <div className="flex flex-col gap-1.5">
@@ -166,6 +181,14 @@ export function AppShell({
             </div>
             <ThemeToggle />
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="tap-soft rounded-2xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground/68 transition hover:border-burgundy/35 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLoggingOut ? "Se iese..." : "Ieși din cont"}
+          </button>
         </div>
       </aside>
 
@@ -225,6 +248,14 @@ export function AppShell({
               <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-center text-xs font-bold text-foreground/75">
                 {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="tap-soft mt-3 w-full rounded-2xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground/68 transition hover:border-burgundy/35 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLoggingOut ? "Se iese..." : "Ieși din cont"}
+              </button>
             </div>
           </nav>
         </div>

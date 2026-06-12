@@ -117,9 +117,12 @@ class CompanyService:
                 company_name=company_name,
                 name=project.name,
                 description=project.description,
+                project_type=project.project_type,
                 status=project.status,
                 starts_at=project.starts_at,
                 due_at=project.due_at,
+                form_opens_at=project.form_opens_at,
+                form_closes_at=project.form_closes_at,
                 created_at=project.created_at,
                 updated_at=project.updated_at,
             )
@@ -150,15 +153,23 @@ class CompanyService:
                 "A project with this name already exists for this company.",
                 code="project_exists",
             )
-        _validate_project_dates(payload.starts_at, payload.due_at)
+        _validate_date_window(payload.starts_at, payload.due_at, "invalid_project_dates")
+        _validate_date_window(
+            payload.form_opens_at,
+            payload.form_closes_at,
+            "invalid_form_window",
+        )
         return await self.repository.add_project(
             CompanyProject(
                 company_id=company_id,
                 name=name,
                 description=_clean_optional(payload.description),
+                project_type=_clean_optional(payload.project_type),
                 status=payload.status,
                 starts_at=payload.starts_at,
                 due_at=payload.due_at,
+                form_opens_at=payload.form_opens_at,
+                form_closes_at=payload.form_closes_at,
             )
         )
 
@@ -186,14 +197,21 @@ class CompanyService:
             project.name = name
         if "description" in payload.model_fields_set:
             project.description = _clean_optional(payload.description)
+        if "project_type" in payload.model_fields_set:
+            project.project_type = _clean_optional(payload.project_type)
         if "status" in payload.model_fields_set and payload.status is not None:
             project.status = payload.status
         if "starts_at" in payload.model_fields_set:
             project.starts_at = payload.starts_at
         if "due_at" in payload.model_fields_set:
             project.due_at = payload.due_at
+        if "form_opens_at" in payload.model_fields_set:
+            project.form_opens_at = payload.form_opens_at
+        if "form_closes_at" in payload.model_fields_set:
+            project.form_closes_at = payload.form_closes_at
 
-        _validate_project_dates(project.starts_at, project.due_at)
+        _validate_date_window(project.starts_at, project.due_at, "invalid_project_dates")
+        _validate_date_window(project.form_opens_at, project.form_closes_at, "invalid_form_window")
         await self.repository.session.flush()
         return project
 
@@ -443,6 +461,12 @@ class CompanyService:
             else None
         )
         identity_service = IdentityService(self.repository.session)
+        project = (
+            await self.repository.get_project(company.id, project_id)
+            if project_id is not None
+            else None
+        )
+        invite_expires_at = project.form_closes_at if project is not None else None
 
         results: list[RosterImportEmailResult] = []
         for participant in participants:
@@ -462,6 +486,7 @@ class CompanyService:
                 respondent_profile_id=participant.id,
                 assignment_ids=[assignment.id for assignment in assignments],
                 project_id=project_id,
+                expires_at=invite_expires_at,
                 force_rotate=force_rotate,
             )
             invite_url = build_task_url(invite.token, settings)
@@ -876,11 +901,20 @@ def _clean_optional(value: str | None) -> str | None:
     return cleaned or None
 
 
-def _validate_project_dates(starts_at: datetime | None, due_at: datetime | None) -> None:
+def _validate_date_window(
+    starts_at: datetime | None,
+    due_at: datetime | None,
+    code: str,
+) -> None:
     if starts_at is not None and due_at is not None and due_at < starts_at:
+        message = (
+            "Project due date cannot be before its start date."
+            if code == "invalid_project_dates"
+            else "Form close date cannot be before its open date."
+        )
         raise DomainError(
-            "Project due date cannot be before its start date.",
-            code="invalid_project_dates",
+            message,
+            code=code,
         )
 
 

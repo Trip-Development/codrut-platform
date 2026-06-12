@@ -145,7 +145,7 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
 
     assert result.assignment_id == assignment_id
     assert result.scores["inspiring"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
-    assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 12}
+    assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
     assert result.scores["awareness"] == {"score": 25.0, "raw_avg": 1.0, "answered": 9}
     assert result.primary_result == "awareness"
 

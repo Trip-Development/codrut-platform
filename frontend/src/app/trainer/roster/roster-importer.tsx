@@ -8,6 +8,7 @@ import {
   importCompanyRoster,
   sendParticipantInvitations,
   type CompanyParticipant,
+  type CompanyProject,
   type ParticipantInvitationMode,
   type RosterInviteResult,
 } from "@/api/companies";
@@ -23,6 +24,9 @@ type RosterImporterProps = {
   defaultCompanyId?: string;
   lockCompany?: boolean;
   existingParticipants?: Pick<CompanyParticipant, "id" | "full_name" | "email">[];
+  projects?: Pick<CompanyProject, "id" | "name" | "status">[];
+  defaultProjectId?: string | null;
+  requireProject?: boolean;
 };
 
 type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile" | "pcm_base" | "pcm_phase";
@@ -165,9 +169,13 @@ export function RosterImporter({
   defaultCompanyId,
   lockCompany = false,
   existingParticipants = [],
+  projects = [],
+  defaultProjectId = null,
+  requireProject = false,
 }: RosterImporterProps) {
   const router = useRouter();
   const [companyId, setCompanyId] = useState(defaultCompanyId || companies[0]?.id || "");
+  const [projectId, setProjectId] = useState(defaultProjectId ?? projects[0]?.id ?? "");
   const [allCompanies, setAllCompanies] = useState<CompanyOption[]>(companies);
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -178,6 +186,14 @@ export function RosterImporter({
       setCompanyId(defaultCompanyId);
     }
   }, [defaultCompanyId]);
+
+  useEffect(() => {
+    if (defaultProjectId) {
+      setProjectId(defaultProjectId);
+    } else if (!projectId && projects[0]?.id) {
+      setProjectId(projects[0].id);
+    }
+  }, [defaultProjectId, projectId, projects]);
 
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -499,6 +515,9 @@ export function RosterImporter({
   const warningCount = validationErrors.filter((error) => error.type === "warning").length;
   const validRowCount = Math.max(0, processedRows.length - criticalRowCount);
   const selectedCompanyName = allCompanies.find((company) => company.id === companyId)?.name ?? "Compania curentă";
+  const projectRequired = requireProject;
+  const selectedProject = projects.find((project) => project.id === projectId) ?? null;
+  const canImportRows = !hasCriticalErrors && (!projectRequired || Boolean(selectedProject));
   const activeStep: FlowStepKey =
     importState.status === "success"
       ? "access"
@@ -567,7 +586,7 @@ export function RosterImporter({
   };
 
   const handleImport = async () => {
-    if (!companyId || processedRows.length === 0 || hasCriticalErrors) return;
+    if (!companyId || processedRows.length === 0 || !canImportRows) return;
 
     setImportState({ status: "importing", message: "Se importă participanții..." });
     setLastImportedParticipantIds([]);
@@ -625,6 +644,7 @@ export function RosterImporter({
     try {
       const result = await sendParticipantInvitations(companyId, {
         participantIds: lastImportedParticipantIds,
+        projectId: selectedProject?.id ?? null,
         mode,
       });
       setAccessState({
@@ -714,6 +734,33 @@ export function RosterImporter({
               )}
             </div>
 
+            {projects.length > 0 ? (
+              <label className="block">
+                <span className="text-sm font-semibold text-foreground">Proiect destinație</span>
+                <select
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                  className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3.5 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                >
+                  <option value="" disabled>
+                    Alege proiectul pentru import
+                  </option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-2 block text-xs leading-5 text-foreground/52">
+                  Invitațiile, linkurile și asignările se lucrează pe proiectul ales.
+                </span>
+              </label>
+            ) : requireProject ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm leading-6 text-amber-900">
+                Creează un proiect înainte de import ca invitațiile și rapoartele să fie corect încapsulate.
+              </div>
+            ) : null}
+
             <label className="block">
               <span className="text-sm font-semibold text-foreground">Selectează fișier</span>
               <input
@@ -758,7 +805,7 @@ export function RosterImporter({
             </p>
             <button
               type="button"
-              disabled={hasCriticalErrors}
+              disabled={!canImportRows}
               onClick={handleImport}
               className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
             >

@@ -5,12 +5,16 @@ import { RosterImporter } from "@/app/trainer/roster/roster-importer";
 
 export default async function CompanyParticipantsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ companyId: string }>;
+  searchParams: Promise<{ projectId?: string }>;
 }) {
   const { companyId } = await params;
+  const { projectId } = await searchParams;
   const company = await getCompanyDetail(companyId, await getServerApiRequestOptions());
   const participants = company?.participants ?? [];
+  const projects = company?.projects ?? [];
   const companyName = company?.name ?? "Compania curentă";
 
   return (
@@ -19,6 +23,9 @@ export default async function CompanyParticipantsPage({
         companies={[{ id: companyId, name: companyName }]}
         defaultCompanyId={companyId}
         existingParticipants={participants}
+        projects={projects}
+        defaultProjectId={projectId ?? projects[0]?.id ?? null}
+        requireProject
         lockCompany
       />
 

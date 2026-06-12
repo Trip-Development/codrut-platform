@@ -12,7 +12,22 @@ export class ParticipantPage {
     await this.page.waitForLoadState("networkidle");
   }
 
+  async acceptConsentIfShown() {
+    const consentButton = this.page.getByRole("button", { name: "Continuă la chestionare" });
+    if (!(await consentButton.isVisible())) {
+      return;
+    }
+
+    await this.page
+      .getByLabel("Accept regulile de confidențialitate și prelucrare a datelor pentru completarea chestionarelor Codruț.")
+      .check();
+    await expect(consentButton).toBeEnabled();
+    await consentButton.click();
+    await this.page.waitForLoadState("networkidle");
+  }
+
   async startFilling() {
+    await this.acceptConsentIfShown();
     const button = this.page.getByRole("link", { name: "Continuă următoarea sarcină" });
     await expect(button).toBeVisible();
     await button.click();
@@ -20,6 +35,7 @@ export class ParticipantPage {
   }
 
   async startNextTask() {
+    await this.acceptConsentIfShown();
     const continuaLink = this.page.getByRole("link", { name: "Continuă următoarea sarcină" });
     if (await continuaLink.isVisible()) {
       await continuaLink.click();
@@ -32,21 +48,21 @@ export class ParticipantPage {
   }
 
   async fillCurrentQuestionnaire() {
-    // Wait for the form to render by checking for either a Likert container or a select element
-    await this.page.locator("div.grid.gap-2.sm\\:grid-cols-3, select").first().waitFor({ state: "visible" });
+    // Wait for the form to render by checking for either answer-button groups or legacy selects.
+    await this.page.locator("[data-testid='question-response-group'], select").first().waitFor({ state: "visible" });
 
-    // 1. Answer Likert scale questions (click first option button in each grid)
-    const likertContainers = this.page.locator("div.grid.gap-2.sm\\:grid-cols-3");
-    const likertCount = await likertContainers.count();
-    for (let i = 0; i < likertCount; i++) {
-      const buttons = likertContainers.nth(i).locator("button");
+    // 1. Answer button-based questions, including Likert, single-choice, and statement sets.
+    const responseGroups = this.page.getByTestId("question-response-group");
+    const responseGroupCount = await responseGroups.count();
+    for (let i = 0; i < responseGroupCount; i++) {
+      const buttons = responseGroups.nth(i).locator("button");
       if ((await buttons.count()) > 0) {
         await buttons.first().click();
         await this.page.waitForTimeout(50); // Small delay to avoid event clashing
       }
     }
 
-    // 2. Answer statement set questions (select first valid value in each dropdown)
+    // 2. Answer legacy dropdown questions if any older questionnaire still renders them.
     const selects = this.page.locator("select");
     const selectCount = await selects.count();
     for (let i = 0; i < selectCount; i++) {
@@ -76,6 +92,9 @@ export class ParticipantPage {
   async submitResponse() {
     const btn = this.page.getByRole("button", { name: "Trimite răspunsurile" });
     await expect(btn).toBeEnabled();
+    this.page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
     await btn.click();
     // Verify confirmation screen is shown
     await expect(this.page.locator("h3")).toContainText("Răspunsurile au fost trimise");
