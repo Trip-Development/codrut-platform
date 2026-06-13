@@ -110,7 +110,8 @@ function getNavIcon(href: string) {
 }
 
 
-let globalIsSidebarCollapsed: boolean | null = null;
+let globalIsSidebarCollapsed: boolean = false;
+let globalHasReadStorage: boolean = false;
 
 export function AppShell({
   audience,
@@ -124,14 +125,10 @@ export function AppShell({
   accessNote,
   children,
 }: AppShellProps) {
-  if (typeof window !== "undefined" && globalIsSidebarCollapsed === null) {
-    globalIsSidebarCollapsed = localStorage.getItem("codrut_sidebar_collapsed") === "true";
-  }
-
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(globalIsSidebarCollapsed ?? false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(globalIsSidebarCollapsed);
   const [optimisticHref, setOptimisticHref] = useState(activeHref);
   
   const isTrainer = audience === "trainer";
@@ -139,10 +136,15 @@ export function AppShell({
   const isEffectivelyCollapsed = isSidebarCollapsed;
 
   useEffect(() => {
-    const stored = localStorage.getItem("codrut_sidebar_collapsed");
-    if (stored === "true" && !isSidebarCollapsed) {
-      setIsSidebarCollapsed(true);
-      globalIsSidebarCollapsed = true;
+    if (!globalHasReadStorage) {
+      const stored = localStorage.getItem("codrut_sidebar_collapsed");
+      if (stored === "true") {
+        setIsSidebarCollapsed(true);
+        globalIsSidebarCollapsed = true;
+      }
+      globalHasReadStorage = true;
+    } else {
+      setIsSidebarCollapsed(globalIsSidebarCollapsed);
     }
   }, []);
 
