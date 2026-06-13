@@ -81,6 +81,9 @@ describe("QuestionnairesWorkspace", () => {
   it("keeps typing local until the trainer explicitly saves", async () => {
     render(<QuestionnairesWorkspace />);
 
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
+
     const titleInput = await screen.findByDisplayValue("Chestionar de evaluare a echipei");
 
     fireEvent.change(titleInput, { target: { value: "L" } });
@@ -88,7 +91,6 @@ describe("QuestionnairesWorkspace", () => {
     fireEvent.change(titleInput, { target: { value: "Leadership" } });
 
     expect(titleInput).toHaveProperty("value", "Leadership");
-    expect(screen.getAllByText("Leadership").some((element) => element.tagName === "H3")).toBe(true);
     expect(screen.getByText("Modificări nesalvate")).toBeTruthy();
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
 
@@ -113,6 +115,9 @@ describe("QuestionnairesWorkspace", () => {
     );
 
     render(<QuestionnairesWorkspace />);
+
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
 
     const questionInput = await screen.findByDisplayValue("Initial question");
 
@@ -170,6 +175,9 @@ describe("QuestionnairesWorkspace", () => {
   it("can discard local questionnaire edits without touching the server", async () => {
     render(<QuestionnairesWorkspace />);
 
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
+
     const descriptionInput = await screen.findByDisplayValue("Initial description");
     fireEvent.change(descriptionInput, { target: { value: "Draft description" } });
 
@@ -182,6 +190,9 @@ describe("QuestionnairesWorkspace", () => {
 
   it("edits a shared answer scale globally for matching questions", async () => {
     render(<QuestionnairesWorkspace />);
+
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
 
     const globalPanel = await screen.findByText("Scări globale de răspuns");
     const scaleCard = globalPanel.closest("section");

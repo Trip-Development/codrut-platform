@@ -58,54 +58,57 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   }
 
   return (
-    <div className="space-y-5">
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="p-5 md:p-6">
-            <p className="text-sm font-semibold text-burgundy/75">Spațiu clienți</p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Companiile pornesc tot fluxul</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
+    <div className="space-y-6">
+      <section className="bento-card overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-32 bg-burgundy/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none"></div>
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_26rem] relative z-10">
+          <div className="p-6 md:p-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Spațiu clienți</p>
+            <h2 className="mt-2 text-2xl md:text-3xl font-display font-bold text-foreground tracking-tight">Companiile pornesc tot fluxul</h2>
+            <p className="mt-3 max-w-xl text-sm md:text-base leading-relaxed text-foreground/60">
               Intră în companie pentru lista de participanți, organigramă, echipe, invitații și rapoarte. Lista de aici rămâne scurtă, scanabilă și legată de datele salvate.
             </p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
               <CompanySummary label="Companii" value={activeCompanies} />
               <CompanySummary label="Proiecte" value={totalProjects} />
               <CompanySummary label="Participanți" value={totalParticipants} />
             </div>
           </div>
-          <form onSubmit={handleCreateCompany} className="flex flex-col justify-end gap-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
-            <label className="text-sm font-semibold text-foreground">
-              Nume companie
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Ex. Michelin România"
-                className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-semibold text-foreground outline-none transition-colors placeholder:text-foreground/34 focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={isSubmitting || !name.trim()}
-              className="tap-soft inline-flex min-h-11 items-center justify-center rounded-xl bg-burgundy px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {isSubmitting ? "Se salvează..." : "Adaugă companie"}
-            </button>
-          </form>
+          <div className="bg-surface-muted/30 border-t border-[var(--border)] lg:border-l lg:border-t-0 p-6 md:p-8 flex flex-col justify-center">
+            <form onSubmit={handleCreateCompany} className="flex flex-col gap-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-foreground/60">
+                Nume companie
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Ex. Michelin România"
+                  className="mt-2 min-h-[3rem] w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-semibold text-foreground outline-none transition-all placeholder:text-foreground/30 focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10 shadow-sm"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={isSubmitting || !name.trim()}
+                className="btn-premium w-full mt-2"
+              >
+                {isSubmitting ? "Se salvează..." : "Adaugă companie"}
+              </button>
+            </form>
+            {message && (
+              <p aria-live="polite" className="mt-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold text-foreground/70 text-center animate-fade-in-up">
+                {message}
+              </p>
+            )}
+          </div>
         </div>
-        {message ? (
-          <p aria-live="polite" className="border-t border-[var(--border)] bg-background/70 px-5 py-3 text-sm font-semibold text-foreground/62">
-            {message}
-          </p>
-        ) : null}
       </section>
 
       {sortedCompanies.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
-          <p className="text-base font-semibold text-foreground">Nu există companii încă.</p>
-          <p className="mt-2 text-sm text-foreground/58">Adaugă prima companie ca să activezi spațiul de lucru.</p>
+        <section className="bento-card bg-surface-muted/20 p-12 text-center flex flex-col items-center justify-center min-h-[30vh]">
+          <p className="text-xl font-bold text-foreground">Nu există companii încă.</p>
+          <p className="mt-3 text-sm leading-relaxed text-foreground/60">Adaugă prima companie ca să activezi spațiul de lucru.</p>
         </section>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {sortedCompanies.map((company) => (
             <CompanyCard
               key={company.id}
@@ -129,64 +132,58 @@ function CompanyCard({
       : 0;
 
   return (
-    <article className="group flex min-h-56 flex-col rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-burgundy/24 hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-background text-base font-semibold text-burgundy shadow-sm">
+    <Link href={`/trainer/companies/${company.id}`} className="group relative flex min-h-64 flex-col rounded-xl border border-[var(--border)] bg-surface p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_8px_30px_-12px_rgba(137,5,5,0.15)] hover:border-burgundy/30 overflow-hidden cursor-pointer">
+      <div className="absolute inset-0 bg-gradient-to-b from-surface to-surface-muted/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100"></div>
+      
+      <div className="relative z-10 flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-surface-muted/50 text-xl font-bold text-burgundy shadow-sm transition-transform duration-300 group-hover:scale-105 group-hover:shadow-md group-hover:border-burgundy/20">
             {company.name.trim().charAt(0).toLocaleUpperCase("ro")}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-foreground">{company.name}</h2>
-            <p className="mt-1 text-xs font-semibold text-foreground/52">
+            <h2 className="truncate text-lg font-bold text-foreground transition-colors group-hover:text-burgundy">{company.name}</h2>
+            <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-foreground/50">
               {company.dataUnavailable ? "Date indisponibile" : stageLabel(company.stage)}
             </p>
           </div>
         </div>
-        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-foreground/55 transition-colors group-hover:bg-burgundy/10 group-hover:text-burgundy">
-          {company.projectCount} proiecte
-        </span>
       </div>
 
-      {company.dataUnavailable ? (
-        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
-          Datele operaționale nu au putut fi citite momentan. Deschide compania pentru verificare.
-        </p>
-      ) : (
-        <dl className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl bg-surface-muted/55 py-3 text-center">
-          <CompanyStat label="Proiecte" value={company.projectCount} />
-          <CompanyStat label="Participanți" value={company.participantCount} />
-          <CompanyStat label="Finalizate" value={company.completedCount} />
-        </dl>
-      )}
+      <div className="relative z-10 mt-6 mb-4 flex-1">
+        {company.dataUnavailable ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-800">
+            Datele operaționale nu au putut fi citite momentan. Deschide compania pentru verificare.
+          </p>
+        ) : (
+          <dl className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl border border-[var(--border)] bg-surface-muted/30 py-4 text-center">
+            <CompanyStat label="Proiecte" value={company.projectCount} />
+            <CompanyStat label="Participanți" value={company.participantCount} />
+            <CompanyStat label="Finalizate" value={company.completedCount} />
+          </dl>
+        )}
+      </div>
 
-      <div className="mt-auto pt-4">
-        <div className="flex items-center justify-between text-sm font-semibold text-foreground/62">
-          <span>Progres</span>
-          <span>{company.dataUnavailable ? "N/A" : `${completion}%`}</span>
+      <div className="relative z-10 mt-auto pt-5 border-t border-[var(--border)]">
+        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-foreground/60 mb-3">
+          <span>Progres general</span>
+          <span className="text-foreground">{company.dataUnavailable ? "N/A" : `${completion}%`}</span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
+        <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted/80 shadow-inner">
           <div
-            className={["h-full rounded-full", company.dataUnavailable ? "bg-amber-400" : "bg-burgundy"].join(" ")}
+            className={["h-full rounded-full transition-all duration-1000", company.dataUnavailable ? "bg-amber-400" : "bg-gradient-to-r from-burgundy to-[#d13a3a]"].join(" ")}
             style={{ width: `${company.dataUnavailable ? 100 : completion}%` }}
           />
         </div>
       </div>
-
-      <Link
-        href={`/trainer/companies/${company.id}`}
-        className="tap-soft mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white hover:shadow-sm"
-      >
-        Intră în spațiu
-      </Link>
-    </article>
+    </Link>
   );
 }
 
 function CompanySummary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-2.5">
-      <p className="text-xs font-semibold text-foreground/48">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+    <div className="rounded-xl border border-[var(--border)] bg-surface-muted/20 px-4 py-3 transition-colors hover:bg-surface-muted/40">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1">{label}</p>
+      <p className="font-display text-2xl font-bold text-foreground tracking-tight">{value}</p>
     </div>
   );
 }
@@ -194,8 +191,8 @@ function CompanySummary({ label, value }: { label: string; value: string | numbe
 function CompanyStat({ label, value }: { label: string | number; value: string | number }) {
   return (
     <div className="px-3">
-      <p className="text-xs font-semibold text-foreground/45">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1.5">{label}</p>
+      <p className="text-base font-bold text-foreground">{value}</p>
     </div>
   );
 }

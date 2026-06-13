@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { BrandMark } from "../brand/brand-mark";
 import { ThemeToggle } from "../theme/theme-toggle";
@@ -31,10 +31,17 @@ function getNavIcon(href: string) {
       </svg>
     );
   }
-  if (href.includes("/companies") || href.includes("/projects")) {
+  if (href.includes("/companies")) {
     return (
       <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8.8a1.8 1.8 0 0 1 1.8-1.8h6.4A1.8 1.8 0 0 1 15 8.8V21M8 11h1.5M8 14h1.5M8 17h1.5M15 12h2.2A1.8 1.8 0 0 1 19 13.8V21" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+    );
+  }
+  if (href.includes("/projects")) {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
       </svg>
     );
   }
@@ -102,6 +109,9 @@ function getNavIcon(href: string) {
   );
 }
 
+
+let globalIsSidebarCollapsed: boolean | null = null;
+
 export function AppShell({
   audience,
   eyebrow,
@@ -114,10 +124,40 @@ export function AppShell({
   accessNote,
   children,
 }: AppShellProps) {
+  if (typeof window !== "undefined" && globalIsSidebarCollapsed === null) {
+    globalIsSidebarCollapsed = localStorage.getItem("codrut_sidebar_collapsed") === "true";
+  }
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(globalIsSidebarCollapsed ?? false);
+  const [optimisticHref, setOptimisticHref] = useState(activeHref);
+  
   const isTrainer = audience === "trainer";
+
+  const isEffectivelyCollapsed = isSidebarCollapsed;
+
+  useEffect(() => {
+    const stored = localStorage.getItem("codrut_sidebar_collapsed");
+    if (stored === "true" && !isSidebarCollapsed) {
+      setIsSidebarCollapsed(true);
+      globalIsSidebarCollapsed = true;
+    }
+  }, []);
+
+  const handleToggleCollapse = () => {
+    const newState = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newState);
+    globalIsSidebarCollapsed = newState;
+    localStorage.setItem("codrut_sidebar_collapsed", String(newState));
+  };
+
+  useEffect(() => {
+    setOptimisticHref(activeHref);
+  }, [activeHref]);
+
+
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -132,24 +172,34 @@ export function AppShell({
     }
   };
 
-  const renderNavLinks = () => (
-    <div className="flex flex-col gap-1.5">
+  const renderNavLinks = (isDesktop: boolean) => (
+    <div className="flex flex-col gap-1.5 relative mt-4">
+
       {navItems.map((item) => {
-        const active = item.href === activeHref;
+        const active = item.href === optimisticHref;
         return (
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => setMobileMenuOpen(false)}
+            data-href={item.href}
+            onClick={() => {
+              setOptimisticHref(item.href);
+              setMobileMenuOpen(false);
+            }}
             className={[
-              "tap-soft group relative flex items-center gap-3.5 rounded-2xl px-4 py-3.5 text-sm font-semibold",
+              "tap-soft group relative flex items-center rounded-full py-3 text-sm font-bold transition-colors duration-150",
+              isDesktop && isEffectivelyCollapsed ? "justify-center px-0 aspect-square h-11 mx-auto" : "gap-3.5 px-4 h-11",
               active
-                ? "bg-burgundy text-white shadow-md shadow-burgundy/12"
-                : "text-foreground/72 hover:bg-surface-muted hover:text-burgundy",
+                ? "text-white bg-burgundy shadow-md dark:bg-[#E65C5C]"
+                : "text-foreground/60 hover:text-burgundy hover:bg-burgundy/5 dark:hover:bg-burgundy/10",
             ].join(" ")}
           >
-            <span className={active ? "text-white" : "text-foreground/48 group-hover:text-burgundy"}>{getNavIcon(item.href)}</span>
-            <span className="truncate">{item.label}</span>
+            <span className={`relative z-10 shrink-0 transition-colors ${active ? "text-white" : "text-foreground/45 group-hover:text-burgundy"}`}>
+              {getNavIcon(item.href)}
+            </span>
+            <span className={`relative z-10 whitespace-nowrap transition-all duration-300 ${isDesktop && isEffectivelyCollapsed ? "w-0 opacity-0 overflow-hidden" : "opacity-100"}`}>
+              {item.label}
+            </span>
           </Link>
         );
       })}
@@ -157,44 +207,65 @@ export function AppShell({
   );
 
   return (
-    <div className={`app-min-height flex flex-col bg-background md:flex-row ${audience === "participant" ? "bg-vines-pattern" : ""}`}>
-      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--shell-sidebar)] p-6 shadow-sm backdrop-blur md:sticky md:top-0 md:flex">
-        <div className="mb-8">
+    <div className={`app-min-height flex flex-col md:flex-row bg-background`}>
+      <aside
+        aria-label="Desktop sidebar"
+        className={`hidden h-[100vh] shrink-0 flex-col bg-[var(--shell-sidebar)] border-r border-[var(--border)] py-6 px-4 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)] md:sticky md:top-0 md:flex z-40 overflow-visible transition-[width] duration-200 ease-out relative ${
+          isEffectivelyCollapsed ? "w-[5.5rem]" : "w-[18rem]"
+        }`}
+      >
+        <button
+          onClick={handleToggleCollapse}
+          className="absolute -right-3 top-8 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border)] bg-surface text-foreground/50 hover:text-foreground shadow-sm hover:scale-110 transition-all"
+        >
+          <svg className={`h-3 w-3 transition-transform duration-300 ${isSidebarCollapsed ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        
+        <div className={`mb-6 pt-2 shrink-0 whitespace-nowrap transition-all duration-200 ${isEffectivelyCollapsed ? "flex justify-center" : "pl-3"}`}>
           <Link
             href="/"
-            className="tap-soft group -m-2 block rounded-2xl p-2 transition-colors hover:bg-surface-muted"
+            className={`tap-soft group inline-block rounded-xl transition-colors hover:bg-surface-muted/50 ${isEffectivelyCollapsed ? "p-1" : "p-2 -ml-2"}`}
           >
             <BrandMark
               size="sm"
+              showText={!isEffectivelyCollapsed}
               subtitle={isTrainer ? "Spațiu trainer" : "Spațiu participant"}
             />
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto" aria-label="Desktop navigation">
-          {renderNavLinks()}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar" aria-label="Desktop navigation">
+          {renderNavLinks(true)}
         </nav>
 
-        <div className="relative mt-auto flex flex-col gap-3 border-t border-[var(--border)] pt-6">
-          <div className="flex items-center justify-between gap-3">
+        <div className="relative mt-auto flex flex-col gap-4 pt-6 shrink-0 z-10">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-[var(--border)] to-transparent absolute top-0 left-0" />
+          <div className={`flex px-1 transition-all duration-200 ${isEffectivelyCollapsed ? "flex-col items-center gap-4" : "items-center justify-between gap-3"}`}>
             <button
               type="button"
               onClick={() => setAccountMenuOpen((open) => !open)}
-              className="tap-soft flex min-w-0 flex-1 items-center justify-between gap-2 rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/75 hover:border-burgundy/30 hover:text-burgundy"
+              className={`tap-soft flex min-w-0 items-center justify-start gap-3 rounded-full border border-[var(--border)] bg-surface-muted/50 p-1.5 text-sm font-bold text-foreground hover:border-burgundy/30 hover:bg-surface transition-colors shadow-sm overflow-hidden ${isEffectivelyCollapsed ? "w-11 justify-center p-1.5 mx-auto" : "w-full pr-4"}`}
               aria-expanded={accountMenuOpen}
             >
-              <span className="truncate">{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</span>
-              <svg className={`h-3.5 w-3.5 shrink-0 transition-transform ${accountMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-burgundy text-xs font-bold text-white shadow-inner">
+                {(userLabel ?? (isTrainer ? "Andrei" : "Participant")).charAt(0).toUpperCase()}
+              </div>
+              <span className={`truncate text-left flex-1 transition-opacity duration-300 ${isEffectivelyCollapsed ? "opacity-0 w-0 hidden" : "opacity-100"}`}>{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</span>
+              <svg className={`h-4 w-4 shrink-0 text-foreground/50 transition-transform duration-300 ${accountMenuOpen ? "rotate-180" : ""} ${isEffectivelyCollapsed ? "hidden" : "block"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
               </svg>
             </button>
-            <ThemeToggle />
+            <div className={`shrink-0 transition-opacity duration-300 ${isEffectivelyCollapsed ? "hidden" : "flex items-center justify-center"}`}>
+              <ThemeToggle />
+            </div>
           </div>
           {accountMenuOpen ? (
-            <div className="absolute bottom-full left-0 right-0 mb-3 rounded-2xl border border-[var(--border)] bg-surface p-2 shadow-lg">
+            <div className="absolute bottom-full left-0 right-0 mb-3 rounded-xl border border-[var(--border)] glass-panel p-2 shadow-2xl animate-fade-in-up">
               <Link
                 href={isTrainer ? "/trainer/settings" : "/participant/account"}
-                className="tap-soft block rounded-xl px-3 py-2 text-sm font-semibold text-foreground/68 hover:bg-surface-muted hover:text-foreground"
+                className="tap-soft block rounded-xl px-4 py-2.5 text-sm font-semibold text-foreground/80 hover:bg-surface-muted hover:text-foreground"
               >
                 Setări cont
               </Link>
@@ -202,7 +273,7 @@ export function AppShell({
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="tap-soft mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="tap-soft mt-1 flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span>{isLoggingOut ? "Se iese..." : "Deconectare"}</span>
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -214,21 +285,21 @@ export function AppShell({
         </div>
       </aside>
 
-      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b border-[var(--border)] bg-surface/90 px-4 py-3 shadow-sm backdrop-blur-xl md:hidden">
+      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b border-[var(--border)] glass-panel px-5 py-4 shadow-sm md:hidden">
         <Link
           href="/"
-          className="tap-soft group -m-2 block min-w-0 rounded-2xl p-2 transition-colors hover:bg-surface-muted"
+          className="tap-soft group block min-w-0 rounded-xl transition-colors hover:bg-surface-muted"
         >
             <BrandMark
               size="sm"
               subtitle={isTrainer ? "Trainer" : "Participant"}
             />
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <ThemeToggle />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="tap-soft rounded-xl border border-[var(--border)] bg-surface p-2.5 text-foreground/75 hover:bg-surface-muted"
+            className="tap-soft rounded-full border border-[var(--border)] bg-surface/80 p-2.5 text-foreground/80 hover:bg-surface-muted shadow-sm"
             aria-label="Deschide meniul de navigare"
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -244,7 +315,7 @@ export function AppShell({
           onClick={() => setMobileMenuOpen(false)}
         >
           <nav
-            className="animate-slide-in absolute bottom-0 left-0 top-0 flex h-full w-72 flex-col border-r border-[var(--border)] bg-[var(--shell-sidebar)] p-6 shadow-2xl"
+            className="animate-slide-in absolute bottom-0 left-0 top-0 flex h-full w-[85%] max-w-[20rem] flex-col border-r border-[var(--border)] bg-surface p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             aria-label="Navigare mobilă"
           >
@@ -255,26 +326,30 @@ export function AppShell({
                 />
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="tap-soft rounded-xl p-1.5 text-foreground/50 hover:bg-surface-muted"
+                className="tap-soft rounded-full p-2 text-foreground/50 hover:bg-surface-muted bg-surface-muted/50 border border-[var(--border)]"
                 aria-label="Închide meniul"
               >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              {renderNavLinks()}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+              {renderNavLinks(false)}
             </div>
-            <div className="mt-auto border-t border-[var(--border)] pt-6">
-              <div className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-center text-xs font-bold text-foreground/75">
-                {userLabel ?? (isTrainer ? "Andrei" : "Participant")}
+            <div className="mt-auto pt-6 relative">
+              <div className="h-px w-full bg-gradient-to-r from-transparent via-[var(--border)] to-transparent absolute top-0 left-0" />
+              <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-surface-muted/50 p-1.5 pr-4 text-sm font-bold text-foreground">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-burgundy text-xs font-bold text-white shadow-inner">
+                  {(userLabel ?? (isTrainer ? "Andrei" : "Participant")).charAt(0).toUpperCase()}
+                </div>
+                <span className="truncate text-left flex-1">{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</span>
               </div>
               <button
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="tap-soft mt-3 w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="tap-soft mt-3 w-full rounded-full border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isLoggingOut ? "Se iese..." : "Deconectare"}
               </button>
@@ -284,13 +359,18 @@ export function AppShell({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-7 md:px-8 lg:px-10 lg:py-10">
-          <section className="mb-7 border-b border-[var(--border)] pb-6">
-            <p className="text-sm font-semibold text-burgundy/75">{eyebrow}</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold leading-tight text-foreground md:text-4xl">
-              {title}
-            </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/64">{description}</p>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 md:px-10 lg:px-12 lg:py-10">
+          <section className="mb-10 hero-shape p-10 md:p-14 shadow-glass animate-fade-in-up relative overflow-hidden">
+            <div className="absolute inset-0 bg-hero-mesh opacity-100"></div>
+            <div className="relative z-10">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-burgundy/80 mb-4">{eyebrow}</p>
+              <h1 className="font-display text-4xl font-bold leading-[1.1] text-foreground md:text-5xl lg:text-6xl tracking-tight">
+                {title}
+              </h1>
+              {description && (
+                <p className="mt-5 max-w-2xl text-lg leading-relaxed text-foreground/60">{description}</p>
+              )}
+            </div>
           </section>
           <SessionBanner session={session} note={accessNote} />
           {children}

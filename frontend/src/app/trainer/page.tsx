@@ -3,7 +3,7 @@ import Link from "next/link";
 import { audienceAccessNote } from "@/api/auth";
 import { getTrainerSession } from "@/api/auth-server";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { getTrainerDashboardSummary, type TrainerAction, type TrainerCompanyRow } from "@/api/trainer";
+import { getTrainerDashboardSummary, type TrainerCompanyRow } from "@/api/trainer";
 import { StatCard } from "@/components/presentation/stat-card";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
@@ -27,98 +27,27 @@ export default async function TrainerDashboardPage() {
       session={trainer}
       accessNote={audienceAccessNote("trainer")}
     >
-      <TrainerWorkspaceBar />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {summary.stats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <DeliveryTable companies={summary.activeCompanies} />
-        <aside className="space-y-4">
-          <VisibilityPanel
-            trainerRawAccess={summary.visibility.trainerRawAccess}
-            managerView={summary.visibility.managerView}
-            note={summary.visibility.note}
-          />
-          <NextActions actions={summary.actions} />
-        </aside>
-      </div>
+      <DeliveryTable companies={summary.activeCompanies} />
     </AppShell>
   );
 }
 
-function TrainerWorkspaceBar() {
-  const shortcuts = [
-    {
-      label: "Companii",
-      step: "01",
-      detail: "Adaugă clientul și gestionează spațiul complet.",
-      href: "/trainer/companies",
-    },
-    {
-      label: "Chestionare",
-      step: "02",
-      detail: "Editează întrebări, scale și versiuni.",
-      href: "/trainer/questionnaires",
-    },
-    {
-      label: "Șabloane email",
-      step: "03",
-      detail: "Ajustează textele reutilizabile. Trimiterea se face din companie.",
-      href: "/trainer/email",
-    },
-    {
-      label: "Rapoarte",
-      step: "04",
-      detail: "Vezi rezultate agregate și scoruri.",
-      href: "/trainer/reports",
-    },
-  ];
 
-  return (
-    <section className="mb-5 rounded-2xl border border-[var(--border)] bg-surface p-4 shadow-sm">
-      <div className="grid gap-5 xl:grid-cols-[minmax(18rem,1fr)_minmax(32rem,44rem)] xl:items-center">
-        <div className="min-w-0 max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Flux companie</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">Pornește din spațiul clientului</h2>
-          <p className="mt-2 text-sm leading-6 text-foreground/62">
-            Alege compania, apoi lucrează pe proiecte, roster, echipe, invitații și rapoarte în același context. Paginile globale rămân pentru configurări reutilizabile.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {shortcuts.map((shortcut) => (
-            <Link
-              key={shortcut.href}
-              href={shortcut.href}
-              className="tap-soft group flex min-h-24 flex-col justify-between rounded-xl border border-[var(--border)] bg-background px-3 py-3 transition hover:border-burgundy/45 hover:bg-surface-muted hover:shadow-sm"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-bold leading-5 text-foreground group-hover:text-burgundy">{shortcut.label}</p>
-                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-bold text-foreground/45 group-hover:bg-burgundy-50 group-hover:text-burgundy dark:group-hover:bg-burgundy/10">
-                  {shortcut.step}
-                </span>
-              </div>
-              <p className="mt-1 hidden text-xs leading-5 text-foreground/52 sm:block">{shortcut.detail}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function DeliveryTable({ companies }: { companies: TrainerCompanyRow[] }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-      <div className="border-b border-[var(--border)] px-5 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Livrare</p>
-        <h2 className="mt-1 text-xl font-semibold text-foreground">Companii active</h2>
-        <p className="mt-2 text-sm leading-6 text-foreground/62">
-          Primul ecran pentru trainer: unde este blocajul, cine trebuie urmărit și ce merge mai departe.
-        </p>
+    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-[0_4px_24px_-8px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.5)]">
+      <div className="border-b border-[var(--border)] px-5 py-4 flex items-center justify-between bg-surface-muted/30">
+        <h2 className="text-lg font-bold text-foreground">Status Proiecte Active</h2>
+        <Link href="/trainer/companies" className="text-sm font-semibold text-burgundy hover:underline">
+          Vezi toate companiile &rarr;
+        </Link>
       </div>
       <div className="divide-y divide-[var(--border)]">
         {companies.length === 0 ? (
@@ -191,57 +120,4 @@ function companyStageLabel(stage: TrainerCompanyRow["stage"]): string {
   return labels[stage];
 }
 
-function VisibilityPanel({
-  trainerRawAccess,
-  managerView,
-  note,
-}: {
-  trainerRawAccess: boolean;
-  managerView: "aggregate_only" | "locked";
-  note: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Vizibilitate raportare</p>
-      <div className="mt-4 grid gap-2">
-        <StatusLine label="Trainer detaliu" value={trainerRawAccess ? "Activ" : "Oprit"} />
-        <StatusLine label="Manager evaluat" value={managerView === "aggregate_only" ? "Doar agregat" : "Blocat"} />
-      </div>
-      <p className="mt-4 text-sm leading-6 text-foreground/62">{note}</p>
-    </section>
-  );
-}
 
-function StatusLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-xl bg-surface-muted px-3 py-2 text-sm">
-      <span className="font-semibold text-foreground/60">{label}</span>
-      <span className="font-semibold text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function NextActions({ actions }: { actions: TrainerAction[] }) {
-  return (
-    <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Următoarele acțiuni</p>
-      <div className="mt-4 space-y-3">
-        {actions.map((action) => (
-          <Link
-            key={action.label}
-            href={action.href}
-            className="tap-soft block rounded-xl border border-[var(--border)] bg-background px-3 py-3 hover:border-burgundy/45"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-foreground">{action.label}</p>
-              <span className="rounded-full bg-surface-muted px-2 py-1 text-xs font-semibold text-foreground/50">
-                {action.urgency}
-              </span>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-foreground/56">{action.detail}</p>
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}

@@ -54,12 +54,15 @@ export default function TrainerLoginPage() {
   };
 
   return (
-    <main className="app-min-height flex items-center justify-center bg-vines-inverted px-4 py-10">
-      <section className="shadow-2xl w-full max-w-md rounded-[2.5rem] border border-white/10 bg-surface p-8 md:p-10 transition-all duration-300">
+    <main className="app-min-height flex items-center justify-center bg-burgundy relative px-4 py-10 overflow-hidden">
+      {/* Decorative vines overlay */}
+      <div className="absolute inset-0 bg-vines-pattern opacity-10 pointer-events-none mix-blend-overlay"></div>
+      
+      <section className="relative shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-300">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
 
-          <span className="mt-4 flex items-center gap-1 text-[11px] font-bold text-burgundy bg-burgundy/5 px-2.5 py-1 rounded-full border border-burgundy/10 uppercase tracking-wider">
+          <span className="mt-4 flex items-center gap-1 text-[11px] font-bold text-burgundy bg-burgundy/10 px-2.5 py-1 rounded-full border border-burgundy/20 uppercase tracking-wider shadow-sm">
             Portal Trainer & Admin
           </span>
 

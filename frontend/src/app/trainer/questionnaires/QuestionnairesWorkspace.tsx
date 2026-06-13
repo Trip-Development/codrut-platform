@@ -90,16 +90,24 @@ export function QuestionnairesWorkspace() {
   const [newDescription, setNewDescription] = useState("");
   const [newAudience, setNewAudience] = useState<"leadership" | "team" | "participant">("team");
 
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredStubs = useMemo(() => {
+    if (!searchQuery.trim()) return stubs;
+    const q = searchQuery.toLowerCase();
+    return stubs.filter(s => 
+      (s.name && s.name.toLowerCase().includes(q)) || 
+      (s.id && s.id.toLowerCase().includes(q))
+    );
+  }, [stubs, searchQuery]);
+
   // Load stubs list
   const loadStubs = useCallback(async () => {
     setIsCatalogLoading(true);
     try {
       const list = await listQuestionnaireDefinitionStubs();
       setStubs(list);
-      if (list.length > 0 && !selectedKeyRef.current) {
-        setSelectedKey(list[0].id);
-        setSelectedVersion(list[0].version ?? 1);
-      }
     } finally {
       setIsCatalogLoading(false);
     }
@@ -674,76 +682,112 @@ export function QuestionnairesWorkspace() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-bold text-foreground">Catalog chestionare</h2>
-              <p className="mt-1 text-xs leading-5 text-foreground/52">Definiții active și drafturi.</p>
+    <div className="animate-fade-in-up space-y-6">
+      {!selectedKey ? (
+        // GALLERY MODE
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="w-full md:w-96">
+              <input
+                type="text"
+                placeholder="Caută chestionar..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-2.5 text-sm font-semibold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-inner placeholder:text-foreground/40"
+              />
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
               disabled={isCatalogLoading}
-              className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90"
+              className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:shadow-md transition-shadow shrink-0"
             >
-              {isCatalogLoading ? "Se încarcă..." : "+ Nou"}
+              {isCatalogLoading ? "..." : "+ Creează chestionar"}
             </button>
           </div>
 
-          <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-            {stubs.map((stub) => {
-              const isLocal = false;
-
-              return (
-              <button
-                key={`${stub.id}-${stub.version ?? "fără-versiune"}`}
-                onClick={() => handleSelectDefinition(stub.id, stub.version ?? 1)}
-                className={`min-w-[16rem] max-w-[18rem] text-left p-3 rounded-xl border transition-all ${
-                  selectedKey === stub.id && selectedVersion === (stub.version ?? 1)
-                    ? "bg-burgundy/10 border-burgundy/40 text-foreground"
-                    : "bg-background border-[var(--border)] text-foreground/70 hover:border-burgundy/30"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-burgundy">
-                    {stub.audience}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {isLocal ? (
-                      <span className="rounded-full border border-success/25 bg-success/12 px-1.5 py-0.5 text-[10px] font-bold text-success-ink">
-                        local
+          {isCatalogLoading ? (
+            <div className="flex items-center justify-center h-64 rounded-xl border border-[var(--border)] bg-surface">
+              <p className="text-sm font-semibold text-foreground/50">Se încarcă catalogul...</p>
+            </div>
+          ) : filteredStubs.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {filteredStubs.map((stub) => (
+                <button
+                  key={`${stub.id}-${stub.version ?? "fără-versiune"}`}
+                  onClick={() => handleSelectDefinition(stub.id, stub.version ?? 1)}
+                  className="group flex flex-col text-left p-6 rounded-xl border border-[var(--border)] bg-surface hover:border-burgundy/30 hover:shadow-[0_8px_30px_-12px_rgba(137,5,5,0.2)] transition-all duration-200 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 p-24 bg-burgundy/5 blur-3xl rounded-full -mr-12 -mt-12 pointer-events-none z-0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="relative z-10 flex flex-col h-full">
+                    <div className="flex items-start justify-between mb-4">
+                      <span className={`text-[10px] font-bold uppercase tracking-[0.2em] px-2 py-1 rounded-full border ${
+                        stub.audience === "team"
+                          ? "text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50"
+                          : stub.audience === "leadership"
+                            ? "text-purple-700 bg-purple-50 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/50"
+                            : "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/50"
+                      }`}>
+                        {stub.audience}
                       </span>
-                    ) : null}
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-surface-muted text-foreground/60 border border-[var(--border)]">
-                      v{stub.version ?? 1}
-                    </span>
+                      <span className="rounded-full bg-foreground/5 border border-foreground/10 px-2 py-0.5 text-[10px] font-bold text-foreground/60">
+                        v{stub.version ?? 1}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-lg text-foreground mb-2 group-hover:text-burgundy transition-colors line-clamp-1">
+                      {stub.name}
+                    </h4>
+                    <p className="text-sm text-foreground/60 mb-6 line-clamp-2 min-h-[2.5rem]">
+                      {stub.description || "Fără descriere. Apasă pentru a edita detaliile."}
+                    </p>
+                    <div className="mt-auto pt-4 border-t border-[var(--border)] flex items-center justify-between text-xs font-semibold text-foreground/50">
+                      <span>{stub.estimatedItems ?? "TBD"} întrebări</span>
+                      <span className="capitalize">{stub.status}</span>
+                    </div>
                   </div>
-                </div>
-                <h3 className="mt-1 font-bold text-sm text-foreground">{stub.name}</h3>
-                <p className="mt-1 text-xs text-foreground/50 line-clamp-2 leading-relaxed">
-                  {stub.description}
-                </p>
-                <div className="mt-2 flex items-center justify-between text-[11px] font-semibold text-foreground/45 border-t border-[var(--border)] pt-2">
-                  <span>{stub.estimatedItems ?? "TBD"} întrebări</span>
-                  <span className="capitalize">{stub.status}</span>
-                </div>
-              </button>
-              );
-            })}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="bento-card bg-surface-muted/30 p-12 text-center flex flex-col items-center justify-center min-h-[40vh]">
+              <p className="text-xl font-bold text-foreground">Catalog gol</p>
+              <p className="mt-3 text-sm leading-relaxed text-foreground/60 max-w-md mx-auto">
+                Nu s-au găsit chestionare. Apasă pe butonul de mai sus pentru a crea unul nou.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        // EDIT MODE
+        <div className="space-y-6">
+          {/* Editor Header / Back Button */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                if (canDiscardDraftForNavigation()) {
+                  setSelectedKey(null);
+                  currentDefinitionRef.current = null;
+                  setCurrentDefinition(null);
+                }
+              }}
+              className="tap-soft rounded-lg bg-surface px-4 py-2 text-sm font-bold text-foreground border border-[var(--border)] hover:bg-surface-muted hover:border-burgundy/30 transition-all flex items-center gap-2"
+            >
+              <span className="text-burgundy/70">&larr;</span> Înapoi la catalog
+            </button>
           </div>
-      </section>
-
-      {/* Main Content Area */}
-      <main className="space-y-5">
+          
+          {/* Main Content Area */}
+          <main className="space-y-5">
         {isEditorLoading ? (
-          <div className="flex items-center justify-center h-64 rounded-2xl border border-[var(--border)] bg-surface">
+          <div className="flex items-center justify-center h-64 rounded-xl border border-[var(--border)] bg-surface">
             <p className="text-sm font-semibold text-foreground/50">Se încarcă detaliile chestionarului...</p>
           </div>
         ) : currentDefinition ? (
-          <section className="rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm space-y-6">
-            {/* Header info card */}
-            <div className="grid gap-5 border-b border-[var(--border)] pb-5 xl:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0 space-y-4">
+          <section className="bento-card p-6 md:p-8 space-y-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-32 bg-burgundy/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none"></div>
+            <div className="relative z-10 space-y-6">
+              {/* Header info card */}
+              <div className="grid gap-5 border-b border-[var(--border)] pb-6 xl:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="min-w-0 space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-[#890505]/35 bg-[#890505]/10 px-2.5 py-1 text-xs font-bold text-[#890505] shadow-none dark:border-[#e35f5f]/45 dark:bg-[#890505]/22 dark:text-[#e35f5f]">
                     Audiență: {currentDefinition.schema.audience ?? (currentDefinition.key === "distress_drivers" ? "leadership" : "team")}
@@ -1228,16 +1272,12 @@ export function QuestionnairesWorkspace() {
                 </div>
               ))}
             </div>
+            </div>
           </section>
-        ) : (
-          <div className="rounded-2xl border border-[var(--border)] bg-surface p-10 text-center shadow-sm">
-            <p className="text-lg font-bold text-foreground">Catalog gol</p>
-            <p className="mt-2 text-sm leading-6 text-foreground/60">
-              Apasă pe Nou.
-            </p>
-          </div>
-        )}
-      </main>
+        ) : null}
+          </main>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

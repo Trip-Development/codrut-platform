@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "./runtime";
+import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 import type { ApiRequestOptions } from "./companies";
 
 export type EmailSurfaceStub = {
@@ -136,6 +136,9 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut actualiza șablonul pe server.");
   }
@@ -149,6 +152,9 @@ export async function activateEmailTemplateOnServer(key: string, version: number
     credentials: "include",
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut activa versiunea șablonului.");
   }
@@ -156,7 +162,7 @@ export async function activateEmailTemplateOnServer(key: string, version: number
   return backendToFrontendTemplate(data);
 }
 
-export async function deleteEmailTemplateOnServer(key: string, version?: number): Promise<EmailTemplate> {
+export async function deleteEmailTemplateOnServer(key: string, version?: number): Promise<EmailTemplate | null> {
   const url = version
     ? `${getApiBaseUrl()}/communications/templates/${key}?version=${version}`
     : `${getApiBaseUrl()}/communications/templates/${key}`;
@@ -165,10 +171,16 @@ export async function deleteEmailTemplateOnServer(key: string, version?: number)
     credentials: "include",
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      if (isDemoFallbackEnabled()) return null;
+      throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut pensiona șablonul.");
   }
-  const data = await response.json();
+  const text = await response.text();
+  if (!text) return null;
+  const data = JSON.parse(text);
   return backendToFrontendTemplate(data);
 }
 

@@ -264,7 +264,7 @@ describe("frontend API adapter stubs", () => {
     expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
-      estimatedItems: 48,
+      estimatedItems: 45,
     });
     await expect(listEmailSurfaceStubs()).resolves.toEqual([
       { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },

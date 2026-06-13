@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -25,6 +26,7 @@ function answerKey(question: QuestionnaireQuestion, statementId?: string): strin
 }
 
 export function QuestionnaireRunner({ definition, assignmentId, initialAnswers, initialStatus = "draft" }: QuestionnaireRunnerProps) {
+  const router = useRouter();
   const [answers, setAnswers] = useState<AnswerState>(initialAnswers ?? {});
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "submitted" | "error">(
     initialStatus === "submitted" ? "submitted" : "idle",
@@ -70,11 +72,15 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers, 
   }
 
   async function saveDraft() {
-    if (!assignmentId) return;
+    if (!assignmentId) {
+      router.back();
+      return;
+    }
     setSaveState("saving");
     try {
       await saveQuestionnaireResponse(assignmentId, answers);
       setSaveState("saved");
+      router.back();
     } catch {
       setSaveState("error");
     }
@@ -99,6 +105,17 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers, 
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
       <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-surface shadow-sm">
         <section className="border-b border-[var(--border)] px-5 py-5 md:px-6">
+          <div className="mb-4">
+            <button
+              onClick={() => router.back()}
+              className="tap-soft inline-flex items-center gap-2 text-sm font-bold text-foreground/60 hover:text-burgundy transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
+              </svg>
+              Înapoi la meniu
+            </button>
+          </div>
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-burgundy/75">
             v{definition.version} · {definition.key}
           </p>
