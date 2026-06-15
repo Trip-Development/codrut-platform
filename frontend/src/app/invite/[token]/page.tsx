@@ -226,7 +226,7 @@ export default function InvitePage({ params }: InvitePageProps) {
 
   return (
     <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10 text-foreground">
-      <section className="w-full max-w-3xl rounded-[2.5rem] border border-[var(--border)] bg-surface/90 p-8 shadow-brand backdrop-blur md:p-10">
+      <section className="w-full max-w-3xl rounded-[2.5rem] border border-[var(--border)] bg-surface/90 p-8 shadow-brand md:p-10">
         <NextLink href="/" className="mb-8 inline-flex">
           <BrandMark subtitle="Invitație securizată" />
         </NextLink>

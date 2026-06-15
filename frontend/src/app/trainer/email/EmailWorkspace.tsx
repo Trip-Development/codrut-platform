@@ -7,12 +7,14 @@ import {
   createEmailTemplateOnServer,
   updateEmailTemplateOnServer,
   deleteEmailTemplateOnServer,
+  bulkCreateCampaignRecipientsOnServer,
   type EmailOpsSummary,
   type AssessmentDeliveryRow,
   type EmailTemplate
 } from "@/api/email";
+import * as XLSX from "xlsx";
 
-type TabKey = "delivery" | "templates";
+type TabKey = "delivery" | "campaigns" | "templates";
 
 
 const MOCK_REPLACEMENTS: Record<string, string> = {
@@ -60,6 +62,81 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
   const [editLane, setEditLane] = useState<"transactional" | "campaign">("transactional");
+
+  // Campaign Manager States
+  const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+
+  // Manual Add State
+  const [showManualAddModal, setShowManualAddModal] = useState(false);
+  const [manualEmail, setManualEmail] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualCompany, setManualCompany] = useState("");
+  const [manualSegment, setManualSegment] = useState<"past_customer" | "potential_customer">("potential_customer");
+  const [isAddingManual, setIsAddingManual] = useState(false);
+
+  const handleAddManualContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualEmail.trim()) return;
+    setIsAddingManual(true);
+    try {
+      await bulkCreateCampaignRecipientsOnServer([{
+        email: manualEmail.trim(),
+        contact_name: manualName.trim() || undefined,
+        organization_name: manualCompany.trim() || undefined,
+        segment: manualSegment,
+      }]);
+      alert("Contact adăugat cu succes!");
+      setShowManualAddModal(false);
+      setManualEmail("");
+      setManualName("");
+      setManualCompany("");
+      refreshSummary();
+    } catch {
+      alert("Eroare la adăugarea contactului.");
+    } finally {
+      setIsAddingManual(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCSV(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet) as Record<string, string>[];
+      
+      const payload = rows.map((row) => {
+        const email = row["email"] || row["Email"] || row["EMAIL"];
+        const name = row["name"] || row["nume"] || row["Name"] || row["Nume"];
+        const company = row["company"] || row["companie"] || row["Company"] || row["Companie"];
+        const segmentStr = row["segment"] || row["Segment"];
+        const segment = segmentStr?.toString().toLowerCase().includes("past") ? "past_customer" : "potential_customer";
+        
+        return {
+          email,
+          contact_name: name,
+          organization_name: company,
+          segment: segment as "past_customer" | "potential_customer",
+        };
+      }).filter(r => r.email);
+
+      if (payload.length > 0) {
+        await bulkCreateCampaignRecipientsOnServer(payload);
+        alert(`S-au importat cu succes ${payload.length} contacte!`);
+        refreshSummary();
+      } else {
+        alert("Fișierul nu conține coloana 'email'. Vă rugăm să folosiți un cap de tabel valid.");
+      }
+    } catch {
+      alert("Eroare la procesarea fișierului.");
+    } finally {
+      setIsUploadingCSV(false);
+      e.target.value = "";
+    }
+  };
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -195,7 +272,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
   };
 
   // Convert markdown to clean, basic HTML preview
-  const getRenderedPreview = (subjectText: string, bodyText: string) => {
+  const getRenderedPreview = (subjectText: string, bodyText: string, lane: string) => {
     let replacedSubject = subjectText;
     let replacedBody = bodyText;
 
@@ -205,10 +282,22 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
     });
 
     // Basic markdown parsing
-    const html = replacedBody
+    let html = replacedBody
       .replace(/\r?\n/g, "<br />")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-burgundy underline font-bold">$1</a>');
+
+    if (lane === "campaign") {
+      html += `
+        <div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;font-size:12px;line-height:1.5;color:#8c7e7b;text-align:center;font-family:sans-serif;">
+          <p style="margin:0 0 8px;">Ai primit acest email deoarece ești abonat la actualizările noastre sau ești un client.</p>
+          <p style="margin:0 0 8px;">
+            <a href="https://app.codrut.ro/unsubscribe" style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a>
+          </p>
+          <p style="margin:0;">Str. Exemplu Nr. 10, București, România</p>
+        </div>
+      `;
+    }
 
     return {
       subject: replacedSubject,
@@ -219,7 +308,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
   const preview = selectedTemplate
     ? getRenderedPreview(
         isEditing ? editSubject : selectedTemplate.subject,
-        isEditing ? editBody : selectedTemplate.body
+        isEditing ? editBody : selectedTemplate.body,
+        isEditing ? editLane : selectedTemplate.lane
       )
     : { subject: "", bodyHtml: "" };
 
@@ -276,6 +366,16 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           }`}
         >
           Arhivă globală
+        </button>
+        <button
+          onClick={() => setActiveTab("campaigns")}
+          className={`px-6 py-3 text-sm font-bold rounded-t-2xl transition-all border-b-2 relative z-10 ${
+            activeTab === "campaigns"
+              ? "border-burgundy text-burgundy bg-surface shadow-[0_-4px_16px_rgba(137,5,5,0.05)]"
+              : "border-transparent text-foreground/50 hover:text-foreground hover:bg-surface-muted/50"
+          }`}
+        >
+          Campanii
         </button>
       </div>
 
@@ -442,15 +542,56 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               </div>
             </section>
           </div>
+        </div>
+      )}
 
-          {/* Campaigns lists */}
-          <section className="bento-card">
-            <div className="border-b border-[var(--border)] px-8 py-6 bg-surface-muted/20">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Campanii</p>
-              <h2 className="mt-2 text-xl font-bold text-foreground">Emailuri video personalizate</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-foreground/60">
-                Template-uri adresate direct factorilor de decizie cu linkuri de urmărire și vizualizare video.
+      {activeTab === "campaigns" && (
+        <div className="space-y-6 animate-fade-in-up">
+          {/* Campaigns header */}
+          <section className="bento-card overflow-hidden relative p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="absolute top-0 right-0 p-32 bg-burgundy/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none"></div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Campanii Promoționale</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Emailuri video personalizate</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/60">
+                Aici poți încărca liste Excel/CSV cu contacte (prospects sau clienți vechi) și să le trimiți automat campanii personalizate bazate pe șabloane.
               </p>
+            </div>
+            
+            <div className="relative z-10 shrink-0">
+              <label className="btn-premium cursor-pointer inline-flex items-center gap-2">
+                {isUploadingCSV ? (
+                  <span>Se încarcă...</span>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    Importă contacte
+                  </>
+                )}
+                <input 
+                  type="file" 
+                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                  className="hidden" 
+                  onChange={handleFileUpload}
+                  disabled={isUploadingCSV}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="bento-card">
+            <div className="border-b border-[var(--border)] px-8 py-6 bg-surface-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Date și setări</p>
+                <h2 className="mt-2 text-xl font-bold text-foreground">Setări campanie curentă</h2>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary text-xs py-2 px-4 whitespace-nowrap"
+                onClick={() => setShowManualAddModal(true)}
+              >
+                + Adaugă contact manual
+              </button>
             </div>
             <div className="grid gap-0 divide-y divide-[var(--border)] lg:grid-cols-[22rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
               <div className="space-y-4 p-6 bg-surface-muted/10">
@@ -478,33 +619,45 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
-                    {summary.campaign.recipients.map((recipient) => (
-                      <tr key={recipient.id} className="hover:bg-surface-muted/30 transition-colors">
-                        <td className="px-6 py-4">
-                          <p className="font-bold text-foreground">{recipient.company}</p>
-                          <p className="mt-1 text-xs font-medium text-foreground/60">
-                            {[recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || "Contact lipsă"}
-                          </p>
-                          <p className="mt-1 text-[11px] text-foreground/40 font-mono">{recipient.email}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="capitalize text-[11px] font-bold uppercase tracking-wider text-foreground/60">{recipient.clientType.replace("_", " ")}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="rounded-full bg-surface px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground/70 border border-[var(--border)] shadow-sm">
-                            {recipient.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
-                          {recipient.openRate ?? "-"} / {recipient.clickRate ?? "-"} / {recipient.viewRate ?? "-"}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="rounded-full bg-burgundy/10 border border-burgundy/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
-                            {recipient.outcome ?? "pending"}
-                          </span>
+                    {summary.campaign.recipients.length > 0 ? (
+                      summary.campaign.recipients.map((recipient) => (
+                        <tr key={recipient.id} className="hover:bg-surface-muted/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-foreground">{recipient.company}</p>
+                            <p className="mt-1 text-xs font-medium text-foreground/60">
+                              {[recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || "Contact lipsă"}
+                            </p>
+                            <p className="mt-1 text-[11px] text-foreground/40 font-mono">{recipient.email}</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="capitalize text-[11px] font-bold uppercase tracking-wider text-foreground/60">{recipient.clientType.replace("_", " ")}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="rounded-full bg-surface px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground/70 border border-[var(--border)] shadow-sm">
+                              {recipient.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
+                            {recipient.openRate ?? "-"} / {recipient.clickRate ?? "-"} / {recipient.viewRate ?? "-"}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="rounded-full bg-burgundy/10 border border-burgundy/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
+                              {recipient.outcome ?? "pending"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-foreground/50 text-sm font-medium">
+                          <p>Niciun contact înregistrat încă.</p>
+                          <div className="mt-4 flex items-center justify-center gap-3">
+                            <span className="text-foreground/40">Importă un fișier CSV sau</span>
+                            <button onClick={() => setShowManualAddModal(true)} className="text-burgundy hover:text-burgundy-dark font-bold underline underline-offset-2">adaugă manual</button>
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -556,7 +709,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       }}
                       className="group flex flex-col text-left p-6 rounded-3xl border border-[var(--border)] bg-surface hover:border-burgundy/30 hover:shadow-[0_8px_30px_-12px_rgba(137,5,5,0.15)] transition-all duration-200 relative overflow-hidden h-full min-h-[220px]"
                     >
-                      <div className="absolute top-0 right-0 p-24 bg-burgundy/5 blur-3xl rounded-full -mr-12 -mt-12 pointer-events-none z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                      <div className="absolute top-0 right-0 p-24 bg-burgundy/5 blur-3xl rounded-full -mr-12 -mt-12 pointer-events-none z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
                       <div className="relative z-10 flex flex-col h-full w-full">
                         <div className="flex items-start justify-between mb-4">
                           <span className={`text-[10px] font-bold uppercase tracking-[0.2em] px-3 py-1 rounded-full shadow-sm border ${
@@ -794,6 +947,42 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Manual Add Contact Modal */}
+      {showManualAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-surface rounded-2xl p-6 shadow-xl w-full max-w-md animate-fade-in-up border border-[var(--border)]">
+            <h2 className="text-xl font-bold text-foreground mb-4">Adaugă Contact Manual</h2>
+            <form onSubmit={handleAddManualContact} className="space-y-4">
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Email</span>
+                <input type="email" required value={manualEmail} onChange={e => setManualEmail(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy" placeholder="exemplu@companie.ro" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Nume (Opțional)</span>
+                <input type="text" value={manualName} onChange={e => setManualName(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy" placeholder="Nume și prenume" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Companie (Opțional)</span>
+                <input type="text" value={manualCompany} onChange={e => setManualCompany(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy" placeholder="Numele companiei" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Segment</span>
+                <select value={manualSegment} onChange={e => setManualSegment(e.target.value as "past_customer" | "potential_customer")} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy">
+                  <option value="potential_customer">Prospect / Client Potențial</option>
+                  <option value="past_customer">Client Existent / Vechi</option>
+                </select>
+              </label>
+              <div className="pt-4 flex justify-end gap-3 border-t border-[var(--border)]">
+                <button type="button" onClick={() => setShowManualAddModal(false)} className="px-4 py-2 rounded-lg font-bold text-foreground/60 hover:bg-surface-muted/30">Anulează</button>
+                <button type="submit" disabled={isAddingManual} className="btn-primary !px-6 !py-2 !rounded-lg !text-sm">
+                  {isAddingManual ? "Se adaugă..." : "Adaugă contact"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

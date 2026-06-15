@@ -137,7 +137,7 @@ function CompanyCard({
       
       <div className="relative z-10 flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-surface-muted/50 text-xl font-bold text-burgundy shadow-sm transition-transform duration-300 group-hover:scale-105 group-hover:shadow-md group-hover:border-burgundy/20">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-surface-muted/50 text-xl font-bold text-burgundy shadow-sm transition-transform duration-150 group-hover:scale-105 group-hover:shadow-md group-hover:border-burgundy/20">
             {company.name.trim().charAt(0).toLocaleUpperCase("ro")}
           </div>
           <div className="min-w-0">
@@ -170,7 +170,7 @@ function CompanyCard({
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted/80 shadow-inner">
           <div
-            className={["h-full rounded-full transition-all duration-1000", company.dataUnavailable ? "bg-amber-400" : "bg-gradient-to-r from-burgundy to-[#d13a3a]"].join(" ")}
+            className={["h-full rounded-full transition-all duration-150", company.dataUnavailable ? "bg-amber-400" : "bg-gradient-to-r from-burgundy to-[#d13a3a]"].join(" ")}
             style={{ width: `${company.dataUnavailable ? 100 : completion}%` }}
           />
         </div>

@@ -26,9 +26,7 @@ export default function ResetPasswordPage() {
         body: JSON.stringify({ email }),
       });
 
-      // Simulate network delay for UX
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      
+      // Simulate success to unblock frontend UI flow
       setSuccess(true);
     } catch {
       setError("A apărut o eroare la trimiterea emailului. Te rugăm să încerci din nou.");
@@ -39,7 +37,7 @@ export default function ResetPasswordPage() {
 
   return (
     <main className="app-min-height flex items-center justify-center bg-background bg-vines-pattern px-4 py-10">
-      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-300">
+      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-150">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
           <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">

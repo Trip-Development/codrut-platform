@@ -79,3 +79,23 @@ class CommunicationsRepository:
         )
         return result.scalar_one_or_none() is not None
 
+    async def add_campaign_recipients(self, recipients: list["CampaignRecipient"]) -> None:
+        self.session.add_all(recipients)
+        await self.session.flush()
+
+    async def list_campaign_recipients(self) -> list["CampaignRecipient"]:
+        from codrut.modules.communications.models import CampaignRecipient
+        stmt = select(CampaignRecipient).order_by(CampaignRecipient.created_at.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def add_campaign(self, campaign: "Campaign") -> "Campaign":
+        self.session.add(campaign)
+        await self.session.flush()
+        return campaign
+
+    async def list_campaigns(self) -> list["Campaign"]:
+        from codrut.modules.communications.models import Campaign
+        stmt = select(Campaign).order_by(Campaign.created_at.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

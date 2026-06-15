@@ -152,24 +152,24 @@ export default function HomePage() {
             setIsTyping(false);
             setDisplayedMessages((prev) => [...prev, nextMsg]);
             messageIndex++;
-            timer = setTimeout(showNextMessage, 1500);
-          }, 1200);
+            timer = setTimeout(showNextMessage, 800);
+          }, 600);
         } else {
           setDisplayedMessages((prev) => [...prev, nextMsg]);
           messageIndex++;
-          timer = setTimeout(showNextMessage, 800);
+          timer = setTimeout(showNextMessage, 400);
         }
       }
     };
 
-    timer = setTimeout(showNextMessage, 500);
+    timer = setTimeout(showNextMessage, 200);
 
     return () => clearTimeout(timer);
   }, [activeScenarioIdx]);
 
   return (
     <main id="top" className="bg-vines-pattern app-min-height bg-background text-foreground">
-      <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] bg-surface/88 shadow-sm backdrop-blur-xl">
+      <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] bg-surface/88 shadow-sm-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
           <Link
             href="/"
@@ -185,7 +185,7 @@ export default function HomePage() {
           >
             {/* Sliding Highlight Pill */}
             <div
-              className="pointer-events-none absolute h-9 rounded-full border border-[#890505]/35 bg-[#890505]/10 transition-[transform,width,opacity] duration-300 ease-out dark:border-[#e35f5f]/45 dark:bg-[#890505]/22"
+              className="pointer-events-none absolute h-9 rounded-full border border-[#890505]/35 bg-[#890505]/10 transition-[transform,width,opacity] duration-150 ease-out dark:border-[#e35f5f]/45 dark:bg-[#890505]/22"
               style={{
                 transform: `translateX(${indicatorStyle.left}px)`,
                 width: `${indicatorStyle.width}px`,
@@ -221,7 +221,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="#contact"
-              className="tap-soft hidden rounded-2xl bg-burgundy px-5 py-2.5 text-center text-sm font-bold text-white shadow-brand hover:bg-burgundy-700 md:block"
+              className="btn-primary !px-5 !py-2.5 hidden md:flex"
             >
               Solicită demo
             </Link>
@@ -246,32 +246,32 @@ export default function HomePage() {
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <a
               href="#contact"
-              className="tap-soft rounded-2xl bg-burgundy px-6 py-4 text-center text-base font-bold text-white shadow-brand hover:bg-burgundy-700"
+              className="btn-primary !px-6 !py-4 !text-base"
             >
               Programează o discuție B2B
             </a>
             <Link
               href="/login"
-              className="tap-soft rounded-2xl border border-burgundy bg-surface px-6 py-4 text-center text-base font-bold text-burgundy hover:bg-burgundy-50 dark:hover:bg-burgundy/10"
+              className="btn-secondary !px-6 !py-4 !text-base"
             >
               Intră în cont
             </Link>
           </div>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
-            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm backdrop-blur">
+            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm">
               <h2 className="text-sm font-bold text-foreground">Pentru HR & L&D</h2>
               <p className="mt-2 text-sm leading-6 text-foreground/58">
                 Măsurarea impactului programelor, monitorizarea progresului general și date clare privind retenția competențelor.
               </p>
             </article>
-            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm backdrop-blur">
+            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm">
               <h2 className="text-sm font-bold text-foreground">Pentru Management</h2>
               <p className="mt-2 text-sm leading-6 text-foreground/58">
                 Un mod simplu de a alinia obiectivele de business cu dezvoltarea reală a echipei, susținut de asistentul AI.
               </p>
             </article>
-            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm backdrop-blur">
+            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm">
               <h2 className="text-sm font-bold text-foreground">Pentru Participanți</h2>
               <p className="mt-2 text-sm leading-6 text-foreground/58">
                 Ghidaj prietenos, fără conturi complicate sau efort administrativ. Doar progres zilnic, pas cu pas.
@@ -282,7 +282,7 @@ export default function HomePage() {
 
         {/* High-fidelity Chat Mockup */}
         <div className="relative z-10 flex flex-col gap-4">
-          <div className="relative rounded-[2rem] border border-[var(--border)] bg-surface/92 p-4 shadow-2xl shadow-burgundy/10 backdrop-blur md:p-5">
+          <div className="relative rounded-[2rem] border border-[var(--border)] bg-surface/92 p-4 shadow-2xl shadow-burgundy/10 md:p-5">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-3">
                 <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm">
@@ -476,7 +476,7 @@ export default function HomePage() {
                 placeholder="Adresa de email corporate"
                 className="w-full sm:w-72 rounded-2xl border border-[var(--border)] bg-surface px-5 py-4 text-sm text-foreground focus:border-burgundy focus:outline-none"
               />
-              <button className="tap-soft w-full sm:w-auto rounded-2xl bg-burgundy px-7 py-4 text-sm font-bold text-white shadow-brand hover:bg-burgundy-700">
+              <button className="btn-primary w-full sm:w-auto !px-7 !py-4 !text-sm">
                 Solicită o discuție
               </button>
             </div>

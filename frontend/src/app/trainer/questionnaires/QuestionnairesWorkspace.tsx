@@ -699,7 +699,7 @@ export function QuestionnairesWorkspace() {
             <button
               onClick={() => setShowCreateModal(true)}
               disabled={isCatalogLoading}
-              className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:shadow-md transition-shadow shrink-0"
+              className="btn-primary shrink-0"
             >
               {isCatalogLoading ? "..." : "+ Creează chestionar"}
             </button>
@@ -883,7 +883,7 @@ export function QuestionnairesWorkspace() {
                     type="button"
                     onClick={() => void handleSaveDraft()}
                     disabled={!isDirty || isSaving || isDefinitionLoading}
-                    className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-45"
+                    className="btn-primary !px-4 !py-2 !text-xs !rounded-lg"
                   >
                     {isSaving ? "Se salvează..." : "Salvează modificările"}
                   </button>
@@ -1044,7 +1044,7 @@ export function QuestionnairesWorkspace() {
                 <h3 className="text-base font-bold text-foreground">Secțiuni ({currentDefinition.schema.sections.length})</h3>
                 <button
                   onClick={handleAddSection}
-                  className="tap-soft rounded-lg bg-burgundy px-3 py-1.5 text-xs font-bold text-white hover:bg-burgundy/90"
+                  className="btn-primary !px-4 !py-2 !text-xs !rounded-lg"
                 >
                   + Adaugă secțiune
                 </button>
@@ -1281,7 +1281,7 @@ export function QuestionnairesWorkspace() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40-sm p-4">
           <form
             onSubmit={handleAddQuestionnaire}
             className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-xl space-y-4"
@@ -1382,7 +1382,7 @@ export function QuestionnairesWorkspace() {
               </button>
               <button
                 type="submit"
-                className="tap-soft rounded-lg bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy/90"
+                className="btn-primary !px-4 !py-2 !text-xs !rounded-lg"
               >
                 Creează
               </button>

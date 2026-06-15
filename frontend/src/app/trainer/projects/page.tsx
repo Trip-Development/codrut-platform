@@ -110,7 +110,7 @@ export default async function TrainerProjectsPage({
               <Link
                 key={project.id}
                 href={`/trainer/projects/${project.id}`}
-                className="group flex flex-col rounded-3xl border border-[var(--border)] bg-surface p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_32px_-12px_rgba(137,5,5,0.12)] hover:border-burgundy/20 relative overflow-hidden"
+                className="group flex flex-col rounded-3xl border border-[var(--border)] bg-surface p-6 transition-all duration-150 hover:-translate-y-1 hover:shadow-[0_12px_32px_-12px_rgba(137,5,5,0.12)] hover:border-burgundy/20 relative overflow-hidden"
               >
                 {/* Status Accent Line */}
                 <div className={`absolute top-0 left-0 w-full h-1 ${
@@ -152,7 +152,7 @@ export default async function TrainerProjectsPage({
 
 function ProjectSummary({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl bg-surface/50 backdrop-blur-sm border border-[var(--border)] p-6 shadow-sm">
+    <div className="rounded-2xl bg-surface/50-sm border border-[var(--border)] p-6 shadow-sm">
       <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">{label}</p>
       <p className="mt-2 text-4xl font-display font-bold text-foreground">{value}</p>
     </div>

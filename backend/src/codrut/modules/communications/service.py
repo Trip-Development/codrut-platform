@@ -259,6 +259,52 @@ class CommunicationsService:
                 k.value,
                 except_version=catalog_template.version,
             )
+    async def bulk_create_campaign_recipients(
+        self,
+        payload: "codrut.modules.communications.schemas.CampaignRecipientBulkCreateRequest",
+    ) -> list["codrut.modules.communications.models.CampaignRecipient"]:
+        repository = self._require_repository()
+        from codrut.modules.communications.models import CampaignRecipient
+
+        recipients = []
+        for req in payload.recipients:
+            recipients.append(
+                CampaignRecipient(
+                    email=req.email,
+                    contact_name=req.contact_name,
+                    organization_name=req.organization_name,
+                    segment=req.segment,
+                    source=req.source,
+                )
+            )
+
+        # Basic de-duplication strategy by email or relying on DB constraint
+        # In a robust system, we would handle upserts.
+        await repository.add_campaign_recipients(recipients)
+        return recipients
+
+    async def create_campaign(
+        self,
+        payload: "codrut.modules.communications.schemas.CampaignCreateRequest",
+    ) -> "codrut.modules.communications.models.Campaign":
+        repository = self._require_repository()
+        from codrut.modules.communications.models import Campaign
+
+        campaign = Campaign(
+            name=payload.name,
+            segment=payload.segment,
+            subject=payload.subject,
+            html_body=payload.html_body,
+            text_body=payload.text_body,
+            video_url=payload.video_url,
+            thumbnail_url=payload.thumbnail_url,
+            landing_page_url=payload.landing_page_url,
+        )
+        return await repository.add_campaign(campaign)
+
+    async def list_campaigns(self) -> list["codrut.modules.communications.models.Campaign"]:
+        repository = self._require_repository()
+        return await repository.list_campaigns()
 
     async def get_email_ops_summary(self) -> dict:
         repository = self._require_repository()

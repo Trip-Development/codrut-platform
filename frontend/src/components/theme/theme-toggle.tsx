@@ -54,7 +54,7 @@ export function ThemeToggle() {
       aria-label={isDark ? "Activează tema luminoasă" : "Activează tema întunecată"}
       aria-pressed={isDark}
       onClick={toggleTheme}
-      className="tap-soft inline-grid h-10 grid-cols-2 items-center rounded-full border border-[var(--border)] bg-surface-muted/82 p-1 text-foreground/42 shadow-sm backdrop-blur hover:text-foreground/68"
+      className="tap-soft inline-grid h-10 grid-cols-2 items-center rounded-full border border-[var(--border)] bg-surface-muted/82 p-1 text-foreground/42 shadow-sm hover:text-foreground/68"
     >
       <span
         aria-hidden

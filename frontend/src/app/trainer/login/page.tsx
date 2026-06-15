@@ -29,8 +29,8 @@ export default function TrainerLoginPage() {
       setTimeout(() => {
         setQuoteIdx((prev) => (prev + 1) % quotes.length);
         setFade(true);
-      }, 300);
-    }, 4500);
+      }, 150);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, []);
@@ -54,11 +54,9 @@ export default function TrainerLoginPage() {
   };
 
   return (
-    <main className="app-min-height flex items-center justify-center bg-burgundy relative px-4 py-10 overflow-hidden">
-      {/* Decorative vines overlay */}
-      <div className="absolute inset-0 bg-vines-pattern opacity-10 pointer-events-none mix-blend-overlay"></div>
+    <main className="app-min-height flex items-center justify-center bg-vines-inverted relative px-4 py-10 overflow-hidden">
       
-      <section className="relative shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-300">
+      <section className="relative shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-150">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
 
@@ -71,7 +69,7 @@ export default function TrainerLoginPage() {
           </h1>
 
           <div className="mt-3 w-full min-h-[3rem] flex items-center justify-center px-2">
-            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-300 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
+            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-150 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
               {quotes[quoteIdx]}
             </p>
           </div>

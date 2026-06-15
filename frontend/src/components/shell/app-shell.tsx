@@ -110,7 +110,7 @@ function getNavIcon(href: string) {
 }
 
 
-let globalIsSidebarCollapsed: boolean = false;
+let globalIsSidebarCollapsed: boolean = true;
 let globalHasReadStorage: boolean = false;
 
 export function AppShell({
@@ -138,7 +138,10 @@ export function AppShell({
   useEffect(() => {
     if (!globalHasReadStorage) {
       const stored = localStorage.getItem("codrut_sidebar_collapsed");
-      if (stored === "true") {
+      if (stored === "false") {
+        setIsSidebarCollapsed(false);
+        globalIsSidebarCollapsed = false;
+      } else {
         setIsSidebarCollapsed(true);
         globalIsSidebarCollapsed = true;
       }
@@ -199,7 +202,7 @@ export function AppShell({
             <span className={`relative z-10 shrink-0 transition-colors ${active ? "text-white" : "text-foreground/45 group-hover:text-burgundy"}`}>
               {getNavIcon(item.href)}
             </span>
-            <span className={`relative z-10 whitespace-nowrap transition-all duration-300 ${isDesktop && isEffectivelyCollapsed ? "w-0 opacity-0 overflow-hidden" : "opacity-100"}`}>
+            <span className={`relative z-10 whitespace-nowrap transition-all duration-150 ${isDesktop && isEffectivelyCollapsed ? "w-0 opacity-0 overflow-hidden" : "opacity-100"}`}>
               {item.label}
             </span>
           </Link>
@@ -220,7 +223,7 @@ export function AppShell({
           onClick={handleToggleCollapse}
           className="absolute -right-3 top-8 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border)] bg-surface text-foreground/50 hover:text-foreground shadow-sm hover:scale-110 transition-all"
         >
-          <svg className={`h-3 w-3 transition-transform duration-300 ${isSidebarCollapsed ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <svg className={`h-3 w-3 transition-transform duration-150 ${isSidebarCollapsed ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -241,49 +244,71 @@ export function AppShell({
         <nav className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar" aria-label="Desktop navigation">
           {renderNavLinks(true)}
         </nav>
-
-        <div className="relative mt-auto flex flex-col gap-4 pt-6 shrink-0 z-10">
+        <div className="relative mt-auto flex flex-col pt-6 shrink-0 z-50">
           <div className="h-px w-full bg-gradient-to-r from-transparent via-[var(--border)] to-transparent absolute top-0 left-0" />
-          <div className={`flex px-1 transition-all duration-200 ${isEffectivelyCollapsed ? "flex-col items-center gap-4" : "items-center justify-between gap-3"}`}>
-            <button
-              type="button"
-              onClick={() => setAccountMenuOpen((open) => !open)}
-              className={`tap-soft flex min-w-0 items-center justify-start gap-3 rounded-full border border-[var(--border)] bg-surface-muted/50 p-1.5 text-sm font-bold text-foreground hover:border-burgundy/30 hover:bg-surface transition-colors shadow-sm overflow-hidden ${isEffectivelyCollapsed ? "w-11 justify-center p-1.5 mx-auto" : "w-full pr-4"}`}
-              aria-expanded={accountMenuOpen}
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-burgundy text-xs font-bold text-white shadow-inner">
-                {(userLabel ?? (isTrainer ? "Andrei" : "Participant")).charAt(0).toUpperCase()}
-              </div>
-              <span className={`truncate text-left flex-1 transition-opacity duration-300 ${isEffectivelyCollapsed ? "opacity-0 w-0 hidden" : "opacity-100"}`}>{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</span>
-              <svg className={`h-4 w-4 shrink-0 text-foreground/50 transition-transform duration-300 ${accountMenuOpen ? "rotate-180" : ""} ${isEffectivelyCollapsed ? "hidden" : "block"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-            <div className={`shrink-0 transition-opacity duration-300 ${isEffectivelyCollapsed ? "hidden" : "flex items-center justify-center"}`}>
-              <ThemeToggle />
-            </div>
-          </div>
-          {accountMenuOpen ? (
-            <div className="absolute bottom-full left-0 right-0 mb-3 rounded-xl border border-[var(--border)] glass-panel p-2 shadow-2xl animate-fade-in-up">
-              <Link
-                href={isTrainer ? "/trainer/settings" : "/participant/account"}
-                className="tap-soft block rounded-xl px-4 py-2.5 text-sm font-semibold text-foreground/80 hover:bg-surface-muted hover:text-foreground"
-              >
-                Setări cont
-              </Link>
+          
+          <div className="relative w-full">
+            {accountMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+                <div className={`absolute bottom-full mb-3 rounded-2xl border border-[var(--border)] bg-surface p-2 shadow-2xl animate-fade-in-up z-50 flex flex-col gap-1 ${isEffectivelyCollapsed ? "left-2 w-64 origin-bottom-left" : "left-0 right-0 origin-bottom"}`}>
+                  
+                  <div className="px-3 py-3 border-b border-[var(--border)] mb-1 bg-surface-muted/30 rounded-t-xl flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy font-bold shadow-inner">
+                      {(userLabel ?? (isTrainer ? "Andrei" : "Participant")).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col overflow-hidden">
+                      <p className="text-sm font-bold text-foreground truncate">{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</p>
+                      <p className="text-[10px] font-bold text-foreground/50 truncate uppercase tracking-wider">{isTrainer ? "Spațiu Trainer" : "Participant"}</p>
+                    </div>
+                  </div>
+
+                  <div className="px-3 py-2 flex items-center justify-between border-b border-[var(--border)] mb-1 pb-3 mt-1">
+                    <span className="text-xs font-semibold text-foreground/70">Temă interfață</span>
+                    <ThemeToggle />
+                  </div>
+
+                  <Link
+                    href={isTrainer ? "/trainer/settings" : "/participant/account"}
+                    onClick={() => setAccountMenuOpen(false)}
+                    className="tap-soft block rounded-xl px-3 py-2.5 text-sm font-semibold text-foreground/80 hover:bg-surface-muted hover:text-foreground flex items-center gap-3 transition-colors"
+                  >
+                    <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.3 2.3l.7 2.3a7.8 7.8 0 011.6.7l2.1-1.1 1.4 1.4-1.1 2.1c.3.5.5 1 .7 1.6l2.3.7v2l-2.3.7a7.8 7.8 0 01-.7 1.6l1.1 2.1-1.4 1.4-2.1-1.1c-.5.3-1 .5-1.6.7l-.7 2.3h-2l-.7-2.3a7.8 7.8 0 01-1.6-.7l-2.1 1.1-1.4-1.4 1.1-2.1c-.3-.5-.5-1-.7-1.6l-2.3-.7v-2l2.3-.7c.2-.6.4-1.1.7-1.6l-1.1-2.1 1.4-1.4 2.1 1.1c.5-.3 1-.5 1.6-.7l.7-2.3h2zM9 12a3 3 0 106 0 3 3 0 00-6 0z" /></svg>
+                    Setări cont
+                  </Link>
+                  
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="tap-soft flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                  >
+                    <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <span>{isLoggingOut ? "Se iese..." : "Deconectare"}</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className={`flex px-1 mt-2 transition-all duration-200 ${isEffectivelyCollapsed ? "justify-center" : "items-center"}`}>
               <button
                 type="button"
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="tap-soft mt-1 flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setAccountMenuOpen((open) => !open)}
+                className={`tap-soft flex min-w-0 items-center justify-start gap-3 rounded-full border border-[var(--border)] bg-surface-muted/50 p-1.5 text-sm font-bold text-foreground hover:border-burgundy/30 hover:bg-surface transition-colors shadow-sm overflow-hidden ${isEffectivelyCollapsed ? "w-11 justify-center mx-auto" : "w-full pr-4"}`}
+                aria-expanded={accountMenuOpen}
               >
-                <span>{isLoggingOut ? "Se iese..." : "Deconectare"}</span>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9.75m9 0-3-3m3 3-3 3" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-burgundy text-xs font-bold text-white shadow-inner">
+                  {(userLabel ?? (isTrainer ? "Andrei" : "Participant")).charAt(0).toUpperCase()}
+                </div>
+                <div className={`truncate text-left flex-1 flex flex-col justify-center transition-opacity duration-150 ${isEffectivelyCollapsed ? "opacity-0 w-0 hidden" : "opacity-100"}`}>
+                  <span className="truncate leading-tight">{userLabel ?? (isTrainer ? "Andrei" : "Participant")}</span>
+                </div>
+                <svg className={`h-4 w-4 shrink-0 text-foreground/50 transition-transform duration-150 ${accountMenuOpen ? "rotate-180" : ""} ${isEffectivelyCollapsed ? "hidden" : "block"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4 15 8-8 8 8" />
                 </svg>
               </button>
             </div>
-          ) : null}
+          </div>
         </div>
       </aside>
 
@@ -313,7 +338,7 @@ export function AppShell({
 
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-300 md:hidden"
+          className="fixed inset-0 z-50 bg-black/40-sm transition-opacity duration-150 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
           <nav

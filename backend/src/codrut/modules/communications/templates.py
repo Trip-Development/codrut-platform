@@ -20,6 +20,19 @@ EMAIL_SHELL_OPEN = (
     'letter-spacing:.08em;text-transform:uppercase;">Codruț</p>'
 )
 EMAIL_SHELL_CLOSE = "</div></div>"
+
+PROMOTIONAL_SHELL_CLOSE = (
+    '</div>'
+    '<div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;'
+    'font-size:12px;line-height:1.5;color:#8c7e7b;text-align:center;">'
+    '<p style="margin:0 0 8px;">Ai primit acest email deoarece ești abonat la actualizările noastre sau ești un client.</p>'
+    '<p style="margin:0 0 8px;">'
+    '<a href="https://app.codrut.ro/unsubscribe" style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a>'
+    '</p>'
+    '<p style="margin:0;">Str. Exemplu Nr. 10, București, România</p>'
+    '</div></div>'
+)
+
 BODY_COPY_STYLE = 'style="margin:0 0 18px;font-size:15px;line-height:1.65;"'
 GREETING_STYLE = 'style="margin:0 0 14px;font-size:15px;line-height:1.65;"'
 HELP_TEXT_STYLE = 'style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;"'

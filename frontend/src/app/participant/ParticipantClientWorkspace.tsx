@@ -58,7 +58,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
       userLabel={anonymousIdentity}
     >
       <div className="space-y-7">
-        <section className="rounded-[1.75rem] border border-burgundy/16 bg-surface/94 p-5 shadow-[0_22px_60px_rgba(137,5,5,0.10)] backdrop-blur md:p-7">
+        <section className="rounded-[1.75rem] border border-burgundy/16 bg-surface/94 p-5 shadow-[0_22px_60px_rgba(137,5,5,0.10)] md:p-7">
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
             <div className="min-w-0">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -120,7 +120,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   <span>{tasksProgressPct}%</span>
                 </div>
                 <div className="h-2.5 overflow-hidden rounded-full bg-burgundy/10">
-                  <div className="h-full rounded-full bg-burgundy transition-all duration-700" style={{ width: `${tasksProgressPct}%` }} />
+                  <div className="h-full rounded-full bg-burgundy transition-all duration-200" style={{ width: `${tasksProgressPct}%` }} />
                 </div>
               </div>
               <div className="mt-4 grid gap-3 text-sm">
@@ -138,7 +138,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
           <StatusCard label="Confidențial" value="Da" detail="Răspunsurile 360 sunt folosite în rapoarte agregate." tone="green" />
         </section>
 
-        <section className="rounded-[1.75rem] border border-[var(--border)] bg-surface/90 p-5 shadow-sm backdrop-blur md:p-6">
+        <section className="rounded-[1.75rem] border border-[var(--border)] bg-surface/90 p-5 shadow-sm md:p-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Profil PCM</p>
@@ -214,7 +214,7 @@ function StatusCard({
   tone: "burgundy" | "green" | "gray";
 }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-surface/86 p-5 shadow-sm backdrop-blur">
+    <div className="rounded-2xl border border-[var(--border)] bg-surface/86 p-5 shadow-sm">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/45">{label}</p>
       <p
         className={[

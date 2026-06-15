@@ -15,6 +15,8 @@ from codrut.modules.communications.schemas import (
     EmailTemplateUpdateRequest,
     EmailTestSendRequest,
     EmailTestSendResponse,
+    CampaignCreateRequest,
+    CampaignRecipientBulkCreateRequest,
 )
 from codrut.modules.communications.service import CommunicationsService
 from codrut.modules.identity.models import UserRole
@@ -147,3 +149,47 @@ async def get_email_ops_summary(
     summary = await CommunicationsService(session).get_email_ops_summary()
     await session.commit()
     return summary
+
+
+@router.post("/campaigns/recipients/bulk")
+async def bulk_create_campaign_recipients(
+    payload: CampaignRecipientBulkCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    _require_trainer(principal)
+    recipients = await CommunicationsService(session).bulk_create_campaign_recipients(payload)
+    await session.commit()
+    return {"status": "success", "count": len(recipients)}
+
+
+@router.post("/campaigns")
+async def create_campaign(
+    payload: CampaignCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    _require_trainer(principal)
+    campaign = await CommunicationsService(session).create_campaign(payload)
+    await session.commit()
+    return {"status": "success", "campaign_id": str(campaign.id)}
+
+
+@router.get("/campaigns")
+async def list_campaigns(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[dict]:
+    _require_trainer(principal)
+    campaigns = await CommunicationsService(session).list_campaigns()
+    await session.commit()
+    return [
+        {
+            "id": str(c.id),
+            "name": c.name,
+            "segment": c.segment.value,
+            "status": c.status.value,
+            "subject": c.subject,
+        }
+        for c in campaigns
+    ]
