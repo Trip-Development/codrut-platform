@@ -80,7 +80,6 @@ export function QuestionnaireRunner({ definition, assignmentId, initialAnswers, 
     try {
       await saveQuestionnaireResponse(assignmentId, answers);
       setSaveState("saved");
-      router.back();
     } catch {
       setSaveState("error");
     }

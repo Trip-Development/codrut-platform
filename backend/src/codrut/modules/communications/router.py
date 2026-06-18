@@ -9,14 +9,14 @@ from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.schemas import (
+    CampaignCreateRequest,
+    CampaignRecipientBulkCreateRequest,
     EmailOpsSummaryResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
     EmailTestSendRequest,
     EmailTestSendResponse,
-    CampaignCreateRequest,
-    CampaignRecipientBulkCreateRequest,
 )
 from codrut.modules.communications.service import CommunicationsService
 from codrut.modules.identity.models import UserRole
@@ -190,6 +190,11 @@ async def list_campaigns(
             "segment": c.segment.value,
             "status": c.status.value,
             "subject": c.subject,
+            "html_body": c.html_body,
+            "text_body": c.text_body,
+            "video_url": c.video_url,
+            "thumbnail_url": c.thumbnail_url,
+            "landing_page_url": c.landing_page_url,
         }
         for c in campaigns
     ]

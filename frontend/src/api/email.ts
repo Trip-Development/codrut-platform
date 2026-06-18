@@ -336,6 +336,11 @@ export type CampaignCreate = {
   landing_page_url?: string;
 };
 
+export type EmailCampaign = CampaignCreate & {
+  id: string;
+  status: "draft" | "ready" | "paused" | "completed";
+};
+
 export async function createCampaignOnServer(campaign: CampaignCreate) {
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
@@ -360,7 +365,7 @@ export async function createCampaignOnServer(campaign: CampaignCreate) {
   }
 }
 
-export async function listCampaignsOnServer() {
+export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
       cache: "no-store",

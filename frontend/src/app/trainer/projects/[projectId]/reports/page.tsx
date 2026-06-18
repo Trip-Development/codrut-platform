@@ -12,6 +12,12 @@ export default async function ProjectReportsPage({
   const { project, assignments } = await getProjectWorkspaceData(projectId, requestOptions);
   const aggregate = await getCompanyReportAggregate(project.company_id, requestOptions, { projectId: project.id });
   const pending = Math.max(aggregate.total_assigned - aggregate.total_completed, 0);
+  const reportableParticipantCount = Math.max(
+    aggregate.lencioni_count,
+    aggregate.driver_count,
+    aggregate.boss_360_count,
+  );
+  const canShowAggregates = reportableParticipantCount >= 3;
 
   return (
     <div className="space-y-5">
@@ -22,11 +28,22 @@ export default async function ProjectReportsPage({
         <ReportMetric label="În așteptare" value={pending} tone="warning" />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-3">
-        <ReportPanel title="Lencioni" count={aggregate.lencioni_count} items={aggregate.lencioni_averages} />
-        <ReportPanel title="Feedback 360 iCARE" count={aggregate.boss_360_count} items={aggregate.boss_360_averages} suffix="%" />
-        <ReportPanel title="Driveri de distres" count={aggregate.driver_count} items={aggregate.driver_averages} suffix="%" />
-      </section>
+      {canShowAggregates ? (
+        <section className="grid gap-5 xl:grid-cols-3">
+          <ReportPanel title="Lencioni" count={aggregate.lencioni_count} items={aggregate.lencioni_averages} />
+          <ReportPanel title="Feedback 360 iCARE" count={aggregate.boss_360_count} items={aggregate.boss_360_averages} suffix="%" />
+          <ReportPanel title="Driveri de distres" count={aggregate.driver_count} items={aggregate.driver_averages} suffix="%" />
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm">
+          <p className="text-sm font-semibold">
+            Rezultatele agregate vor fi afișate după ce minim 3 participanți completează chestionarul (în prezent: {reportableParticipantCount})
+          </p>
+          <p className="mt-2 text-sm leading-6 text-amber-800/80">
+            Pragul protejează confidențialitatea răspunsurilor în cohortele mici.
+          </p>
+        </section>
+      )}
 
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
         <div className="border-b border-[var(--border)] px-5 py-4">

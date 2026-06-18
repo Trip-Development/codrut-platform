@@ -8,8 +8,11 @@ import {
   updateEmailTemplateOnServer,
   deleteEmailTemplateOnServer,
   bulkCreateCampaignRecipientsOnServer,
+  createCampaignOnServer,
+  listCampaignsOnServer,
   type EmailOpsSummary,
   type AssessmentDeliveryRow,
+  type EmailCampaign,
   type EmailTemplate
 } from "@/api/email";
 import * as XLSX from "xlsx";
@@ -65,6 +68,16 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   // Campaign Manager States
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+  const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
+  const [campaignName, setCampaignName] = useState("Campanie video leadership");
+  const [campaignSegment, setCampaignSegment] = useState<"past_customer" | "potential_customer">("potential_customer");
+  const [campaignSubject, setCampaignSubject] = useState("O idee practică pentru echipa ta, {first_name}");
+  const [campaignVideoUrl, setCampaignVideoUrl] = useState("");
+  const [campaignThumbnailUrl, setCampaignThumbnailUrl] = useState("");
+  const [campaignLandingUrl, setCampaignLandingUrl] = useState("");
+  const [campaignMessage, setCampaignMessage] = useState<string | null>(null);
 
   // Manual Add State
   const [showManualAddModal, setShowManualAddModal] = useState(false);
@@ -135,6 +148,57 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     } finally {
       setIsUploadingCSV(false);
       e.target.value = "";
+    }
+  };
+
+  const loadCampaigns = useCallback(async () => {
+    setIsLoadingCampaigns(true);
+    try {
+      setCampaigns(await listCampaignsOnServer());
+    } finally {
+      setIsLoadingCampaigns(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCampaigns();
+  }, [loadCampaigns]);
+
+  const handleCreateCampaign = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = campaignName.trim();
+    const trimmedVideoUrl = campaignVideoUrl.trim();
+    const trimmedThumbnailUrl = campaignThumbnailUrl.trim();
+    const trimmedLandingUrl = campaignLandingUrl.trim() || trimmedVideoUrl;
+
+    if (!trimmedName || !trimmedVideoUrl || !trimmedThumbnailUrl || !trimmedLandingUrl) {
+      setCampaignMessage("Completează numele, video-ul, thumbnail-ul și pagina de destinație.");
+      return;
+    }
+
+    setIsCreatingCampaign(true);
+    setCampaignMessage(null);
+    try {
+      await createCampaignOnServer({
+        name: trimmedName,
+        segment: campaignSegment,
+        subject: campaignSubject.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
+        html_body: [
+          "<p>Bună, ${first_name}.</p>",
+          "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
+          `<p><a href="${trimmedLandingUrl}">Vezi video-ul</a></p>`,
+        ].join(""),
+        text_body: `Bună, \${first_name}. Vezi video-ul aici: ${trimmedLandingUrl}`,
+        video_url: trimmedVideoUrl,
+        thumbnail_url: trimmedThumbnailUrl,
+        landing_page_url: trimmedLandingUrl,
+      });
+      setCampaignMessage("Campania a fost salvată.");
+      await loadCampaigns();
+    } catch (error) {
+      setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi salvată.");
+    } finally {
+      setIsCreatingCampaign(false);
     }
   };
 
@@ -600,10 +664,99 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   <p className="text-sm font-bold text-foreground">{summary.campaign.videoHost.provider}</p>
                   <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">{summary.campaign.videoHost.note}</p>
                 </article>
+                <form onSubmit={handleCreateCampaign} className="space-y-4 rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70">Campanie video</p>
+                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">
+                      Standardul curat este thumbnail în email, cu link spre o pagină de vizionare Codruț. Video-ul nu se atașează și nu se redă direct în email.
+                    </p>
+                  </div>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Nume campanie</span>
+                    <input
+                      value={campaignName}
+                      onChange={(event) => setCampaignName(event.target.value)}
+                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Segment</span>
+                    <select
+                      value={campaignSegment}
+                      onChange={(event) => setCampaignSegment(event.target.value as "past_customer" | "potential_customer")}
+                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                    >
+                      <option value="potential_customer">Prospect / client potențial</option>
+                      <option value="past_customer">Client vechi / existent</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Subiect</span>
+                    <input
+                      value={campaignSubject}
+                      onChange={(event) => setCampaignSubject(event.target.value)}
+                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Video URL</span>
+                    <input
+                      type="url"
+                      value={campaignVideoUrl}
+                      onChange={(event) => setCampaignVideoUrl(event.target.value)}
+                      placeholder="https://video.codrut.ro/..."
+                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Thumbnail URL</span>
+                    <input
+                      type="url"
+                      value={campaignThumbnailUrl}
+                      onChange={(event) => setCampaignThumbnailUrl(event.target.value)}
+                      placeholder="https://cdn.codrut.ro/thumb.jpg"
+                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Landing page URL</span>
+                    <input
+                      type="url"
+                      value={campaignLandingUrl}
+                      onChange={(event) => setCampaignLandingUrl(event.target.value)}
+                      placeholder="https://app.codrut.ro/watch/..."
+                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={isCreatingCampaign}
+                    className="btn-premium w-full justify-center"
+                  >
+                    {isCreatingCampaign ? "Se salvează..." : "Creează campanie"}
+                  </button>
+                  {campaignMessage ? (
+                    <p aria-live="polite" className="rounded-xl bg-surface-muted/50 px-3 py-2 text-xs font-semibold text-foreground/62">
+                      {campaignMessage}
+                    </p>
+                  ) : null}
+                </form>
                 <article className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70 mb-2">Subiect implicit</p>
-                  <p className="text-sm font-bold text-foreground leading-snug">{summary.campaign.template.subject}</p>
-                  <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">{summary.campaign.template.personalization}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70 mb-2">Campanii salvate</p>
+                  {isLoadingCampaigns ? (
+                    <p className="text-xs font-medium text-foreground/50">Se încarcă...</p>
+                  ) : campaigns.length === 0 ? (
+                    <p className="text-xs font-medium text-foreground/50">Nicio campanie salvată încă.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {campaigns.map((campaign) => (
+                        <div key={campaign.id} className="rounded-xl border border-[var(--border)] bg-surface-muted/30 px-3 py-2">
+                          <p className="text-xs font-bold text-foreground">{campaign.name}</p>
+                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-foreground/45">{campaign.status}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </article>
               </div>
 

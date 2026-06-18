@@ -9,9 +9,11 @@ from codrut.contracts.emails import EmailAddress, EmailDeliveryStatus, EmailMess
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
 from codrut.modules.communications.email_provider import EmailProvider
-from codrut.modules.communications.models import EmailTemplate
+from codrut.modules.communications.models import Campaign, CampaignRecipient, EmailTemplate
 from codrut.modules.communications.repository import CommunicationsRepository
 from codrut.modules.communications.schemas import (
+    CampaignCreateRequest,
+    CampaignRecipientBulkCreateRequest,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
@@ -259,12 +261,12 @@ class CommunicationsService:
                 k.value,
                 except_version=catalog_template.version,
             )
+
     async def bulk_create_campaign_recipients(
         self,
-        payload: "codrut.modules.communications.schemas.CampaignRecipientBulkCreateRequest",
-    ) -> list["codrut.modules.communications.models.CampaignRecipient"]:
+        payload: CampaignRecipientBulkCreateRequest,
+    ) -> list[CampaignRecipient]:
         repository = self._require_repository()
-        from codrut.modules.communications.models import CampaignRecipient
 
         recipients = []
         for req in payload.recipients:
@@ -285,10 +287,9 @@ class CommunicationsService:
 
     async def create_campaign(
         self,
-        payload: "codrut.modules.communications.schemas.CampaignCreateRequest",
-    ) -> "codrut.modules.communications.models.Campaign":
+        payload: CampaignCreateRequest,
+    ) -> Campaign:
         repository = self._require_repository()
-        from codrut.modules.communications.models import Campaign
 
         campaign = Campaign(
             name=payload.name,
@@ -302,7 +303,7 @@ class CommunicationsService:
         )
         return await repository.add_campaign(campaign)
 
-    async def list_campaigns(self) -> list["codrut.modules.communications.models.Campaign"]:
+    async def list_campaigns(self) -> list[Campaign]:
         repository = self._require_repository()
         return await repository.list_campaigns()
 

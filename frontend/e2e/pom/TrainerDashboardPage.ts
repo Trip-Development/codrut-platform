@@ -25,8 +25,8 @@ export class TrainerDashboardPage {
     await card.first().click();
   }
 
-  async goToReports(companyId: string) {
-    await this.page.goto(`/trainer/companies/${companyId}/reports`);
+  async goToReports(projectId: string) {
+    await this.page.goto(`/trainer/projects/${projectId}/reports`);
     await this.page.waitForLoadState("networkidle");
   }
 
