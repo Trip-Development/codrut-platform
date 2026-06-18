@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, cleanup } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 
@@ -79,6 +79,24 @@ describe("QuestionnaireRunner", () => {
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
     });
+  });
+
+  it("saves a draft in place without leaving the questionnaire", async () => {
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvează draft" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Draft salvat.")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Trimite răspunsurile" })).toBeTruthy();
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 1 });
   });
 
   it("renders single-choice questions and saves string answers", async () => {

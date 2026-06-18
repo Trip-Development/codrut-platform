@@ -17,7 +17,10 @@ from codrut.modules.companies.models import (
     Company,
     CompanyMembership,
     CompanyMembershipRole,
+    CompanyProject,
+    CompanyProjectStatus,
     ParticipantProfile,
+    ProjectMembership,
 )
 from codrut.modules.identity.models import AssignmentInvite, User, UserRole
 from codrut.modules.identity.service import IdentityService
@@ -71,6 +74,17 @@ async def seed_e2e_state() -> None:
         # 2. Create the company
         company = Company(id=uuid.uuid4(), name=company_name)
         session.add(company)
+        await session.flush()
+
+        project = CompanyProject(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            name="E2E Leadership Project",
+            description="Project-scoped E2E workflow coverage.",
+            project_type="leadership_program",
+            status=CompanyProjectStatus.active,
+        )
+        session.add(project)
         await session.flush()
 
         # 2.5 Ensure and link the E2E trainer account used by Playwright.
@@ -147,6 +161,7 @@ async def seed_e2e_state() -> None:
         identity_service = IdentityService(session)
         
         print("--- SEEDED E2E PARTICIPANTS ---")
+        print(f"Project ID: {project.id}")
         for p_data in participants_data:
             user_id = None
             if p_data["with_account"]:
@@ -180,15 +195,30 @@ async def seed_e2e_state() -> None:
             )
             session.add(profile)
             await session.flush()
+
+            session.add(
+                ProjectMembership(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    participant_profile_id=profile.id,
+                    reports_to_name=profile.reports_to_name,
+                    position=profile.position,
+                    location=profile.location,
+                    role_group=profile.role_group,
+                )
+            )
+            await session.flush()
             
             # Create Distress Drivers Assignment
             distress_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
+                project_id=project.id,
                 respondent_profile_id=profile.id,
                 questionnaire_key="distress_drivers",
                 target_type=AssignmentTargetType.self_assessment,
-                status=AssignmentStatus.assigned
+                status=AssignmentStatus.assigned,
             )
             session.add(distress_assignment)
             await session.flush()
@@ -197,10 +227,11 @@ async def seed_e2e_state() -> None:
             lencioni_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
+                project_id=project.id,
                 respondent_profile_id=profile.id,
                 questionnaire_key="lencioni",
                 target_type=AssignmentTargetType.self_assessment,
-                status=AssignmentStatus.assigned
+                status=AssignmentStatus.assigned,
             )
             session.add(lencioni_assignment)
             await session.flush()

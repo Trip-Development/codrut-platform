@@ -693,11 +693,20 @@ export async function createCompany(name: string): Promise<{ id: string; name: s
       body: JSON.stringify({ name }),
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        if (isDemoFallbackEnabled()) {
+          return { id: `demo-${Date.now()}`, name };
+        }
+        throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+      }
       const payload = await response.json().catch(() => null);
-      throw new Error(payload?.error?.message ?? `Server returned status ${response.status}`);
+      throw new Error(payload?.error?.message ?? `Eroare server: ${response.status}`);
     }
     return (await response.json()) as { id: string; name: string };
   } catch (e) {
+    if (isDemoFallbackEnabled() && e instanceof TypeError) {
+      return { id: `demo-${Date.now()}`, name };
+    }
     throw e;
   }
 }

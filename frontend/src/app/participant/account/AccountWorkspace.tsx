@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 
 import type { InviteTask } from "@/api/invites";
 
@@ -23,9 +22,6 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
   const name = summary.participantFullName || session.user.name || "Participant";
   const email = summary.participantEmail || "Email indisponibil";
   const company = summary.companyName || "Companie neasociată";
-  const pcmTask = summary.tasks?.find((task) => task.questionnaireKey === "pcm_base");
-  const pcmHref = pcmTask?.href ?? "/participant/questionnaires";
-  const pcmCtaLabel = pcmTask ? "Actualizează PCM" : "Vezi chestionarele";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -44,21 +40,8 @@ export function AccountWorkspace({ session, summary }: AccountWorkspaceProps) {
       </section>
 
       <section className="rounded-3xl border border-[var(--border)] bg-surface p-6 shadow-sm md:p-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Profil PCM</p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">Bază și fază</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Aceste câmpuri se actualizează doar prin chestionarul PCM salvat în baza de date. Nu folosim valori implicite locale.
-            </p>
-          </div>
-          <Link
-            href={pcmHref}
-            className="tap-soft inline-flex justify-center rounded-2xl bg-burgundy px-4 py-3 text-sm font-bold text-white hover:bg-burgundy/90"
-          >
-            {pcmCtaLabel}
-          </Link>
-        </div>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Profil PCM</p>
+        <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">Bază și fază</h2>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <ProfileFact label="Bază PCM" value={formatPcmValue(summary.pcmBase)} />

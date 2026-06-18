@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getAllCompanyProjects, getProjectParticipants } from "@/api/companies";
 import { displayReportsToName } from "@/api/roster-format";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { RosterImporter } from "@/app/trainer/roster/roster-importer";
+import { RosterImporter } from "@/components/roster-importer";
 
 export default async function ProjectParticipantsPage({
   params,

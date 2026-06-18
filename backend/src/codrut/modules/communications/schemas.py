@@ -99,3 +99,26 @@ class EmailOpsSummaryResponse(BaseModel):
     assessmentRows: list[AssessmentDeliveryRowResponse]
     rules: list[str]
     campaign: CampaignOpsSummaryResponse
+
+
+class CampaignRecipientCreateRequest(BaseModel):
+    email: EmailStr
+    contact_name: str | None = None
+    organization_name: str | None = None
+    segment: str  # "past_customer" | "potential_customer"
+    source: str | None = None
+
+
+class CampaignRecipientBulkCreateRequest(BaseModel):
+    recipients: list[CampaignRecipientCreateRequest]
+
+
+class CampaignCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    segment: str
+    subject: str = Field(min_length=1, max_length=255)
+    html_body: str = Field(min_length=1)
+    text_body: str = Field(min_length=1)
+    video_url: str | None = None
+    thumbnail_url: str | None = None
+    landing_page_url: str | None = None

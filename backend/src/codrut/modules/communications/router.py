@@ -9,6 +9,8 @@ from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.schemas import (
+    CampaignCreateRequest,
+    CampaignRecipientBulkCreateRequest,
     EmailOpsSummaryResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
@@ -147,3 +149,52 @@ async def get_email_ops_summary(
     summary = await CommunicationsService(session).get_email_ops_summary()
     await session.commit()
     return summary
+
+
+@router.post("/campaigns/recipients/bulk")
+async def bulk_create_campaign_recipients(
+    payload: CampaignRecipientBulkCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    _require_trainer(principal)
+    recipients = await CommunicationsService(session).bulk_create_campaign_recipients(payload)
+    await session.commit()
+    return {"status": "success", "count": len(recipients)}
+
+
+@router.post("/campaigns")
+async def create_campaign(
+    payload: CampaignCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    _require_trainer(principal)
+    campaign = await CommunicationsService(session).create_campaign(payload)
+    await session.commit()
+    return {"status": "success", "campaign_id": str(campaign.id)}
+
+
+@router.get("/campaigns")
+async def list_campaigns(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[dict]:
+    _require_trainer(principal)
+    campaigns = await CommunicationsService(session).list_campaigns()
+    await session.commit()
+    return [
+        {
+            "id": str(c.id),
+            "name": c.name,
+            "segment": c.segment.value,
+            "status": c.status.value,
+            "subject": c.subject,
+            "html_body": c.html_body,
+            "text_body": c.text_body,
+            "video_url": c.video_url,
+            "thumbnail_url": c.thumbnail_url,
+            "landing_page_url": c.landing_page_url,
+        }
+        for c in campaigns
+    ]

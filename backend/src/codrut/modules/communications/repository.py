@@ -2,7 +2,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.modules.communications.models import EmailTemplate
+from codrut.modules.communications.models import Campaign, CampaignRecipient, EmailTemplate
 
 
 class CommunicationsRepository:
@@ -79,3 +79,21 @@ class CommunicationsRepository:
         )
         return result.scalar_one_or_none() is not None
 
+    async def add_campaign_recipients(self, recipients: list[CampaignRecipient]) -> None:
+        self.session.add_all(recipients)
+        await self.session.flush()
+
+    async def list_campaign_recipients(self) -> list[CampaignRecipient]:
+        stmt = select(CampaignRecipient).order_by(CampaignRecipient.created_at.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def add_campaign(self, campaign: Campaign) -> Campaign:
+        self.session.add(campaign)
+        await self.session.flush()
+        return campaign
+
+    async def list_campaigns(self) -> list[Campaign]:
+        stmt = select(Campaign).order_by(Campaign.created_at.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

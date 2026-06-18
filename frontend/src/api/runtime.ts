@@ -1,6 +1,9 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export function getApiBaseUrl(): string {
+  if (process.env.VITEST && API_BASE_URL.startsWith("/")) {
+    return `http://localhost:3000${API_BASE_URL}`;
+  }
   if (typeof window === "undefined" && API_BASE_URL.startsWith("/")) {
     return process.env.INTERNAL_API_BASE_URL ?? "http://backend:8000/api";
   }

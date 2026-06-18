@@ -25,7 +25,7 @@ export default async function ParticipantQuestionnaireRunPage({
 
   if (access === "secure") {
     return (
-      <main className="bg-vines-pattern min-h-screen bg-background px-4 py-8 text-foreground md:px-6">
+      <main className="min-h-screen bg-background px-4 py-8 text-foreground md:px-6">
         <div className="mx-auto max-w-5xl">
           <section className="mb-5 rounded-3xl border border-[var(--border)] bg-surface/92 p-5 shadow-sm">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Chestionar securizat</p>
