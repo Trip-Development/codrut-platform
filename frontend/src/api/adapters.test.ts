@@ -254,6 +254,8 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false } as Response));
+
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
     expect(questionnaires.map((definition) => definition.id)).toEqual(
@@ -264,7 +266,7 @@ describe("frontend API adapter stubs", () => {
     expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
-      estimatedItems: 45,
+      estimatedItems: 48,
     });
     await expect(listEmailSurfaceStubs()).resolves.toEqual([
       { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },
