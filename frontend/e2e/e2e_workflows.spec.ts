@@ -21,7 +21,7 @@ test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", ()
   let aliceUrl = "";
   let bobUrl = "";
   let charlieUrl = "";
-  let companyId = "";
+  let projectId = "";
 
   test.beforeAll(() => {
     // Seed the database with a clean E2E company and retrieve the magic URLs
@@ -35,20 +35,17 @@ test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", ()
     const aliceMatch = stdout.match(/Alice Popescu.*?:\s*(https?:\/\/[^\s]+)/);
     const bobMatch = stdout.match(/Bob Ionescu.*?:\s*(https?:\/\/[^\s]+)/);
     const charlieMatch = stdout.match(/Charlie Vasilescu.*?:\s*(https?:\/\/[^\s]+)/);
+    const projectMatch = stdout.match(/Project ID:\s*([0-9a-f-]+)/i);
 
-    if (!aliceMatch || !bobMatch || !charlieMatch) {
+    if (!aliceMatch || !bobMatch || !charlieMatch || !projectMatch) {
       throw new Error("Could not parse seeded invite URLs from seeder output:\n" + stdout);
     }
 
     aliceUrl = aliceMatch[1];
     bobUrl = bobMatch[1];
     charlieUrl = charlieMatch[1];
-
-    // Extract companyId from one of the tokens (it is base64 encoded JSON in the first segment of the dot-separated string)
-    const token = aliceUrl.split("/invite/")[1];
-    const decoded = JSON.parse(Buffer.from(token.split(".")[0], "base64").toString("utf8"));
-    companyId = decoded.company_id;
-    console.log(`Parsed seeded company ID for tests: ${companyId}`);
+    projectId = projectMatch[1];
+    console.log(`Parsed seeded project ID for tests: ${projectId}`);
   });
 
   test("should complete surveys for Alice and Bob, verify confidentiality threshold, and then complete Charlie's to reveal aggregate dashboard", async ({ page }) => {
@@ -106,8 +103,8 @@ test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", ()
     await loginPage.login("trainer@example.com", "replace-with-a-long-test-password");
     await trainerPage.verifyOnDashboard();
 
-    // Navigate to E2E company reports
-    await trainerPage.goToReports(companyId);
+    // Navigate to E2E project reports
+    await trainerPage.goToReports(projectId);
     await trainerPage.verifyConfidentialityWarning(2);
     console.log("Confidentiality warning verified successfully.");
 
@@ -140,7 +137,7 @@ test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", ()
     await loginPage.login("trainer@example.com", "replace-with-a-long-test-password");
     await trainerPage.verifyOnDashboard();
 
-    await trainerPage.goToReports(companyId);
+    await trainerPage.goToReports(projectId);
     await trainerPage.verifyLencioniResultsVisible();
     console.log("Aggregate results verified. E2E workflow succeeded.");
   });

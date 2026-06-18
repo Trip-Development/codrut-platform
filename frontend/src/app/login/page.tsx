@@ -30,8 +30,8 @@ export default function LoginPage() {
       setTimeout(() => {
         setQuoteIdx((prev) => (prev + 1) % quotes.length);
         setFade(true);
-      }, 300); // Wait for fade-out animation to complete
-    }, 4500); // Rotate every 4.5 seconds
+      }, 150); // Wait for fade-out animation to complete
+    }, 2500); // Rotate every 2.5 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -53,14 +53,14 @@ export default function LoginPage() {
 
   return (
     <main className="app-min-height flex items-center justify-center bg-background bg-vines-pattern px-4 py-10">
-      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-300">
+      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-150">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
           <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
             Bine ai venit
           </h1>
           <div className="mt-3 w-full min-h-[3rem] flex items-center justify-center px-2">
-            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-300 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
+            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-150 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
               {quotes[quoteIdx]}
             </p>
           </div>

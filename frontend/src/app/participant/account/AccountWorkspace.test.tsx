@@ -18,40 +18,7 @@ describe("AccountWorkspace", () => {
     cleanup();
   });
 
-  it("links the PCM action to the persisted assignment task when available", () => {
-    render(
-      <AccountWorkspace
-        session={session}
-        summary={{
-          projectName: "Leadership septembrie",
-          participantFullName: "Ana Participant",
-          participantEmail: "ana@example.com",
-          companyName: "Michelin",
-          pcmBase: null,
-          pcmPhase: null,
-          tasks: [
-            {
-              id: "assignment-1",
-              title: "Profil PCM",
-              status: "not_started",
-              detail: "Completează baza și faza PCM.",
-              href: "/participant/questionnaires/pcm_base?assignmentId=assignment-1",
-              assignmentId: "assignment-1",
-              targetLabel: "Autoevaluare",
-              estimatedMinutes: 3,
-              questionnaireKey: "pcm_base",
-            },
-          ],
-        }}
-      />,
-    );
-
-    expect(screen.getByRole("link", { name: "Actualizează PCM" }).getAttribute("href")).toBe(
-      "/participant/questionnaires/pcm_base?assignmentId=assignment-1",
-    );
-  });
-
-  it("falls back to the assigned questionnaire list instead of an unsavable direct PCM route", () => {
+  it("displays the PCM base and phase without showing a CTA button", () => {
     render(
       <AccountWorkspace
         session={session}
@@ -67,8 +34,28 @@ describe("AccountWorkspace", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Vezi chestionarele" }).getAttribute("href")).toBe(
-      "/participant/questionnaires",
+    expect(screen.getByText("harmonizer")).toBeDefined();
+    expect(screen.getByText("thinker")).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Actualizează PCM" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Vezi chestionarele" })).toBeNull();
+  });
+
+  it("displays 'Necompletată' when PCM base and phase are missing", () => {
+    render(
+      <AccountWorkspace
+        session={session}
+        summary={{
+          projectName: "Leadership septembrie",
+          participantFullName: "Ana Participant",
+          participantEmail: "ana@example.com",
+          companyName: "Michelin",
+          pcmBase: null,
+          pcmPhase: null,
+          tasks: [],
+        }}
+      />,
     );
+
+    expect(screen.getAllByText("Necompletată")).toHaveLength(2);
   });
 });

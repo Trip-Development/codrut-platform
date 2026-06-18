@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "./runtime";
+import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 import type { ApiRequestOptions } from "./companies";
 
 export type EmailSurfaceStub = {
@@ -136,6 +136,9 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut actualiza șablonul pe server.");
   }
@@ -149,6 +152,9 @@ export async function activateEmailTemplateOnServer(key: string, version: number
     credentials: "include",
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut activa versiunea șablonului.");
   }
@@ -156,7 +162,7 @@ export async function activateEmailTemplateOnServer(key: string, version: number
   return backendToFrontendTemplate(data);
 }
 
-export async function deleteEmailTemplateOnServer(key: string, version?: number): Promise<EmailTemplate> {
+export async function deleteEmailTemplateOnServer(key: string, version?: number): Promise<EmailTemplate | null> {
   const url = version
     ? `${getApiBaseUrl()}/communications/templates/${key}?version=${version}`
     : `${getApiBaseUrl()}/communications/templates/${key}`;
@@ -165,10 +171,16 @@ export async function deleteEmailTemplateOnServer(key: string, version?: number)
     credentials: "include",
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      if (isDemoFallbackEnabled()) return null;
+      throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut pensiona șablonul.");
   }
-  const data = await response.json();
+  const text = await response.text();
+  if (!text) return null;
+  const data = JSON.parse(text);
   return backendToFrontendTemplate(data);
 }
 
@@ -255,19 +267,9 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
   } catch (e) {
     console.error("Error fetching email ops summary, using fallback data", e);
     return {
-      metrics: [
-        { label: "Invitații trimise", value: "0", detail: "Conturi lideri și linkuri securizate membri." },
-        { label: "Au intrat în app", value: "0", detail: "Click pe link sau autentificare cont." },
-        { label: "Completate", value: "0", detail: "Toate task-urile din bundle finalizate." },
-        { label: "Reminder azi", value: "0", detail: "Invitați sau începuți fără submit." },
-      ],
+      metrics: [],
       assessmentRows: [],
-      rules: [
-        "Liderii primesc email de cont și pot reveni la task-uri.",
-        "Membrii fără cont primesc link securizat per proiect, valabil până la deadline.",
-        "Reminderul se trimite pentru status invitat sau început, nu pentru task finalizat.",
-        "Emailurile nu includ răspunsuri confidențiale, doar linkuri și status operațional.",
-      ],
+      rules: [],
       campaign: {
         videoHost: {
           provider: "Codruț watch page + Cloudflare R2",
@@ -288,5 +290,94 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
         },
       },
     };
+  }
+}
+
+export type CampaignRecipientCreate = {
+  email: string;
+  contact_name?: string;
+  organization_name?: string;
+  segment: "past_customer" | "potential_customer";
+  source?: string;
+};
+
+export async function bulkCreateCampaignRecipientsOnServer(recipients: CampaignRecipientCreate[]) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipients }),
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) {
+        return { success: true, count: recipients.length };
+      }
+      throw new Error(`Failed to upload recipients: ${response.status}`);
+    }
+    return await response.json();
+  } catch (err) {
+    if (isDemoFallbackEnabled()) {
+      return { success: true, count: recipients.length };
+    }
+    throw err;
+  }
+}
+
+export type CampaignCreate = {
+  name: string;
+  segment: "past_customer" | "potential_customer";
+  subject: string;
+  html_body: string;
+  text_body: string;
+  video_url?: string;
+  thumbnail_url?: string;
+  landing_page_url?: string;
+};
+
+export type EmailCampaign = CampaignCreate & {
+  id: string;
+  status: "draft" | "ready" | "paused" | "completed";
+};
+
+export async function createCampaignOnServer(campaign: CampaignCreate) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(campaign),
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) {
+        return { id: "campaign_" + Date.now(), ...campaign };
+      }
+      throw new Error(`Failed to create campaign: ${response.status}`);
+    }
+    return await response.json();
+  } catch (err) {
+    if (isDemoFallbackEnabled()) {
+      return { id: "campaign_" + Date.now(), ...campaign };
+    }
+    throw err;
+  }
+}
+
+export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return [];
+      throw new Error(`Failed to fetch campaigns: ${response.status}`);
+    }
+    return await response.json();
+  } catch (err) {
+    if (isDemoFallbackEnabled()) return [];
+    throw err;
   }
 }

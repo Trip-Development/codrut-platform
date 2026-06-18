@@ -254,6 +254,8 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false } as Response));
+
     const questionnaires = await listQuestionnaireDefinitionStubs();
 
     expect(questionnaires.map((definition) => definition.id)).toEqual(
