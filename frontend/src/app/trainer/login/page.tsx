@@ -77,10 +77,11 @@ export default function TrainerLoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
+            <label htmlFor="trainer-login-email" className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
               Email Trainer
             </label>
             <input
+              id="trainer-login-email"
               className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
               placeholder="andrei@codrut.ro"
               type="email"
@@ -92,7 +93,7 @@ export default function TrainerLoginPage() {
 
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
+              <label htmlFor="trainer-login-password" className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
                 Parolă
               </label>
               <Link
@@ -103,6 +104,7 @@ export default function TrainerLoginPage() {
               </Link>
             </div>
             <input
+              id="trainer-login-password"
               className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
               placeholder="Introdu parola"
               type="password"

@@ -336,6 +336,57 @@ export type CampaignCreate = {
   landing_page_url?: string;
 };
 
+export type CampaignVideoDraft = {
+  name: string;
+  segment: "past_customer" | "potential_customer";
+  subject: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  landingUrl: string;
+};
+
+function normalizeHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): CampaignCreate | null {
+  const trimmedName = draft.name.trim();
+  const videoUrl = normalizeHttpUrl(draft.videoUrl);
+  const thumbnailUrl = normalizeHttpUrl(draft.thumbnailUrl);
+  const landingUrl = normalizeHttpUrl(draft.landingUrl) ?? videoUrl;
+
+  if (!trimmedName || !videoUrl || !thumbnailUrl || !landingUrl) return null;
+
+  const safeLandingUrl = escapeHtmlAttribute(landingUrl);
+  const safeThumbnailUrl = escapeHtmlAttribute(thumbnailUrl);
+
+  return {
+    name: trimmedName,
+    segment: draft.segment,
+    subject: draft.subject.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
+    html_body: [
+      "<p>Bună, ${first_name}.</p>",
+      "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
+      `<p><a href="${safeLandingUrl}"><img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;max-width:100%;height:auto;border:0;border-radius:12px;" /></a></p>`,
+      `<p><a href="${safeLandingUrl}">Vezi video-ul</a></p>`,
+    ].join(""),
+    text_body: `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`,
+    video_url: videoUrl,
+    thumbnail_url: thumbnailUrl,
+    landing_page_url: landingUrl,
+  };
+}
+
 export type EmailCampaign = CampaignCreate & {
   id: string;
   status: "draft" | "ready" | "paused" | "completed";

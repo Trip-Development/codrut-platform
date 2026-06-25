@@ -36,8 +36,10 @@ def _require_trainer(principal: SessionPrincipal) -> None:
 @router.post("/test-email", response_model=EmailTestSendResponse)
 async def send_test_email(
     payload: EmailTestSendRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> EmailTestSendResponse:
+    _require_trainer(principal)
     if settings.is_production:
         raise DomainError(
             "Test email endpoint is disabled in production.",
@@ -63,9 +65,11 @@ async def send_test_email(
 
 @router.get("/templates", response_model=list[EmailTemplateResponse])
 async def list_email_templates(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     include_retired: bool = False,
 ) -> list[EmailTemplateResponse]:
+    _require_trainer(principal)
     templates = await CommunicationsService(session).list_templates(
         active_only=not include_retired,
     )
@@ -76,9 +80,11 @@ async def list_email_templates(
 @router.get("/templates/{key}", response_model=EmailTemplateResponse)
 async def get_email_template(
     key: str,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     version: int | None = None,
 ) -> EmailTemplateResponse:
+    _require_trainer(principal)
     template = await CommunicationsService(session).get_template(key, version=version)
     await session.commit()
     return template
