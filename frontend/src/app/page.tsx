@@ -169,7 +169,7 @@ export default function HomePage() {
 
   return (
     <main id="top" className="bg-vines-pattern app-min-height bg-background text-foreground">
-      <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] bg-surface/88 shadow-sm-xl">
+      <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] glass-panel shadow-sm-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
           <Link
             href="/"
