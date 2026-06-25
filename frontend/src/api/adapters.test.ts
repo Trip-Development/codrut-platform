@@ -7,7 +7,7 @@ import {
   getParticipantSession,
   getTrainerSession,
 } from "./auth";
-import { listEmailSurfaceStubs } from "./email";
+import { buildVideoCampaignCreatePayload, listEmailSurfaceStubs } from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
@@ -273,6 +273,48 @@ describe("frontend API adapter stubs", () => {
       { id: "assessment-reminders", name: "Remindere assessment", lane: "transactional" },
       { id: "video-campaigns", name: "Campanii cu link video", lane: "campaign" },
     ]);
+  });
+
+  it("builds video campaign payloads with linked thumbnail images", () => {
+    const payload = buildVideoCampaignCreatePayload({
+      name: " Campanie video ",
+      segment: "potential_customer",
+      subject: "O idee pentru {first_name}",
+      videoUrl: "https://video.codrut.ro/watch/intro",
+      thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=\"hero\"",
+      landingUrl: "https://app.codrut.ro/watch/intro?source=email&name=\"hero\"",
+    });
+
+    expect(payload).toMatchObject({
+      name: "Campanie video",
+      segment: "potential_customer",
+      subject: "O idee pentru ${first_name}",
+      video_url: "https://video.codrut.ro/watch/intro",
+      thumbnail_url: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=%22hero%22",
+      landing_page_url: "https://app.codrut.ro/watch/intro?source=email&name=%22hero%22",
+    });
+    expect(payload?.html_body).toContain('<a href="https://app.codrut.ro/watch/intro?source=email&amp;name=%22hero%22">');
+    expect(payload?.html_body).toContain('<img src="https://cdn.codrut.ro/thumb.jpg?size=large&amp;variant=%22hero%22"');
+    expect(payload?.text_body).toContain("https://app.codrut.ro/watch/intro?source=email&name=%22hero%22");
+  });
+
+  it("rejects incomplete or non-http video campaign URLs", () => {
+    expect(buildVideoCampaignCreatePayload({
+      name: "Campanie video",
+      segment: "past_customer",
+      subject: "Salut",
+      videoUrl: "ftp://video.codrut.ro/watch/intro",
+      thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
+      landingUrl: "https://app.codrut.ro/watch/intro",
+    })).toBeNull();
+    expect(buildVideoCampaignCreatePayload({
+      name: "Campanie video",
+      segment: "past_customer",
+      subject: "Salut",
+      videoUrl: "https://video.codrut.ro/watch/intro",
+      thumbnailUrl: "",
+      landingUrl: "",
+    })).toBeNull();
   });
 
   it("resolves invite bundle fallback states", async () => {

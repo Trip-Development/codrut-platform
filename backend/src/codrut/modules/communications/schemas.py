@@ -1,6 +1,7 @@
+from urllib.parse import urlparse
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from codrut.contracts.emails import EmailDeliveryStatus, EmailProviderKey
 
@@ -119,6 +120,37 @@ class CampaignCreateRequest(BaseModel):
     subject: str = Field(min_length=1, max_length=255)
     html_body: str = Field(min_length=1)
     text_body: str = Field(min_length=1)
-    video_url: str | None = None
-    thumbnail_url: str | None = None
-    landing_page_url: str | None = None
+    video_url: str | None = Field(default=None, max_length=2048)
+    thumbnail_url: str | None = Field(default=None, max_length=2048)
+    landing_page_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("video_url", "thumbnail_url", "landing_page_url", mode="before")
+    @classmethod
+    def normalize_campaign_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        if not stripped:
+            return None
+        parsed = urlparse(stripped)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Campaign asset URLs must be absolute HTTP(S) URLs.")
+        return stripped
+
+    @model_validator(mode="after")
+    def require_complete_video_asset_set(self) -> "CampaignCreateRequest":
+        if self.video_url or self.thumbnail_url or self.landing_page_url:
+            missing = [
+                label
+                for label, value in (
+                    ("video_url", self.video_url),
+                    ("thumbnail_url", self.thumbnail_url),
+                    ("landing_page_url", self.landing_page_url),
+                )
+                if value is None
+            ]
+            if missing:
+                raise ValueError(
+                    "Video campaigns require video_url, thumbnail_url, and landing_page_url."
+                )
+        return self

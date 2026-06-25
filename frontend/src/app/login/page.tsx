@@ -68,10 +68,11 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
+            <label htmlFor="login-email" className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
               Email
             </label>
             <input
+              id="login-email"
               className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
               placeholder="nume@companie.ro"
               type="email"
@@ -83,7 +84,7 @@ export default function LoginPage() {
 
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
+              <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
                 Parolă
               </label>
               <Link
@@ -94,6 +95,7 @@ export default function LoginPage() {
               </Link>
             </div>
             <input
+              id="login-password"
               className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
               placeholder="Introdu parola"
               type="password"
