@@ -9,6 +9,7 @@ from codrut.modules.communications.models import (
     EmailEventType,
     EmailSendStatus,
 )
+from codrut.modules.communications.schemas import CampaignCreateRequest
 from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.identity import models as identity_models  # noqa: F401
 
@@ -83,3 +84,52 @@ def test_campaign_model_supports_template_and_video_link_design() -> None:
         "thumbnail_url",
         "landing_page_url",
     }.issubset(columns.keys())
+
+
+def test_campaign_create_requires_http_video_asset_urls() -> None:
+    request = CampaignCreateRequest(
+        name="Video campaign",
+        segment="potential_customer",
+        subject="Subject",
+        html_body="<p>Body</p>",
+        text_body="Body",
+        video_url="https://video.codrut.ro/watch/demo",
+        thumbnail_url="https://cdn.codrut.ro/thumb.jpg",
+        landing_page_url="https://app.codrut.ro/watch/demo",
+    )
+
+    assert request.thumbnail_url == "https://cdn.codrut.ro/thumb.jpg"
+
+
+def test_campaign_create_rejects_incomplete_video_assets() -> None:
+    try:
+        CampaignCreateRequest(
+            name="Video campaign",
+            segment="potential_customer",
+            subject="Subject",
+            html_body="<p>Body</p>",
+            text_body="Body",
+            video_url="https://video.codrut.ro/watch/demo",
+        )
+    except ValueError as exc:
+        assert "Video campaigns require" in str(exc)
+    else:
+        raise AssertionError("Incomplete video assets should be rejected.")
+
+
+def test_campaign_create_rejects_non_http_asset_urls() -> None:
+    try:
+        CampaignCreateRequest(
+            name="Video campaign",
+            segment="potential_customer",
+            subject="Subject",
+            html_body="<p>Body</p>",
+            text_body="Body",
+            video_url="javascript:alert(1)",
+            thumbnail_url="https://cdn.codrut.ro/thumb.jpg",
+            landing_page_url="https://app.codrut.ro/watch/demo",
+        )
+    except ValueError as exc:
+        assert "absolute HTTP(S) URLs" in str(exc)
+    else:
+        raise AssertionError("Non-HTTP campaign asset URLs should be rejected.")

@@ -8,6 +8,7 @@ import {
   updateEmailTemplateOnServer,
   deleteEmailTemplateOnServer,
   bulkCreateCampaignRecipientsOnServer,
+  buildVideoCampaignCreatePayload,
   createCampaignOnServer,
   listCampaignsOnServer,
   type EmailOpsSummary,
@@ -166,33 +167,24 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   const handleCreateCampaign = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmedName = campaignName.trim();
-    const trimmedVideoUrl = campaignVideoUrl.trim();
-    const trimmedThumbnailUrl = campaignThumbnailUrl.trim();
-    const trimmedLandingUrl = campaignLandingUrl.trim() || trimmedVideoUrl;
+    const payload = buildVideoCampaignCreatePayload({
+      name: campaignName,
+      segment: campaignSegment,
+      subject: campaignSubject,
+      videoUrl: campaignVideoUrl,
+      thumbnailUrl: campaignThumbnailUrl,
+      landingUrl: campaignLandingUrl,
+    });
 
-    if (!trimmedName || !trimmedVideoUrl || !trimmedThumbnailUrl || !trimmedLandingUrl) {
-      setCampaignMessage("Completează numele, video-ul, thumbnail-ul și pagina de destinație.");
+    if (!payload) {
+      setCampaignMessage("Completează numele și URL-uri valide pentru video, thumbnail și pagina de destinație.");
       return;
     }
 
     setIsCreatingCampaign(true);
     setCampaignMessage(null);
     try {
-      await createCampaignOnServer({
-        name: trimmedName,
-        segment: campaignSegment,
-        subject: campaignSubject.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
-        html_body: [
-          "<p>Bună, ${first_name}.</p>",
-          "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
-          `<p><a href="${trimmedLandingUrl}">Vezi video-ul</a></p>`,
-        ].join(""),
-        text_body: `Bună, \${first_name}. Vezi video-ul aici: ${trimmedLandingUrl}`,
-        video_url: trimmedVideoUrl,
-        thumbnail_url: trimmedThumbnailUrl,
-        landing_page_url: trimmedLandingUrl,
-      });
+      await createCampaignOnServer(payload);
       setCampaignMessage("Campania a fost salvată.");
       await loadCampaigns();
     } catch (error) {
