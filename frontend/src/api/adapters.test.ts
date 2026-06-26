@@ -719,6 +719,37 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("surfaces roster import validation details from the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      json: async () => ({
+        detail: [
+          {
+            loc: ["body", "rows", 0, "email"],
+            msg: "value is not a valid email address: The part after the @-sign is a special-use or reserved name",
+            type: "value_error",
+          },
+        ],
+      }),
+    } as Response);
+
+    await expect(
+      importCompanyRoster("company-1", [
+        {
+          Name: "Ana",
+          "Reports To": "",
+          Position: "Member",
+          Location: "Bucharest",
+          email: "ana@example.test",
+          "Profil PCM": "",
+        },
+      ]),
+    ).rejects.toThrow("rows.0.email: value is not a valid email address");
+  });
+
   it("resends participant invitations through the backend", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
