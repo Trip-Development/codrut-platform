@@ -203,11 +203,10 @@ class AssignmentService:
         scopes: list[AssignmentPlanScopeResponse] = []
         plan_items: list[AssignmentPlanItemResponse] = []
 
-        leadership_ids = [
-            participant.id
-            for participant in participants
-            if (participant.role_group or "").casefold() == "leadership"
-        ]
+        leadership_ids = sorted(
+            manager_ids,
+            key=lambda item: participant_by_id[item].full_name,
+        )
         if leadership_ids:
             leadership_team = teams_by_name.get("leadership")
             scopes.append(
@@ -240,8 +239,13 @@ class AssignmentService:
                 direct_reports_by_manager.get(manager_id, []),
                 key=lambda item: participant_by_id[item].full_name,
             )
-            if direct_report_ids:
-                manager_team_ids = [manager_id, *direct_report_ids]
+            direct_member_ids = [
+                participant_id
+                for participant_id in direct_report_ids
+                if participant_id not in manager_ids
+            ]
+            if direct_member_ids:
+                manager_team_ids = [manager_id, *direct_member_ids]
                 manager_team_name = f"Echipa {manager.full_name}"
                 persisted_team = teams_by_name.get(manager_team_name.casefold())
 
@@ -253,7 +257,7 @@ class AssignmentService:
                         participant_ids=manager_team_ids,
                     )
                 )
-                for respondent_id in direct_report_ids:
+                for respondent_id in direct_member_ids:
                     plan_items.append(
                         _plan_team_assignment(
                             scope_id=f"manager-team:{manager_id}",
