@@ -21,6 +21,10 @@ from codrut.modules.communications.service import (
     CommunicationsService,
     TransactionalEmailService,
 )
+from codrut.modules.communications.templates import (
+    TransactionalTemplateKey,
+    get_transactional_template,
+)
 from codrut.modules.companies.models import ParticipantProfile
 
 
@@ -212,6 +216,37 @@ async def test_retire_template_marks_active_false() -> None:
 
     assert result.active is False
     assert repository.templates == [template]
+
+
+@pytest.mark.asyncio
+async def test_retire_template_without_version_marks_all_versions_inactive() -> None:
+    v1 = persisted_template(key="custom_template", version=1, active=False)
+    v2 = persisted_template(key="custom_template", version=2, active=True)
+    repository = FakeCommunicationsRepository([v1, v2])
+    service = make_service(repository)
+
+    result = await service.retire_template("custom_template")
+
+    assert result.version == 2
+    assert v1.active is False
+    assert v2.active is False
+
+
+@pytest.mark.asyncio
+async def test_list_templates_does_not_reactivate_retired_catalog_template() -> None:
+    catalog = get_transactional_template(TransactionalTemplateKey.account_setup)
+    template = persisted_template(
+        key=TransactionalTemplateKey.account_setup.value,
+        version=catalog.version,
+        active=False,
+    )
+    repository = FakeCommunicationsRepository([template])
+    service = make_service(repository)
+
+    result = await service.list_templates(active_only=True)
+
+    assert all(item.key != TransactionalTemplateKey.account_setup.value for item in result)
+    assert template.active is False
 
 
 @pytest.mark.asyncio

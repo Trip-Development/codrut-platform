@@ -229,7 +229,10 @@ class CommunicationsService:
         template = await repository.get_template(key, version=version)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
-        template.active = False
+        if version is None:
+            await repository.deactivate_templates_for_key(key)
+        else:
+            template.active = False
         return EmailTemplateResponse.model_validate(template)
 
     def _require_repository(self) -> CommunicationsRepository:
@@ -256,11 +259,10 @@ class CommunicationsService:
                         active=True,
                     )
                 )
-            existing.active = True
-            await repository.deactivate_templates_for_key(
-                k.value,
-                except_version=catalog_template.version,
-            )
+                await repository.deactivate_templates_for_key(
+                    k.value,
+                    except_version=catalog_template.version,
+                )
 
     async def bulk_create_campaign_recipients(
         self,
@@ -533,9 +535,15 @@ class TransactionalEmailService:
         template_key = _select_invitation_template(respondent)
 
         version = 1
+        db_template = None
         if self.session is not None:
             comm_service = CommunicationsService(self.session)
-            db_template = await comm_service.get_template(template_key.value)
+            try:
+                db_template = await comm_service.get_template(template_key.value)
+            except DomainError as error:
+                if error.code != "email_template_not_found":
+                    raise
+        if db_template is not None:
             subject = db_template.subject
             html_body = db_template.html_body
             text_body = db_template.text_body

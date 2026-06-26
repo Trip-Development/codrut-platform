@@ -74,7 +74,7 @@ class FormsService:
         payload: QuestionnaireDefinitionCreateRequest,
     ) -> QuestionnaireDefinitionResponse:
         repository = self._require_repository()
-        _validate_definition_schema(payload.definition_schema)
+        _validate_definition_schema(payload.definition_schema, require_questions=payload.active)
         version = await repository.get_latest_version(payload.key) + 1
         if payload.active:
             await repository.deactivate_definitions_for_key(payload.key)
@@ -104,7 +104,8 @@ class FormsService:
         updated_schema = definition.schema
         if payload.definition_schema is not None:
             updated_schema = payload.definition_schema
-        _validate_definition_schema(updated_schema)
+        active = payload.active if payload.active is not None else definition.active
+        _validate_definition_schema(updated_schema, require_questions=active)
         has_submissions = await repository.has_submitted_responses(key, definition.version)
         if has_submissions:
             next_version = await repository.get_latest_version(key) + 1
@@ -144,6 +145,7 @@ class FormsService:
         definition = await repository.get_definition(key, version=version)
         if definition is None:
             raise DomainError("Questionnaire definition not found.", code="definition_not_found")
+        _validate_definition_schema(definition.schema, require_questions=True)
         await repository.deactivate_definitions_for_key(key, except_version=definition.version)
         definition.active = True
         return _to_response(definition)
@@ -334,14 +336,15 @@ class FormsService:
 
     async def _seed_catalog_definitions(self, repository: FormsRepository) -> None:
         for catalog_definition in APPROVED_QUESTIONNAIRE_DEFINITIONS:
+            catalog_key = str(catalog_definition.key)
             existing = await repository.get_definition(
-                catalog_definition.key,
+                catalog_key,
                 version=catalog_definition.version,
             )
             if existing is None:
                 await repository.add_definition(
                     QuestionnaireDefinition(
-                        key=catalog_definition.key,
+                        key=catalog_key,
                         version=catalog_definition.version,
                         title=catalog_definition.title,
                         description=catalog_definition.description,
@@ -374,11 +377,11 @@ class FormsService:
                 )
                 continue
 
-            next_version = await repository.get_latest_version(catalog_definition.key) + 1
-            await repository.deactivate_definitions_for_key(catalog_definition.key)
+            next_version = await repository.get_latest_version(catalog_key) + 1
+            await repository.deactivate_definitions_for_key(catalog_key)
             await repository.add_definition(
                 QuestionnaireDefinition(
-                    key=catalog_definition.key,
+                    key=catalog_key,
                     version=next_version,
                     title=catalog_definition.title,
                     description=catalog_definition.description,
@@ -473,7 +476,11 @@ async def _resolve_definition(
         ) from exc
 
 
-def _validate_definition_schema(schema: dict[str, Any]) -> None:
+def _validate_definition_schema(
+    schema: dict[str, Any],
+    *,
+    require_questions: bool,
+) -> None:
     sections = schema.get("sections")
     if not isinstance(sections, list) or not sections:
         raise DomainError(
@@ -482,7 +489,7 @@ def _validate_definition_schema(schema: dict[str, Any]) -> None:
         )
     for section in sections:
         questions = section.get("questions") if isinstance(section, dict) else None
-        if not isinstance(questions, list) or not questions:
+        if not isinstance(questions, list) or (require_questions and not questions):
             raise DomainError(
                 "Questionnaire definition sections must include at least one item.",
                 code="definition_invalid",

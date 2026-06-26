@@ -324,6 +324,14 @@ class CompanyRepository:
         )
         return result.scalar_one_or_none()
 
+    async def list_team_memberships_by_team(self, team_id: UUID) -> list:
+        from codrut.modules.assignments.models import TeamMembership
+
+        result = await self.session.execute(
+            select(TeamMembership).where(TeamMembership.team_id == team_id)
+        )
+        return list(result.scalars().all())
+
     async def list_assignments_for_participant(self, participant_id: UUID) -> list:
         from codrut.modules.assignments.models import QuestionnaireAssignment
 
