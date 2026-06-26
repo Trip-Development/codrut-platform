@@ -129,7 +129,7 @@ describe("QuestionnairesWorkspace", () => {
     await waitFor(() =>
       expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(true, { latestOnly: false }),
     );
-    expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(true);
+    expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledTimes(1);
   });
 
   it("shows one latest catalog card while keeping older versions selectable", async () => {

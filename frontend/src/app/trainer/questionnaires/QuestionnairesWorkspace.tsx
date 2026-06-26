@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   listQuestionnaireDefinitionStubs,
+  latestDefinitionStubs,
   getQuestionnaireDefinition,
   createQuestionnaireDefinitionOnServer,
   updateQuestionnaireDefinitionOnServer,
@@ -108,9 +109,8 @@ export function QuestionnairesWorkspace() {
     setIsCatalogLoading(true);
     try {
       const allVersions = await listQuestionnaireDefinitionStubs(true, { latestOnly: false });
-      const latestVersions = await listQuestionnaireDefinitionStubs(true);
       setVersionStubs(allVersions);
-      setStubs(latestVersions);
+      setStubs(latestDefinitionStubs(allVersions));
     } finally {
       setIsCatalogLoading(false);
     }
@@ -379,7 +379,7 @@ export function QuestionnairesWorkspace() {
     try {
       await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
       const remainingVersions = await listQuestionnaireDefinitionStubs(true, { latestOnly: false });
-      const remainingLatest = await listQuestionnaireDefinitionStubs(true);
+      const remainingLatest = latestDefinitionStubs(remainingVersions);
       setVersionStubs(remainingVersions);
       setStubs(remainingLatest);
       const nextSelection = remainingLatest.find((stub) => stub.id !== selectedKey) ?? remainingLatest[0];
