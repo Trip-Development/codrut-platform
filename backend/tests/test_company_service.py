@@ -275,6 +275,9 @@ class FakeCompanyRepository:
     async def get_team_by_company_name(self, _company_id: uuid.UUID, _name: str) -> None:
         return None
 
+    async def list_team_memberships_by_team(self, _team_id: uuid.UUID) -> list[TeamMembership]:
+        return []
+
     async def add_access_code(self, access_code: CompanyAccessCode) -> CompanyAccessCode:
         access_code.id = uuid.uuid4()
         self.access_codes_by_hash[access_code.code_hash] = access_code
@@ -810,6 +813,45 @@ async def test_import_roster_rejects_duplicate_row_email() -> None:
         )
 
 
+async def test_import_roster_infers_managers_from_reports_to_names_without_positions() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+
+    result = await service.import_roster(
+        owner_id,
+        company.id,
+        RosterImportRequest(
+            rows=[
+                {
+                    "Name": "Andrei Vacaru",
+                    "Reports To": "",
+                    "Location": "Bucharest",
+                    "email": "andrei.vacaru@tripdevelopment.ro",
+                },
+                {
+                    "Name": "Ilinca Corbu",
+                    "Reports To": "Andrei Vacaru",
+                    "Location": "Bucharest",
+                    "email": "ilincacrb4825@gmail.com",
+                },
+                {
+                    "Name": "Member Vlad",
+                    "Reports To": "Ilinca Corbu",
+                    "Location": "Bucharest",
+                    "email": "vlad.soimu@yahoo.com",
+                },
+            ]
+        ),
+    )
+
+    participants_by_email = {participant.email: participant for participant in result.participants}
+    assert participants_by_email["andrei.vacaru@tripdevelopment.ro"].role_group == "leadership"
+    assert participants_by_email["ilincacrb4825@gmail.com"].role_group == "leadership"
+    assert participants_by_email["vlad.soimu@yahoo.com"].role_group == "member"
+
+
 async def test_project_roster_reuses_company_participants_and_stores_project_context() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
@@ -1171,6 +1213,45 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
             select(TeamMembership).where(TeamMembership.team_id == leadership_team.id)
         )
         assert len(membership_result.scalars().all()) == 2
+
+        repeated_roster = await service.import_roster(
+            trainer.id,
+            company.id,
+            RosterImportRequest(
+                rows=[
+                    {
+                        "Name": "Manager Andrei",
+                        "Reports To": "",
+                        "Position": "Manager",
+                        "Location": "Bucharest",
+                        "email": "andrei.vacaru@tripdevelopment.ro",
+                        "Profil PCM": "",
+                    },
+                    {
+                        "Name": "Manager Ilinca",
+                        "Reports To": "",
+                        "Position": "Manager",
+                        "Location": "Bucharest",
+                        "email": "ilincacrb4825@gmail.com",
+                        "Profil PCM": "",
+                    },
+                    {
+                        "Name": "Member Vlad",
+                        "Reports To": "Manager Andrei",
+                        "Position": "Member",
+                        "Location": "Bucharest",
+                        "email": "vlad.soimu@yahoo.com",
+                        "Profil PCM": "",
+                    },
+                ]
+            ),
+        )
+
+        assert repeated_roster.total_imported == 3
+        repeated_membership_result = await session.execute(
+            select(TeamMembership).where(TeamMembership.team_id == leadership_team.id)
+        )
+        assert len(repeated_membership_result.scalars().all()) == 2
 
         assignment_result = await session.execute(
             select(QuestionnaireAssignment).where(QuestionnaireAssignment.company_id == company.id)

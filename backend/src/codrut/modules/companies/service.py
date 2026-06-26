@@ -295,6 +295,11 @@ class CompanyService:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, payload.project_id)
         rows = [_normalize_roster_row(row) for row in payload.rows]
+        manager_names = {
+            row.reports_to_name.casefold()
+            for row in rows
+            if row.reports_to_name is not None
+        }
         seen_emails: set[str] = set()
         for row in rows:
             if row.email in seen_emails:
@@ -319,7 +324,7 @@ class CompanyService:
                         reports_to_name=row.reports_to_name,
                         position=row.position,
                         location=row.location,
-                        role_group=_infer_roster_role_group(row),
+                        role_group=_infer_roster_role_group(row, manager_names),
                         pcm_profile=row.pcm_profile or row.pcm_base,
                         pcm_base=row.pcm_base,
                         pcm_phase=row.pcm_phase,
@@ -335,6 +340,7 @@ class CompanyService:
                     payload.project_id,
                     participant,
                     row,
+                    manager_names,
                 )
             participants.append(participant)
 
@@ -372,7 +378,17 @@ class CompanyService:
                 )
                 self.repository.session.add(leadership_team)
                 await self.repository.session.flush()
+            existing_memberships = {
+                membership.participant_profile_id: membership
+                for membership in await self.repository.list_team_memberships_by_team(
+                    leadership_team.id
+                )
+            }
             for participant in leadership_participants:
+                existing_membership = existing_memberships.get(participant.id)
+                if existing_membership is not None:
+                    existing_membership.role = TeamMembershipRole.leader
+                    continue
                 self.repository.session.add(
                     TeamMembership(
                         team_id=leadership_team.id,
@@ -472,6 +488,7 @@ class CompanyService:
         project_id: UUID,
         participant: ParticipantProfile,
         row: RosterImportRow,
+        manager_names: set[str],
     ) -> ProjectMembership:
         membership = await self.repository.get_project_membership(project_id, participant.id)
         if membership is None:
@@ -483,7 +500,7 @@ class CompanyService:
                     reports_to_name=row.reports_to_name,
                     position=row.position,
                     location=row.location,
-                    role_group=_infer_roster_role_group(row),
+                    role_group=_infer_roster_role_group(row, manager_names),
                     active=True,
                 )
             )
@@ -491,7 +508,7 @@ class CompanyService:
             membership.reports_to_name = row.reports_to_name
             membership.position = row.position
             membership.location = row.location
-            membership.role_group = _infer_roster_role_group(row)
+            membership.role_group = _infer_roster_role_group(row, manager_names)
             membership.active = True
             await self.repository.session.flush()
         return membership
@@ -1054,9 +1071,11 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
     )
 
 
-def _infer_roster_role_group(row: RosterImportRow) -> str:
+def _infer_roster_role_group(row: RosterImportRow, manager_names: set[str]) -> str:
     position = (row.position or "").casefold()
     if row.reports_to_name is None:
+        return "leadership"
+    if row.full_name.casefold() in manager_names:
         return "leadership"
     if any(token in position for token in ("manager", "director", "lead")):
         return "leadership"
