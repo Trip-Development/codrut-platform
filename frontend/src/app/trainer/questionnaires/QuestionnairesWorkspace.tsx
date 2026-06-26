@@ -106,7 +106,7 @@ export function QuestionnairesWorkspace() {
   const loadStubs = useCallback(async () => {
     setIsCatalogLoading(true);
     try {
-      const list = await listQuestionnaireDefinitionStubs();
+      const list = await listQuestionnaireDefinitionStubs(true);
       setStubs(list);
     } finally {
       setIsCatalogLoading(false);
@@ -331,7 +331,7 @@ export function QuestionnairesWorkspace() {
     setIsDefinitionLoading(true);
     try {
       await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
-      const remaining = await listQuestionnaireDefinitionStubs();
+      const remaining = await listQuestionnaireDefinitionStubs(true);
       setStubs(remaining);
       const nextSelection = remaining.find((stub) => stub.id !== selectedKey) ?? remaining[0];
       if (nextSelection) {
@@ -353,14 +353,15 @@ export function QuestionnairesWorkspace() {
 
   const handleAddQuestionnaire = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newKey || !newTitle) return;
+    if (!newKey) return;
 
     const key = newKey.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    const title = newTitle.trim() || "Chestionar nou";
     setIsCatalogLoading(true);
     try {
       const saved = await createQuestionnaireDefinitionOnServer({
         key,
-        title: newTitle,
+        title,
         description: newDescription,
         schema: {
           schema_version: "questionnaire.v1",
@@ -370,24 +371,11 @@ export function QuestionnairesWorkspace() {
             {
               id: "sectiunea_1",
               title: "Secțiunea 1",
-              questions: [
-                {
-                  id: `${key}_q1`,
-                  code: "Q1",
-                  type: "likert",
-                  label: "Prima întrebare din acest chestionar.",
-                  required: true,
-                  scale: [
-                     { value: 1, label: "Dezacord total" },
-                     { value: 2, label: "Neutru" },
-                     { value: 3, label: "Acord total" },
-                  ],
-                },
-              ],
+              questions: [],
             },
           ],
         },
-        active: true,
+        active: false,
       });
 
       setShowCreateModal(false);
@@ -1340,10 +1328,9 @@ export function QuestionnairesWorkspace() {
               <label className="text-xs font-bold text-foreground/60">Titlu</label>
               <input
                 type="text"
-                required
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Ex. Chestionar Evaluare PCM"
+                placeholder="Chestionar nou"
                 className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
               />
             </div>

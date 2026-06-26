@@ -1,9 +1,13 @@
 import uuid
+from copy import deepcopy
 from typing import Any, cast
 
 import pytest
+from sqlalchemy import select
 
+from codrut.core.database import SessionLocal
 from codrut.core.errors import DomainError
+from codrut.modules.forms.definitions import APPROVED_QUESTIONNAIRE_DEFINITIONS
 from codrut.modules.forms.models import QuestionnaireDefinition, QuestionnaireKey
 from codrut.modules.forms.schemas import (
     QuestionnaireDefinitionCreateRequest,
@@ -16,6 +20,7 @@ class FakeDefinitionRepository:
     def __init__(self, definitions: list[QuestionnaireDefinition] | None = None) -> None:
         self.definitions = definitions or []
         self.submitted_versions: set[tuple[QuestionnaireKey, int]] = set()
+        self.lookup_keys: list[str] = []
 
     async def list_definitions(
         self,
@@ -29,10 +34,11 @@ class FakeDefinitionRepository:
 
     async def get_definition(
         self,
-        key: QuestionnaireKey,
+        key: str,
         *,
         version: int | None = None,
     ) -> QuestionnaireDefinition | None:
+        self.lookup_keys.append(key)
         definitions = [definition for definition in self.definitions if definition.key == key]
         if version is None:
             definitions = [definition for definition in definitions if definition.active]
@@ -42,7 +48,7 @@ class FakeDefinitionRepository:
             None,
         )
 
-    async def get_latest_version(self, key: QuestionnaireKey) -> int:
+    async def get_latest_version(self, key: str) -> int:
         versions = [definition.version for definition in self.definitions if definition.key == key]
         return max(versions, default=0)
 
@@ -54,12 +60,12 @@ class FakeDefinitionRepository:
         self.definitions.append(definition)
         return definition
 
-    async def has_submitted_responses(self, key: QuestionnaireKey, version: int) -> bool:
+    async def has_submitted_responses(self, key: str, version: int) -> bool:
         return (key, version) in self.submitted_versions
 
     async def deactivate_definitions_for_key(
         self,
-        key: QuestionnaireKey,
+        key: str,
         *,
         except_version: int | None = None,
     ) -> None:
@@ -161,6 +167,28 @@ async def test_create_definition_accepts_custom_category_slug() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_inactive_definition_accepts_empty_draft_section() -> None:
+    repository = FakeDefinitionRepository()
+    service = make_service(repository)
+
+    result = await service.create_definition(
+        QuestionnaireDefinitionCreateRequest(
+            key="draft_custom",
+            title="Draft custom",
+            schema={
+                "schema_version": "questionnaire.v1",
+                "audience": "team",
+                "sections": [{"id": "sectiunea_1", "title": "Secțiunea 1", "questions": []}],
+            },
+            active=False,
+        )
+    )
+
+    assert result.active is False
+    assert result.definition_schema["sections"][0]["questions"] == []
+
+
+@pytest.mark.asyncio
 async def test_update_definition_mutates_unused_version() -> None:
     definition = persisted_definition()
     repository = FakeDefinitionRepository([definition])
@@ -216,6 +244,31 @@ async def test_activate_definition_deactivates_sibling_versions() -> None:
 
 
 @pytest.mark.asyncio
+async def test_activate_definition_rejects_incomplete_draft() -> None:
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key="draft_custom",
+        version=1,
+        title="Draft custom",
+        description="",
+        schema={
+            "schema_version": "questionnaire.v1",
+            "audience": "team",
+            "sections": [{"id": "sectiunea_1", "title": "Secțiunea 1", "questions": []}],
+        },
+        active=False,
+    )
+    repository = FakeDefinitionRepository([definition])
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.activate_definition("draft_custom", 1)
+
+    assert exc_info.value.code == "definition_invalid"
+    assert definition.active is False
+
+
+@pytest.mark.asyncio
 async def test_retire_definition_marks_active_false_without_deleting() -> None:
     definition = persisted_definition()
     repository = FakeDefinitionRepository([definition])
@@ -228,7 +281,7 @@ async def test_retire_definition_marks_active_false_without_deleting() -> None:
 
 
 @pytest.mark.asyncio
-async def test_definition_schema_requires_items() -> None:
+async def test_active_definition_schema_requires_items() -> None:
     service = make_service(FakeDefinitionRepository())
 
     with pytest.raises(DomainError) as exc_info:
@@ -241,3 +294,60 @@ async def test_definition_schema_requires_items() -> None:
         )
 
     assert exc_info.value.code == "definition_invalid"
+
+
+@pytest.mark.asyncio
+async def test_seed_catalog_definitions_uses_string_keys_for_lookup() -> None:
+    catalog = APPROVED_QUESTIONNAIRE_DEFINITIONS[0]
+    repository = FakeDefinitionRepository(
+        [
+            QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key=str(catalog.key),
+                version=catalog.version,
+                title=catalog.title,
+                description=catalog.description,
+                schema=catalog.schema,
+                active=True,
+            )
+        ]
+    )
+    service = make_service(repository)
+
+    await service.list_persisted_definitions()
+
+    assert repository.lookup_keys
+    assert all(type(key) is str for key in repository.lookup_keys)
+
+
+@pytest.mark.asyncio
+async def test_seed_catalog_definitions_is_idempotent_with_existing_database_row() -> None:
+    catalog = APPROVED_QUESTIONNAIRE_DEFINITIONS[0]
+
+    async with SessionLocal() as session:
+        existing = await session.scalar(
+            select(QuestionnaireDefinition)
+            .where(QuestionnaireDefinition.key == str(catalog.key))
+            .where(QuestionnaireDefinition.version == catalog.version)
+        )
+        if existing is None:
+            session.add(
+                QuestionnaireDefinition(
+                    id=uuid.uuid4(),
+                    key=str(catalog.key),
+                    version=catalog.version,
+                    title=catalog.title,
+                    description=catalog.description,
+                    schema=deepcopy(catalog.schema),
+                    active=True,
+                )
+            )
+            await session.flush()
+
+        result = await FormsService(session).list_persisted_definitions()
+
+        assert any(
+            definition.key == str(catalog.key) and definition.version == catalog.version
+            for definition in result
+        )
+        await session.rollback()

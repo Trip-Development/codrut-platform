@@ -49,6 +49,7 @@ export type QuestionnaireDefinition = {
   version: number;
   title: string;
   description: string;
+  active?: boolean;
   schema: {
     schema_version: string;
     source?: {
@@ -93,7 +94,7 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
     id: definition.key,
     name: definition.title,
     description: definition.description,
-    status: "active",
+    status: definition.active === false ? "draft" : "active",
     version: definition.version,
     source: definition.schema.source?.path,
     audience,
@@ -558,9 +559,14 @@ fallbackDefinitionDetails.boss_360_en = {
     "iCARE behavioral feedback for a manager from self, manager peers, and direct reports.",
 };
 
-export async function listQuestionnaireDefinitionStubs(): Promise<QuestionnaireDefinitionStub[]> {
+export async function listQuestionnaireDefinitionStubs(
+  includeRetired = false,
+): Promise<QuestionnaireDefinitionStub[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
+    const url = includeRetired
+      ? `${getApiBaseUrl()}/forms/definitions?include_retired=true`
+      : `${getApiBaseUrl()}/forms/definitions`;
+    const response = await fetch(url, {
       cache: "no-store",
       credentials: "include",
     });

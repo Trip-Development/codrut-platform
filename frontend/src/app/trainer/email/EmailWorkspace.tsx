@@ -210,7 +210,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const loadTemplates = useCallback(async () => {
     setIsLoadingTemplates(true);
     try {
-      const list = await listEmailTemplatesOnServer(true);
+      const list = await listEmailTemplatesOnServer();
       setTemplates(list);
     } finally {
       setIsLoadingTemplates(false);
@@ -311,7 +311,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
     setIsLoadingTemplates(true);
     try {
       await deleteEmailTemplateOnServer(selectedTemplate.baseKey); // Fix: Remove version to delete the whole template
-      const list = await listEmailTemplatesOnServer(true);
+      const list = await listEmailTemplatesOnServer();
       setTemplates(list);
       const remaining = list.filter((t) => t.id !== selectedTemplateId);
       if (remaining.length > 0) {
