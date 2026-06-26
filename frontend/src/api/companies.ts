@@ -1,5 +1,47 @@
 import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 
+type ApiErrorPayload = {
+  error?: {
+    message?: unknown;
+  };
+  detail?: unknown;
+};
+
+function formatApiError(payload: ApiErrorPayload | null, fallbackMessage: string): string {
+  if (typeof payload?.error?.message === "string" && payload.error.message.trim()) {
+    return payload.error.message;
+  }
+
+  if (typeof payload?.detail === "string" && payload.detail.trim()) {
+    return payload.detail;
+  }
+
+  if (Array.isArray(payload?.detail)) {
+    const messages = payload.detail
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const issue = item as { loc?: unknown; msg?: unknown };
+        if (typeof issue.msg !== "string" || !issue.msg.trim()) return null;
+
+        const path = Array.isArray(issue.loc)
+          ? issue.loc
+              .filter((part) => part !== "body")
+              .map(String)
+              .join(".")
+          : "";
+        return path ? `${path}: ${issue.msg}` : issue.msg;
+      })
+      .filter((message): message is string => Boolean(message));
+
+    if (messages.length > 0) {
+      const visibleMessages = messages.slice(0, 3).join("; ");
+      return messages.length > 3 ? `${visibleMessages}; încă ${messages.length - 3} erori.` : visibleMessages;
+    }
+  }
+
+  return fallbackMessage;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -748,8 +790,8 @@ export async function importCompanyRoster(
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error?.message ?? `Backend refuzat (${response.status})`);
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(formatApiError(payload, `Backend refuzat (${response.status})`));
   }
 
   return (await response.json()) as RosterImportResponse;
