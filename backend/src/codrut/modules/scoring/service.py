@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
@@ -33,12 +34,34 @@ DISTRESS_DRIVER_LABELS = {
 }
 
 ICARE_LABELS = {
-    "inspiring": "Inspiring",
-    "create_trust": "Construirea încrederii",
-    "awareness": "Awareness",
-    "results": "Results",
-    "empowerment": "Empowerment",
+    "icare_01_dezvolta_oamenii": "Dezvoltă oamenii",
+    "icare_02_conduce_prin_puterea_exemplului": "Conduce prin puterea exemplului",
+    "icare_03_creeaza_un_mediu_care_stimuleaza_implicarea": (
+        "Creează un mediu care stimulează implicarea"
+    ),
+    "icare_04_promotor_al_colaborarii": "Promotor al colaborării",
+    "icare_05_ancorat_in_realitate": "Ancorat în realitate",
+    "icare_06_aduce_claritate": "Aduce claritate",
+    "icare_07_modestie": "Modestie",
+    "icare_08_inteligenta_emotionala_si_situationala": (
+        "Inteligență emoțională și situațională"
+    ),
+    "icare_09_deschis_catre_lume": "Deschis către lume",
+    "icare_10_ambitios_pentru_companie": "Ambițios pentru companie",
+    "icare_11_grija_egala_pentru_angajati_si_clienti": (
+        "Grijă egală pentru angajați și clienți"
+    ),
+    "icare_12_agilitate_antreprenoriala": "Agilitate antreprenorială",
+    "icare_13_decizii_cat_mai_aproape_de_teren": "Decizii cât mai aproape de teren",
+    "icare_14_cultiva_inteligenta_colectiva": "Cultivă inteligența colectivă",
+    "icare_15_ajuta_echipa": "Ajută echipa",
 }
+
+LENCIONI_INTERPRETATION_RANGES = (
+    (8.0, 9.0, "Disfuncția probabil nu este o problemă."),
+    (6.0, 7.99, "Disfuncția poate fi o problemă."),
+    (3.0, 5.99, "Disfuncția trebuie probabil abordată."),
+)
 
 COMPLETED_STATUSES = {
     AssignmentStatus.submitted,
@@ -131,11 +154,13 @@ class ScoringService:
                 lencioni_sums,
                 LENCIONI_LABELS,
                 lencioni_count,
+                interpretation_fn=_lencioni_interpretation,
             ),
             driver_averages=_averages_from_sums(
                 driver_sums,
                 DISTRESS_DRIVER_LABELS,
                 driver_count,
+                minimum_avg=50.0000001,
             ),
             boss_360_averages=_averages_from_sums(
                 boss_360_sums,
@@ -266,10 +291,39 @@ class ScoringService:
                     "answered": len(values),
                 }
 
+                for question in section.get("questions", []):
+                    if question.get("type") != "statement_score_set":
+                        continue
+                    question_id = question["id"]
+                    block_values: list[float] = []
+                    for statement in question.get("statements", []):
+                        answer_key = f"{question_id}:{statement['id']}"
+                        value = _coerce_score(answers.get(answer_key))
+                        if value is not None:
+                            block_values.append(min(max(value, scale_min), scale_max))
+
+                    if not block_values:
+                        scores[question_id] = {
+                            "score": 0,
+                            "raw_avg": 0,
+                            "answered": 0,
+                        }
+                        continue
+
+                    block_raw_avg = sum(block_values) / len(block_values)
+                    block_percent_score = ((block_raw_avg - score_min) / score_range) * 100
+                    scores[question_id] = {
+                        "score": round(block_percent_score, 1),
+                        "raw_avg": round(block_raw_avg, 2),
+                        "answered": len(block_values),
+                    }
+
             scored_dimensions = {
                 key: value
                 for key, value in scores.items()
-                if isinstance(value, dict) and value.get("answered", 0) > 0
+                if key in ICARE_LABELS
+                and isinstance(value, dict)
+                and value.get("answered", 0) > 0
             }
             if scored_dimensions:
                 primary_result = min(
@@ -332,12 +386,32 @@ def _averages_from_sums(
     sums: dict[str, float],
     labels: dict[str, str],
     count: int,
+    *,
+    minimum_avg: float | None = None,
+    interpretation_fn: Callable[[float], tuple[str, str]] | None = None,
 ) -> list[ReportAverageResponse]:
-    return [
-        ReportAverageResponse(
-            id=key,
-            label=labels.get(key, key),
-            avg=round((total / count) if count > 0 else 0, 1),
+    averages: list[ReportAverageResponse] = []
+    for key, total in sums.items():
+        avg = round((total / count) if count > 0 else 0, 1)
+        if minimum_avg is not None and avg < minimum_avg:
+            continue
+        interpretation = interpretation_fn(avg) if interpretation_fn is not None else None
+        averages.append(
+            ReportAverageResponse(
+                id=key,
+                label=labels.get(key, key),
+                avg=avg,
+                interpretation=interpretation[0] if interpretation is not None else None,
+                range_label=interpretation[1] if interpretation is not None else None,
+            )
         )
-        for key, total in sums.items()
-    ]
+    return averages
+
+
+def _lencioni_interpretation(score: float) -> tuple[str, str]:
+    for minimum, maximum, label in LENCIONI_INTERPRETATION_RANGES:
+        if minimum <= score <= maximum:
+            return label, f"{minimum:g}-{maximum:g}"
+    if score < 3:
+        return "Scor sub intervalul de referință Lencioni.", "<3"
+    return "Scor peste intervalul de referință Lencioni.", ">9"

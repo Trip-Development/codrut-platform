@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { getApiBaseUrl } from "@/api/runtime";
+import { requestPasswordReset } from "@/api/auth";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -17,19 +17,10 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
 
     try {
-      // Send reset password request
-      // (This endpoint might return 404 if not implemented on the backend yet,
-      // but we will simulate success to unblock frontend UI flow).
-      await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      // Simulate success to unblock frontend UI flow
+      await requestPasswordReset(email);
       setSuccess(true);
-    } catch {
-      setError("A apărut o eroare la trimiterea emailului. Te rugăm să încerci din nou.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "A apărut o eroare la trimiterea emailului. Te rugăm să încerci din nou.");
     } finally {
       setSubmitting(false);
     }

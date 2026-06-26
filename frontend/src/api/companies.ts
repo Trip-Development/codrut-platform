@@ -271,6 +271,8 @@ export type ReportAverage = {
   id: string;
   label: string;
   avg: number;
+  interpretation?: string | null;
+  range_label?: string | null;
 };
 
 export type CompanyScoringResult = {

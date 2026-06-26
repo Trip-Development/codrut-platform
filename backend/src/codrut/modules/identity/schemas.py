@@ -50,6 +50,19 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class PasswordResetResponse(BaseModel):
+    ok: bool = True
+
+
 class SessionPrincipal(BaseModel):
     user_id: UUID
     email: EmailStr
