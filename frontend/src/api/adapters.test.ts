@@ -7,7 +7,12 @@ import {
   getParticipantSession,
   getTrainerSession,
 } from "./auth";
-import { buildVideoCampaignCreatePayload, listEmailSurfaceStubs } from "./email";
+import {
+  buildVideoCampaignCreatePayload,
+  deleteEmailTemplateOnServer,
+  listEmailSurfaceStubs,
+  listEmailTemplatesOnServer,
+} from "./email";
 import { resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
@@ -1021,7 +1026,7 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
-  it("lists only active questionnaire definitions", async () => {
+  it("lists active questionnaire definitions by default", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValue({
@@ -1053,6 +1058,91 @@ describe("frontend API adapter stubs", () => {
       expect.stringMatching(/\/forms\/definitions$/),
       expect.objectContaining({
         cache: "no-store",
+        credentials: "include",
+      }),
+    );
+  });
+
+  it("can list inactive questionnaire drafts for the trainer editor", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          key: "draft_custom",
+          version: 1,
+          title: "Draft custom",
+          description: "",
+          active: false,
+          schema: {
+            schema_version: "questionnaire.v1",
+            audience: "team",
+            sections: [{ id: "sectiunea_1", title: "Secțiunea 1", questions: [] }],
+          },
+        },
+      ],
+    } as Response);
+
+    await expect(listQuestionnaireDefinitionStubs(true)).resolves.toEqual([
+      expect.objectContaining({
+        id: "draft_custom",
+        status: "draft",
+      }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/forms\/definitions\?include_retired=true$/),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+  });
+
+  it("lists email templates without retired templates by default and deletes by key", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            key: "account_setup",
+            version: 1,
+            name: "Account setup",
+            subject: "Setup",
+            html_body: "<p>Body</p>",
+            text_body: "Body",
+            variables: [],
+            audience: "transactional",
+            active: true,
+          },
+        ],
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => "",
+      } as Response);
+
+    await expect(listEmailTemplatesOnServer()).resolves.toEqual([
+      expect.objectContaining({ baseKey: "account_setup", version: 1 }),
+    ]);
+    await expect(deleteEmailTemplateOnServer("account_setup")).resolves.toBeNull();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/\/communications\/templates\?include_retired=false$/),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/\/communications\/templates\/account_setup$/),
+      expect.objectContaining({
+        method: "DELETE",
         credentials: "include",
       }),
     );

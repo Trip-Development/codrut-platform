@@ -3,6 +3,8 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createQuestionnaireDefinitionOnServer,
+  listQuestionnaireDefinitionStubs,
   updateQuestionnaireDefinitionOnServer,
   type QuestionnaireDefinition,
 } from "@/api/questionnaires";
@@ -68,6 +70,17 @@ vi.mock("@/api/questionnaires", async (importOriginal) => {
       },
     ]),
     getQuestionnaireDefinition: vi.fn().mockResolvedValue(fixtures.definition),
+    createQuestionnaireDefinitionOnServer: vi.fn().mockResolvedValue({
+      ...fixtures.definition,
+      key: "lencioni",
+      version: 2,
+      title: "Chestionar nou",
+      active: false,
+      schema: {
+        ...fixtures.definition.schema,
+        sections: [{ id: "sectiunea_1", title: "Secțiunea 1", questions: [] }],
+      },
+    }),
     updateQuestionnaireDefinitionOnServer: vi.fn().mockResolvedValue(fixtures.definition),
   };
 });
@@ -76,6 +89,38 @@ describe("QuestionnairesWorkspace", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it("loads draft questionnaire definitions in the trainer editor catalog", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    await waitFor(() => expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(true));
+  });
+
+  it("creates a new questionnaire as an incomplete draft", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "+ Creează chestionar" }));
+    const modalTitle = await screen.findByText("Adaugă chestionar nou");
+    const form = modalTitle.closest("form");
+    expect(form).not.toBeNull();
+
+    const formScope = within(form as HTMLElement);
+    fireEvent.change(formScope.getAllByRole("combobox")[0], { target: { value: "lencioni" } });
+    fireEvent.click(formScope.getByRole("button", { name: "Creează" }));
+
+    await waitFor(() =>
+      expect(createQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: "lencioni",
+          title: "Chestionar nou",
+          active: false,
+          schema: expect.objectContaining({
+            sections: [expect.objectContaining({ questions: [] })],
+          }),
+        }),
+      ),
+    );
   });
 
   it("keeps typing local until the trainer explicitly saves", async () => {
