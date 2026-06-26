@@ -102,7 +102,7 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
   };
 }
 
-function latestDefinitionStubs(
+export function latestDefinitionStubs(
   stubs: QuestionnaireDefinitionStub[],
 ): QuestionnaireDefinitionStub[] {
   const latestByKey = new Map<string, QuestionnaireDefinitionStub>();
