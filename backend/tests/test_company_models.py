@@ -2,7 +2,7 @@ from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
 from sqlalchemy.orm import configure_mappers
 
 from codrut.core.database import Base
-from codrut.modules.companies.models import CompanyMembershipRole
+from codrut.modules.companies.models import CompanyMembershipRole, ProjectMembership
 
 
 def test_company_participant_tables_are_registered() -> None:
@@ -76,3 +76,14 @@ def test_reporting_relationship_supports_org_chart_without_self_reports() -> Non
     assert ("company_id", "participant_profile_id") in foreign_key_columns
     assert ("company_id", "manager_profile_id") in foreign_key_columns
     assert "participant_profile_id <> manager_profile_id" in checks
+
+
+def test_project_membership_timestamps_do_not_depend_only_on_database_defaults() -> None:
+    table = Base.metadata.tables["project_memberships"]
+
+    assert table.c.created_at.default is not None
+    assert table.c.created_at.server_default is not None
+    assert table.c.updated_at.default is not None
+    assert table.c.updated_at.server_default is not None
+    assert ProjectMembership.created_at.property.columns[0].default is not None
+    assert ProjectMembership.updated_at.property.columns[0].onupdate is not None
