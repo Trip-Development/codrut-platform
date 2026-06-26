@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession, async_sessionmaker, create_async_engine
@@ -22,16 +22,22 @@ class Base(AsyncAttrs, DeclarativeBase):
     metadata = metadata
 
 
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=utcnow,
         server_default=func.now(),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=utcnow,
         server_default=func.now(),
-        onupdate=func.now(),
+        onupdate=utcnow,
         nullable=False,
     )
 
