@@ -54,6 +54,7 @@ type ScaleGroup = {
 
 export function QuestionnairesWorkspace() {
   const [stubs, setStubs] = useState<QuestionnaireDefinitionStub[]>([]);
+  const [versionStubs, setVersionStubs] = useState<QuestionnaireDefinitionStub[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<number>(1);
   const [availableVersions, setAvailableVersions] = useState<number[]>([]);
@@ -75,13 +76,13 @@ export function QuestionnairesWorkspace() {
   }, [selectedKey]);
 
   useEffect(() => {
-    if (stubs.length > 0) {
-      const uniqueKeys = stubs.map((s) => s.id);
+    if (versionStubs.length > 0) {
+      const uniqueKeys = versionStubs.map((s) => s.id);
       setCategories(Array.from(new Set(uniqueKeys)));
     } else {
       setCategories([]);
     }
-  }, [stubs]);
+  }, [versionStubs]);
 
   // New Questionnaire Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -106,8 +107,10 @@ export function QuestionnairesWorkspace() {
   const loadStubs = useCallback(async () => {
     setIsCatalogLoading(true);
     try {
-      const list = await listQuestionnaireDefinitionStubs(true);
-      setStubs(list);
+      const allVersions = await listQuestionnaireDefinitionStubs(true, { latestOnly: false });
+      const latestVersions = await listQuestionnaireDefinitionStubs(true);
+      setVersionStubs(allVersions);
+      setStubs(latestVersions);
     } finally {
       setIsCatalogLoading(false);
     }
@@ -121,10 +124,15 @@ export function QuestionnairesWorkspace() {
   useEffect(() => {
     if (!selectedKey) return;
 
-    const allVersions: number[] = stubs
-      .filter((s) => s.id === selectedKey)
-      .map((s) => s.version)
-      .filter((v): v is number => typeof v === "number");
+    const allVersions: number[] = Array.from(
+      new Set(
+        stubs
+          .concat(versionStubs)
+          .filter((s) => s.id === selectedKey)
+          .map((s) => s.version)
+          .filter((v): v is number => typeof v === "number"),
+      ),
+    );
 
     if (allVersions.length === 0) {
       allVersions.push(1);
@@ -137,7 +145,7 @@ export function QuestionnairesWorkspace() {
     if (!allVersions.includes(selectedVersion)) {
       setSelectedVersion(allVersions[0]);
     }
-  }, [selectedKey, selectedVersion, stubs]);
+  }, [selectedKey, selectedVersion, stubs, versionStubs]);
 
   useEffect(() => {
     if (!selectedKey) {
@@ -175,6 +183,19 @@ export function QuestionnairesWorkspace() {
     setSaveState("idle");
     setSaveError(null);
     setStubs((previousStubs) =>
+      previousStubs.map((stub) =>
+        stub.id === updatedDef.key && (stub.version ?? 1) === updatedDef.version
+          ? {
+              ...stub,
+              name: updatedDef.title,
+              description: updatedDef.description,
+              audience: updatedDef.schema.audience ?? stub.audience,
+              estimatedItems: estimateQuestionnaireItems(updatedDef),
+            }
+          : stub,
+      ),
+    );
+    setVersionStubs((previousStubs) =>
       previousStubs.map((stub) =>
         stub.id === updatedDef.key && (stub.version ?? 1) === updatedDef.version
           ? {
@@ -225,6 +246,19 @@ export function QuestionnairesWorkspace() {
             : stub,
         ),
       );
+      setVersionStubs((previousStubs) =>
+        previousStubs.map((stub) =>
+          stub.id === saved.key && (stub.version ?? 1) === saved.version
+            ? {
+                ...stub,
+                name: saved.title,
+                description: saved.description,
+                audience: saved.schema.audience ?? stub.audience,
+                estimatedItems: estimateQuestionnaireItems(saved),
+              }
+            : stub,
+        ),
+      );
     } catch (error) {
       if (saveRequestRef.current === requestId) {
         setSaveState("error");
@@ -242,6 +276,19 @@ export function QuestionnairesWorkspace() {
     setSaveState("idle");
     setSaveError(null);
     setStubs((previousStubs) =>
+      previousStubs.map((stub) =>
+        stub.id === persisted.key && (stub.version ?? 1) === persisted.version
+          ? {
+              ...stub,
+              name: persisted.title,
+              description: persisted.description,
+              audience: persisted.schema.audience ?? stub.audience,
+              estimatedItems: estimateQuestionnaireItems(persisted),
+            }
+          : stub,
+      ),
+    );
+    setVersionStubs((previousStubs) =>
       previousStubs.map((stub) =>
         stub.id === persisted.key && (stub.version ?? 1) === persisted.version
           ? {
@@ -331,9 +378,11 @@ export function QuestionnairesWorkspace() {
     setIsDefinitionLoading(true);
     try {
       await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
-      const remaining = await listQuestionnaireDefinitionStubs(true);
-      setStubs(remaining);
-      const nextSelection = remaining.find((stub) => stub.id !== selectedKey) ?? remaining[0];
+      const remainingVersions = await listQuestionnaireDefinitionStubs(true, { latestOnly: false });
+      const remainingLatest = await listQuestionnaireDefinitionStubs(true);
+      setVersionStubs(remainingVersions);
+      setStubs(remainingLatest);
+      const nextSelection = remainingLatest.find((stub) => stub.id !== selectedKey) ?? remainingLatest[0];
       if (nextSelection) {
         setSelectedKey(nextSelection.id);
         setSelectedVersion(nextSelection.version ?? 1);
@@ -602,9 +651,7 @@ export function QuestionnairesWorkspace() {
     handleUpdateQuestion(sectionIndex, questionIndex, { statements });
   };
 
-  const selectedStub =
-    stubs.find((s) => s.id === selectedKey && s.version === selectedVersion) ??
-    stubs.find((s) => s.id === selectedKey);
+  const latestSelectedVersion = stubs.find((s) => s.id === selectedKey)?.version ?? availableVersions[0];
   const scaleGroups = useMemo<ScaleGroup[]>(() => {
     if (!currentDefinition) return [];
 
@@ -861,7 +908,7 @@ export function QuestionnairesWorkspace() {
                   >
                     {availableVersions.map((v) => (
                       <option key={v} value={v}>
-                        v{v} {v === selectedStub?.version ? "(Activă)" : "(Veche)"}
+                        v{v} {v === latestSelectedVersion ? "(Activă)" : "(Veche)"}
                       </option>
                     ))}
                   </select>
