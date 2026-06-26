@@ -11,6 +11,9 @@ from codrut.modules.identity.schemas import (
     ConsentRequest,
     InviteVerifyResponse,
     LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    PasswordResetResponse,
     RegisterRequest,
     SessionPrincipal,
 )
@@ -54,6 +57,26 @@ async def login(
     await session.commit()
     _set_session_cookie(response, result.session_token)
     return result.response
+
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def request_password_reset(
+    payload: PasswordResetRequest,
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PasswordResetResponse:
+    await IdentityService(session).request_password_reset(payload)
+    await session.commit()
+    return PasswordResetResponse()
+
+
+@router.post("/reset-password/confirm", response_model=PasswordResetResponse)
+async def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> PasswordResetResponse:
+    await IdentityService(session).confirm_password_reset(payload)
+    await session.commit()
+    return PasswordResetResponse()
 
 
 @router.post("/consent", response_model=AuthResponse)

@@ -16,6 +16,8 @@ class ReportAverageResponse(BaseModel):
     id: str
     label: str
     avg: float
+    interpretation: str | None = None
+    range_label: str | None = None
 
 
 class CompanyReportAggregateResponse(BaseModel):

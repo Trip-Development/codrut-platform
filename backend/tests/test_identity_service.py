@@ -5,8 +5,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from codrut.contracts.emails import (
+    EmailDeliveryStatus,
+    EmailProviderKey,
+    EmailSendResult,
+    make_test_message_id,
+)
 from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
+from codrut.core.security import hash_password, verify_password
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
@@ -14,8 +21,13 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
 from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
-from codrut.modules.identity.models import UserRole
-from codrut.modules.identity.schemas import RegisterRequest
+from codrut.modules.identity.models import PasswordResetToken, User, UserRole
+from codrut.modules.identity.repository import hash_session_token
+from codrut.modules.identity.schemas import (
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    RegisterRequest,
+)
 from codrut.modules.identity.service import IdentityService
 
 
@@ -23,6 +35,60 @@ def _company_result(company_id: uuid.UUID, name: str = "Intake Iunie") -> MagicM
     result = MagicMock()
     result.scalar_one_or_none.return_value = Company(id=company_id, name=name)
     return result
+
+
+class FakeResetRepository:
+    def __init__(self, user: User) -> None:
+        self.user = user
+        self.tokens: list[PasswordResetToken] = []
+        self.deleted_session_user_ids: list[uuid.UUID] = []
+
+    async def get_user_by_email(self, email: str) -> User | None:
+        return self.user if self.user.email == email.lower() else None
+
+    async def get_user_by_id(self, user_id: uuid.UUID) -> User | None:
+        return self.user if self.user.id == user_id else None
+
+    async def revoke_password_reset_tokens_for_user(self, user_id: uuid.UUID) -> None:
+        now = datetime.now(UTC)
+        for token in self.tokens:
+            if token.user_id == user_id and token.used_at is None:
+                token.used_at = now
+
+    async def add_password_reset_token(self, token: PasswordResetToken) -> PasswordResetToken:
+        self.tokens.append(token)
+        return token
+
+    async def get_active_password_reset_token(self, token: str) -> PasswordResetToken | None:
+        token_hash = hash_session_token(token)
+        now = datetime.now(UTC)
+        return next(
+            (
+                reset_token
+                for reset_token in self.tokens
+                if reset_token.token_hash == token_hash
+                and reset_token.expires_at > now
+                and reset_token.used_at is None
+            ),
+            None,
+        )
+
+    async def delete_sessions_for_user(self, user_id: uuid.UUID) -> None:
+        self.deleted_session_user_ids.append(user_id)
+
+
+class FakeAcceptedEmailProvider:
+    def __init__(self) -> None:
+        self.messages = []
+
+    async def send(self, message):
+        self.messages.append(message)
+        return EmailSendResult(
+            provider=EmailProviderKey.test,
+            status=EmailDeliveryStatus.accepted,
+            message_id=make_test_message_id(),
+            recipient=message.to,
+        )
 
 
 @pytest.mark.asyncio
@@ -81,6 +147,70 @@ async def test_verify_invite_token_success() -> None:
     assert result.token_status == "active"  # noqa: S105
     assert len(result.tasks) == 1
     assert result.tasks[0].id == str(mock_assignment.id)
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_sends_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="ana@example.com",
+        password_hash=hash_password("old-password-123"),
+        role=UserRole.trainer,
+    )
+    repository = FakeResetRepository(user)
+    provider = FakeAcceptedEmailProvider()
+    monkeypatch.setattr(
+        "codrut.modules.identity.service.build_email_provider",
+        lambda _settings: provider,
+    )
+
+    service = IdentityService(AsyncMock())
+    service.repository = repository
+
+    await service.request_password_reset(PasswordResetRequest(email=user.email))
+
+    assert len(repository.tokens) == 1
+    assert repository.tokens[0].user_id == user.id
+    assert repository.tokens[0].used_at is None
+    assert len(provider.messages) == 1
+    assert "/update-password?token=" in provider.messages[0].text_body
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_updates_password_and_consumes_token() -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="ana@example.com",
+        password_hash=hash_password("old-password-123"),
+        role=UserRole.trainer,
+    )
+    repository = FakeResetRepository(user)
+    raw_token = "reset-token-" + uuid.uuid4().hex
+    repository.tokens.append(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_session_token(raw_token),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+    )
+
+    service = IdentityService(AsyncMock())
+    service.repository = repository
+
+    await service.confirm_password_reset(
+        PasswordResetConfirmRequest(token=raw_token, password="new-password-123")
+    )
+
+    assert verify_password("new-password-123", user.password_hash)
+    assert repository.tokens[0].used_at is not None
+    assert repository.deleted_session_user_ids == [user.id]
+
+    with pytest.raises(DomainError, match="invalid"):
+        await service.confirm_password_reset(
+            PasswordResetConfirmRequest(token=raw_token, password="another-password-123")
+        )
 
 
 @pytest.mark.asyncio
