@@ -34,6 +34,17 @@ type FlowStepKey = "upload" | "review" | "import" | "access";
 type FlowStepState = "complete" | "current" | "upcoming" | "error";
 const MAPPING_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location"];
 const PREVIEW_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location", "pcm_base", "pcm_phase"];
+const MANUAL_HEADERS = ["Name", "email", "Reports To", "Position", "Location"];
+const MANUAL_MAPPINGS: Record<DbField, string> = {
+  full_name: "Name",
+  email: "email",
+  reports_to_name: "Reports To",
+  position: "Position",
+  location: "Location",
+  pcm_profile: "",
+  pcm_base: "",
+  pcm_phase: "",
+};
 
 const FIELD_LABELS: Record<DbField, string> = {
   full_name: "Nume Complet (Obligatoriu)",
@@ -392,6 +403,30 @@ export function RosterImporter({
     setMappings((prev) => ({ ...prev, [field]: column }));
   };
 
+  const handleAddManualParticipant = () => {
+    const nextIndex = rawRows.length;
+    const emptyRow = Object.fromEntries(MANUAL_HEADERS.map((header) => [header, ""])) as Record<string, string>;
+
+    setHeaders((current) => (current.length > 0 ? Array.from(new Set([...current, ...MANUAL_HEADERS])) : MANUAL_HEADERS));
+    setMappings((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        Object.entries(MANUAL_MAPPINGS).map(([field, manualHeader]) => [
+          field,
+          current[field as DbField] || manualHeader,
+        ]),
+      ) as Record<DbField, string>,
+    }));
+    setRawRows((current) => [...current, emptyRow]);
+    setEditingCellId({ rowIndex: nextIndex, field: "full_name" });
+    setLastImportedParticipantIds([]);
+    resetAccessState();
+    setImportState({
+      status: "ready",
+      message: "Completează participantul manual în tabel, apoi salvează participanții.",
+    });
+  };
+
   // Convert raw row to Db fields taking manual edits into account
   const getNormalizedRow = useCallback((rawRow: Record<string, string>, rowIndex: number): Record<DbField, string> => {
     const rowEdits = editedCells[rowIndex] || {};
@@ -491,15 +526,6 @@ export function RosterImporter({
             type: "warning",
           });
         }
-      }
-      if (!row.pcm_base || !row.pcm_phase) {
-        errors.push({
-          rowIndex: idx,
-          name,
-          field: !row.pcm_base ? "pcm_base" : "pcm_phase",
-          error: "PCM bază/fază este incomplet. Participantul poate completa chestionarul PCM ulterior.",
-          type: "warning",
-        });
       }
     });
     return errors;
@@ -762,16 +788,27 @@ export function RosterImporter({
               </div>
             ) : null}
 
-            <label className="block">
-              <span className="text-sm font-semibold text-foreground">Selectează fișier</span>
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={handleFileChange}
-                className="mt-2 w-full rounded-xl border border-dashed border-burgundy/35 bg-background px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
-              />
-              <span className="mt-2 block text-xs text-foreground/50">Excel (.xlsx, .xls) sau CSV (.csv)</span>
-            </label>
+            <div className="block">
+              <span className="text-sm font-semibold text-foreground">Participanți</span>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <label className="min-w-0 flex-1">
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileChange}
+                    className="w-full rounded-xl border border-dashed border-burgundy/35 bg-background px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddManualParticipant}
+                  className="tap-soft rounded-xl border border-[var(--border)] bg-surface px-3.5 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                >
+                  + Participant manual
+                </button>
+              </div>
+              <span className="mt-2 block text-xs text-foreground/50">Excel (.xlsx, .xls), CSV (.csv) sau introducere manuală</span>
+            </div>
           </div>
         </div>
 
@@ -804,14 +841,23 @@ export function RosterImporter({
             <p className="max-w-2xl text-sm leading-6 text-foreground/62">
               Importul salvează doar participanții. Trimiterea emailurilor sau generarea linkurilor se face separat după confirmare.
             </p>
-            <button
-              type="button"
-              disabled={!canImportRows}
-              onClick={handleImport}
-              className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Salvează participanții
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleAddManualParticipant}
+                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+              >
+                + Participant manual
+              </button>
+              <button
+                type="button"
+                disabled={!canImportRows}
+                onClick={handleImport}
+                className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Salvează participanții
+              </button>
+            </div>
           </div>
         </section>
       )}
