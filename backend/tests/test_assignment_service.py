@@ -527,10 +527,10 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
         target_id,
         _outside_participant_id,
     ) = seed_assignment_scope()
-    peer_id = uuid.uuid4()
-    member_id = uuid.uuid4()
-    lower_manager_id = uuid.uuid4()
-    lower_report_id = uuid.uuid4()
+    ilinca_id = uuid.uuid4()
+    alexandra_id = uuid.uuid4()
+    member_vlad_id = uuid.uuid4()
+    member_ilinca_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
     company_repository.projects[project_id] = CompanyProject(
@@ -538,36 +538,36 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
         company_id=company_id,
         name="Leadership Septembrie",
     )
-    company_repository.participants[respondent_id].full_name = "Andrei Manager"
+    company_repository.participants[respondent_id].full_name = "Andrei Vacaru"
     company_repository.participants[respondent_id].role_group = "leadership"
-    company_repository.participants[target_id].full_name = "Ioana Peer"
+    company_repository.participants[target_id].full_name = "Vlad Soimu"
     company_repository.participants[target_id].role_group = "leadership"
-    company_repository.participants[peer_id] = ParticipantProfile(
-        id=peer_id,
+    company_repository.participants[ilinca_id] = ParticipantProfile(
+        id=ilinca_id,
         company_id=company_id,
-        full_name="Mara Peer",
-        email="mara@example.com",
+        full_name="Ilinca Corbu",
+        email="ilinca@example.com",
         role_group="leadership",
     )
-    company_repository.participants[member_id] = ParticipantProfile(
-        id=member_id,
+    company_repository.participants[alexandra_id] = ParticipantProfile(
+        id=alexandra_id,
         company_id=company_id,
-        full_name="Ana Report",
-        email="ana@example.com",
+        full_name="Alexandra Giurca",
+        email="alexandra@example.com",
         role_group="member",
     )
-    company_repository.participants[lower_manager_id] = ParticipantProfile(
-        id=lower_manager_id,
+    company_repository.participants[member_vlad_id] = ParticipantProfile(
+        id=member_vlad_id,
         company_id=company_id,
-        full_name="Bogdan Lead",
-        email="bogdan@example.com",
+        full_name="Member Vlad",
+        email="member-vlad@example.com",
         role_group="member",
     )
-    company_repository.participants[lower_report_id] = ParticipantProfile(
-        id=lower_report_id,
+    company_repository.participants[member_ilinca_id] = ParticipantProfile(
+        id=member_ilinca_id,
         company_id=company_id,
-        full_name="Dan Report",
-        email="dan@example.com",
+        full_name="Member Ilinca",
+        email="member-ilinca@example.com",
         role_group="member",
     )
     company_repository.reporting_relationships.extend(
@@ -575,12 +575,27 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
             ParticipantReportingRelationship(
                 company_id=company_id,
                 manager_profile_id=respondent_id,
-                participant_profile_id=member_id,
+                participant_profile_id=ilinca_id,
             ),
             ParticipantReportingRelationship(
                 company_id=company_id,
-                manager_profile_id=lower_manager_id,
-                participant_profile_id=lower_report_id,
+                manager_profile_id=respondent_id,
+                participant_profile_id=target_id,
+            ),
+            ParticipantReportingRelationship(
+                company_id=company_id,
+                manager_profile_id=ilinca_id,
+                participant_profile_id=alexandra_id,
+            ),
+            ParticipantReportingRelationship(
+                company_id=company_id,
+                manager_profile_id=ilinca_id,
+                participant_profile_id=member_vlad_id,
+            ),
+            ParticipantReportingRelationship(
+                company_id=company_id,
+                manager_profile_id=target_id,
+                participant_profile_id=member_ilinca_id,
             ),
         ]
     )
@@ -612,26 +627,60 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
 
     plan = await service.build_default_assignment_plan(user_id, company_id, project_id)
 
+    leadership_scope = next(scope for scope in plan.scopes if scope.type == "leadership_team")
+    assert leadership_scope.participant_ids == [respondent_id, ilinca_id, target_id]
+
     manager_team_scopes = [scope.name for scope in plan.scopes if scope.type == "manager_team"]
-    assert manager_team_scopes == ["Echipa Andrei Manager", "Echipa Bogdan Lead"]
-    assert "Echipa Ioana Peer" not in manager_team_scopes
-    assert "Echipa Mara Peer" not in manager_team_scopes
+    assert manager_team_scopes == ["Echipa Ilinca Corbu", "Echipa Vlad Soimu"]
+    assert "Echipa Andrei Vacaru" not in manager_team_scopes
+
+    manager_team_members = {
+        scope.name: scope.participant_ids for scope in plan.scopes if scope.type == "manager_team"
+    }
+    assert manager_team_members == {
+        "Echipa Ilinca Corbu": [ilinca_id, alexandra_id, member_vlad_id],
+        "Echipa Vlad Soimu": [target_id, member_ilinca_id],
+    }
 
     andrei_360_respondents = {
         item.respondent_profile_id
         for item in plan.assignments
         if item.questionnaire_key == "boss_360" and item.target_person_id == respondent_id
     }
-    assert andrei_360_respondents == {respondent_id, target_id, peer_id, member_id}
-    assert lower_manager_id not in andrei_360_respondents
+    assert andrei_360_respondents == {respondent_id, ilinca_id, target_id}
 
-    ioana_lencioni_team_assignments = [
+    ilinca_360_respondents = {
+        item.respondent_profile_id
+        for item in plan.assignments
+        if item.questionnaire_key == "boss_360" and item.target_person_id == ilinca_id
+    }
+    assert ilinca_360_respondents == {
+        respondent_id,
+        ilinca_id,
+        target_id,
+        alexandra_id,
+        member_vlad_id,
+    }
+
+    vlad_360_respondents = {
+        item.respondent_profile_id
+        for item in plan.assignments
+        if item.questionnaire_key == "boss_360" and item.target_person_id == target_id
+    }
+    assert vlad_360_respondents == {
+        respondent_id,
+        ilinca_id,
+        target_id,
+        member_ilinca_id,
+    }
+
+    andrei_lencioni_team_assignments = [
         item
         for item in plan.assignments
         if item.questionnaire_key == "lencioni"
-        and item.scope_name == "Echipa Ioana Peer"
+        and item.scope_name == "Echipa Andrei Vacaru"
     ]
-    assert ioana_lencioni_team_assignments == []
+    assert andrei_lencioni_team_assignments == []
 
     andrei_pcm_assignments = [
         item

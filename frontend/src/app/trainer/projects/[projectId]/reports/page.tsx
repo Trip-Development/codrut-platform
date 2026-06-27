@@ -30,7 +30,12 @@ export default async function ProjectReportsPage({
 
       {canShowAggregates ? (
         <section className="grid gap-5 xl:grid-cols-3">
-          <ReportPanel title="Lencioni" count={aggregate.lencioni_count} items={aggregate.lencioni_averages} />
+          <ReportPanel
+            title="Lencioni"
+            count={aggregate.lencioni_count}
+            items={aggregate.lencioni_averages}
+            legend={lencioniLegend}
+          />
           <ReportPanel title="Feedback 360 iCARE" count={aggregate.boss_360_count} items={aggregate.boss_360_averages} suffix="%" />
           <ReportPanel title="Driveri de distres" count={aggregate.driver_count} items={aggregate.driver_averages} suffix="%" />
         </section>
@@ -108,11 +113,13 @@ function ReportPanel({
   count,
   items,
   suffix = "",
+  legend,
 }: {
   title: string;
   count: number;
-  items: Array<{ id: string; label: string; avg: number }>;
+  items: Array<{ id: string; label: string; avg: number; interpretation?: string | null; range_label?: string | null }>;
   suffix?: string;
+  legend?: Array<{ range: string; label: string }>;
 }) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
@@ -126,6 +133,15 @@ function ReportPanel({
         <p className="py-10 text-center text-sm text-foreground/52">Rezultatele apar după completare și scorare.</p>
       ) : (
         <div className="mt-4 space-y-3">
+          {legend ? (
+            <div className="rounded-xl border border-[var(--border)] bg-surface-muted/60 p-3 text-xs leading-5 text-foreground/62">
+              {legend.map((item) => (
+                <p key={item.range}>
+                  <strong className="text-foreground">{item.range}:</strong> {item.label}
+                </p>
+              ))}
+            </div>
+          ) : null}
           {items.map((item) => (
             <div key={item.id}>
               <div className="flex justify-between text-xs font-semibold text-foreground/68">
@@ -135,6 +151,12 @@ function ReportPanel({
                   {suffix}
                 </span>
               </div>
+              {item.interpretation ? (
+                <p className="mt-1 text-xs leading-5 text-foreground/52">
+                  {item.range_label ? `${item.range_label}: ` : ""}
+                  {item.interpretation}
+                </p>
+              ) : null}
               <div className="mt-1.5 h-2 rounded-full bg-surface-muted">
                 <div
                   className="h-full rounded-full bg-burgundy"
@@ -148,6 +170,12 @@ function ReportPanel({
     </section>
   );
 }
+
+const lencioniLegend = [
+  { range: "8-9", label: "Disfuncția probabil nu este o problemă." },
+  { range: "6-7", label: "Disfuncția poate fi o problemă." },
+  { range: "3-5", label: "Disfuncția trebuie probabil abordată." },
+];
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";

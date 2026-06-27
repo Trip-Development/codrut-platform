@@ -18,12 +18,28 @@ export const driverLabels: Record<string, string> = {
 };
 
 export const boss360Labels: Record<string, string> = {
-  inspiring: "Inspiring",
-  create_trust: "Construirea încrederii",
-  awareness: "Awareness",
-  results: "Results",
-  empowerment: "Empowerment",
+  icare_01_dezvolta_oamenii: "Dezvoltă oamenii",
+  icare_02_conduce_prin_puterea_exemplului: "Conduce prin puterea exemplului",
+  icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: "Creează un mediu care stimulează implicarea",
+  icare_04_promotor_al_colaborarii: "Promotor al colaborării",
+  icare_05_ancorat_in_realitate: "Ancorat în realitate",
+  icare_06_aduce_claritate: "Aduce claritate",
+  icare_07_modestie: "Modestie",
+  icare_08_inteligenta_emotionala_si_situationala: "Inteligență emoțională și situațională",
+  icare_09_deschis_catre_lume: "Deschis către lume",
+  icare_10_ambitios_pentru_companie: "Ambițios pentru companie",
+  icare_11_grija_egala_pentru_angajati_si_clienti: "Grijă egală pentru angajați și clienți",
+  icare_12_agilitate_antreprenoriala: "Agilitate antreprenorială",
+  icare_13_decizii_cat_mai_aproape_de_teren: "Decizii cât mai aproape de teren",
+  icare_14_cultiva_inteligenta_colectiva: "Cultivă inteligența colectivă",
+  icare_15_ajuta_echipa: "Ajută echipa",
 };
+
+const lencioniInterpretations = [
+  { min: 8, max: 9, range: "8-9", label: "Disfuncția probabil nu este o problemă." },
+  { min: 6, max: 7.99, range: "6-7", label: "Disfuncția poate fi o problemă." },
+  { min: 3, max: 5.99, range: "3-5", label: "Disfuncția trebuie probabil abordată." },
+];
 
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const lencioniKeys = new Set(["lencioni", "lencioni_en"]);
@@ -34,6 +50,8 @@ export type ReportAverage = {
   id: string;
   label: string;
   avg: number;
+  interpretation?: string | null;
+  range_label?: string | null;
 };
 
 export type ReportAggregation = {
@@ -98,8 +116,10 @@ export function buildReportAggregation(
     lencioniCount,
     driverCount,
     boss360Count,
-    lencioniAverages: averagesFromSums(lencioniSums, lencioniLabels, lencioniCount),
-    driverAverages: averagesFromSums(driverSums, driverLabels, driverCount),
+    lencioniAverages: averagesFromSums(lencioniSums, lencioniLabels, lencioniCount, {
+      interpretation: lencioniInterpretation,
+    }),
+    driverAverages: averagesFromSums(driverSums, driverLabels, driverCount, { minimumAvg: 50.0000001 }),
     boss360Averages: averagesFromSums(boss360Sums, boss360Labels, boss360Count),
     totalAssigned,
     totalCompleted,
@@ -115,10 +135,30 @@ function averagesFromSums(
   sums: Record<string, number>,
   labels: Record<string, string>,
   count: number,
+  options: {
+    minimumAvg?: number;
+    interpretation?: (score: number) => { label: string; range: string };
+  } = {},
 ): ReportAverage[] {
-  return Object.entries(sums).map(([key, sum]) => ({
-    id: key,
-    label: labels[key] || key,
-    avg: Number((count > 0 ? sum / count : 0).toFixed(1)),
-  }));
+  return Object.entries(sums).flatMap(([key, sum]) => {
+    const avg = Number((count > 0 ? sum / count : 0).toFixed(1));
+    if (options.minimumAvg !== undefined && avg < options.minimumAvg) return [];
+    const interpretation = options.interpretation?.(avg);
+    return [
+      {
+        id: key,
+        label: labels[key] || key,
+        avg,
+        interpretation: interpretation?.label ?? null,
+        range_label: interpretation?.range ?? null,
+      },
+    ];
+  });
+}
+
+function lencioniInterpretation(score: number): { label: string; range: string } {
+  const match = lencioniInterpretations.find((item) => item.min <= score && score <= item.max);
+  if (match) return { label: match.label, range: match.range };
+  if (score < 3) return { label: "Scor sub intervalul de referință Lencioni.", range: "<3" };
+  return { label: "Scor peste intervalul de referință Lencioni.", range: ">9" };
 }

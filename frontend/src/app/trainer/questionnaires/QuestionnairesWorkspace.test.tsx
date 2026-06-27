@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createQuestionnaireDefinitionOnServer,
+  getQuestionnaireDefinition,
   listQuestionnaireDefinitionStubs,
   updateQuestionnaireDefinitionOnServer,
   type QuestionnaireDefinition,
@@ -85,7 +86,38 @@ vi.mock("@/api/questionnaires", async (importOriginal) => {
   };
 });
 
+function resetQuestionnaireApiMocks() {
+  vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([
+    {
+      id: "lencioni",
+      name: "Chestionar de evaluare a echipei",
+      description: "Initial description",
+      status: "active",
+      version: 1,
+      audience: "team",
+      estimatedItems: 1,
+    },
+  ]);
+  vi.mocked(getQuestionnaireDefinition).mockResolvedValue(fixtures.definition);
+  vi.mocked(createQuestionnaireDefinitionOnServer).mockResolvedValue({
+    ...fixtures.definition,
+    key: "lencioni",
+    version: 2,
+    title: "Chestionar nou",
+    active: false,
+    schema: {
+      ...fixtures.definition.schema,
+      sections: [{ id: "sectiunea_1", title: "Secțiunea 1", questions: [] }],
+    },
+  });
+  vi.mocked(updateQuestionnaireDefinitionOnServer).mockResolvedValue(fixtures.definition);
+}
+
 describe("QuestionnairesWorkspace", () => {
+  beforeEach(() => {
+    resetQuestionnaireApiMocks();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -94,7 +126,52 @@ describe("QuestionnairesWorkspace", () => {
   it("loads draft questionnaire definitions in the trainer editor catalog", async () => {
     render(<QuestionnairesWorkspace />);
 
-    await waitFor(() => expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(true));
+    await waitFor(() =>
+      expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(true, { latestOnly: false }),
+    );
+    expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows one latest catalog card while keeping older versions selectable", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockImplementation(async (_includeRetired, options) => {
+      const latest = {
+        id: "lencioni",
+        name: "Latest Lencioni",
+        description: "Latest description",
+        status: "active" as const,
+        version: 2,
+        audience: "team" as const,
+        estimatedItems: 2,
+      };
+      const older = {
+        id: "lencioni",
+        name: "Older Lencioni",
+        description: "Older description",
+        status: "active" as const,
+        version: 1,
+        audience: "team" as const,
+        estimatedItems: 1,
+      };
+      return options?.latestOnly === false ? [latest, older] : [latest];
+    });
+    vi.mocked(getQuestionnaireDefinition).mockImplementation(async (key) => {
+      const version = key.endsWith("@1") ? 1 : 2;
+      return {
+        ...fixtures.definition,
+        version,
+        title: version === 2 ? "Latest Lencioni" : "Older Lencioni",
+      };
+    });
+
+    render(<QuestionnairesWorkspace />);
+
+    const latestCard = await screen.findByText("Latest Lencioni");
+    expect(screen.queryByText("Older Lencioni")).toBeNull();
+
+    fireEvent.click(latestCard);
+
+    expect(await screen.findByRole("option", { name: "v2 (Activă)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "v1 (Veche)" })).toBeTruthy();
   });
 
   it("creates a new questionnaire as an incomplete draft", async () => {

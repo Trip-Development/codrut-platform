@@ -5,12 +5,16 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.contracts.emails import EmailAddress, EmailDeliveryStatus, EmailMessage
+from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token, verify_password
+from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.identity.models import (
     SHADOW_ACCOUNT_PASSWORD_HASH,
     AssignmentInvite,
+    PasswordResetToken,
     Session,
     User,
     UserRole,
@@ -21,6 +25,8 @@ from codrut.modules.identity.schemas import (
     ConsentRequest,
     InviteVerifyResponse,
     LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RegisterRequest,
     SessionPrincipal,
 )
@@ -383,6 +389,64 @@ class IdentityService:
             raise DomainError("Invalid email or password.", code="invalid_credentials")
         token = await self._create_session(user)
         return AuthResult(response=self._response(user), session_token=token)
+
+    async def request_password_reset(self, payload: PasswordResetRequest) -> None:
+        user = await self.repository.get_user_by_email(payload.email)
+        if user is None:
+            return
+        if user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH:
+            return
+
+        raw_token = new_session_token()
+        await self.repository.revoke_password_reset_tokens_for_user(user.id)
+        await self.repository.add_password_reset_token(
+            PasswordResetToken(
+                user_id=user.id,
+                token_hash=hash_session_token(raw_token),
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+        )
+
+        settings = get_settings()
+        reset_url = f"{settings.public_app_url.rstrip('/')}/update-password?token={raw_token}"
+        message = EmailMessage(
+            to=EmailAddress(user.email),
+            subject="Resetare parolă Codruț",
+            html_body=(
+                "<p>Ai cerut resetarea parolei pentru contul Codruț.</p>"
+                f'<p><a href="{reset_url}">Setează o parolă nouă</a></p>'
+                "<p>Linkul expiră în 60 de minute. "
+                "Dacă nu ai cerut resetarea, ignoră acest email.</p>"
+            ),
+            text_body=(
+                "Ai cerut resetarea parolei pentru contul Codruț.\n\n"
+                f"Setează o parolă nouă aici: {reset_url}\n\n"
+                "Linkul expiră în 60 de minute. Dacă nu ai cerut resetarea, ignoră acest email."
+            ),
+        )
+        result = await build_email_provider(settings).send(message)
+        if result.status != EmailDeliveryStatus.accepted:
+            raise DomainError(
+                "Emailul de resetare nu a putut fi trimis.",
+                code="password_reset_email_failed",
+            )
+
+    async def confirm_password_reset(self, payload: PasswordResetConfirmRequest) -> None:
+        reset_token = await self.repository.get_active_password_reset_token(payload.token)
+        if reset_token is None:
+            raise DomainError(
+                "Linkul de resetare este invalid sau a expirat.",
+                code="password_reset_invalid",
+            )
+
+        user = await self.repository.get_user_by_id(reset_token.user_id)
+        if user is None:
+            raise DomainError("Contul nu mai există.", code="user_not_found")
+
+        user.password_hash = hash_password(payload.password)
+        reset_token.used_at = datetime.now(UTC)
+        await self.repository.revoke_password_reset_tokens_for_user(user.id)
+        await self.repository.delete_sessions_for_user(user.id)
 
     async def logout(self, token: str) -> None:
         await self.repository.delete_session_by_token(token)

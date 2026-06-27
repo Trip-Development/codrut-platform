@@ -147,7 +147,17 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
     assert result.scores["inspiring"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
     assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
     assert result.scores["awareness"] == {"score": 25.0, "raw_avg": 1.0, "answered": 9}
-    assert result.primary_result == "awareness"
+    assert result.scores["icare_01_dezvolta_oamenii"] == {
+        "score": 100.0,
+        "raw_avg": 4.0,
+        "answered": 3,
+    }
+    assert result.scores["icare_07_modestie"] == {
+        "score": 25.0,
+        "raw_avg": 1.0,
+        "answered": 3,
+    }
+    assert result.primary_result == "icare_07_modestie"
 
 
 async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results() -> None:
@@ -273,7 +283,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                             "be_strong": 10,
                             "be_perfect": "20",
                             "try_hard": 30,
-                            "hurry_up": 40,
+                            "hurry_up": 60,
                             "please_people": 50,
                         },
                     ),
@@ -286,6 +296,25 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                             "awareness": {"score": 60},
                             "results": {"score": 90},
                             "empowerment": {"score": 85},
+                            "icare_01_dezvolta_oamenii": {"score": 80},
+                            "icare_02_conduce_prin_puterea_exemplului": {"score": 75},
+                            "icare_03_creeaza_un_mediu_care_stimuleaza_implicarea": {
+                                "score": 70
+                            },
+                            "icare_04_promotor_al_colaborarii": {"score": 65},
+                            "icare_05_ancorat_in_realitate": {"score": 60},
+                            "icare_06_aduce_claritate": {"score": 55},
+                            "icare_07_modestie": {"score": 50},
+                            "icare_08_inteligenta_emotionala_si_situationala": {"score": 45},
+                            "icare_09_deschis_catre_lume": {"score": 40},
+                            "icare_10_ambitios_pentru_companie": {"score": 35},
+                            "icare_11_grija_egala_pentru_angajati_si_clienti": {
+                                "score": 30
+                            },
+                            "icare_12_agilitate_antreprenoriala": {"score": 25},
+                            "icare_13_decizii_cat_mai_aproape_de_teren": {"score": 20},
+                            "icare_14_cultiva_inteligenta_colectiva": {"score": 15},
+                            "icare_15_ajuta_echipa": {"score": 10},
                         },
                     ),
                     ScoringResult(
@@ -329,8 +358,10 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 other_project_assignment.id,
             }
             assert aggregate.lencioni_averages[0].avg == 10.5
-            assert aggregate.driver_averages[1].avg == 20
+            assert [item.id for item in aggregate.driver_averages] == ["hurry_up"]
+            assert aggregate.driver_averages[0].avg == 60
             assert aggregate.boss_360_averages[0].avg == 80
+            assert aggregate.boss_360_averages[-1].id == "icare_15_ajuta_echipa"
 
             project_aggregate = await ScoringService(session).get_company_report_aggregate(
                 company.id,

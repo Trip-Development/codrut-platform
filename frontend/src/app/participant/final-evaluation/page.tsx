@@ -119,6 +119,7 @@ function DistressResultCard({ result }: { result: ScoringResultRecord }) {
   const rows = Object.entries(result.scores)
     .map(([key, value]) => ({ key, value: Number(value) || 0 }))
     .sort((a, b) => b.value - a.value);
+  const feedbackRows = rows.filter((row) => row.value > 50);
   const top = rows[0];
 
   return (
@@ -134,26 +135,44 @@ function DistressResultCard({ result }: { result: ScoringResultRecord }) {
           {top?.value ?? 0}
         </span>
       </div>
-      {top && distressGuidance[top.key] ? (
-        <div className="mt-3 space-y-3 text-sm leading-6 text-foreground/62">
-          <p>
-            <strong className="font-bold text-foreground/75">Stresori probabili: </strong>
-            {distressGuidance[top.key].stressors}
+      <div className="mt-3 space-y-4 text-sm leading-6 text-foreground/62">
+        {feedbackRows.length === 0 ? (
+          <p className="rounded-2xl border border-[var(--border)] bg-surface p-3 text-foreground/58">
+            Niciun driver nu a trecut pragul de 50. Feedbackul detaliat apare doar pentru driverii peste acest prag.
           </p>
-          <p>
-            <strong className="font-bold text-foreground/75">Comportament sub stres: </strong>
-            {distressGuidance[top.key].behaviour}
-          </p>
-          <div>
-            <p className="font-bold text-foreground/75">Permisiuni utile:</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5">
-              {distressGuidance[top.key].allowers.map((allower) => (
-                <li key={allower}>{allower}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : null}
+        ) : (
+          feedbackRows.map((row) => {
+            const guidance = distressGuidance[row.key];
+            if (!guidance) return null;
+            return (
+              <section key={row.key} className="rounded-2xl border border-[var(--border)] bg-surface p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="font-bold text-foreground">{distressLabels[row.key] ?? row.key}</h4>
+                  <span className="rounded-full bg-burgundy/10 px-2.5 py-1 text-xs font-bold text-burgundy">
+                    {row.value}
+                  </span>
+                </div>
+                <p className="mt-2">
+                  <strong className="font-bold text-foreground/75">Stresori probabili: </strong>
+                  {guidance.stressors}
+                </p>
+                <p className="mt-2">
+                  <strong className="font-bold text-foreground/75">Comportament sub stres: </strong>
+                  {guidance.behaviour}
+                </p>
+                <div className="mt-2">
+                  <p className="font-bold text-foreground/75">Permisiuni utile:</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {guidance.allowers.map((allower) => (
+                      <li key={allower}>{allower}</li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            );
+          })
+        )}
+      </div>
       <div className="mt-4 space-y-2">
         {rows.map((row) => (
           <div key={row.key}>

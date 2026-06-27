@@ -102,6 +102,19 @@ function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireD
   };
 }
 
+export function latestDefinitionStubs(
+  stubs: QuestionnaireDefinitionStub[],
+): QuestionnaireDefinitionStub[] {
+  const latestByKey = new Map<string, QuestionnaireDefinitionStub>();
+  for (const stub of stubs) {
+    const current = latestByKey.get(stub.id);
+    if ((stub.version ?? 1) > (current?.version ?? 0)) {
+      latestByKey.set(stub.id, stub);
+    }
+  }
+  return Array.from(latestByKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   {
     id: "lencioni",
@@ -561,7 +574,9 @@ fallbackDefinitionDetails.boss_360_en = {
 
 export async function listQuestionnaireDefinitionStubs(
   includeRetired = false,
+  options: { latestOnly?: boolean } = {},
 ): Promise<QuestionnaireDefinitionStub[]> {
+  const latestOnly = options.latestOnly ?? true;
   try {
     const url = includeRetired
       ? `${getApiBaseUrl()}/forms/definitions?include_retired=true`
@@ -574,12 +589,14 @@ export async function listQuestionnaireDefinitionStubs(
       return isDemoFallbackEnabled() ? fallbackDefinitions : [];
     }
     const serverDefs = (await response.json()) as QuestionnaireDefinition[];
-    return serverDefs
+    const stubs = serverDefs
       .filter((definition) => !legacyHiddenQuestionnaireKeys.has(definition.key))
       .map(stubFromDefinition);
+    return latestOnly ? latestDefinitionStubs(stubs) : stubs;
   } catch (e) {
     console.error("Error listing definitions", e);
-    return isDemoFallbackEnabled() ? fallbackDefinitions : [];
+    const fallback = isDemoFallbackEnabled() ? fallbackDefinitions : [];
+    return latestOnly ? latestDefinitionStubs(fallback) : fallback;
   }
 }
 

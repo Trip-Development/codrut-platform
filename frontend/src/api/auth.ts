@@ -49,6 +49,36 @@ export async function loginWithPassword(email: string, password: string): Promis
   };
 }
 
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Emailul de resetare nu a putut fi trimis.";
+    throw new Error(message);
+  }
+}
+
+export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ token, password }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Parola nu a putut fi resetată.";
+    throw new Error(message);
+  }
+}
+
 async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/auth/me`, {

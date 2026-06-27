@@ -1026,7 +1026,7 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
-  it("lists active questionnaire definitions by default", async () => {
+  it("lists only latest active questionnaire definitions by default", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValue({
@@ -1035,6 +1035,17 @@ describe("frontend API adapter stubs", () => {
         {
           key: "boss_360",
           version: 1,
+          title: "Boss / manager 360 old",
+          description: "Old feedback form",
+          schema: {
+            schema_version: "questionnaire.v1",
+            audience: "participant",
+            sections: [],
+          },
+        },
+        {
+          key: "boss_360",
+          version: 2,
           title: "Boss / manager 360",
           description: "Feedback form",
           schema: {
@@ -1050,6 +1061,7 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({
         id: "boss_360",
         name: "Boss / manager 360",
+        version: 2,
         status: "active",
       }),
     ]);
@@ -1061,6 +1073,43 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
       }),
     );
+  });
+
+  it("can list all questionnaire versions when requested", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          key: "boss_360",
+          version: 1,
+          title: "Boss / manager 360 old",
+          description: "Old feedback form",
+          schema: {
+            schema_version: "questionnaire.v1",
+            audience: "participant",
+            sections: [],
+          },
+        },
+        {
+          key: "boss_360",
+          version: 2,
+          title: "Boss / manager 360",
+          description: "Feedback form",
+          schema: {
+            schema_version: "questionnaire.v1",
+            audience: "participant",
+            sections: [],
+          },
+        },
+      ],
+    } as Response);
+
+    await expect(listQuestionnaireDefinitionStubs(false, { latestOnly: false })).resolves.toEqual([
+      expect.objectContaining({ id: "boss_360", version: 1 }),
+      expect.objectContaining({ id: "boss_360", version: 2 }),
+    ]);
   });
 
   it("can list inactive questionnaire drafts for the trainer editor", async () => {
