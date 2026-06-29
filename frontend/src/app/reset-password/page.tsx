@@ -27,8 +27,8 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <main className="app-min-height flex items-center justify-center bg-background bg-vines-pattern px-4 py-10">
-      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-150">
+    <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+      <section className="surface-panel w-full max-w-md p-8 transition-all duration-150 md:p-10">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
           <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
@@ -56,10 +56,7 @@ export default function ResetPasswordPage() {
                 Verifică-ți adresa de email <strong className="text-foreground">{email}</strong> și urmează instrucțiunile primite.
               </p>
             </div>
-            <Link
-              href="/login"
-              className="tap-soft mt-6 inline-block w-full rounded-2xl bg-surface-muted border border-[var(--border)] px-4 py-4 font-semibold text-foreground hover:bg-surface transition-colors duration-200"
-            >
+            <Link href="/login" className="btn-secondary mt-6 w-full px-4 py-4">
               Întoarce-te la autentificare
             </Link>
           </div>
@@ -71,7 +68,7 @@ export default function ResetPasswordPage() {
                   Email
                 </label>
                 <input
-                  className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                  className="control-input w-full bg-surface-muted py-3.5 text-base"
                   placeholder="nume@companie.ro"
                   type="email"
                   value={email}
@@ -80,11 +77,7 @@ export default function ResetPasswordPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={submitting || !email}
-                className="tap-soft mt-2 w-full flex items-center justify-center gap-2 rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md disabled:cursor-not-allowed disabled:opacity-65"
-              >
+              <button type="submit" disabled={submitting || !email} className="btn-primary mt-2 w-full gap-2 px-4 py-4">
                 {submitting ? (
                   <>
                     <svg className="animate-spin -ml-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -99,7 +92,7 @@ export default function ResetPasswordPage() {
               </button>
 
               {error ? (
-                <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 animate-fade-in-up">
+                <p className="status-panel-danger px-4 py-3 animate-fade-in-up">
                   {error}
                 </p>
               ) : null}
@@ -109,7 +102,7 @@ export default function ResetPasswordPage() {
               <span className="text-foreground/50">Ți-ai amintit parola?</span>
               <Link
                 href="/login"
-                className="ml-2 font-bold text-burgundy hover:text-burgundy-dark transition-colors"
+                className="ml-2 font-bold text-burgundy transition-colors hover:text-burgundy-dark"
               >
                 Înapoi la autentificare
               </Link>

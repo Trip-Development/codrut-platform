@@ -5,8 +5,12 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.database import get_session
+from codrut.core.errors import DomainError
+from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.identity.service import IdentityService
+
+CURRENT_TERMS_VERSION = "privacy-2026-06-12"
 
 
 async def db_session() -> AsyncIterator[AsyncSession]:
@@ -25,3 +29,16 @@ async def current_principal(
     if principal is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
     return principal
+
+
+def require_current_terms(principal: SessionPrincipal) -> None:
+    if principal.role != UserRole.participant:
+        return
+    if (
+        principal.terms_accepted_at is None
+        or principal.terms_version != CURRENT_TERMS_VERSION
+    ):
+        raise DomainError(
+            "Privacy and confidentiality terms must be accepted.",
+            code="terms_required",
+        )

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   audienceAccessNote,
+  changePassword,
   getCurrentParticipant,
   getCurrentTrainer,
   getParticipantSession,
@@ -10,10 +11,12 @@ import {
 import {
   buildVideoCampaignCreatePayload,
   deleteEmailTemplateOnServer,
+  getEmailOpsSummary,
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
+  sendCampaignOnServer,
 } from "./email";
-import { resolveInviteBundle } from "./invites";
+import { inviteQuestionnaireLabel, inviteTaskHref, participantTaskTypeLabel, resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
   addCompanyTeamMembership,
@@ -21,30 +24,42 @@ import {
   createCompany,
   createCompanyTeam,
   deleteCompany,
+  getAllCompanyProjects,
+  getCompanyAssignments,
   getCompanyDefaultAssignmentPlan,
   getCompanyList,
+  getCompanyParticipants,
+  getCompanyProjects,
+  getCompanyReportAggregate,
   getCompanyTeamMemberships,
+  getProjectParticipants,
   importCompanyRoster,
   resendParticipantInvitation,
   saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
 } from "./companies";
 import {
+  clearQuestionnaireDefinitionCache,
   getQuestionnaireDefinition,
   getQuestionnaireResponse,
+  groupQuestionnaireStubsByKey,
   listQuestionnaireDefinitionStubs,
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
+  updateQuestionnaireDefinitionOnServer,
 } from "./questionnaires";
+import { isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 import { getTrainerDashboardSummary, getTrainerOperationsSummary } from "./trainer";
 
 describe("frontend API adapter stubs", () => {
   beforeEach(() => {
+    clearQuestionnaireDefinitionCache();
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
   });
 
   afterEach(() => {
+    clearQuestionnaireDefinitionCache();
     vi.unstubAllGlobals();
     window.localStorage.clear();
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
@@ -59,6 +74,161 @@ describe("frontend API adapter stubs", () => {
     expect(audienceAccessNote("invitee")).toContain("linkul securizat");
   });
 
+  it("never falls back to slug-like questionnaire labels in participant UI", () => {
+    expect(inviteQuestionnaireLabel("boss_360")).toBe("iCARE 360 pentru manager");
+    expect(inviteQuestionnaireLabel("unknown_internal_slug")).toBe("Chestionar");
+    expect(participantTaskTypeLabel("boss_360")).toBe("Feedback confidențial");
+    expect(participantTaskTypeLabel("distress_drivers")).toBe("Formular individual");
+    expect(participantTaskTypeLabel("pcm_base")).toBe("Formular individual");
+    expect(participantTaskTypeLabel("phase")).toBe("Formular individual");
+    expect(participantTaskTypeLabel("pcm_phase")).toBe("Formular individual");
+  });
+
+  it("does not duplicate secure invite return targets on task links", () => {
+    expect(
+      inviteTaskHref(
+        {
+          id: "task-1",
+          title: "Task",
+          status: "not_started",
+          detail: "Detail",
+          href: "/participant/questionnaires/lencioni?assignmentId=a1&access=secure&returnTo=%2Finvite%2Fabc",
+          assignmentId: "a1",
+          targetLabel: "Leadership",
+          estimatedMinutes: 12,
+          questionnaireKey: "lencioni",
+        },
+        { returnTo: "/invite/abc" },
+      ),
+    ).toBe(
+      "/participant/tasks/a1?access=secure&returnTo=%2Finvite%2Fabc&target=Leadership",
+    );
+  });
+
+  it("keeps permanent participant questionnaire task links out of the secure invite route", () => {
+    expect(
+      inviteTaskHref(
+        {
+          id: "task-1",
+          title: "Chestionar",
+          status: "not_started",
+          detail: "Completează formularul.",
+          href: "/participant/questionnaires/lencioni?assignmentId=a1",
+          assignmentId: "a1",
+          targetLabel: "Leadership",
+          estimatedMinutes: 12,
+          questionnaireKey: "lencioni",
+        },
+        { returnTo: "/participant/questionnaires" },
+      ),
+    ).toBe(
+      "/participant/questionnaires/lencioni?assignmentId=a1&returnTo=%2Fparticipant%2Fquestionnaires&target=Leadership",
+    );
+  });
+
+  it("enables demo fallback on localhost unless explicitly disabled", () => {
+    delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
+    delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
+
+    expect(isDemoFallbackEnabled()).toBe(true);
+
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+
+    expect(isDemoFallbackEnabled()).toBe(false);
+  });
+
+  it("honors an explicit server false when the public fallback env is empty", () => {
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "";
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+
+    expect(isDemoFallbackEnabled()).toBe(false);
+  });
+
+  it("fails closed for seeded demo data in production-like server runtimes", async () => {
+    delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
+    delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
+
+    const originalInternalApiBaseUrl = process.env.INTERNAL_API_BASE_URL;
+    const originalVitest = process.env.VITEST;
+
+    delete process.env.VITEST;
+    vi.stubGlobal("window", undefined);
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.INTERNAL_API_BASE_URL = "https://api.codrut.ro/api";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false } as Response));
+
+    try {
+      expect(isDemoFallbackEnabled()).toBe(true);
+      expect(isSeededDemoFallbackEnabled()).toBe(false);
+      await expect(getTrainerSession()).rejects.toThrow("Trainer authentication required");
+      await expect(getParticipantSession()).rejects.toThrow("Participant authentication required");
+      await expect(getQuestionnaireDefinition("boss_360")).resolves.toBeNull();
+      await expect(listQuestionnaireDefinitionStubs()).resolves.toEqual([]);
+
+      const workspace = await getParticipantWorkspaceSummary();
+      expect(workspace).toMatchObject({
+        participantFullName: "Participant",
+        projectName: "Spațiul tău de lucru",
+        tasks: [],
+      });
+    } finally {
+      if (originalInternalApiBaseUrl === undefined) {
+        delete process.env.INTERNAL_API_BASE_URL;
+      } else {
+        process.env.INTERNAL_API_BASE_URL = originalInternalApiBaseUrl;
+      }
+      if (originalVitest === undefined) {
+        delete process.env.VITEST;
+      } else {
+        process.env.VITEST = originalVitest;
+      }
+    }
+  });
+
+  it("does not return fake email ops data when demo fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 } as Response));
+
+    await expect(getEmailOpsSummary()).rejects.toThrow("Server returned status 503");
+  });
+
+  it("posts campaign send requests to the communications API", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        campaign_id: "campaign-1",
+        total: 1,
+        sent: 1,
+        failed: 0,
+        skipped: 0,
+        dry_run: false,
+        results: [],
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendCampaignOnServer("campaign-1", {
+      recipientIds: ["recipient-1"],
+    });
+
+    expect(result.sent).toBe(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/communications/campaigns/campaign-1/send"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          dry_run: false,
+          recipient_ids: ["recipient-1"],
+        }),
+      }),
+    );
+  });
+
   it("returns trainer dashboard placeholder data", async () => {
     const summary = await getTrainerDashboardSummary();
 
@@ -67,7 +237,7 @@ describe("frontend API adapter stubs", () => {
     expect(summary.cards.map((card) => card.title)).toContain("Email");
     expect(summary.activeCompanies[0]).toMatchObject({
       id: "demo-project",
-      company: "Client demo",
+      company: "Atlas Mobility",
     });
     expect(Object.prototype.hasOwnProperty.call(summary.activeCompanies[0], "projectName")).toBe(false);
   });
@@ -187,9 +357,9 @@ describe("frontend API adapter stubs", () => {
         company_name: "Michelin",
         project_id: "project-1",
         project_name: "Leadership septembrie",
+        pcm_base: "Gânditor",
+        pcm_phase: "Perseverent",
         deadline_label: "30.09.2026",
-        pcm_base: "harmonizer",
-        pcm_phase: "thinker",
         tasks: [
           {
             id: "assignment-1",
@@ -201,6 +371,16 @@ describe("frontend API adapter stubs", () => {
             targetLabel: "Leadership",
             estimatedMinutes: 12,
             questionnaireKey: "lencioni",
+          },
+        ],
+        results: [
+          {
+            assignment_id: "result-assignment-1",
+            questionnaire_key: "distress_drivers",
+            title: "Driveri de stres TA",
+            target_label: "Autoevaluare",
+            scores: { be_strong: 72 },
+            primary_result: "be_strong",
           },
         ],
         cards: [{ title: "De completat", description: "1 sarcini active", meta: "Acum" }],
@@ -217,9 +397,10 @@ describe("frontend API adapter stubs", () => {
       participantEmail: "ana@example.com",
       companyName: "Michelin",
       projectName: "Leadership septembrie",
-      pcmBase: "harmonizer",
-      pcmPhase: "thinker",
+      pcmBase: "Gânditor",
+      pcmPhase: "Perseverent",
       tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
+      results: [expect.objectContaining({ assignmentId: "result-assignment-1" })],
       emptyState: expect.objectContaining({ title: "Nu ai sarcini active" }),
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -287,7 +468,7 @@ describe("frontend API adapter stubs", () => {
       subject: "O idee pentru {first_name}",
       videoUrl: "https://video.codrut.ro/watch/intro",
       thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=\"hero\"",
-      landingUrl: "https://app.codrut.ro/watch/intro?source=email&name=\"hero\"",
+      landingUrl: "https://codrut.andreivacaru.ro/watch/intro?source=email&name=\"hero\"",
     });
 
     expect(payload).toMatchObject({
@@ -296,11 +477,11 @@ describe("frontend API adapter stubs", () => {
       subject: "O idee pentru ${first_name}",
       video_url: "https://video.codrut.ro/watch/intro",
       thumbnail_url: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=%22hero%22",
-      landing_page_url: "https://app.codrut.ro/watch/intro?source=email&name=%22hero%22",
+      landing_page_url: "https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22",
     });
-    expect(payload?.html_body).toContain('<a href="https://app.codrut.ro/watch/intro?source=email&amp;name=%22hero%22">');
+    expect(payload?.html_body).toContain('<a href="https://codrut.andreivacaru.ro/watch/intro?source=email&amp;name=%22hero%22">');
     expect(payload?.html_body).toContain('<img src="https://cdn.codrut.ro/thumb.jpg?size=large&amp;variant=%22hero%22"');
-    expect(payload?.text_body).toContain("https://app.codrut.ro/watch/intro?source=email&name=%22hero%22");
+    expect(payload?.text_body).toContain("https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22");
   });
 
   it("rejects incomplete or non-http video campaign URLs", () => {
@@ -310,7 +491,7 @@ describe("frontend API adapter stubs", () => {
       subject: "Salut",
       videoUrl: "ftp://video.codrut.ro/watch/intro",
       thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
-      landingUrl: "https://app.codrut.ro/watch/intro",
+      landingUrl: "https://codrut.andreivacaru.ro/watch/intro",
     })).toBeNull();
     expect(buildVideoCampaignCreatePayload({
       name: "Campanie video",
@@ -320,27 +501,44 @@ describe("frontend API adapter stubs", () => {
       thumbnailUrl: "",
       landingUrl: "",
     })).toBeNull();
+    expect(buildVideoCampaignCreatePayload({
+      name: "Campanie video",
+      segment: "past_customer",
+      subject: "Salut",
+      videoUrl: "https://video.codrut.ro/watch/intro",
+      thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
+      landingUrl: "not-a-url",
+    })).toBeNull();
   });
 
   it("resolves invite bundle fallback states", async () => {
     await expect(resolveInviteBundle("demo-token")).resolves.toMatchObject({
       state: "valid",
-      projectName: "Intake Iunie",
-      participantEmail: "participant@companie.ro",
+      projectName: "Leadership operațional Q3",
+      participantEmail: "mihai.matei@atlas-mobility.ro",
       tasks: [
-        expect.objectContaining({ targetLabel: "Echipa operațională" }),
         expect.objectContaining({
-          detail: "Feedback confidențial pentru persoana către care raportezi.",
+          title: "Driveri de stres TA",
+          questionnaireKey: "distress_drivers",
+          targetLabel: "Autoevaluare",
+        }),
+        expect.objectContaining({ targetLabel: "Echipa operațională Atlas" }),
+        expect.objectContaining({
+          title: "Feedback confidențial",
+          detail: "Oferă feedback pentru persoana indicată în această sarcină.",
         }),
         expect.any(Object),
       ],
     });
+    const demoBundle = await resolveInviteBundle("demo-token");
+    expect(demoBundle.state === "valid" ? demoBundle.tasks[0].href : "").toContain("/participant/questionnaires/");
+    expect(demoBundle.state === "valid" ? demoBundle.tasks[0].href : "").not.toContain("access=secure");
     await expect(resolveInviteBundle("expired-demo")).resolves.toMatchObject({
       state: "expired",
     });
   });
 
-  it("resolves real secure invite links through the backend", async () => {
+  it("keeps real permanent participant links from the backend on questionnaire routes", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -355,9 +553,9 @@ describe("frontend API adapter stubs", () => {
         tasks: [
           {
             id: "assignment-1",
-            title: "Lencioni pentru echipa ta",
+            title: "Feedback pentru echipă",
             status: "not_started",
-            detail: "Răspuns pentru echipa din care faci parte.",
+            detail: "Răspunde pentru echipa indicată în această sarcină.",
             href: "/participant/questionnaires/lencioni?assignmentId=assignment-1",
             assignmentId: "assignment-1",
             targetLabel: "Leadership",
@@ -379,12 +577,51 @@ describe("frontend API adapter stubs", () => {
       deadlineLabel: expect.stringContaining("2026"),
       tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
     });
+    const bundle = await resolveInviteBundle("real-token");
+    expect(bundle.state === "valid" ? bundle.tasks[0].href : "").toBe(
+      "/participant/questionnaires/lencioni?assignmentId=assignment-1",
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/auth/invite/verify?token=real-token"),
       expect.objectContaining({
         cache: "no-store",
         credentials: "include",
       }),
+    );
+  });
+
+  it("resolves real secure invite links through the backend when access is marked secure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: "ana@example.com",
+        full_name: "Ana Pop",
+        is_leadership: false,
+        already_registered: false,
+        project_id: "project-1",
+        project_name: "Leadership training sept 2026",
+        expires_at: "2026-09-30T21:00:00Z",
+        token_status: "active",
+        tasks: [
+          {
+            id: "assignment-1",
+            title: "Feedback pentru echipă",
+            status: "not_started",
+            detail: "Răspunde pentru echipa indicată în această sarcină.",
+            href: "/participant/questionnaires/lencioni?assignmentId=assignment-1&access=secure",
+            assignmentId: "assignment-1",
+            targetLabel: "Leadership",
+            estimatedMinutes: 12,
+            questionnaireKey: "lencioni",
+          },
+        ],
+      }),
+    } as Response));
+
+    const bundle = await resolveInviteBundle("real-secure-token");
+
+    expect(bundle.state === "valid" ? bundle.tasks[0].href : "").toBe(
+      "/participant/tasks/assignment-1?access=secure&target=Leadership",
     );
   });
 
@@ -516,6 +753,25 @@ describe("frontend API adapter stubs", () => {
     await expect(getParticipantSession()).rejects.toThrow("Participant authentication required");
   });
 
+  it("changes password through the authenticated backend endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(changePassword("old-password-123", "new-password-123")).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/change-password"),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          current_password: "old-password-123",
+          new_password: "new-password-123",
+        }),
+      }),
+    );
+  });
+
   it("creates companies through the backend only", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -639,8 +895,135 @@ describe("frontend API adapter stubs", () => {
 
     expect(companies.map((company) => company.id)).not.toContain("local-company");
     expect(companies.map((company) => company.id)).toEqual(
-      expect.arrayContaining(["demo-project", "leadership-pilot", "past-client-video"]),
+      expect.arrayContaining(["demo-project", "leadership-pilot", "past-client-video", "nova-retail"]),
     );
+  });
+
+  it("skips protected company fetches in browser demo fallback without a session cookie", async () => {
+    const previousVitest = process.env.VITEST;
+    delete process.env.VITEST;
+    document.cookie = "codrut_session=; Max-Age=0; path=/";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const companies = await getCompanyList();
+
+      expect(companies.map((company) => company.id)).toEqual([
+        "demo-project",
+        "leadership-pilot",
+        "past-client-video",
+        "nova-retail",
+      ]);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousVitest) {
+        process.env.VITEST = previousVitest;
+      }
+    }
+  });
+
+  it("keeps project routes backed by consistent localhost demo fallback data", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+    await expect(getAllCompanyProjects()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "demo-project",
+          company_id: "demo-project",
+          name: "Leadership operațional Q3",
+        }),
+        expect.objectContaining({
+          id: "leadership-pilot",
+          company_id: "leadership-pilot",
+          name: "Pilot leadership iulie",
+        }),
+      ]),
+    );
+    await expect(getCompanyProjects("demo-project")).resolves.toEqual([
+      expect.objectContaining({ id: "demo-project", company_id: "demo-project" }),
+      expect.objectContaining({ id: "atlas-retrospective", status: "completed" }),
+    ]);
+    await expect(getCompanyParticipants("demo-project")).resolves.toEqual([
+      expect.objectContaining({ id: "radu-munteanu", full_name: "Radu Munteanu" }),
+      expect.objectContaining({ id: "bianca-pavel", reports_to_name: "Radu Munteanu" }),
+      expect.objectContaining({ id: "sorin-dima", reports_to_name: "Radu Munteanu" }),
+      expect.objectContaining({ id: "mihai-matei", reports_to_name: "Bianca Pavel" }),
+      expect.objectContaining({ id: "ana-stan", reports_to_name: "Bianca Pavel" }),
+      expect.objectContaining({ id: "claudia-neagu", reports_to_name: "Sorin Dima" }),
+    ]);
+    await expect(getProjectParticipants("demo-project", "demo-project")).resolves.toHaveLength(6);
+
+    const assignments = await getCompanyAssignments("demo-project", {}, { projectId: "demo-project" });
+    expect(assignments.map((assignment) => assignment.id)).toEqual([
+      "atlas-lencioni-radu",
+      "atlas-lencioni-bianca",
+      "atlas-lencioni-sorin",
+      "atlas-driver-mihai",
+      "atlas-driver-ana",
+      "atlas-driver-claudia",
+      "atlas-360-radu-bianca",
+      "atlas-360-radu-sorin",
+    ]);
+
+    await expect(getCompanyReportAggregate("demo-project", {}, { projectId: "demo-project" })).resolves.toMatchObject({
+      total_assigned: 8,
+      total_completed: 6,
+      lencioni_count: 3,
+      driver_count: 3,
+      boss_360_count: 2,
+      results: expect.arrayContaining([
+        expect.objectContaining({ assignment_id: "atlas-lencioni-radu" }),
+        expect.objectContaining({ assignment_id: "atlas-driver-claudia" }),
+      ]),
+    });
+
+    await expect(getCompanyProjects("leadership-pilot")).resolves.toEqual([
+      expect.objectContaining({ id: "leadership-pilot", company_id: "leadership-pilot" }),
+    ]);
+    await expect(getCompanyParticipants("leadership-pilot")).resolves.toEqual([
+      expect.objectContaining({ id: "andrei-vacaru", role_group: "manager", user_id: "user-andrei-vacaru" }),
+      expect.objectContaining({ id: "ilinca-corbu", reports_to_name: "Andrei Vacaru", role_group: "manager" }),
+      expect.objectContaining({ id: "vlad-soimu", reports_to_name: "Andrei Vacaru", role_group: "manager" }),
+      expect.objectContaining({ id: "alexandra-giurca", reports_to_name: "Ilinca Corbu", role_group: "member" }),
+      expect.objectContaining({ id: "member-vlad", reports_to_name: "Ilinca Corbu", role_group: "member" }),
+      expect.objectContaining({ id: "member-ilinca", reports_to_name: "Vlad Soimu", role_group: "member" }),
+    ]);
+    await expect(getProjectParticipants("leadership-pilot", "leadership-pilot")).resolves.toHaveLength(6);
+
+    const leadershipAssignments = await getCompanyAssignments("leadership-pilot", {}, { projectId: "leadership-pilot" });
+    expect(leadershipAssignments).toHaveLength(23);
+    expect(leadershipAssignments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "leadership-lencioni-andrei",
+          target_type: "team",
+          target_team_id: "leadership",
+        }),
+        expect.objectContaining({
+          id: "icare-ilinca-on-andrei",
+          questionnaire_key: "boss_360",
+          target_person_id: "andrei-vacaru",
+        }),
+        expect.objectContaining({
+          id: "icare-member-ilinca-on-vlad",
+          questionnaire_key: "boss_360",
+          target_person_id: "vlad-soimu",
+        }),
+      ]),
+    );
+
+    await expect(getCompanyReportAggregate("leadership-pilot", {}, { projectId: "leadership-pilot" })).resolves.toMatchObject({
+      total_assigned: 23,
+      total_completed: 23,
+      lencioni_count: 6,
+      driver_count: 3,
+      boss_360_count: 11,
+      results: expect.arrayContaining([
+        expect.objectContaining({ assignment_id: "leadership-lencioni-andrei" }),
+        expect.objectContaining({ assignment_id: "icare-ilinca-on-andrei" }),
+      ]),
+    });
   });
 
   it("imports roster first and sends participant access through an explicit batch action", async () => {
@@ -1075,6 +1458,33 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("dedupes repeated questionnaire definition list lookups", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          key: "boss_360",
+          version: 2,
+          title: "Boss / manager 360",
+          description: "Feedback form",
+          schema: {
+            schema_version: "questionnaire.v1",
+            audience: "participant",
+            sections: [],
+          },
+        },
+      ],
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await Promise.all([
+      listQuestionnaireDefinitionStubs(),
+      listQuestionnaireDefinitionStubs(),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("can list all questionnaire versions when requested", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -1112,6 +1522,38 @@ describe("frontend API adapter stubs", () => {
     ]);
   });
 
+  it("groups questionnaire stubs by key with newest versions first", () => {
+    const grouped = groupQuestionnaireStubsByKey([
+      {
+        id: "boss_360",
+        name: "Boss 360 v1",
+        description: "",
+        status: "active",
+        version: 1,
+        audience: "participant",
+      },
+      {
+        id: "lencioni",
+        name: "Lencioni",
+        description: "",
+        status: "active",
+        version: 1,
+        audience: "team",
+      },
+      {
+        id: "boss_360",
+        name: "Boss 360 v3",
+        description: "",
+        status: "active",
+        version: 3,
+        audience: "participant",
+      },
+    ]);
+
+    expect(grouped.get("boss_360")?.map((stub) => stub.version)).toEqual([3, 1]);
+    expect(grouped.get("lencioni")?.map((stub) => stub.version)).toEqual([1]);
+  });
+
   it("can list inactive questionnaire drafts for the trainer editor", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -1146,6 +1588,58 @@ describe("frontend API adapter stubs", () => {
         cache: "no-store",
         credentials: "include",
       }),
+    );
+  });
+
+  it("caches questionnaire definitions and clears the cache after trainer edits", async () => {
+    const definition = {
+      key: "boss_360",
+      version: 2,
+      title: "Boss / manager 360",
+      description: "Feedback form",
+      schema: {
+        schema_version: "questionnaire.v1",
+        audience: "participant",
+        sections: [],
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => definition,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ...definition, title: "Updated 360" }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ...definition, title: "Updated 360" }),
+      } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getQuestionnaireDefinition("boss_360")).resolves.toMatchObject({ title: "Boss / manager 360" });
+    await expect(getQuestionnaireDefinition("boss_360")).resolves.toMatchObject({ title: "Boss / manager 360" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await updateQuestionnaireDefinitionOnServer("boss_360", {
+      title: "Updated 360",
+      description: definition.description,
+      schema: definition.schema,
+    });
+    await expect(getQuestionnaireDefinition("boss_360")).resolves.toMatchObject({ title: "Updated 360" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/\/forms\/definitions\/boss_360$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/\/forms\/definitions\/boss_360$/),
+      expect.objectContaining({ method: "PUT" }),
     );
   });
 
@@ -1195,5 +1689,13 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
       }),
     );
+  });
+
+  it("does not return seeded email templates when demo fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 } as Response));
+
+    await expect(listEmailTemplatesOnServer()).rejects.toThrow("Server returned status 503");
   });
 });

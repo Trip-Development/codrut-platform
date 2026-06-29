@@ -8,9 +8,9 @@ const routeGroups = [
     routes: [
       ["/trainer", "Acasă livrare"],
       ["/trainer/companies", "Companii"],
+      ["/trainer/projects", "Proiecte"],
       ["/trainer/questionnaires", "Chestionare"],
       ["/trainer/email", "Email"],
-      ["/trainer/reports", "Index rapoarte companie"],
       ["/trainer/login", "Autentificare trainer"],
     ],
   },
@@ -24,7 +24,7 @@ const routeGroups = [
       ["/participant/questionnaires", "Chestionare"],
       ["/participant/chat", "Chat"],
       ["/participant/onboarding", "Onboarding"],
-      ["/participant/final-evaluation", "Evaluare finală"],
+      ["/participant/final-evaluation", "Finalizare participant"],
       ["/participant/account", "Cont"],
     ],
   },
@@ -59,14 +59,14 @@ export default function DevRoutesPage() {
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {routeGroups.map((group) => (
-            <section key={group.title} className="rounded-3xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+            <section key={group.title} className="surface-panel p-5">
               <h2 className="text-base font-bold text-foreground">{group.title}</h2>
               <div className="mt-4 grid gap-2">
                 {group.routes.map(([href, label]) => (
                   <Link
                     key={href}
                     href={href}
-                    className="tap-soft rounded-2xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/75 hover:border-burgundy/50 hover:text-burgundy"
+                    className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/75 hover:border-burgundy/50 hover:text-burgundy"
                   >
                     {label}
                     <span className="mt-1 block font-mono text-xs font-normal text-foreground/45">{href}</span>

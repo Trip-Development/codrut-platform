@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ from codrut.modules.identity.schemas import (
     ConsentRequest,
     InviteVerifyResponse,
     LoginRequest,
+    PasswordChangeRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     RegisterRequest,
@@ -33,6 +35,7 @@ from codrut.modules.identity.schemas import (
 
 if TYPE_CHECKING:
     from codrut.modules.assignments.models import QuestionnaireAssignment
+    from codrut.modules.companies.models import CompanyProject
 
 
 @dataclass(frozen=True)
@@ -50,26 +53,26 @@ class InviteVerifyResult:
 def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
     if questionnaire_key in {"lencioni", "lencioni_en"}:
         return (
-            "Lencioni - Cele 5 disfuncții ale echipei",
-            "Evaluează dinamica echipei pentru proiectul curent.",
+            "Feedback pentru echipă",
+            "Răspunde pentru echipa indicată în această sarcină.",
             12,
         )
     if questionnaire_key in {"distress_drivers", "distress_drivers_en"}:
         return (
-            "Driveri de stres TA",
-            "Identifică driverii care apar cel mai des în context de presiune.",
+            "Autoevaluare individuală",
+            "Completează formularul individual atribuit pentru proiectul curent.",
             10,
         )
     if questionnaire_key in {"boss_360", "icare"}:
         return (
-            "iCARE 360 pentru manager",
-            "Oferă feedback pentru managerul indicat în această sarcină.",
+            "Feedback confidențial",
+            "Oferă feedback pentru persoana indicată în această sarcină.",
             20,
         )
     if questionnaire_key == "pcm_base":
         return (
-            "Baza și faza ta PCM",
-            "Confirmă baza și faza PCM pentru profilul tău de participant.",
+            "Formular de profil",
+            "Completează formularul de profil cerut pentru proiectul curent.",
             2,
         )
     return ("Chestionar", "Completează formularul atribuit.", 10)
@@ -203,6 +206,12 @@ class IdentityService:
 
         # Check if already registered
         already_registered = profile.user_id is not None
+        user: User | None = None
+        if profile.user_id is not None:
+            user_result = await self.repository.session.execute(
+                select(User).where(User.id == profile.user_id)
+            )
+            user = user_result.scalar_one_or_none()
 
         # Check if the participant is leadership
         stmt = select(
@@ -216,7 +225,7 @@ class IdentityService:
         is_leadership = (await self.repository.session.execute(stmt)).scalar() or False
 
         # Retrieve assignments details
-        from codrut.modules.assignments.models import QuestionnaireAssignment
+        from codrut.modules.assignments.models import AssignmentTargetType, QuestionnaireAssignment
         from codrut.modules.identity.schemas import InviteTask
         assignments_result = await self.repository.session.execute(
             select(QuestionnaireAssignment)
@@ -231,17 +240,19 @@ class IdentityService:
                 "Task link assignment scope is invalid.",
                 code="task_link_scope_mismatch",
             )
-        project_id, project_name = await self._invite_project_context(
+        project_id, project_name, effective_expires_at = await self._invite_project_context(
             claims.company_id,
             company.name,
             list(assignments_by_id.values()),
+            claims.expires_at,
         )
 
         tasks = []
+        return_to = quote(f"/invite/{token}", safe="")
         for assignment_id in claims.assignment_ids:
             ass = assignments_by_id[assignment_id]
             target_label = "Autoevaluare"
-            if ass.target_type == "team" and ass.target_team_id:
+            if ass.target_type == AssignmentTargetType.team and ass.target_team_id:
                 team_result = await self.repository.session.execute(
                     select(Team)
                     .where(Team.id == ass.target_team_id)
@@ -250,7 +261,7 @@ class IdentityService:
                 team = team_result.scalar_one_or_none()
                 if team:
                     target_label = f"Echipa {team.name}"
-            elif ass.target_type == "person" and ass.target_person_id:
+            elif ass.target_type == AssignmentTargetType.person and ass.target_person_id:
                 person_result = await self.repository.session.execute(
                     select(ParticipantProfile)
                     .where(ParticipantProfile.id == ass.target_person_id)
@@ -277,7 +288,10 @@ class IdentityService:
                     title=title,
                     status=task_status,
                     detail=detail,
-                    href=f"/participant/questionnaires/{ass.questionnaire_key}?assignmentId={ass.id}&access=secure",
+                    href=(
+                        f"/participant/tasks/{ass.id}"
+                        f"?access=secure&returnTo={return_to}"
+                    ),
                     assignmentId=str(ass.id),
                     targetLabel=target_label,
                     estimatedMinutes=est_minutes,
@@ -293,8 +307,10 @@ class IdentityService:
             already_registered=already_registered,
             project_id=project_id,
             project_name=project_name,
-            expires_at=claims.expires_at,
+            expires_at=effective_expires_at,
             token_status="active",  # noqa: S106
+            terms_accepted_at=user.terms_accepted_at if user is not None else None,
+            terms_version=user.terms_version if user is not None else None,
             tasks=tasks,
         )
 
@@ -303,7 +319,8 @@ class IdentityService:
         company_id: UUID,
         company_name: str,
         assignments: list["QuestionnaireAssignment"],
-    ) -> tuple[UUID | None, str]:
+        token_expires_at: datetime,
+    ) -> tuple[UUID | None, str, datetime]:
         from sqlalchemy import select
 
         from codrut.modules.companies.models import CompanyProject
@@ -312,7 +329,7 @@ class IdentityService:
             assignment.project_id for assignment in assignments if assignment.project_id is not None
         }
         if len(project_ids) != 1:
-            return None, company_name
+            return None, company_name, token_expires_at
 
         project_id = next(iter(project_ids))
         result = await self.repository.session.execute(
@@ -322,8 +339,14 @@ class IdentityService:
         )
         project = result.scalar_one_or_none()
         if project is None:
-            return None, company_name
-        return project.id, project.name
+            return None, company_name, token_expires_at
+        now = datetime.now(UTC)
+        _validate_project_access_window(project, now=now)
+        return project.id, project.name, _min_datetime(
+            token_expires_at,
+            project.form_closes_at,
+            project.due_at,
+        )
 
     async def verify_invite_token_and_create_session(self, token: str) -> InviteVerifyResult:
         # 1. Verify the token using the existing verify_invite_token method
@@ -362,21 +385,31 @@ class IdentityService:
                     select(User).where(User.id == profile.user_id)
                 )
                 user = user_result.scalar_one_or_none()
-            
+
             if user is None:
-                user = await self.repository.get_user_by_email(profile.email)
-                if user is None:
-                    user = User(
-                        id=uuid.uuid4(),
-                        email=profile.email.lower(),
-                        password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
-                        role=UserRole.participant,
+                existing_user = await self.repository.get_user_by_email(profile.email)
+                if existing_user is not None:
+                    raise DomainError(
+                        "Invite email already belongs to another account. "
+                        "Ask the trainer to link it explicitly.",
+                        code="invite_email_account_conflict",
                     )
-                    await self.repository.add_user(user)
+                user = User(
+                    id=uuid.uuid4(),
+                    email=profile.email.lower(),
+                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+                    role=UserRole.participant,
+                )
+                await self.repository.add_user(user)
                 profile.user_id = user.id
+            elif user.role != UserRole.participant or user.email.lower() != profile.email.lower():
+                raise DomainError(
+                    "Invite profile is linked to an incompatible account.",
+                    code="invite_profile_account_conflict",
+                )
 
             # Create session for this user
-            session_token = await self._create_session(user)
+            session_token = await self._create_session(user, expires_at=verify_result.expires_at)
 
         return InviteVerifyResult(
             response=verify_result,
@@ -394,7 +427,10 @@ class IdentityService:
         user = await self.repository.get_user_by_email(payload.email)
         if user is None:
             return
-        if user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH:
+        if (
+            user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
+            and not await self._shadow_account_password_reset_allowed(user.id)
+        ):
             return
 
         raw_token = new_session_token()
@@ -431,6 +467,46 @@ class IdentityService:
                 code="password_reset_email_failed",
             )
 
+    async def _shadow_account_password_reset_allowed(self, user_id: UUID) -> bool:
+        from sqlalchemy import select
+
+        from codrut.modules.assignments.models import (
+            QuestionnaireAssignment,
+            Team,
+            TeamMembership,
+            TeamType,
+        )
+        from codrut.modules.companies.models import CompanyProject, ParticipantProfile
+
+        now = datetime.now(UTC)
+        result = await self.repository.session.execute(
+            select(QuestionnaireAssignment, CompanyProject)
+            .join(
+                ParticipantProfile,
+                ParticipantProfile.id == QuestionnaireAssignment.respondent_profile_id,
+            )
+            .join(
+                TeamMembership,
+                TeamMembership.participant_profile_id == ParticipantProfile.id,
+            )
+            .join(Team, Team.id == TeamMembership.team_id)
+            .outerjoin(CompanyProject, CompanyProject.id == QuestionnaireAssignment.project_id)
+            .where(ParticipantProfile.user_id == user_id)
+            .where(Team.type == TeamType.leadership)
+        )
+
+        for assignment, project in result.all():
+            if assignment.due_at is not None and assignment.due_at <= now:
+                continue
+            if project is not None:
+                try:
+                    _validate_project_access_window(project, now=now)
+                except DomainError:
+                    continue
+            return True
+
+        return False
+
     async def confirm_password_reset(self, payload: PasswordResetConfirmRequest) -> None:
         reset_token = await self.repository.get_active_password_reset_token(payload.token)
         if reset_token is None:
@@ -442,9 +518,34 @@ class IdentityService:
         user = await self.repository.get_user_by_id(reset_token.user_id)
         if user is None:
             raise DomainError("Contul nu mai există.", code="user_not_found")
+        if (
+            user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
+            and not await self._shadow_account_password_reset_allowed(user.id)
+        ):
+            raise DomainError(
+                "Temporary invite accounts cannot be converted through password reset.",
+                code="password_reset_forbidden",
+            )
 
         user.password_hash = hash_password(payload.password)
         reset_token.used_at = datetime.now(UTC)
+        await self.repository.revoke_password_reset_tokens_for_user(user.id)
+        await self.repository.delete_sessions_for_user(user.id)
+
+    async def change_password(self, user_id: UUID, payload: PasswordChangeRequest) -> None:
+        user = await self.repository.get_user_by_id(user_id)
+        if user is None:
+            raise DomainError("Contul nu mai există.", code="user_not_found")
+        if user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH or not verify_password(
+            payload.current_password,
+            user.password_hash,
+        ):
+            raise DomainError(
+                "Parola curentă este incorectă.",
+                code="invalid_current_password",
+            )
+
+        user.password_hash = hash_password(payload.new_password)
         await self.repository.revoke_password_reset_tokens_for_user(user.id)
         await self.repository.delete_sessions_for_user(user.id)
 
@@ -481,13 +582,13 @@ class IdentityService:
             session_token=token,
         )
 
-    async def _create_session(self, user: User) -> str:
+    async def _create_session(self, user: User, *, expires_at: datetime | None = None) -> str:
         token = new_session_token()
         await self.repository.add_session(
             Session(
                 user_id=user.id,
                 token_hash=hash_session_token(token),
-                expires_at=datetime.now(UTC) + timedelta(days=14),
+                expires_at=expires_at or datetime.now(UTC) + timedelta(days=90),
             )
         )
         return token
@@ -541,6 +642,8 @@ class IdentityService:
                 code="no_active_assignments",
             )
 
+        requested_expires_at = expires_at or datetime.now(UTC) + timedelta(days=expires_in_days)
+
         # 3. Check if there is already an active invite
         if not force_rotate:
             active_invite = await self.repository.get_active_invite_by_respondent(
@@ -552,7 +655,11 @@ class IdentityService:
                     from codrut.modules.communications.task_links import parse_task_token
                     claims = parse_task_token(active_invite.token, settings)
                     
-                    if set(claims.assignment_ids) == set(assignment_ids):
+                    if (
+                        set(claims.assignment_ids) == set(assignment_ids)
+                        and claims.expires_at <= requested_expires_at
+                        and active_invite.expires_at <= requested_expires_at
+                    ):
                         return active_invite
                 except Exception:  # noqa: S110
                     pass
@@ -561,12 +668,11 @@ class IdentityService:
         await self.repository.invalidate_invites_for_respondent(company_id, respondent_profile_id)
 
         # 5. Generate secure token claims
-        expires_at = expires_at or datetime.now(UTC) + timedelta(days=expires_in_days)
         claims = TaskLinkClaims(
             company_id=company_id,
             respondent_profile_id=respondent_profile_id,
             assignment_ids=tuple(assignment_ids),
-            expires_at=expires_at,
+            expires_at=requested_expires_at,
         )
         settings = get_settings()
         token = create_task_token(claims, settings)
@@ -577,7 +683,7 @@ class IdentityService:
             respondent_profile_id=respondent_profile_id,
             token=token,
             status="active",
-            expires_at=expires_at,
+            expires_at=requested_expires_at,
         )
         return await self.repository.add_invite(invite)
 
@@ -628,3 +734,27 @@ class IdentityService:
         respondent_profile_id: UUID,
     ) -> None:
         await self.repository.invalidate_invites_for_respondent(company_id, respondent_profile_id)
+
+
+def _min_datetime(*values: datetime | None) -> datetime:
+    candidates = [value for value in values if value is not None]
+    if not candidates:
+        raise ValueError("at least one datetime is required")
+    return min(candidates)
+
+
+def _validate_project_access_window(project: "CompanyProject", *, now: datetime) -> None:
+    if project.form_opens_at is not None and project.form_opens_at > now:
+        raise DomainError(
+            "Project questionnaires are not open yet.",
+            code="project_not_open",
+        )
+    close_candidates = [project.form_closes_at, project.due_at]
+    if not any(close_candidates):
+        return
+    closes_at = _min_datetime(*close_candidates)
+    if closes_at <= now:
+        raise DomainError(
+            "Project questionnaire window has closed.",
+            code="project_closed",
+        )

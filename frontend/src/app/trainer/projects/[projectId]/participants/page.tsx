@@ -36,7 +36,12 @@ export default async function ProjectParticipantsPage({
         lockCompany
       />
 
-      <ProjectParticipantsWorkspace participants={participants} invitationStatuses={invitationStatuses} />
+      <ProjectParticipantsWorkspace
+        companyId={project.company_id}
+        projectId={project.id}
+        participants={participants}
+        invitationStatuses={invitationStatuses}
+      />
     </div>
   );
 }

@@ -705,6 +705,60 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
     ]
 
 
+async def test_default_assignment_plan_rejects_ambiguous_project_manager_names() -> None:
+    (
+        service,
+        _assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    member_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Ambiguous Managers",
+    )
+    company_repository.participants[respondent_id].full_name = "Ana Pop"
+    company_repository.participants[respondent_id].role_group = "leadership"
+    company_repository.participants[target_id].full_name = "Ana Pop"
+    company_repository.participants[target_id].role_group = "leadership"
+    company_repository.participants[member_id] = ParticipantProfile(
+        id=member_id,
+        company_id=company_id,
+        full_name="Mihai Ionescu",
+        email="mihai@example.com",
+        role_group="member",
+    )
+    for participant_id, reports_to_name in [
+        (respondent_id, None),
+        (target_id, None),
+        (member_id, "Ana Pop"),
+    ]:
+        company_repository.project_memberships.append(
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=participant_id,
+                reports_to_name=reports_to_name,
+                position=None,
+                location=None,
+                role_group=company_repository.participants[participant_id].role_group,
+                active=True,
+            )
+        )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.build_default_assignment_plan(user_id, company_id, project_id)
+
+    assert exc_info.value.code == "manager_name_ambiguous"
+
+
 async def test_create_assignment_rejects_inactive_persisted_questionnaire_key() -> None:
     (
         service,

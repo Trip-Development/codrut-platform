@@ -29,7 +29,7 @@ PROMOTIONAL_SHELL_CLOSE = (
     "Ai primit acest email deoarece ești abonat la actualizările noastre sau ești un client."
     "</p>"
     '<p style="margin:0 0 8px;">'
-    '<a href="https://app.codrut.ro/unsubscribe" '
+    '<a href="${unsubscribe_url}" '
     'style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a>'
     '</p>'
     '<p style="margin:0;">Str. Exemplu Nr. 10, București, România</p>'

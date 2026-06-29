@@ -1,24 +1,52 @@
 import re
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from string import Template
+from urllib.parse import urlparse
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.contracts.emails import EmailAddress, EmailDeliveryStatus, EmailMessage, EmailSendResult
+from codrut.core.config import Settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+from codrut.modules.communications.campaign_policy import require_campaign_send_allowed
+from codrut.modules.communications.campaign_tracking import (
+    CampaignRecipientActionClaims,
+    build_campaign_unsubscribe_url,
+    create_campaign_recipient_action_token,
+    parse_campaign_recipient_action_token,
+    parse_campaign_tracking_token,
+)
 from codrut.modules.communications.email_provider import EmailProvider
-from codrut.modules.communications.models import Campaign, CampaignRecipient, EmailTemplate
+from codrut.modules.communications.models import (
+    Campaign,
+    CampaignRecipient,
+    CampaignRecipientEvent,
+    CampaignRecipientStatus,
+    CampaignStatus,
+    EmailSend,
+    EmailSendStatus,
+    EmailTemplate,
+)
 from codrut.modules.communications.repository import CommunicationsRepository
 from codrut.modules.communications.schemas import (
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
+    CampaignRecipientEventCreateRequest,
+    CampaignRecipientEventResponse,
+    CampaignSendRecipientResult,
+    CampaignSendRequest,
+    CampaignSendResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
 )
 from codrut.modules.communications.templates import (
+    EMAIL_SHELL_OPEN,
+    PROMOTIONAL_SHELL_CLOSE,
     TRANSACTIONAL_TEMPLATES,
     TransactionalTemplateKey,
     get_transactional_template,
@@ -103,14 +131,18 @@ class CommunicationsService:
 
     async def list_templates(self, *, active_only: bool = True) -> list[EmailTemplateResponse]:
         repository = self._require_repository()
-        await self._seed_catalog_templates(repository)
         templates = await repository.list_templates(active_only=active_only)
+        if not templates:
+            await self._seed_catalog_templates(repository)
+            templates = await repository.list_templates(active_only=active_only)
         return [EmailTemplateResponse.model_validate(t) for t in templates]
 
     async def get_template(self, key: str, *, version: int | None = None) -> EmailTemplateResponse:
         repository = self._require_repository()
-        await self._seed_catalog_templates(repository)
         template = await repository.get_template(key, version=version)
+        if template is None:
+            await self._seed_catalog_templates(repository)
+            template = await repository.get_template(key, version=version)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
         return EmailTemplateResponse.model_validate(template)
@@ -241,11 +273,12 @@ class CommunicationsService:
         return self.repository
 
     async def _seed_catalog_templates(self, repository: CommunicationsRepository) -> None:
+        existing_templates = {
+            (template.key, template.version): template
+            for template in await repository.list_templates(active_only=False)
+        }
         for k, catalog_template in TRANSACTIONAL_TEMPLATES.items():
-            existing = await repository.get_template(
-                key=k.value,
-                version=catalog_template.version,
-            )
+            existing = existing_templates.get((k.value, catalog_template.version))
             if existing is None:
                 existing = await repository.add_template(
                     EmailTemplate(
@@ -259,6 +292,7 @@ class CommunicationsService:
                         active=True,
                     )
                 )
+                existing_templates[(k.value, catalog_template.version)] = existing
                 await repository.deactivate_templates_for_key(
                     k.value,
                     except_version=catalog_template.version,
@@ -270,22 +304,32 @@ class CommunicationsService:
     ) -> list[CampaignRecipient]:
         repository = self._require_repository()
 
-        recipients = []
+        recipients_by_email: dict[str, CampaignRecipient] = {}
         for req in payload.recipients:
-            recipients.append(
+            normalized_email = req.email.lower()
+            recipients_by_email.setdefault(
+                normalized_email,
                 CampaignRecipient(
-                    email=req.email,
+                    email=normalized_email,
                     contact_name=req.contact_name,
                     organization_name=req.organization_name,
                     segment=req.segment,
                     source=req.source,
-                )
+                ),
             )
 
-        # Basic de-duplication strategy by email or relying on DB constraint
-        # In a robust system, we would handle upserts.
-        await repository.add_campaign_recipients(recipients)
-        return recipients
+        existing = await repository.list_campaign_recipients_by_emails(
+            set(recipients_by_email),
+        )
+        existing_by_email = {recipient.email.lower(): recipient for recipient in existing}
+        recipients_to_create = [
+            recipient
+            for email, recipient in recipients_by_email.items()
+            if email not in existing_by_email
+        ]
+        if recipients_to_create:
+            await repository.add_campaign_recipients(recipients_to_create)
+        return [*existing, *recipients_to_create]
 
     async def create_campaign(
         self,
@@ -296,6 +340,7 @@ class CommunicationsService:
         campaign = Campaign(
             name=payload.name,
             segment=payload.segment,
+            status=CampaignStatus.ready,
             subject=payload.subject,
             html_body=payload.html_body,
             text_body=payload.text_body,
@@ -308,6 +353,185 @@ class CommunicationsService:
     async def list_campaigns(self) -> list[Campaign]:
         repository = self._require_repository()
         return await repository.list_campaigns()
+
+    async def send_campaign(
+        self,
+        campaign_id: UUID,
+        payload: CampaignSendRequest,
+        *,
+        provider: EmailProvider,
+        settings: Settings,
+    ) -> CampaignSendResponse:
+        repository = self._require_repository()
+        campaign = await repository.get_campaign(campaign_id)
+        if campaign is None:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
+        if campaign.status != CampaignStatus.ready:
+            raise DomainError(
+                "Campaign must be ready before sending.",
+                code="campaign_not_ready",
+            )
+
+        recipients = await self._campaign_send_recipients(campaign, payload)
+        if not recipients:
+            raise DomainError("Campaign has no matching recipients.", code="campaign_no_recipients")
+
+        results: list[CampaignSendRecipientResult] = []
+        for recipient in recipients:
+            if recipient.segment != campaign.segment:
+                results.append(
+                    CampaignSendRecipientResult(
+                        recipient_id=recipient.id,
+                        email=recipient.email,
+                        status="skipped",
+                        error="Recipient segment does not match campaign segment.",
+                    )
+                )
+                continue
+            if recipient.status != CampaignRecipientStatus.active:
+                results.append(
+                    CampaignSendRecipientResult(
+                        recipient_id=recipient.id,
+                        email=recipient.email,
+                        status="skipped",
+                        error="Recipient is suppressed or unsubscribed.",
+                    )
+                )
+                continue
+
+            unsubscribe_url = _campaign_unsubscribe_url(recipient, settings)
+            require_campaign_send_allowed(
+                recipient,
+                unsubscribe_url=unsubscribe_url,
+                allow_insecure_localhost=not settings.is_production,
+            )
+            message = _render_campaign_message(campaign, recipient, unsubscribe_url)
+
+            if payload.dry_run:
+                results.append(
+                    CampaignSendRecipientResult(
+                        recipient_id=recipient.id,
+                        email=recipient.email,
+                        status="dry_run",
+                    )
+                )
+                continue
+
+            result = await provider.send(message)
+            send_status = (
+                EmailSendStatus.accepted
+                if result.status == EmailDeliveryStatus.accepted
+                else EmailSendStatus.failed
+            )
+            await repository.add_email_send(
+                EmailSend(
+                    assignment_id=None,
+                    recipient_email=recipient.email,
+                    template_key="campaign",
+                    template_version=1,
+                    provider=result.provider.value,
+                    provider_message_id=result.message_id,
+                    status=send_status,
+                    error_details=result.error_details,
+                    last_event_at=datetime.now(UTC),
+                )
+            )
+            results.append(
+                CampaignSendRecipientResult(
+                    recipient_id=recipient.id,
+                    email=recipient.email,
+                    status=result.status.value,
+                    message_id=result.message_id,
+                    error=result.error_details,
+                )
+            )
+
+        if not payload.dry_run and any(result.status == "accepted" for result in results):
+            campaign.status = CampaignStatus.completed
+
+        return CampaignSendResponse(
+            campaign_id=campaign.id,
+            total=len(results),
+            sent=sum(1 for result in results if result.status == "accepted"),
+            failed=sum(1 for result in results if result.status == "failed"),
+            skipped=sum(1 for result in results if result.status in {"skipped", "dry_run"}),
+            dry_run=payload.dry_run,
+            results=results,
+        )
+
+    async def unsubscribe_campaign_recipient(
+        self,
+        token: str,
+        settings: Settings,
+    ) -> CampaignRecipient:
+        repository = self._require_repository()
+        claims = parse_campaign_recipient_action_token(token, settings)
+        if claims.action != "unsubscribe":
+            raise DomainError(
+                "Invalid campaign recipient action link.",
+                code="campaign_recipient_action_invalid",
+            )
+        recipient = await repository.get_campaign_recipient(claims.recipient_id)
+        if recipient is None:
+            raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
+        recipient.status = CampaignRecipientStatus.unsubscribed
+        await repository.flush()
+        return recipient
+
+    async def _campaign_send_recipients(
+        self,
+        campaign: Campaign,
+        payload: CampaignSendRequest,
+    ) -> list[CampaignRecipient]:
+        repository = self._require_repository()
+        if payload.recipient_ids:
+            return await repository.list_campaign_recipients_by_ids(payload.recipient_ids)
+        recipients = await repository.list_campaign_recipients()
+        return [recipient for recipient in recipients if recipient.segment == campaign.segment]
+
+    async def record_campaign_recipient_event(
+        self,
+        recipient_id: UUID,
+        payload: CampaignRecipientEventCreateRequest,
+    ) -> CampaignRecipientEventResponse:
+        repository = self._require_repository()
+        recipient = await repository.get_campaign_recipient(recipient_id)
+        if recipient is None:
+            raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
+
+        event = await repository.add_campaign_recipient_event(
+            CampaignRecipientEvent(
+                id=uuid.uuid4(),
+                recipient_id=recipient.id,
+                event_type=payload.event_type,
+                variant_key=payload.variant_key,
+                occurred_at=payload.occurred_at or datetime.now(UTC),
+            )
+        )
+        return CampaignRecipientEventResponse(
+            id=event.id,
+            recipient_id=event.recipient_id,
+            event_type=event.event_type,
+            variant_key=event.variant_key,
+            occurred_at=event.occurred_at,
+        )
+
+    async def record_calendly_tracking_click(self, token: str, settings: Settings) -> str:
+        claims = parse_campaign_tracking_token(token, settings)
+        if claims.event_type != "calendly_clicked":
+            raise DomainError(
+                "Campaign tracking link has the wrong event type.",
+                code="campaign_tracking_invalid",
+            )
+        _require_calendly_target(claims.target_url)
+        await self.record_campaign_recipient_event(
+            claims.recipient_id,
+            CampaignRecipientEventCreateRequest(
+                event_type="calendly_clicked",
+                variant_key=claims.variant_key,
+            ),
+        )
+        return claims.target_url
 
     async def get_email_ops_summary(self) -> dict:
         repository = self._require_repository()
@@ -354,6 +578,15 @@ class CommunicationsService:
         for s in sends:
             if s.recipient_email not in latest_send_by_email:
                 latest_send_by_email[s.recipient_email] = s
+
+        campaign_recipients = await repository.list_campaign_recipients()
+        campaign_events = await repository.list_campaign_recipient_events()
+        campaign_event_counts: dict[UUID, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        campaign_variant_by_recipient: dict[UUID, str] = {}
+        for event in campaign_events:
+            campaign_event_counts[event.recipient_id][event.event_type] += 1
+            if event.variant_key and event.recipient_id not in campaign_variant_by_recipient:
+                campaign_variant_by_recipient[event.recipient_id] = event.variant_key
 
         # 4. Process rows
         rows = []
@@ -481,6 +714,29 @@ class CommunicationsService:
             ),
         ]
 
+        campaign_rows = [
+            {
+                "id": str(recipient.id),
+                "company": recipient.organization_name or "Companie necompletată",
+                "firstName": _first_name(recipient.contact_name),
+                "lastName": _last_name(recipient.contact_name),
+                "email": recipient.email,
+                "clientType": _campaign_client_type(recipient.segment.value),
+                "status": _campaign_recipient_status(recipient),
+                "openRate": None,
+                "clickRate": None,
+                "viewRate": None,
+                "openCount": campaign_event_counts[recipient.id]["opened"],
+                "clickCount": campaign_event_counts[recipient.id]["clicked"],
+                "viewCount": campaign_event_counts[recipient.id]["video_viewed"],
+                "replyCount": campaign_event_counts[recipient.id]["replied"],
+                "calendlyClickCount": campaign_event_counts[recipient.id]["calendly_clicked"],
+                "emailVariant": campaign_variant_by_recipient.get(recipient.id) or recipient.source,
+                "outcome": None,
+            }
+            for recipient in campaign_recipients
+        ]
+
         campaign = {
             "videoHost": {
                 "provider": "Codruț watch page + Cloudflare R2",
@@ -496,10 +752,17 @@ class CommunicationsService:
                 "ctaPrimary": "Programează o discuție",
                 "ctaSecondary": "Vreau să fiu contactat",
             },
-            "recipients": [],
+            "recipients": campaign_rows,
             "weeklyReport": {
                 "cadence": "Săptămânal",
-                "metrics": ["open rate", "click rate", "view rate"],
+                "metrics": [
+                    "deschideri",
+                    "clickuri",
+                    "vizualizări video",
+                    "reply-uri",
+                    "clickuri Calendly",
+                    "variantă email",
+                ],
                 "notification": "Andrei primește email/Telegram cu link către raport.",
             },
         }
@@ -510,6 +773,95 @@ class CommunicationsService:
             "rules": rules,
             "campaign": campaign,
         }
+
+
+def _first_name(full_name: str | None) -> str | None:
+    if not full_name:
+        return None
+    parts = full_name.strip().split()
+    return parts[0] if parts else None
+
+
+def _last_name(full_name: str | None) -> str | None:
+    if not full_name:
+        return None
+    parts = full_name.strip().split()
+    return " ".join(parts[1:]) if len(parts) > 1 else None
+
+
+def _campaign_client_type(segment: str) -> str:
+    return "tip_1" if segment == "past_customer" else "tip_2"
+
+
+def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
+    if recipient.status.value in {"suppressed", "unsubscribed"}:
+        return "suppressed"
+    if not recipient.contact_name:
+        return "needs_contact_name"
+    return "ready"
+
+
+def _campaign_unsubscribe_url(recipient: CampaignRecipient, settings: Settings) -> str:
+    token = create_campaign_recipient_action_token(
+        CampaignRecipientActionClaims(
+            recipient_id=recipient.id,
+            action="unsubscribe",
+        ),
+        settings,
+    )
+    return build_campaign_unsubscribe_url(token, settings)
+
+
+def _render_campaign_message(
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    unsubscribe_url: str,
+) -> EmailMessage:
+    contact_name = recipient.contact_name or ""
+    context = {
+        "first_name": _first_name(contact_name) or "",
+        "last_name": _last_name(contact_name) or "",
+        "contact_name": contact_name,
+        "company_name": recipient.organization_name or "",
+        "organization_name": recipient.organization_name or "",
+        "email": recipient.email,
+        "video_url": campaign.video_url or "",
+        "thumbnail_url": campaign.thumbnail_url or "",
+        "landing_page_url": campaign.landing_page_url or "",
+        "unsubscribe_url": unsubscribe_url,
+    }
+
+    subject = _render_campaign_template(campaign.subject, context)
+    html_body = _render_campaign_template(campaign.html_body, context)
+    text_body = _render_campaign_template(campaign.text_body, context)
+    html_body = (
+        EMAIL_SHELL_OPEN
+        + html_body
+        + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
+    )
+    text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
+    return EmailMessage(
+        to=EmailAddress(recipient.email),
+        subject=subject,
+        html_body=html_body,
+        text_body=text_body,
+    )
+
+
+def _render_campaign_template(template: str, context: dict[str, str]) -> str:
+    rendered = Template(template).safe_substitute(context)
+    for key, value in context.items():
+        rendered = rendered.replace("{" + key + "}", value)
+    return rendered
+
+
+def _require_calendly_target(target_url: str) -> None:
+    hostname = urlparse(target_url).hostname
+    if hostname != "calendly.com" and not (hostname or "").endswith(".calendly.com"):
+        raise DomainError(
+            "Campaign Calendly tracking link target is not allowed.",
+            code="campaign_tracking_invalid_target",
+        )
 
 
 
@@ -525,6 +877,7 @@ class TransactionalEmailService:
     def __init__(self, provider: EmailProvider, session: AsyncSession | None = None) -> None:
         self.provider = provider
         self.session = session
+        self._template_cache: dict[str, EmailTemplate | None] = {}
 
     async def send_assignment_invitation(
         self,
@@ -537,12 +890,12 @@ class TransactionalEmailService:
         version = 1
         db_template = None
         if self.session is not None:
-            comm_service = CommunicationsService(self.session)
-            try:
-                db_template = await comm_service.get_template(template_key.value)
-            except DomainError as error:
-                if error.code != "email_template_not_found":
-                    raise
+            if template_key.value not in self._template_cache:
+                repository = CommunicationsRepository(self.session)
+                self._template_cache[template_key.value] = await repository.get_template(
+                    template_key.value
+                )
+            db_template = self._template_cache[template_key.value]
         if db_template is not None:
             subject = db_template.subject
             html_body = db_template.html_body

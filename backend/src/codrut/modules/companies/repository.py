@@ -195,6 +195,18 @@ class CompanyRepository:
         )
         return list(result.scalars().all())
 
+    async def get_participant(
+        self,
+        company_id: UUID,
+        participant_id: UUID,
+    ) -> ParticipantProfile | None:
+        result = await self.session.execute(
+            select(ParticipantProfile)
+            .where(ParticipantProfile.company_id == company_id)
+            .where(ParticipantProfile.id == participant_id)
+        )
+        return result.scalar_one_or_none()
+
     async def list_project_memberships(
         self,
         company_id: UUID,
@@ -338,6 +350,22 @@ class CompanyRepository:
         result = await self.session.execute(
             select(QuestionnaireAssignment).where(
                 QuestionnaireAssignment.respondent_profile_id == participant_id
+            )
+        )
+        return list(result.scalars().all())
+
+    async def list_assignments_for_participants(
+        self,
+        participant_ids: list[UUID],
+    ) -> list:
+        from codrut.modules.assignments.models import QuestionnaireAssignment
+
+        if not participant_ids:
+            return []
+
+        result = await self.session.execute(
+            select(QuestionnaireAssignment).where(
+                QuestionnaireAssignment.respondent_profile_id.in_(participant_ids)
             )
         )
         return list(result.scalars().all())

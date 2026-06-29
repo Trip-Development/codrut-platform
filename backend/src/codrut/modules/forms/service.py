@@ -50,8 +50,10 @@ class FormsService:
         active_only: bool = True,
     ) -> list[QuestionnaireDefinitionResponse]:
         repository = self._require_repository()
-        await self._seed_catalog_definitions(repository)
         definitions = await repository.list_definitions(active_only=active_only)
+        if not definitions:
+            await self._seed_catalog_definitions(repository)
+            definitions = await repository.list_definitions(active_only=active_only)
         return [_to_response(definition) for definition in definitions]
 
     async def get_persisted_definition(
@@ -61,8 +63,12 @@ class FormsService:
         version: int | None = None,
     ) -> QuestionnaireDefinitionResponse:
         repository = self._require_repository()
-        await self._seed_catalog_definitions(repository)
         definition = await repository.get_definition(key, version=version)
+        if definition is None and version is None and key in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
+            return _to_response(LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS[key])
+        if definition is None:
+            await self._seed_catalog_definitions(repository)
+            definition = await repository.get_definition(key, version=version)
         if definition is None and version is None and key in LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS:
             return _to_response(LEGACY_QUESTIONNAIRE_ALIAS_DEFINITIONS[key])
         if definition is None:
@@ -172,6 +178,7 @@ class FormsService:
         assignment = await repository.get_assignment_for_user(assignment_id, user_id)
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
+        await _validate_assignment_response_window(repository, assignment)
         response = await repository.get_response_by_assignment(assignment_id)
         if response is None:
             definition = await _resolve_definition(
@@ -200,6 +207,7 @@ class FormsService:
         assignment = await repository.get_assignment_for_user(assignment_id, user_id)
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
+        await _validate_assignment_response_window(repository, assignment)
         definition = await _resolve_definition(
             repository,
             assignment.questionnaire_key,
@@ -335,14 +343,15 @@ class FormsService:
         return assignment
 
     async def _seed_catalog_definitions(self, repository: FormsRepository) -> None:
+        existing_definitions = {
+            (definition.key, definition.version): definition
+            for definition in await repository.list_definitions(active_only=False)
+        }
         for catalog_definition in APPROVED_QUESTIONNAIRE_DEFINITIONS:
             catalog_key = str(catalog_definition.key)
-            existing = await repository.get_definition(
-                catalog_key,
-                version=catalog_definition.version,
-            )
+            existing = existing_definitions.get((catalog_key, catalog_definition.version))
             if existing is None:
-                await repository.add_definition(
+                definition = await repository.add_definition(
                     QuestionnaireDefinition(
                         key=catalog_key,
                         version=catalog_definition.version,
@@ -352,6 +361,7 @@ class FormsService:
                         active=True,
                     )
                 )
+                existing_definitions[(catalog_key, catalog_definition.version)] = definition
                 continue
 
             if (
@@ -474,6 +484,36 @@ async def _resolve_definition(
             "Questionnaire definition not found.",
             code="definition_not_found",
         ) from exc
+
+
+async def _validate_assignment_response_window(
+    repository: FormsRepository,
+    assignment: QuestionnaireAssignment,
+) -> None:
+    now = datetime.now(UTC)
+    if assignment.due_at is not None and assignment.due_at <= now:
+        raise DomainError(
+            "Assignment response window has closed.",
+            code="assignment_closed",
+        )
+    project = await repository.get_project_for_assignment(assignment)
+    if project is None:
+        return
+    if project.form_opens_at is not None and project.form_opens_at > now:
+        raise DomainError(
+            "Project questionnaires are not open yet.",
+            code="project_not_open",
+        )
+    close_candidates = [
+        value
+        for value in (project.form_closes_at, project.due_at)
+        if value is not None
+    ]
+    if close_candidates and min(close_candidates) <= now:
+        raise DomainError(
+            "Project questionnaire window has closed.",
+            code="project_closed",
+        )
 
 
 def _validate_definition_schema(

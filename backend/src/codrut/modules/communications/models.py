@@ -108,6 +108,20 @@ class CampaignRecipient(TimestampMixin, Base):
     )
 
 
+class CampaignRecipientEvent(TimestampMixin, Base):
+    __tablename__ = "campaign_recipient_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaign_recipients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    variant_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class Campaign(TimestampMixin, Base):
     __tablename__ = "campaigns"
 
@@ -150,4 +164,3 @@ class EmailTemplate(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-

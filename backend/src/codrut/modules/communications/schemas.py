@@ -1,9 +1,19 @@
+from datetime import datetime
+from typing import Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from codrut.contracts.emails import EmailDeliveryStatus, EmailProviderKey
+
+CampaignRecipientEventType = Literal[
+    "opened",
+    "clicked",
+    "video_viewed",
+    "calendly_clicked",
+    "replied",
+]
 
 
 class EmailTestSendRequest(BaseModel):
@@ -85,6 +95,12 @@ class CampaignRecipientRowResponse(BaseModel):
     openRate: str | None = None
     clickRate: str | None = None
     viewRate: str | None = None
+    openCount: int = 0
+    clickCount: int = 0
+    viewCount: int = 0
+    replyCount: int = 0
+    calendlyClickCount: int = 0
+    emailVariant: str | None = None
     outcome: str | None = None
 
 
@@ -112,6 +128,43 @@ class CampaignRecipientCreateRequest(BaseModel):
 
 class CampaignRecipientBulkCreateRequest(BaseModel):
     recipients: list[CampaignRecipientCreateRequest]
+
+
+class CampaignRecipientEventCreateRequest(BaseModel):
+    event_type: CampaignRecipientEventType
+    variant_key: str | None = Field(default=None, max_length=120)
+    occurred_at: datetime | None = None
+
+
+class CampaignRecipientEventResponse(BaseModel):
+    id: UUID
+    recipient_id: UUID
+    event_type: CampaignRecipientEventType
+    variant_key: str | None = None
+    occurred_at: datetime
+
+
+class CampaignSendRequest(BaseModel):
+    recipient_ids: list[UUID] | None = None
+    dry_run: bool = False
+
+
+class CampaignSendRecipientResult(BaseModel):
+    recipient_id: UUID
+    email: EmailStr
+    status: str
+    message_id: str | None = None
+    error: str | None = None
+
+
+class CampaignSendResponse(BaseModel):
+    campaign_id: UUID
+    total: int
+    sent: int
+    failed: int
+    skipped: int
+    dry_run: bool
+    results: list[CampaignSendRecipientResult]
 
 
 class CampaignCreateRequest(BaseModel):

@@ -35,6 +35,7 @@ jobs:
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
       CODRUT_REDIS_URL: redis://redis:6379/0
       CODRUT_SESSION_SECRET: compose-config-secret
+      CODRUT_TASK_LINK_SECRET: compose-config-task-link-secret
       CODRUT_CORS_ORIGINS: '["https://codrut.example.com"]'
       CODRUT_PUBLIC_APP_URL: https://codrut.example.com
       CODRUT_EMAIL_PROVIDER: brevo

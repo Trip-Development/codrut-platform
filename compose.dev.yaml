@@ -24,8 +24,8 @@ services:
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_BASE_URL: /api
-      CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-false}
-      NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-false}
+      CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-}
+      NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK: ${CODRUT_FRONTEND_DEMO_FALLBACK:-}
     volumes:
       - .:/workspace:cached
       - frontend_node_modules:/workspace/frontend/node_modules

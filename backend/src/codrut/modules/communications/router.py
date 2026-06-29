@@ -1,6 +1,8 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -11,6 +13,10 @@ from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.schemas import (
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
+    CampaignRecipientEventCreateRequest,
+    CampaignRecipientEventResponse,
+    CampaignSendRequest,
+    CampaignSendResponse,
     EmailOpsSummaryResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
@@ -169,6 +175,53 @@ async def bulk_create_campaign_recipients(
     return {"status": "success", "count": len(recipients)}
 
 
+@router.post(
+    "/campaigns/recipients/{recipient_id}/events",
+    response_model=CampaignRecipientEventResponse,
+)
+async def record_campaign_recipient_event(
+    recipient_id: UUID,
+    payload: CampaignRecipientEventCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CampaignRecipientEventResponse:
+    _require_trainer(principal)
+    event = await CommunicationsService(session).record_campaign_recipient_event(
+        recipient_id,
+        payload,
+    )
+    await session.commit()
+    return event
+
+
+@router.get("/campaigns/track/calendly/{token}")
+async def track_campaign_calendly_click(
+    token: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> RedirectResponse:
+    target_url = await CommunicationsService(session).record_calendly_tracking_click(
+        token,
+        settings,
+    )
+    await session.commit()
+    return RedirectResponse(target_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@router.get("/campaigns/unsubscribe/{token}")
+async def unsubscribe_campaign_recipient(
+    token: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    recipient = await CommunicationsService(session).unsubscribe_campaign_recipient(
+        token,
+        settings,
+    )
+    await session.commit()
+    return {"status": "unsubscribed", "email": recipient.email}
+
+
 @router.post("/campaigns")
 async def create_campaign(
     payload: CampaignCreateRequest,
@@ -179,6 +232,25 @@ async def create_campaign(
     campaign = await CommunicationsService(session).create_campaign(payload)
     await session.commit()
     return {"status": "success", "campaign_id": str(campaign.id)}
+
+
+@router.post("/campaigns/{campaign_id}/send", response_model=CampaignSendResponse)
+async def send_campaign(
+    campaign_id: UUID,
+    payload: CampaignSendRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CampaignSendResponse:
+    _require_trainer(principal)
+    result = await CommunicationsService(session).send_campaign(
+        campaign_id,
+        payload,
+        provider=build_email_provider(settings),
+        settings=settings,
+    )
+    await session.commit()
+    return result
 
 
 @router.get("/campaigns")

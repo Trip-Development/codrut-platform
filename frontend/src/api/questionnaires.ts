@@ -1,4 +1,4 @@
-import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
+import { getApiBaseUrl, isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 
 export type QuestionnaireDefinitionStub = {
   id: string;
@@ -77,9 +77,39 @@ const seededAssignmentQuestionnaires: Record<string, string> = {
   "11111111-1111-4111-8111-111111111111": "lencioni",
   "22222222-2222-4222-8222-222222222222": "boss_360",
   "33333333-3333-4333-8333-333333333333": "lencioni",
+  "44444444-4444-4444-8444-444444444444": "distress_drivers",
 };
 
 const legacyHiddenQuestionnaireKeys = new Set(["icare", "phase", "boss_360_en"]);
+const questionnaireDefinitionCacheTtlMs = 60_000;
+
+type CachedPromise<T> = {
+  expiresAt: number;
+  promise: Promise<T>;
+};
+
+const stubsCache = new Map<string, CachedPromise<QuestionnaireDefinitionStub[]>>();
+const definitionCache = new Map<string, CachedPromise<QuestionnaireDefinition | null>>();
+
+function cached<T>(cache: Map<string, CachedPromise<T>>, key: string, loader: () => Promise<T>): Promise<T> {
+  const existing = cache.get(key);
+  const now = Date.now();
+  if (existing && existing.expiresAt > now) {
+    return existing.promise;
+  }
+
+  const promise = loader().catch((error) => {
+    cache.delete(key);
+    throw error;
+  });
+  cache.set(key, { expiresAt: now + questionnaireDefinitionCacheTtlMs, promise });
+  return promise;
+}
+
+export function clearQuestionnaireDefinitionCache(): void {
+  stubsCache.clear();
+  definitionCache.clear();
+}
 
 function stubFromDefinition(definition: QuestionnaireDefinition): QuestionnaireDefinitionStub {
   const questions = definition.schema.sections.flatMap((section) => section.questions);
@@ -113,6 +143,26 @@ export function latestDefinitionStubs(
     }
   }
   return Array.from(latestByKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function groupQuestionnaireStubsByKey(
+  stubs: QuestionnaireDefinitionStub[],
+): Map<string, QuestionnaireDefinitionStub[]> {
+  const stubsByKey = new Map<string, QuestionnaireDefinitionStub[]>();
+  for (const stub of stubs) {
+    const existing = stubsByKey.get(stub.id);
+    if (existing) {
+      existing.push(stub);
+    } else {
+      stubsByKey.set(stub.id, [stub]);
+    }
+  }
+
+  for (const group of stubsByKey.values()) {
+    group.sort((a, b) => (b.version ?? 1) - (a.version ?? 1));
+  }
+
+  return stubsByKey;
 }
 
 const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
@@ -183,7 +233,149 @@ const icareFourPointScale: QuestionnaireScaleOption[] = [
   { value: 4, label: "Întotdeauna" },
 ];
 
+const lencioniThreePointScale: QuestionnaireScaleOption[] = [
+  { value: 1, label: "Rar" },
+  { value: 2, label: "Uneori" },
+  { value: 3, label: "De obicei" },
+];
+
+const distressTenPointScale: QuestionnaireScaleOption[] = Array.from({ length: 10 }, (_, index) => ({
+  value: index + 1,
+  label: String(index + 1),
+}));
+
+function shouldUseClientSeededDefinitionFallback(): boolean {
+  return (
+    !process.env.VITEST &&
+    typeof document !== "undefined" &&
+    isSeededDemoFallbackEnabled() &&
+    !document.cookie.includes("codrut_session=")
+  );
+}
+
 const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
+  lencioni: {
+    key: "lencioni",
+    version: 1,
+    title: "Lencioni - evaluare echipă",
+    description: "Evaluează echipa pe cele cinci disfuncții Lencioni.",
+    schema: {
+      schema_version: "questionnaire.v1",
+      audience: "team",
+      instructions:
+        "Răspunde pentru echipa indicată în sarcină. Scorurile sunt agregate la nivel de echipă.",
+      sections: [
+        {
+          id: "lencioni_team_health",
+          title: "Evaluarea echipei",
+          questions: [
+            "Membrii echipei admit greșelile și punctele vulnerabile.",
+            "Membrii echipei cer ajutor unii altora.",
+            "Membrii echipei discută deschis idei și opinii diferite.",
+            "Întâlnirile includ dezbateri reale, nu doar aprobări formale.",
+            "După discuții, echipa se aliniază clar pe decizii.",
+            "Prioritățile importante sunt clare pentru toți membrii.",
+            "Membrii echipei se trag reciproc la răspundere.",
+            "Comportamentele care afectează echipa sunt adresate direct.",
+            "Echipa pune rezultatele comune înaintea intereselor individuale.",
+            "Membrii echipei urmăresc activ obiectivele comune.",
+            "Se poate cere feedback sincer fără defensivitate.",
+            "Conflictele importante sunt rezolvate, nu evitate.",
+            "Deciziile sunt asumate chiar când nu există acord total.",
+            "Standardele echipei sunt respectate consecvent.",
+            "Succesul echipei contează mai mult decât recunoașterea personală.",
+          ].map((label, index) => ({
+            id: `lencioni_q${index + 1}`,
+            code: `Q${index + 1}`,
+            type: "likert" as const,
+            label,
+            required: true,
+            scale: lencioniThreePointScale,
+          })),
+        },
+      ],
+    },
+  },
+  distress_drivers: {
+    key: "distress_drivers",
+    version: 1,
+    title: "Driveri de stres TA",
+    description: "Autoevaluare pentru driverii de stres din Analiza Tranzacțională.",
+    schema: {
+      schema_version: "questionnaire.v1",
+      audience: "leadership",
+      instructions:
+        "Alege pe scala 1-10 cât de mult te regăsești în fiecare afirmație.",
+      sections: [
+        {
+          id: "distress_driveri",
+          title: "Driveri de stres",
+          questions: [
+            {
+              id: "driver_be_strong",
+              code: "D1",
+              type: "statement_score_set",
+              label: "Fii Puternic",
+              required: true,
+              scale: distressTenPointScale,
+              statements: [
+                { id: "be_strong_1", code: "S1", label: "Îmi este greu să cer ajutor când am nevoie." },
+                { id: "be_strong_2", code: "S2", label: "Prefer să nu arăt când sunt sub presiune." },
+              ],
+            },
+            {
+              id: "driver_be_perfect",
+              code: "D2",
+              type: "statement_score_set",
+              label: "Fii Perfect",
+              required: true,
+              scale: distressTenPointScale,
+              statements: [
+                { id: "be_perfect_1", code: "S1", label: "Îmi este greu să livrez ceva până nu este foarte bine finisat." },
+                { id: "be_perfect_2", code: "S2", label: "Observ rapid erorile și detaliile lipsă." },
+              ],
+            },
+            {
+              id: "driver_try_hard",
+              code: "D3",
+              type: "statement_score_set",
+              label: "Străduiește-te",
+              required: true,
+              scale: distressTenPointScale,
+              statements: [
+                { id: "try_hard_1", code: "S1", label: "Pun mult efort în sarcini chiar și când direcția nu este clară." },
+                { id: "try_hard_2", code: "S2", label: "Am tendința să încep multe lucruri în paralel." },
+              ],
+            },
+            {
+              id: "driver_hurry_up",
+              code: "D4",
+              type: "statement_score_set",
+              label: "Grăbește-te",
+              required: true,
+              scale: distressTenPointScale,
+              statements: [
+                { id: "hurry_up_1", code: "S1", label: "Simt frecvent că trebuie să termin mai repede." },
+                { id: "hurry_up_2", code: "S2", label: "Mă irită ritmul lent al celorlalți." },
+              ],
+            },
+            {
+              id: "driver_please_people",
+              code: "D5",
+              type: "statement_score_set",
+              label: "Mulțumește-i pe alții",
+              required: true,
+              scale: distressTenPointScale,
+              statements: [
+                { id: "please_people_1", code: "S1", label: "Îmi adaptez rapid răspunsul ca să evit dezamăgirea altora." },
+                { id: "please_people_2", code: "S2", label: "Îmi este greu să spun nu unor cereri suplimentare." },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  },
   icare: {
     key: "icare",
     version: 1,
@@ -572,56 +764,86 @@ fallbackDefinitionDetails.boss_360_en = {
     "iCARE behavioral feedback for a manager from self, manager peers, and direct reports.",
 };
 
+fallbackDefinitionDetails.lencioni_en = {
+  ...fallbackDefinitionDetails.lencioni,
+  key: "lencioni_en",
+  title: "Lencioni Team Assessment",
+  description: "Assess the team against Lencioni's five dysfunctions.",
+};
+
+fallbackDefinitionDetails.distress_drivers_en = {
+  ...fallbackDefinitionDetails.distress_drivers,
+  key: "distress_drivers_en",
+  title: "TA Distress Drivers",
+  description: "Self-assessment for Transactional Analysis stress drivers.",
+};
+
 export async function listQuestionnaireDefinitionStubs(
   includeRetired = false,
   options: { latestOnly?: boolean } = {},
 ): Promise<QuestionnaireDefinitionStub[]> {
   const latestOnly = options.latestOnly ?? true;
-  try {
-    const url = includeRetired
-      ? `${getApiBaseUrl()}/forms/definitions?include_retired=true`
-      : `${getApiBaseUrl()}/forms/definitions`;
-    const response = await fetch(url, {
-      cache: "no-store",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      return isDemoFallbackEnabled() ? fallbackDefinitions : [];
+  const cacheKey = `stubs:${includeRetired ? "all" : "active"}:${latestOnly ? "latest" : "versions"}`;
+  return cached(stubsCache, cacheKey, async () => {
+    if (shouldUseClientSeededDefinitionFallback()) {
+      return latestOnly ? latestDefinitionStubs(fallbackDefinitions) : fallbackDefinitions;
     }
-    const serverDefs = (await response.json()) as QuestionnaireDefinition[];
-    const stubs = serverDefs
-      .filter((definition) => !legacyHiddenQuestionnaireKeys.has(definition.key))
-      .map(stubFromDefinition);
-    return latestOnly ? latestDefinitionStubs(stubs) : stubs;
-  } catch (e) {
-    console.error("Error listing definitions", e);
-    const fallback = isDemoFallbackEnabled() ? fallbackDefinitions : [];
-    return latestOnly ? latestDefinitionStubs(fallback) : fallback;
-  }
+
+    try {
+      const url = includeRetired
+        ? `${getApiBaseUrl()}/forms/definitions?include_retired=true`
+        : `${getApiBaseUrl()}/forms/definitions`;
+      const response = await fetch(url, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        return isSeededDemoFallbackEnabled() ? fallbackDefinitions : [];
+      }
+      const serverDefs = (await response.json()) as QuestionnaireDefinition[];
+      const stubs = serverDefs
+        .filter((definition) => !legacyHiddenQuestionnaireKeys.has(definition.key))
+        .map(stubFromDefinition);
+      return latestOnly ? latestDefinitionStubs(stubs) : stubs;
+    } catch (e) {
+      console.error("Error listing definitions", e);
+      const fallback = isSeededDemoFallbackEnabled() ? fallbackDefinitions : [];
+      return latestOnly ? latestDefinitionStubs(fallback) : fallback;
+    }
+  });
 }
 
 export async function getQuestionnaireDefinition(
   key: string,
+  options: RequestInit = {},
 ): Promise<QuestionnaireDefinition | null> {
   const [realKey, versionStr] = key.split("@");
   const targetVersion = versionStr ? parseInt(versionStr) : null;
+  const cacheKey = targetVersion ? `definition:${realKey}@${targetVersion}` : `definition:${realKey}`;
 
-  try {
-    const url = targetVersion
-      ? `${getApiBaseUrl()}/forms/definitions/${realKey}?version=${targetVersion}`
-      : `${getApiBaseUrl()}/forms/definitions/${realKey}`;
-    const response = await fetch(url, {
-      cache: "no-store",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      return isDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
+  return cached(definitionCache, cacheKey, async () => {
+    if (shouldUseClientSeededDefinitionFallback()) {
+      return fallbackDefinitionDetails[realKey] ?? null;
     }
-    return (await response.json()) as QuestionnaireDefinition;
-  } catch (e) {
-    console.error("Error getting definition", e);
-    return isDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
-  }
+
+    try {
+      const url = targetVersion
+        ? `${getApiBaseUrl()}/forms/definitions/${realKey}?version=${targetVersion}`
+        : `${getApiBaseUrl()}/forms/definitions/${realKey}`;
+      const response = await fetch(url, {
+        cache: "no-store",
+        credentials: "include",
+        ...options,
+      });
+      if (!response.ok) {
+        return isSeededDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
+      }
+      return (await response.json()) as QuestionnaireDefinition;
+    } catch (e) {
+      console.error("Error getting definition", e);
+      return isSeededDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
+    }
+  });
 }
 
 export async function createQuestionnaireDefinitionOnServer(
@@ -643,7 +865,9 @@ export async function createQuestionnaireDefinitionOnServer(
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut crea chestionarul pe server.");
   }
-  return (await response.json()) as QuestionnaireDefinition;
+  const created = (await response.json()) as QuestionnaireDefinition;
+  clearQuestionnaireDefinitionCache();
+  return created;
 }
 
 export async function updateQuestionnaireDefinitionOnServer(
@@ -669,7 +893,9 @@ export async function updateQuestionnaireDefinitionOnServer(
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut actualiza chestionarul pe server.");
   }
-  return (await response.json()) as QuestionnaireDefinition;
+  const updated = (await response.json()) as QuestionnaireDefinition;
+  clearQuestionnaireDefinitionCache();
+  return updated;
 }
 
 export async function activateQuestionnaireDefinitionOnServer(
@@ -684,7 +910,9 @@ export async function activateQuestionnaireDefinitionOnServer(
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut activa versiunea chestionarului.");
   }
-  return (await response.json()) as QuestionnaireDefinition;
+  const activated = (await response.json()) as QuestionnaireDefinition;
+  clearQuestionnaireDefinitionCache();
+  return activated;
 }
 
 export async function deleteQuestionnaireDefinitionOnServer(
@@ -702,7 +930,9 @@ export async function deleteQuestionnaireDefinitionOnServer(
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut pensiona chestionarul.");
   }
-  return (await response.json()) as QuestionnaireDefinition;
+  const retired = (await response.json()) as QuestionnaireDefinition;
+  clearQuestionnaireDefinitionCache();
+  return retired;
 }
 
 export async function getQuestionnaireResponse(

@@ -33,6 +33,8 @@ type InvitationsWorkspaceProps = {
   assignments: CompanyAssignment[];
   invitationStatuses: ParticipantInvitationStatus[];
   teams: CompanyTeam[];
+  mode?: "combined" | "assignments" | "invitations";
+  showProjectSelector?: boolean;
 };
 
 type AssignmentTargetType = CompanyAssignment["target_type"];
@@ -60,18 +62,82 @@ type ParticipantInviteRow = {
 };
 
 type InvitationFilter = "all" | "ready" | "errors" | "no_assignments" | "not_signed_up";
+type AssignmentScopeGuide = {
+  id: string;
+  title: string;
+  scopeLabel: string;
+  description: string;
+  recommendedTargetType: AssignmentTargetType;
+  questionnaireKeys: string[];
+  details: string[];
+};
+type AvailableAssignmentScopeGuide = AssignmentScopeGuide & { questionnaireKey: string };
 
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const activeInviteStatuses = new Set(["invited", "started", "submitted", "validated", "scored"]);
 const questionnaireLabels: Record<string, string> = {
   lencioni: "Lencioni - evaluare echipă",
-  lencioni_en: "Lencioni Team Assessment",
+  lencioni_en: "Lencioni - evaluare echipă",
   distress_drivers: "Driveri de stres TA",
-  distress_drivers_en: "TA Distress Drivers",
+  distress_drivers_en: "Driveri de stres TA",
   boss_360: "iCARE 360 pentru manager",
   icare: "Feedback 360 iCARE",
   pcm_base: "Baza și faza PCM",
 };
+const assignmentScopeGuides: AssignmentScopeGuide[] = [
+  {
+    id: "lencioni",
+    title: "Lencioni",
+    scopeLabel: "Echipă",
+    description: "Evaluare despre o echipă definită, inclusiv leadership sau echipe manageriale.",
+    recommendedTargetType: "team",
+    questionnaireKeys: ["lencioni", "lencioni_en"],
+    details: [
+      "Ținta recomandată este echipa, nu persoana.",
+      "În rezultate se agregă pe proiect și se poate deschide detalierea pe echipe.",
+      "Se afișează doar cohorte suficient de mari pentru a proteja confidențialitatea.",
+    ],
+  },
+  {
+    id: "boss_360",
+    title: "Feedback 360 iCARE",
+    scopeLabel: "Persoană",
+    description: "Feedback despre un manager sau coleg evaluat ca persoană țintă.",
+    recommendedTargetType: "person",
+    questionnaireKeys: ["boss_360", "boss_360_en", "icare"],
+    details: [
+      "Ținta recomandată este persoana evaluată.",
+      "Răspunsurile mai multor respondenți intră în sumarul 360 al persoanei.",
+      "Participantul vede doar propria sarcină; trainerul vede agregatele raportabile.",
+    ],
+  },
+  {
+    id: "distress_drivers",
+    title: "Driveri de distres",
+    scopeLabel: "Individual",
+    description: "Autoevaluare individuală; în rapoarte se poate agrega la nivel de proiect sau echipă.",
+    recommendedTargetType: "self",
+    questionnaireKeys: ["distress_drivers", "distress_drivers_en"],
+    details: [
+      "Ținta recomandată este autoevaluarea.",
+      "Toți driverii sunt afișați în rezultate; interpretarea se explică doar peste 50%.",
+      "Pentru echipe, agregatele sunt utile doar când există suficienți respondenți.",
+    ],
+  },
+  {
+    id: "pcm",
+    title: "PCM bază și fază",
+    scopeLabel: "Individual",
+    description: "Profil individual folosit pentru distribuțiile PCM pe proiect și pe echipe.",
+    recommendedTargetType: "self",
+    questionnaireKeys: ["pcm_base", "pcm_phase", "phase"],
+    details: [
+      "Ținta recomandată este autoevaluarea.",
+      "Rezultatele se afișează ca distribuții pe bază și fază, nu ca răspunsuri brute.",
+      "Culorile PCM sunt păstrate în rezultatele participantului și în rapoarte.",
+    ],
+  },
+];
 
 export function buildInvitationRows(
   participants: CompanyParticipant[],
@@ -168,6 +234,8 @@ export function InvitationsWorkspace({
   assignments,
   invitationStatuses,
   teams,
+  mode = "combined",
+  showProjectSelector = true,
 }: InvitationsWorkspaceProps) {
   const [assignmentState, setAssignmentState] = useState(assignments);
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireDefinitionStub[]>([]);
@@ -190,12 +258,14 @@ export function InvitationsWorkspace({
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("all");
-  const [showAdvancedAssignments, setShowAdvancedAssignments] = useState(false);
+  const [showAdvancedAssignments, setShowAdvancedAssignments] = useState(mode === "assignments");
+  const [expandedScopeCards, setExpandedScopeCards] = useState<Set<string>>(new Set());
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
   const hasProjects = projects.length > 0;
+  const hasParticipants = participants.length > 0;
   const canUseProjectActions = !hasProjects || selectedProjectId !== null;
 
   useEffect(() => {
@@ -210,6 +280,10 @@ export function InvitationsWorkspace({
     setCopiedParticipantId(null);
     setMessage(null);
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!hasParticipants) setShowAdvancedAssignments(false);
+  }, [hasParticipants]);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,12 +367,18 @@ export function InvitationsWorkspace({
     () => plan?.assignments.filter((assignment) => selectedPlanKeys.has(assignment.key)) ?? [],
     [plan, selectedPlanKeys],
   );
+  const availableScopeGuides = useMemo(
+    () => buildAvailableScopeGuides(questionnaires),
+    [questionnaires],
+  );
 
   const signedUpCount = rows.filter((row) => row.signedUp).length;
   const activeInvites = rows.filter((row) => row.deliveryTone === "success").length;
   const completedCount = rows.filter((row) => row.totalTasks > 0 && row.completedTasks === row.totalTasks).length;
   const blockedCount = rows.filter((row) => row.deliveryTone === "danger" || row.totalTasks === 0).length;
   const participantsWithoutAssignments = rows.filter((row) => row.totalTasks === 0).length;
+  const showAssignmentWorkspace = mode !== "invitations";
+  const showInvitationWorkspace = mode !== "assignments";
   const visibleSelectedCount = filteredRows.filter((row) => selectedParticipantIds.has(row.participant.id)).length;
   const allVisibleSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedParticipantIds.has(row.participant.id));
   const canCreateAssignment =
@@ -332,6 +412,53 @@ export function InvitationsWorkspace({
 
       return next;
     });
+  }
+
+  function selectScopeGuide(guide: AvailableAssignmentScopeGuide) {
+    updateAssignmentForm({
+      questionnaireKey: guide.questionnaireKey,
+      targetType: guide.recommendedTargetType,
+    });
+  }
+
+  function toggleScopeGuide(guideId: string) {
+    setExpandedScopeCards((current) => {
+      const next = new Set(current);
+      if (next.has(guideId)) {
+        next.delete(guideId);
+      } else {
+        next.add(guideId);
+      }
+      return next;
+    });
+  }
+
+  function renderTargetTypeControls() {
+    return (
+      <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-3">
+        <p className="px-1 text-xs font-semibold text-foreground/50">Ținta evaluării</p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          <TargetButton
+            active={assignmentForm.targetType === "self"}
+            label="Autoevaluare"
+            detail="Persoana răspunde despre sine."
+            onClick={() => updateAssignmentForm({ targetType: "self" })}
+          />
+          <TargetButton
+            active={assignmentForm.targetType === "person"}
+            label="Persoană"
+            detail="Feedback despre un manager sau coleg."
+            onClick={() => updateAssignmentForm({ targetType: "person" })}
+          />
+          <TargetButton
+            active={assignmentForm.targetType === "team"}
+            label="Echipă"
+            detail="Evaluare pentru o echipă definită."
+            onClick={() => updateAssignmentForm({ targetType: "team" })}
+          />
+        </div>
+      </div>
+    );
   }
 
   async function handleCreateAssignment() {
@@ -586,12 +713,15 @@ export function InvitationsWorkspace({
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-        <ProjectScopeSelector
-          companyId={companyId}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-        />
+      {showInvitationWorkspace ? (
+      <section className="surface-panel overflow-hidden">
+        {showProjectSelector ? (
+          <ProjectScopeSelector
+            companyId={companyId}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+          />
+        ) : null}
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="p-5 md:p-6">
             <p className="text-sm font-semibold text-burgundy/75">
@@ -610,8 +740,8 @@ export function InvitationsWorkspace({
               <InviteSummary label="Blocaje" value={blockedCount} />
             </div>
           </div>
-          <div className="space-y-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
-            <div className="rounded-xl border border-[var(--border)] bg-background/70 px-3 py-2.5">
+          <div className="space-y-3 border-t border-[var(--border)] bg-surface-muted p-5 md:p-6 lg:border-l lg:border-t-0">
+            <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2.5">
               <p className="text-xs font-semibold text-foreground/48">Selecție pentru trimitere</p>
               <p className="mt-1 text-lg font-semibold text-foreground">
                 {selectedReadyCount} persoane cu sarcini
@@ -619,19 +749,19 @@ export function InvitationsWorkspace({
             </div>
             <button
               type="button"
-              onClick={() => void handleSend("secure_links")}
+              onClick={() => void handleSend("email")}
               disabled={!canUseProjectActions || sendingMode !== null || selectedReadyCount === 0}
-              className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="tap-soft w-full rounded-full bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {sendingMode === "secure_links" ? "Se generează linkurile..." : "Generează linkuri securizate"}
+              {sendingMode === "email" ? "Se trimit emailurile..." : "Trimite email invitații"}
             </button>
             <button
               type="button"
-              onClick={() => void handleSend("email")}
+              onClick={() => void handleSend("secure_links")}
               disabled={!canUseProjectActions || sendingMode !== null || selectedReadyCount === 0}
-              className="tap-soft w-full rounded-xl border border-[var(--border)] bg-background px-4 py-3 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+              className="tap-soft w-full rounded-full border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {sendingMode === "email" ? "Se trimit emailurile..." : "Trimite email invitații"}
+              {sendingMode === "secure_links" ? "Se generează linkurile..." : "Generează linkuri securizate"}
             </button>
             <p className="text-xs leading-5 text-foreground/52">
               Trimiterea folosește doar persoanele bifate în tabel și sarcinile din proiectul selectat. Persoanele fără sarcini salvate nu pot fi selectate.
@@ -639,14 +769,16 @@ export function InvitationsWorkspace({
           </div>
         </div>
         {message ? (
-          <p aria-live="polite" className="border-t border-[var(--border)] bg-background/70 px-5 py-3 text-sm font-semibold text-foreground/62">
+          <p aria-live="polite" className="border-t border-[var(--border)] bg-surface-muted px-5 py-3 text-sm font-semibold text-foreground/62">
             {message}
           </p>
         ) : null}
       </section>
+      ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-surface-muted/35 px-5 py-4 md:flex-row md:items-center md:justify-between">
+      {showAssignmentWorkspace ? (
+      <section className="surface-panel overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-surface-muted px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-semibold text-burgundy/75">Pregătire sarcini</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Asignări înainte de trimitere</h2>
@@ -657,11 +789,19 @@ export function InvitationsWorkspace({
           <button
             type="button"
             onClick={() => setShowAdvancedAssignments((current) => !current)}
-            className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+            disabled={!hasParticipants}
+            className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {showAdvancedAssignments ? "Ascunde avansat" : "Configurează asignări avansat"}
+            {!hasParticipants ? "Adaugă participanți pentru asignări" : showAdvancedAssignments ? "Ascunde avansat" : "Configurează asignări avansat"}
           </button>
         </div>
+        {!hasParticipants ? (
+          <div className="border-b border-[var(--border)] bg-surface px-5 py-4">
+            <p className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-sm font-semibold leading-6 text-foreground/58">
+              După ce adaugi participanți în roster, vei putea genera planul de asignări, crea excepții și trimite invitații.
+            </p>
+          </div>
+        ) : null}
         {showAdvancedAssignments ? (
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="p-5 md:p-6">
@@ -676,7 +816,7 @@ export function InvitationsWorkspace({
                 type="button"
                 onClick={() => void handleGeneratePlan()}
                 disabled={!canUseProjectActions || planLoading || participants.length === 0}
-                className="tap-soft rounded-xl border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy hover:bg-burgundy/5 disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft rounded-full border border-burgundy bg-surface px-4 py-3 text-sm font-bold text-burgundy hover:bg-burgundy/5 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {planLoading ? "Se generează planul..." : "Generează plan de asignări"}
               </button>
@@ -684,7 +824,7 @@ export function InvitationsWorkspace({
                 type="button"
                 onClick={() => void handleSavePlan()}
                 disabled={!canSavePlan}
-                className="tap-soft rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft rounded-full bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {planSaving ? "Se salvează asignările..." : `Salvează asignările bifate (${selectedPlanItems.length})`}
               </button>
@@ -701,7 +841,7 @@ export function InvitationsWorkspace({
                 <AssignmentMatrix assignments={plan.assignments} selectedKeys={selectedPlanKeys} />
               </>
             ) : (
-              <div className="mt-5 rounded-2xl border border-dashed border-[var(--border)] bg-background/60 px-4 py-5 text-sm leading-6 text-foreground/58">
+              <div className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-surface-muted px-4 py-5 text-sm leading-6 text-foreground/58">
                 Planul implicit va grupa sarcinile pe leadership, echipe de manager și feedback 360. După generare poți debifa rândurile care nu trebuie salvate.
               </div>
             )}
@@ -743,29 +883,15 @@ export function InvitationsWorkspace({
               </LabeledSelect>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-background/70 p-3">
-              <p className="px-1 text-xs font-semibold text-foreground/50">Ținta evaluării</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                <TargetButton
-                  active={assignmentForm.targetType === "self"}
-                  label="Autoevaluare"
-                  detail="Persoana răspunde despre sine."
-                  onClick={() => updateAssignmentForm({ targetType: "self" })}
-                />
-                <TargetButton
-                  active={assignmentForm.targetType === "person"}
-                  label="Persoană"
-                  detail="Feedback despre un manager sau coleg."
-                  onClick={() => updateAssignmentForm({ targetType: "person" })}
-                />
-                <TargetButton
-                  active={assignmentForm.targetType === "team"}
-                  label="Echipă"
-                  detail="Evaluare pentru o echipă definită."
-                  onClick={() => updateAssignmentForm({ targetType: "team" })}
-                />
-              </div>
-            </div>
+            <AssignmentScopeCards
+              guides={availableScopeGuides}
+              selectedQuestionnaireKey={assignmentForm.questionnaireKey}
+              expandedKeys={expandedScopeCards}
+              onSelect={selectScopeGuide}
+              onToggle={toggleScopeGuide}
+            >
+              {renderTargetTypeControls()}
+            </AssignmentScopeCards>
 
             {assignmentForm.targetType === "person" ? (
               <div className="mt-4">
@@ -804,7 +930,7 @@ export function InvitationsWorkspace({
             ) : null}
           </div>
 
-          <div className="flex flex-col justify-between gap-4 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 xl:border-l xl:border-t-0">
+          <div className="flex flex-col justify-between gap-4 border-t border-[var(--border)] bg-surface-muted p-5 md:p-6 xl:border-l xl:border-t-0">
             <div className="space-y-3">
               <AssignmentSummary label="Asignări totale" value={assignmentState.length} />
               <AssignmentSummary label="Bifate în plan" value={selectedPlanItems.length} />
@@ -819,7 +945,7 @@ export function InvitationsWorkspace({
                 type="button"
                 onClick={() => void handleCreateAssignment()}
                 disabled={!canCreateAssignment || assignmentSaving}
-                className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft w-full rounded-full bg-burgundy px-4 py-3 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {assignmentSaving ? "Se salvează asignarea..." : "Creează asignarea"}
               </button>
@@ -831,8 +957,10 @@ export function InvitationsWorkspace({
         </div>
         ) : null}
       </section>
+      ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+      {showInvitationWorkspace ? (
+      <section className="surface-panel overflow-hidden">
         <div className="border-b border-[var(--border)] px-5 py-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -847,7 +975,7 @@ export function InvitationsWorkspace({
                 type="button"
                 onClick={() => void handleSendAll("email")}
                 disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
-                className="tap-soft rounded-xl bg-burgundy px-3 py-2 text-xs font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft rounded-full bg-burgundy px-3 py-2 text-xs font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {sendingMode === "email" ? "Se trimit..." : "Trimite email tuturor"}
               </button>
@@ -855,14 +983,14 @@ export function InvitationsWorkspace({
                 type="button"
                 onClick={() => void handleSendAll("secure_links")}
                 disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
-                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {sendingMode === "secure_links" ? "Se generează..." : "Generează linkuri tuturor"}
               </button>
               <button
                 type="button"
                 onClick={selectReadyUnsentParticipants}
-                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
               >
                 Selectează netrimiși
               </button>
@@ -870,7 +998,7 @@ export function InvitationsWorkspace({
                 type="button"
                 onClick={() => setSelectedParticipantIds(new Set())}
                 disabled={selectedParticipantIds.size === 0}
-                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Curăță selecția
               </button>
@@ -934,7 +1062,7 @@ export function InvitationsWorkspace({
                 </tr>
               ) : (
                 filteredRows.map((row) => (
-                  <tr key={row.participant.id} className="align-top transition-colors hover:bg-surface-muted/40">
+                  <tr key={row.participant.id} className="align-top transition-colors hover:bg-surface-muted">
                     <td className="px-5 py-4">
                       <input
                         aria-label={`Selectează ${row.participant.full_name}`}
@@ -979,7 +1107,7 @@ export function InvitationsWorkspace({
                           type="button"
                           onClick={() => void handleCopyLink(row)}
                           disabled={sendingMode !== null}
-                          className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                          className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
                         >
                           {copiedParticipantId === row.participant.id ? "Copiat" : "Copiază link"}
                         </button>
@@ -988,7 +1116,7 @@ export function InvitationsWorkspace({
                           type="button"
                           onClick={() => void handleResend(row.participant.id)}
                           disabled={sendingMode !== null || row.totalTasks === 0}
-                          className="tap-soft rounded-lg border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                          className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
                         >
                           Retrimite
                         </button>
@@ -1001,6 +1129,7 @@ export function InvitationsWorkspace({
           </table>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }
@@ -1013,8 +1142,8 @@ function AssignmentMatrix({
   selectedKeys: Set<string>;
 }) {
   return (
-    <details className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)] bg-background/70">
-      <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-foreground hover:bg-surface-muted/45">
+    <details className="mt-4 overflow-hidden rounded-xl border border-[var(--border)] bg-surface">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-foreground hover:bg-surface-muted">
         Vezi matricea completă de asignări
       </summary>
       <div className="max-h-80 overflow-auto border-t border-[var(--border)]">
@@ -1030,7 +1159,7 @@ function AssignmentMatrix({
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
             {assignments.map((assignment) => (
-              <tr key={assignment.key} className="hover:bg-surface-muted/35">
+              <tr key={assignment.key} className="hover:bg-surface-muted">
                 <td className="px-4 py-2 font-semibold">
                   {assignment.existing_assignment_id ? "Salvat" : selectedKeys.has(assignment.key) ? "Bifat" : "Nebifat"}
                 </td>
@@ -1068,7 +1197,7 @@ function ProjectScopeSelector({
   }
 
   return (
-    <div className="border-b border-[var(--border)] bg-surface-muted/35 px-5 py-4">
+    <div className="border-b border-[var(--border)] bg-surface-muted px-5 py-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-xs font-semibold text-burgundy/75">Proiect curent</p>
@@ -1083,7 +1212,7 @@ function ProjectScopeSelector({
         <select
           value={selectedProjectId ?? ""}
           onChange={(event) => handleChange(event.target.value)}
-          className="min-h-10 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none hover:border-burgundy/45 focus:border-burgundy/45"
+          className="control-input min-h-10 px-3 py-2"
         >
           <option value="">Alege proiect</option>
           {projects.map((project) => (
@@ -1174,7 +1303,7 @@ function AssignmentPlanList({
 }) {
   if (groups.length === 0) {
     return (
-      <div className="mt-5 rounded-2xl border border-[var(--border)] bg-background/70 px-4 py-5 text-sm text-foreground/58">
+      <div className="mt-5 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-5 text-sm text-foreground/58">
         Nu există rânduri de asignare în planul generat.
       </div>
     );
@@ -1188,8 +1317,8 @@ function AssignmentPlanList({
         const allSelected = selectable.length > 0 && selectedCount === selectable.length;
 
         return (
-          <div key={group.id} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-background/75">
-            <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-surface-muted/55 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div key={group.id} className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface">
+            <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-surface-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-bold text-foreground">{group.name}</p>
                 <p className="mt-1 text-xs font-semibold text-foreground/50">
@@ -1239,7 +1368,7 @@ function PlanAssignmentRow({
     <label
       className={[
         "grid gap-3 px-4 py-3 text-sm md:grid-cols-[1.5rem_1.2fr_0.85fr_1fr] md:items-center",
-        isExisting ? "bg-surface-muted/35 text-foreground/48" : "cursor-pointer hover:bg-surface-muted/35",
+        isExisting ? "bg-surface-muted text-foreground/48" : "cursor-pointer hover:bg-surface-muted",
       ].join(" ")}
     >
       <input
@@ -1295,7 +1424,7 @@ function formatPlanTarget(assignment: CompanyAssignmentPlanItem): string {
 
 function InviteSummary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-2.5">
+    <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2.5">
       <p className="text-xs font-semibold text-foreground/48">{label}</p>
       <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
     </div>
@@ -1304,7 +1433,7 @@ function InviteSummary({ label, value }: { label: string; value: string | number
 
 function AssignmentSummary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-3">
+    <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-3">
       <p className="text-xs font-semibold text-foreground/48">{label}</p>
       <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
     </div>
@@ -1364,6 +1493,107 @@ function LabeledSelect({
   );
 }
 
+function AssignmentScopeCards({
+  guides,
+  selectedQuestionnaireKey,
+  expandedKeys,
+  onSelect,
+  onToggle,
+  children,
+}: {
+  guides: AvailableAssignmentScopeGuide[];
+  selectedQuestionnaireKey: string;
+  expandedKeys: Set<string>;
+  onSelect: (guide: AvailableAssignmentScopeGuide) => void;
+  onToggle: (guideId: string) => void;
+  children: React.ReactNode;
+}) {
+  const selectedGuide = guides.find((guide) => guide.questionnaireKey === selectedQuestionnaireKey);
+
+  if (guides.length === 0) {
+    return <div className="mt-4">{children}</div>;
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <p className="px-1 text-xs font-semibold text-foreground/50">Alege instrumentul și ținta evaluării</p>
+      <div className="grid gap-3 xl:grid-cols-2">
+        {guides.map((guide) => {
+          const selected = guide.questionnaireKey === selectedQuestionnaireKey;
+          const expanded = expandedKeys.has(guide.id);
+
+          return (
+            <article
+              key={guide.id}
+              className={[
+                "rounded-xl border bg-surface p-4 shadow-sm transition-colors",
+                selected ? "border-burgundy/55 ring-1 ring-burgundy/12" : "border-[var(--border)]",
+              ].join(" ")}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-bold text-foreground">{guide.title}</h3>
+                    <span className="rounded-full bg-burgundy/10 px-2 py-1 text-[11px] font-bold text-burgundy">
+                      {guide.scopeLabel}
+                    </span>
+                    {selected ? (
+                      <span className="rounded-full bg-success/18 px-2 py-1 text-[11px] font-bold text-success-ink">
+                        Selectat
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-foreground/58">{guide.description}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onToggle(guide.id)}
+                    className="tap-soft rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/62 hover:border-burgundy/35 hover:text-burgundy"
+                    aria-expanded={expanded}
+                  >
+                    {expanded ? "Ascunde" : "Detalii"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(guide)}
+                    className={[
+                      "tap-soft rounded-xl px-3 py-2 text-xs font-bold transition-colors",
+                      selected
+                        ? "bg-foreground text-background"
+                        : "border border-burgundy/25 bg-surface text-burgundy hover:bg-burgundy hover:text-white",
+                    ].join(" ")}
+                  >
+                    Folosește
+                  </button>
+                </div>
+              </div>
+              {expanded ? (
+                <ul className="mt-3 space-y-2 rounded-xl bg-surface-muted px-3 py-3 text-xs leading-5 text-foreground/62">
+                  {guide.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {selected ? (
+                <div className="mt-4 border-t border-[var(--border)] pt-4">
+                  {children}
+                  {guide.recommendedTargetType !== "self" ? (
+                    <p className="mt-2 px-1 text-xs leading-5 text-foreground/48">
+                      Ținta recomandată pentru {guide.title} este {formatTargetType(guide.recommendedTargetType).toLocaleLowerCase("ro-RO")}, dar poți ajusta manual pentru excepții.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+      {!selectedGuide ? <div>{children}</div> : null}
+    </div>
+  );
+}
+
 function TargetButton({
   active,
   label,
@@ -1392,6 +1622,15 @@ function TargetButton({
       </span>
     </button>
   );
+}
+
+function buildAvailableScopeGuides(questionnaires: QuestionnaireDefinitionStub[]): AvailableAssignmentScopeGuide[] {
+  const availableKeys = new Set(questionnaires.map((questionnaire) => questionnaire.id));
+
+  return assignmentScopeGuides.flatMap((guide) => {
+    const questionnaireKey = guide.questionnaireKeys.find((key) => availableKeys.has(key));
+    return questionnaireKey ? [{ ...guide, questionnaireKey }] : [];
+  });
 }
 
 function formatAssignmentLabel(

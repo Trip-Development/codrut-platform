@@ -353,4 +353,48 @@ describe("QuestionnairesWorkspace", () => {
       1,
     );
   });
+
+  it("keeps global scale inputs focused while editing their labels", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
+
+    const globalPanel = await screen.findByText("Scări globale de răspuns");
+    const scaleCard = globalPanel.closest("section");
+    expect(scaleCard).not.toBeNull();
+
+    const labelInput = within(scaleCard as HTMLElement).getAllByDisplayValue("Rar")[0] as HTMLInputElement;
+    labelInput.focus();
+
+    fireEvent.change(labelInput, { target: { value: "Foarte r" } });
+    expect(document.activeElement).toBe(labelInput);
+    expect(labelInput).toHaveProperty("value", "Foarte r");
+
+    fireEvent.change(labelInput, { target: { value: "Foarte rar" } });
+    expect(document.activeElement).toBe(labelInput);
+    expect(labelInput).toHaveProperty("value", "Foarte rar");
+  });
+
+  it("keeps local scale editing collapsed by default and stable while typing", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
+
+    const questionCard = await screen.findByTestId("question-editor-q1");
+    const questionScope = within(questionCard);
+
+    expect(questionScope.queryByPlaceholderText("Descriere opțională pentru această opțiune")).toBeNull();
+    fireEvent.click(questionScope.getByRole("button", { name: "Editează scara locală" }));
+
+    const localLabelInput = questionScope.getByDisplayValue("Rar") as HTMLInputElement;
+    localLabelInput.focus();
+
+    fireEvent.change(localLabelInput, { target: { value: "Aproape niciodată" } });
+
+    expect(document.activeElement).toBe(localLabelInput);
+    expect(localLabelInput).toHaveProperty("value", "Aproape niciodată");
+    expect(questionScope.getByRole("button", { name: "Ascunde scara" })).toBeTruthy();
+  });
 });

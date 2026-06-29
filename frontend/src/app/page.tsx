@@ -168,12 +168,12 @@ export default function HomePage() {
   }, [activeScenarioIdx]);
 
   return (
-    <main id="top" className="bg-vines-pattern app-min-height bg-background text-foreground">
-      <header className="safe-top sticky top-0 z-40 border-b border-[var(--border)] glass-panel shadow-sm-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
+    <main id="top" className="app-min-height bg-background bg-vines-pattern text-foreground">
+      <header className="safe-top public-glass public-header-glass sticky top-0 z-40 !border-b !border-x-0 !border-t-0 !border-[var(--border)]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-1.5 md:px-6">
           <Link
             href="/"
-            className="tap-soft group -ml-2 min-w-0 rounded-2xl px-2 py-1 transition-colors hover:bg-surface-muted/80"
+            className="tap-soft group -ml-2 min-w-0 rounded-xl px-2 py-1 transition-colors hover:bg-surface-muted"
           >
             <BrandMark subtitle="Platformă de coaching și training" />
           </Link>
@@ -211,17 +211,17 @@ export default function HomePage() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <ThemeToggle />
             <Link
               href="/login"
-              className="tap-soft rounded-2xl border border-[var(--border)] bg-surface px-5 py-2.5 text-center text-sm font-bold text-foreground hover:bg-surface-muted"
+              className="btn-secondary min-h-8 px-5 py-1.5 text-center text-sm"
             >
               Intră în cont
             </Link>
             <Link
               href="#contact"
-              className="btn-primary !px-5 !py-2.5 hidden md:flex"
+              className="btn-primary hidden min-h-8 items-center !px-5 !py-1.5 md:flex"
             >
               Solicită demo
             </Link>
@@ -230,9 +230,9 @@ export default function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative mx-auto grid min-h-[calc(100dvh-5rem)] max-w-7xl items-center gap-10 overflow-hidden px-4 pb-12 pt-10 md:grid-cols-[1.05fr_0.95fr] md:px-6 md:pb-16 md:pt-14">
+      <section className="relative mx-auto grid min-h-[calc(100dvh-5rem)] max-w-7xl items-center gap-10 overflow-hidden rounded-b-[2rem] px-4 pb-12 pt-10 md:grid-cols-[1.05fr_0.95fr] md:px-6 md:pb-16 md:pt-14">
         <div className="relative z-10 max-w-3xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#890505]/35 bg-[#890505]/8 px-3 py-1.5 text-xs font-bold text-[#890505] shadow-none dark:border-[#e35f5f]/45 dark:bg-[#890505]/22 dark:text-[#e35f5f]">
+          <span className="inline-flex h-9 items-center gap-2 rounded-full border border-[#890505]/35 bg-[#890505]/10 px-4 py-2 text-sm font-bold text-burgundy dark:border-[#e35f5f]/45 dark:bg-[#890505]/22">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#890505] dark:bg-[#e35f5f]" />
             Noul standard în dezvoltarea echipelor
           </span>
@@ -259,19 +259,19 @@ export default function HomePage() {
           </div>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
-            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm">
+            <article className="surface-panel p-4">
               <h2 className="text-sm font-bold text-foreground">Pentru HR & L&D</h2>
               <p className="mt-2 text-sm leading-6 text-foreground/58">
                 Măsurarea impactului programelor, monitorizarea progresului general și date clare privind retenția competențelor.
               </p>
             </article>
-            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm">
+            <article className="surface-panel p-4">
               <h2 className="text-sm font-bold text-foreground">Pentru Management</h2>
               <p className="mt-2 text-sm leading-6 text-foreground/58">
                 Un mod simplu de a alinia obiectivele de business cu dezvoltarea reală a echipei, susținut de asistentul AI.
               </p>
             </article>
-            <article className="rounded-2xl border border-[var(--border)] bg-surface/84 p-4 shadow-sm">
+            <article className="surface-panel p-4">
               <h2 className="text-sm font-bold text-foreground">Pentru Participanți</h2>
               <p className="mt-2 text-sm leading-6 text-foreground/58">
                 Ghidaj prietenos, fără conturi complicate sau efort administrativ. Doar progres zilnic, pas cu pas.
@@ -282,10 +282,10 @@ export default function HomePage() {
 
         {/* High-fidelity Chat Mockup */}
         <div className="relative z-10 flex flex-col gap-4">
-          <div className="relative rounded-[2rem] border border-[var(--border)] bg-surface/92 p-4 shadow-2xl shadow-burgundy/10 md:p-5">
+          <div className="surface-panel relative p-4 shadow-xl shadow-burgundy/10 md:p-5">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-3">
-                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm">
+                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm">
                   <Image
                     src="/logo.png"
                     alt="Sigla Codruț"
@@ -311,7 +311,7 @@ export default function HomePage() {
               {displayedMessages.map((msg, index) => (
                 <div
                   key={index}
-                  className={`flex max-w-[85%] flex-col rounded-2xl p-3.5 text-sm leading-6 animate-fade-up ${
+                  className={`flex max-w-[85%] flex-col rounded-xl p-3.5 text-sm leading-6 animate-fade-up ${
                     msg.sender === "user"
                       ? "self-end bg-burgundy text-white rounded-br-none"
                       : "self-start bg-surface-muted text-foreground border border-[var(--border)] rounded-bl-none"
@@ -325,7 +325,7 @@ export default function HomePage() {
               ))}
 
               {isTyping && (
-                <div className="self-start rounded-2xl bg-surface-muted border border-[var(--border)] p-3.5 rounded-bl-none">
+                <div className="self-start rounded-xl bg-surface-muted border border-[var(--border)] p-3.5 rounded-bl-none">
                   <div className="flex items-center gap-1">
                     <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/30 [animation-delay:-0.3s]" />
                     <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/30 [animation-delay:-0.15s]" />
@@ -340,21 +340,21 @@ export default function HomePage() {
               <div className="flex-1 rounded-xl bg-surface-muted border border-[var(--border)] px-4 py-2.5 text-xs text-foreground/55">
                 Scrie un răspuns către Codruț...
               </div>
-              <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-burgundy text-white hover:bg-burgundy-700">
+              <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-burgundy text-white hover:bg-burgundy-700">
                 ➔
               </button>
             </div>
           </div>
 
           {/* Quick Scenario Selector */}
-          <div className="rounded-2xl border border-[var(--border)] bg-surface-muted/60 p-3">
+          <div className="surface-panel p-3">
             <p className="text-xs font-bold text-foreground/62 mb-2 px-1">Alege un scenariu de coaching pentru previzualizare:</p>
             <div className="grid gap-2 grid-cols-3">
               {chatScenarios.map((sc, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveScenarioIdx(idx)}
-                  className={`tap-soft rounded-xl p-2.5 text-center text-xs font-bold border transition ${
+                  className={`tap-soft rounded-full p-2.5 text-center text-xs font-bold border transition ${
                     activeScenarioIdx === idx
                       ? "bg-burgundy text-white border-burgundy"
                       : "bg-surface text-foreground/72 border-[var(--border)] hover:bg-surface-muted"
@@ -381,8 +381,8 @@ export default function HomePage() {
         </div>
 
         <div className="mt-12 grid gap-6 md:grid-cols-4">
-          <article className="rounded-3xl border border-[var(--border)] bg-surface p-6 shadow-sm">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+          <article className="surface-panel p-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
               1
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Diagnostic Științific</h3>
@@ -390,8 +390,8 @@ export default function HomePage() {
               Evaluăm dinamica echipei prin profile PCM (Process Communication Model), diagnoza Lencioni și evaluări 360 dedicate.
             </p>
           </article>
-          <article className="rounded-3xl border border-[var(--border)] bg-surface p-6 shadow-sm">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+          <article className="surface-panel p-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
               2
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Workshop & Aliniere</h3>
@@ -399,8 +399,8 @@ export default function HomePage() {
               Sesiuni practice facilitate de traineri acreditați pentru însușirea conceptelor și stabilirea obiectivelor de dezvoltare.
             </p>
           </article>
-          <article className="rounded-3xl border border-[var(--border)] bg-surface p-6 shadow-sm">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+          <article className="surface-panel p-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
               3
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Coaching Continuu</h3>
@@ -408,8 +408,8 @@ export default function HomePage() {
               Codruț ghidează zilnic fiecare lider prin întrebări, scenarii și micro-sarcini adaptate planului lor personal de acțiune.
             </p>
           </article>
-          <article className="rounded-3xl border border-[var(--border)] bg-surface p-6 shadow-sm">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+          <article className="surface-panel p-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
               4
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Măsurarea Impactului</h3>
@@ -422,7 +422,7 @@ export default function HomePage() {
 
       {/* Impact Section */}
       <section id="impact" className="scroll-mt-20 mx-auto max-w-7xl px-4 pb-16 md:px-6 md:pb-24">
-        <div className="rounded-[2.5rem] border border-[var(--border)] bg-surface/92 p-8 shadow-sm md:p-12">
+        <div className="surface-panel p-8 md:p-12">
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] items-center">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-burgundy">Performanță dovedită</span>
@@ -435,22 +435,22 @@ export default function HomePage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <article className="rounded-2xl border border-[var(--border)] bg-surface-muted p-5">
+              <article className="surface-panel-muted p-5">
                 <span className="mb-3 block h-1.5 w-10 rounded-full bg-success" />
                 <h4 className="font-bold text-foreground text-sm">Link sigur</h4>
                 <p className="mt-1 text-xs leading-5 text-foreground/58">Completare directă din invitația securizată primită pe email, fără parole.</p>
               </article>
-              <article className="rounded-2xl border border-[var(--border)] bg-surface-muted p-5">
+              <article className="surface-panel-muted p-5">
                 <span className="mb-3 block h-1.5 w-10 rounded-full bg-success" />
                 <h4 className="font-bold text-foreground text-sm">Chestionare grupate</h4>
                 <p className="mt-1 text-xs leading-5 text-foreground/58">Toate evaluările active apar grupate pe proiect, ușor de urmărit.</p>
               </article>
-              <article className="rounded-2xl border border-[var(--border)] bg-surface-muted p-5">
+              <article className="surface-panel-muted p-5">
                 <span className="mb-3 block h-1.5 w-10 rounded-full bg-success" />
                 <h4 className="font-bold text-foreground text-sm">Rapoarte dinamice</h4>
                 <p className="mt-1 text-xs leading-5 text-foreground/58">Date agregate actualizate automat, gata pentru prezentările executive.</p>
               </article>
-              <article className="rounded-2xl border border-[var(--border)] bg-surface-muted p-5">
+              <article className="surface-panel-muted p-5">
                 <span className="mb-3 block h-1.5 w-10 rounded-full bg-success" />
                 <h4 className="font-bold text-foreground text-sm">Confidențialitate garantată</h4>
                 <p className="mt-1 text-xs leading-5 text-foreground/58">Răspunsurile individuale sunt protejate pentru a asigura transparență maximă.</p>
@@ -463,7 +463,7 @@ export default function HomePage() {
       {/* B2B Demo / Contact Section */}
       <div id="companii" className="scroll-mt-20">
         <section id="contact" className="mx-auto max-w-4xl px-4 pb-24 text-center md:px-6">
-          <div className="rounded-3xl border border-[var(--border)] bg-surface-muted/40 p-8 md:p-12">
+          <div className="surface-panel p-8 md:p-12">
             <h2 className="font-display text-3xl font-semibold text-foreground md:text-4xl">
               Pregătit să mărești impactul workshop-urilor tale?
             </h2>
@@ -474,7 +474,7 @@ export default function HomePage() {
               <input
                 type="email"
                 placeholder="Adresa de email corporate"
-                className="w-full sm:w-72 rounded-2xl border border-[var(--border)] bg-surface px-5 py-4 text-sm text-foreground focus:border-burgundy focus:outline-none"
+                className="control-input w-full sm:w-72 px-5 py-4 text-sm"
               />
               <button className="btn-primary w-full sm:w-auto !px-7 !py-4 !text-sm">
                 Solicită o discuție
@@ -484,7 +484,7 @@ export default function HomePage() {
         </section>
       </div>
 
-      <footer className="border-t border-[var(--border)] bg-surface/70 px-4 py-8 md:px-6">
+      <footer className="border-t border-[var(--border)] bg-surface px-4 py-8 md:px-6">
         <div className="mx-auto max-w-7xl flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-foreground/55">
           <div>© {new Date().getFullYear()} Codruț. Toate drepturile rezervate.</div>
           <div className="flex gap-4">

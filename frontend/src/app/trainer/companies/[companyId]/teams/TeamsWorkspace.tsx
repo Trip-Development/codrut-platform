@@ -187,7 +187,7 @@ export function TeamsWorkspace({
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+      <section className="surface-panel overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="p-5 md:p-6">
             <p className="text-sm font-semibold text-burgundy/75">Structură echipe</p>
@@ -201,14 +201,14 @@ export function TeamsWorkspace({
               <TeamSummary label="Automate" value={derivedTeams.length} />
             </div>
           </div>
-          <form onSubmit={handleCreateTeam} className="space-y-3 border-t border-[var(--border)] bg-surface-muted/45 p-5 md:p-6 lg:border-l lg:border-t-0">
+          <form onSubmit={handleCreateTeam} className="space-y-3 border-t border-[var(--border)] bg-surface-muted p-5 md:p-6 lg:border-l lg:border-t-0">
             <label className="block text-sm font-semibold text-foreground">
               Nume echipă
               <input
                 value={teamName}
                 onChange={(event) => setTeamName(event.target.value)}
                 placeholder="Ex. Leadership septembrie"
-                className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-semibold text-foreground outline-none transition-colors placeholder:text-foreground/34 focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                className="control-input mt-2 min-h-11 w-full py-2.5"
               />
             </label>
             <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
@@ -216,7 +216,7 @@ export function TeamsWorkspace({
                 value={teamType}
                 onChange={(event) => setTeamType(event.target.value as CompanyTeam["type"])}
                 aria-label="Tip echipă"
-                className="min-h-11 rounded-xl border border-[var(--border)] bg-background px-3 py-2.5 text-sm font-semibold text-foreground outline-none transition-colors focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                className="control-input min-h-11 px-3 py-2.5"
               >
                 <option value="functional">Funcțională</option>
                 <option value="leadership">Leadership</option>
@@ -224,7 +224,7 @@ export function TeamsWorkspace({
               <button
                 type="submit"
                 disabled={isCreatingTeam || !teamName.trim()}
-                className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
+                className="tap-soft rounded-full bg-burgundy px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {isCreatingTeam ? "Se salvează..." : "Adaugă"}
               </button>
@@ -232,19 +232,19 @@ export function TeamsWorkspace({
           </form>
         </div>
         {message ? (
-          <p aria-live="polite" className="border-t border-[var(--border)] bg-background/70 px-5 py-3 text-sm font-semibold text-foreground/62">
+          <p aria-live="polite" className="border-t border-[var(--border)] bg-surface-muted px-5 py-3 text-sm font-semibold text-foreground/62">
             {message}
           </p>
         ) : null}
       </section>
 
       {participants.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
+        <section className="surface-panel border-dashed p-8 text-center">
           <p className="text-base font-semibold text-foreground">Lista de participanți este goală.</p>
           <p className="mt-2 text-sm text-foreground/58">Importă participanții înainte de a construi echipe.</p>
         </section>
       ) : teams.length === 0 && derivedTeams.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
+        <section className="surface-panel border-dashed p-8 text-center">
           <p className="text-base font-semibold text-foreground">Nu există echipe încă.</p>
           <p className="mt-2 text-sm text-foreground/58">Creează prima echipă, apoi adaugă membrii din lista de participanți.</p>
         </section>
@@ -301,7 +301,7 @@ export function TeamsWorkspace({
 
 function TeamSummary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-2.5">
+    <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2.5">
       <p className="text-xs font-semibold text-foreground/48">{label}</p>
       <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
     </div>
@@ -310,7 +310,7 @@ function TeamSummary({ label, value }: { label: string; value: string | number }
 
 function DerivedTeamCard({ team }: { team: DerivedTeam }) {
   return (
-    <article className="flex min-h-[20rem] flex-col rounded-2xl border border-dashed border-burgundy/24 bg-surface p-5 shadow-sm">
+    <article className="flex min-h-[20rem] flex-col rounded-xl border border-dashed border-burgundy/24 bg-surface p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-foreground">{team.name}</h2>
@@ -382,7 +382,7 @@ function TeamCard({
   }
 
   return (
-    <article className="flex min-h-[28rem] flex-col rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-burgundy/24 hover:shadow-md">
+    <article className="flex min-h-[28rem] flex-col rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-colors hover:border-burgundy/25">
       <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-foreground">{team.name}</h2>
@@ -397,7 +397,7 @@ function TeamCard({
 
       <div className="mt-4 flex-1">
         {members.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--border)] bg-background/70 px-3 py-4 text-sm leading-6 text-foreground/55">
+          <p className="rounded-xl border border-dashed border-[var(--border)] bg-surface-muted px-3 py-4 text-sm leading-6 text-foreground/55">
             Niciun membru adăugat încă.
           </p>
         ) : (
@@ -423,7 +423,7 @@ function TeamCard({
           value={selectedParticipantId}
           onChange={(event) => setSelectedParticipantId(event.target.value)}
           aria-label={`Participant pentru ${team.name}`}
-          className="min-h-10 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none transition-colors focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+          className="control-input min-h-10 w-full px-3 py-2"
         >
           <option value="">Selectează participant</option>
           {availableParticipants.map((participant) => (
@@ -437,7 +437,7 @@ function TeamCard({
             value={selectedRole}
             onChange={(event) => setSelectedRole(event.target.value as CompanyTeamMembership["role"])}
             aria-label={`Rol în ${team.name}`}
-            className="min-h-10 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none transition-colors focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+            className="control-input min-h-10 px-3 py-2"
           >
             <option value="member">Membru</option>
             <option value="leader">Lider</option>
@@ -445,7 +445,7 @@ function TeamCard({
           <button
             type="submit"
             disabled={isAdding || !selectedParticipantId}
-            className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2 text-sm font-bold text-foreground hover:border-burgundy/45 hover:bg-surface-muted/70 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+            className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2 text-sm font-bold text-foreground hover:border-burgundy/45 hover:bg-surface-muted hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
           >
             {isAdding ? "..." : "Adaugă"}
           </button>

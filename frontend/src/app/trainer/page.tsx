@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { audienceAccessNote } from "@/api/auth";
 import { getTrainerSession } from "@/api/auth-server";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { getTrainerDashboardSummary, type TrainerCompanyRow } from "@/api/trainer";
@@ -24,8 +23,6 @@ export default async function TrainerDashboardPage() {
       navItems={trainerNavItems}
       activeHref="/trainer"
       userLabel={trainer.user.name}
-      session={trainer}
-      accessNote={audienceAccessNote("trainer")}
     >
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {summary.stats.map((stat) => (
@@ -42,8 +39,8 @@ export default async function TrainerDashboardPage() {
 
 function DeliveryTable({ companies }: { companies: TrainerCompanyRow[] }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-[0_4px_24px_-8px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.5)]">
-      <div className="border-b border-[var(--border)] px-5 py-4 flex items-center justify-between bg-surface-muted/30">
+    <section className="surface-panel overflow-hidden">
+      <div className="flex items-center justify-between border-b border-[var(--border)] bg-surface-muted px-5 py-4">
         <h2 className="text-lg font-bold text-foreground">Status Proiecte Active</h2>
         <Link href="/trainer/companies" className="text-sm font-semibold text-burgundy hover:underline">
           Vezi toate companiile &rarr;
@@ -101,7 +98,7 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
         </div>
         <Link
           href={`/trainer/companies/${company.id}`}
-          className="tap-soft mt-3 inline-flex w-full justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
+          className="tap-soft mt-3 inline-flex w-full justify-center rounded-full bg-burgundy px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700"
         >
           Deschide compania
         </Link>
@@ -119,5 +116,3 @@ function companyStageLabel(stage: TrainerCompanyRow["stage"]): string {
   };
   return labels[stage];
 }
-
-

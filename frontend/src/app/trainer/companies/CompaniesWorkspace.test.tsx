@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -71,5 +71,27 @@ describe("CompaniesWorkspace", () => {
     expect(screen.getByRole("link", { name: /Michelin/i }).getAttribute("href")).toBe(
       "/trainer/companies/backend-company",
     );
+  });
+
+  it("matches company search without requiring Romanian diacritics", async () => {
+    render(
+      <CompaniesWorkspace
+        initialCompanies={[
+          {
+            id: "roots-company",
+            name: "Rădăcini Coaching",
+            participantCount: 0,
+            projectCount: 0,
+            assignmentCount: 0,
+            completedCount: 0,
+            stage: "setup",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Caută companie..."), { target: { value: "Radacini" } });
+
+    expect(screen.getByRole("link", { name: /Rădăcini Coaching/i })).toBeTruthy();
   });
 });

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { confirmPasswordReset } from "@/api/auth";
 
 export default function UpdatePasswordPage() {
@@ -15,12 +15,22 @@ export default function UpdatePasswordPage() {
 
 function UpdatePasswordForm() {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const resetToken = searchParams.get("token") ?? "";
+    setToken(resetToken);
+    if (!resetToken || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("token");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [searchParams]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -48,7 +58,7 @@ function UpdatePasswordForm() {
 
   return (
     <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
-      <section className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm">
+      <section className="surface-panel w-full max-w-md p-6 md:p-8">
         <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-burgundy text-2xl font-bold text-white">C</div>
         <h1 className="text-center text-2xl font-bold text-foreground">Setează parola nouă</h1>
         <p className="mt-2 text-center text-sm leading-6 text-foreground/60">
@@ -56,9 +66,9 @@ function UpdatePasswordForm() {
         </p>
 
         {success ? (
-          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-center text-sm font-semibold text-green-800">
+          <div className="status-panel-success mt-6 p-4 text-center">
             Parola a fost actualizată. Te poți autentifica folosind noua parolă.
-            <Link href="/login" className="mt-4 block text-burgundy">
+            <Link href="/login" className="btn-secondary mt-4 w-full">
               Înapoi la autentificare
             </Link>
           </div>
@@ -67,7 +77,7 @@ function UpdatePasswordForm() {
             <label className="block text-sm font-semibold text-foreground/70">
               Parola nouă
               <input
-                className="mt-1 w-full rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3 text-base"
+                className="control-input mt-1 w-full bg-surface-muted py-3 text-base"
                 placeholder="Minim 12 caractere"
                 type="password"
                 value={password}
@@ -79,7 +89,7 @@ function UpdatePasswordForm() {
             <label className="block text-sm font-semibold text-foreground/70">
               Confirmă parola
               <input
-                className="mt-1 w-full rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3 text-base"
+                className="control-input mt-1 w-full bg-surface-muted py-3 text-base"
                 placeholder="Repetă parola nouă"
                 type="password"
                 value={confirmPassword}
@@ -89,15 +99,11 @@ function UpdatePasswordForm() {
               />
             </label>
             {error ? (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+              <p className="status-panel-danger px-3 py-2">
                 {error}
               </p>
             ) : null}
-            <button
-              className="tap-soft w-full rounded-xl bg-burgundy px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-65"
-              disabled={submitting || !token}
-              type="submit"
-            >
+            <button className="btn-primary w-full px-4 py-3" disabled={submitting || !token} type="submit">
               {submitting ? "Se salvează..." : "Salvează parola"}
             </button>
             {!token ? (
@@ -115,7 +121,7 @@ function UpdatePasswordForm() {
 function UpdatePasswordShell() {
   return (
     <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
-      <section className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm">
+      <section className="surface-panel w-full max-w-md p-6 md:p-8">
         <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-burgundy text-2xl font-bold text-white">C</div>
         <h1 className="text-center text-2xl font-bold text-foreground">Setează parola nouă</h1>
         <p className="mt-2 text-center text-sm leading-6 text-foreground/60">
