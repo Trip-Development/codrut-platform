@@ -13,6 +13,7 @@ describe("middleware", () => {
   afterEach(() => {
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
     delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
+    delete process.env.CI;
   });
 
   it("allows the trainer login route without a session", () => {
@@ -34,6 +35,15 @@ describe("middleware", () => {
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
 
     const response = middleware(requestFor("/trainer"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+  });
+
+  it("redirects protected localhost routes in CI unless demo fallback is explicit", () => {
+    process.env.CI = "true";
+
+    const response = middleware(requestFor("/participant"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost:3000/login");

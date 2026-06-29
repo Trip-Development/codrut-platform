@@ -31,13 +31,15 @@ export class TrainerDashboardPage {
   }
 
   async verifyConfidentialityWarning(completionsCount: number) {
-    const warning = this.page.getByText(`Rezultatele agregate vor fi afișate după ce minim 3 participanți completează chestionarul (în prezent: ${completionsCount})`);
-    await expect(warning.first()).toBeVisible();
+    await expect(this.page.getByText(`${completionsCount} răspunsuri`).first()).toBeVisible();
+    await expect(
+      this.page.getByText("Rezultatele sunt ascunse până există cel puțin 3 răspunsuri pentru acest instrument.").first(),
+    ).toBeVisible();
   }
 
   async verifyLencioniResultsVisible() {
-    // The warning message should be hidden/not present
-    const warning = this.page.locator("text=Rezultatele agregate vor fi afișate după ce minim 3 participanți");
+    // Suppression should be lifted after the minimum cohort size is reached.
+    const warning = this.page.locator("text=Rezultatele sunt ascunse până există cel puțin 3 răspunsuri pentru acest instrument.");
     await expect(warning).toBeHidden();
     
     // Core disfunctions averages should now be visible
