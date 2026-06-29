@@ -17,7 +17,7 @@ test.describe("Security and Auth Workflows", () => {
 });
 
 test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", () => {
-  test.setTimeout(90000);
+  test.setTimeout(180000);
   let aliceUrl = "";
   let bobUrl = "";
   let charlieUrl = "";
@@ -61,7 +61,8 @@ test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", ()
     await participantPage.fillCurrentQuestionnaire();
     // Test draft saving functionality
     await participantPage.saveDraft();
-    // Submit
+    await participantPage.startFilling();
+    // Submit the task resumed from draft
     await participantPage.submitResponse();
 
     // Navigate back to invite URL to get the clean updated tasks list

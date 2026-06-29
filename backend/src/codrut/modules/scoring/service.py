@@ -58,9 +58,9 @@ ICARE_LABELS = {
 }
 
 LENCIONI_INTERPRETATION_RANGES = (
-    (8.0, 9.0, "Disfuncția probabil nu este o problemă."),
-    (6.0, 7.99, "Disfuncția poate fi o problemă."),
-    (3.0, 5.99, "Disfuncția trebuie probabil abordată."),
+    (8.0, 9.0, "8-9", "Disfuncția probabil nu este o problemă."),
+    (6.0, 7.99, "6-7", "Disfuncția poate fi o problemă."),
+    (3.0, 5.99, "3-5", "Disfuncția trebuie probabil abordată."),
 )
 
 COMPLETED_STATUSES = {
@@ -160,7 +160,6 @@ class ScoringService:
                 driver_sums,
                 DISTRESS_DRIVER_LABELS,
                 driver_count,
-                minimum_avg=50.0000001,
             ),
             boss_360_averages=_averages_from_sums(
                 boss_360_sums,
@@ -409,9 +408,9 @@ def _averages_from_sums(
 
 
 def _lencioni_interpretation(score: float) -> tuple[str, str]:
-    for minimum, maximum, label in LENCIONI_INTERPRETATION_RANGES:
+    for minimum, maximum, range_label, label in LENCIONI_INTERPRETATION_RANGES:
         if minimum <= score <= maximum:
-            return label, f"{minimum:g}-{maximum:g}"
+            return label, range_label
     if score < 3:
         return "Scor sub intervalul de referință Lencioni.", "<3"
     return "Scor peste intervalul de referință Lencioni.", ">9"

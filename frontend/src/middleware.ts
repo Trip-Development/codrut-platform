@@ -11,6 +11,8 @@ function isDemoFallbackEnabled(request: NextRequest): boolean {
   if (explicitSetting === "false") return false;
   if (explicitSetting === "true") return true;
 
+  if (process.env.CI === "true") return false;
+
   if (process.env.NODE_ENV === "development") return true;
 
   return ["localhost", "127.0.0.1", "::1"].includes(request.nextUrl.hostname);
