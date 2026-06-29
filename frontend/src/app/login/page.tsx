@@ -53,7 +53,7 @@ export default function LoginPage() {
 
   return (
     <main className="app-min-height flex items-center justify-center bg-background bg-vines-pattern px-4 py-10">
-      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-150">
+      <section className="surface-panel w-full max-w-md p-8 transition-all duration-150 md:p-10">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
           <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
@@ -73,7 +73,7 @@ export default function LoginPage() {
             </label>
             <input
               id="login-email"
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              className="control-input w-full py-3.5 text-base"
               placeholder="nume@companie.ro"
               type="email"
               value={email}
@@ -96,7 +96,7 @@ export default function LoginPage() {
             </div>
             <input
               id="login-password"
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              className="control-input w-full py-3.5 text-base"
               placeholder="Introdu parola"
               type="password"
               value={password}
@@ -108,12 +108,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="tap-soft mt-2 w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md disabled:cursor-not-allowed disabled:opacity-65"
+            className="btn-primary mt-2 w-full px-4 py-4"
           >
             {submitting ? "Se verifică..." : "Intră în cont"}
           </button>
           {error ? (
-            <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <p className="status-panel-danger px-4 py-3">
               {error}
             </p>
           ) : null}

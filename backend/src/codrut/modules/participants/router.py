@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.api.dependencies import current_principal, db_session
+from codrut.api.dependencies import current_principal, db_session, require_current_terms
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.participants.schemas import ParticipantWorkspaceSummary
@@ -21,4 +21,5 @@ async def get_my_workspace(
         from codrut.core.errors import DomainError
 
         raise DomainError("Participant account required.", code="participant_required")
+    require_current_terms(principal)
     return await ParticipantWorkspaceService(session).get_workspace_summary(principal.user_id)

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 
 import { createCompany, getCompanyList, type CompanyListItem } from "@/api/companies";
 
@@ -19,6 +19,8 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   const [name, setName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     getCompanyList()
@@ -30,10 +32,15 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       });
   }, []);
 
-  const sortedCompanies = useMemo(
-    () => [...companies].sort((a, b) => a.name.localeCompare(b.name, "ro")),
-    [companies],
-  );
+  const sortedCompanies = useMemo(() => {
+    const query = normalizeSearchText(searchQuery);
+    return companies
+      .filter((company) => {
+        if (!query) return true;
+        return normalizeSearchText(`${company.name} ${company.stage}`).includes(query);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "ro"));
+  }, [companies, searchQuery]);
   const totalParticipants = companies.reduce((total, company) => total + company.participantCount, 0);
   const totalProjects = companies.reduce((total, company) => total + company.projectCount, 0);
   const activeCompanies = companies.filter((company) => !company.dataUnavailable).length;
@@ -49,6 +56,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       const created = await createCompany(trimmedName);
       setCompanies((current) => mergeCompanies(current, [companyToListItem(created)]));
       setName("");
+      setCreateOpen(false);
       setMessage("Compania a fost creată și salvată.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Compania nu a putut fi creată.");
@@ -59,53 +67,97 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
 
   return (
     <div className="space-y-6">
-      <section className="bento-card overflow-hidden relative">
-        <div className="absolute top-0 right-0 p-32 bg-burgundy/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none"></div>
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_26rem] relative z-10">
-          <div className="p-6 md:p-8">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Spațiu clienți</p>
-            <h2 className="mt-2 text-2xl md:text-3xl font-display font-bold text-foreground tracking-tight">Companiile pornesc tot fluxul</h2>
-            <p className="mt-3 max-w-xl text-sm md:text-base leading-relaxed text-foreground/60">
-              Intră în companie pentru lista de participanți, organigramă, echipe, invitații și rapoarte. Lista de aici rămâne scurtă, scanabilă și legată de datele salvate.
-            </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <CompanySummary label="Companii" value={activeCompanies} />
-              <CompanySummary label="Proiecte" value={totalProjects} />
-              <CompanySummary label="Participanți" value={totalParticipants} />
+      <section className="filter-toolbar">
+        <div className="relative w-full md:flex-1">
+          <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+          </svg>
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Caută companie..."
+            className="control-input control-search w-full py-3 pl-12 pr-4"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="btn-primary shrink-0"
+        >
+          Adaugă companie
+        </button>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        <CompanySummary label="Companii" value={activeCompanies} />
+        <CompanySummary label="Proiecte" value={totalProjects} />
+        <CompanySummary label="Participanți" value={totalParticipants} />
+      </section>
+
+      {message && (
+        <p aria-live="polite" className="surface-panel px-4 py-3 text-center text-sm font-semibold text-foreground/70">
+          {message}
+        </p>
+      )}
+
+      {createOpen ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => !isSubmitting && setCreateOpen(false)}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-company-title"
+            className="modal-panel"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Companie nouă</p>
+                <h3 id="create-company-title" className="mt-1 text-xl font-bold text-foreground">Adaugă companie</h3>
+                <p className="mt-2 text-sm leading-6 text-foreground/60">
+                  Creează spațiul companiei, apoi configurezi proiectele și rosterul în pagina ei.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                disabled={isSubmitting}
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy disabled:opacity-50"
+              >
+                Închide
+              </button>
             </div>
-          </div>
-          <div className="bg-surface-muted/30 border-t border-[var(--border)] lg:border-l lg:border-t-0 p-6 md:p-8 flex flex-col justify-center">
-            <form onSubmit={handleCreateCompany} className="flex flex-col gap-4">
+            <form onSubmit={handleCreateCompany} className="mt-6 flex flex-col gap-4">
               <label className="text-xs font-bold uppercase tracking-wider text-foreground/60">
                 Nume companie
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Ex. Michelin România"
-                  className="mt-2 min-h-[3rem] w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-semibold text-foreground outline-none transition-all placeholder:text-foreground/30 focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10 shadow-sm"
+                  className="control-input mt-2 min-h-[3rem] w-full py-3"
+                  autoFocus
                 />
               </label>
               <button
                 type="submit"
                 disabled={isSubmitting || !name.trim()}
-                className="btn-premium w-full mt-2"
+                className="btn-primary mt-2 w-full"
               >
-                {isSubmitting ? "Se salvează..." : "Adaugă companie"}
+                {isSubmitting ? "Se salvează..." : "Salvează compania"}
               </button>
             </form>
-            {message && (
-              <p aria-live="polite" className="mt-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold text-foreground/70 text-center animate-fade-in-up">
-                {message}
-              </p>
-            )}
-          </div>
+          </section>
         </div>
-      </section>
+      ) : null}
 
-      {sortedCompanies.length === 0 ? (
-        <section className="bento-card bg-surface-muted/20 p-12 text-center flex flex-col items-center justify-center min-h-[30vh]">
+      {companies.length === 0 ? (
+        <section className="surface-panel-muted flex min-h-[30vh] flex-col items-center justify-center p-12 text-center">
           <p className="text-xl font-bold text-foreground">Nu există companii încă.</p>
           <p className="mt-3 text-sm leading-relaxed text-foreground/60">Adaugă prima companie ca să activezi spațiul de lucru.</p>
+        </section>
+      ) : sortedCompanies.length === 0 ? (
+        <section className="surface-panel flex min-h-[18rem] flex-col items-center justify-center p-10 text-center">
+          <p className="font-display text-lg font-bold text-foreground">Nu am găsit companii pentru căutarea curentă.</p>
+          <p className="mt-2 max-w-sm text-sm text-foreground/55">Șterge o parte din căutare sau încearcă alt nume.</p>
         </section>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -126,36 +178,37 @@ function CompanyCard({
 }: {
   company: CompanyListItem;
 }) {
-  const completion =
-    !company.dataUnavailable && company.assignmentCount > 0
-      ? Math.round((company.completedCount / company.assignmentCount) * 100)
-      : 0;
-
   return (
-    <Link href={`/trainer/companies/${company.id}`} className="group relative flex min-h-64 flex-col rounded-xl border border-[var(--border)] bg-surface p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_8px_30px_-12px_rgba(137,5,5,0.15)] hover:border-burgundy/30 overflow-hidden cursor-pointer">
-      <div className="absolute inset-0 bg-gradient-to-b from-surface to-surface-muted/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100"></div>
-      
-      <div className="relative z-10 flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-surface-muted/50 text-xl font-bold text-burgundy shadow-sm transition-transform duration-150 group-hover:scale-105 group-hover:shadow-md group-hover:border-burgundy/20">
+    <Link href={`/trainer/companies/${company.id}`} className="group flex min-h-64 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm transition-colors hover:border-burgundy/25">
+      <div className="visual-band h-24 border-b border-[var(--border)] p-5" style={entityVisualStyle(company.name)}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="band-mark h-12 w-12 text-xl font-bold">
             {company.name.trim().charAt(0).toLocaleUpperCase("ro")}
           </div>
+          <span className="band-chip">
+            {company.dataUnavailable ? "Date indisponibile" : stageLabel(company.stage)}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <div className="min-w-0">
             <h2 className="truncate text-lg font-bold text-foreground transition-colors group-hover:text-burgundy">{company.name}</h2>
             <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-foreground/50">
-              {company.dataUnavailable ? "Date indisponibile" : stageLabel(company.stage)}
+              Spațiu companie
             </p>
           </div>
         </div>
       </div>
 
-      <div className="relative z-10 mt-6 mb-4 flex-1">
+      <div className="mt-6 mb-4 flex-1">
         {company.dataUnavailable ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-800">
+          <p className="status-panel-warning px-4 py-3 text-xs leading-relaxed">
             Datele operaționale nu au putut fi citite momentan. Deschide compania pentru verificare.
           </p>
         ) : (
-          <dl className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl border border-[var(--border)] bg-surface-muted/30 py-4 text-center">
+          <dl className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl border border-[var(--border)] bg-surface-muted py-4 text-center">
             <CompanyStat label="Proiecte" value={company.projectCount} />
             <CompanyStat label="Participanți" value={company.participantCount} />
             <CompanyStat label="Finalizate" value={company.completedCount} />
@@ -163,17 +216,9 @@ function CompanyCard({
         )}
       </div>
 
-      <div className="relative z-10 mt-auto pt-5 border-t border-[var(--border)]">
-        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-foreground/60 mb-3">
-          <span>Progres general</span>
-          <span className="text-foreground">{company.dataUnavailable ? "N/A" : `${completion}%`}</span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted/80 shadow-inner">
-          <div
-            className={["h-full rounded-full transition-all duration-150", company.dataUnavailable ? "bg-amber-400" : "bg-gradient-to-r from-burgundy to-[#d13a3a]"].join(" ")}
-            style={{ width: `${company.dataUnavailable ? 100 : completion}%` }}
-          />
-        </div>
+      <p className="mt-auto border-t border-[var(--border)] pt-4 text-xs font-semibold leading-5 text-foreground/52">
+        Deschide pentru proiecte, roster și echipe.
+      </p>
       </div>
     </Link>
   );
@@ -181,11 +226,35 @@ function CompanyCard({
 
 function CompanySummary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-surface-muted/20 px-4 py-3 transition-colors hover:bg-surface-muted/40">
+    <div className="surface-panel px-4 py-3">
       <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1">{label}</p>
       <p className="font-display text-2xl font-bold text-foreground tracking-tight">{value}</p>
     </div>
   );
+}
+
+function entityVisualStyle(seed: string): CSSProperties {
+  const palettes = [
+    ["#890505", "#b8860b"],
+    ["#650303", "#71717a"],
+    ["#8f1d1d", "#a3a3a3"],
+    ["#7f1d1d", "#84cc52"],
+    ["#9f1239", "#b8860b"],
+  ];
+  const index = Math.abs(hashString(seed)) % palettes.length;
+  const [first, second] = palettes[index];
+  return {
+    "--band-a": first,
+    "--band-b": second,
+  } as CSSProperties;
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return hash;
 }
 
 function CompanyStat({ label, value }: { label: string | number; value: string | number }) {
@@ -222,6 +291,14 @@ function companyToListItem(company: CompanyIdentity): CompanyListItem {
     completedCount: 0,
     stage: "setup",
   };
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("ro");
 }
 
 function mergeCompanies(

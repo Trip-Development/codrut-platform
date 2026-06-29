@@ -17,7 +17,7 @@ export default async function ProjectOrgChartPage({
   });
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+    <section className="surface-panel p-5">
       <p className="text-xs font-semibold text-burgundy/75">Organigramă proiect</p>
       <h2 className="mt-1 text-xl font-semibold text-foreground">Structura rosterului din proiect</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
@@ -25,7 +25,7 @@ export default async function ProjectOrgChartPage({
       </p>
 
       {participants.length === 0 ? (
-        <p className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-background/70 p-5 text-sm text-foreground/58">
+        <p className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-surface-muted p-5 text-sm text-foreground/58">
           Importă rosterul proiectului pentru a vedea organigrama.
         </p>
       ) : (
@@ -63,7 +63,7 @@ function OrgNode({
 
   return (
     <div style={{ marginLeft: `${depth * 1.5}rem` }}>
-      <div className="rounded-xl border border-[var(--border)] bg-background px-4 py-3">
+      <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3">
         <p className="font-semibold text-foreground">{participant.full_name}</p>
         <p className="mt-1 text-xs font-semibold text-foreground/48">
           {participant.position ?? "Rol necompletat"} · {participant.location ?? "Locație necompletată"}

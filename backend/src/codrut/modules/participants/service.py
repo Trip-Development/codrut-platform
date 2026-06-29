@@ -17,8 +17,16 @@ from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
 from codrut.modules.participants.schemas import (
     ParticipantWorkspaceCard,
+    ParticipantWorkspaceResult,
     ParticipantWorkspaceSummary,
 )
+from codrut.modules.scoring.models import ScoringResult
+
+COMPLETED_ASSIGNMENT_STATUSES = {
+    AssignmentStatus.submitted,
+    AssignmentStatus.validated,
+    AssignmentStatus.scored,
+}
 
 
 class ParticipantWorkspaceService:
@@ -34,6 +42,7 @@ class ParticipantWorkspaceService:
         projects = await self._get_projects(assignments)
         teams = await self._get_teams(assignments)
         people = await self._get_people(assignments, profile.company_id)
+        scoring_results = await self._get_scoring_results(assignments)
 
         tasks = [
             self._assignment_to_task(
@@ -42,6 +51,17 @@ class ParticipantWorkspaceService:
                 people=people,
             )
             for assignment in assignments
+        ]
+        results = [
+            self._assignment_to_result(
+                assignment=assignment,
+                result=scoring_results[assignment.id],
+                teams=teams,
+                people=people,
+            )
+            for assignment in assignments
+            if assignment.status in COMPLETED_ASSIGNMENT_STATUSES
+            and assignment.id in scoring_results
         ]
         project_id, project_name = self._workspace_project(company, assignments, projects)
         deadline_at = self._workspace_deadline(assignments, projects)
@@ -53,15 +73,16 @@ class ParticipantWorkspaceService:
             participant_full_name=profile.full_name,
             participant_email=profile.email,
             anonymous_name=profile.anonymous_name,
+            pcm_base=profile.pcm_base,
+            pcm_phase=profile.pcm_phase,
             company_id=company.id,
             company_name=company.name,
             project_id=project_id,
             project_name=project_name,
             deadline_label=_format_deadline(deadline_at),
             deadline_at=deadline_at,
-            pcm_base=profile.pcm_base,
-            pcm_phase=profile.pcm_phase,
             tasks=tasks,
+            results=results,
             cards=[
                 ParticipantWorkspaceCard(
                     title="De completat",
@@ -159,6 +180,25 @@ class ParticipantWorkspaceService:
         )
         return {profile.id: profile for profile in result.scalars().all()}
 
+    async def _get_scoring_results(
+        self,
+        assignments: list[QuestionnaireAssignment],
+    ) -> dict[UUID, ScoringResult]:
+        assignment_ids = {
+            assignment.id
+            for assignment in assignments
+            if assignment.status in COMPLETED_ASSIGNMENT_STATUSES
+        }
+        if not assignment_ids:
+            return {}
+        result = await self.session.execute(
+            select(ScoringResult).where(ScoringResult.assignment_id.in_(assignment_ids))
+        )
+        return {
+            scoring_result.assignment_id: scoring_result
+            for scoring_result in result.scalars().all()
+        }
+
     def _assignment_to_task(
         self,
         *,
@@ -188,6 +228,24 @@ class ParticipantWorkspaceService:
             targetLabel=target_label,
             estimatedMinutes=estimated_minutes,
             questionnaireKey=assignment.questionnaire_key,
+        )
+
+    def _assignment_to_result(
+        self,
+        *,
+        assignment: QuestionnaireAssignment,
+        result: ScoringResult,
+        teams: dict[UUID, Team],
+        people: dict[UUID, ParticipantProfile],
+    ) -> ParticipantWorkspaceResult:
+        task = self._assignment_to_task(assignment=assignment, teams=teams, people=people)
+        return ParticipantWorkspaceResult(
+            assignment_id=assignment.id,
+            questionnaire_key=assignment.questionnaire_key,
+            title=task.title,
+            target_label=task.targetLabel,
+            scores=result.scores,
+            primary_result=result.primary_result,
         )
 
     def _workspace_project(

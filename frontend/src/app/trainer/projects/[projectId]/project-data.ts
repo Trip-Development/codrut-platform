@@ -37,3 +37,26 @@ export async function getProjectWorkspaceData(
     teams,
   };
 }
+
+export async function getProjectReportData(
+  projectId: string,
+  requestOptions: ApiRequestOptions,
+) {
+  const projects = await getAllCompanyProjects(requestOptions);
+  const project = projects.find((item) => item.id === projectId);
+
+  if (!project) {
+    notFound();
+  }
+
+  const [participants, assignments] = await Promise.all([
+    getProjectParticipants(project.company_id, project.id, requestOptions),
+    getCompanyAssignments(project.company_id, requestOptions, { projectId: project.id }),
+  ]);
+
+  return {
+    project,
+    participants,
+    assignments,
+  };
+}

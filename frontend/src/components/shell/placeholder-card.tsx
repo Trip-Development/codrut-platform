@@ -6,7 +6,7 @@ type PlaceholderCardProps = {
 
 export function PlaceholderCard({ title, description, meta }: PlaceholderCardProps) {
   return (
-    <article className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+    <article className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
       {meta ? (
         <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-burgundy/80">{meta}</p>
       ) : null}

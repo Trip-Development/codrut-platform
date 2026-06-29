@@ -1,8 +1,16 @@
 
+from uuid import UUID
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.modules.communications.models import Campaign, CampaignRecipient, EmailTemplate
+from codrut.modules.communications.models import (
+    Campaign,
+    CampaignRecipient,
+    CampaignRecipientEvent,
+    EmailSend,
+    EmailTemplate,
+)
 
 
 class CommunicationsRepository:
@@ -83,17 +91,71 @@ class CommunicationsRepository:
         self.session.add_all(recipients)
         await self.session.flush()
 
+    async def list_campaign_recipients_by_emails(
+        self,
+        emails: set[str],
+    ) -> list[CampaignRecipient]:
+        if not emails:
+            return []
+        stmt = select(CampaignRecipient).where(func.lower(CampaignRecipient.email).in_(emails))
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def list_campaign_recipients(self) -> list[CampaignRecipient]:
         stmt = select(CampaignRecipient).order_by(CampaignRecipient.created_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_campaign_recipient(self, recipient_id: UUID) -> CampaignRecipient | None:
+        result = await self.session.execute(
+            select(CampaignRecipient).where(CampaignRecipient.id == recipient_id).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_campaign_recipients_by_ids(
+        self,
+        recipient_ids: list[UUID],
+    ) -> list[CampaignRecipient]:
+        if not recipient_ids:
+            return []
+        result = await self.session.execute(
+            select(CampaignRecipient).where(CampaignRecipient.id.in_(recipient_ids))
+        )
+        return list(result.scalars().all())
+
+    async def list_campaign_recipient_events(self) -> list[CampaignRecipientEvent]:
+        stmt = select(CampaignRecipientEvent).order_by(CampaignRecipientEvent.occurred_at.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def add_campaign_recipient_event(
+        self,
+        event: CampaignRecipientEvent,
+    ) -> CampaignRecipientEvent:
+        self.session.add(event)
+        await self.session.flush()
+        return event
 
     async def add_campaign(self, campaign: Campaign) -> Campaign:
         self.session.add(campaign)
         await self.session.flush()
         return campaign
 
+    async def get_campaign(self, campaign_id: UUID) -> Campaign | None:
+        result = await self.session.execute(
+            select(Campaign).where(Campaign.id == campaign_id).limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def list_campaigns(self) -> list[Campaign]:
         stmt = select(Campaign).order_by(Campaign.created_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def add_email_send(self, send: EmailSend) -> EmailSend:
+        self.session.add(send)
+        await self.session.flush()
+        return send
+
+    async def flush(self) -> None:
+        await self.session.flush()

@@ -134,12 +134,12 @@ export async function getTrainerDashboardSummary(
     activeCompanies: [
       {
         id: "demo-project",
-        company: "Client demo",
+        company: "Atlas Mobility",
         stage: "completion",
-        invited: 42,
-        completed: 28,
-        total: 42,
-        blockers: ["3 emailuri nelivrate", "2 manageri fără cont activ"],
+        invited: 8,
+        completed: 6,
+        total: 8,
+        blockers: ["1 invitație neaccesată", "1 task început, netrimis"],
         nextAction: "Trimite reminder pentru participanții fără progres",
         href: "/trainer/companies/demo-project",
       },
@@ -156,14 +156,25 @@ export async function getTrainerDashboardSummary(
       },
       {
         id: "past-client-video",
-        company: "Campanie clienți trecuți",
+        company: "Clinica Meridian",
         stage: "reporting",
-        invited: 26,
-        completed: 18,
-        total: 26,
+        invited: 3,
+        completed: 3,
+        total: 3,
         blockers: [],
-        nextAction: "Verifică raportul săptămânal open/click/view",
-        href: "/trainer/email",
+        nextAction: "Verifică raportul final și istoricul participanților",
+        href: "/trainer/companies/past-client-video",
+      },
+      {
+        id: "nova-retail",
+        company: "Nova Retail Group",
+        stage: "setup",
+        invited: 0,
+        completed: 0,
+        total: 1,
+        blockers: ["Roster în lucru", "Proiect încă în pregătire"],
+        nextAction: "Completează rosterul înainte de asignări",
+        href: "/trainer/companies/nova-retail",
       },
     ],
     actions: [
@@ -182,7 +193,7 @@ export async function getTrainerDashboardSummary(
       {
         label: "Revizuiește vizibilitatea raportării",
         detail: "Trainerul vede detaliu; managerii evaluați primesc agregat.",
-        href: "/trainer/reports",
+        href: "/trainer/projects",
         urgency: "soon",
       },
     ],
@@ -301,23 +312,23 @@ export async function getTrainerOperationsSummary(
 ): Promise<TrainerOperationsSummary> {
   const defaultRoster: TrainerRosterMember[] = [
     {
-      id: "andrei-popescu",
-      name: "Andrei Popescu",
+      id: "radu-munteanu",
+      name: "Radu Munteanu",
       position: "Director General",
       location: "București",
-      email: "andrei.popescu@client.ro",
+      email: "radu.munteanu@atlas-mobility.ro",
       pcmProfile: "Persister",
       role: "leadership",
       inviteStatus: "account_active",
       completion: 80,
     },
     {
-      id: "ioana-ionescu",
-      name: "Ioana Ionescu",
-      reportsTo: "Andrei Popescu",
+      id: "bianca-pavel",
+      name: "Bianca Pavel",
+      reportsTo: "Radu Munteanu",
       position: "Director Operațiuni",
       location: "Cluj",
-      email: "ioana.ionescu@client.ro",
+      email: "bianca.pavel@atlas-mobility.ro",
       role: "leadership",
       inviteStatus: "account_active",
       completion: 62,
@@ -325,10 +336,10 @@ export async function getTrainerOperationsSummary(
     {
       id: "mihai-matei",
       name: "Mihai Matei",
-      reportsTo: "Ioana Ionescu",
-      position: "Team Lead",
+      reportsTo: "Bianca Pavel",
+      position: "Șef flotă",
       location: "Iași",
-      email: "mihai.matei@client.ro",
+      email: "mihai.matei@atlas-mobility.ro",
       pcmProfile: "Promoter",
       role: "member",
       inviteStatus: "link_sent",
@@ -337,21 +348,21 @@ export async function getTrainerOperationsSummary(
     {
       id: "ana-stan",
       name: "Ana Stan",
-      reportsTo: "Ioana Ionescu",
-      position: "Specialist",
+      reportsTo: "Bianca Pavel",
+      position: "Coordonator call-center",
       location: "Remote",
-      email: "ana.stan@client.ro",
+      email: "ana.stan@atlas-mobility.ro",
       role: "member",
       inviteStatus: "link_sent",
       completion: 0,
     },
     {
-      id: "elena-radu",
-      name: "Elena Radu",
-      reportsTo: "Andrei Popescu",
-      position: "Director HR",
+      id: "sorin-dima",
+      name: "Sorin Dima",
+      reportsTo: "Radu Munteanu",
+      position: "Director Service",
       location: "Bucuresti",
-      email: "elena.radu@client.ro",
+      email: "sorin.dima@atlas-mobility.ro",
       pcmProfile: "Harmonizer",
       role: "leadership",
       inviteStatus: "blocked",
@@ -395,7 +406,7 @@ export async function getTrainerOperationsSummary(
 }
 
 function isSeededDemoCompanyList(companies: Array<{ id: string }>): boolean {
-  const seededIds = new Set(["demo-project", "leadership-pilot", "past-client-video"]);
+  const seededIds = new Set(["demo-project", "leadership-pilot", "past-client-video", "nova-retail"]);
   return companies.length === seededIds.size && companies.every((company) => seededIds.has(company.id));
 }
 
@@ -405,7 +416,7 @@ function fallbackOperationsSummary(defaultRoster: TrainerRosterMember[]): Traine
     validations: [
       {
         label: "Reports To",
-        detail: `${defaultRoster.filter((r) => r.reportsTo || r.id === "andrei-popescu").length}/${defaultRoster.length} persoane au manager validat.`,
+        detail: `${defaultRoster.filter((r) => r.reportsTo || r.id === "radu-munteanu").length}/${defaultRoster.length} persoane au manager validat.`,
         severity: "ok",
       },
       {
@@ -415,7 +426,7 @@ function fallbackOperationsSummary(defaultRoster: TrainerRosterMember[]): Traine
       },
       {
         label: "Email",
-        detail: "Elena Radu are invitație blocată până la confirmarea adresei.",
+        detail: "Sorin Dima are invitație blocată până la confirmarea adresei.",
         severity: "warning",
       },
     ],

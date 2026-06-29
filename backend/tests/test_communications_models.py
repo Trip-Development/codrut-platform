@@ -95,7 +95,7 @@ def test_campaign_create_requires_http_video_asset_urls() -> None:
         text_body="Body",
         video_url="https://video.codrut.ro/watch/demo",
         thumbnail_url="https://cdn.codrut.ro/thumb.jpg",
-        landing_page_url="https://app.codrut.ro/watch/demo",
+        landing_page_url="https://codrut.andreivacaru.ro/watch/demo",
     )
 
     assert request.thumbnail_url == "https://cdn.codrut.ro/thumb.jpg"
@@ -127,7 +127,7 @@ def test_campaign_create_rejects_non_http_asset_urls() -> None:
             text_body="Body",
             video_url="javascript:alert(1)",
             thumbnail_url="https://cdn.codrut.ro/thumb.jpg",
-            landing_page_url="https://app.codrut.ro/watch/demo",
+            landing_page_url="https://codrut.andreivacaru.ro/watch/demo",
         )
     except ValueError as exc:
         assert "absolute HTTP(S) URLs" in str(exc)

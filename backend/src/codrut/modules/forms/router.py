@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.api.dependencies import current_principal, db_session
+from codrut.api.dependencies import current_principal, db_session, require_current_terms
 from codrut.modules.forms.schemas import (
     ParticipantOnboardingResponse,
     QuestionnaireDefinitionCreateRequest,
@@ -28,6 +28,7 @@ async def get_participant_onboarding(
 ) -> ParticipantOnboardingResponse:
     if principal.role != UserRole.participant:
         return ParticipantOnboardingResponse(required=False)
+    require_current_terms(principal)
     response = await FormsService(session).get_participant_onboarding(principal.user_id)
     await session.commit()
     return response
@@ -35,9 +36,12 @@ async def get_participant_onboarding(
 
 @router.get("/definitions", response_model=list[QuestionnaireDefinitionResponse])
 async def list_questionnaire_definitions(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     include_retired: bool = False,
 ) -> list[QuestionnaireDefinitionResponse]:
+    if include_retired:
+        _require_trainer(principal)
     definitions = await FormsService(session).list_persisted_definitions(
         active_only=not include_retired,
     )
@@ -48,6 +52,7 @@ async def list_questionnaire_definitions(
 @router.get("/definitions/{key}", response_model=QuestionnaireDefinitionResponse)
 async def get_questionnaire_definition(
     key: QuestionnaireSlug,
+    _principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     version: int | None = None,
 ) -> QuestionnaireDefinitionResponse:
@@ -120,6 +125,7 @@ async def get_assignment_response(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> QuestionnaireResponseResponse:
+    require_current_terms(principal)
     return await FormsService(session).get_assignment_response(principal.user_id, assignment_id)
 
 
@@ -133,6 +139,7 @@ async def save_assignment_response(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> QuestionnaireResponseResponse:
+    require_current_terms(principal)
     response = await FormsService(session).save_assignment_response(
         principal.user_id,
         assignment_id,
@@ -152,6 +159,7 @@ async def submit_assignment_response(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> QuestionnaireResponseResponse:
+    require_current_terms(principal)
     response = await FormsService(session).save_assignment_response(
         principal.user_id,
         assignment_id,

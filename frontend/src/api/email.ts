@@ -1,4 +1,4 @@
-import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
+import { getApiBaseUrl, isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 import type { ApiRequestOptions } from "./companies";
 
 export type EmailSurfaceStub = {
@@ -27,7 +27,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
     subject: "Invitație Codruț: activează contul pentru {company_name}",
     lane: "transactional",
     placeholders: ["{participant_name}", "{trainer_name}", "{company_name}", "{action_url}"],
-    body: `<p>Bună, {participant_name}.</p><p>{trainer_name} te-a invitat în Codruț pentru {company_name}. După activare vei vedea dashboardul tău de participant și sarcinile pregătite pentru proiect.</p><p><a href="{action_url}">Activează contul</a></p>`
+    body: `<p>Bună, {participant_name}.</p><p>{trainer_name} te-a invitat în Codruț pentru {company_name}. După activare vei vedea spațiul tău de participant și sarcinile pregătite pentru proiect.</p><p><a href="{action_url}">Activează contul</a></p>`
   },
   {
     id: "assignment_bundle",
@@ -40,6 +40,13 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
     body: `<p>Bună, {participant_name}.</p><p>Pentru {company_name}, trainerul a pregătit {task_count} sarcini într-un link securizat. Răspunsurile sunt tratate confidențial și folosite în agregare.</p><p><a href="{action_url}">Deschide chestionarele</a></p>`
   }
 ];
+
+function getSeededTemplates(): EmailTemplate[] {
+  return SEEDED_TEMPLATES.map((template) => ({
+    ...template,
+    placeholders: [...template.placeholders],
+  }));
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function backendToFrontendTemplate(b: any): EmailTemplate {
@@ -77,19 +84,28 @@ function frontendToBackendTemplate(f: EmailTemplate) {
 }
 
 export async function listEmailTemplatesOnServer(includeRetired: boolean = false): Promise<EmailTemplate[]> {
+  if (typeof window !== "undefined" && !process.env.VITEST && isDemoFallbackEnabled()) {
+    return getSeededTemplates();
+  }
+
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/templates?include_retired=${includeRetired}`, {
       cache: "no-store",
       credentials: "include",
     });
     if (!response.ok) {
-      return SEEDED_TEMPLATES;
+      if (isSeededDemoFallbackEnabled()) {
+        return getSeededTemplates();
+      }
+      throw new Error(`Server returned status ${response.status}`);
     }
     const data = await response.json();
     return data.map(backendToFrontendTemplate);
   } catch (e) {
-    console.error("Error fetching email templates", e);
-    return SEEDED_TEMPLATES;
+    if (isSeededDemoFallbackEnabled()) {
+      return getSeededTemplates();
+    }
+    throw e;
   }
 }
 
@@ -112,6 +128,13 @@ export async function getEmailTemplateOnServer(key: string, version?: number): P
 }
 
 export async function createEmailTemplateOnServer(template: EmailTemplate): Promise<EmailTemplate> {
+  if (typeof window !== "undefined" && !process.env.VITEST && isDemoFallbackEnabled()) {
+    return {
+      ...template,
+      placeholders: [...template.placeholders],
+    };
+  }
+
   const payload = frontendToBackendTemplate(template);
   const response = await fetch(`${getApiBaseUrl()}/communications/templates`, {
     method: "POST",
@@ -120,6 +143,12 @@ export async function createEmailTemplateOnServer(template: EmailTemplate): Prom
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
+    if (isDemoFallbackEnabled()) {
+      return {
+        ...template,
+        placeholders: [...template.placeholders],
+      };
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.error?.message ?? "Nu am putut crea șablonul pe server.");
   }
@@ -128,6 +157,13 @@ export async function createEmailTemplateOnServer(template: EmailTemplate): Prom
 }
 
 export async function updateEmailTemplateOnServer(template: EmailTemplate): Promise<EmailTemplate> {
+  if (typeof window !== "undefined" && !process.env.VITEST && isDemoFallbackEnabled()) {
+    return {
+      ...template,
+      placeholders: [...template.placeholders],
+    };
+  }
+
   const payload = frontendToBackendTemplate(template);
   const response = await fetch(`${getApiBaseUrl()}/communications/templates/${template.baseKey}?version=${template.version}`, {
     method: "PATCH",
@@ -136,6 +172,12 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
+    if (isDemoFallbackEnabled()) {
+      return {
+        ...template,
+        placeholders: [...template.placeholders],
+      };
+    }
     if (response.status === 401) {
       throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
     }
@@ -153,6 +195,18 @@ export async function activateEmailTemplateOnServer(key: string, version: number
   });
   if (!response.ok) {
     if (response.status === 401) {
+      if (isDemoFallbackEnabled()) {
+        return {
+          id: `${key}@${version}`,
+          baseKey: key,
+          version,
+          name: key,
+          subject: "",
+          body: "",
+          lane: "transactional",
+          placeholders: [],
+        };
+      }
       throw new Error("Nu sunteți autentificat. Vă rugăm să vă reconectați.");
     }
     const errorBody = await response.json().catch(() => null);
@@ -222,6 +276,12 @@ export type CampaignRecipientRow = {
   openRate?: string;
   clickRate?: string;
   viewRate?: string;
+  openCount?: number;
+  clickCount?: number;
+  viewCount?: number;
+  replyCount?: number;
+  calendlyClickCount?: number;
+  emailVariant?: string | null;
   outcome?: "intalnire" | "ofertare" | "contract";
 };
 
@@ -265,7 +325,9 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
     }
     return await response.json();
   } catch (e) {
-    console.error("Error fetching email ops summary, using fallback data", e);
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
     return {
       metrics: [],
       assessmentRows: [],
@@ -282,10 +344,70 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
           ctaPrimary: "Programează o discuție",
           ctaSecondary: "Vreau să fiu contactat",
         },
-        recipients: [],
+        recipients: [
+          {
+            id: "campaign-atlas-ceo",
+            company: "Atlas Mobility",
+            firstName: "Radu",
+            lastName: "Munteanu",
+            email: "radu.munteanu@atlas-mobility.ro",
+            clientType: "tip_1",
+            status: "sent",
+            openCount: 3,
+            clickCount: 2,
+            viewCount: 1,
+            replyCount: 1,
+            calendlyClickCount: 1,
+            emailVariant: "variant_a",
+            outcome: "intalnire",
+          },
+          {
+            id: "campaign-meridian-director",
+            company: "Clinica Meridian",
+            firstName: "Diana",
+            lastName: "Ene",
+            email: "diana.ene@clinica-meridian.ro",
+            clientType: "tip_1",
+            status: "ready",
+            openCount: 1,
+            clickCount: 1,
+            viewCount: 1,
+            replyCount: 0,
+            calendlyClickCount: 0,
+            emailVariant: "variant_b",
+          },
+          {
+            id: "campaign-nova-retail",
+            company: "Nova Retail Group",
+            firstName: "Cristina",
+            lastName: "Olaru",
+            email: "cristina.olaru@nova-retail.ro",
+            clientType: "tip_2",
+            status: "needs_contact_name",
+            openCount: 0,
+            clickCount: 0,
+            viewCount: 0,
+            replyCount: 0,
+            calendlyClickCount: 0,
+            emailVariant: "variant_a",
+          },
+          {
+            id: "campaign-suppressed",
+            company: "Fabrica Nord",
+            email: "office@fabricanord.ro",
+            clientType: "tip_2",
+            status: "suppressed",
+            openCount: 0,
+            clickCount: 0,
+            viewCount: 0,
+            replyCount: 0,
+            calendlyClickCount: 0,
+            emailVariant: "variant_c",
+          },
+        ],
         weeklyReport: {
           cadence: "Săptămânal",
-          metrics: ["open rate", "click rate", "view rate"],
+          metrics: ["deschideri", "clickuri", "vizualizări video", "reply-uri", "clickuri Calendly", "variantă email"],
           notification: "Andrei primește email/Telegram cu link către raport.",
         },
       },
@@ -363,7 +485,7 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
   const trimmedName = draft.name.trim();
   const videoUrl = normalizeHttpUrl(draft.videoUrl);
   const thumbnailUrl = normalizeHttpUrl(draft.thumbnailUrl);
-  const landingUrl = normalizeHttpUrl(draft.landingUrl) ?? videoUrl;
+  const landingUrl = normalizeHttpUrl(draft.landingUrl);
 
   if (!trimmedName || !videoUrl || !thumbnailUrl || !landingUrl) return null;
 
@@ -392,6 +514,24 @@ export type EmailCampaign = CampaignCreate & {
   status: "draft" | "ready" | "paused" | "completed";
 };
 
+export type CampaignSendRecipientResult = {
+  recipient_id: string;
+  email: string;
+  status: "accepted" | "failed" | "skipped" | "dry_run" | string;
+  message_id?: string | null;
+  error?: string | null;
+};
+
+export type CampaignSendResponse = {
+  campaign_id: string;
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  dry_run: boolean;
+  results: CampaignSendRecipientResult[];
+};
+
 export async function createCampaignOnServer(campaign: CampaignCreate) {
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
@@ -417,6 +557,10 @@ export async function createCampaignOnServer(campaign: CampaignCreate) {
 }
 
 export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
+  if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
+    return [];
+  }
+
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
       cache: "no-store",
@@ -429,6 +573,65 @@ export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
     return await response.json();
   } catch (err) {
     if (isDemoFallbackEnabled()) return [];
+    throw err;
+  }
+}
+
+export async function sendCampaignOnServer(
+  campaignId: string,
+  options: { dryRun?: boolean; recipientIds?: string[] } = {},
+): Promise<CampaignSendResponse> {
+  if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
+    return {
+      campaign_id: campaignId,
+      total: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      dry_run: Boolean(options.dryRun),
+      results: [],
+    };
+  }
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      credentials: "include",
+      body: JSON.stringify({
+        dry_run: Boolean(options.dryRun),
+        recipient_ids: options.recipientIds,
+      }),
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) {
+        return {
+          campaign_id: campaignId,
+          total: 0,
+          sent: 0,
+          failed: 0,
+          skipped: 0,
+          dry_run: Boolean(options.dryRun),
+          results: [],
+        };
+      }
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut trimite campania (${response.status}).`);
+    }
+    return await response.json();
+  } catch (err) {
+    if (isDemoFallbackEnabled()) {
+      return {
+        campaign_id: campaignId,
+        total: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        dry_run: Boolean(options.dryRun),
+        results: [],
+      };
+    }
     throw err;
   }
 }

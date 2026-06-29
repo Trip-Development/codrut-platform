@@ -20,6 +20,8 @@ export default async function ProjectAssignmentsPage({
       assignments={data.assignments}
       invitationStatuses={data.invitationStatuses}
       teams={data.teams}
+      mode="assignments"
+      showProjectSelector={false}
     />
   );
 }

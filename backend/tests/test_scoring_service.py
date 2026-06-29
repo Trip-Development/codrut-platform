@@ -358,8 +358,14 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 other_project_assignment.id,
             }
             assert aggregate.lencioni_averages[0].avg == 10.5
-            assert [item.id for item in aggregate.driver_averages] == ["hurry_up"]
-            assert aggregate.driver_averages[0].avg == 60
+            assert [item.id for item in aggregate.driver_averages] == [
+                "be_strong",
+                "be_perfect",
+                "try_hard",
+                "hurry_up",
+                "please_people",
+            ]
+            assert [item.avg for item in aggregate.driver_averages] == [10, 20, 30, 60, 50]
             assert aggregate.boss_360_averages[0].avg == 80
             assert aggregate.boss_360_averages[-1].id == "icare_15_ajuta_echipa"
 

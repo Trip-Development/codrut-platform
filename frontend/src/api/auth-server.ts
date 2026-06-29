@@ -3,17 +3,13 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import type { CurrentUser, SessionState } from "./auth";
-import { getApiBaseUrl } from "./runtime";
+import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
 
 type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
 };
-
-function isDemoFallbackEnabled(): boolean {
-  return process.env.CODRUT_FRONTEND_DEMO_FALLBACK === "true";
-}
 
 async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
   const cookieStore = await cookies();
@@ -41,6 +37,7 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
     user: {
       id: user.user_id,
       name: user.email.split("@")[0],
+      email: user.email,
       role: user.role,
     },
   };
@@ -58,7 +55,7 @@ export async function getTrainerSession(): Promise<SessionState> {
   const session = await getSessionFromApi("trainer");
   if (session) return session;
 
-  if (!isDemoFallbackEnabled()) {
+  if (!isSeededDemoFallbackEnabled()) {
     throw new Error("Trainer authentication required.");
   }
 
@@ -69,7 +66,6 @@ export async function getTrainerSession(): Promise<SessionState> {
       name: "Andrei",
       role: "trainer",
     },
-    message: "Sesiune temporară de lucru activă.",
   };
 }
 
@@ -77,7 +73,7 @@ export async function getParticipantSession(): Promise<SessionState> {
   const session = await getSessionFromApi("participant");
   if (session) return session;
 
-  if (!isDemoFallbackEnabled()) {
+  if (!isSeededDemoFallbackEnabled()) {
     throw new Error("Participant authentication required.");
   }
 
@@ -85,9 +81,8 @@ export async function getParticipantSession(): Promise<SessionState> {
     state: "fallback",
     user: {
       id: "participant-local",
-      name: "Leadership demo",
+      name: "Mihai Matei",
       role: "participant",
     },
-    message: "Sesiune temporară de lucru activă.",
   };
 }

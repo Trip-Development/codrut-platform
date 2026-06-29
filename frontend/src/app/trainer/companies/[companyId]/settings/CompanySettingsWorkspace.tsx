@@ -44,10 +44,10 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm md:p-6">
+      <section className="surface-panel p-5 md:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-background text-xl font-semibold text-burgundy shadow-sm">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-surface-muted text-xl font-semibold text-burgundy shadow-sm">
               {company.name.trim().charAt(0).toLocaleUpperCase("ro")}
             </div>
             <div className="min-w-0">
@@ -71,49 +71,49 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
         </div>
       </section>
 
-      <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm md:p-6">
+      <section className="surface-panel p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-semibold text-foreground/52">Administrare</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Acțiuni asupra companiei</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Acțiunile sensibile sunt separate de fluxul zilnic de participanți, organigramă și rapoarte.
+              Acțiunile sensibile sunt separate de fluxul zilnic de participanți, organigramă și rezultate.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setIsDeleteOpen((current) => !current)}
-            className="tap-soft inline-flex min-h-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
+            className="btn-danger-subtle min-h-10 px-4 py-2"
           >
             {isDeleteOpen ? "Închide ștergerea" : "Configurează ștergerea"}
           </button>
         </div>
 
         {isDeleteOpen ? (
-          <div className="mt-5 rounded-xl border border-red-200 bg-red-50/70 p-4">
-            <p className="text-sm font-semibold text-red-950">Șterge compania</p>
-            <p className="mt-2 text-sm leading-6 text-red-900/72">
+          <div className="status-panel-danger mt-5 p-4">
+            <p className="text-sm font-semibold">Șterge compania</p>
+            <p className="mt-2 text-sm leading-6 opacity-75">
               Ștergerea elimină compania împreună cu participanții, organigrama, echipele, invitațiile și asignările legate de ea.
             </p>
 
             <form onSubmit={handleDelete} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-end">
-              <label className="block text-sm font-semibold text-red-950">
+              <label className="block text-sm font-semibold">
                 Scrie numele companiei pentru confirmare
                 <input
                   value={confirmation}
                   onChange={(event) => setConfirmation(event.target.value)}
                   placeholder={company.name}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-950 outline-none transition-colors placeholder:text-red-900/35 focus:border-red-400 focus:ring-2 focus:ring-red-200/70"
+                  className="status-input-danger mt-2 min-h-11 w-full px-4 py-2.5 placeholder:text-foreground/35"
                 />
               </label>
               <button
                 type="submit"
                 disabled={!canDelete || isDeleting}
                 className={[
-                  "tap-soft inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm disabled:cursor-not-allowed",
+                  "tap-soft inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2.5 text-sm font-bold shadow-sm disabled:cursor-not-allowed",
                   canDelete
                     ? "bg-red-700 text-white hover:bg-red-800"
-                    : "border border-red-200 bg-white text-red-900/35",
+                    : "border border-[var(--border)] bg-surface text-foreground/35",
                 ].join(" ")}
               >
                 {isDeleting ? "Se șterge..." : "Șterge compania"}
@@ -123,7 +123,7 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
         ) : null}
 
         {message ? (
-          <p aria-live="polite" className="mt-3 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-800">
+          <p aria-live="polite" className="status-panel-danger mt-3 px-3 py-2">
             {message}
           </p>
         ) : null}
@@ -134,7 +134,7 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
 
 function SettingStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-3">
+    <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3">
       <p className="text-xs font-semibold text-foreground/48">{label}</p>
       <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
     </div>

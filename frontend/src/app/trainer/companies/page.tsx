@@ -10,9 +10,9 @@ export default async function TrainerCompaniesPage() {
   return (
     <AppShell
       audience="trainer"
-      eyebrow="Companii"
+      eyebrow=""
       title="Companiile tale"
-      description="Lista companiilor cu care lucrezi, statusul fiecărei companii și progresul operațional."
+      description="Caută rapid o companie și intră în spațiul ei pentru proiecte, participanți și echipe."
       navItems={trainerNavItems}
       activeHref="/trainer/companies"
     >

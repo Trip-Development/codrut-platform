@@ -12,8 +12,8 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
 )
 from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
-from codrut.modules.companies.models import Company, ParticipantProfile
-from codrut.modules.identity.models import AssignmentInvite, Session, User
+from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
+from codrut.modules.identity.models import AssignmentInvite, Session, User, UserRole
 from codrut.modules.identity.service import IdentityService
 
 
@@ -168,10 +168,67 @@ async def test_create_invite_idempotency_reuses_active_invite() -> None:
         company_id=company_id,
         respondent_profile_id=respondent_id,
         assignment_ids=[assignment_id],
+        expires_at=claims.expires_at,
     )
 
     assert invite == existing_invite
     assert len(session.added_models) == 0  # No new model added
+
+
+@pytest.mark.asyncio
+async def test_create_invite_rotates_existing_invite_when_expiry_is_shortened() -> None:
+    company_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+
+    session = FakeSession()
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        email="test@example.com",
+        full_name="Test User",
+    )
+    result_profile = FakeScalarResult(profile)
+    result_assignments = FakeScalarsResult([assignment_id])
+
+    settings = get_settings()
+    old_expiry = datetime.now(UTC) + timedelta(days=10)
+    shortened_expiry = datetime.now(UTC) + timedelta(days=2)
+    claims = TaskLinkClaims(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        assignment_ids=(assignment_id,),
+        expires_at=old_expiry,
+    )
+    existing_invite = AssignmentInvite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        token=create_task_token(claims, settings),
+        status="active",
+        expires_at=old_expiry,
+    )
+    result_active_invite = FakeScalarsResult(existing_invite)
+    result_to_invalidate = FakeScalarsResult([existing_invite])
+
+    session.side_effects = [
+        result_profile,
+        result_assignments,
+        result_active_invite,
+        result_to_invalidate,
+    ]
+
+    service = IdentityService(session)
+    invite = await service.create_invite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        assignment_ids=[assignment_id],
+        expires_at=shortened_expiry,
+    )
+
+    assert invite != existing_invite
+    assert invite.expires_at == shortened_expiry
+    assert existing_invite.status == "revoked"
+    assert len(session.added_models) == 1
 
 
 @pytest.mark.asyncio
@@ -417,10 +474,140 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
     assert profile.user_id is not None
     assert any(isinstance(model, User) for model in session.added_models)
     assert any(isinstance(model, Session) for model in session.added_models)
+    created_session = next(model for model in session.added_models if isinstance(model, Session))
+    assert created_session.expires_at.timestamp() == int(expires_at.timestamp())
 
 
 @pytest.mark.asyncio
-async def test_verify_invite_for_non_leadership_reuses_existing_email_user() -> None:
+async def test_verify_invite_for_project_uses_project_close_as_effective_expiry() -> None:
+    company_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+
+    session = FakeSession()
+    settings = get_settings()
+    token_expires_at = datetime.now(UTC) + timedelta(days=10)
+    project_closes_at = datetime.now(UTC) + timedelta(days=3)
+    token = create_task_token(
+        TaskLinkClaims(
+            company_id=company_id,
+            respondent_profile_id=respondent_id,
+            assignment_ids=(assignment_id,),
+            expires_at=token_expires_at,
+        ),
+        settings,
+    )
+    invite = AssignmentInvite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        token=token,
+        status="active",
+        expires_at=token_expires_at,
+    )
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        email="same.person@example.com",
+        full_name="Same Person",
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        project_id=project_id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.invited,
+    )
+    project = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="July Pilot",
+        form_closes_at=project_closes_at,
+    )
+    session.side_effects = [
+        FakeScalarResult(invite),
+        FakeScalarResult(profile),
+        FakeScalarResult(Company(id=company_id, name="Michelin")),
+        FakeScalarResult(False),
+        FakeScalarsResult([assignment]),
+        FakeScalarResult(project),
+        FakeScalarResult(profile),
+        FakeScalarResult(None),
+    ]
+
+    result = await IdentityService(session).verify_invite_token_and_create_session(token)
+
+    assert result.response.expires_at == project_closes_at
+    created_session = next(model for model in session.added_models if isinstance(model, Session))
+    assert created_session.expires_at == project_closes_at
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_rejects_closed_project_window() -> None:
+    company_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+
+    settings = get_settings()
+    token_expires_at = datetime.now(UTC) + timedelta(days=10)
+    token = create_task_token(
+        TaskLinkClaims(
+            company_id=company_id,
+            respondent_profile_id=respondent_id,
+            assignment_ids=(assignment_id,),
+            expires_at=token_expires_at,
+        ),
+        settings,
+    )
+    invite = AssignmentInvite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        token=token,
+        status="active",
+        expires_at=token_expires_at,
+    )
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        email="same.person@example.com",
+        full_name="Same Person",
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        project_id=project_id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.invited,
+    )
+    project = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="July Pilot",
+        form_closes_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    session = FakeSession()
+    session.side_effects = [
+        FakeScalarResult(invite),
+        FakeScalarResult(profile),
+        FakeScalarResult(Company(id=company_id, name="Michelin")),
+        FakeScalarResult(False),
+        FakeScalarsResult([assignment]),
+        FakeScalarResult(project),
+    ]
+
+    with pytest.raises(DomainError) as exc_info:
+        await IdentityService(session).verify_invite_token_and_create_session(token)
+
+    assert exc_info.value.code == "project_closed"
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_for_non_leadership_rejects_unlinked_existing_email_user() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
     assignment_id = uuid.uuid4()
@@ -454,7 +641,7 @@ async def test_verify_invite_for_non_leadership_reuses_existing_email_user() -> 
         id=user_id,
         email="known.member@example.com",
         password_hash="existing",  # noqa: S106
-        role="participant",
+        role=UserRole.participant,
     )
     assignment = QuestionnaireAssignment(
         id=assignment_id,
@@ -474,6 +661,74 @@ async def test_verify_invite_for_non_leadership_reuses_existing_email_user() -> 
         FakeScalarsResult([assignment]),
         FakeScalarResult(profile),
         FakeScalarResult(existing_user),
+    ]
+
+    with pytest.raises(DomainError) as exc_info:
+        await IdentityService(session).verify_invite_token_and_create_session(token)
+
+    assert exc_info.value.code == "invite_email_account_conflict"
+    assert profile.user_id is None
+    assert not any(isinstance(model, User) for model in session.added_models)
+    assert not any(isinstance(model, Session) for model in session.added_models)
+
+
+@pytest.mark.asyncio
+async def test_verify_invite_for_non_leadership_reuses_profile_linked_user() -> None:
+    company_id = uuid.uuid4()
+    respondent_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+
+    settings = get_settings()
+    expires_at = datetime.now(UTC) + timedelta(days=5)
+    token = create_task_token(
+        TaskLinkClaims(
+            company_id=company_id,
+            respondent_profile_id=respondent_id,
+            assignment_ids=(assignment_id,),
+            expires_at=expires_at,
+        ),
+        settings,
+    )
+    invite = AssignmentInvite(
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        token=token,
+        status="active",
+        expires_at=expires_at,
+    )
+    profile = ParticipantProfile(
+        id=respondent_id,
+        company_id=company_id,
+        user_id=user_id,
+        email="linked.member@example.com",
+        full_name="Linked Member",
+    )
+    linked_user = User(
+        id=user_id,
+        email="linked.member@example.com",
+        password_hash="existing",  # noqa: S106
+        role=UserRole.participant,
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.invited,
+    )
+
+    session = FakeSession()
+    session.side_effects = [
+        FakeScalarResult(invite),
+        FakeScalarResult(profile),
+        FakeScalarResult(Company(id=company_id, name="Michelin")),
+        FakeScalarResult(linked_user),
+        FakeScalarResult(False),
+        FakeScalarsResult([assignment]),
+        FakeScalarResult(profile),
+        FakeScalarResult(linked_user),
     ]
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)

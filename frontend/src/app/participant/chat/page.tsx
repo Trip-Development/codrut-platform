@@ -25,12 +25,12 @@ export default async function ParticipantChatPage() {
       userLabel={identity}
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <section className="rounded-[1.75rem] border border-[var(--border)] bg-surface p-5 shadow-sm md:p-6">
+        <section className="surface-panel p-5 md:p-6">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Preview scenarii</p>
           <h2 className="mt-2 text-2xl font-semibold text-foreground">Întrebări utile înainte de răspuns</h2>
           <div className="mt-5 space-y-3">
             {scenarios.map((scenario) => (
-              <article key={scenario} className="rounded-2xl border border-[var(--border)] bg-background px-4 py-3 transition hover:border-burgundy/25 hover:bg-surface-muted/45">
+              <article key={scenario} className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 transition hover:border-burgundy/25">
                 <p className="text-sm font-semibold text-foreground">{scenario}</p>
                 <p className="mt-1 text-xs leading-5 text-foreground/55">
                   Va deschide un răspuns ghidat în versiunea completă a asistentului.
@@ -39,7 +39,7 @@ export default async function ParticipantChatPage() {
             ))}
           </div>
         </section>
-        <aside className="rounded-[1.75rem] border border-burgundy/16 bg-burgundy/8 p-5">
+        <aside className="rounded-xl border border-burgundy/16 bg-surface p-5 shadow-sm">
           <p className="text-sm font-bold text-burgundy">Identitate anonimă</p>
           <p className="mt-2 text-2xl font-semibold text-foreground">{identity}</p>
           <p className="mt-3 text-sm leading-6 text-foreground/62">

@@ -21,12 +21,14 @@ class FakeDefinitionRepository:
         self.definitions = definitions or []
         self.submitted_versions: set[tuple[QuestionnaireKey, int]] = set()
         self.lookup_keys: list[str] = []
+        self.list_calls = 0
 
     async def list_definitions(
         self,
         *,
         active_only: bool = True,
     ) -> list[QuestionnaireDefinition]:
+        self.list_calls += 1
         definitions = self.definitions
         if active_only:
             definitions = [definition for definition in definitions if definition.active]
@@ -297,7 +299,7 @@ async def test_active_definition_schema_requires_items() -> None:
 
 
 @pytest.mark.asyncio
-async def test_seed_catalog_definitions_uses_string_keys_for_lookup() -> None:
+async def test_seed_catalog_definitions_keeps_string_keys() -> None:
     catalog = APPROVED_QUESTIONNAIRE_DEFINITIONS[0]
     repository = FakeDefinitionRepository(
         [
@@ -316,8 +318,8 @@ async def test_seed_catalog_definitions_uses_string_keys_for_lookup() -> None:
 
     await service.list_persisted_definitions()
 
-    assert repository.lookup_keys
-    assert all(type(key) is str for key in repository.lookup_keys)
+    assert repository.definitions
+    assert all(type(definition.key) is str for definition in repository.definitions)
 
 
 @pytest.mark.asyncio
@@ -351,3 +353,18 @@ async def test_seed_catalog_definitions_is_idempotent_with_existing_database_row
             for definition in result
         )
         await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_get_persisted_definition_does_not_seed_when_definition_exists() -> None:
+    definition = persisted_definition(key="lencioni", version=1, active=True)
+    repository = FakeDefinitionRepository([definition])
+    service = make_service(repository)
+
+    first = await service.get_persisted_definition("lencioni")
+    second = await service.get_persisted_definition("lencioni")
+
+    assert first.key == "lencioni"
+    assert second.key == "lencioni"
+    assert repository.lookup_keys == ["lencioni", "lencioni"]
+    assert repository.list_calls == 0

@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.assignments.models import AssignmentTargetType, QuestionnaireAssignment
-from codrut.modules.companies.models import ParticipantProfile
+from codrut.modules.companies.models import CompanyProject, ParticipantProfile
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
     QuestionnaireResponse,
@@ -84,6 +84,19 @@ class FormsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_project_for_assignment(
+        self,
+        assignment: QuestionnaireAssignment,
+    ) -> CompanyProject | None:
+        if assignment.project_id is None:
+            return None
+        result = await self.session.execute(
+            select(CompanyProject)
+            .where(CompanyProject.id == assignment.project_id)
+            .where(CompanyProject.company_id == assignment.company_id)
+        )
+        return result.scalar_one_or_none()
+
     async def add_response(self, response: QuestionnaireResponse) -> QuestionnaireResponse:
         self.session.add(response)
         await self.session.flush()
@@ -155,7 +168,9 @@ class FormsRepository:
         *,
         except_version: int | None = None,
     ) -> None:
-        definitions = await self.list_definitions(active_only=False)
+        stmt = select(QuestionnaireDefinition).where(QuestionnaireDefinition.key == key)
+        result = await self.session.execute(stmt)
+        definitions = result.scalars().all()
         for definition in definitions:
-            if definition.key == key and definition.version != except_version:
+            if definition.version != except_version:
                 definition.active = False

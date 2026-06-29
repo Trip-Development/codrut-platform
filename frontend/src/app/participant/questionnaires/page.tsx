@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { inviteStatusLabel } from "@/api/invites";
+import { inviteStatusLabel, inviteTaskHref, participantTaskTypeLabel } from "@/api/invites";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
@@ -20,7 +20,7 @@ export default async function ParticipantQuestionnairesPage() {
       activeHref="/participant/questionnaires"
     >
       {summary.tasks.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+        <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm">
           {summary.tasks.map((task) => (
             <article
               key={task.assignmentId}
@@ -39,20 +39,26 @@ export default async function ParticipantQuestionnairesPage() {
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-foreground/45">
                   <span>{task.targetLabel}</span>
                   <span>{task.estimatedMinutes} min</span>
-                  <span>{summary.projectName}</span>
+                  <span>{participantTaskTypeLabel(task.questionnaireKey)}</span>
                 </div>
               </div>
+              {task.status === "completed" ? (
+                <span className="inline-flex justify-center rounded-full border border-success/25 bg-success/12 px-4 py-2.5 text-sm font-semibold text-success-ink">
+                  Finalizat
+                </span>
+              ) : (
               <Link
-                href={task.href}
-                className="tap-soft inline-flex justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
+                href={inviteTaskHref(task, { returnTo: "/participant/questionnaires" })}
+                className="tap-soft inline-flex justify-center rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:bg-burgundy hover:text-white"
               >
-                {task.status === "completed" ? "Revizuiește" : "Deschide"}
+                Deschide
               </Link>
+              )}
             </article>
           ))}
-        </div>
+        </section>
       ) : (
-        <section className="rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-sm">
+        <section className="rounded-xl border border-[var(--border)] bg-surface p-6 shadow-sm">
           <h2 className="text-base font-semibold text-foreground">{summary.emptyState.title}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
             {summary.emptyState.description}

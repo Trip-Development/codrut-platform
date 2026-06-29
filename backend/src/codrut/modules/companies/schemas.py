@@ -99,6 +99,16 @@ class ParticipantCreateRequest(BaseModel):
     pcm_phase: str | None = Field(default=None, max_length=80)
 
 
+class ParticipantUpdateRequest(BaseModel):
+    project_id: UUID | None = None
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    email: EmailStr | None = None
+    reports_to_name: str | None = Field(default=None, max_length=255)
+    position: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    role_group: str | None = Field(default=None, max_length=255)
+
+
 class RosterImportRow(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

@@ -134,8 +134,8 @@ export default function RegisterPage() {
 
   if (loading) {
     return (
-      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
+      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="surface-panel w-full max-w-md p-10 text-center">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <div className="mt-8 flex justify-center">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-burgundy border-t-transparent"></div>
@@ -147,8 +147,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-      <section className="shadow-brand w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 md:p-10 transition-all duration-150">
+    <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+      <section className="surface-panel w-full max-w-md p-8 transition-all duration-150 md:p-10">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
           <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
@@ -160,7 +160,7 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-400">
+          <div className="status-panel-danger mb-6 p-4">
             {error}
           </div>
         )}
@@ -179,7 +179,7 @@ export default function RegisterPage() {
               </span>
             </div>
             <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted/62 px-4 py-3.5 text-base text-foreground/45 cursor-not-allowed outline-none select-none"
+              className="control-input w-full cursor-not-allowed select-none bg-surface-muted py-3.5 text-base text-foreground/45"
               type="email"
               value={email}
               disabled={true}
@@ -195,7 +195,7 @@ export default function RegisterPage() {
               Nume complet
             </label>
             <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              className="control-input w-full bg-surface-muted py-3.5 text-base"
               type="text"
               placeholder="Numele tău complet"
               value={fullName}
@@ -216,7 +216,7 @@ export default function RegisterPage() {
             <div className="relative flex items-center">
               <span className="absolute left-4 text-foreground/40 font-bold select-none">@</span>
               <input
-                className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted pl-8 pr-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+                className="control-input w-full bg-surface-muted py-3.5 pl-8 pr-4 text-base"
                 type="text"
                 placeholder="nickname_ul_tau"
                 value={nickname}
@@ -237,7 +237,7 @@ export default function RegisterPage() {
               Parolă
             </label>
             <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              className="control-input w-full bg-surface-muted py-3.5 text-base"
               type="password"
               placeholder="Minim 12 caractere"
               value={password}
@@ -251,7 +251,7 @@ export default function RegisterPage() {
               Confirmă parola
             </label>
             <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-surface-muted px-4 py-3.5 text-base text-foreground placeholder-foreground/35 outline-none transition-all duration-200 focus:border-burgundy focus:ring-1 focus:ring-burgundy"
+              className="control-input w-full bg-surface-muted py-3.5 text-base"
               type="password"
               placeholder="Reintroduce parola"
               value={confirmPassword}
@@ -260,7 +260,7 @@ export default function RegisterPage() {
             />
           </div>
 
-          <label className="flex gap-3 rounded-2xl border border-[var(--border)] bg-surface-muted/70 p-4 text-left">
+          <label className="flex gap-3 rounded-xl border border-[var(--border)] bg-surface-muted p-4 text-left">
             <input
               type="checkbox"
               checked={termsAccepted}
@@ -273,11 +273,7 @@ export default function RegisterPage() {
             </span>
           </label>
 
-          <button
-            type="submit"
-            disabled={submitting || !termsAccepted}
-            className="tap-soft mt-2.5 w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark disabled:bg-burgundy/50 px-4 py-4 font-semibold text-white transition-colors duration-200 shadow-md flex items-center justify-center gap-2"
-          >
+          <button type="submit" disabled={submitting || !termsAccepted} className="btn-primary mt-2.5 w-full gap-2 px-4 py-4">
             {submitting ? (
               <>
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
@@ -293,7 +289,7 @@ export default function RegisterPage() {
           <span className="text-foreground/50">Ai deja cont?</span>
           <Link
             href="/login"
-            className="ml-2 font-bold text-burgundy hover:text-burgundy-dark transition-colors"
+            className="ml-2 font-bold text-burgundy transition-colors hover:text-burgundy-dark"
           >
             Intră în cont
           </Link>

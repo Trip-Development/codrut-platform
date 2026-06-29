@@ -7,6 +7,10 @@ export class ParticipantPage {
     this.page = page;
   }
 
+  private continueTaskLink() {
+    return this.page.getByRole("link", { name: /^Continuă/i }).first();
+  }
+
   async gotoInvite(token: string) {
     await this.page.goto(`/invite/${token}`);
     await this.page.waitForLoadState("networkidle");
@@ -14,21 +18,26 @@ export class ParticipantPage {
 
   async acceptConsentIfShown() {
     const consentButton = this.page.getByRole("button", { name: "Continuă la chestionare" });
+    await Promise.race([
+      consentButton.waitFor({ state: "visible", timeout: 5000 }).catch(() => undefined),
+      this.continueTaskLink().waitFor({ state: "visible", timeout: 5000 }).catch(() => undefined),
+    ]);
     if (!(await consentButton.isVisible())) {
       return;
     }
 
-    await this.page
-      .getByLabel("Accept regulile de confidențialitate și prelucrare a datelor pentru completarea chestionarelor Codruț.")
-      .check();
+    const consentCheckbox = this.page.locator("input[type='checkbox']").first();
+    await consentCheckbox.check();
+    await expect(consentCheckbox).toBeChecked();
     await expect(consentButton).toBeEnabled();
     await consentButton.click();
     await this.page.waitForLoadState("networkidle");
+    await expect(this.continueTaskLink()).toBeVisible();
   }
 
   async startFilling() {
     await this.acceptConsentIfShown();
-    const button = this.page.getByRole("link", { name: "Continuă următoarea sarcină" });
+    const button = this.continueTaskLink();
     await expect(button).toBeVisible();
     await button.click();
     await this.page.waitForLoadState("networkidle");
@@ -36,7 +45,7 @@ export class ParticipantPage {
 
   async startNextTask() {
     await this.acceptConsentIfShown();
-    const continuaLink = this.page.getByRole("link", { name: "Continuă următoarea sarcină" });
+    const continuaLink = this.continueTaskLink();
     if (await continuaLink.isVisible()) {
       await continuaLink.click();
     } else {
@@ -85,8 +94,8 @@ export class ParticipantPage {
     const btn = this.page.getByRole("button", { name: "Salvează draft" });
     await expect(btn).toBeEnabled();
     await btn.click();
-    // Wait for the draft saved confirmation text
-    await expect(this.page.locator("p.text-foreground\\/55")).toContainText(/Draft salvat/i);
+    await this.page.waitForLoadState("networkidle");
+    await expect(this.continueTaskLink()).toBeVisible();
   }
 
   async submitResponse() {

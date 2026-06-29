@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 
 type ThemeMode = "light" | "dark";
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => {
+    ready: Promise<void>;
+  };
+};
+type ViewTransitionAnimationOptions = KeyframeAnimationOptions & {
+  pseudoElement?: string;
+};
 
 const STORAGE_KEY = "codrut-theme";
 
@@ -32,6 +40,7 @@ function getInitialTheme(): ThemeMode {
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<ThemeMode>("light");
+  const revealAnimationRef = useRef<Animation | null>(null);
 
   useEffect(() => {
     const initialTheme = getInitialTheme();
@@ -39,11 +48,46 @@ export function ThemeToggle() {
     document.documentElement.dataset.theme = initialTheme;
   }, []);
 
-  function toggleTheme() {
-    const nextTheme = theme === "light" ? "dark" : "light";
+  function applyTheme(nextTheme: ThemeMode) {
     setTheme(nextTheme);
     document.documentElement.dataset.theme = nextTheme;
     window.localStorage.setItem(STORAGE_KEY, nextTheme);
+  }
+
+  function toggleTheme(event: MouseEvent<HTMLButtonElement>) {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    const transitionDocument = document as ViewTransitionDocument;
+
+    if (!transitionDocument.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      applyTheme(nextTheme);
+      return;
+    }
+
+    const { left, top, width, height } = event.currentTarget.getBoundingClientRect();
+    const x = left + width / 2;
+    const y = top + height / 2;
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y),
+    );
+    const transition = transitionDocument.startViewTransition(() => applyTheme(nextTheme));
+
+    transition.ready.then(() => {
+      revealAnimationRef.current?.cancel();
+      revealAnimationRef.current = document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${endRadius}px at ${x}px ${y}px)`,
+          ],
+        },
+        {
+          duration: 860,
+          easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+          pseudoElement: "::view-transition-new(root)",
+        } as ViewTransitionAnimationOptions,
+      );
+    }).catch(() => undefined);
   }
 
   const isDark = theme === "dark";
@@ -54,25 +98,15 @@ export function ThemeToggle() {
       aria-label={isDark ? "Activează tema luminoasă" : "Activează tema întunecată"}
       aria-pressed={isDark}
       onClick={toggleTheme}
-      className="tap-soft inline-grid h-10 grid-cols-2 items-center rounded-full border border-[var(--border)] bg-surface-muted/82 p-1 text-foreground/42 shadow-sm hover:text-foreground/68"
+      className="radiate-button tap-soft inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-surface text-burgundy shadow-sm outline-none hover:border-burgundy/25 hover:bg-surface-muted focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 active:outline-none active:ring-0 dark:text-success-ink"
+      style={{ outline: "none", boxShadow: "0 1px 2px rgba(24, 24, 27, 0.04)" }}
     >
       <span
+        key={theme}
         aria-hidden
-        className={[
-          "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-          isDark ? "text-foreground/36" : "bg-surface text-burgundy shadow-sm",
-        ].join(" ")}
+        className="relative z-10 flex h-4 w-4 items-center justify-center animate-fade-up"
       >
-        <SunIcon />
-      </span>
-      <span
-        aria-hidden
-        className={[
-          "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-          isDark ? "bg-surface text-success-ink shadow-sm" : "text-foreground/36",
-        ].join(" ")}
-      >
-        <MoonIcon />
+        {isDark ? <MoonIcon /> : <SunIcon />}
       </span>
     </button>
   );
