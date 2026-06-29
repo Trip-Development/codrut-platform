@@ -14,6 +14,18 @@ export type InviteTask = {
   questionnaireKey: string;
 };
 
+const questionnaireLabels: Record<string, string> = {
+  lencioni: "Lencioni - evaluare echipă",
+  lencioni_en: "Lencioni - team assessment",
+  distress_drivers: "Driveri de stres TA",
+  distress_drivers_en: "TA distress drivers",
+  boss_360: "iCARE 360 pentru manager",
+  icare: "iCARE 360 pentru manager",
+  pcm_base: "Baza și faza PCM",
+  pcm_phase: "Baza și faza PCM",
+  phase: "Baza și faza PCM",
+};
+
 export type InviteBundle =
   | {
       state: "valid";
@@ -26,6 +38,8 @@ export type InviteBundle =
       alreadyRegistered: boolean;
       deadlineLabel: string;
       expiresAt?: string;
+      termsAcceptedAt?: string | null;
+      termsVersion?: string | null;
       tasks: InviteTask[];
     }
   | {
@@ -51,6 +65,8 @@ type BackendInviteVerifyResponse = {
   project_name: string;
   expires_at?: string;
   token_status?: "active";
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
   tasks: InviteTask[];
 };
 
@@ -94,48 +110,59 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
     return {
       state: "valid",
       token,
-      projectName: "Intake Iunie",
-      participantEmail: "participant@companie.ro",
-      participantFullName: "Participant demo",
-      anonymousName: "CuriousSoap2121",
+      projectName: "Leadership operațional Q3",
+      participantEmail: "mihai.matei@atlas-mobility.ro",
+      participantFullName: "Mihai Matei",
+      anonymousName: "SignalHarbor5271",
       isLeadership: false,
       alreadyRegistered: false,
       deadlineLabel: "deadline-ul proiectului",
-      tasks: [
+      tasks: normalizeInviteTasks([
+        {
+          id: "distress-drivers-self",
+          title: "Driveri de stres TA",
+          status: "not_started",
+          detail: "Completează autoevaluarea pe scala 1-10 pentru a verifica interfața cu slider.",
+          href: "/participant/questionnaires/distress_drivers?assignmentId=44444444-4444-4444-8444-444444444444",
+          assignmentId: "44444444-4444-4444-8444-444444444444",
+          targetLabel: "Autoevaluare",
+          estimatedMinutes: 8,
+          questionnaireKey: "distress_drivers",
+        },
         {
           id: "lencioni-team",
-          title: "Lencioni pentru echipa ta",
+          title: "Feedback pentru echipă",
           status: "not_started",
-          detail: "Răspuns pentru echipa din care faci parte.",
-          href: "/participant/questionnaires/lencioni?assignmentId=11111111-1111-4111-8111-111111111111&access=secure",
+          detail: "Răspunde pentru echipa indicată în această sarcină.",
+          href: "/participant/questionnaires/lencioni?assignmentId=11111111-1111-4111-8111-111111111111",
           assignmentId: "11111111-1111-4111-8111-111111111111",
-          targetLabel: "Echipa operațională",
+          targetLabel: "Echipa operațională Atlas",
           estimatedMinutes: 12,
           questionnaireKey: "lencioni",
         },
         {
           id: "boss-360",
-          title: "360 pentru manager",
+          title: "Feedback confidențial",
           status: "in_progress",
-          detail: "Feedback confidențial pentru persoana către care raportezi.",
-          href: "/participant/questionnaires/boss_360?assignmentId=22222222-2222-4222-8222-222222222222&access=secure",
+          detail: "Oferă feedback pentru persoana indicată în această sarcină.",
+          href: "/participant/questionnaires/boss_360?assignmentId=22222222-2222-4222-8222-222222222222",
           assignmentId: "22222222-2222-4222-8222-222222222222",
-          targetLabel: "Manager direct",
+          targetLabel: "Bianca Pavel",
           estimatedMinutes: 10,
           questionnaireKey: "boss_360",
         },
         {
           id: "leadership-lencioni",
-          title: "Lencioni pentru direcție",
+          title: "Feedback pentru echipă",
           status: "completed",
-          detail: "Task finalizat pentru demo-ul de progres.",
-          href: "/participant/questionnaires/lencioni?assignmentId=33333333-3333-4333-8333-333333333333&access=secure",
+          detail: "Sarcină finalizată pentru demo-ul de progres.",
+          href: "/participant/questionnaires/lencioni?assignmentId=33333333-3333-4333-8333-333333333333",
           assignmentId: "33333333-3333-4333-8333-333333333333",
           targetLabel: "Echipa de direcție",
           estimatedMinutes: 12,
           questionnaireKey: "lencioni",
         },
-      ],
+      ]),
     };
   }
 
@@ -182,7 +209,9 @@ async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> 
     alreadyRegistered: data.already_registered,
     deadlineLabel: data.expires_at ? formatInviteDeadline(data.expires_at) : "finalul evaluării",
     expiresAt: data.expires_at,
-    tasks: data.tasks,
+    termsAcceptedAt: data.terms_accepted_at,
+    termsVersion: data.terms_version,
+    tasks: normalizeInviteTasks(data.tasks),
   };
 }
 
@@ -227,4 +256,68 @@ export function inviteTaskProgress(tasks: InviteTask[]): {
     percent: total > 0 ? Math.round((completed / total) * 100) : 0,
     nextTask,
   };
+}
+
+export function inviteQuestionnaireLabel(key: string): string {
+  return questionnaireLabels[key] ?? "Chestionar";
+}
+
+export function participantTaskTypeLabel(key: string): string {
+  if (key === "lencioni" || key === "lencioni_en") {
+    return "Sarcină de echipă";
+  }
+  if (key === "boss_360" || key === "icare") {
+    return "Feedback confidențial";
+  }
+  if (key === "distress_drivers" || key === "distress_drivers_en" || key === "pcm_base" || key === "pcm_phase" || key === "phase") {
+    return "Formular individual";
+  }
+  return "Chestionar";
+}
+
+export function inviteTaskHref(task: InviteTask, options: { returnTo?: string } = {}): string {
+  if (task.assignmentId && isSecureInviteTaskHref(task.href)) {
+    return secureTaskHref(task, options);
+  }
+
+  const query: string[] = [];
+  const hasReturnTo = task.href.includes("returnTo=");
+  const hasTarget = task.href.includes("target=");
+  if (options.returnTo && !hasReturnTo) {
+    query.push(`returnTo=${encodeURIComponent(options.returnTo)}`);
+  }
+  if (task.targetLabel && !hasTarget) {
+    query.push(`target=${encodeURIComponent(task.targetLabel)}`);
+  }
+  if (query.length === 0) {
+    return task.href;
+  }
+  const separator = task.href.includes("?") ? "&" : "?";
+  return `${task.href}${separator}${query.join("&")}`;
+}
+
+function isSecureInviteTaskHref(href: string): boolean {
+  return href.includes("access=secure");
+}
+
+function normalizeInviteTasks(tasks: InviteTask[]): InviteTask[] {
+  return tasks.map((task) =>
+    task.assignmentId && isSecureInviteTaskHref(task.href)
+      ? { ...task, href: secureTaskHref(task) }
+      : task,
+  );
+}
+
+function secureTaskHref(task: InviteTask, options: { returnTo?: string } = {}): string {
+  const query = new URLSearchParams({ access: "secure" });
+  if (options.returnTo) {
+    query.set("returnTo", options.returnTo);
+  } else {
+    const existingReturnTo = new URLSearchParams(task.href.split("?")[1] ?? "").get("returnTo");
+    if (existingReturnTo) query.set("returnTo", existingReturnTo);
+  }
+  if (task.targetLabel) {
+    query.set("target", task.targetLabel);
+  }
+  return `/participant/tasks/${encodeURIComponent(task.assignmentId)}?${query.toString()}`;
 }

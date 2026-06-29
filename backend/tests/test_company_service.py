@@ -47,6 +47,7 @@ from codrut.modules.companies.schemas import (
     CompanyProjectUpdateRequest,
     ParticipantCreateRequest,
     ParticipantInviteBatchRequest,
+    ParticipantUpdateRequest,
     RosterImportRequest,
 )
 from codrut.modules.companies.service import CompanyService, hash_company_access_code
@@ -86,6 +87,7 @@ class FakeCompanyRepository:
         self.projects: list[CompanyProject] = []
         self.project_memberships: list[ProjectMembership] = []
         self.reporting_relationships: list[ParticipantReportingRelationship] = []
+        self.assignments: list[QuestionnaireAssignment] = []
 
     async def list_companies_for_user(self, user_id: uuid.UUID) -> list[Company]:
         company_ids = {
@@ -206,6 +208,16 @@ class FakeCompanyRepository:
             participant for participant in self.participants if participant.company_id == company_id
         ]
 
+    async def get_participant(
+        self,
+        company_id: uuid.UUID,
+        participant_id: uuid.UUID,
+    ) -> ParticipantProfile | None:
+        for participant in self.participants:
+            if participant.company_id == company_id and participant.id == participant_id:
+                return participant
+        return None
+
     async def list_project_memberships(
         self,
         company_id: uuid.UUID,
@@ -277,6 +289,17 @@ class FakeCompanyRepository:
 
     async def list_team_memberships_by_team(self, _team_id: uuid.UUID) -> list[TeamMembership]:
         return []
+
+    async def list_assignments_for_participants(
+        self,
+        participant_ids: list[uuid.UUID],
+    ) -> list[QuestionnaireAssignment]:
+        participant_id_set = set(participant_ids)
+        return [
+            assignment
+            for assignment in self.assignments
+            if assignment.respondent_profile_id in participant_id_set
+        ]
 
     async def add_access_code(self, access_code: CompanyAccessCode) -> CompanyAccessCode:
         access_code.id = uuid.uuid4()
@@ -696,6 +719,149 @@ async def test_create_participant_rejects_non_trainer_without_company_membership
             company.id,
             ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
         )
+
+
+async def test_update_participant_changes_profile_and_project_membership_fields() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Pilot iulie"),
+    )
+    participant = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(
+            full_name="Andrei Vacaru",
+            email="andrei@example.com",
+            reports_to_name="root",
+            position="CEO",
+            location="București",
+            role_group="leadership",
+        ),
+    )
+    membership = await repository.add_project_membership(
+        ProjectMembership(
+            company_id=company.id,
+            project_id=project.id,
+            participant_profile_id=participant.id,
+            reports_to_name="root",
+            position="CEO",
+            location="București",
+            role_group="leadership",
+        )
+    )
+
+    updated = await service.update_participant(
+        owner_id,
+        company.id,
+        participant.id,
+        ParticipantUpdateRequest(
+            project_id=project.id,
+            full_name=" Andrei Văcaru ",
+            email="ANDREY@example.com",
+            reports_to_name="fără manager",
+            position="Director General",
+            location="Cluj",
+            role_group="leadership",
+        ),
+    )
+
+    assert updated.full_name == "Andrei Văcaru"
+    assert updated.email == "andrey@example.com"
+    assert updated.reports_to_name is None
+    assert updated.position == "Director General"
+    assert updated.location == "Cluj"
+    assert updated.role_group == "leadership"
+    assert membership.reports_to_name is None
+    assert membership.position == "Director General"
+    assert membership.location == "Cluj"
+    assert membership.role_group == "leadership"
+
+
+async def test_update_participant_rejects_duplicate_company_email() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    first = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
+    await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Maria", email="maria@example.com"),
+    )
+
+    with pytest.raises(DomainError, match="already exists"):
+        await service.update_participant(
+            owner_id,
+            company.id,
+            first.id,
+            ParticipantUpdateRequest(email="maria@example.com"),
+        )
+
+
+async def test_update_participant_rejects_claimed_account_email_change() -> None:
+    repository = FakeCompanyRepository()
+    identity_repository = FakeIdentityRepository()
+    service = make_service(repository, identity_repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    user = User(
+        id=uuid.uuid4(),
+        email="ana@example.com",
+        password_hash=hash_password("participant-password-123"),
+        role=UserRole.participant,
+    )
+    identity_repository.users_by_id[user.id] = user
+    identity_repository.users_by_email[user.email] = user
+    participant = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
+    participant.user_id = user.id
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.update_participant(
+            owner_id,
+            company.id,
+            participant.id,
+            ParticipantUpdateRequest(email="ana.nou@example.com"),
+        )
+
+    assert exc_info.value.code == "participant_email_claimed"
+    assert participant.email == "ana@example.com"
+    assert user.email == "ana@example.com"
+
+
+async def test_update_participant_rejects_blank_name_after_trim() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    participant = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.update_participant(
+            owner_id,
+            company.id,
+            participant.id,
+            ParticipantUpdateRequest(full_name="   "),
+        )
+
+    assert exc_info.value.code == "participant_name_required"
+    assert participant.full_name == "Ana"
 
 
 def test_require_trainer_principal_allows_trainer() -> None:
@@ -1374,6 +1540,147 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
 
 
 @pytest.mark.asyncio
+async def test_send_project_invites_uses_earliest_project_close_or_due_date() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name="Invite Window Company")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership iulie",
+                due_at=datetime.now(UTC) + timedelta(days=2),
+                form_closes_at=datetime.now(UTC) + timedelta(days=5),
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                email="ana.window@example.com",
+                full_name="Ana Window",
+                anonymous_name="Participant 1",
+            )
+            session.add_all([trainer, company, project, participant])
+            await session.flush()
+            session.add_all(
+                [
+                    CompanyMembership(
+                        company_id=company.id,
+                        user_id=trainer.id,
+                        role=CompanyMembershipRole.owner,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant.id,
+                    ),
+                    QuestionnaireAssignment(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        respondent_profile_id=participant.id,
+                        questionnaire_key="lencioni",
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.assigned,
+                        due_at=datetime.now(UTC) + timedelta(days=10),
+                    ),
+                ]
+            )
+            await session.flush()
+
+            result = await CompanyService(session).send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(mode="secure_links", project_id=project.id),
+            )
+
+            assert result.links_generated == 1
+            invite_result = await session.execute(
+                select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+            )
+            invite = invite_result.scalar_one()
+            assert int(invite.expires_at.timestamp()) == int(project.due_at.timestamp())
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_send_project_invites_rejects_closed_project_window() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name="Closed Invite Window Company")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership inchis",
+                form_closes_at=datetime.now(UTC) - timedelta(minutes=1),
+                due_at=datetime.now(UTC) + timedelta(days=3),
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                email="ana.closed@example.com",
+                full_name="Ana Closed",
+                anonymous_name="Participant 1",
+            )
+            session.add_all([trainer, company, project, participant])
+            await session.flush()
+            session.add_all(
+                [
+                    CompanyMembership(
+                        company_id=company.id,
+                        user_id=trainer.id,
+                        role=CompanyMembershipRole.owner,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant.id,
+                    ),
+                    QuestionnaireAssignment(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        respondent_profile_id=participant.id,
+                        questionnaire_key="lencioni",
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.assigned,
+                    ),
+                ]
+            )
+            await session.flush()
+
+            with pytest.raises(DomainError) as exc_info:
+                await CompanyService(session).send_participant_invites(
+                    trainer.id,
+                    company.id,
+                    ParticipantInviteBatchRequest(mode="secure_links", project_id=project.id),
+                )
+
+            assert exc_info.value.code == "project_closed"
+            invite_result = await session.execute(
+                select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+            )
+            assert invite_result.scalars().all() == []
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_resend_invite_failure_preserves_existing_active_link(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1482,7 +1789,7 @@ async def test_create_access_code_returns_plain_code_once_and_stores_hash() -> N
     assert hash_company_access_code(response.code) in repository.access_codes_by_hash
 
 
-async def test_access_code_registration_claims_roster_profile() -> None:
+async def test_access_code_registration_is_disabled_for_public_profile_claims() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -1499,21 +1806,18 @@ async def test_access_code_registration_claims_roster_profile() -> None:
         CompanyAccessCodeCreateRequest(label=None),
     )
 
-    result = await service.register_with_access_code(
-        CompanyAccessCodeRegistrationRequest(
-            email="ANA@example.com",
-            access_code=code.code.lower(),
-            **{"password": "correct horse battery"},
+    with pytest.raises(DomainError) as exc_info:
+        await service.register_with_access_code(
+            CompanyAccessCodeRegistrationRequest(
+                email="ANA@example.com",
+                access_code=code.code.lower(),
+                **{"password": "correct horse battery"},
+            )
         )
-    )
 
-    assert result.response.email == "ana@example.com"
-    assert result.response.role == UserRole.participant
-    assert repository.participants[0].user_id == result.response.user_id
-    assert any(
-        membership.user_id == result.response.user_id for membership in repository.memberships
-    )
-    assert identity_repository.sessions
+    assert exc_info.value.code == "access_code_registration_disabled"
+    assert repository.participants[0].user_id is None
+    assert identity_repository.sessions == []
 
 
 async def test_access_code_registration_uses_generic_error_for_invalid_match() -> None:
@@ -1527,7 +1831,7 @@ async def test_access_code_registration_uses_generic_error_for_invalid_match() -
         CompanyAccessCodeCreateRequest(label=None),
     )
 
-    with pytest.raises(DomainError, match="Invalid access code or email"):
+    with pytest.raises(DomainError, match="access-code registration is disabled"):
         await service.register_with_access_code(
             CompanyAccessCodeRegistrationRequest(
                 email="missing@example.com",
@@ -1540,7 +1844,7 @@ async def test_access_code_registration_uses_generic_error_for_invalid_match() -
 async def test_access_code_registration_rejects_invalid_code_generically() -> None:
     service = make_service(FakeCompanyRepository())
 
-    with pytest.raises(DomainError, match="Invalid access code or email"):
+    with pytest.raises(DomainError, match="access-code registration is disabled"):
         await service.register_with_access_code(
             CompanyAccessCodeRegistrationRequest(
                 email="missing@example.com",
@@ -1567,7 +1871,7 @@ async def test_access_code_registration_rejects_claimed_profile_generically() ->
     )
     participant.user_id = uuid.uuid4()
 
-    with pytest.raises(DomainError, match="Invalid access code or email"):
+    with pytest.raises(DomainError, match="access-code registration is disabled"):
         await service.register_with_access_code(
             CompanyAccessCodeRegistrationRequest(
                 email="ana@example.com",

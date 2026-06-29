@@ -10,8 +10,8 @@ type BrandMarkProps = {
 
 const sizeClasses = {
   sm: "h-10 w-10 rounded-xl",
-  md: "h-11 w-11 rounded-2xl",
-  lg: "h-14 w-14 rounded-2xl",
+  md: "h-11 w-11 rounded-xl",
+  lg: "h-14 w-14 rounded-xl",
 };
 
 export function BrandMark({
@@ -25,7 +25,7 @@ export function BrandMark({
     <span className={`inline-flex min-w-0 items-center gap-3 ${className}`}>
       <span
         className={[
-          "relative flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-brand border border-[var(--border)]",
+          "relative flex shrink-0 items-center justify-center overflow-hidden bg-surface shadow-brand border border-[var(--border)]",
           sizeClasses[size],
         ].join(" ")}
         aria-hidden="true"

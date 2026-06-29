@@ -24,6 +24,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
     ParticipantResponse,
+    ParticipantUpdateRequest,
     ProjectParticipantResponse,
     ReportingRelationshipImportResponse,
     RosterImportRequest,
@@ -189,6 +190,25 @@ async def create_company_participant(
     participant = await CompanyService(session).create_participant(
         principal.user_id,
         company_id,
+        payload,
+    )
+    await session.commit()
+    return participant
+
+
+@router.patch("/{company_id}/participants/{participant_id}", response_model=ParticipantResponse)
+async def update_company_participant(
+    company_id: UUID,
+    participant_id: UUID,
+    payload: ParticipantUpdateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> ParticipantResponse:
+    require_trainer_principal(principal)
+    participant = await CompanyService(session).update_participant(
+        principal.user_id,
+        company_id,
+        participant_id,
         payload,
     )
     await session.commit()

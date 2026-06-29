@@ -25,7 +25,7 @@ def make_recipient(
 def test_campaign_send_policy_allows_active_recipient_with_https_unsubscribe() -> None:
     require_campaign_send_allowed(
         make_recipient(),
-        unsubscribe_url="https://app.codrut.ro/unsubscribe/token",
+        unsubscribe_url="https://codrut.andreivacaru.ro/unsubscribe/token",
     )
 
 
@@ -33,10 +33,24 @@ def test_campaign_send_policy_rejects_suppressed_recipient() -> None:
     with pytest.raises(DomainError, match="suppressed or unsubscribed"):
         require_campaign_send_allowed(
             make_recipient(CampaignRecipientStatus.suppressed),
-            unsubscribe_url="https://app.codrut.ro/unsubscribe/token",
+            unsubscribe_url="https://codrut.andreivacaru.ro/unsubscribe/token",
         )
 
 
 def test_campaign_send_policy_requires_secure_unsubscribe_url() -> None:
     with pytest.raises(DomainError, match="secure unsubscribe"):
         require_campaign_send_allowed(make_recipient(), unsubscribe_url="http://example.com")
+
+
+def test_campaign_send_policy_allows_localhost_http_only_when_explicitly_enabled() -> None:
+    require_campaign_send_allowed(
+        make_recipient(),
+        unsubscribe_url="http://localhost:3000/api/communications/campaigns/unsubscribe/token",
+        allow_insecure_localhost=True,
+    )
+
+    with pytest.raises(DomainError, match="secure unsubscribe"):
+        require_campaign_send_allowed(
+            make_recipient(),
+            unsubscribe_url="http://localhost:3000/api/communications/campaigns/unsubscribe/token",
+        )

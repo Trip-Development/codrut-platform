@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.modules.identity.models import AssignmentInvite, Session, User
+from codrut.modules.identity.models import AssignmentInvite, PasswordResetToken, Session, User
 
 
 def hash_session_token(token: str) -> str:
@@ -50,6 +50,36 @@ class IdentityRepository:
         session = result.scalar_one_or_none()
         if session is not None:
             await self.session.delete(session)
+
+    async def delete_sessions_for_user(self, user_id: UUID) -> None:
+        result = await self.session.execute(select(Session).where(Session.user_id == user_id))
+        for session in result.scalars().all():
+            await self.session.delete(session)
+
+    async def add_password_reset_token(self, token: PasswordResetToken) -> PasswordResetToken:
+        self.session.add(token)
+        await self.session.flush()
+        return token
+
+    async def get_active_password_reset_token(self, token: str) -> PasswordResetToken | None:
+        result = await self.session.execute(
+            select(PasswordResetToken)
+            .where(PasswordResetToken.token_hash == hash_session_token(token))
+            .where(PasswordResetToken.expires_at > datetime.now(UTC))
+            .where(PasswordResetToken.used_at.is_(None))
+        )
+        return result.scalar_one_or_none()
+
+    async def revoke_password_reset_tokens_for_user(self, user_id: UUID) -> None:
+        result = await self.session.execute(
+            select(PasswordResetToken)
+            .where(PasswordResetToken.user_id == user_id)
+            .where(PasswordResetToken.used_at.is_(None))
+        )
+        now = datetime.now(UTC)
+        for token in result.scalars().all():
+            token.used_at = now
+        await self.session.flush()
 
     async def add_invite(self, invite: AssignmentInvite) -> AssignmentInvite:
         self.session.add(invite)

@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -28,7 +29,7 @@ from codrut.modules.assignments.schemas import (
     TeamCreateRequest,
     TeamMembershipCreateRequest,
 )
-from codrut.modules.companies.models import CompanyMembershipRole
+from codrut.modules.companies.models import CompanyMembershipRole, ParticipantProfile
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.forms.definitions import get_approved_questionnaire_definition
 from codrut.modules.forms.repository import FormsRepository
@@ -170,10 +171,10 @@ class AssignmentService:
         teams_by_name = {team.name.strip().casefold(): team for team in teams}
         direct_reports_by_manager: dict[UUID, list[UUID]] = {}
         if project_id is not None:
-            participant_by_name = {
-                participant.full_name.strip().casefold(): participant
-                for participant in participants
-            }
+            participant_by_name = _participants_by_unique_referenced_name(
+                participants,
+                (membership.reports_to_name for membership, _participant in project_memberships),
+            )
             for membership, participant in project_memberships:
                 reports_to_name = (membership.reports_to_name or "").strip()
                 if not reports_to_name:
@@ -203,11 +204,10 @@ class AssignmentService:
         scopes: list[AssignmentPlanScopeResponse] = []
         plan_items: list[AssignmentPlanItemResponse] = []
 
-        leadership_ids = [
-            participant.id
-            for participant in participants
-            if (participant.role_group or "").casefold() == "leadership"
-        ]
+        leadership_ids = sorted(
+            manager_ids,
+            key=lambda item: participant_by_id[item].full_name,
+        )
         if leadership_ids:
             leadership_team = teams_by_name.get("leadership")
             scopes.append(
@@ -240,8 +240,13 @@ class AssignmentService:
                 direct_reports_by_manager.get(manager_id, []),
                 key=lambda item: participant_by_id[item].full_name,
             )
-            if direct_report_ids:
-                manager_team_ids = [manager_id, *direct_report_ids]
+            direct_member_ids = [
+                participant_id
+                for participant_id in direct_report_ids
+                if participant_id not in manager_ids
+            ]
+            if direct_member_ids:
+                manager_team_ids = [manager_id, *direct_member_ids]
                 manager_team_name = f"Echipa {manager.full_name}"
                 persisted_team = teams_by_name.get(manager_team_name.casefold())
 
@@ -253,7 +258,7 @@ class AssignmentService:
                         participant_ids=manager_team_ids,
                     )
                 )
-                for respondent_id in direct_report_ids:
+                for respondent_id in direct_member_ids:
                     plan_items.append(
                         _plan_team_assignment(
                             scope_id=f"manager-team:{manager_id}",
@@ -611,6 +616,40 @@ def _assignment_match_key(
         target_person_id if target_type == AssignmentTargetType.person else None,
         target_team_id if target_type == AssignmentTargetType.team else None,
     )
+
+
+def _participants_by_unique_referenced_name(
+    participants: list[ParticipantProfile],
+    reports_to_names: Iterable[str | None],
+) -> dict[str, ParticipantProfile]:
+    names: dict[str, ParticipantProfile] = {}
+    duplicate_names: set[str] = set()
+    labels_by_key: dict[str, str] = {}
+    for participant in participants:
+        label = participant.full_name.strip()
+        if not label:
+            continue
+        key = label.casefold()
+        labels_by_key.setdefault(key, label)
+        if key in names:
+            duplicate_names.add(key)
+        else:
+            names[key] = participant
+
+    referenced_names = {
+        reports_to_name.strip().casefold()
+        for reports_to_name in reports_to_names
+        if reports_to_name and reports_to_name.strip()
+    }
+    ambiguous_names = duplicate_names & referenced_names
+    if ambiguous_names:
+        ambiguous_name = labels_by_key[sorted(ambiguous_names)[0]]
+        raise DomainError(
+            f'Manager name "{ambiguous_name}" is ambiguous in the project roster.',
+            code="manager_name_ambiguous",
+        )
+
+    return names
 
 
 def _plan_self_assignment(

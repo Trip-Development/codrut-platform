@@ -42,12 +42,32 @@ class InviteVerifyResponse(BaseModel):
     project_name: str
     expires_at: datetime
     token_status: Literal["active"]
+    terms_accepted_at: datetime | None = None
+    terms_version: str | None = None
     tasks: list[InviteTask]
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+class PasswordResetResponse(BaseModel):
+    ok: bool = True
 
 
 class SessionPrincipal(BaseModel):

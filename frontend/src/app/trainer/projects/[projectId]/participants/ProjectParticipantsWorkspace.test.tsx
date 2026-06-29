@@ -1,11 +1,25 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { CompanyParticipant, ParticipantInvitationStatus } from "@/api/companies";
+import {
+  importCompanyRoster,
+  updateCompanyParticipant,
+  type CompanyParticipant,
+  type ParticipantInvitationStatus,
+} from "@/api/companies";
 import {
   buildProjectParticipantAccessRows,
   ProjectParticipantsWorkspace,
 } from "./ProjectParticipantsWorkspace";
+
+vi.mock("@/api/companies", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/companies")>();
+  return {
+    ...original,
+    importCompanyRoster: vi.fn(),
+    updateCompanyParticipant: vi.fn(),
+  };
+});
 
 const participants: CompanyParticipant[] = [
   {
@@ -15,9 +29,9 @@ const participants: CompanyParticipant[] = [
     reports_to_name: null,
     position: "Manager Operațional",
     location: "București",
-    role_group: "leadership",
+    role_group: null,
     pcm_profile: null,
-    user_id: "user-1",
+    user_id: null,
   },
   {
     id: "member-1",
@@ -47,7 +61,10 @@ const invitationStatuses: ParticipantInvitationStatus[] = [
 ];
 
 describe("ProjectParticipantsWorkspace", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
 
   it("derives permanent manager access and temporary secure-link access", () => {
     const rows = buildProjectParticipantAccessRows(participants, invitationStatuses);
@@ -55,7 +72,7 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(rows[0]).toMatchObject({
       internalRoleLabel: "Manager / leadership",
       accountTypeLabel: "Cont permanent",
-      accountStateLabel: "Cont creat",
+      accountStateLabel: "Cont de creat",
       deliveryLabel: "Nepregătit",
     });
     expect(rows[1]).toMatchObject({
@@ -69,10 +86,15 @@ describe("ProjectParticipantsWorkspace", () => {
   it("shows the internal access tab with account type counts", () => {
     render(
       <ProjectParticipantsWorkspace
+        companyId="company-1"
+        projectId="project-1"
         participants={participants}
         invitationStatuses={invitationStatuses}
       />,
     );
+
+    expect(screen.getByText("cont permanent")).toBeTruthy();
+    expect(screen.getByText("invitație temporară activă")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Acces intern" }));
 
@@ -82,4 +104,106 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Dan Membru")).toBeTruthy();
     expect(screen.getByText("Link securizat activ")).toBeTruthy();
   });
+
+  it("keeps the roster read-only until a row is explicitly edited", async () => {
+    vi.mocked(updateCompanyParticipant).mockResolvedValue({
+      ...participants[1],
+      full_name: "Dan Actualizat",
+      email: "dan.actualizat@example.test",
+      reports_to_name: "Ana Manager",
+      position: "Consultant senior",
+      location: "Cluj-Napoca",
+      role_group: "member",
+    });
+
+    renderWorkspace();
+
+    expect(screen.queryByDisplayValue("Dan Membru")).toBeNull();
+
+    const row = screen.getByText("Dan Membru").closest("tr");
+    expect(row).toBeTruthy();
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Editează" }));
+
+    fireEvent.change(screen.getByDisplayValue("Dan Membru"), {
+      target: { value: "Dan Actualizat" },
+    });
+    fireEvent.change(screen.getByDisplayValue("Consultant"), {
+      target: { value: "Consultant senior" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
+
+    await waitFor(() =>
+      expect(updateCompanyParticipant).toHaveBeenCalledWith("company-1", "member-1", {
+        projectId: "project-1",
+        fullName: "Dan Actualizat",
+        email: "dan.membru@example.test",
+        reportsToName: "Ana Manager",
+        position: "Consultant senior",
+        location: "Cluj-Napoca",
+      }),
+    );
+    expect(await screen.findByText("Dan Actualizat")).toBeTruthy();
+  });
+
+  it("adds pasted participants through the roster import endpoint", async () => {
+    vi.mocked(importCompanyRoster).mockResolvedValue({
+      participants: [
+        {
+          ...participants[1],
+          id: "member-2",
+          full_name: "Ioana Nouă",
+          email: "ioana@example.test",
+          position: "Designer",
+          reports_to_name: null,
+        },
+      ],
+      email_results: [],
+      total_imported: 1,
+      emails_sent: 0,
+      emails_failed: 0,
+    });
+
+    render(
+      <ProjectParticipantsWorkspace
+        companyId="company-1"
+        projectId="project-1"
+        participants={[]}
+        invitationStatuses={[]}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Ana Popescu/), {
+      target: { value: "Ioana Nouă, ioana@example.test, Designer, -" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
+
+    await waitFor(() =>
+      expect(importCompanyRoster).toHaveBeenCalledWith(
+        "company-1",
+        [
+          {
+            Name: "Ioana Nouă",
+            "Reports To": "",
+            Position: "Designer",
+            Location: "",
+            email: "ioana@example.test",
+            "Profil PCM": "",
+          },
+        ],
+        { projectId: "project-1" },
+      ),
+    );
+    expect(await screen.findByText("Ioana Nouă")).toBeTruthy();
+  });
 });
+
+function renderWorkspace() {
+  render(
+    <ProjectParticipantsWorkspace
+      companyId="company-1"
+      projectId="project-1"
+      participants={participants}
+      invitationStatuses={invitationStatuses}
+    />,
+  );
+}

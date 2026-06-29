@@ -26,7 +26,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     expect(screen.getAllByText("Codruț").length).toBeGreaterThan(0);
-    expect(screen.getByRole("banner").className).toContain("glass-panel");
+    expect(screen.getByRole("banner").className).toContain("public-glass");
     expect(screen.getByText("Codruț transformă trainingul în pași clari pentru fiecare om.")).toBeTruthy();
     expect(screen.getByText("Acasă")).toBeTruthy();
     expect(screen.getAllByText("Intră în cont").length).toBeGreaterThan(0);

@@ -10,7 +10,7 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, description, icon, action, className = "" }: EmptyStateProps) {
   return (
-    <div className={`rounded-2xl border border-[var(--border)] bg-surface px-5 py-6 text-center shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-[var(--border)] bg-surface px-5 py-6 text-center shadow-sm ${className}`}>
       {icon ? (
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-cream-100 text-lg">
           {icon}

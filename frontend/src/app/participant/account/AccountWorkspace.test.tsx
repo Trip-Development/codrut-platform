@@ -18,7 +18,7 @@ describe("AccountWorkspace", () => {
     cleanup();
   });
 
-  it("displays the PCM base and phase without showing a CTA button", () => {
+  it("shows operational profile data and the participant result visibility rule", () => {
     render(
       <AccountWorkspace
         session={session}
@@ -27,20 +27,23 @@ describe("AccountWorkspace", () => {
           participantFullName: "Ana Participant",
           participantEmail: "ana@example.com",
           companyName: "Michelin",
-          pcmBase: "harmonizer",
-          pcmPhase: "thinker",
           tasks: [],
         }}
       />,
     );
 
-    expect(screen.getByText("harmonizer")).toBeDefined();
-    expect(screen.getByText("thinker")).toBeDefined();
+    expect(screen.getByText("ana@example.com")).toBeDefined();
+    expect(screen.getByText("Michelin")).toBeDefined();
+    expect(screen.getByText("Scoruri și interpretări sumarizate în tabul Rezultate")).toBeDefined();
+    expect(screen.getByText("Răspunsurile brute nu sunt afișate în cont")).toBeDefined();
+    expect(screen.getByText("Schimbă parola")).toBeDefined();
+    expect(screen.queryByText("Armonizator")).toBeNull();
+    expect(screen.queryByText("Gânditor")).toBeNull();
     expect(screen.queryByRole("link", { name: "Actualizează PCM" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Vezi chestionarele" })).toBeNull();
   });
 
-  it("displays 'Necompletată' when PCM base and phase are missing", () => {
+  it("does not show missing PCM placeholders to participants", () => {
     render(
       <AccountWorkspace
         session={session}
@@ -49,13 +52,12 @@ describe("AccountWorkspace", () => {
           participantFullName: "Ana Participant",
           participantEmail: "ana@example.com",
           companyName: "Michelin",
-          pcmBase: null,
-          pcmPhase: null,
           tasks: [],
         }}
       />,
     );
 
-    expect(screen.getAllByText("Necompletată")).toHaveLength(2);
+    expect(screen.queryByText("Necompletată")).toBeNull();
+    expect(screen.getByText("Rezultate")).toBeDefined();
   });
 });

@@ -543,6 +543,7 @@ export function RosterImporter({
   const selectedCompanyName = allCompanies.find((company) => company.id === companyId)?.name ?? "Compania curentă";
   const projectRequired = requireProject;
   const selectedProject = projects.find((project) => project.id === projectId) ?? null;
+  const isProjectFixed = Boolean(defaultProjectId) && projects.length === 1 && projects[0]?.id === defaultProjectId;
   const canImportRows = !hasCriticalErrors && (!projectRequired || Boolean(selectedProject));
   const activeStep: FlowStepKey =
     importState.status === "success"
@@ -715,15 +716,15 @@ export function RosterImporter({
     <div className="space-y-6">
       <ImportFlowStepper steps={flowSteps} />
 
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+      <section className="surface-panel overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="border-b border-[var(--border)] bg-background/55 p-5 lg:border-b-0 lg:border-r">
+          <div className="border-b border-[var(--border)] bg-surface-muted p-5 lg:border-b-0 lg:border-r">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
             <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
               Importul creează lista de participanți în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
             </p>
-            <p className="mt-4 inline-flex rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
+            <p className="mt-4 inline-flex rounded-xl border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
               Fără trimitere automată la import
             </p>
           </div>
@@ -743,14 +744,14 @@ export function RosterImporter({
                 )}
               </div>
               {lockCompany ? (
-                <div className="mt-2 rounded-xl border border-[var(--border)] bg-background px-3.5 py-3 text-sm font-semibold text-foreground">
+                <div className="mt-2 rounded-xl border border-[var(--border)] bg-surface px-3.5 py-3 text-sm font-semibold text-foreground">
                   {selectedCompanyName}
                 </div>
               ) : (
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-[var(--border)] bg-background px-3.5 py-3 text-sm font-semibold text-foreground focus:border-burgundy"
+                  className="control-input mt-2 w-full py-3"
                 >
                   {allCompanies.map((company) => (
                     <option key={company.id} value={company.id}>
@@ -761,13 +762,21 @@ export function RosterImporter({
               )}
             </div>
 
-            {projects.length > 0 ? (
+            {isProjectFixed && selectedProject ? (
+              <div className="rounded-xl border border-[var(--border)] bg-surface px-3.5 py-3">
+                <span className="text-sm font-semibold text-foreground">Proiect</span>
+                <p className="mt-2 text-sm font-bold text-foreground">{selectedProject.name}</p>
+                <p className="mt-1 text-xs leading-5 text-foreground/52">
+                  Participanții importați sunt legați automat de acest proiect. Invitațiile se trimit separat din tabul Invitații.
+                </p>
+              </div>
+            ) : projects.length > 0 ? (
               <label className="block">
                 <span className="text-sm font-semibold text-foreground">Proiect destinație</span>
                 <select
                   value={projectId}
                   onChange={(event) => setProjectId(event.target.value)}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3.5 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45 focus:ring-2 focus:ring-burgundy/10"
+                  className="control-input mt-2 min-h-11 w-full py-2"
                 >
                   <option value="" disabled>
                     Alege proiectul pentru import
@@ -783,7 +792,7 @@ export function RosterImporter({
                 </span>
               </label>
             ) : requireProject ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm leading-6 text-amber-900">
+              <div className="status-panel-warning px-3.5 py-3 leading-6">
                 Creează un proiect înainte de import ca invitațiile și rapoartele să fie corect încapsulate.
               </div>
             ) : null}
@@ -796,13 +805,13 @@ export function RosterImporter({
                     type="file"
                     accept=".csv,.xlsx,.xls"
                     onChange={handleFileChange}
-                    className="w-full rounded-xl border border-dashed border-burgundy/35 bg-background px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
+                    className="w-full rounded-xl border border-dashed border-burgundy/35 bg-surface px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
                   />
                 </label>
                 <button
                   type="button"
                   onClick={handleAddManualParticipant}
-                  className="tap-soft rounded-xl border border-[var(--border)] bg-surface px-3.5 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                  className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3.5 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                 >
                   + Participant manual
                 </button>
@@ -813,14 +822,14 @@ export function RosterImporter({
         </div>
 
         {importState.status === "idle" && (
-          <div className="border-t border-[var(--border)] bg-background/60 px-5 py-5 text-center text-foreground/55">
+          <div className="border-t border-[var(--border)] bg-surface-muted px-5 py-5 text-center text-foreground/55">
             <p className="text-sm font-semibold">Aștept fișierul de import.</p>
             <p className="mt-1 text-xs">Acceptă Excel (.xlsx, .xls) și CSV (.csv).</p>
           </div>
         )}
 
         {importState.status !== "idle" && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] bg-background/60 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] bg-surface-muted px-5 py-3">
             <StatusDot tone={importState.status} />
             <p className="text-sm font-semibold text-foreground/68">
               {importState.message}
@@ -830,7 +839,7 @@ export function RosterImporter({
       </section>
 
       {processedRows.length > 0 && importState.status === "ready" && (
-        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+        <section className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
           <div className="grid gap-3 sm:grid-cols-4">
             <RosterMetric label="Rânduri citite" value={processedRows.length} />
             <RosterMetric label="Valide pentru import" value={validRowCount} tone={criticalErrorCount > 0 ? "warning" : "success"} />
@@ -845,7 +854,7 @@ export function RosterImporter({
               <button
                 type="button"
                 onClick={handleAddManualParticipant}
-                className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
               >
                 + Participant manual
               </button>
@@ -853,7 +862,7 @@ export function RosterImporter({
                 type="button"
                 disabled={!canImportRows}
                 onClick={handleImport}
-                className="tap-soft rounded-xl bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="tap-soft rounded-full bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Salvează participanții
               </button>
@@ -863,7 +872,7 @@ export function RosterImporter({
       )}
 
       {importState.status === "success" && lastImportedParticipantIds.length > 0 && (
-        <section className="rounded-2xl border border-burgundy/20 bg-surface p-5 shadow-sm">
+        <section className="rounded-xl border border-burgundy/20 bg-surface p-5 shadow-sm">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)]">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acces participanți</p>
@@ -876,7 +885,7 @@ export function RosterImporter({
                   type="button"
                   disabled={accessState.status === "sending"}
                   onClick={() => handleSendAccess("secure_links")}
-                  className="tap-soft rounded-xl bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="tap-soft rounded-full bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {accessState.status === "sending" && accessState.mode === "secure_links"
                     ? "Se generează..."
@@ -886,7 +895,7 @@ export function RosterImporter({
                   type="button"
                   disabled={accessState.status === "sending"}
                   onClick={() => handleSendAccess("email")}
-                  className="tap-soft rounded-xl border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                  className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {accessState.status === "sending" && accessState.mode === "email"
                     ? "Se trimit..."
@@ -895,7 +904,7 @@ export function RosterImporter({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[var(--border)] bg-background p-4">
+            <div className="rounded-xl border border-[var(--border)] bg-background p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Status acces</p>
@@ -906,7 +915,7 @@ export function RosterImporter({
                 <button
                   type="button"
                   onClick={() => router.push(selectedProject ? `/trainer/projects/${selectedProject.id}/invitations` : `/trainer/companies/${companyId}`)}
-                  className="tap-soft shrink-0 rounded-lg border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                  className="tap-soft shrink-0 rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                 >
                   Invitații
                 </button>
@@ -923,7 +932,7 @@ export function RosterImporter({
                   {accessState.message}
                 </p>
               ) : (
-                <p className="mt-3 rounded-xl border border-[var(--border)] bg-surface-muted/45 px-3 py-2 text-xs font-semibold text-foreground/56">
+                <p className="mt-3 rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-semibold text-foreground/56">
                   Nicio livrare pornită încă.
                 </p>
               )}
@@ -955,7 +964,7 @@ export function RosterImporter({
                           <button
                             type="button"
                             onClick={() => handleCopyAccessLink(result)}
-                            className="tap-soft shrink-0 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                            className="tap-soft shrink-0 rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
                           >
                             {copiedParticipantId === result.participant_id ? "Copiat" : "Copiază"}
                           </button>
@@ -972,7 +981,7 @@ export function RosterImporter({
 
       {/* Participant column mapping */}
       {headers.length > 0 && importState.status === "ready" && (
-        <section className="rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
+        <section className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
           <div>
             <h3 className="text-base font-semibold text-foreground">Mapare coloane</h3>
             <p className="mt-1 text-sm leading-6 text-foreground/60">
@@ -982,12 +991,12 @@ export function RosterImporter({
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {MAPPING_FIELDS.map((field) => (
-              <label key={field} className="block rounded-xl border border-[var(--border)] bg-background p-3 transition-colors hover:border-burgundy/25 hover:bg-surface-muted/40">
+              <label key={field} className="block rounded-xl border border-[var(--border)] bg-background p-3 transition-colors hover:border-burgundy/25 hover:bg-surface-muted">
                 <span className="text-xs font-bold text-foreground/70">{FIELD_LABELS[field]}</span>
                 <select
                   value={mappings[field]}
                   onChange={(e) => handleMappingChange(field, e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-[var(--border)] bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground focus:border-burgundy"
+                  className="mt-2 w-full rounded-xl border border-[var(--border)] bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground focus:border-burgundy"
                 >
                   <option value="">-- Ignoră / Fără --</option>
                   {headers.map((h) => (
@@ -1006,18 +1015,18 @@ export function RosterImporter({
       {validationErrors.length > 0 && importState.status === "ready" && (
         <div className="space-y-3">
           {validationErrors.some((e) => e.type === "critical") && (
-            <section className="rounded-2xl border border-red-200 bg-red-50/60 p-5 shadow-sm space-y-3">
-              <h3 className="text-base font-semibold text-red-800">
+            <section className="status-panel-danger space-y-3 p-5">
+              <h3 className="text-base font-semibold">
                 Erori critice ({validationErrors.filter((e) => e.type === "critical").length})
               </h3>
-              <p className="text-xs text-red-700">
+              <p className="text-xs">
                 Problemele de mai jos blochează importul. Corectează-le direct în tabel:
               </p>
               <div className="max-h-28 overflow-y-auto space-y-1.5">
                 {validationErrors
                   .filter((e) => e.type === "critical")
                   .map((err, i) => (
-                    <p key={i} className="text-xs font-semibold text-red-700">
+                    <p key={i} className="text-xs font-semibold">
                       - <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
                     </p>
                   ))}
@@ -1026,11 +1035,11 @@ export function RosterImporter({
           )}
 
           {validationErrors.some((e) => e.type === "warning") && (
-            <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm space-y-3">
-              <h3 className="text-base font-semibold text-amber-800">
+            <section className="status-panel-warning space-y-3 p-5">
+              <h3 className="text-base font-semibold">
                 Atenționări ({validationErrors.filter((e) => e.type === "warning").length})
               </h3>
-              <p className="text-xs text-amber-700">
+              <p className="text-xs">
                 Nu blochează importul, dar pot afecta generarea automată a evaluărilor:
               </p>
               <div className="max-h-28 overflow-y-auto space-y-1.5">
@@ -1049,7 +1058,7 @@ export function RosterImporter({
 
       {/* Spreadsheet Live Preview & Inline Editing */}
       {processedRows.length > 0 && importState.status === "ready" && (
-        <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-sm">
+        <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm">
           <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-base font-semibold text-foreground">Previzualizare participanți</h3>
             <p className="mt-1 text-sm leading-6 text-foreground/60">
@@ -1073,7 +1082,7 @@ export function RosterImporter({
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {processedRows.map((row, rIdx) => (
-                  <tr key={rIdx} className="hover:bg-background/40">
+                  <tr key={rIdx} className="hover:bg-surface-muted">
                     <td className="px-5 py-3 font-semibold text-foreground/45 text-center">{rIdx + 1}</td>
 
                     {/* Render fields with double click inline editing support */}
@@ -1086,7 +1095,7 @@ export function RosterImporter({
                         <td
                           key={field}
                           className={`px-5 py-3 font-medium transition-colors ${
-                            hasError ? "bg-red-50/80 text-red-900 border border-red-200" : "text-foreground"
+                            hasError ? "bg-red-50 text-red-900 border border-red-200" : "text-foreground"
                           }`}
                           onDoubleClick={() => setEditingCellId({ rowIndex: rIdx, field })}
                         >
@@ -1134,10 +1143,10 @@ export function RosterImporter({
 
       {/* Add Company Modal */}
       {showAddCompanyModal && !lockCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form
             onSubmit={handleAddCompany}
-            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-surface p-6 shadow-xl space-y-4"
+            className="w-full max-w-md rounded-xl border border-[var(--border)] bg-surface p-6 shadow-xl space-y-4"
           >
             <h3 className="text-lg font-semibold text-foreground">Adaugă companie nouă</h3>
 
@@ -1149,7 +1158,7 @@ export function RosterImporter({
                 value={newCompanyName}
                 onChange={(e) => setNewCompanyName(e.target.value)}
                 placeholder="Ex. Acme Corporation SRL"
-                className="w-full rounded-xl border border-[var(--border)] bg-background px-3.5 py-2.5 text-sm font-semibold text-foreground focus:border-burgundy focus:outline-none"
+                className="control-input w-full py-2.5"
               />
             </div>
 
@@ -1160,14 +1169,14 @@ export function RosterImporter({
                   setShowAddCompanyModal(false);
                   setNewCompanyName("");
                 }}
-                className="tap-soft rounded-lg border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:bg-surface-muted"
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2 text-xs font-bold text-foreground hover:bg-surface-muted"
               >
                 Anulează
               </button>
               <button
                 type="submit"
                 disabled={isCreatingCompany}
-                className="tap-soft rounded-lg bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCreatingCompany ? "Se creează..." : "Adaugă"}
               </button>
@@ -1185,7 +1194,7 @@ function ImportFlowStepper({
   steps: Array<{ key: FlowStepKey; label: string; detail: string; state: FlowStepState }>;
 }) {
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-surface via-surface to-surface-muted/50 p-3 shadow-sm">
+    <section className="surface-panel p-3">
       <div className="grid gap-1.5 md:grid-cols-4">
         {steps.map((step, index) => (
           <div
@@ -1197,8 +1206,8 @@ function ImportFlowStepper({
                 : step.state === "complete"
                   ? "text-green-700 hover:bg-green-50/70"
                   : step.state === "error"
-                    ? "text-red-700 hover:bg-red-50/70"
-                    : "text-foreground/50 hover:bg-background/70",
+                    ? "text-red-700 hover:bg-red-50"
+                    : "text-foreground/50 hover:bg-surface-muted",
             ].join(" ")}
           >
             <span
@@ -1210,7 +1219,7 @@ function ImportFlowStepper({
                     ? "border-green-200 bg-green-50 text-green-700"
                     : step.state === "error"
                       ? "border-red-200 bg-red-50 text-red-700"
-                      : "border-[var(--border)] bg-background text-foreground/50 group-hover:border-burgundy/25",
+                      : "border-[var(--border)] bg-surface text-foreground/50 group-hover:border-burgundy/25",
               ].join(" ")}
             >
               {index + 1}
@@ -1273,7 +1282,7 @@ function RosterMetric({
           : "text-foreground";
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-background/80 px-3 py-3 transition-all hover:border-burgundy/20 hover:bg-surface-muted/50 hover:shadow-sm">
+    <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-3 transition-all hover:border-burgundy/20 hover:bg-surface-muted hover:shadow-sm">
       <p className="text-[11px] font-semibold text-foreground/50">{label}</p>
       <p className={["mt-1 text-2xl font-semibold", toneClass].join(" ")}>{value}</p>
     </div>

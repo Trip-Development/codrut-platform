@@ -261,6 +261,28 @@ describe("buildInvitationRows", () => {
     expect(screen.getByText("iCARE 360 pentru manager · despre Andrei Manager")).toBeTruthy();
   });
 
+  it("keeps advanced assignment controls visibly locked until roster participants exist", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+
+    render(
+      <InvitationsWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={[]}
+        assignments={[]}
+        invitationStatuses={[]}
+        teams={[]}
+      />,
+    );
+
+    const advancedButton = screen.getByRole("button", { name: "Adaugă participanți pentru asignări" });
+    expect(advancedButton.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/După ce adaugi participanți în roster/)).toBeTruthy();
+    expect(screen.queryByText("Configurează asignările înainte de trimitere")).toBeNull();
+  });
+
   it("generates a default assignment plan and saves only selected rows", async () => {
     vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
     vi.mocked(getCompanyDefaultAssignmentPlan).mockResolvedValue({

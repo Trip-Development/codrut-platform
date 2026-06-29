@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { getCompanyDetail } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
@@ -14,34 +15,27 @@ export default async function CompanyOverviewPage({
   const company = await getCompanyDetail(companyId, await getServerApiRequestOptions());
 
   if (!company) {
-    return (
-      <section className="rounded-xl border border-dashed border-[var(--border)] bg-surface/70 p-8 text-center">
-        <p className="text-base font-semibold text-foreground">Compania nu a fost găsită.</p>
-      </section>
-    );
+    notFound();
   }
 
   const basePath = `/trainer/companies/${companyId}`;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 hero-shape shadow-glass animate-fade-in-up p-8 md:p-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-hero-mesh opacity-100"></div>
-        <div className="relative z-10">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Context companie</p>
-          <h2 className="mt-3 font-display text-4xl font-bold leading-tight text-foreground tracking-tight">Sumar și Setări</h2>
-          <p className="mt-4 text-lg leading-relaxed text-foreground/60 max-w-md">Administrează participanții globali și setările organizației într-un spațiu aerisit.</p>
+      <div className="company-arch overflow-hidden p-5 md:p-7">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Context companie</p>
+            <h2 className="font-display mt-2 text-3xl font-semibold leading-tight text-foreground md:text-4xl">{company.name}</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/62">
+              Administrează proiectele și setările organizației dintr-un singur spațiu.
+            </p>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-3 relative z-10">
-          <Link
-            href={`${basePath}/participants`}
-            className="btn-secondary"
-          >
-            Participanți
-          </Link>
+        <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href={`${basePath}/settings`}
-            className="btn-premium"
+            className="btn-primary"
           >
             Setări companie
           </Link>
@@ -78,10 +72,9 @@ export default async function CompanyOverviewPage({
           companyId={companyId}
           initialProjects={company.projects}
           assignments={company.assignments}
+          participantCount={company.stats.totalParticipants}
         />
       </div>
     </div>
   );
 }
-
-

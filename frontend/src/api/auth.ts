@@ -1,8 +1,9 @@
-import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
+import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
 
 export type CurrentUser = {
   id: string;
   name: string;
+  email?: string;
   role: "trainer" | "participant";
 };
 
@@ -44,9 +45,61 @@ export async function loginWithPassword(email: string, password: string): Promis
     user: {
       id: user.user_id,
       name: user.email.split("@")[0],
+      email: user.email,
       role: user.role,
     },
   };
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Emailul de resetare nu a putut fi trimis.";
+    throw new Error(message);
+  }
+}
+
+export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ token, password }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Parola nu a putut fi resetată.";
+    throw new Error(message);
+  }
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Parola nu a putut fi actualizată.";
+    throw new Error(message);
+  }
 }
 
 async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
@@ -63,6 +116,7 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       user: {
         id: user.user_id,
         name: user.email.split("@")[0],
+        email: user.email,
         role: user.role,
       },
     };
@@ -83,7 +137,7 @@ export async function getTrainerSession(): Promise<SessionState> {
   const session = await getSessionFromApi("trainer");
   if (session) return session;
 
-  if (!isDemoFallbackEnabled()) {
+  if (!isSeededDemoFallbackEnabled()) {
     throw new Error("Trainer authentication required.");
   }
 
@@ -94,7 +148,6 @@ export async function getTrainerSession(): Promise<SessionState> {
       name: "Andrei",
       role: "trainer",
     },
-    message: "Sesiune demo trainer până când login-ul FastAPI este conectat complet în frontend.",
   };
 }
 
@@ -102,7 +155,7 @@ export async function getParticipantSession(): Promise<SessionState> {
   const session = await getSessionFromApi("participant");
   if (session) return session;
 
-  if (!isDemoFallbackEnabled()) {
+  if (!isSeededDemoFallbackEnabled()) {
     throw new Error("Participant authentication required.");
   }
 
@@ -110,10 +163,9 @@ export async function getParticipantSession(): Promise<SessionState> {
     state: "fallback",
     user: {
       id: "participant-local",
-      name: "Leadership demo",
+      name: "Mihai Matei",
       role: "participant",
     },
-    message: "Sesiune demo leadership. Membrii invitați fără cont intră prin link securizat.",
   };
 }
 

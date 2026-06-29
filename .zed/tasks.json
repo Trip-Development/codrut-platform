@@ -3,7 +3,7 @@
     "label": "just: dev",
     "command": "just",
     "args": ["dev"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -12,7 +12,7 @@
     "label": "just: down",
     "command": "just",
     "args": ["down"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -21,7 +21,7 @@
     "label": "just: logs",
     "command": "just",
     "args": ["logs"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -30,7 +30,7 @@
     "label": "just: backend-test",
     "command": "just",
     "args": ["backend-test"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -39,7 +39,7 @@
     "label": "just: backend-lint",
     "command": "just",
     "args": ["backend-lint"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -48,7 +48,7 @@
     "label": "just: frontend-test",
     "command": "just",
     "args": ["frontend-test"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -57,7 +57,7 @@
     "label": "just: frontend-lint",
     "command": "just",
     "args": ["frontend-lint"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -66,7 +66,7 @@
     "label": "just: frontend-typecheck",
     "command": "just",
     "args": ["frontend-typecheck"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -75,7 +75,7 @@
     "label": "just: frontend-build",
     "command": "just",
     "args": ["frontend-build"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -84,7 +84,7 @@
     "label": "just: migrate",
     "command": "just",
     "args": ["migrate"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always"
@@ -93,7 +93,7 @@
     "label": "just: smoke",
     "command": "just",
     "args": ["smoke"],
-    "cwd": "$ZED_WORKTREE_ROOT",
+    "cwd": "$ZED_WORKTREE_ROOT/projects/codrut-platform",
     "use_new_terminal": true,
     "allow_concurrent_runs": false,
     "reveal": "always"

@@ -11,11 +11,13 @@ import {
   type CompanyProject,
   type CompanyProjectStatus,
 } from "@/api/companies";
+import { ProjectCardFrame, ProjectMeta } from "@/components/projects/project-card";
 
 type CompanyProjectsPanelProps = {
   companyId: string;
   initialProjects: CompanyProject[];
   assignments: CompanyAssignment[];
+  participantCount: number;
 };
 
 const statusOptions: Array<{ value: CompanyProjectStatus; label: string }> = [
@@ -24,13 +26,6 @@ const statusOptions: Array<{ value: CompanyProjectStatus; label: string }> = [
   { value: "completed", label: "Finalizat" },
   { value: "archived", label: "Arhivat" },
 ];
-
-const statusTone: Record<CompanyProjectStatus, string> = {
-  draft: "bg-surface-muted text-foreground/62",
-  active: "bg-green-50 text-green-800 border-green-100",
-  completed: "bg-burgundy/10 text-burgundy border-burgundy/15",
-  archived: "bg-foreground/8 text-foreground/48",
-};
 
 export function CompanyProjectsPanel({
   companyId,
@@ -46,9 +41,11 @@ export function CompanyProjectsPanel({
   const [formOpenDate, setFormOpenDate] = useState("");
   const [formCloseDate, setFormCloseDate] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const activeProjects = useMemo(
     () => projects.filter((project) => project.status === "active").length,
@@ -72,10 +69,15 @@ export function CompanyProjectsPanel({
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    if (!trimmedName) {
+      setFormError("Completează numele proiectului. Restul câmpurilor pot fi ajustate mai târziu în Setări.");
+      setMessage(null);
+      return;
+    }
 
     setIsCreating(true);
     setMessage(null);
+    setFormError(null);
     try {
       const created = await createCompanyProject(companyId, {
         name: trimmedName,
@@ -95,6 +97,7 @@ export function CompanyProjectsPanel({
       setDueDate("");
       setFormOpenDate("");
       setFormCloseDate("");
+      setCreateOpen(false);
       setMessage("Proiectul a fost salvat.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Proiectul nu a putut fi salvat.");
@@ -143,257 +146,223 @@ export function CompanyProjectsPanel({
   }
 
   return (
-    <section className="bento-card overflow-hidden">
-      <div className="grid gap-0 xl:grid-cols-[22rem_minmax(0,1fr)]">
-        {/* Create Project Form - Sidebar */}
-        <form onSubmit={handleCreate} className="border-b border-[var(--border)] bg-surface-muted/30 p-6 xl:border-b-0 xl:border-r relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-32 bg-burgundy/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none z-0"></div>
-          <div className="relative z-10">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Proiecte</p>
-            <h2 className="mt-1 text-xl font-bold text-foreground">Inițiază un proiect</h2>
-            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
-              Setează un proiect nou. Perioada formularelor controlează când linkurile sunt active pentru participanți.
-            </p>
-            <div className="mt-6 space-y-5">
-              <label className="block">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Nume proiect</span>
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Ex: Leadership Q3 2026"
-                  className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-inner placeholder:text-foreground/30"
-                />
-              </label>
-              <label className="block">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Tip proiect</span>
-                <select
-                  value={projectType}
-                  onChange={(event) => setProjectType(event.target.value)}
-                  className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-sm appearance-none"
-                >
-                  <option value="team_coaching">Team coaching</option>
-                  <option value="individual_coaching">Individual coaching</option>
-                  <option value="leadership_program">Leadership program</option>
-                  <option value="custom">Personalizat</option>
-                </select>
-              </label>
+    <section className="space-y-5">
+      <div className="page-toolbar">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/50">Portofoliu</p>
+          <h3 className="mt-1 font-display text-xl font-bold text-foreground">
+            {projects.length} proiecte <span className="font-medium text-foreground/30">({activeProjects} active)</span>
+          </h3>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-foreground/58">
+            Creează proiectul, apoi adaugă rosterul și pregătește asignările în spațiul lui.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {archivedCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowArchived((current) => !current)}
+              className="btn-secondary !px-4 !py-2"
+            >
+              {showArchived ? "Ascunde arhiva" : `Arată arhiva (${archivedCount})`}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="btn-primary"
+          >
+            Adaugă proiect
+          </button>
+        </div>
+      </div>
+
+      {message ? (
+        <p aria-live="polite" className="surface-panel px-4 py-3 text-[11px] font-bold text-foreground/70">
+          {message}
+        </p>
+      ) : null}
+
+      {createOpen ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => !isCreating && setCreateOpen(false)}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-project-title"
+            className="modal-panel max-w-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Proiect nou</p>
+                <h3 id="create-project-title" className="mt-1 text-xl font-bold text-foreground">Inițiază un proiect</h3>
+                <p className="mt-2 text-sm leading-6 text-foreground/60">
+                  Perioada formularelor controlează când linkurile sunt active pentru participanți.
+                  Rosterul poate fi adăugat după ce proiectul este creat.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                disabled={isCreating}
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy disabled:opacity-50"
+              >
+                Închide
+              </button>
+            </div>
+
+            <form onSubmit={handleCreate} className="mt-6 space-y-5">
+              {formError ? (
+                <p id="create-project-error" className="rounded-xl border border-burgundy/20 bg-burgundy/10 px-4 py-3 text-sm font-semibold text-burgundy">
+                  {formError}
+                </p>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Start proiect</span>
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Nume proiect</span>
                   <input
-                    value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
-                    type="date"
-                    className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-sm"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Ex: Leadership Q3 2026"
+                    className="control-input w-full py-3"
+                    aria-invalid={Boolean(formError && !name.trim())}
+                    aria-describedby={formError ? "create-project-error" : undefined}
+                    autoFocus
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Final proiect</span>
-                  <input
-                    value={dueDate}
-                    onChange={(event) => setDueDate(event.target.value)}
-                    type="date"
-                    className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-sm"
-                  />
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Tip proiect</span>
+                  <select
+                    value={projectType}
+                    onChange={(event) => setProjectType(event.target.value)}
+                    className="control-input w-full appearance-none py-3"
+                  >
+                    <option value="team_coaching">Team coaching</option>
+                    <option value="individual_coaching">Individual coaching</option>
+                    <option value="leadership_program">Leadership program</option>
+                    <option value="custom">Personalizat</option>
+                  </select>
                 </label>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Formulare active din</span>
-                  <input
-                    value={formOpenDate}
-                    onChange={(event) => setFormOpenDate(event.target.value)}
-                    type="date"
-                    className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-sm"
-                  />
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Start proiect</span>
+                  <input value={startDate} onChange={(event) => setStartDate(event.target.value)} type="date" className="control-input w-full py-3" />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Active până la</span>
-                  <input
-                    value={formCloseDate}
-                    onChange={(event) => setFormCloseDate(event.target.value)}
-                    type="date"
-                    className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-bold text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-sm"
-                  />
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Final proiect</span>
+                  <input value={dueDate} onChange={(event) => setDueDate(event.target.value)} type="date" className="control-input w-full py-3" />
+                </label>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Formulare active din</span>
+                  <input value={formOpenDate} onChange={(event) => setFormOpenDate(event.target.value)} type="date" className="control-input w-full py-3" />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Active până la</span>
+                  <input value={formCloseDate} onChange={(event) => setFormCloseDate(event.target.value)} type="date" className="control-input w-full py-3" />
                 </label>
               </div>
               <label className="block">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Notițe interne</span>
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">Notițe interne</span>
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  rows={2}
+                  rows={3}
                   placeholder="Obiective, contextul intervenției..."
-                  className="w-full resize-none rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium leading-relaxed text-foreground focus:border-burgundy/50 focus:ring-2 focus:ring-burgundy/10 transition-all shadow-inner"
+                  className="control-input w-full resize-none py-3 leading-relaxed"
                 />
               </label>
               <button
                 type="submit"
-                disabled={isCreating || !name.trim()}
-                className="btn-premium w-full mt-2"
+                disabled={isCreating}
+                className="btn-primary w-full"
               >
-                {isCreating ? "Se salvează..." : "Adaugă proiect"}
+                {isCreating ? "Se salvează..." : "Salvează proiectul"}
               </button>
-            </div>
-            {message ? (
-              <p aria-live="polite" className="mt-4 rounded-xl bg-surface-muted/50 border border-[var(--border)] px-4 py-3 text-[11px] font-bold text-foreground/70">
-                {message}
-              </p>
-            ) : null}
-          </div>
-        </form>
-
-        {/* Projects Grid */}
-        <div className="p-6 md:p-8 bg-background/50 flex flex-col h-full">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] pb-5 mb-6">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/50">Portofoliu</p>
-              <h3 className="mt-1 text-xl font-display font-bold text-foreground">
-                {projects.length} proiecte <span className="text-foreground/30 font-medium">({activeProjects} active)</span>
-              </h3>
-            </div>
-            {archivedCount > 0 ? (
-              <button
-                type="button"
-                onClick={() => setShowArchived((current) => !current)}
-                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2 text-[11px] font-bold text-foreground/60 hover:border-burgundy/30 hover:text-burgundy hover:shadow-sm transition-all shadow-sm"
-              >
-                {showArchived ? "Ascunde arhiva" : `Arată arhiva (${archivedCount})`}
-              </button>
-            ) : null}
-          </div>
-
-          <div className="flex-1">
-            {visibleProjects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full min-h-[400px] rounded-3xl border border-dashed border-[var(--border)] bg-surface/40 p-12 text-center">
-                <div className="w-16 h-16 rounded-full bg-surface-muted/50 flex items-center justify-center mb-4 text-foreground/30">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                </div>
-                <h4 className="text-lg font-bold text-foreground mb-2">Niciun proiect</h4>
-                <p className="text-sm font-medium text-foreground/50 max-w-[250px]">
-                  Utilizați formularul din stânga pentru a adăuga primul proiect al acestei companii.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
-                {visibleProjects.map((project) => {
-                  const metrics = metricsByProject.get(project.id) ?? {
-                    total: 0,
-                    completed: 0,
-                  };
-                  return (
-                    <article
-                      key={project.id}
-                      className="group flex flex-col rounded-3xl border border-[var(--border)] bg-surface p-6 transition-all duration-150 hover:-translate-y-1 hover:shadow-[0_12px_32px_-12px_rgba(137,5,5,0.12)] hover:border-burgundy/20 relative overflow-hidden"
-                    >
-                      {/* Status Accent Line */}
-                      <div className={`absolute top-0 left-0 w-full h-1 ${
-                        project.status === 'active' ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
-                        project.status === 'completed' ? 'bg-gradient-to-r from-burgundy/40 to-burgundy/80' :
-                        project.status === 'draft' ? 'bg-gradient-to-r from-surface-muted to-[var(--border)]' :
-                        'bg-foreground/10'
-                      }`} />
-
-                      <div className="flex-1 min-w-0 mb-5">
-                        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider border shadow-sm ${statusTone[project.status]}`}>
-                            {project.status === "active" ? <span className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> : null}
-                            {statusLabel(project.status)}
-                          </span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-burgundy/70 bg-burgundy/5 px-2 py-1 rounded-md">
-                            {projectTypeLabel(project.project_type)}
-                          </span>
-                        </div>
-                        <h4 className="text-lg font-bold text-foreground leading-tight line-clamp-2" title={project.name}>{project.name}</h4>
-                        
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-semibold text-foreground/50">
-                          <div>
-                            <span className="block text-[9px] uppercase tracking-wider text-foreground/40 mb-0.5">Perioadă</span>
-                            {formatDate(project.starts_at) ?? "TBD"} - {formatDate(project.due_at) ?? "TBD"}
-                          </div>
-                          <div>
-                            <span className="block text-[9px] uppercase tracking-wider text-foreground/40 mb-0.5">Formulare live</span>
-                            {formatDate(project.form_opens_at) ?? "oricând"} - {formatDate(project.form_closes_at) ?? "nelimitat"}
-                          </div>
-                        </div>
-
-                        {project.description ? (
-                          <p className="mt-4 text-xs font-medium leading-relaxed text-foreground/60 line-clamp-2" title={project.description}>{project.description}</p>
-                        ) : null}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 mt-auto mb-5">
-                        <div className="rounded-xl border border-[var(--border)] bg-surface-muted/20 px-4 py-3 text-center">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">Asignări</p>
-                          <p className="mt-1 text-xl font-display font-bold text-foreground">{metrics.total}</p>
-                        </div>
-                        <div className="rounded-xl border border-[var(--border)] bg-surface-muted/20 px-4 py-3 text-center">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">Finalizate</p>
-                          <p className="mt-1 text-xl font-display font-bold text-burgundy">{metrics.completed}</p>
-                        </div>
-                      </div>
-
-                      <div className="pt-5 border-t border-[var(--border)] grid grid-cols-2 gap-2">
-                        <Link
-                          href={`/trainer/projects/${project.id}/participants`}
-                          className="tap-soft flex items-center justify-center h-10 rounded-xl bg-surface-muted/50 text-xs font-bold text-foreground hover:bg-surface hover:border hover:border-[var(--border)] hover:shadow-sm transition-all"
-                        >
-                          Participanți
-                        </Link>
-                        <Link
-                          href={`/trainer/projects/${project.id}/invitations`}
-                          className="tap-soft flex items-center justify-center h-10 rounded-xl bg-surface-muted/50 text-xs font-bold text-foreground hover:bg-surface hover:border hover:border-[var(--border)] hover:shadow-sm transition-all"
-                        >
-                          Invitații
-                        </Link>
-                        <Link
-                          href={`/trainer/projects/${project.id}/reports`}
-                          className="tap-soft flex items-center justify-center h-10 rounded-xl bg-surface-muted/50 text-xs font-bold text-foreground hover:bg-surface hover:border hover:border-[var(--border)] hover:shadow-sm transition-all col-span-2"
-                        >
-                          Vizualizare Rapoarte
-                        </Link>
-                        <select
-                          value={project.status}
-                          onChange={(event) => handleStatusChange(project, event.target.value as CompanyProjectStatus)}
-                          disabled={busyId === project.id}
-                          className="h-10 rounded-xl border border-[var(--border)] bg-surface px-3 text-xs font-bold text-foreground outline-none transition-colors hover:border-burgundy/30 focus:border-burgundy/40 appearance-none col-span-2 shadow-sm text-center"
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              Status: {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(project)}
-                          disabled={busyId === project.id}
-                          className="tap-soft h-10 rounded-xl bg-red-50/50 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-45 transition-colors col-span-2"
-                        >
-                          Șterge proiectul
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            </form>
+          </section>
         </div>
-      </div>
+      ) : null}
+
+      {visibleProjects.length === 0 ? (
+        <div className="surface-panel-muted flex min-h-[20rem] flex-col items-center justify-center border-dashed p-12 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-surface text-foreground/30">
+            <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          </div>
+          <h4 className="text-lg font-bold text-foreground">Niciun proiect</h4>
+          <p className="mt-2 max-w-sm text-sm font-medium leading-relaxed text-foreground/50">
+            Adaugă primul proiect al acestei companii din butonul de sus.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+          {visibleProjects.map((project) => {
+            const metrics = metricsByProject.get(project.id) ?? { total: 0, completed: 0 };
+            return (
+              <ProjectCardFrame key={project.id} project={project}>
+                <div className="border-t border-[var(--border)] px-5 pb-5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <ProjectMeta label="Asignări" value={metrics.total} />
+                    <ProjectMeta label="Finalizate" value={metrics.completed} />
+                  </div>
+                  <ProjectCompletionBar completed={metrics.completed} total={metrics.total} />
+
+                  <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-5">
+                    <Link href={`/trainer/projects/${project.id}/participants`} className="btn-secondary !h-10 !px-3 !py-0 !text-xs">
+                      Participanți
+                    </Link>
+                    <Link href={`/trainer/projects/${project.id}/invitations`} className="btn-secondary !h-10 !px-3 !py-0 !text-xs">
+                      Invitații
+                    </Link>
+                    <Link href={`/trainer/projects/${project.id}/reports`} className="btn-secondary col-span-2 !h-10 !px-3 !py-0 !text-xs">
+                      Rezultate
+                    </Link>
+                    <select
+                      value={project.status}
+                      onChange={(event) => handleStatusChange(project, event.target.value as CompanyProjectStatus)}
+                      disabled={busyId === project.id}
+                      className="control-input col-span-2 h-10 appearance-none px-3 text-center text-xs"
+                    >
+                      {statusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          Status: {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(project)}
+                      disabled={busyId === project.id}
+                      className="btn-danger-subtle col-span-2 h-10 text-xs"
+                    >
+                      Șterge proiectul
+                    </button>
+                  </div>
+                </div>
+              </ProjectCardFrame>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
 
-function statusLabel(status: CompanyProjectStatus): string {
-  return statusOptions.find((option) => option.value === status)?.label ?? status;
-}
-
-function projectTypeLabel(value: string | null): string {
-  if (value === "individual_coaching") return "Individual coaching";
-  if (value === "leadership_program") return "Leadership program";
-  if (value === "custom") return "Personalizat";
-  return "Team coaching";
+function ProjectCompletionBar({ completed, total }: { completed: number; total: number }) {
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-foreground/42">
+        <span>Progres asignări</span>
+        <span>{percent}%</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
+        <div className="project-timeline-fill h-full rounded-full" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
 }
 
 function buildProjectMetrics(assignments: CompanyAssignment[]) {
@@ -408,15 +377,6 @@ function buildProjectMetrics(assignments: CompanyAssignment[]) {
     metrics.set(assignment.project_id, current);
   }
   return metrics;
-}
-
-function formatDate(value: string | null): string | null {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString("ro-RO", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function dateInputToIso(value: string): string | null {

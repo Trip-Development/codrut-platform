@@ -5,14 +5,29 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from codrut.core.config import Settings
+from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
 )
-from codrut.modules.communications.models import EmailSend, EmailSendStatus
+from codrut.modules.communications.campaign_tracking import (
+    CampaignTrackingClaims,
+    create_campaign_tracking_token,
+)
+from codrut.modules.communications.models import (
+    CampaignRecipient,
+    CampaignRecipientEvent,
+    CampaignRecipientSegment,
+    CampaignRecipientStatus,
+    EmailSend,
+    EmailSendStatus,
+)
+from codrut.modules.communications.schemas import CampaignRecipientEventCreateRequest
 from codrut.modules.communications.service import CommunicationsService
 from codrut.modules.companies.models import ParticipantProfile
+from codrut.modules.identity import models as identity_models  # noqa: F401
 
 
 class FakeScalarsResult:
@@ -34,6 +49,14 @@ class FakeTupleResult:
 
     def all(self) -> list[tuple]:
         return self.rows
+
+
+class FakeScalarOneResult:
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+    def scalar_one_or_none(self) -> Any:
+        return self.value
 
 
 @pytest.mark.asyncio
@@ -105,6 +128,8 @@ async def test_get_email_ops_summary_success() -> None:
         profiles_result,
         assignments_result,
         sends_result,
+        FakeScalarsResult([]),
+        FakeScalarsResult([]),
     ]
 
     service = CommunicationsService(session)
@@ -139,3 +164,168 @@ async def test_get_email_ops_summary_success() -> None:
     assert row_2["delivery"] == "draft"  # No EmailSend exists
     assert row_2["reminder"] == "today"
     assert row_2["nextAction"] == "Trimite reminder"
+
+
+@pytest.mark.asyncio
+async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metrics() -> None:
+    recipient_id = uuid.uuid4()
+    recipient = CampaignRecipient(
+        id=recipient_id,
+        email="ceo@example.com",
+        contact_name="Ana Director",
+        organization_name="Compania B",
+        segment=CampaignRecipientSegment.potential_customer,
+        source="variant_a",
+        status=CampaignRecipientStatus.active,
+    )
+    events = [
+        CampaignRecipientEvent(
+            recipient_id=recipient_id,
+            event_type="opened",
+            variant_key="variant_a",
+            occurred_at=datetime.now(UTC) - timedelta(hours=4),
+        ),
+        CampaignRecipientEvent(
+            recipient_id=recipient_id,
+            event_type="clicked",
+            variant_key="variant_a",
+            occurred_at=datetime.now(UTC) - timedelta(hours=3),
+        ),
+        CampaignRecipientEvent(
+            recipient_id=recipient_id,
+            event_type="video_viewed",
+            variant_key="variant_a",
+            occurred_at=datetime.now(UTC) - timedelta(hours=2),
+        ),
+        CampaignRecipientEvent(
+            recipient_id=recipient_id,
+            event_type="calendly_clicked",
+            variant_key="variant_a",
+            occurred_at=datetime.now(UTC) - timedelta(hours=1),
+        ),
+        CampaignRecipientEvent(
+            recipient_id=recipient_id,
+            event_type="replied",
+            variant_key="variant_a",
+            occurred_at=datetime.now(UTC),
+        ),
+    ]
+
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.execute.side_effect = [
+        FakeTupleResult([]),
+        FakeScalarsResult([]),
+        FakeScalarsResult([]),
+        FakeScalarsResult([recipient]),
+        FakeScalarsResult(events),
+    ]
+
+    summary = await CommunicationsService(session).get_email_ops_summary()
+
+    [row] = summary["campaign"]["recipients"]
+    assert row["company"] == "Compania B"
+    assert row["firstName"] == "Ana"
+    assert row["lastName"] == "Director"
+    assert row["clientType"] == "tip_2"
+    assert row["status"] == "ready"
+    assert row["openCount"] == 1
+    assert row["clickCount"] == 1
+    assert row["viewCount"] == 1
+    assert row["replyCount"] == 1
+    assert row["calendlyClickCount"] == 1
+    assert row["emailVariant"] == "variant_a"
+    assert "reply-uri" in summary["campaign"]["weeklyReport"]["metrics"]
+    assert "clickuri Calendly" in summary["campaign"]["weeklyReport"]["metrics"]
+
+
+@pytest.mark.asyncio
+async def test_record_campaign_recipient_event_persists_allowed_event() -> None:
+    recipient_id = uuid.uuid4()
+    occurred_at = datetime.now(UTC)
+    recipient = CampaignRecipient(
+        id=recipient_id,
+        email="ceo@example.com",
+        contact_name="Ana Director",
+        organization_name="Compania B",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.active,
+    )
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=FakeScalarOneResult(recipient))
+    session.flush = AsyncMock()
+
+    event = await CommunicationsService(session).record_campaign_recipient_event(
+        recipient_id,
+        CampaignRecipientEventCreateRequest(
+            event_type="calendly_clicked",
+            variant_key="variant_b",
+            occurred_at=occurred_at,
+        ),
+    )
+
+    session.add.assert_called_once()
+    saved_event = session.add.call_args.args[0]
+    assert saved_event.recipient_id == recipient_id
+    assert saved_event.event_type == "calendly_clicked"
+    assert saved_event.variant_key == "variant_b"
+    assert saved_event.occurred_at == occurred_at
+    assert event.recipient_id == recipient_id
+    assert event.event_type == "calendly_clicked"
+
+
+@pytest.mark.asyncio
+async def test_record_calendly_tracking_click_persists_event_and_returns_target() -> None:
+    recipient_id = uuid.uuid4()
+    recipient = CampaignRecipient(
+        id=recipient_id,
+        email="ceo@example.com",
+        contact_name="Ana Director",
+        organization_name="Compania B",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.active,
+    )
+    settings = Settings()
+    target_url = "https://calendly.com/codrut/demo"
+    token = create_campaign_tracking_token(
+        CampaignTrackingClaims(
+            recipient_id=recipient_id,
+            target_url=target_url,
+            event_type="calendly_clicked",
+            variant_key="variant_b",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        ),
+        settings,
+    )
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=FakeScalarOneResult(recipient))
+    session.flush = AsyncMock()
+
+    returned_url = await CommunicationsService(session).record_calendly_tracking_click(
+        token,
+        settings,
+    )
+
+    session.add.assert_called_once()
+    saved_event = session.add.call_args.args[0]
+    assert returned_url == target_url
+    assert saved_event.recipient_id == recipient_id
+    assert saved_event.event_type == "calendly_clicked"
+    assert saved_event.variant_key == "variant_b"
+
+
+@pytest.mark.asyncio
+async def test_record_calendly_tracking_click_rejects_non_calendly_target() -> None:
+    recipient_id = uuid.uuid4()
+    settings = Settings()
+    with pytest.raises(DomainError, match="Calendly URL"):
+        create_campaign_tracking_token(
+            CampaignTrackingClaims(
+                recipient_id=recipient_id,
+                target_url="https://example.com/book",
+                event_type="calendly_clicked",
+                variant_key="variant_b",
+                expires_at=datetime.now(UTC) + timedelta(days=7),
+            ),
+            settings,
+        )

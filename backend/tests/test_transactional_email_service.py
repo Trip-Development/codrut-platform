@@ -68,7 +68,7 @@ async def test_send_assignment_invitation_uses_account_setup_for_leadership_part
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://app.codrut.ro/invite/token",
+            action_url="https://codrut.andreivacaru.ro/invite/token",
             task_count=2,
         ),
     )
@@ -90,7 +90,7 @@ async def test_send_assignment_invitation_uses_bundle_template_for_existing_acco
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://app.codrut.ro/tasks/token",
+            action_url="https://codrut.andreivacaru.ro/tasks/token",
             task_count=3,
         ),
     )
@@ -108,7 +108,7 @@ async def test_send_assignment_invitation_does_not_stamp_failed_send() -> None:
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://app.codrut.ro/tasks/token",
+            action_url="https://codrut.andreivacaru.ro/tasks/token",
         ),
     )
 
@@ -169,7 +169,7 @@ async def test_send_assignment_invitation_persists_error_details_on_failure() ->
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://app.codrut.ro/invite/token",
+            action_url="https://codrut.andreivacaru.ro/invite/token",
         ),
     )
 

@@ -14,6 +14,30 @@ type InvitePageProps = {
 
 const TERMS_VERSION = "privacy-2026-06-12";
 
+function consentStorageKey(token: string): string {
+  return `codrut_invite_consent:${TERMS_VERSION}:${token}`;
+}
+
+function hasStoredConsent(token: string): boolean {
+  try {
+    return window.localStorage.getItem(consentStorageKey(token)) === "accepted";
+  } catch {
+    return false;
+  }
+}
+
+function storeConsent(token: string): void {
+  try {
+    window.localStorage.setItem(consentStorageKey(token), "accepted");
+  } catch {
+    // Consent is still saved server-side; local persistence is best-effort.
+  }
+}
+
+function hasServerConsent(bundle: ValidInviteBundle): boolean {
+  return bundle.termsVersion === TERMS_VERSION && Boolean(bundle.termsAcceptedAt);
+}
+
 export default function InvitePage({ params }: InvitePageProps) {
   const { token } = use(params);
   const [loading, setLoading] = useState(true);
@@ -33,6 +57,8 @@ export default function InvitePage({ params }: InvitePageProps) {
         }
 
         setData(bundle);
+        setTermsChecked(hasStoredConsent(token));
+        setConsentSaved(hasServerConsent(bundle));
 
         sessionStorage.setItem(
           "codrut_invite",
@@ -70,6 +96,7 @@ export default function InvitePage({ params }: InvitePageProps) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error?.message || "Nu am putut salva acordul de confidențialitate.");
       }
+      storeConsent(token);
       setConsentSaved(true);
     } catch (err) {
       setConsentError(err instanceof Error ? err.message : "Nu am putut salva acordul de confidențialitate.");
@@ -80,8 +107,8 @@ export default function InvitePage({ params }: InvitePageProps) {
 
   if (loading) {
     return (
-      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
+      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="surface-panel w-full max-w-md p-10 text-center">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <div className="mt-8 flex justify-center">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-burgundy border-t-transparent"></div>
@@ -94,8 +121,8 @@ export default function InvitePage({ params }: InvitePageProps) {
 
   if (error || !data) {
     return (
-      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
+      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="surface-panel w-full max-w-md p-10 text-center">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <div className="mt-6 flex justify-center text-burgundy">
             <svg className="w-16 h-16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -109,7 +136,7 @@ export default function InvitePage({ params }: InvitePageProps) {
           <div className="mt-8">
             <NextLink
               href="/"
-              className="tap-soft block w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
+              className="tap-soft block w-full rounded-full bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
             >
               Mergi la Codruț
             </NextLink>
@@ -121,8 +148,8 @@ export default function InvitePage({ params }: InvitePageProps) {
 
   if (data.alreadyRegistered && data.isLeadership) {
     return (
-      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
+      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="surface-panel w-full max-w-md p-10 text-center">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <h1 className="font-display mt-8 text-2xl font-bold text-foreground">Cont deja existent</h1>
           <p className="mt-3 text-sm text-foreground/60 leading-6">
@@ -131,13 +158,13 @@ export default function InvitePage({ params }: InvitePageProps) {
           <div className="mt-8 space-y-3">
             <NextLink
               href="/login"
-              className="tap-soft block w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
+              className="tap-soft block w-full rounded-full bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
             >
               Autentifică-te aici
             </NextLink>
             <NextLink
               href="/"
-              className="tap-soft block w-full rounded-2xl border border-[var(--border)] bg-surface hover:bg-surface-muted px-4 py-3.5 font-bold text-foreground transition-colors text-center"
+              className="tap-soft block w-full rounded-full border border-[var(--border)] bg-surface hover:bg-surface-muted px-4 py-3.5 font-bold text-foreground transition-colors text-center"
             >
               Pagina principală
             </NextLink>
@@ -149,24 +176,24 @@ export default function InvitePage({ params }: InvitePageProps) {
 
   if (data.isLeadership && !data.alreadyRegistered) {
     return (
-      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="w-full max-w-md rounded-[2.5rem] border border-[var(--border)] bg-surface p-10 text-center shadow-brand">
+      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="surface-panel w-full max-w-md p-10 text-center">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-burgundy">Cont Leadership</p>
           <h1 className="font-display mt-3 text-2xl font-bold text-foreground">Activează contul înainte de chestionare</h1>
           <p className="mt-3 text-sm text-foreground/60 leading-6">
-            Invitația pentru <strong className="text-foreground/80">{data.participantEmail}</strong> este pregătită. Creează contul ca să vezi dashboardul tău de participant și sarcinile proiectului.
+            Invitația pentru <strong className="text-foreground/80">{data.participantEmail}</strong> este pregătită. Creează contul ca să vezi spațiul tău de participant și sarcinile proiectului.
           </p>
           <div className="mt-8 space-y-3">
             <NextLink
               href="/register"
-              className="tap-soft block w-full rounded-2xl bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
+              className="tap-soft block w-full rounded-full bg-burgundy hover:bg-burgundy-dark px-4 py-3.5 font-bold text-white transition-colors text-center"
             >
               Înregistrează cont Leadership
             </NextLink>
             <NextLink
               href="/"
-              className="tap-soft block w-full rounded-2xl border border-[var(--border)] bg-surface hover:bg-surface-muted px-4 py-3.5 font-bold text-foreground transition-colors text-center"
+              className="tap-soft block w-full rounded-full border border-[var(--border)] bg-surface hover:bg-surface-muted px-4 py-3.5 font-bold text-foreground transition-colors text-center"
             >
               Pagina principală
             </NextLink>
@@ -178,8 +205,8 @@ export default function InvitePage({ params }: InvitePageProps) {
 
   if (!consentSaved) {
     return (
-      <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="w-full max-w-xl rounded-[2.5rem] border border-[var(--border)] bg-surface p-8 shadow-brand md:p-10">
+      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
+        <section className="surface-panel w-full max-w-xl p-8 md:p-10">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <p className="mt-8 text-center text-xs font-bold uppercase tracking-[0.18em] text-burgundy">
             Acces securizat
@@ -193,7 +220,7 @@ export default function InvitePage({ params }: InvitePageProps) {
             folosite doar în cadrul evaluării stabilite cu trainerul.
           </p>
 
-          <label className="mt-7 flex gap-3 rounded-2xl border border-[var(--border)] bg-surface-muted/70 p-4 text-left">
+          <label className="mt-7 flex gap-3 rounded-xl border border-[var(--border)] bg-surface-muted p-4 text-left">
             <input
               type="checkbox"
               checked={termsChecked}
@@ -206,7 +233,7 @@ export default function InvitePage({ params }: InvitePageProps) {
           </label>
 
           {consentError ? (
-            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300">
+            <p className="status-panel-danger mt-4 p-3">
               {consentError}
             </p>
           ) : null}
@@ -215,7 +242,7 @@ export default function InvitePage({ params }: InvitePageProps) {
             type="button"
             onClick={handleAcceptTerms}
             disabled={!termsChecked || consentSubmitting}
-            className="tap-soft mt-5 w-full rounded-2xl bg-burgundy px-4 py-3.5 font-bold text-white transition-colors hover:bg-burgundy-dark disabled:bg-burgundy/50"
+            className="tap-soft mt-5 w-full rounded-full bg-burgundy px-4 py-3.5 font-bold text-white transition-colors hover:bg-burgundy-dark disabled:bg-burgundy/50"
           >
             {consentSubmitting ? "Se salvează..." : "Continuă la chestionare"}
           </button>
@@ -225,8 +252,8 @@ export default function InvitePage({ params }: InvitePageProps) {
   }
 
   return (
-    <main className="bg-vines-pattern app-min-height flex items-center justify-center bg-background px-4 py-10 text-foreground">
-      <section className="w-full max-w-3xl rounded-[2.5rem] border border-[var(--border)] bg-surface/90 p-8 shadow-brand md:p-10">
+    <main className="app-min-height flex items-center justify-center bg-background px-4 py-10 text-foreground">
+      <section className="surface-panel w-full max-w-3xl p-8 md:p-10">
         <NextLink href="/" className="mb-8 inline-flex">
           <BrandMark subtitle="Invitație securizată" />
         </NextLink>
@@ -245,6 +272,7 @@ export default function InvitePage({ params }: InvitePageProps) {
             tasks={data.tasks}
             projectName={data.projectName}
             participantEmail={data.participantEmail}
+            returnTo={`/invite/${token}`}
           />
         </div>
 
@@ -252,14 +280,14 @@ export default function InvitePage({ params }: InvitePageProps) {
           {data.isLeadership ? (
             <NextLink
               href="/register"
-              className="tap-soft rounded-2xl bg-burgundy hover:bg-burgundy-dark px-6 py-4 text-center font-bold text-white shadow-md transition-colors"
+              className="tap-soft rounded-full bg-burgundy hover:bg-burgundy-dark px-6 py-4 text-center font-bold text-white shadow-md transition-colors"
             >
               Înregistrează cont Leadership
             </NextLink>
           ) : null}
           <NextLink
             href="/"
-            className="tap-soft rounded-2xl border border-[var(--border)] bg-surface hover:bg-surface-muted px-6 py-4 text-center font-bold text-foreground transition-colors sm:ml-auto"
+            className="tap-soft rounded-full border border-[var(--border)] bg-surface hover:bg-surface-muted px-6 py-4 text-center font-bold text-foreground transition-colors sm:ml-auto"
           >
             Pagina principală
           </NextLink>

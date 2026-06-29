@@ -3,15 +3,13 @@ import logging
 import secrets
 import string
 import unicodedata
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Literal, NoReturn
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
-from codrut.core.security import hash_password, new_session_token
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import (
     Company,
@@ -37,6 +35,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
+    ParticipantUpdateRequest,
     ProjectParticipantResponse,
     ReportingRelationshipImportResponse,
     ReportingRelationshipIssue,
@@ -45,17 +44,10 @@ from codrut.modules.companies.schemas import (
     RosterImportResponse,
     RosterImportRow,
 )
-from codrut.modules.identity.models import Session, User, UserRole
-from codrut.modules.identity.repository import IdentityRepository, hash_session_token
-from codrut.modules.identity.schemas import AuthResponse
+from codrut.modules.identity.models import UserRole
+from codrut.modules.identity.repository import IdentityRepository
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class CompanyAccessRegistrationResult:
-    response: AuthResponse
-    session_token: str
 
 
 class CompanyService:
@@ -284,6 +276,76 @@ class CompanyService:
                 anonymous_name=new_anonymous_name(),
             )
         )
+
+    async def update_participant(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        participant_id: UUID,
+        payload: ParticipantUpdateRequest,
+    ) -> ParticipantProfile:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        participant = await self.repository.get_participant(company_id, participant_id)
+        if participant is None:
+            raise DomainError("Participant not found.", code="participant_not_found")
+
+        if payload.project_id is not None:
+            await self._require_company_project(company_id, payload.project_id)
+
+        fields_set = payload.model_fields_set
+        if "email" in fields_set and payload.email is not None:
+            email = payload.email.lower()
+            if participant.user_id is not None and email != participant.email.lower():
+                raise DomainError(
+                    "Claimed participant account email cannot be changed by a trainer.",
+                    code="participant_email_claimed",
+                )
+            existing = await self.repository.get_participant_by_company_email(company_id, email)
+            if existing is not None and existing.id != participant.id:
+                raise DomainError(
+                    "A participant with this email already exists for this company.",
+                    code="participant_exists",
+                )
+            participant.email = email
+
+        if "full_name" in fields_set and payload.full_name is not None:
+            full_name = payload.full_name.strip()
+            if not full_name:
+                raise DomainError(
+                    "Participant name cannot be empty.",
+                    code="participant_name_required",
+                )
+            participant.full_name = full_name
+        if "reports_to_name" in fields_set:
+            participant.reports_to_name = _clean_reports_to_name(payload.reports_to_name)
+        if "position" in fields_set:
+            participant.position = _clean_optional(payload.position)
+        if "location" in fields_set:
+            participant.location = _clean_optional(payload.location)
+        if "role_group" in fields_set:
+            participant.role_group = _clean_optional(payload.role_group)
+
+        if payload.project_id is not None:
+            membership = await self.repository.get_project_membership(
+                payload.project_id,
+                participant.id,
+            )
+            if membership is None or membership.company_id != company_id:
+                raise DomainError(
+                    "Participant is not a member of this project.",
+                    code="project_membership_not_found",
+                )
+            if "reports_to_name" in fields_set:
+                membership.reports_to_name = participant.reports_to_name
+            if "position" in fields_set:
+                membership.position = participant.position
+            if "location" in fields_set:
+                membership.location = participant.location
+            if "role_group" in fields_set:
+                membership.role_group = participant.role_group
+
+        return participant
 
     async def import_roster(
         self,
@@ -547,15 +609,16 @@ class CompanyService:
             if project_id is not None
             else None
         )
-        invite_expires_at = project.form_closes_at if project is not None else None
+        invite_expires_at = _project_invite_expires_at(project)
+        active_assignments_by_participant = await self._list_active_assignments_for_participants(
+            company.id,
+            participants,
+            project_id,
+        )
 
         results: list[RosterImportEmailResult] = []
         for participant in participants:
-            assignments = await self._list_active_assignments_for_participant(
-                company.id,
-                participant,
-                project_id,
-            )
+            assignments = active_assignments_by_participant.get(participant.id, [])
             if not assignments:
                 raise DomainError(
                     f"No assignments found for participant: {participant.email}",
@@ -770,21 +833,41 @@ class CompanyService:
         participant: ParticipantProfile,
         project_id: UUID | None = None,
     ) -> list:
+        assignments_by_participant = await self._list_active_assignments_for_participants(
+            company_id,
+            [participant],
+            project_id,
+        )
+        return assignments_by_participant.get(participant.id, [])
+
+    async def _list_active_assignments_for_participants(
+        self,
+        company_id: UUID,
+        participants: list[ParticipantProfile],
+        project_id: UUID | None = None,
+    ) -> dict[UUID, list]:
         from codrut.modules.assignments.models import AssignmentStatus
 
-        assignments = await self.repository.list_assignments_for_participant(participant.id)
+        participant_ids = [participant.id for participant in participants]
+        participant_id_set = set(participant_ids)
+        assignments = await self.repository.list_assignments_for_participants(participant_ids)
         active_statuses = {
             AssignmentStatus.assigned,
             AssignmentStatus.invited,
             AssignmentStatus.started,
         }
-        return [
-            assignment
-            for assignment in assignments
-            if assignment.company_id == company_id
-            and assignment.status in active_statuses
-            and (project_id is None or assignment.project_id == project_id)
-        ]
+        active_assignments_by_participant = {
+            participant_id: [] for participant_id in participant_ids
+        }
+        for assignment in assignments:
+            if (
+                assignment.respondent_profile_id in participant_id_set
+                and assignment.company_id == company_id
+                and assignment.status in active_statuses
+                and (project_id is None or assignment.project_id == project_id)
+            ):
+                active_assignments_by_participant[assignment.respondent_profile_id].append(assignment)
+        return active_assignments_by_participant
 
     async def resend_invite(
         self,
@@ -845,48 +928,12 @@ class CompanyService:
     async def register_with_access_code(
         self,
         payload: CompanyAccessCodeRegistrationRequest,
-    ) -> CompanyAccessRegistrationResult:
-        access_code = await self.repository.get_active_access_code(
-            hash_company_access_code(payload.access_code)
-        )
-        if access_code is None:
-            raise _invalid_registration()
-
-        email = payload.email.lower()
-        participant = await self.repository.get_unclaimed_participant_by_company_email(
-            access_code.company_id,
-            email,
-        )
-        existing_user = await self.identity_repository.get_user_by_email(email)
-        if participant is None or existing_user is not None:
-            raise _invalid_registration()
-
-        user = await self.identity_repository.add_user(
-            User(
-                email=email,
-                password_hash=hash_password(payload.password),
-                role=UserRole.participant,
-            )
-        )
-        await self.repository.add_membership(
-            CompanyMembership(
-                company_id=access_code.company_id,
-                user_id=user.id,
-                role=CompanyMembershipRole.participant,
-            )
-        )
-        participant.user_id = user.id
-        session_token = new_session_token()
-        await self.identity_repository.add_session(
-            Session(
-                user_id=user.id,
-                token_hash=hash_session_token(session_token),
-                expires_at=datetime.now(UTC) + timedelta(days=14),
-            )
-        )
-        return CompanyAccessRegistrationResult(
-            response=AuthResponse(user_id=user.id, email=user.email, role=user.role),
-            session_token=session_token,
+    ) -> NoReturn:
+        _ = payload
+        raise DomainError(
+            "Company access-code registration is disabled. "
+            "Use the secure invite flow to claim participant accounts.",
+            code="access_code_registration_disabled",
         )
 
     async def import_reporting_relationships(
@@ -1025,6 +1072,32 @@ def _validate_date_window(
             message,
             code=code,
         )
+
+
+def _project_invite_expires_at(project: CompanyProject | None) -> datetime | None:
+    if project is None:
+        return None
+
+    now = datetime.now(UTC)
+    if project.form_opens_at is not None and project.form_opens_at > now:
+        raise DomainError(
+            "Project questionnaires are not open yet.",
+            code="project_not_open",
+        )
+
+    close_candidates = [
+        value for value in (project.form_closes_at, project.due_at) if value is not None
+    ]
+    if not close_candidates:
+        return None
+
+    expires_at = min(close_candidates)
+    if expires_at <= now:
+        raise DomainError(
+            "Project questionnaire window has closed.",
+            code="project_closed",
+        )
+    return expires_at
 
 
 _TOP_LEVEL_REPORTS_TO_VALUES = {

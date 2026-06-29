@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
@@ -14,6 +15,7 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
 )
 from codrut.modules.companies import models as company_models  # noqa: F401
+from codrut.modules.companies.models import CompanyProject
 from codrut.modules.forms.models import QuestionnaireResponse, QuestionnaireResponseStatus
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
@@ -22,8 +24,13 @@ from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User, U
 
 
 class FakeFormsRepository:
-    def __init__(self, assignment: QuestionnaireAssignment | None) -> None:
+    def __init__(
+        self,
+        assignment: QuestionnaireAssignment | None,
+        project: CompanyProject | None = None,
+    ) -> None:
         self.assignment = assignment
+        self.project = project
         self.response: QuestionnaireResponse | None = None
 
     async def get_assignment_for_user(
@@ -47,6 +54,14 @@ class FakeFormsRepository:
         response.id = uuid.uuid4()
         self.response = response
         return response
+
+    async def get_project_for_assignment(
+        self,
+        assignment: QuestionnaireAssignment,
+    ) -> CompanyProject | None:
+        if self.project is None or assignment.project_id != self.project.id:
+            return None
+        return self.project
 
 
 def make_service(repository: FakeFormsRepository) -> FormsService:
@@ -100,6 +115,64 @@ async def test_submit_assignment_response_marks_response_and_assignment_submitte
     assert response.status == QuestionnaireResponseStatus.submitted
     assert assignment.status == AssignmentStatus.submitted
     assert assignment.submitted_at is not None
+
+
+async def test_save_assignment_response_rejects_changes_after_submission() -> None:
+    assignment = make_assignment()
+    service = make_service(FakeFormsRepository(assignment))
+    user_id = uuid.uuid4()
+
+    await service.save_assignment_response(
+        user_id,
+        assignment.id,
+        QuestionnaireResponseSaveRequest(answers=complete_lencioni_answers()),
+        submit=True,
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.save_assignment_response(
+            user_id,
+            assignment.id,
+            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 1}),
+        )
+
+    assert exc_info.value.code == "response_locked"
+
+
+async def test_save_assignment_response_rejects_assignment_after_due_date() -> None:
+    assignment = make_assignment()
+    assignment.due_at = datetime.now(UTC) - timedelta(minutes=1)
+    service = make_service(FakeFormsRepository(assignment))
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.save_assignment_response(
+            uuid.uuid4(),
+            assignment.id,
+            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+        )
+
+    assert exc_info.value.code == "assignment_closed"
+
+
+async def test_save_assignment_response_rejects_project_closed_window() -> None:
+    assignment = make_assignment()
+    assignment.project_id = uuid.uuid4()
+    project = CompanyProject(
+        id=assignment.project_id,
+        company_id=assignment.company_id,
+        name="July Pilot",
+        form_closes_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    service = make_service(FakeFormsRepository(assignment, project))
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.save_assignment_response(
+            uuid.uuid4(),
+            assignment.id,
+            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+        )
+
+    assert exc_info.value.code == "project_closed"
 
 
 async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> None:
@@ -334,6 +407,34 @@ async def test_get_assignment_response_does_not_create_draft() -> None:
     assert res.answers == {}
     assert res.questionnaire_key == assignment.questionnaire_key
     assert repository.response is None
+
+
+async def test_get_assignment_response_rejects_assignment_after_due_date() -> None:
+    assignment = make_assignment()
+    assignment.due_at = datetime.now(UTC) - timedelta(minutes=1)
+    service = make_service(FakeFormsRepository(assignment))
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.get_assignment_response(uuid.uuid4(), assignment.id)
+
+    assert exc_info.value.code == "assignment_closed"
+
+
+async def test_get_assignment_response_rejects_project_closed_window() -> None:
+    assignment = make_assignment()
+    assignment.project_id = uuid.uuid4()
+    project = CompanyProject(
+        id=assignment.project_id,
+        company_id=assignment.company_id,
+        name="July Pilot",
+        form_closes_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    service = make_service(FakeFormsRepository(assignment, project))
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.get_assignment_response(uuid.uuid4(), assignment.id)
+
+    assert exc_info.value.code == "project_closed"
 
 
 async def test_submit_rejects_incomplete_required_answers() -> None:

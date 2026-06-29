@@ -9,10 +9,27 @@ from codrut.contracts.emails import (
     EmailProviderKey,
     EmailSendResult,
 )
+from codrut.core.config import Settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
-from codrut.modules.communications.models import EmailSend, EmailTemplate
+from codrut.modules.communications.campaign_tracking import (
+    CampaignRecipientActionClaims,
+    create_campaign_recipient_action_token,
+)
+from codrut.modules.communications.models import (
+    Campaign,
+    CampaignRecipient,
+    CampaignRecipientSegment,
+    CampaignRecipientStatus,
+    CampaignStatus,
+    EmailSend,
+    EmailTemplate,
+)
 from codrut.modules.communications.schemas import (
+    CampaignCreateRequest,
+    CampaignRecipientBulkCreateRequest,
+    CampaignRecipientCreateRequest,
+    CampaignSendRequest,
     EmailTemplateCreateRequest,
     EmailTemplateUpdateRequest,
 )
@@ -33,6 +50,9 @@ class FakeCommunicationsRepository:
         self.templates = templates or []
         self.sends: list[EmailSend] = []
         self.sent_versions: set[tuple[str, int]] = set()
+        self.campaign_recipients: list[CampaignRecipient] = []
+        self.campaigns: list[Campaign] = []
+        self.list_template_calls = 0
 
     async def has_sent_emails(self, key: str, version: int) -> bool:
         return (key, version) in self.sent_versions
@@ -42,6 +62,7 @@ class FakeCommunicationsRepository:
         *,
         active_only: bool = True,
     ) -> list[EmailTemplate]:
+        self.list_template_calls += 1
         templates = self.templates
         if active_only:
             templates = [t for t in templates if t.active]
@@ -83,6 +104,56 @@ class FakeCommunicationsRepository:
         for t in self.templates:
             if t.key == key and t.version != except_version:
                 t.active = False
+
+    async def list_campaign_recipients_by_emails(
+        self,
+        emails: set[str],
+    ) -> list[CampaignRecipient]:
+        return [
+            recipient
+            for recipient in self.campaign_recipients
+            if recipient.email.lower() in emails
+        ]
+
+    async def add_campaign_recipients(
+        self,
+        recipients: list[CampaignRecipient],
+    ) -> None:
+        self.campaign_recipients.extend(recipients)
+
+    async def get_campaign(self, campaign_id: uuid.UUID) -> Campaign | None:
+        return next((campaign for campaign in self.campaigns if campaign.id == campaign_id), None)
+
+    async def add_campaign(self, campaign: Campaign) -> Campaign:
+        self.campaigns.append(campaign)
+        return campaign
+
+    async def list_campaign_recipients(self) -> list[CampaignRecipient]:
+        return self.campaign_recipients
+
+    async def list_campaign_recipients_by_ids(
+        self,
+        recipient_ids: list[uuid.UUID],
+    ) -> list[CampaignRecipient]:
+        recipient_id_set = set(recipient_ids)
+        return [
+            recipient
+            for recipient in self.campaign_recipients
+            if recipient.id in recipient_id_set
+        ]
+
+    async def get_campaign_recipient(self, recipient_id: uuid.UUID) -> CampaignRecipient | None:
+        return next(
+            (recipient for recipient in self.campaign_recipients if recipient.id == recipient_id),
+            None,
+        )
+
+    async def add_email_send(self, send: EmailSend) -> EmailSend:
+        self.sends.append(send)
+        return send
+
+    async def flush(self) -> None:
+        return None
 
 
 class FakeEmailProvider:
@@ -126,6 +197,211 @@ def persisted_template(
         audience="participant",
         active=active,
     )
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_campaign_recipients_deduplicates_by_email() -> None:
+    repository = FakeCommunicationsRepository()
+    existing = CampaignRecipient(
+        id=uuid.uuid4(),
+        email="existing@example.com",
+        contact_name="Existing Contact",
+        organization_name="Existing Org",
+        segment="potential_customer",
+        source="manual",
+    )
+    repository.campaign_recipients.append(existing)
+    service = make_service(repository)
+
+    recipients = await service.bulk_create_campaign_recipients(
+        CampaignRecipientBulkCreateRequest(
+            recipients=[
+                CampaignRecipientCreateRequest(
+                    email="NEW@example.com",
+                    contact_name="New Contact",
+                    organization_name="New Org",
+                    segment="potential_customer",
+                    source="csv",
+                ),
+                CampaignRecipientCreateRequest(
+                    email="new@example.com",
+                    contact_name="Duplicate Contact",
+                    organization_name="Duplicate Org",
+                    segment="potential_customer",
+                    source="csv",
+                ),
+                CampaignRecipientCreateRequest(
+                    email="existing@example.com",
+                    contact_name="Existing Again",
+                    organization_name="Existing Org",
+                    segment="potential_customer",
+                    source="csv",
+                ),
+            ]
+        )
+    )
+
+    assert [recipient.email for recipient in repository.campaign_recipients] == [
+        "existing@example.com",
+        "new@example.com",
+    ]
+    assert [recipient.email for recipient in recipients] == [
+        "existing@example.com",
+        "new@example.com",
+    ]
+    assert repository.campaign_recipients[1].contact_name == "New Contact"
+
+
+def persisted_campaign() -> Campaign:
+    return Campaign(
+        id=uuid.uuid4(),
+        name="Leadership video",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignStatus.ready,
+        subject="Salut ${first_name}",
+        html_body="<p>Bună, {first_name}.</p>",
+        text_body="Bună, {first_name}.",
+    )
+
+
+def persisted_campaign_recipient(
+    *,
+    email: str = "ana@example.com",
+    contact_name: str = "Ana Director",
+    segment: CampaignRecipientSegment = CampaignRecipientSegment.potential_customer,
+    status: CampaignRecipientStatus = CampaignRecipientStatus.active,
+) -> CampaignRecipient:
+    return CampaignRecipient(
+        id=uuid.uuid4(),
+        email=email,
+        contact_name=contact_name,
+        organization_name="Compania A",
+        segment=segment,
+        status=status,
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscribe_link() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    active = persisted_campaign_recipient()
+    suppressed = persisted_campaign_recipient(
+        email="stop@example.com",
+        status=CampaignRecipientStatus.unsubscribed,
+    )
+    other_segment = persisted_campaign_recipient(
+        email="old@example.com",
+        segment=CampaignRecipientSegment.past_customer,
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([active, suppressed, other_segment])
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id, suppressed.id, other_segment.id]),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert response.sent == 1
+    assert response.skipped == 2
+    assert campaign.status == CampaignStatus.completed
+    assert len(provider.sent) == 1
+    assert provider.sent[0].to.value == active.email
+    assert provider.sent[0].subject == "Salut Ana"
+    assert (
+        "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/"
+        in provider.sent[0].html_body
+    )
+    assert "Ai primit acest email deoarece" in provider.sent[0].html_body
+    assert "Str. Exemplu Nr. 10" in provider.sent[0].html_body
+    assert len(repository.sends) == 1
+    assert repository.sends[0].assignment_id is None
+    assert repository.sends[0].template_key == "campaign"
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_dry_run_does_not_send_or_log() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    recipient = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(recipient)
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(dry_run=True),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert response.dry_run is True
+    assert response.sent == 0
+    assert response.skipped == 1
+    assert provider.sent == []
+    assert repository.sends == []
+    assert campaign.status == CampaignStatus.ready
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_marks_valid_campaign_ready() -> None:
+    repository = FakeCommunicationsRepository()
+    service = make_service(repository)
+
+    campaign = await service.create_campaign(
+        CampaignCreateRequest(
+            name="Campanie pilot",
+            segment="potential_customer",
+            subject="Salut ${first_name}",
+            html_body="<p>Bună.</p>",
+            text_body="Bună.",
+        )
+    )
+
+    assert campaign.status == CampaignStatus.ready
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_rejects_campaigns_that_are_not_ready() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.status = CampaignStatus.completed
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(persisted_campaign_recipient())
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.send_campaign(
+            campaign.id,
+            CampaignSendRequest(),
+            provider=FakeEmailProvider(),
+            settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        )
+
+    assert exc_info.value.code == "campaign_not_ready"
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_campaign_recipient_marks_recipient_unsubscribed() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient()
+    repository.campaign_recipients.append(recipient)
+    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    token = create_campaign_recipient_action_token(
+        CampaignRecipientActionClaims(recipient_id=recipient.id, action="unsubscribe"),
+        settings,
+    )
+    service = make_service(repository)
+
+    result = await service.unsubscribe_campaign_recipient(token, settings)
+
+    assert result.id == recipient.id
+    assert recipient.status == CampaignRecipientStatus.unsubscribed
 
 
 @pytest.mark.asyncio
@@ -250,6 +526,27 @@ async def test_list_templates_does_not_reactivate_retired_catalog_template() -> 
 
 
 @pytest.mark.asyncio
+async def test_get_template_does_not_seed_when_template_exists() -> None:
+    repository = FakeCommunicationsRepository(
+        [
+            persisted_template(
+                key=TransactionalTemplateKey.account_setup.value,
+                version=1,
+                active=True,
+            )
+        ]
+    )
+    service = make_service(repository)
+
+    first = await service.get_template(TransactionalTemplateKey.account_setup.value)
+    second = await service.get_template(TransactionalTemplateKey.account_setup.value)
+
+    assert first.key == TransactionalTemplateKey.account_setup.value
+    assert second.key == TransactionalTemplateKey.account_setup.value
+    assert repository.list_template_calls == 0
+
+
+@pytest.mark.asyncio
 async def test_template_validation_missing_required() -> None:
     repository = FakeCommunicationsRepository()
     service = make_service(repository)
@@ -301,23 +598,22 @@ async def test_transactional_email_service_uses_db_template() -> None:
     session = cast(Any, FakeSession())
     trans_service.session = session
     
-    # Mock communications service inside trans_service
     async def fake_get_template(key: str, *, version: int | None = None):
         # Return modified subject to verify it was read from database!
         t = persisted_template()
         t.subject = "Custom DB Subject for ${company_name}"
         return t
-    
-    # We will override the service constructor call
-    class MockCommService:
+
+    class MockCommunicationsRepository:
         def __init__(self, s: Any) -> None:
             pass
+
         async def get_template(self, key: str, *, version: int | None = None):
             return await fake_get_template(key, version=version)
-            
+
     import codrut.modules.communications.service as comm_svc_mod
-    original_comm_service = comm_svc_mod.CommunicationsService
-    comm_svc_mod.CommunicationsService = MockCommService
+    original_repository = comm_svc_mod.CommunicationsRepository
+    comm_svc_mod.CommunicationsRepository = MockCommunicationsRepository
 
     try:
         assignment = QuestionnaireAssignment(
@@ -351,4 +647,4 @@ async def test_transactional_email_service_uses_db_template() -> None:
         assert len(provider.sent) == 1
         assert provider.sent[0].subject == "Custom DB Subject for Demo Corp"
     finally:
-        comm_svc_mod.CommunicationsService = original_comm_service
+        comm_svc_mod.CommunicationsRepository = original_repository
