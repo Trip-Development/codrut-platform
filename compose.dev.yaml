@@ -57,7 +57,7 @@ services:
       CODRUT_EMAIL_SMTP_USERNAME: ${CODRUT_EMAIL_SMTP_USERNAME:-}
       CODRUT_EMAIL_SMTP_PASSWORD: ${CODRUT_EMAIL_SMTP_PASSWORD:-}
       CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
-      CODRUT_CAMPAIGN_ASSET_DIR: /workspace/backend/var/campaign-assets
+      CODRUT_CAMPAIGN_ASSET_DIR: /home/vscode/.local/share/codrut/campaign-assets
       CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: /api/campaign-assets
     volumes:
       - .:/workspace:cached
@@ -66,6 +66,7 @@ services:
       - backend_venv:/workspace/backend/.venv
       - frontend_node_modules:/workspace/frontend/node_modules
       - pnpm_store:/home/vscode/.local/share/pnpm/store
+      - campaign_assets:/home/vscode/.local/share/codrut/campaign-assets
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -96,13 +97,14 @@ services:
       CODRUT_EMAIL_SMTP_USERNAME: ${CODRUT_EMAIL_SMTP_USERNAME:-}
       CODRUT_EMAIL_SMTP_PASSWORD: ${CODRUT_EMAIL_SMTP_PASSWORD:-}
       CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
-      CODRUT_CAMPAIGN_ASSET_DIR: /workspace/backend/var/campaign-assets
+      CODRUT_CAMPAIGN_ASSET_DIR: /home/vscode/.local/share/codrut/campaign-assets
       CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: /api/campaign-assets
     volumes:
       - .:/workspace:cached
       - worker_uv_cache:/home/vscode/.cache/uv
       - backend_pip_cache:/home/vscode/.cache/pip
       - worker_venv:/workspace/backend/.venv
+      - campaign_assets:/home/vscode/.local/share/codrut/campaign-assets
     init: true
     tty: true
     stdin_open: true
