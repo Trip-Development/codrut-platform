@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,8 +9,10 @@ from codrut.api.dependencies import current_principal, db_session
 from codrut.contracts.emails import EmailAddress, EmailMessage
 from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
+from codrut.modules.communications.assets import store_campaign_asset
 from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.schemas import (
+    CampaignAssetUploadResponse,
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
@@ -66,6 +68,43 @@ async def send_test_email(
         status=result.status,
         message_id=result.message_id,
         recipient=result.recipient.value,
+    )
+
+
+@router.post("/campaign-assets", response_model=CampaignAssetUploadResponse)
+async def upload_campaign_asset(
+    request: Request,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    content_type: Annotated[str | None, Header(alias="content-type")] = None,
+    file_name: Annotated[str | None, Header(alias="x-file-name")] = None,
+) -> CampaignAssetUploadResponse:
+    _require_trainer(principal)
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            too_large = int(declared_length) > settings.campaign_asset_max_bytes
+        except ValueError as exc:
+            raise DomainError(
+                "Dimensiunea fișierului nu a putut fi citită.",
+                code="campaign_asset_length_invalid",
+            ) from exc
+        if too_large:
+            raise DomainError(
+                "Thumbnailul depășește limita permisă.",
+                code="campaign_asset_too_large",
+            )
+    asset = store_campaign_asset(
+        settings=settings,
+        content=await request.body(),
+        content_type=content_type,
+        original_file_name=file_name,
+    )
+    return CampaignAssetUploadResponse(
+        url=asset.url,
+        file_name=asset.file_name,
+        content_type=asset.content_type,
+        size_bytes=asset.size_bytes,
     )
 
 

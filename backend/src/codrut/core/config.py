@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     email_smtp_starttls: bool = False
     email_test_mode: bool = True
     public_app_url: str = "http://localhost:3000"
+    campaign_asset_dir: str = "var/campaign-assets"
+    campaign_asset_public_path: str = "/api/campaign-assets"
+    campaign_asset_max_bytes: int = 5 * 1024 * 1024
 
     @field_validator("cors_origins", mode="before")
     @classmethod

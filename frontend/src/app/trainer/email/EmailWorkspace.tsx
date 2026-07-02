@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   createCampaignOnServer,
   listCampaignsOnServer,
   sendCampaignOnServer,
+  uploadCampaignAssetOnServer,
   type EmailOpsSummary,
   type AssessmentDeliveryRow,
   type CampaignSendResponse,
@@ -123,6 +125,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignThumbnailUrl, setCampaignThumbnailUrl] = useState("");
   const [campaignLandingUrl, setCampaignLandingUrl] = useState("");
   const [campaignMessage, setCampaignMessage] = useState<string | null>(null);
+  const [campaignAssetMessage, setCampaignAssetMessage] = useState<string | null>(null);
+  const [isUploadingCampaignAsset, setIsUploadingCampaignAsset] = useState(false);
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
 
@@ -211,6 +215,25 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   useEffect(() => {
     loadCampaigns();
   }, [loadCampaigns]);
+
+  const handleCampaignAssetUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCampaignAsset(true);
+    setCampaignAssetMessage(null);
+    try {
+      const asset = await uploadCampaignAssetOnServer(file);
+      setCampaignThumbnailUrl(asset.url);
+      setCampaignAssetMessage(`Thumbnail încărcat: ${(asset.size_bytes / 1024).toFixed(1)} KB.`);
+    } catch (error) {
+      setCampaignAssetMessage(
+        error instanceof Error ? error.message : "Thumbnailul nu a putut fi încărcat.",
+      );
+    } finally {
+      setIsUploadingCampaignAsset(false);
+      event.target.value = "";
+    }
+  };
 
   const handleCreateCampaign = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -776,13 +799,46 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Thumbnail URL</span>
-                    <input
-                      type="url"
-                      value={campaignThumbnailUrl}
-                      onChange={(event) => setCampaignThumbnailUrl(event.target.value)}
-                      placeholder="https://cdn.codrut.ro/thumb.jpg"
-                      className="control-input w-full py-3"
-                    />
+                    <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <label className="btn-secondary inline-flex cursor-pointer items-center justify-center px-4 py-2 text-xs">
+                          {isUploadingCampaignAsset ? "Se încarcă..." : "Încarcă thumbnail"}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            disabled={isUploadingCampaignAsset}
+                            onChange={handleCampaignAssetUpload}
+                          />
+                        </label>
+                        <input
+                          type="url"
+                          value={campaignThumbnailUrl}
+                          onChange={(event) => setCampaignThumbnailUrl(event.target.value)}
+                          placeholder="URL generat automat sau fallback manual"
+                          className="control-input min-w-0 flex-1 py-3"
+                        />
+                      </div>
+                      {campaignThumbnailUrl ? (
+                        <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-surface">
+                          <Image
+                            src={campaignThumbnailUrl}
+                            alt="Previzualizare thumbnail campanie"
+                            width={640}
+                            height={320}
+                            unoptimized
+                            className="h-32 w-full object-cover"
+                          />
+                        </div>
+                      ) : null}
+                      {campaignAssetMessage ? (
+                        <p className="mt-2 text-xs font-semibold text-foreground/62">{campaignAssetMessage}</p>
+                      ) : null}
+                      <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">
+                        Acceptă JPG, PNG, WEBP sau GIF. Emailul afișează imaginea și trimite
+                        către pagina video Codruț.
+                      </p>
+                    </div>
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Landing page URL</span>

@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from codrut.api.router import api_router
 from codrut.core.config import get_settings
@@ -27,6 +30,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_exception_handlers(app)
+    Path(settings.campaign_asset_dir).mkdir(parents=True, exist_ok=True)
+    app.mount(
+        settings.campaign_asset_public_path,
+        StaticFiles(directory=settings.campaign_asset_dir),
+        name="campaign-assets",
+    )
     app.include_router(api_router, prefix="/api")
     return app
 
