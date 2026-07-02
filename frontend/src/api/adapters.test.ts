@@ -15,6 +15,7 @@ import {
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
   sendCampaignOnServer,
+  uploadCampaignAssetOnServer,
 } from "./email";
 import { inviteQuestionnaireLabel, inviteTaskHref, participantTaskTypeLabel, resolveInviteBundle } from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
@@ -482,6 +483,41 @@ describe("frontend API adapter stubs", () => {
     expect(payload?.html_body).toContain('<a href="https://codrut.andreivacaru.ro/watch/intro?source=email&amp;name=%22hero%22">');
     expect(payload?.html_body).toContain('<img src="https://cdn.codrut.ro/thumb.jpg?size=large&amp;variant=%22hero%22"');
     expect(payload?.text_body).toContain("https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22");
+  });
+
+  it("uploads campaign thumbnail assets as raw image bodies", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "mini thumb.png", {
+      type: "image/png",
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        url: "https://codrut.andreivacaru.ro/api/campaign-assets/mini.png",
+        file_name: "mini.png",
+        content_type: "image/png",
+        size_bytes: 4,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(uploadCampaignAssetOnServer(file)).resolves.toMatchObject({
+      url: "https://codrut.andreivacaru.ro/api/campaign-assets/mini.png",
+      content_type: "image/png",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/communications/campaign-assets"),
+      expect.objectContaining({
+        method: "POST",
+        body: file,
+        credentials: "include",
+        headers: expect.objectContaining({
+          "Content-Type": "image/png",
+          "X-File-Name": "mini%20thumb.png",
+        }),
+      }),
+    );
   });
 
   it("rejects incomplete or non-http video campaign URLs", () => {

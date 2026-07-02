@@ -57,6 +57,8 @@ services:
       CODRUT_EMAIL_SMTP_USERNAME: ${CODRUT_EMAIL_SMTP_USERNAME:-}
       CODRUT_EMAIL_SMTP_PASSWORD: ${CODRUT_EMAIL_SMTP_PASSWORD:-}
       CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
+      CODRUT_CAMPAIGN_ASSET_DIR: /workspace/backend/var/campaign-assets
+      CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: /api/campaign-assets
     volumes:
       - .:/workspace:cached
       - backend_uv_cache:/home/vscode/.cache/uv
@@ -94,6 +96,8 @@ services:
       CODRUT_EMAIL_SMTP_USERNAME: ${CODRUT_EMAIL_SMTP_USERNAME:-}
       CODRUT_EMAIL_SMTP_PASSWORD: ${CODRUT_EMAIL_SMTP_PASSWORD:-}
       CODRUT_EMAIL_SMTP_STARTTLS: ${CODRUT_EMAIL_SMTP_STARTTLS:-false}
+      CODRUT_CAMPAIGN_ASSET_DIR: /workspace/backend/var/campaign-assets
+      CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: /api/campaign-assets
     volumes:
       - .:/workspace:cached
       - worker_uv_cache:/home/vscode/.cache/uv

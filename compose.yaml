@@ -47,6 +47,10 @@ services:
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
       CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["http://localhost","http://localhost:3000","http://localhost:8000"]}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
+      CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
+      CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
+    volumes:
+      - campaign_assets:/app/var/campaign-assets
     depends_on:
       db:
         condition: service_healthy
@@ -76,6 +80,10 @@ services:
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
+      CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
+      CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
+    volumes:
+      - campaign_assets:/app/var/campaign-assets
     depends_on:
       db:
         condition: service_healthy
@@ -110,3 +118,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  campaign_assets:

@@ -80,7 +80,9 @@ ENV CODRUT_ENV=production \
     PYTHONUNBUFFERED=1
 
 RUN groupadd --system codrut \
-    && useradd --system --gid codrut --home-dir /app --shell /usr/sbin/nologin codrut
+    && useradd --system --gid codrut --home-dir /app --shell /usr/sbin/nologin codrut \
+    && mkdir -p /app/var/campaign-assets \
+    && chown -R codrut:codrut /app/var
 
 WORKDIR /app
 COPY --from=runtime-builder --chown=codrut:codrut /app /app
