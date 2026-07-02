@@ -111,6 +111,69 @@ def test_campaign_send_requires_trainer_role() -> None:
     assert response.status_code == 403
 
 
+def test_campaign_asset_upload_requires_trainer_role() -> None:
+    client = _client_as(UserRole.participant)
+
+    response = client.post(
+        "/api/communications/campaign-assets",
+        content=b"\x89PNG\r\n\x1a\nfake",
+        headers={"content-type": "image/png", "x-file-name": "thumb.png"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_trainer_can_upload_campaign_asset(tmp_path) -> None:
+    settings = Settings(
+        public_app_url="https://codrut.andreivacaru.ro",
+        campaign_asset_dir=str(tmp_path),
+        campaign_asset_public_path="/api/campaign-assets",
+    )
+    client = _client_as(UserRole.trainer, settings)
+
+    response = client.post(
+        "/api/communications/campaign-assets",
+        content=b"\x89PNG\r\n\x1a\nfake",
+        headers={"content-type": "image/png", "x-file-name": "thumbnail.png"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["url"].startswith("https://codrut.andreivacaru.ro/api/campaign-assets/")
+    assert body["content_type"] == "image/png"
+    assert body["size_bytes"] == 12
+    assert body["file_name"].endswith(".png")
+    assert (tmp_path / body["file_name"]).read_bytes() == b"\x89PNG\r\n\x1a\nfake"
+
+
+def test_campaign_asset_upload_rejects_unsupported_file_type(tmp_path) -> None:
+    settings = Settings(campaign_asset_dir=str(tmp_path))
+    client = _client_as(UserRole.trainer, settings)
+
+    response = client.post(
+        "/api/communications/campaign-assets",
+        content=b"<svg></svg>",
+        headers={"content-type": "image/svg+xml", "x-file-name": "thumb.svg"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "campaign_asset_type_unsupported"
+
+
+def test_campaign_asset_upload_rejects_mismatched_signature(tmp_path) -> None:
+    settings = Settings(campaign_asset_dir=str(tmp_path))
+    client = _client_as(UserRole.trainer, settings)
+
+    response = client.post(
+        "/api/communications/campaign-assets",
+        content=b"not really a png",
+        headers={"content-type": "image/png", "x-file-name": "thumb.png"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "campaign_asset_signature_invalid"
+
+
 def test_campaign_event_recording_rejects_unknown_event_type() -> None:
     client = _client_as(UserRole.trainer)
 

@@ -458,6 +458,31 @@ export type CampaignCreate = {
   landing_page_url?: string;
 };
 
+export type CampaignAssetUpload = {
+  url: string;
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+};
+
+export async function uploadCampaignAssetOnServer(file: File): Promise<CampaignAssetUpload> {
+  const response = await fetch(`${getApiBaseUrl()}/communications/campaign-assets`, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name || "thumbnail"),
+    },
+    body: file,
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error?.message ?? "Thumbnailul nu a putut fi încărcat.");
+  }
+  return await response.json();
+}
+
 export type CampaignVideoDraft = {
   name: string;
   segment: "past_customer" | "potential_customer";

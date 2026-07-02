@@ -167,6 +167,13 @@ class CampaignSendResponse(BaseModel):
     results: list[CampaignSendRecipientResult]
 
 
+class CampaignAssetUploadResponse(BaseModel):
+    url: str
+    file_name: str
+    content_type: str
+    size_bytes: int
+
+
 class CampaignCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     segment: str
