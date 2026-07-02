@@ -196,6 +196,7 @@ function formatDate(value: string | null): string | null {
   return new Date(value).toLocaleDateString("ro-RO", {
     day: "2-digit",
     month: "short",
+    timeZone: "UTC",
   });
 }
 
