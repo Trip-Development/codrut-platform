@@ -482,11 +482,14 @@ html {
   }
 
   .modal-backdrop {
-    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8;
+    @apply fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:py-8;
+    align-items: flex-start;
   }
 
   .modal-panel {
     @apply surface-panel w-full max-w-xl p-6 shadow-xl;
+    max-height: calc(100dvh - 3rem);
+    overflow-y: auto;
     box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.35);
   }
 

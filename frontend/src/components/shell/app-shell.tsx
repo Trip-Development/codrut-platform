@@ -20,6 +20,7 @@ type AppShellProps = {
   userLabel?: string;
   session?: SessionState;
   accessNote?: string;
+  showHeader?: boolean;
   children: React.ReactNode;
 };
 
@@ -137,6 +138,7 @@ export function AppShell({
   userLabel,
   session,
   accessNote,
+  showHeader = true,
   children,
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -397,19 +399,21 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 lg:px-10 lg:py-8">
-          <section className="page-toolbar mb-6">
-            <div className="min-w-0">
-              {eyebrow ? (
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-burgundy/80">{eyebrow}</p>
-              ) : null}
-              <h1 className="mt-1 text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
-                {title}
-              </h1>
-              {description ? (
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">{description}</p>
-              ) : null}
-            </div>
-          </section>
+          {showHeader ? (
+            <section className="page-toolbar mb-6">
+              <div className="min-w-0">
+                {eyebrow ? (
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-burgundy/80">{eyebrow}</p>
+                ) : null}
+                <h1 className="mt-1 text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
+                  {title}
+                </h1>
+                {description ? (
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">{description}</p>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
           <SessionBanner session={session} note={accessNote} />
           {children}
         </main>
