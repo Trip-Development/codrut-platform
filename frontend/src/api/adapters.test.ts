@@ -80,6 +80,8 @@ describe("frontend API adapter stubs", () => {
 
   it("never falls back to slug-like questionnaire labels in participant UI", () => {
     expect(inviteQuestionnaireLabel("boss_360")).toBe("iCARE 360 pentru manager");
+    expect(inviteQuestionnaireLabel("lencioni_en")).toBe("Lencioni - evaluare echipă");
+    expect(inviteQuestionnaireLabel("distress_drivers_en")).toBe("Driveri de stres TA");
     expect(inviteQuestionnaireLabel("unknown_internal_slug")).toBe("Chestionar");
     expect(participantTaskTypeLabel("boss_360")).toBe("Feedback confidențial");
     expect(participantTaskTypeLabel("distress_drivers")).toBe("Formular individual");
@@ -514,6 +516,8 @@ describe("frontend API adapter stubs", () => {
       expect.arrayContaining(["boss_360", "pcm_base"]),
     );
     expect(questionnaires.map((definition) => definition.id)).not.toContain("phase");
+    expect(questionnaires.map((definition) => definition.id)).not.toContain("lencioni_en");
+    expect(questionnaires.map((definition) => definition.id)).not.toContain("distress_drivers_en");
     expect(questionnaires.map((definition) => definition.id)).not.toContain("boss_360_en");
     expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({

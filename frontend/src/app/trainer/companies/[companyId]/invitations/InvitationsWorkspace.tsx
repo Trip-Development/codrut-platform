@@ -91,7 +91,7 @@ const assignmentScopeGuides: AssignmentScopeGuide[] = [
     scopeLabel: "Echipă",
     description: "Evaluare despre o echipă definită, inclusiv leadership sau echipe manageriale.",
     recommendedTargetType: "team",
-    questionnaireKeys: ["lencioni", "lencioni_en"],
+    questionnaireKeys: ["lencioni"],
     details: [
       "Ținta recomandată este echipa, nu persoana.",
       "În rezultate se agregă pe proiect și se poate deschide detalierea pe echipe.",
@@ -104,7 +104,7 @@ const assignmentScopeGuides: AssignmentScopeGuide[] = [
     scopeLabel: "Persoană",
     description: "Feedback despre un manager sau coleg evaluat ca persoană țintă.",
     recommendedTargetType: "person",
-    questionnaireKeys: ["boss_360", "boss_360_en", "icare"],
+    questionnaireKeys: ["boss_360", "icare"],
     details: [
       "Ținta recomandată este persoana evaluată.",
       "Răspunsurile mai multor respondenți intră în sumarul 360 al persoanei.",
@@ -117,7 +117,7 @@ const assignmentScopeGuides: AssignmentScopeGuide[] = [
     scopeLabel: "Individual",
     description: "Autoevaluare individuală; în rapoarte se poate agrega la nivel de proiect sau echipă.",
     recommendedTargetType: "self",
-    questionnaireKeys: ["distress_drivers", "distress_drivers_en"],
+    questionnaireKeys: ["distress_drivers"],
     details: [
       "Ținta recomandată este autoevaluarea.",
       "Toți driverii sunt afișați în rezultate; interpretarea se explică doar peste 50%.",

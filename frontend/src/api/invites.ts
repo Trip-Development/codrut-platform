@@ -16,9 +16,9 @@ export type InviteTask = {
 
 const questionnaireLabels: Record<string, string> = {
   lencioni: "Lencioni - evaluare echipă",
-  lencioni_en: "Lencioni - team assessment",
+  lencioni_en: "Lencioni - evaluare echipă",
   distress_drivers: "Driveri de stres TA",
-  distress_drivers_en: "TA distress drivers",
+  distress_drivers_en: "Driveri de stres TA",
   boss_360: "iCARE 360 pentru manager",
   icare: "iCARE 360 pentru manager",
   pcm_base: "Baza și faza PCM",

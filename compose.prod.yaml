@@ -39,7 +39,7 @@ services:
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:?Set CODRUT_PUBLIC_APP_URL to the public app origin, for example https://codrut.andreivacaru.ro}
       CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS}
-      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Andrei Văcaru}
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY}
     labels:
       traefik.http.routers.codrut-api.rule: Host(`${CODRUT_HOST}`) && PathPrefix(`/api`)
@@ -57,7 +57,7 @@ services:
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:?Set CODRUT_PUBLIC_APP_URL to the public app origin, for example https://codrut.andreivacaru.ro}
       CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS}
-      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME}
+      CODRUT_EMAIL_FROM_NAME: ${CODRUT_EMAIL_FROM_NAME:-Andrei Văcaru}
       CODRUT_EMAIL_BREVO_API_KEY: ${CODRUT_EMAIL_BREVO_API_KEY}
     restart: unless-stopped
 
