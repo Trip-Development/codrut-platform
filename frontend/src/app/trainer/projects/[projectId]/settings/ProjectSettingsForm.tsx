@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { updateCompanyProject, type CompanyProject, type CompanyProjectStatus } from "@/api/companies";
+import { deleteCompanyProject, updateCompanyProject, type CompanyProject, type CompanyProjectStatus } from "@/api/companies";
 
 const statusOptions: Array<{ value: CompanyProjectStatus; label: string }> = [
   { value: "draft", label: "În pregătire" },
@@ -25,6 +25,9 @@ export function ProjectSettingsForm({ project }: { project: CompanyProject }) {
   const [message, setMessage] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const canDelete = deleteConfirmation.trim() === project.name.trim();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,61 +59,113 @@ export function ProjectSettingsForm({ project }: { project: CompanyProject }) {
     }
   }
 
+  async function handleDelete(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canDelete || deleting) return;
+
+    const confirmed = window.confirm(`Ștergi proiectul „${project.name}”? Această acțiune nu poate fi anulată.`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setMessage(null);
+    try {
+      await deleteCompanyProject(project.company_id, project.id);
+      router.push("/trainer/projects");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Proiectul nu a putut fi șters.");
+      setDeleting(false);
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-      <p className="text-xs font-semibold text-burgundy/75">Setări proiect</p>
-      <h2 className="mt-1 text-xl font-semibold text-foreground">Configurare operațională</h2>
-      {fieldError ? (
-        <p id="project-settings-error" className="mt-4 rounded-xl border border-burgundy/20 bg-burgundy/10 px-4 py-3 text-sm font-semibold text-burgundy">
-          {fieldError}
-        </p>
-      ) : null}
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <Field
-          label="Nume proiect"
-          value={name}
-          onChange={setName}
-          invalid={Boolean(fieldError && !name.trim())}
-          describedBy={fieldError ? "project-settings-error" : undefined}
-        />
-        <label className="block text-xs font-bold text-foreground/58">
-          Status
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value as CompanyProjectStatus)}
-            className="mt-1 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45"
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
-        <Field label="Tip proiect" value={projectType} onChange={setProjectType} />
-        <Field label="Start proiect" value={startsAt} onChange={setStartsAt} type="date" />
-        <Field label="Final proiect" value={dueAt} onChange={setDueAt} type="date" />
-        <Field label="Formulare active din" value={formOpensAt} onChange={setFormOpensAt} type="date" />
-        <Field label="Formulare active până la" value={formClosesAt} onChange={setFormClosesAt} type="date" />
-        <label className="block text-xs font-bold text-foreground/58 md:col-span-2">
-          Notițe
-          <textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={4}
-            className="mt-1 w-full resize-none rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-medium text-foreground outline-none focus:border-burgundy/45"
+    <div className="space-y-5">
+      <form onSubmit={handleSubmit} className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+        <p className="text-xs font-semibold text-burgundy/75">Setări proiect</p>
+        <h2 className="mt-1 text-xl font-semibold text-foreground">Configurare operațională</h2>
+        {fieldError ? (
+          <p id="project-settings-error" className="mt-4 rounded-xl border border-burgundy/20 bg-burgundy/10 px-4 py-3 text-sm font-semibold text-burgundy">
+            {fieldError}
+          </p>
+        ) : null}
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field
+            label="Nume proiect"
+            value={name}
+            onChange={setName}
+            invalid={Boolean(fieldError && !name.trim())}
+            describedBy={fieldError ? "project-settings-error" : undefined}
           />
-        </label>
-      </div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={saving}
-          className="tap-soft rounded-full bg-burgundy px-5 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {saving ? "Se salvează..." : "Salvează setările"}
-        </button>
-        {message ? <p className="text-sm font-semibold text-foreground/62">{message}</p> : null}
-      </div>
-    </form>
+          <label className="block text-xs font-bold text-foreground/58">
+            Status
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as CompanyProjectStatus)}
+              className="mt-1 min-h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45"
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <Field label="Tip proiect" value={projectType} onChange={setProjectType} />
+          <Field label="Start proiect" value={startsAt} onChange={setStartsAt} type="date" />
+          <Field label="Final proiect" value={dueAt} onChange={setDueAt} type="date" />
+          <Field label="Formulare active din" value={formOpensAt} onChange={setFormOpensAt} type="date" />
+          <Field label="Formulare active până la" value={formClosesAt} onChange={setFormClosesAt} type="date" />
+          <label className="block text-xs font-bold text-foreground/58 md:col-span-2">
+            Notițe
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={4}
+              className="mt-1 w-full resize-none rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-medium text-foreground outline-none focus:border-burgundy/45"
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={saving}
+            className="tap-soft rounded-full bg-burgundy px-5 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {saving ? "Se salvează..." : "Salvează setările"}
+          </button>
+          {message ? <p className="text-sm font-semibold text-foreground/62">{message}</p> : null}
+        </div>
+      </form>
+
+      <section className="rounded-xl border border-burgundy/15 bg-burgundy/6 p-5 shadow-sm">
+        <p className="text-xs font-semibold text-burgundy/75">Zona de pericol</p>
+        <h2 className="mt-1 text-xl font-semibold text-foreground">Ștergere proiect</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
+          Ștergerea elimină proiectul și datele asociate. Confirmă prin numele proiectului înainte de a continua.
+        </p>
+        <form onSubmit={handleDelete} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem] md:items-end">
+          <label className="block text-xs font-bold text-foreground/58">
+            Scrie numele proiectului pentru confirmare
+            <input
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              placeholder={project.name}
+              className="mt-1 min-h-11 w-full rounded-xl border border-burgundy/20 bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-burgundy/45"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={!canDelete || deleting}
+            className={[
+              "tap-soft inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2.5 text-sm font-bold shadow-sm disabled:cursor-not-allowed",
+              canDelete
+                ? "bg-red-700 text-white hover:bg-red-800"
+                : "border border-[var(--border)] bg-surface text-foreground/35",
+            ].join(" ")}
+          >
+            {deleting ? "Se șterge..." : "Șterge proiectul"}
+          </button>
+        </form>
+      </section>
+    </div>
   );
 }
 

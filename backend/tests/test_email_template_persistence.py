@@ -23,6 +23,7 @@ from codrut.modules.communications.models import (
     CampaignRecipientStatus,
     CampaignStatus,
     EmailSend,
+    EmailSendStatus,
     EmailTemplate,
 )
 from codrut.modules.communications.schemas import (
@@ -169,6 +170,18 @@ class FakeCommunicationsRepository:
     async def add_email_send(self, send: EmailSend) -> EmailSend:
         self.sends.append(send)
         return send
+
+    async def list_accepted_campaign_recipient_ids(self, campaign_id: uuid.UUID) -> set[uuid.UUID]:
+        return {
+            send.campaign_recipient_id
+            for send in self.sends
+            if send.campaign_id == campaign_id
+            and send.campaign_recipient_id is not None
+            and send.status == EmailSendStatus.accepted
+        }
+
+    async def count_accepted_sends_since(self, _since: object) -> int:
+        return sum(1 for send in self.sends if send.status == EmailSendStatus.accepted)
 
     async def flush(self) -> None:
         return None
@@ -369,6 +382,64 @@ async def test_send_campaign_uses_video_url_when_landing_page_is_missing() -> No
 
 
 @pytest.mark.asyncio
+async def test_send_campaign_default_mode_skips_already_accepted_recipients() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    first = persisted_campaign_recipient(email="first@example.com", contact_name="First")
+    second = persisted_campaign_recipient(email="second@example.com", contact_name="Second")
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([first, second])
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    first_response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[first.id]),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+    second_response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert first_response.sent == 1
+    assert second_response.sent == 1
+    assert provider.sent[0].to.value == first.email
+    assert provider.sent[1].to.value == second.email
+    assert len(provider.sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_respects_daily_email_cap() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    first = persisted_campaign_recipient(email="first@example.com", contact_name="First")
+    second = persisted_campaign_recipient(email="second@example.com", contact_name="Second")
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([first, second])
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(mode="all"),
+        provider=provider,
+        settings=Settings(
+            public_app_url="https://codrut.andreivacaru.ro",
+            email_daily_send_cap=1,
+        ),
+    )
+
+    assert response.sent == 1
+    assert response.skipped == 1
+    assert response.results[1].error == "Daily email send cap reached."
+    assert len(provider.sent) == 1
+
+
+@pytest.mark.asyncio
 async def test_send_campaign_dry_run_does_not_send_or_log() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
@@ -522,7 +593,7 @@ async def test_delete_campaign_recipient_preserves_unsubscribe_state() -> None:
 async def test_send_campaign_rejects_campaigns_that_are_not_ready() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
-    campaign.status = CampaignStatus.completed
+    campaign.status = CampaignStatus.paused
     repository.campaigns.append(campaign)
     repository.campaign_recipients.append(persisted_campaign_recipient())
     service = make_service(repository)

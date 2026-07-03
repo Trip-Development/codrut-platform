@@ -5,6 +5,7 @@ import {
   importCompanyRoster,
   updateCompanyParticipant,
   type CompanyParticipant,
+  type CompanyProject,
   type ParticipantInvitationStatus,
 } from "@/api/companies";
 import {
@@ -60,6 +61,22 @@ const invitationStatuses: ParticipantInvitationStatus[] = [
   },
 ];
 
+const project: CompanyProject = {
+  id: "project-1",
+  company_id: "company-1",
+  company_name: "Michelin",
+  name: "Leadership Septembrie",
+  description: null,
+  project_type: "team_coaching",
+  status: "active",
+  starts_at: null,
+  due_at: null,
+  form_opens_at: null,
+  form_closes_at: null,
+  created_at: "2026-06-11T09:00:00Z",
+  updated_at: "2026-06-11T09:00:00Z",
+};
+
 describe("ProjectParticipantsWorkspace", () => {
   afterEach(() => {
     cleanup();
@@ -88,6 +105,8 @@ describe("ProjectParticipantsWorkspace", () => {
       <ProjectParticipantsWorkspace
         companyId="company-1"
         projectId="project-1"
+        companyName="Michelin"
+        project={project}
         participants={participants}
         invitationStatuses={invitationStatuses}
       />,
@@ -103,6 +122,15 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Ana Manager")).toBeTruthy();
     expect(screen.getByText("Dan Membru")).toBeTruthy();
     expect(screen.getByText("Link securizat activ")).toBeTruthy();
+  });
+
+  it("opens the roster import modal from the project header", () => {
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Importă participanți" }));
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Închide" })).toBeTruthy();
   });
 
   it("keeps the roster read-only until a row is explicitly edited", async () => {
@@ -167,6 +195,8 @@ describe("ProjectParticipantsWorkspace", () => {
       <ProjectParticipantsWorkspace
         companyId="company-1"
         projectId="project-1"
+        companyName="Michelin"
+        project={project}
         participants={[]}
         invitationStatuses={[]}
       />,
@@ -178,8 +208,8 @@ describe("ProjectParticipantsWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
 
     await waitFor(() =>
-      expect(importCompanyRoster).toHaveBeenCalledWith(
-        "company-1",
+    expect(importCompanyRoster).toHaveBeenCalledWith(
+      "company-1",
         [
           {
             Name: "Ioana Nouă",
@@ -202,6 +232,8 @@ function renderWorkspace() {
     <ProjectParticipantsWorkspace
       companyId="company-1"
       projectId="project-1"
+      companyName="Michelin"
+      project={project}
       participants={participants}
       invitationStatuses={invitationStatuses}
     />,

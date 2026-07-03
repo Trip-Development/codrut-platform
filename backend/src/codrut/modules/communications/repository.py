@@ -1,4 +1,5 @@
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,6 +10,7 @@ from codrut.modules.communications.models import (
     CampaignRecipient,
     CampaignRecipientEvent,
     EmailSend,
+    EmailSendStatus,
     EmailTemplate,
 )
 
@@ -159,6 +161,23 @@ class CommunicationsRepository:
         stmt = select(Campaign).order_by(Campaign.created_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_accepted_campaign_recipient_ids(self, campaign_id: UUID) -> set[UUID]:
+        result = await self.session.execute(
+            select(EmailSend.campaign_recipient_id)
+            .where(EmailSend.campaign_id == campaign_id)
+            .where(EmailSend.campaign_recipient_id.is_not(None))
+            .where(EmailSend.status == EmailSendStatus.accepted)
+        )
+        return {recipient_id for recipient_id in result.scalars().all() if recipient_id is not None}
+
+    async def count_accepted_sends_since(self, since: datetime) -> int:
+        result = await self.session.execute(
+            select(func.count(EmailSend.id))
+            .where(EmailSend.status == EmailSendStatus.accepted)
+            .where(EmailSend.created_at >= since)
+        )
+        return int(result.scalar_one() or 0)
 
     async def delete_campaign(self, campaign: Campaign) -> None:
         await self.session.delete(campaign)

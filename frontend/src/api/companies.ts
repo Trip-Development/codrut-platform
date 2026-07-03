@@ -1291,6 +1291,7 @@ export async function sendParticipantInvitations(
     participantIds?: string[];
     projectId?: string | null;
     mode: ParticipantInvitationMode;
+    targetMode?: "unsent" | "selected" | "all";
     forceRotate?: boolean;
   },
 ): Promise<ParticipantInviteBatchResponse> {
@@ -1302,6 +1303,7 @@ export async function sendParticipantInvitations(
       participant_ids: payload.participantIds,
       project_id: payload.projectId ?? null,
       mode: payload.mode,
+      target_mode: payload.targetMode ?? (payload.participantIds?.length ? "selected" : "unsent"),
       force_rotate: payload.forceRotate ?? false,
     }),
   });

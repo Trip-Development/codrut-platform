@@ -61,6 +61,16 @@ class EmailSend(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    campaign_recipient_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("campaign_recipients.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     recipient_email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     template_key: Mapped[str] = mapped_column(String(120), nullable=False)
     template_version: Mapped[int] = mapped_column(Integer, nullable=False)

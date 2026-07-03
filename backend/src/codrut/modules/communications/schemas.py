@@ -155,6 +155,7 @@ class CampaignRecipientEventResponse(BaseModel):
 
 class CampaignSendRequest(BaseModel):
     recipient_ids: list[UUID] | None = None
+    mode: Literal["new", "selected", "all"] = "new"
     dry_run: bool = False
 
 
@@ -220,3 +221,20 @@ class CampaignCreateRequest(BaseModel):
             if missing:
                 raise ValueError("Video campaigns require video_url and thumbnail_url.")
         return self
+
+
+class CampaignUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    segment: str | None = None
+    status: str | None = None
+    subject: str | None = Field(default=None, min_length=1, max_length=255)
+    html_body: str | None = Field(default=None, min_length=1)
+    text_body: str | None = Field(default=None, min_length=1)
+    video_url: str | None = Field(default=None, max_length=2048)
+    thumbnail_url: str | None = Field(default=None, max_length=2048)
+    landing_page_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("video_url", "thumbnail_url", "landing_page_url", mode="before")
+    @classmethod
+    def normalize_campaign_url(cls, value: str | None) -> str | None:
+        return CampaignCreateRequest.normalize_campaign_url(value)
