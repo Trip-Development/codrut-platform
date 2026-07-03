@@ -1,17 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 
 import {
   createCompanyProject,
-  deleteCompanyProject,
-  updateCompanyProject,
   type CompanyAssignment,
   type CompanyProject,
   type CompanyProjectStatus,
 } from "@/api/companies";
-import { ProjectCardFrame, ProjectMeta } from "@/components/projects/project-card";
+import { ProjectCardLink } from "@/components/projects/project-card";
 
 type CompanyProjectsPanelProps = {
   companyId: string;
@@ -20,17 +17,9 @@ type CompanyProjectsPanelProps = {
   participantCount: number;
 };
 
-const statusOptions: Array<{ value: CompanyProjectStatus; label: string }> = [
-  { value: "draft", label: "În pregătire" },
-  { value: "active", label: "Activ" },
-  { value: "completed", label: "Finalizat" },
-  { value: "archived", label: "Arhivat" },
-];
-
 export function CompanyProjectsPanel({
   companyId,
   initialProjects,
-  assignments,
 }: CompanyProjectsPanelProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
@@ -42,7 +31,6 @@ export function CompanyProjectsPanel({
   const [formCloseDate, setFormCloseDate] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -64,7 +52,6 @@ export function CompanyProjectsPanel({
     [projects, showArchived],
   );
   const archivedCount = projects.filter((project) => project.status === "archived").length;
-  const metricsByProject = useMemo(() => buildProjectMetrics(assignments), [assignments]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,45 +90,6 @@ export function CompanyProjectsPanel({
       setMessage(error instanceof Error ? error.message : "Proiectul nu a putut fi salvat.");
     } finally {
       setIsCreating(false);
-    }
-  }
-
-  async function handleStatusChange(project: CompanyProject, status: CompanyProjectStatus) {
-    setBusyId(project.id);
-    setMessage(null);
-    try {
-      const updated = await updateCompanyProject(companyId, project.id, {
-        name: project.name,
-        description: project.description,
-        projectType: project.project_type,
-        status,
-        startsAt: project.starts_at,
-        dueAt: project.due_at,
-        formOpensAt: project.form_opens_at,
-        formClosesAt: project.form_closes_at,
-      });
-      setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Statusul proiectului nu a putut fi actualizat.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function handleDelete(project: CompanyProject) {
-    const confirmed = window.confirm(`Ștergi proiectul „${project.name}”?`);
-    if (!confirmed) return;
-
-    setBusyId(project.id);
-    setMessage(null);
-    try {
-      await deleteCompanyProject(companyId, project.id);
-      setProjects((current) => current.filter((item) => item.id !== project.id));
-      setMessage("Proiectul a fost șters.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Proiectul nu a putut fi șters.");
-    } finally {
-      setBusyId(null);
     }
   }
 
@@ -298,85 +246,13 @@ export function CompanyProjectsPanel({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 2xl:grid-cols-3">
-          {visibleProjects.map((project) => {
-            const metrics = metricsByProject.get(project.id) ?? { total: 0, completed: 0 };
-            return (
-              <ProjectCardFrame key={project.id} project={project}>
-                <div className="border-t border-[var(--border)] px-5 pb-5">
-                  <div className="grid grid-cols-2 gap-2">
-                    <ProjectMeta label="Asignări" value={metrics.total} />
-                    <ProjectMeta label="Finalizate" value={metrics.completed} />
-                  </div>
-                  <ProjectCompletionBar completed={metrics.completed} total={metrics.total} />
-
-                  <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-5">
-                    <Link href={`/trainer/projects/${project.id}/participants`} className="btn-secondary !h-10 !px-3 !py-0 !text-xs">
-                      Participanți
-                    </Link>
-                    <Link href={`/trainer/projects/${project.id}/invitations`} className="btn-secondary !h-10 !px-3 !py-0 !text-xs">
-                      Invitații
-                    </Link>
-                    <Link href={`/trainer/projects/${project.id}/reports`} className="btn-secondary col-span-2 !h-10 !px-3 !py-0 !text-xs">
-                      Rezultate
-                    </Link>
-                    <select
-                      value={project.status}
-                      onChange={(event) => handleStatusChange(project, event.target.value as CompanyProjectStatus)}
-                      disabled={busyId === project.id}
-                      className="control-input col-span-2 h-10 appearance-none px-3 text-center text-xs"
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          Status: {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(project)}
-                      disabled={busyId === project.id}
-                      className="btn-danger-subtle col-span-2 h-10 text-xs"
-                    >
-                      Șterge proiectul
-                    </button>
-                  </div>
-                </div>
-              </ProjectCardFrame>
-            );
-          })}
+          {visibleProjects.map((project) => (
+            <ProjectCardLink key={project.id} project={project} />
+          ))}
         </div>
       )}
     </section>
   );
-}
-
-function ProjectCompletionBar({ completed, total }: { completed: number; total: number }) {
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-foreground/42">
-        <span>Progres asignări</span>
-        <span>{percent}%</span>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
-        <div className="project-timeline-fill h-full rounded-full" style={{ width: `${percent}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function buildProjectMetrics(assignments: CompanyAssignment[]) {
-  const metrics = new Map<string, { total: number; completed: number }>();
-  for (const assignment of assignments) {
-    if (!assignment.project_id) continue;
-    const current = metrics.get(assignment.project_id) ?? { total: 0, completed: 0 };
-    current.total += 1;
-    if (["submitted", "validated", "scored"].includes(assignment.status)) {
-      current.completed += 1;
-    }
-    metrics.set(assignment.project_id, current);
-  }
-  return metrics;
 }
 
 function dateInputToIso(value: string): string | null {
