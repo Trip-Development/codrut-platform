@@ -18,6 +18,7 @@ export default async function CompanyDetailLayout({
       description="Proiecte active, participanți și setări administrative."
       navItems={trainerNavItems}
       activeHref="/trainer/companies"
+      showHeader={false}
     >
       {children}
     </AppShell>
