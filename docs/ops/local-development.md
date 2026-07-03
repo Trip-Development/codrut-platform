@@ -79,9 +79,8 @@ Expected behavior:
   their expiry date. Participant secure-link pages do not display expiry dates.
 - Managers receive account setup emails and then use the participant dashboard.
   Members receive secure form links and see form-only pages.
-- Reports aggregate both Romanian and English questionnaire keys into the same
-  Lencioni and Distress Drivers buckets, plus canonical Romanian iCARE 360 on
-  `boss_360`.
+- Reports use the Romanian questionnaire keys for active workflows:
+  `lencioni`, `distress_drivers`, and canonical iCARE 360 on `boss_360`.
 
 This path is covered by `test_two_person_roster_generates_manager_member_default_plan`
 in `backend/tests/test_company_service.py`.

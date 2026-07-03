@@ -80,7 +80,13 @@ const seededAssignmentQuestionnaires: Record<string, string> = {
   "44444444-4444-4444-8444-444444444444": "distress_drivers",
 };
 
-const legacyHiddenQuestionnaireKeys = new Set(["icare", "phase", "boss_360_en"]);
+const legacyHiddenQuestionnaireKeys = new Set([
+  "icare",
+  "phase",
+  "boss_360_en",
+  "lencioni_en",
+  "distress_drivers_en",
+]);
 const questionnaireDefinitionCacheTtlMs = 60_000;
 
 type CachedPromise<T> = {
@@ -177,29 +183,9 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
     estimatedItems: 15,
   },
   {
-    id: "lencioni_en",
-    name: "Lencioni Team Assessment (EN)",
-    description: "15 items for assessing the team against Lencioni's five dysfunctions.",
-    status: "active",
-    version: 1,
-    source: "docs/questionnaires/lencioni.pdf",
-    audience: "team",
-    estimatedItems: 15,
-  },
-  {
     id: "distress_drivers",
     name: "Driveri de stres TA (RO)",
     description: "10 seturi de afirmații pentru autoevaluarea driverilor de stres TA.",
-    status: "active",
-    version: 1,
-    source: "docs/questionnaires/distress_drivers.pdf",
-    audience: "leadership",
-    estimatedItems: 50,
-  },
-  {
-    id: "distress_drivers_en",
-    name: "TA Distress Drivers (EN)",
-    description: "10 scored statement sets for TA driver self-assessment.",
     status: "active",
     version: 1,
     source: "docs/questionnaires/distress_drivers.pdf",
@@ -754,28 +740,6 @@ fallbackDefinitionDetails.boss_360 = {
       "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele iCARE observabile din perspectiva ta.",
     scoring: undefined,
   },
-};
-
-fallbackDefinitionDetails.boss_360_en = {
-  ...fallbackDefinitionDetails.boss_360,
-  key: "boss_360_en",
-  title: "iCARE 360 Feedback for Manager",
-  description:
-    "iCARE behavioral feedback for a manager from self, manager peers, and direct reports.",
-};
-
-fallbackDefinitionDetails.lencioni_en = {
-  ...fallbackDefinitionDetails.lencioni,
-  key: "lencioni_en",
-  title: "Lencioni Team Assessment",
-  description: "Assess the team against Lencioni's five dysfunctions.",
-};
-
-fallbackDefinitionDetails.distress_drivers_en = {
-  ...fallbackDefinitionDetails.distress_drivers,
-  key: "distress_drivers_en",
-  title: "TA Distress Drivers",
-  description: "Self-assessment for Transactional Analysis stress drivers.",
 };
 
 export async function listQuestionnaireDefinitionStubs(
