@@ -111,6 +111,33 @@ def test_campaign_send_requires_trainer_role() -> None:
     assert response.status_code == 403
 
 
+def test_campaign_recipient_update_requires_trainer_role() -> None:
+    client = _client_as(UserRole.participant)
+
+    response = client.patch(
+        f"/api/communications/campaigns/recipients/{uuid4()}",
+        json={"contact_name": "Ana Director"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_campaign_recipient_delete_requires_trainer_role() -> None:
+    client = _client_as(UserRole.participant)
+
+    response = client.delete(f"/api/communications/campaigns/recipients/{uuid4()}")
+
+    assert response.status_code == 403
+
+
+def test_campaign_delete_requires_trainer_role() -> None:
+    client = _client_as(UserRole.participant)
+
+    response = client.delete(f"/api/communications/campaigns/{uuid4()}")
+
+    assert response.status_code == 403
+
+
 def test_campaign_asset_upload_requires_trainer_role() -> None:
     client = _client_as(UserRole.participant)
 

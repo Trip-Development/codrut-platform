@@ -101,7 +101,22 @@ def test_campaign_create_requires_http_video_asset_urls() -> None:
     assert request.thumbnail_url == "https://cdn.codrut.ro/thumb.jpg"
 
 
-def test_campaign_create_rejects_incomplete_video_assets() -> None:
+def test_campaign_create_allows_vimeo_with_thumbnail_without_landing_page() -> None:
+    request = CampaignCreateRequest(
+        name="Video campaign",
+        segment="potential_customer",
+        subject="Subject",
+        html_body="<p>Body</p>",
+        text_body="Body",
+        video_url="https://vimeo.com/123456789",
+        thumbnail_url="https://cdn.codrut.ro/thumb.jpg",
+    )
+
+    assert request.video_url == "https://vimeo.com/123456789"
+    assert request.landing_page_url is None
+
+
+def test_campaign_create_rejects_missing_thumbnail_for_video_campaign() -> None:
     try:
         CampaignCreateRequest(
             name="Video campaign",
@@ -114,7 +129,7 @@ def test_campaign_create_rejects_incomplete_video_assets() -> None:
     except ValueError as exc:
         assert "Video campaigns require" in str(exc)
     else:
-        raise AssertionError("Incomplete video assets should be rejected.")
+        raise AssertionError("Video campaigns without thumbnail should be rejected.")
 
 
 def test_campaign_create_rejects_non_http_asset_urls() -> None:

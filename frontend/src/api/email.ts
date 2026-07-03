@@ -334,9 +334,9 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
       rules: [],
       campaign: {
         videoHost: {
-          provider: "Codruț watch page + Cloudflare R2",
-          status: "needs_upload",
-          note: "Emailul trimite thumbnail și CTA către pagina Codruț; video-ul nu este redat direct în email.",
+          provider: "Vimeo sau pagină Codruț",
+          status: "ready",
+          note: "Emailul trimite thumbnail și CTA către linkul video. Pagina Codruț este opțională pentru tracking sau CTA-uri dedicate.",
         },
         template: {
           subject: "O idee practică pentru echipa ta, ${first_name}",
@@ -423,6 +423,10 @@ export type CampaignRecipientCreate = {
   source?: string;
 };
 
+export type CampaignRecipientUpdate = Partial<CampaignRecipientCreate> & {
+  status?: "active" | "suppressed" | "unsubscribed";
+};
+
 export async function bulkCreateCampaignRecipientsOnServer(recipients: CampaignRecipientCreate[]) {
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/bulk`, {
@@ -443,6 +447,48 @@ export async function bulkCreateCampaignRecipientsOnServer(recipients: CampaignR
     if (isDemoFallbackEnabled()) {
       return { success: true, count: recipients.length };
     }
+    throw err;
+  }
+}
+
+export async function updateCampaignRecipientOnServer(
+  recipientId: string,
+  recipient: CampaignRecipientUpdate,
+) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(recipient),
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return { id: recipientId, ...recipient };
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut actualiza contactul (${response.status}).`);
+    }
+    return await response.json();
+  } catch (err) {
+    if (isDemoFallbackEnabled()) return { id: recipientId, ...recipient };
+    throw err;
+  }
+}
+
+export async function deleteCampaignRecipientOnServer(recipientId: string): Promise<void> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}`, {
+      method: "DELETE",
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return;
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut șterge contactul (${response.status}).`);
+    }
+  } catch (err) {
+    if (isDemoFallbackEnabled()) return;
     throw err;
   }
 }
@@ -489,10 +535,11 @@ export type CampaignVideoDraft = {
   subject: string;
   videoUrl: string;
   thumbnailUrl: string;
-  landingUrl: string;
+  landingUrl?: string;
 };
 
-function normalizeHttpUrl(value: string): string | null {
+function normalizeHttpUrl(value: string | undefined): string | null {
+  if (!value?.trim()) return null;
   try {
     const url = new URL(value.trim());
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
@@ -510,7 +557,7 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
   const trimmedName = draft.name.trim();
   const videoUrl = normalizeHttpUrl(draft.videoUrl);
   const thumbnailUrl = normalizeHttpUrl(draft.thumbnailUrl);
-  const landingUrl = normalizeHttpUrl(draft.landingUrl);
+  const landingUrl = normalizeHttpUrl(draft.landingUrl) ?? videoUrl;
 
   if (!trimmedName || !videoUrl || !thumbnailUrl || !landingUrl) return null;
 
@@ -524,13 +571,20 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
     html_body: [
       "<p>Bună, ${first_name}.</p>",
       "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
-      `<p><a href="${safeLandingUrl}"><img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;max-width:100%;height:auto;border:0;border-radius:12px;" /></a></p>`,
+      [
+        `<p><a href="${safeLandingUrl}" style="display:block;text-decoration:none;color:inherit;">`,
+        `<span style="display:block;position:relative;max-width:620px;border-radius:16px;overflow:hidden;background:#2b211f;">`,
+        `<img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;width:100%;max-width:620px;height:auto;border:0;border-radius:16px;" />`,
+        `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
+        "</span>",
+        "</a></p>",
+      ].join(""),
       `<p><a href="${safeLandingUrl}">Vezi video-ul</a></p>`,
     ].join(""),
     text_body: `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`,
     video_url: videoUrl,
     thumbnail_url: thumbnailUrl,
-    landing_page_url: landingUrl,
+    landing_page_url: landingUrl === videoUrl ? undefined : landingUrl,
   };
 }
 
@@ -598,6 +652,28 @@ export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
     return await response.json();
   } catch (err) {
     if (isDemoFallbackEnabled()) return [];
+    throw err;
+  }
+}
+
+export async function deleteCampaignOnServer(campaignId: string): Promise<void> {
+  if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}`, {
+      method: "DELETE",
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return;
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut șterge campania (${response.status}).`);
+    }
+  } catch (err) {
+    if (isDemoFallbackEnabled()) return;
     throw err;
   }
 }

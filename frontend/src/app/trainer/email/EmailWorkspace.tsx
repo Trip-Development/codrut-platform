@@ -8,14 +8,18 @@ import {
   createEmailTemplateOnServer,
   updateEmailTemplateOnServer,
   deleteEmailTemplateOnServer,
+  deleteCampaignOnServer,
+  deleteCampaignRecipientOnServer,
   bulkCreateCampaignRecipientsOnServer,
   buildVideoCampaignCreatePayload,
   createCampaignOnServer,
   listCampaignsOnServer,
   sendCampaignOnServer,
+  updateCampaignRecipientOnServer,
   uploadCampaignAssetOnServer,
   type EmailOpsSummary,
   type AssessmentDeliveryRow,
+  type CampaignRecipientRow,
   type CampaignSendResponse,
   type EmailCampaign,
   type EmailTemplate
@@ -26,11 +30,23 @@ type TabKey = "delivery" | "campaigns" | "templates";
 
 const MOCK_REPLACEMENTS: Record<string, string> = {
   "{first_name}": "Ioana",
+  "{last_name}": "Popescu",
+  "{participant_name}": "Ioana Popescu",
+  "{trainer_name}": "Echipa Codruț",
+  "{company_name}": "Compania Pilot",
+  "{organization_name}": "Compania Pilot",
+  "{contact_name}": "Ioana Popescu",
+  "{email}": "ioana.popescu@example.com",
+  "{action_url}": "https://codrut.andreivacaru.ro/invite/demo-token",
   "{project}": "Intake Iunie",
   "{link_securizat}": "https://codrut.andreivacaru.ro/auth/seclink-8f2a175",
   "{estimare_timp}": "15",
   "{sarcini_ramase}": "2 chestionare rămase (Lencioni, Distress)",
   "{link_video}": "https://watch.codrut.ro/v/performanta-echipe-2026",
+  "{video_url}": "https://vimeo.com/123456789",
+  "{thumbnail_url}": "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg",
+  "{landing_page_url}": "https://vimeo.com/123456789",
+  "{unsubscribe_url}": "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/demo-token",
 };
 
 function detectedPlaceholders(subject: string, body: string): string[] {
@@ -47,6 +63,10 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function sanitizePreviewHref(value: string): string {
   const trimmed = value.trim();
   try {
@@ -60,7 +80,85 @@ function sanitizePreviewHref(value: string): string {
   return "#";
 }
 
+export function replacePreviewPlaceholders(value: string): string {
+  let replaced = value;
+  Object.entries(MOCK_REPLACEMENTS).forEach(([key, replacement]) => {
+    replaced = replaced
+      .replace(new RegExp(escapeRegExp(`$${key}`), "g"), replacement)
+      .replace(new RegExp(escapeRegExp(key), "g"), replacement);
+  });
+  return replaced;
+}
+
+function looksLikeHtml(value: string): boolean {
+  return /^\s*<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function sanitizePreviewHtml(value: string): string {
+  if (typeof DOMParser === "undefined") {
+    return escapeHtml(value);
+  }
+
+  const allowedTags = new Set([
+    "A",
+    "B",
+    "BR",
+    "DIV",
+    "EM",
+    "H1",
+    "H2",
+    "H3",
+    "IMG",
+    "LI",
+    "OL",
+    "P",
+    "SPAN",
+    "STRONG",
+    "UL",
+  ]);
+  const allowedAttributes = new Set(["alt", "class", "height", "href", "src", "style", "target", "width"]);
+  const allowedUrlAttributes = new Set(["href", "src"]);
+  const parser = new DOMParser();
+  const document = parser.parseFromString(value, "text/html");
+  const nodes = Array.from(document.body.querySelectorAll("*"));
+
+  nodes.forEach((node) => {
+    if (!allowedTags.has(node.tagName)) {
+      node.replaceWith(...Array.from(node.childNodes));
+      return;
+    }
+
+    Array.from(node.attributes).forEach((attribute) => {
+      const attributeName = attribute.name.toLowerCase();
+      if (!allowedAttributes.has(attributeName) || attributeName.startsWith("on")) {
+        node.removeAttribute(attribute.name);
+        return;
+      }
+
+      if (allowedUrlAttributes.has(attributeName)) {
+        const safeUrl = sanitizePreviewHref(attribute.value);
+        node.setAttribute(attribute.name, safeUrl);
+      } else if (
+        attributeName === "style"
+        && /(javascript\s*:|expression\s*\(|url\s*\()/i.test(attribute.value)
+      ) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+
+    if (node.tagName === "A") {
+      node.setAttribute("rel", "noreferrer");
+      node.setAttribute("target", "_blank");
+    }
+  });
+
+  return document.body.innerHTML;
+}
+
 export function renderEmailTemplatePreviewBody(body: string): string {
+  if (looksLikeHtml(body)) {
+    return sanitizePreviewHtml(body);
+  }
   return escapeHtml(body)
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\[(.*?)\]\((.*?)\)/g, (_match, label: string, href: string) => {
@@ -79,6 +177,39 @@ function upsertEmailTemplate(templates: EmailTemplate[], template: EmailTemplate
     nextTemplates.unshift(template);
   }
   return nextTemplates;
+}
+
+type CampaignContactDraft = {
+  email: string;
+  contact_name: string;
+  organization_name: string;
+  segment: "past_customer" | "potential_customer";
+};
+
+function campaignRecipientName(recipient: CampaignRecipientRow): string {
+  return [recipient.firstName, recipient.lastName].filter(Boolean).join(" ");
+}
+
+function campaignRecipientSegment(recipient: CampaignRecipientRow): "past_customer" | "potential_customer" {
+  return recipient.clientType === "tip_1" ? "past_customer" : "potential_customer";
+}
+
+function splitContactName(value: string): { firstName?: string; lastName?: string } {
+  const [firstName, ...lastNameParts] = value.trim().split(/\s+/).filter(Boolean);
+  const lastName = lastNameParts.join(" ");
+  return {
+    firstName: firstName || undefined,
+    lastName: lastName || undefined,
+  };
+}
+
+function campaignRecipientDraft(recipient: CampaignRecipientRow): CampaignContactDraft {
+  return {
+    email: recipient.email,
+    contact_name: campaignRecipientName(recipient),
+    organization_name: recipient.company === "Companie necompletată" ? "" : recipient.company,
+    segment: campaignRecipientSegment(recipient),
+  };
 }
 
 type EmailWorkspaceProps = {
@@ -118,6 +249,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [campaignName, setCampaignName] = useState("Campanie video leadership");
   const [campaignSegment, setCampaignSegment] = useState<"past_customer" | "potential_customer">("potential_customer");
   const [campaignSubject, setCampaignSubject] = useState("O idee practică pentru echipa ta, {first_name}");
@@ -128,7 +260,13 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignAssetMessage, setCampaignAssetMessage] = useState<string | null>(null);
   const [isUploadingCampaignAsset, setIsUploadingCampaignAsset] = useState(false);
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
+  const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
+  const [campaignContactMessage, setCampaignContactMessage] = useState<string | null>(null);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [contactDrafts, setContactDrafts] = useState<Record<string, CampaignContactDraft>>({});
+  const [savingContactId, setSavingContactId] = useState<string | null>(null);
+  const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
 
   // Manual Add State
   const [showManualAddModal, setShowManualAddModal] = useState(false);
@@ -142,6 +280,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     e.preventDefault();
     if (!manualEmail.trim()) return;
     setIsAddingManual(true);
+    setCampaignContactMessage(null);
     try {
       await bulkCreateCampaignRecipientsOnServer([{
         email: manualEmail.trim(),
@@ -149,14 +288,14 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         organization_name: manualCompany.trim() || undefined,
         segment: manualSegment,
       }]);
-      alert("Contact adăugat cu succes!");
+      setCampaignContactMessage("Contactul a fost adăugat.");
       setShowManualAddModal(false);
       setManualEmail("");
       setManualName("");
       setManualCompany("");
-      refreshSummary();
-    } catch {
-      alert("Eroare la adăugarea contactului.");
+      await refreshSummary();
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi adăugat.");
     } finally {
       setIsAddingManual(false);
     }
@@ -190,13 +329,13 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
       if (payload.length > 0) {
         await bulkCreateCampaignRecipientsOnServer(payload);
-        alert(`S-au importat cu succes ${payload.length} contacte!`);
-        refreshSummary();
+        setCampaignContactMessage(`S-au importat ${payload.length} contacte.`);
+        await refreshSummary();
       } else {
-        alert("Fișierul nu conține coloana 'email'. Vă rugăm să folosiți un cap de tabel valid.");
+        setCampaignContactMessage("Fișierul nu conține coloana email. Folosește un cap de tabel valid.");
       }
-    } catch {
-      alert("Eroare la procesarea fișierului.");
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Fișierul nu a putut fi procesat.");
     } finally {
       setIsUploadingCSV(false);
       e.target.value = "";
@@ -247,7 +386,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
 
     if (!payload) {
-      setCampaignMessage("Completează numele și URL-uri valide pentru video, thumbnail și pagina de destinație.");
+      setCampaignMessage("Completează numele, linkul Vimeo/video și un thumbnail valid.");
       return;
     }
 
@@ -256,11 +395,121 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     try {
       await createCampaignOnServer(payload);
       setCampaignMessage("Campania a fost salvată.");
+      setShowCampaignModal(false);
       await loadCampaigns();
     } catch (error) {
       setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi salvată.");
     } finally {
       setIsCreatingCampaign(false);
+    }
+  };
+
+  const startEditingContact = (recipient: CampaignRecipientRow) => {
+    setEditingContactId(recipient.id);
+    setCampaignContactMessage(null);
+    setContactDrafts((drafts) => ({
+      ...drafts,
+      [recipient.id]: drafts[recipient.id] ?? campaignRecipientDraft(recipient),
+    }));
+  };
+
+  const updateContactDraft = <Field extends keyof CampaignContactDraft>(
+    recipientId: string,
+    field: Field,
+    value: CampaignContactDraft[Field],
+  ) => {
+    setContactDrafts((drafts) => ({
+      ...drafts,
+      [recipientId]: {
+        ...(drafts[recipientId] ?? {
+          email: "",
+          contact_name: "",
+          organization_name: "",
+          segment: "potential_customer",
+        }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const cancelEditingContact = (recipientId: string) => {
+    setEditingContactId(null);
+    setContactDrafts((drafts) => {
+      const nextDrafts = { ...drafts };
+      delete nextDrafts[recipientId];
+      return nextDrafts;
+    });
+  };
+
+  const saveContact = async (recipient: CampaignRecipientRow) => {
+    const draft = contactDrafts[recipient.id] ?? campaignRecipientDraft(recipient);
+    if (!draft.email.trim()) {
+      setCampaignContactMessage("Emailul contactului este obligatoriu.");
+      return;
+    }
+
+    setSavingContactId(recipient.id);
+    setCampaignContactMessage(null);
+    try {
+      await updateCampaignRecipientOnServer(recipient.id, {
+        email: draft.email.trim(),
+        contact_name: draft.contact_name.trim(),
+        organization_name: draft.organization_name.trim(),
+        segment: draft.segment,
+      });
+      const nameParts = splitContactName(draft.contact_name);
+      setSummary((currentSummary) => ({
+        ...currentSummary,
+        campaign: {
+          ...currentSummary.campaign,
+          recipients: currentSummary.campaign.recipients.map((currentRecipient) =>
+            currentRecipient.id === recipient.id
+              ? {
+                  ...currentRecipient,
+                  email: draft.email.trim(),
+                  company: draft.organization_name.trim() || "Companie necompletată",
+                  firstName: nameParts.firstName,
+                  lastName: nameParts.lastName,
+                  clientType: draft.segment === "past_customer" ? "tip_1" : "tip_2",
+                }
+              : currentRecipient,
+          ),
+        },
+      }));
+      setCampaignContactMessage("Contactul a fost actualizat.");
+      cancelEditingContact(recipient.id);
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi actualizat.");
+    } finally {
+      setSavingContactId(null);
+    }
+  };
+
+  const deleteContact = async (recipient: CampaignRecipientRow) => {
+    const confirmed = window.confirm(`Ștergi contactul ${recipient.email}? Istoricul agregat de email rămâne în rapoarte.`);
+    if (!confirmed) return;
+
+    setDeletingContactId(recipient.id);
+    setCampaignContactMessage(null);
+    try {
+      await deleteCampaignRecipientOnServer(recipient.id);
+      setCampaignContactMessage("Contactul a fost șters.");
+      if (editingContactId === recipient.id) {
+        cancelEditingContact(recipient.id);
+      }
+      setSummary((currentSummary) => ({
+        ...currentSummary,
+        campaign: {
+          ...currentSummary.campaign,
+          recipients: currentSummary.campaign.recipients.filter(
+            (currentRecipient) => currentRecipient.id !== recipient.id,
+          ),
+        },
+      }));
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi șters.");
+    } finally {
+      setDeletingContactId(null);
     }
   };
 
@@ -286,6 +535,30 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi trimisă.");
     } finally {
       setSendingCampaignId(null);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaign: EmailCampaign) => {
+    const confirmed = window.confirm(
+      `Ștergi campania „${campaign.name}”? Contactele și istoricul de livrare rămân păstrate.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingCampaignId(campaign.id);
+    setCampaignMessage(null);
+    try {
+      await deleteCampaignOnServer(campaign.id);
+      setCampaignSendResults((previousResults) => {
+        const nextResults = { ...previousResults };
+        delete nextResults[campaign.id];
+        return nextResults;
+      });
+      setCampaignMessage("Campania a fost ștearsă.");
+      await loadCampaigns();
+    } catch (error) {
+      setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi ștearsă.");
+    } finally {
+      setDeletingCampaignId(null);
     }
   };
 
@@ -433,10 +706,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
     let replacedSubject = subjectText;
     let replacedBody = bodyText;
 
-    Object.entries(MOCK_REPLACEMENTS).forEach(([key, val]) => {
-      replacedSubject = replacedSubject.replace(new RegExp(key, "g"), val);
-      replacedBody = replacedBody.replace(new RegExp(key, "g"), val);
-    });
+    replacedSubject = replacePreviewPlaceholders(replacedSubject);
+    replacedBody = replacePreviewPlaceholders(replacedBody);
 
     let html = renderEmailTemplatePreviewBody(replacedBody);
 
@@ -711,7 +982,17 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               </p>
             </div>
             
-            <div className="shrink-0">
+            <div className="flex shrink-0 flex-wrap gap-3">
+              <button
+                type="button"
+                className="btn-premium"
+                onClick={() => {
+                  setCampaignMessage(null);
+                  setShowCampaignModal(true);
+                }}
+              >
+                + Campanie nouă
+              </button>
               <label className="btn-premium cursor-pointer inline-flex items-center gap-2">
                 {isUploadingCSV ? (
                   <span>Se încarcă...</span>
@@ -729,6 +1010,13 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   disabled={isUploadingCSV}
                 />
               </label>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowManualAddModal(true)}
+              >
+                + Adaugă contact
+              </button>
             </div>
           </section>
 
@@ -738,13 +1026,9 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Date și setări</p>
                 <h2 className="mt-2 text-xl font-bold text-foreground">Setări campanie curentă</h2>
               </div>
-              <button
-                type="button"
-                className="btn-secondary text-xs py-2 px-4 whitespace-nowrap"
-                onClick={() => setShowManualAddModal(true)}
-              >
-                + Adaugă contact manual
-              </button>
+              <p className="max-w-xl text-xs font-medium leading-relaxed text-foreground/50">
+                Contactele se pot importa, edita inline sau șterge din tabel. Campaniile salvate rămân ca istoric operațional.
+              </p>
             </div>
             <div className="grid gap-0 divide-y divide-[var(--border)] lg:grid-cols-[22rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
               <div className="space-y-4 p-6 bg-surface-muted">
@@ -753,118 +1037,31 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   <p className="text-sm font-bold text-foreground">{summary.campaign.videoHost.provider}</p>
                   <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">{summary.campaign.videoHost.note}</p>
                 </article>
-                <form onSubmit={handleCreateCampaign} className="space-y-4 rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+                <article className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70">Campanie video</p>
                     <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">
-                      Standardul curat este thumbnail în email, cu link spre o pagină de vizionare Codruț. Video-ul nu se atașează și nu se redă direct în email.
+                      Folosește link Vimeo și thumbnail încărcat în Codruț. Landing page-ul este opțional; dacă rămâne gol, butonul din email duce direct la video.
                     </p>
                   </div>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Nume campanie</span>
-                    <input
-                      value={campaignName}
-                      onChange={(event) => setCampaignName(event.target.value)}
-                      className="control-input w-full py-3"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Segment</span>
-                    <select
-                      value={campaignSegment}
-                      onChange={(event) => setCampaignSegment(event.target.value as "past_customer" | "potential_customer")}
-                      className="control-input w-full py-3"
-                    >
-                      <option value="potential_customer">Prospect / client potențial</option>
-                      <option value="past_customer">Client vechi / existent</option>
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Subiect</span>
-                    <input
-                      value={campaignSubject}
-                      onChange={(event) => setCampaignSubject(event.target.value)}
-                      className="control-input w-full py-3"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Video URL</span>
-                    <input
-                      type="url"
-                      value={campaignVideoUrl}
-                      onChange={(event) => setCampaignVideoUrl(event.target.value)}
-                      placeholder="https://video.codrut.ro/..."
-                      className="control-input w-full py-3"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Thumbnail URL</span>
-                    <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <label className="btn-secondary inline-flex cursor-pointer items-center justify-center px-4 py-2 text-xs">
-                          {isUploadingCampaignAsset ? "Se încarcă..." : "Încarcă thumbnail"}
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            className="hidden"
-                            disabled={isUploadingCampaignAsset}
-                            onChange={handleCampaignAssetUpload}
-                          />
-                        </label>
-                        <input
-                          type="url"
-                          value={campaignThumbnailUrl}
-                          onChange={(event) => setCampaignThumbnailUrl(event.target.value)}
-                          placeholder="URL generat automat sau fallback manual"
-                          className="control-input min-w-0 flex-1 py-3"
-                        />
-                      </div>
-                      {campaignThumbnailUrl ? (
-                        <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-surface">
-                          <Image
-                            src={campaignThumbnailUrl}
-                            alt="Previzualizare thumbnail campanie"
-                            width={640}
-                            height={320}
-                            unoptimized
-                            className="h-32 w-full object-cover"
-                          />
-                        </div>
-                      ) : null}
-                      {campaignAssetMessage ? (
-                        <p className="mt-2 text-xs font-semibold text-foreground/62">{campaignAssetMessage}</p>
-                      ) : null}
-                      <p className="mt-2 text-[11px] font-medium leading-relaxed text-foreground/50">
-                        Acceptă JPG, PNG, WEBP sau GIF. Emailul afișează imaginea și trimite
-                        către pagina video Codruț.
-                      </p>
-                    </div>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Landing page URL</span>
-                    <input
-                      type="url"
-                      value={campaignLandingUrl}
-                      onChange={(event) => setCampaignLandingUrl(event.target.value)}
-                      placeholder="https://codrut.andreivacaru.ro/watch/..."
-                      className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy"
-                    />
-                  </label>
                   <button
-                    type="submit"
-                    disabled={isCreatingCampaign}
-                    className="btn-premium w-full justify-center"
+                    type="button"
+                    className="btn-premium mt-4 w-full justify-center"
+                    onClick={() => {
+                      setCampaignMessage(null);
+                      setShowCampaignModal(true);
+                    }}
                   >
-                    {isCreatingCampaign ? "Se salvează..." : "Creează campanie"}
+                    Creează campanie
                   </button>
                   {campaignMessage ? (
-                    <p aria-live="polite" className="rounded-xl bg-surface-muted px-3 py-2 text-xs font-semibold text-foreground/62">
+                    <p aria-live="polite" className="mt-3 rounded-xl bg-surface-muted px-3 py-2 text-xs font-semibold text-foreground/62">
                       {campaignMessage}
                     </p>
                   ) : null}
-                </form>
+                </article>
                 <article className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70 mb-2">Campanii salvate</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70 mb-2">Istoric campanii</p>
                   {isLoadingCampaigns ? (
                     <p className="text-xs font-medium text-foreground/50">Se încarcă...</p>
                   ) : campaigns.length === 0 ? (
@@ -878,14 +1075,24 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                               <p className="truncate text-xs font-bold text-foreground">{campaign.name}</p>
                               <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-foreground/45">{campaign.status}</p>
                             </div>
-                            <button
-                              type="button"
-                              disabled={sendingCampaignId === campaign.id}
-                              onClick={() => handleSendCampaign(campaign)}
-                              className="btn-secondary px-3 py-1.5 text-[10px]"
-                            >
-                              {sendingCampaignId === campaign.id ? "Se trimite..." : "Trimite"}
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id}
+                                onClick={() => handleSendCampaign(campaign)}
+                                className="btn-secondary px-3 py-1.5 text-[10px]"
+                              >
+                                {sendingCampaignId === campaign.id ? "Se trimite..." : "Trimite"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id}
+                                onClick={() => handleDeleteCampaign(campaign)}
+                                className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold text-red-700 transition hover:-translate-y-0.5 hover:border-red-500/55 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-200"
+                              >
+                                {deletingCampaignId === campaign.id ? "Se șterge..." : "Șterge"}
+                              </button>
+                            </div>
                           </div>
                           {campaignSendResults[campaign.id] ? (
                             <p className="mt-2 rounded-xl bg-surface px-3 py-2 text-[11px] font-semibold text-foreground/60">
@@ -900,6 +1107,11 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               </div>
 
               <div className="overflow-x-auto p-2">
+                {campaignContactMessage ? (
+                  <p aria-live="polite" className="mx-4 mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-xs font-semibold text-foreground/65">
+                    {campaignContactMessage}
+                  </p>
+                ) : null}
                 <table className="min-w-full text-left text-sm">
                   <thead className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/50 border-b border-[var(--border)]">
                     <tr>
@@ -909,48 +1121,134 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       <th className="px-6 py-4">Evenimente</th>
                       <th className="px-6 py-4">Reply / Calendly</th>
                       <th className="px-6 py-4">Rezultat</th>
+                      <th className="px-6 py-4 text-right">Acțiuni</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
                     {summary.campaign.recipients.length > 0 ? (
-                      summary.campaign.recipients.map((recipient) => (
-                        <tr key={recipient.id} className="hover:bg-surface-muted transition-colors">
-                          <td className="px-6 py-4">
-                            <p className="font-bold text-foreground">{recipient.company}</p>
-                            <p className="mt-1 text-xs font-medium text-foreground/60">
-                              {[recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || "Contact lipsă"}
-                            </p>
-                            <p className="mt-1 text-[11px] text-foreground/40 font-mono">{recipient.email}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="capitalize text-[11px] font-bold uppercase tracking-wider text-foreground/60">{recipient.clientType.replace("_", " ")}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="rounded-full bg-surface px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground/70 border border-[var(--border)] shadow-sm">
-                              {recipient.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
-                            {recipient.openCount ?? 0} desch. / {recipient.clickCount ?? 0} click / {recipient.viewCount ?? 0} video
-                            {recipient.emailVariant ? (
-                              <span className="mt-1 block font-sans text-[10px] font-bold uppercase tracking-wider text-burgundy/70">
-                                variantă {recipient.emailVariant}
+                      summary.campaign.recipients.map((recipient) => {
+                        const isEditingContact = editingContactId === recipient.id;
+                        const draft = contactDrafts[recipient.id] ?? campaignRecipientDraft(recipient);
+                        return (
+                          <tr key={recipient.id} className="hover:bg-surface-muted transition-colors">
+                            <td className="min-w-[17rem] px-6 py-4">
+                              {isEditingContact ? (
+                                <div className="space-y-2">
+                                  <input
+                                    value={draft.organization_name}
+                                    onChange={(event) => updateContactDraft(recipient.id, "organization_name", event.target.value)}
+                                    className="control-input w-full px-3 py-2 text-xs"
+                                    placeholder="Companie"
+                                  />
+                                  <input
+                                    value={draft.contact_name}
+                                    onChange={(event) => updateContactDraft(recipient.id, "contact_name", event.target.value)}
+                                    className="control-input w-full px-3 py-2 text-xs"
+                                    placeholder="Nume contact"
+                                  />
+                                  <input
+                                    type="email"
+                                    value={draft.email}
+                                    onChange={(event) => updateContactDraft(recipient.id, "email", event.target.value)}
+                                    className="control-input w-full px-3 py-2 font-mono text-xs"
+                                    placeholder="email@companie.ro"
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  <p className="font-bold text-foreground">{recipient.company}</p>
+                                  <p className="mt-1 text-xs font-medium text-foreground/60">
+                                    {campaignRecipientName(recipient) || "Contact lipsă"}
+                                  </p>
+                                  <p className="mt-1 text-[11px] text-foreground/40 font-mono">{recipient.email}</p>
+                                </>
+                              )}
+                            </td>
+                            <td className="min-w-[11rem] px-6 py-4">
+                              {isEditingContact ? (
+                                <select
+                                  value={draft.segment}
+                                  onChange={(event) => updateContactDraft(recipient.id, "segment", event.target.value as CampaignContactDraft["segment"])}
+                                  className="control-input w-full px-3 py-2 text-xs"
+                                >
+                                  <option value="potential_customer">Prospect</option>
+                                  <option value="past_customer">Client existent</option>
+                                </select>
+                              ) : (
+                                <span className="capitalize text-[11px] font-bold uppercase tracking-wider text-foreground/60">
+                                  {recipient.clientType === "tip_1" ? "Client existent" : "Prospect"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="rounded-full bg-surface px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground/70 border border-[var(--border)] shadow-sm">
+                                {recipient.status}
                               </span>
-                            ) : null}
-                          </td>
-                          <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
-                            {recipient.replyCount ?? 0} / {recipient.calendlyClickCount ?? 0}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="rounded-full bg-burgundy/10 border border-burgundy/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
-                              {recipient.outcome ?? "pending"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                            </td>
+                            <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
+                              {recipient.openCount ?? 0} desch. / {recipient.clickCount ?? 0} click / {recipient.viewCount ?? 0} video
+                              {recipient.emailVariant ? (
+                                <span className="mt-1 block font-sans text-[10px] font-bold uppercase tracking-wider text-burgundy/70">
+                                  variantă {recipient.emailVariant}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
+                              {recipient.replyCount ?? 0} / {recipient.calendlyClickCount ?? 0}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="rounded-full bg-burgundy/10 border border-burgundy/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
+                                {recipient.outcome ?? "pending"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex justify-end gap-2">
+                                {isEditingContact ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={savingContactId === recipient.id}
+                                      onClick={() => saveContact(recipient)}
+                                      className="btn-secondary px-3 py-1.5 text-[10px]"
+                                    >
+                                      {savingContactId === recipient.id ? "Se salvează..." : "Salvează"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={savingContactId === recipient.id}
+                                      onClick={() => cancelEditingContact(recipient.id)}
+                                      className="rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-[10px] font-bold text-foreground/60"
+                                    >
+                                      Anulează
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditingContact(recipient)}
+                                      className="btn-secondary px-3 py-1.5 text-[10px]"
+                                    >
+                                      Editează
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={deletingContactId === recipient.id}
+                                      onClick={() => deleteContact(recipient)}
+                                      className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold text-red-700 dark:text-red-200"
+                                    >
+                                      {deletingContactId === recipient.id ? "Se șterge..." : "Șterge"}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-foreground/50 text-sm font-medium">
+                        <td colSpan={7} className="px-6 py-12 text-center text-foreground/50 text-sm font-medium">
                           <p>Niciun contact înregistrat încă.</p>
                           <div className="mt-4 flex items-center justify-center gap-3">
                             <span className="text-foreground/40">Importă un fișier CSV sau</span>
@@ -1258,27 +1556,174 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
         </div>
       )}
 
+      {/* New Campaign Modal */}
+      {showCampaignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[var(--border)] bg-surface p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Campanie nouă</p>
+                <h2 className="mt-2 text-xl font-bold text-foreground">Email video cu thumbnail</h2>
+                <p className="mt-2 text-xs font-medium leading-relaxed text-foreground/55">
+                  Linkul video poate fi Vimeo. Landing page-ul Codruț este opțional și se folosește doar când vrei tracking sau CTA-uri dedicate.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCampaignModal(false)}
+                className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/60"
+              >
+                Închide
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCampaign} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Nume campanie</span>
+                  <input
+                    value={campaignName}
+                    onChange={(event) => setCampaignName(event.target.value)}
+                    className="control-input w-full py-3"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Segment</span>
+                  <select
+                    value={campaignSegment}
+                    onChange={(event) => setCampaignSegment(event.target.value as "past_customer" | "potential_customer")}
+                    className="control-input w-full py-3"
+                  >
+                    <option value="potential_customer">Prospect / client potențial</option>
+                    <option value="past_customer">Client vechi / existent</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Subiect</span>
+                <input
+                  value={campaignSubject}
+                  onChange={(event) => setCampaignSubject(event.target.value)}
+                  className="control-input w-full py-3"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Link video</span>
+                <input
+                  type="url"
+                  value={campaignVideoUrl}
+                  onChange={(event) => setCampaignVideoUrl(event.target.value)}
+                  placeholder="https://vimeo.com/..."
+                  className="control-input w-full py-3"
+                />
+              </label>
+
+              <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-4">
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <span className="block text-xs font-bold uppercase tracking-wider text-foreground/60">Thumbnail</span>
+                    <p className="mt-1 text-[11px] font-medium text-foreground/50">Încarcă imagine/GIF sau lipește un URL existent.</p>
+                  </div>
+                  <label className="btn-secondary inline-flex cursor-pointer items-center justify-center px-4 py-2 text-xs">
+                    {isUploadingCampaignAsset ? "Se încarcă..." : "Încarcă fișier"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={isUploadingCampaignAsset}
+                      onChange={handleCampaignAssetUpload}
+                    />
+                  </label>
+                </div>
+                <input
+                  type="url"
+                  value={campaignThumbnailUrl}
+                  onChange={(event) => setCampaignThumbnailUrl(event.target.value)}
+                  placeholder="https://codrut.andreivacaru.ro/api/campaign-assets/thumbnail.jpg"
+                  className="control-input w-full py-3"
+                />
+                {campaignThumbnailUrl ? (
+                  <div className="relative mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-surface">
+                    <Image
+                      src={campaignThumbnailUrl}
+                      alt="Previzualizare thumbnail campanie"
+                      width={640}
+                      height={320}
+                      unoptimized
+                      className="h-40 w-full object-cover"
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0 flex items-center justify-center bg-black/10"
+                    >
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/65 bg-white/86 shadow-xl backdrop-blur-sm">
+                        <span className="ml-1 block h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-burgundy" />
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                {campaignAssetMessage ? (
+                  <p className="mt-2 text-xs font-semibold text-foreground/62">{campaignAssetMessage}</p>
+                ) : null}
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Landing page Codruț (opțional)</span>
+                <input
+                  type="url"
+                  value={campaignLandingUrl}
+                  onChange={(event) => setCampaignLandingUrl(event.target.value)}
+                  placeholder="Lasă gol ca butonul să ducă direct la Vimeo"
+                  className="control-input w-full py-3"
+                />
+              </label>
+
+              {campaignMessage ? (
+                <p aria-live="polite" className="rounded-xl bg-surface-muted px-3 py-2 text-xs font-semibold text-foreground/62">
+                  {campaignMessage}
+                </p>
+              ) : null}
+
+              <div className="flex justify-end gap-3 border-t border-[var(--border)] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCampaignModal(false)}
+                  className="rounded-full px-4 py-2 font-bold text-foreground/60 hover:bg-surface-muted"
+                >
+                  Anulează
+                </button>
+                <button type="submit" disabled={isCreatingCampaign} className="btn-primary !rounded-full !px-6 !py-2 !text-sm">
+                  {isCreatingCampaign ? "Se salvează..." : "Salvează campania"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Manual Add Contact Modal */}
       {showManualAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm">
           <div className="bg-surface rounded-xl p-6 shadow-xl w-full max-w-md border border-[var(--border)]">
             <h2 className="text-xl font-bold text-foreground mb-4">Adaugă Contact Manual</h2>
             <form onSubmit={handleAddManualContact} className="space-y-4">
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Email</span>
-                <input type="email" required value={manualEmail} onChange={e => setManualEmail(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy" placeholder="exemplu@companie.ro" />
+                <input type="email" required value={manualEmail} onChange={e => setManualEmail(e.target.value)} className="control-input w-full py-3" placeholder="exemplu@companie.ro" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Nume (Opțional)</span>
-                <input type="text" value={manualName} onChange={e => setManualName(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy" placeholder="Nume și prenume" />
+                <input type="text" value={manualName} onChange={e => setManualName(e.target.value)} className="control-input w-full py-3" placeholder="Nume și prenume" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Companie (Opțional)</span>
-                <input type="text" value={manualCompany} onChange={e => setManualCompany(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy" placeholder="Numele companiei" />
+                <input type="text" value={manualCompany} onChange={e => setManualCompany(e.target.value)} className="control-input w-full py-3" placeholder="Numele companiei" />
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Segment</span>
-                <select value={manualSegment} onChange={e => setManualSegment(e.target.value as "past_customer" | "potential_customer")} className="w-full rounded-xl border border-[var(--border)] bg-surface px-4 py-3 text-sm font-medium focus:border-burgundy focus:ring-1 focus:ring-burgundy">
+                <select value={manualSegment} onChange={e => setManualSegment(e.target.value as "past_customer" | "potential_customer")} className="control-input w-full py-3">
                   <option value="potential_customer">Prospect / Client Potențial</option>
                   <option value="past_customer">Client Existent / Vechi</option>
                 </select>
