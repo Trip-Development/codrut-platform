@@ -130,6 +130,15 @@ class CampaignRecipientBulkCreateRequest(BaseModel):
     recipients: list[CampaignRecipientCreateRequest]
 
 
+class CampaignRecipientUpdateRequest(BaseModel):
+    email: EmailStr | None = None
+    contact_name: str | None = Field(default=None, max_length=255)
+    organization_name: str | None = Field(default=None, max_length=255)
+    segment: str | None = None
+    status: str | None = None
+    source: str | None = Field(default=None, max_length=255)
+
+
 class CampaignRecipientEventCreateRequest(BaseModel):
     event_type: CampaignRecipientEventType
     variant_key: str | None = Field(default=None, max_length=120)
@@ -198,19 +207,16 @@ class CampaignCreateRequest(BaseModel):
         return stripped
 
     @model_validator(mode="after")
-    def require_complete_video_asset_set(self) -> "CampaignCreateRequest":
-        if self.video_url or self.thumbnail_url or self.landing_page_url:
+    def require_video_asset_pair(self) -> "CampaignCreateRequest":
+        if self.video_url or self.thumbnail_url:
             missing = [
                 label
                 for label, value in (
                     ("video_url", self.video_url),
                     ("thumbnail_url", self.thumbnail_url),
-                    ("landing_page_url", self.landing_page_url),
                 )
                 if value is None
             ]
             if missing:
-                raise ValueError(
-                    "Video campaigns require video_url, thumbnail_url, and landing_page_url."
-                )
+                raise ValueError("Video campaigns require video_url and thumbnail_url.")
         return self

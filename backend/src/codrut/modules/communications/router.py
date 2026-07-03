@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from codrut.modules.communications.schemas import (
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
     CampaignRecipientEventResponse,
+    CampaignRecipientUpdateRequest,
     CampaignSendRequest,
     CampaignSendResponse,
     EmailOpsSummaryResponse,
@@ -214,6 +215,42 @@ async def bulk_create_campaign_recipients(
     return {"status": "success", "count": len(recipients)}
 
 
+@router.patch("/campaigns/recipients/{recipient_id}")
+async def update_campaign_recipient(
+    recipient_id: UUID,
+    payload: CampaignRecipientUpdateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    _require_trainer(principal)
+    recipient = await CommunicationsService(session).update_campaign_recipient(
+        recipient_id,
+        payload,
+    )
+    await session.commit()
+    return {
+        "id": str(recipient.id),
+        "email": recipient.email,
+        "contact_name": recipient.contact_name,
+        "organization_name": recipient.organization_name,
+        "segment": recipient.segment.value,
+        "status": recipient.status.value,
+        "source": recipient.source,
+    }
+
+
+@router.delete("/campaigns/recipients/{recipient_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign_recipient(
+    recipient_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    _require_trainer(principal)
+    await CommunicationsService(session).delete_campaign_recipient(recipient_id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/campaigns/recipients/{recipient_id}/events",
     response_model=CampaignRecipientEventResponse,
@@ -290,6 +327,18 @@ async def send_campaign(
     )
     await session.commit()
     return result
+
+
+@router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign(
+    campaign_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    _require_trainer(principal)
+    await CommunicationsService(session).delete_campaign(campaign_id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/campaigns")

@@ -29,6 +29,7 @@ from codrut.modules.communications.schemas import (
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientCreateRequest,
+    CampaignRecipientUpdateRequest,
     CampaignSendRequest,
     EmailTemplateCreateRequest,
     EmailTemplateUpdateRequest,
@@ -128,6 +129,13 @@ class FakeCommunicationsRepository:
         self.campaigns.append(campaign)
         return campaign
 
+    async def delete_campaign(self, campaign: Campaign) -> None:
+        self.campaigns = [
+            saved_campaign
+            for saved_campaign in self.campaigns
+            if saved_campaign.id != campaign.id
+        ]
+
     async def list_campaign_recipients(self) -> list[CampaignRecipient]:
         return self.campaign_recipients
 
@@ -145,6 +153,16 @@ class FakeCommunicationsRepository:
     async def get_campaign_recipient(self, recipient_id: uuid.UUID) -> CampaignRecipient | None:
         return next(
             (recipient for recipient in self.campaign_recipients if recipient.id == recipient_id),
+            None,
+        )
+
+    async def get_campaign_recipient_by_email(self, email: str) -> CampaignRecipient | None:
+        return next(
+            (
+                recipient
+                for recipient in self.campaign_recipients
+                if recipient.email.lower() == email.lower()
+            ),
             None,
         )
 
@@ -324,6 +342,33 @@ async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscr
 
 
 @pytest.mark.asyncio
+async def test_send_campaign_uses_video_url_when_landing_page_is_missing() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.video_url = "https://vimeo.com/123456789"
+    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = None
+    campaign.html_body = '<a href="${landing_page_url}">Vezi video</a>'
+    campaign.text_body = "Vezi video: ${landing_page_url}"
+    recipient = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(recipient)
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[recipient.id]),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert response.sent == 1
+    assert 'href="https://vimeo.com/123456789"' in provider.sent[0].html_body
+    assert "Vezi video: https://vimeo.com/123456789" in provider.sent[0].text_body
+
+
+@pytest.mark.asyncio
 async def test_send_campaign_dry_run_does_not_send_or_log() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
@@ -364,6 +409,113 @@ async def test_create_campaign_marks_valid_campaign_ready() -> None:
     )
 
     assert campaign.status == CampaignStatus.ready
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign_removes_saved_campaign() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    repository.campaigns.append(campaign)
+    service = make_service(repository)
+
+    await service.delete_campaign(campaign.id)
+
+    assert repository.campaigns == []
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign_rejects_unknown_campaign() -> None:
+    service = make_service(FakeCommunicationsRepository())
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.delete_campaign(uuid.uuid4())
+
+    assert exc_info.value.code == "campaign_not_found"
+
+
+@pytest.mark.asyncio
+async def test_update_campaign_recipient_persists_operational_fields() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient()
+    repository.campaign_recipients.append(recipient)
+    service = make_service(repository)
+
+    result = await service.update_campaign_recipient(
+        recipient.id,
+        CampaignRecipientUpdateRequest(
+            email="NEW@example.com",
+            contact_name="  Ioana Popescu  ",
+            organization_name="  Compania B  ",
+            segment="past_customer",
+        ),
+    )
+
+    assert result.id == recipient.id
+    assert recipient.email == "new@example.com"
+    assert recipient.contact_name == "Ioana Popescu"
+    assert recipient.organization_name == "Compania B"
+    assert recipient.segment == CampaignRecipientSegment.past_customer
+
+
+@pytest.mark.asyncio
+async def test_update_campaign_recipient_rejects_duplicate_email() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient(email="first@example.com")
+    existing = persisted_campaign_recipient(email="existing@example.com")
+    repository.campaign_recipients.extend([recipient, existing])
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.update_campaign_recipient(
+            recipient.id,
+            CampaignRecipientUpdateRequest(email="Existing@example.com"),
+        )
+
+    assert exc_info.value.code == "campaign_recipient_email_exists"
+    assert recipient.email == "first@example.com"
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign_recipient_suppresses_contact_without_erasing_history() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient()
+    repository.campaign_recipients.append(recipient)
+    service = make_service(repository)
+
+    await service.delete_campaign_recipient(recipient.id)
+
+    assert repository.campaign_recipients == [recipient]
+    assert recipient.status == CampaignRecipientStatus.suppressed
+
+    imported = await service.bulk_create_campaign_recipients(
+        CampaignRecipientBulkCreateRequest(
+            recipients=[
+                CampaignRecipientCreateRequest(
+                    email=recipient.email,
+                    contact_name="Reimportat",
+                    organization_name="Compania nouă",
+                    segment="potential_customer",
+                )
+            ]
+        )
+    )
+
+    assert imported == [recipient]
+    assert repository.campaign_recipients == [recipient]
+    assert recipient.status == CampaignRecipientStatus.suppressed
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign_recipient_preserves_unsubscribe_state() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient(status=CampaignRecipientStatus.unsubscribed)
+    repository.campaign_recipients.append(recipient)
+    service = make_service(repository)
+
+    await service.delete_campaign_recipient(recipient.id)
+
+    assert repository.campaign_recipients == [recipient]
+    assert recipient.status == CampaignRecipientStatus.unsubscribed
 
 
 @pytest.mark.asyncio

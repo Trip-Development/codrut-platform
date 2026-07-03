@@ -10,11 +10,14 @@ import {
 } from "./auth";
 import {
   buildVideoCampaignCreatePayload,
+  deleteCampaignOnServer,
+  deleteCampaignRecipientOnServer,
   deleteEmailTemplateOnServer,
   getEmailOpsSummary,
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
   sendCampaignOnServer,
+  updateCampaignRecipientOnServer,
   uploadCampaignAssetOnServer,
 } from "./email";
 import { inviteQuestionnaireLabel, inviteTaskHref, participantTaskTypeLabel, resolveInviteBundle } from "./invites";
@@ -226,6 +229,67 @@ describe("frontend API adapter stubs", () => {
           dry_run: false,
           recipient_ids: ["recipient-1"],
         }),
+      }),
+    );
+  });
+
+  it("deletes campaigns through the communications API", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deleteCampaignOnServer("campaign-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/communications/campaigns/campaign-1"),
+      expect.objectContaining({
+        method: "DELETE",
+        credentials: "include",
+      }),
+    );
+  });
+
+  it("updates and deletes campaign contacts through the communications API", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "recipient-1", email: "ana@example.com" }),
+      } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateCampaignRecipientOnServer("recipient-1", {
+      email: "ana@example.com",
+      contact_name: "Ana",
+      organization_name: "Compania A",
+      segment: "potential_customer",
+    });
+    await deleteCampaignRecipientOnServer("recipient-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/communications/campaigns/recipients/recipient-1"),
+      expect.objectContaining({
+        method: "PATCH",
+        credentials: "include",
+        body: JSON.stringify({
+          email: "ana@example.com",
+          contact_name: "Ana",
+          organization_name: "Compania A",
+          segment: "potential_customer",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/communications/campaigns/recipients/recipient-1"),
+      expect.objectContaining({
+        method: "DELETE",
+        credentials: "include",
       }),
     );
   });
@@ -485,6 +549,24 @@ describe("frontend API adapter stubs", () => {
     expect(payload?.text_body).toContain("https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22");
   });
 
+  it("uses the video url as the campaign destination when landing page is empty", () => {
+    const payload = buildVideoCampaignCreatePayload({
+      name: "Campanie Vimeo",
+      segment: "potential_customer",
+      subject: "Salut",
+      videoUrl: "https://vimeo.com/123456789",
+      thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
+      landingUrl: "",
+    });
+
+    expect(payload).toMatchObject({
+      video_url: "https://vimeo.com/123456789",
+      thumbnail_url: "https://cdn.codrut.ro/thumb.jpg",
+    });
+    expect(payload?.landing_page_url).toBeUndefined();
+    expect(payload?.html_body).toContain('href="https://vimeo.com/123456789"');
+  });
+
   it("uploads campaign thumbnail assets as raw image bodies", async () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
@@ -544,7 +626,7 @@ describe("frontend API adapter stubs", () => {
       videoUrl: "https://video.codrut.ro/watch/intro",
       thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
       landingUrl: "not-a-url",
-    })).toBeNull();
+    })?.landing_page_url).toBeUndefined();
   });
 
   it("resolves invite bundle fallback states", async () => {
