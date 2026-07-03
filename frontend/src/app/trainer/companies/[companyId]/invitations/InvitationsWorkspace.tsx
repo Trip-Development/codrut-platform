@@ -258,7 +258,7 @@ export function InvitationsWorkspace({
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
   const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("all");
-  const [showAdvancedAssignments, setShowAdvancedAssignments] = useState(mode === "assignments");
+  const [showAdvancedAssignmentModal, setShowAdvancedAssignmentModal] = useState(false);
   const [expandedScopeCards, setExpandedScopeCards] = useState<Set<string>>(new Set());
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -280,10 +280,6 @@ export function InvitationsWorkspace({
     setCopiedParticipantId(null);
     setMessage(null);
   }, [selectedProjectId]);
-
-  useEffect(() => {
-    if (!hasParticipants) setShowAdvancedAssignments(false);
-  }, [hasParticipants]);
 
   useEffect(() => {
     let cancelled = false;
@@ -621,8 +617,13 @@ export function InvitationsWorkspace({
     );
   }
 
-  async function dispatchInvitations(mode: ParticipantInvitationMode, participantIds: string[], emptyMessage: string) {
-    if (participantIds.length === 0) {
+  async function dispatchInvitations(
+    mode: ParticipantInvitationMode,
+    participantIds: string[] | undefined,
+    emptyMessage: string,
+    targetMode: "unsent" | "selected" | "all" = participantIds?.length ? "selected" : "unsent",
+  ) {
+    if (participantIds?.length === 0) {
       setMessage(emptyMessage);
       return;
     }
@@ -638,6 +639,7 @@ export function InvitationsWorkspace({
         mode,
         participantIds,
         projectId: selectedProjectId,
+        targetMode,
       });
       setResultsByParticipant((current) => {
         const next = new Map(current);
@@ -672,7 +674,16 @@ export function InvitationsWorkspace({
 
   async function handleSendAll(mode: ParticipantInvitationMode) {
     const participantIds = rows.filter((row) => row.totalTasks > 0).map((row) => row.participant.id);
-    await dispatchInvitations(mode, participantIds, "Nu există persoane cu sarcini salvate pentru trimitere.");
+    if (participantIds.length === 0) {
+      setMessage("Nu există persoane cu sarcini salvate pentru trimitere.");
+      return;
+    }
+    await dispatchInvitations(
+      mode,
+      mode === "email" ? undefined : participantIds,
+      "Nu există persoane cu sarcini salvate pentru trimitere.",
+      mode === "email" ? "unsent" : "selected",
+    );
   }
 
   async function handleResend(participantId: string) {
@@ -783,16 +794,16 @@ export function InvitationsWorkspace({
             <p className="text-sm font-semibold text-burgundy/75">Pregătire sarcini</p>
             <h2 className="mt-1 text-xl font-semibold text-foreground">Asignări înainte de trimitere</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-foreground/58">
-              Generează și salvează planul implicit doar când trebuie să ajustezi sarcinile. Pentru trimitere rapidă folosește tabul Persoane invitate.
+              Planul implicit rămâne vizibil aici. Ajustările manuale mai rare se deschid din Avansat.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setShowAdvancedAssignments((current) => !current)}
+            onClick={() => setShowAdvancedAssignmentModal(true)}
             disabled={!hasParticipants}
             className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {!hasParticipants ? "Adaugă participanți pentru asignări" : showAdvancedAssignments ? "Ascunde avansat" : "Configurează asignări avansat"}
+            {!hasParticipants ? "Adaugă participanți pentru Avansat" : "Avansat"}
           </button>
         </div>
         {!hasParticipants ? (
@@ -802,7 +813,6 @@ export function InvitationsWorkspace({
             </p>
           </div>
         ) : null}
-        {showAdvancedAssignments ? (
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="p-5 md:p-6">
             <p className="text-sm font-semibold text-burgundy/75">Pregătire sarcini</p>
@@ -845,15 +855,57 @@ export function InvitationsWorkspace({
                 Planul implicit va grupa sarcinile pe leadership, echipe de manager și feedback 360. După generare poți debifa rândurile care nu trebuie salvate.
               </div>
             )}
+          </div>
 
-            <div className="mt-6 border-t border-[var(--border)] pt-5">
-              <p className="text-sm font-semibold text-foreground">Asignare punctuală</p>
-              <p className="mt-1 text-xs leading-5 text-foreground/52">
-                Folosește formularul doar pentru excepții care nu apar în planul implicit.
+          <div className="flex flex-col justify-between gap-4 border-t border-[var(--border)] bg-surface-muted p-5 md:p-6 xl:border-l xl:border-t-0">
+            <div className="space-y-3">
+              <AssignmentSummary label="Asignări totale" value={assignmentState.length} />
+              <AssignmentSummary label="Bifate în plan" value={selectedPlanItems.length} />
+              <AssignmentSummary label="Persoane fără sarcini" value={participantsWithoutAssignments} />
+              <AssignmentSummary label="Chestionare active" value={questionnaires.length} />
+            </div>
+            <div className="space-y-3">
+              {questionnaireMessage ? (
+                <p className="text-xs font-semibold text-burgundy">{questionnaireMessage}</p>
+              ) : null}
+              <p className="text-xs leading-5 text-foreground/52">
+                Invitarea rămâne separată: creezi toate asignările, apoi alegi emailuri sau linkuri securizate. Folosește Avansat doar pentru excepții.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+      ) : null}
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      {showAdvancedAssignmentModal ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowAdvancedAssignmentModal(false)}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="advanced-assignment-title"
+            className="modal-panel max-w-4xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold text-burgundy/75">Avansat</p>
+                <h2 id="advanced-assignment-title" className="mt-1 text-xl font-semibold text-foreground">
+                  Asignare punctuală
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-foreground/58">
+                  Formularul acesta este pentru excepții care nu intră în planul implicit.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdvancedAssignmentModal(false)}
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy"
+              >
+                Închide
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
               <LabeledSelect
                 label="Persoană"
                 value={assignmentForm.respondentProfileId}
@@ -928,19 +980,8 @@ export function InvitationsWorkspace({
                 </LabeledSelect>
               </div>
             ) : null}
-          </div>
 
-          <div className="flex flex-col justify-between gap-4 border-t border-[var(--border)] bg-surface-muted p-5 md:p-6 xl:border-l xl:border-t-0">
-            <div className="space-y-3">
-              <AssignmentSummary label="Asignări totale" value={assignmentState.length} />
-              <AssignmentSummary label="Bifate în plan" value={selectedPlanItems.length} />
-              <AssignmentSummary label="Persoane fără sarcini" value={participantsWithoutAssignments} />
-              <AssignmentSummary label="Chestionare active" value={questionnaires.length} />
-            </div>
-            <div className="space-y-3">
-              {questionnaireMessage ? (
-                <p className="text-xs font-semibold text-burgundy">{questionnaireMessage}</p>
-              ) : null}
+            <div className="mt-6 border-t border-[var(--border)] pt-5">
               <button
                 type="button"
                 onClick={() => void handleCreateAssignment()}
@@ -949,14 +990,12 @@ export function InvitationsWorkspace({
               >
                 {assignmentSaving ? "Se salvează asignarea..." : "Creează asignarea"}
               </button>
-              <p className="text-xs leading-5 text-foreground/52">
+              <p className="mt-3 text-xs leading-5 text-foreground/52">
                 Invitarea rămâne separată: creezi toate asignările, apoi alegi emailuri sau linkuri securizate.
               </p>
             </div>
-          </div>
+          </section>
         </div>
-        ) : null}
-      </section>
       ) : null}
 
       {showInvitationWorkspace ? (
@@ -977,7 +1016,18 @@ export function InvitationsWorkspace({
                 disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
                 className="tap-soft rounded-full bg-burgundy px-3 py-2 text-xs font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
               >
-                {sendingMode === "email" ? "Se trimit..." : "Trimite email tuturor"}
+                {sendingMode === "email" ? "Se trimit..." : "Trimite email netrimișilor"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const participantIds = rows.filter((row) => row.totalTasks > 0).map((row) => row.participant.id);
+                  void dispatchInvitations("email", participantIds, "Nu există persoane cu sarcini salvate pentru trimitere.", "all");
+                }}
+                disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Trimite email tuturor
               </button>
               <button
                 type="button"

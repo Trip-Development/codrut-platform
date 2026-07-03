@@ -228,6 +228,7 @@ describe("frontend API adapter stubs", () => {
         body: JSON.stringify({
           dry_run: false,
           recipient_ids: ["recipient-1"],
+          mode: "selected",
         }),
       }),
     );
@@ -544,7 +545,7 @@ describe("frontend API adapter stubs", () => {
       thumbnail_url: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=%22hero%22",
       landing_page_url: "https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22",
     });
-    expect(payload?.html_body).toContain('<a href="https://codrut.andreivacaru.ro/watch/intro?source=email&amp;name=%22hero%22">');
+    expect(payload?.html_body).toContain('href="https://codrut.andreivacaru.ro/watch/intro?source=email&amp;name=%22hero%22"');
     expect(payload?.html_body).toContain('<img src="https://cdn.codrut.ro/thumb.jpg?size=large&amp;variant=%22hero%22"');
     expect(payload?.text_body).toContain("https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22");
   });
@@ -1219,6 +1220,7 @@ describe("frontend API adapter stubs", () => {
           participant_ids: ["participant-1"],
           project_id: "project-1",
           mode: "secure_links",
+          target_mode: "selected",
           force_rotate: false,
         }),
       }),

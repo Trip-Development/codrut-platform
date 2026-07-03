@@ -27,6 +27,7 @@ type RosterImporterProps = {
   projects?: Pick<CompanyProject, "id" | "name" | "status">[];
   defaultProjectId?: string | null;
   requireProject?: boolean;
+  compact?: boolean;
 };
 
 type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile" | "pcm_base" | "pcm_phase";
@@ -183,6 +184,7 @@ export function RosterImporter({
   projects = [],
   defaultProjectId = null,
   requireProject = false,
+  compact = false,
 }: RosterImporterProps) {
   const router = useRouter();
   const [companyId, setCompanyId] = useState(defaultCompanyId || companies[0]?.id || "");
@@ -714,20 +716,31 @@ export function RosterImporter({
 
   return (
     <div className="space-y-6">
-      <ImportFlowStepper steps={flowSteps} />
+      {!compact ? <ImportFlowStepper steps={flowSteps} /> : null}
 
       <section className="surface-panel overflow-hidden">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="border-b border-[var(--border)] bg-surface-muted p-5 lg:border-b-0 lg:border-r">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
-            <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
-              Importul creează lista de participanți în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
-            </p>
-            <p className="mt-4 inline-flex rounded-xl border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
-              Fără trimitere automată la import
+        {compact ? (
+          <div className="border-b border-[var(--border)] bg-surface-muted px-5 py-4">
+            <p className="text-sm font-semibold text-burgundy/75">Import participanți</p>
+            <p className="mt-1 text-sm leading-6 text-foreground/62">
+              Încarcă fișierul, revizuiește maparea și adaugă manual doar dacă ai nevoie.
             </p>
           </div>
+        ) : null}
+
+        <div className={compact ? "" : "grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"}>
+          {!compact ? (
+            <div className="border-b border-[var(--border)] bg-surface-muted p-5 lg:border-b-0 lg:border-r">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
+              <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
+              <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
+                Importul creează lista de participanți în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
+              </p>
+              <p className="mt-4 inline-flex rounded-xl border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
+                Fără trimitere automată la import
+              </p>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 p-5 md:grid-cols-2">
             <div className="block">

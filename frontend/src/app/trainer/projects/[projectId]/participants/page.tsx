@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 
 import { getAllCompanyProjects, getCompanyInvitationStatuses, getProjectParticipants } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { RosterImporter } from "@/components/roster-importer";
 import { ProjectParticipantsWorkspace } from "./ProjectParticipantsWorkspace";
 
 export default async function ProjectParticipantsPage({
@@ -25,23 +24,13 @@ export default async function ProjectParticipantsPage({
   ]);
 
   return (
-    <div className="space-y-5">
-      <RosterImporter
-        companies={[{ id: project.company_id, name: project.company_name ?? "Companie" }]}
-        defaultCompanyId={project.company_id}
-        existingParticipants={participants}
-        projects={[project]}
-        defaultProjectId={project.id}
-        requireProject
-        lockCompany
-      />
-
-      <ProjectParticipantsWorkspace
-        companyId={project.company_id}
-        projectId={project.id}
-        participants={participants}
-        invitationStatuses={invitationStatuses}
-      />
-    </div>
+    <ProjectParticipantsWorkspace
+      companyId={project.company_id}
+      projectId={project.id}
+      companyName={project.company_name ?? "Companie"}
+      project={project}
+      participants={participants}
+      invitationStatuses={invitationStatuses}
+    />
   );
 }

@@ -15,6 +15,7 @@ export type EmailTemplate = {
   subject: string;
   body: string;
   lane: "transactional" | "campaign";
+  audience?: string | null;
   placeholders: string[];
 };
 
@@ -58,12 +59,29 @@ function backendToFrontendTemplate(b: any): EmailTemplate {
     id: b.id || `${b.key}@${b.version}`,
     baseKey: b.key,
     version: b.version,
-    name: b.key === "account_setup" ? "Invitație înrolare" : b.key === "assignment_bundle" ? "Sarcini de completat" : b.key,
+    name: templateDisplayName(b.key),
     subject,
     body,
-    lane: b.audience === "campaign" ? "campaign" : "transactional",
+    lane: String(b.audience || "").startsWith("campaign") ? "campaign" : "transactional",
+    audience: b.audience ?? null,
     placeholders,
   };
+}
+
+function templateDisplayName(key: string): string {
+  const names: Record<string, string> = {
+    account_setup: "Invitație înrolare",
+    assignment_bundle: "Sarcini de completat",
+    promo_past_report_2022_2025: "Promo clienți vechi - raport 2022-2025",
+    promo_past_reactivation: "Promo clienți vechi - reactivare",
+    promo_current_programs: "Promo clienți existenți - programe noi",
+    promo_potential_intro: "Promo prospect - prima interacțiune",
+    evaluation_leadership_invite: "Evaluare leadership - invitație",
+    evaluation_leadership_reminder: "Evaluare leadership - reminder",
+    evaluation_team_invite: "Evaluare echipe - invitație",
+    evaluation_team_reminder: "Evaluare echipe - reminder",
+  };
+  return names[key] ?? key;
 }
 
 function frontendToBackendTemplate(f: EmailTemplate) {
@@ -78,7 +96,7 @@ function frontendToBackendTemplate(f: EmailTemplate) {
     html_body,
     text_body,
     variables,
-    audience: f.lane,
+    audience: f.audience ?? f.lane,
     active: true,
   };
 }
@@ -504,6 +522,13 @@ export type CampaignCreate = {
   landing_page_url?: string;
 };
 
+export type CampaignUpdate = Omit<Partial<CampaignCreate>, "video_url" | "thumbnail_url" | "landing_page_url"> & {
+  status?: "draft" | "ready" | "paused" | "completed";
+  video_url?: string | null;
+  thumbnail_url?: string | null;
+  landing_page_url?: string | null;
+};
+
 export type CampaignAssetUpload = {
   url: string;
   file_name: string;
@@ -533,6 +558,8 @@ export type CampaignVideoDraft = {
   name: string;
   segment: "past_customer" | "potential_customer";
   subject: string;
+  htmlBody?: string;
+  textBody?: string;
   videoUrl: string;
   thumbnailUrl: string;
   landingUrl?: string;
@@ -563,25 +590,33 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
 
   const safeLandingUrl = escapeHtmlAttribute(landingUrl);
   const safeThumbnailUrl = escapeHtmlAttribute(thumbnailUrl);
+  const htmlBody = draft.htmlBody?.trim()
+    ? draft.htmlBody
+        .replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
+        .replace(/\$\{landing_page_url\}/g, safeLandingUrl)
+        .replace(/\$\{thumbnail_url\}/g, safeThumbnailUrl)
+    : [
+        "<p>Bună, ${first_name}.</p>",
+        "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
+        [
+          `<p><a href="${safeLandingUrl}" style="display:block;text-decoration:none;color:inherit;">`,
+          `<span style="display:block;position:relative;max-width:620px;border-radius:16px;overflow:hidden;background:#2b211f;">`,
+          `<img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;width:100%;max-width:620px;height:auto;border:0;border-radius:16px;" />`,
+          `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
+          "</span>",
+          "</a></p>",
+        ].join(""),
+      ].join("");
+  const textBody = draft.textBody?.trim()
+    ? draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
+    : `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`;
 
   return {
     name: trimmedName,
     segment: draft.segment,
     subject: draft.subject.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
-    html_body: [
-      "<p>Bună, ${first_name}.</p>",
-      "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
-      [
-        `<p><a href="${safeLandingUrl}" style="display:block;text-decoration:none;color:inherit;">`,
-        `<span style="display:block;position:relative;max-width:620px;border-radius:16px;overflow:hidden;background:#2b211f;">`,
-        `<img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;width:100%;max-width:620px;height:auto;border:0;border-radius:16px;" />`,
-        `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
-        "</span>",
-        "</a></p>",
-      ].join(""),
-      `<p><a href="${safeLandingUrl}">Vezi video-ul</a></p>`,
-    ].join(""),
-    text_body: `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`,
+    html_body: htmlBody,
+    text_body: textBody,
     video_url: videoUrl,
     thumbnail_url: thumbnailUrl,
     landing_page_url: landingUrl === videoUrl ? undefined : landingUrl,
@@ -635,6 +670,31 @@ export async function createCampaignOnServer(campaign: CampaignCreate) {
   }
 }
 
+export async function updateCampaignOnServer(campaignId: string, campaign: CampaignUpdate): Promise<EmailCampaign> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(campaign),
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) {
+        return { id: campaignId, name: "", segment: "potential_customer", subject: "", html_body: "", text_body: "", status: "ready", ...campaign } as EmailCampaign;
+      }
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut actualiza campania (${response.status}).`);
+    }
+    return await response.json();
+  } catch (err) {
+    if (isDemoFallbackEnabled()) {
+      return { id: campaignId, name: "", segment: "potential_customer", subject: "", html_body: "", text_body: "", status: "ready", ...campaign } as EmailCampaign;
+    }
+    throw err;
+  }
+}
+
 export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
   if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
     return [];
@@ -680,7 +740,7 @@ export async function deleteCampaignOnServer(campaignId: string): Promise<void> 
 
 export async function sendCampaignOnServer(
   campaignId: string,
-  options: { dryRun?: boolean; recipientIds?: string[] } = {},
+  options: { dryRun?: boolean; recipientIds?: string[]; mode?: "new" | "selected" | "all" } = {},
 ): Promise<CampaignSendResponse> {
   if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
     return {
@@ -703,6 +763,7 @@ export async function sendCampaignOnServer(
       body: JSON.stringify({
         dry_run: Boolean(options.dryRun),
         recipient_ids: options.recipientIds,
+        mode: options.mode ?? (options.recipientIds?.length ? "selected" : "new"),
       }),
     });
     if (!response.ok) {

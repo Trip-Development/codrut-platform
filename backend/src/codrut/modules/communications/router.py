@@ -20,6 +20,7 @@ from codrut.modules.communications.schemas import (
     CampaignRecipientUpdateRequest,
     CampaignSendRequest,
     CampaignSendResponse,
+    CampaignUpdateRequest,
     EmailOpsSummaryResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
@@ -327,6 +328,30 @@ async def send_campaign(
     )
     await session.commit()
     return result
+
+
+@router.patch("/campaigns/{campaign_id}")
+async def update_campaign(
+    campaign_id: UUID,
+    payload: CampaignUpdateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict:
+    _require_trainer(principal)
+    campaign = await CommunicationsService(session).update_campaign(campaign_id, payload)
+    await session.commit()
+    return {
+        "id": str(campaign.id),
+        "name": campaign.name,
+        "segment": campaign.segment.value,
+        "status": campaign.status.value,
+        "subject": campaign.subject,
+        "html_body": campaign.html_body,
+        "text_body": campaign.text_body,
+        "video_url": campaign.video_url,
+        "thumbnail_url": campaign.thumbnail_url,
+        "landing_page_url": campaign.landing_page_url,
+    }
 
 
 @router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)

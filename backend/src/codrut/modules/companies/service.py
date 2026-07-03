@@ -522,6 +522,13 @@ class CompanyService:
                     code="participant_not_found",
                 )
 
+        if payload.mode == "email" and payload.target_mode == "unsent":
+            participants = await self._filter_participants_without_accepted_email(
+                company.id,
+                participants,
+                payload.project_id,
+            )
+
         if not participants:
             raise DomainError("No participants found for invite delivery.", code="no_participants")
 
@@ -588,9 +595,11 @@ class CompanyService:
         from codrut.core.config import get_settings
         from codrut.modules.assignments.models import AssignmentStatus
         from codrut.modules.communications.email_provider import build_email_provider
+        from codrut.modules.communications.repository import CommunicationsRepository
         from codrut.modules.communications.service import (
             AssignmentInvitationContext,
             TransactionalEmailService,
+            _remaining_email_sends_today,
         )
         from codrut.modules.communications.task_links import build_task_url
         from codrut.modules.identity.service import IdentityService
@@ -604,6 +613,7 @@ class CompanyService:
             else None
         )
         identity_service = IdentityService(self.repository.session)
+        communications_repository = CommunicationsRepository(self.repository.session)
         project = (
             await self.repository.get_project(company.id, project_id)
             if project_id is not None
@@ -617,6 +627,11 @@ class CompanyService:
         )
 
         results: list[RosterImportEmailResult] = []
+        remaining_sends = (
+            await _remaining_email_sends_today(communications_repository, settings)
+            if mode == "email"
+            else 0
+        )
         for participant in participants:
             assignments = active_assignments_by_participant.get(participant.id, [])
             if not assignments:
@@ -648,6 +663,20 @@ class CompanyService:
                         full_name=participant.full_name,
                         delivery_mode="secure_links",
                         email_sent=False,
+                        invite_url=invite_url,
+                    )
+                )
+                continue
+
+            if mode == "email" and remaining_sends <= 0:
+                results.append(
+                    RosterImportEmailResult(
+                        participant_id=participant.id,
+                        email=participant.email,
+                        full_name=participant.full_name,
+                        delivery_mode="email",
+                        email_sent=False,
+                        error="Daily email send cap reached.",
                         invite_url=invite_url,
                     )
                 )
@@ -687,6 +716,8 @@ class CompanyService:
                     invite_url=invite_url,
                 )
             )
+            if send_error is None:
+                remaining_sends -= 1
 
         emails_sent = sum(1 for result in results if result.email_sent)
         links_generated = sum(1 for result in results if result.delivery_mode == "secure_links")
@@ -701,6 +732,38 @@ class CompanyService:
             ),
             links_generated=links_generated,
         )
+
+    async def _filter_participants_without_accepted_email(
+        self,
+        company_id: UUID,
+        participants: list[ParticipantProfile],
+        project_id: UUID | None,
+    ) -> list[ParticipantProfile]:
+        from sqlalchemy import select
+
+        from codrut.modules.assignments.models import QuestionnaireAssignment
+        from codrut.modules.communications.models import EmailSend, EmailSendStatus
+
+        if not participants:
+            return []
+
+        participant_ids = {participant.id for participant in participants}
+        stmt = (
+            select(QuestionnaireAssignment.respondent_profile_id)
+            .join(EmailSend, EmailSend.assignment_id == QuestionnaireAssignment.id)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.respondent_profile_id.in_(participant_ids))
+            .where(EmailSend.status == EmailSendStatus.accepted)
+        )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        result = await self.repository.session.execute(stmt)
+        sent_participant_ids = set(result.scalars().all())
+        return [
+            participant
+            for participant in participants
+            if participant.id not in sent_participant_ids
+        ]
 
     async def list_participant_invitation_statuses(
         self,

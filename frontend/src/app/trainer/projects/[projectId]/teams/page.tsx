@@ -1,12 +1,10 @@
-import ProjectReportsPage from "../reports/page";
+import { redirect } from "next/navigation";
 
-export default function ProjectTeamsPage({
+export default async function ProjectTeamsPage({
   params,
 }: {
   params: Promise<{ projectId: string }>;
 }) {
-  return ProjectReportsPage({
-    params,
-    searchParams: Promise.resolve({ view: "lencioni-teams" }),
-  });
+  const { projectId } = await params;
+  redirect(`/trainer/projects/${projectId}/reports/lencioni`);
 }

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     email_smtp_password: SecretStr | None = None
     email_smtp_starttls: bool = False
     email_test_mode: bool = True
+    email_daily_send_cap: int = 300
     public_app_url: str = "http://localhost:3000"
     campaign_asset_dir: str = "var/campaign-assets"
     campaign_asset_public_path: str = "/api/campaign-assets"

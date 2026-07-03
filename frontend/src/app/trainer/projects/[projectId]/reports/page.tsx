@@ -22,13 +22,10 @@ const distressDriverKeys = new Set(["distress_drivers", "distress_drivers_en"]);
 
 export default async function ProjectReportsPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams?: Promise<{ view?: string }>;
 }) {
   const { projectId } = await params;
-  const query = searchParams ? await searchParams : {};
   const requestOptions = await getServerApiRequestOptions();
   const { project, participants, assignments } = await getProjectReportData(projectId, requestOptions);
   const aggregate = await getCompanyReportAggregate(project.company_id, requestOptions, { projectId: project.id });
@@ -48,9 +45,7 @@ export default async function ProjectReportsPage({
   const driverCount = aggregate.driver_count;
   const boss360Count = aggregate.boss_360_count;
   const commonDriverResults = driverAverages.filter((item) => item.avg > 50);
-  const selectedView = query.view === "lencioni-teams" || query.view === "drivers" ? query.view : "overview";
   const reportsPath = `/trainer/projects/${projectId}/reports`;
-  const driverIndividualResults = buildDriverIndividualResults(assignments, resultMap, participants);
 
   if (mismatches.length > 0) {
     return (
@@ -94,7 +89,7 @@ export default async function ProjectReportsPage({
           valueLabel="0-10"
           legend={lencioniLegend}
           suppressed={isSmallCohort(lencioniCount)}
-          actionHref={`${reportsPath}?view=lencioni-teams#lencioni-pe-echipe`}
+          actionHref={`${reportsPath}/lencioni`}
           actionLabel="Vezi pe echipe"
         />
         <ReportPanel
@@ -113,7 +108,7 @@ export default async function ProjectReportsPage({
           max={100}
           description="Toți driverii sunt afișați; interpretarea apare doar peste 50%."
           suppressed={isSmallCohort(driverCount)}
-          actionHref={`${reportsPath}?view=drivers#driveri-detaliu`}
+          actionHref={`${reportsPath}/drivers`}
           actionLabel="Vezi detalii"
         />
       </section>
@@ -142,16 +137,6 @@ export default async function ProjectReportsPage({
             </ChartPanel>
           ) : null}
         </section>
-      ) : null}
-
-      {selectedView === "lencioni-teams" ? (
-        <LencioniTeamBreakdown teams={report.teamLenses} overviewHref={reportsPath} />
-      ) : selectedView === "drivers" ? (
-        <DriverDetailBreakdown
-          teams={report.teamLenses}
-          individuals={driverIndividualResults}
-          overviewHref={reportsPath}
-        />
       ) : null}
 
       <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm">
@@ -336,7 +321,7 @@ function SuppressedTeamSection({ title, count }: { title: string; count: number 
   );
 }
 
-function LencioniTeamBreakdown({ teams, overviewHref }: { teams: TeamLens[]; overviewHref: string }) {
+export function LencioniTeamBreakdown({ teams, overviewHref }: { teams: TeamLens[]; overviewHref: string }) {
   const teamsWithData = teams.filter((team) => team.lencioniCount > 0);
 
   return (
@@ -404,7 +389,7 @@ type DriverIndividualResult = {
   scores: ReportAverage[];
 };
 
-function DriverDetailBreakdown({
+export function DriverDetailBreakdown({
   teams,
   individuals,
   overviewHref,
@@ -608,7 +593,7 @@ function isSmallCohort(count: number): boolean {
 
 const completedStatusesForReports = new Set(["submitted", "validated", "scored"]);
 
-function buildDriverIndividualResults(
+export function buildDriverIndividualResults(
   assignments: CompanyAssignment[],
   resultMap: Map<string, ScoringResultRecord>,
   participants: CompanyParticipant[],

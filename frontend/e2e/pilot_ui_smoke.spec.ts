@@ -74,9 +74,11 @@ test.describe("Pilot trainer UI smoke", () => {
     await page.getByRole("link", { exact: true, name: "Asignări" }).click();
     await expect(page).toHaveURL(new RegExp(`/trainer/projects/${seeded.projectId}/assignments$`));
     await expect(page.getByRole("heading", { name: "Configurează asignările înainte de trimitere" })).toBeVisible();
+    await page.getByRole("button", { name: "Avansat" }).click();
     await expect(page.getByRole("button", { name: /Autoevaluare/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Persoană/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Echipă/ })).toBeVisible();
+    await page.getByRole("button", { name: "Închide" }).click();
 
     await Promise.all([
       page.waitForResponse(

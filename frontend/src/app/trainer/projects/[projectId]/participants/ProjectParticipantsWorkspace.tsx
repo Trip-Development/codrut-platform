@@ -8,13 +8,17 @@ import {
   importCompanyRoster,
   updateCompanyParticipant,
   type CompanyParticipant,
+  type CompanyProject,
   type ParticipantInvitationStatus,
 } from "@/api/companies";
 import { displayReportsToName, normalizeReportsToName } from "@/api/roster-format";
+import { RosterImporter } from "@/components/roster-importer";
 
 type ProjectParticipantsWorkspaceProps = {
   companyId: string;
   projectId: string;
+  companyName: string;
+  project: Pick<CompanyProject, "id" | "name" | "status" | "company_id">;
   participants: CompanyParticipant[];
   invitationStatuses: ParticipantInvitationStatus[];
 };
@@ -112,6 +116,8 @@ function isPermanentAccountParticipant(participant: CompanyParticipant, managerN
 export function ProjectParticipantsWorkspace({
   companyId,
   projectId,
+  companyName,
+  project,
   participants: initialParticipants,
   invitationStatuses,
 }: ProjectParticipantsWorkspaceProps) {
@@ -119,6 +125,7 @@ export function ProjectParticipantsWorkspace({
   const [participants, setParticipants] = useState(initialParticipants);
   const [activeTab, setActiveTab] = useState<TabKey>("roster");
   const [showAddPanel, setShowAddPanel] = useState(initialParticipants.length === 0);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [manualForm, setManualForm] = useState<ManualAddForm>(emptyManualForm);
   const [pasteText, setPasteText] = useState("");
   const [adding, setAdding] = useState(false);
@@ -248,13 +255,22 @@ export function ProjectParticipantsWorkspace({
               Tabelul este read-only implicit. Intră în editare doar pentru corecții operaționale.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAddPanel((current) => !current)}
-            className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
-          >
-            {showAddPanel ? "Ascunde adăugarea" : "Adaugă manual"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy-700"
+            >
+              Importă participanți
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddPanel((current) => !current)}
+              className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+            >
+              {showAddPanel ? "Ascunde adăugarea" : "Adaugă manual"}
+            </button>
+          </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Vizualizări participanți">
           {tabs.map((tab) => (
@@ -317,6 +333,46 @@ export function ProjectParticipantsWorkspace({
           activeSecureLinkCount={activeSecureLinkCount}
         />
       )}
+
+      {showImportModal ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowImportModal(false)}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="project-import-title"
+            className="modal-panel max-w-5xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
+                <h2 id="project-import-title" className="mt-1 text-xl font-semibold text-foreground">
+                  {companyName} · {project.name}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy"
+              >
+                Închide
+              </button>
+            </div>
+            <div className="mt-5 max-h-[80vh] overflow-y-auto pr-1">
+              <RosterImporter
+                companies={[{ id: companyId, name: companyName }]}
+                defaultCompanyId={companyId}
+                existingParticipants={participants}
+                projects={[project]}
+                defaultProjectId={projectId}
+                requireProject
+                lockCompany
+                compact
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
