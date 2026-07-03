@@ -112,6 +112,14 @@ class CommunicationsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_campaign_recipient_by_email(self, email: str) -> CampaignRecipient | None:
+        result = await self.session.execute(
+            select(CampaignRecipient)
+            .where(func.lower(CampaignRecipient.email) == email.lower())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def list_campaign_recipients_by_ids(
         self,
         recipient_ids: list[UUID],
@@ -151,6 +159,10 @@ class CommunicationsRepository:
         stmt = select(Campaign).order_by(Campaign.created_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def delete_campaign(self, campaign: Campaign) -> None:
+        await self.session.delete(campaign)
+        await self.session.flush()
 
     async def add_email_send(self, send: EmailSend) -> EmailSend:
         self.session.add(send)

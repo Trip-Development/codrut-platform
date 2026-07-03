@@ -25,6 +25,7 @@ from codrut.modules.communications.models import (
     Campaign,
     CampaignRecipient,
     CampaignRecipientEvent,
+    CampaignRecipientSegment,
     CampaignRecipientStatus,
     CampaignStatus,
     EmailSend,
@@ -37,6 +38,7 @@ from codrut.modules.communications.schemas import (
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
     CampaignRecipientEventResponse,
+    CampaignRecipientUpdateRequest,
     CampaignSendRecipientResult,
     CampaignSendRequest,
     CampaignSendResponse,
@@ -331,6 +333,65 @@ class CommunicationsService:
             await repository.add_campaign_recipients(recipients_to_create)
         return [*existing, *recipients_to_create]
 
+    async def update_campaign_recipient(
+        self,
+        recipient_id: UUID,
+        payload: CampaignRecipientUpdateRequest,
+    ) -> CampaignRecipient:
+        repository = self._require_repository()
+        recipient = await repository.get_campaign_recipient(recipient_id)
+        if recipient is None:
+            raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
+
+        if payload.email is not None:
+            normalized_email = str(payload.email).lower()
+            existing_email_recipient = await repository.get_campaign_recipient_by_email(
+                normalized_email,
+            )
+            if (
+                existing_email_recipient is not None
+                and existing_email_recipient.id != recipient.id
+            ):
+                raise DomainError(
+                    "Campaign recipient email already exists.",
+                    code="campaign_recipient_email_exists",
+                )
+            recipient.email = normalized_email
+        if payload.contact_name is not None:
+            recipient.contact_name = payload.contact_name.strip() or None
+        if payload.organization_name is not None:
+            recipient.organization_name = payload.organization_name.strip() or None
+        if payload.segment is not None:
+            try:
+                recipient.segment = CampaignRecipientSegment(payload.segment)
+            except ValueError as exc:
+                raise DomainError(
+                    "Invalid campaign recipient segment.",
+                    code="campaign_recipient_segment_invalid",
+                ) from exc
+        if payload.status is not None:
+            try:
+                recipient.status = CampaignRecipientStatus(payload.status)
+            except ValueError as exc:
+                raise DomainError(
+                    "Invalid campaign recipient status.",
+                    code="campaign_recipient_status_invalid",
+                ) from exc
+        if payload.source is not None:
+            recipient.source = payload.source.strip() or None
+
+        await repository.flush()
+        return recipient
+
+    async def delete_campaign_recipient(self, recipient_id: UUID) -> None:
+        repository = self._require_repository()
+        recipient = await repository.get_campaign_recipient(recipient_id)
+        if recipient is None:
+            raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
+        if recipient.status == CampaignRecipientStatus.active:
+            recipient.status = CampaignRecipientStatus.suppressed
+        await repository.flush()
+
     async def create_campaign(
         self,
         payload: CampaignCreateRequest,
@@ -353,6 +414,13 @@ class CommunicationsService:
     async def list_campaigns(self) -> list[Campaign]:
         repository = self._require_repository()
         return await repository.list_campaigns()
+
+    async def delete_campaign(self, campaign_id: UUID) -> None:
+        repository = self._require_repository()
+        campaign = await repository.get_campaign(campaign_id)
+        if campaign is None:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
+        await repository.delete_campaign(campaign)
 
     async def send_campaign(
         self,
@@ -735,15 +803,16 @@ class CommunicationsService:
                 "outcome": None,
             }
             for recipient in campaign_recipients
+            if recipient.status == CampaignRecipientStatus.active
         ]
 
         campaign = {
             "videoHost": {
-                "provider": "Codruț watch page + Cloudflare R2",
-                "status": "needs_upload",
+                "provider": "Vimeo sau pagină Codruț",
+                "status": "ready",
                 "note": (
-                    "Emailul trimite thumbnail și CTA către pagina Codruț; "
-                    "video-ul nu este redat direct în email."
+                    "Emailul trimite thumbnail și CTA către linkul video. "
+                    "Pagina Codruț este opțională când vrei tracking sau CTA-uri dedicate."
                 ),
             },
             "template": {
@@ -827,7 +896,7 @@ def _render_campaign_message(
         "email": recipient.email,
         "video_url": campaign.video_url or "",
         "thumbnail_url": campaign.thumbnail_url or "",
-        "landing_page_url": campaign.landing_page_url or "",
+        "landing_page_url": campaign.landing_page_url or campaign.video_url or "",
         "unsubscribe_url": unsubscribe_url,
     }
 
