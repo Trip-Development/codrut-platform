@@ -238,7 +238,7 @@ describe("buildInvitationRows", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Configurează asignări avansat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Avansat" }));
     await screen.findByRole("option", { name: "Boss 360" });
 
     fireEvent.change(screen.getByLabelText("Persoană"), { target: { value: "ana" } });
@@ -277,10 +277,10 @@ describe("buildInvitationRows", () => {
       />,
     );
 
-    const advancedButton = screen.getByRole("button", { name: "Adaugă participanți pentru asignări" });
+    const advancedButton = screen.getByRole("button", { name: "Adaugă participanți pentru Avansat" });
     expect(advancedButton.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/După ce adaugi participanți în roster/)).toBeTruthy();
-    expect(screen.queryByText("Configurează asignările înainte de trimitere")).toBeNull();
+    expect(screen.getByText("Configurează asignările înainte de trimitere")).toBeTruthy();
   });
 
   it("generates a default assignment plan and saves only selected rows", async () => {
@@ -373,7 +373,7 @@ describe("buildInvitationRows", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Configurează asignări avansat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Avansat" }));
     fireEvent.click(screen.getByRole("button", { name: "Generează plan de asignări" }));
 
     expect(await screen.findAllByText("Leadership")).not.toHaveLength(0);
@@ -444,6 +444,7 @@ describe("buildInvitationRows", () => {
         mode: "secure_links",
         participantIds: ["ana"],
         projectId: "project-1",
+        targetMode: "selected",
       });
     });
     expect(await screen.findByText("1/1 linkuri securizate generate.")).toBeTruthy();
@@ -506,6 +507,7 @@ describe("buildInvitationRows", () => {
         mode: "email",
         participantIds: ["andrei", "ana"],
         projectId: "project-1",
+        targetMode: "all",
       });
     });
     expect(await screen.findByText("2/2 emailuri trimise.")).toBeTruthy();

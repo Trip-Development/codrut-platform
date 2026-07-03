@@ -42,13 +42,16 @@ from codrut.modules.communications.schemas import (
     CampaignSendRecipientResult,
     CampaignSendRequest,
     CampaignSendResponse,
+    CampaignUpdateRequest,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
 )
 from codrut.modules.communications.templates import (
     EMAIL_SHELL_OPEN,
+    EVALUATION_TEMPLATES,
     PROMOTIONAL_SHELL_CLOSE,
+    PROMOTIONAL_TEMPLATES,
     TRANSACTIONAL_TEMPLATES,
     TransactionalTemplateKey,
     get_transactional_template,
@@ -133,10 +136,8 @@ class CommunicationsService:
 
     async def list_templates(self, *, active_only: bool = True) -> list[EmailTemplateResponse]:
         repository = self._require_repository()
+        await self._seed_catalog_templates(repository)
         templates = await repository.list_templates(active_only=active_only)
-        if not templates:
-            await self._seed_catalog_templates(repository)
-            templates = await repository.list_templates(active_only=active_only)
         return [EmailTemplateResponse.model_validate(t) for t in templates]
 
     async def get_template(self, key: str, *, version: int | None = None) -> EmailTemplateResponse:
@@ -299,6 +300,26 @@ class CommunicationsService:
                     k.value,
                     except_version=catalog_template.version,
                 )
+        for catalog_template in (*PROMOTIONAL_TEMPLATES, *EVALUATION_TEMPLATES):
+            existing = existing_templates.get((catalog_template.key, catalog_template.version))
+            if existing is None:
+                existing = await repository.add_template(
+                    EmailTemplate(
+                        key=catalog_template.key,
+                        version=catalog_template.version,
+                        subject=catalog_template.subject,
+                        html_body=catalog_template.html_body,
+                        text_body=catalog_template.text_body,
+                        variables=list(catalog_template.required_context),
+                        audience=catalog_template.audience,
+                        active=True,
+                    )
+                )
+                existing_templates[(catalog_template.key, catalog_template.version)] = existing
+                await repository.deactivate_templates_for_key(
+                    catalog_template.key,
+                    except_version=catalog_template.version,
+                )
 
     async def bulk_create_campaign_recipients(
         self,
@@ -411,6 +432,57 @@ class CommunicationsService:
         )
         return await repository.add_campaign(campaign)
 
+    async def update_campaign(
+        self,
+        campaign_id: UUID,
+        payload: CampaignUpdateRequest,
+    ) -> Campaign:
+        repository = self._require_repository()
+        campaign = await repository.get_campaign(campaign_id)
+        if campaign is None:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
+
+        provided_fields = payload.model_fields_set
+        if "name" in provided_fields and payload.name is not None:
+            campaign.name = payload.name.strip()
+        if "segment" in provided_fields and payload.segment is not None:
+            try:
+                campaign.segment = CampaignRecipientSegment(payload.segment)
+            except ValueError as exc:
+                raise DomainError(
+                    "Invalid campaign segment.",
+                    code="campaign_segment_invalid",
+                ) from exc
+        if "status" in provided_fields and payload.status is not None:
+            try:
+                campaign.status = CampaignStatus(payload.status)
+            except ValueError as exc:
+                raise DomainError(
+                    "Invalid campaign status.",
+                    code="campaign_status_invalid",
+                ) from exc
+        if "subject" in provided_fields and payload.subject is not None:
+            campaign.subject = payload.subject
+        if "html_body" in provided_fields and payload.html_body is not None:
+            campaign.html_body = payload.html_body
+        if "text_body" in provided_fields and payload.text_body is not None:
+            campaign.text_body = payload.text_body
+        if "video_url" in provided_fields:
+            campaign.video_url = payload.video_url
+        if "thumbnail_url" in provided_fields:
+            campaign.thumbnail_url = payload.thumbnail_url
+        if "landing_page_url" in provided_fields:
+            campaign.landing_page_url = payload.landing_page_url
+
+        if bool(campaign.video_url) != bool(campaign.thumbnail_url):
+            raise DomainError(
+                "Video campaigns require video_url and thumbnail_url.",
+                code="campaign_video_assets_incomplete",
+            )
+
+        await repository.flush()
+        return campaign
+
     async def list_campaigns(self) -> list[Campaign]:
         repository = self._require_repository()
         return await repository.list_campaigns()
@@ -434,7 +506,7 @@ class CommunicationsService:
         campaign = await repository.get_campaign(campaign_id)
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
-        if campaign.status != CampaignStatus.ready:
+        if campaign.status not in {CampaignStatus.ready, CampaignStatus.completed}:
             raise DomainError(
                 "Campaign must be ready before sending.",
                 code="campaign_not_ready",
@@ -445,6 +517,7 @@ class CommunicationsService:
             raise DomainError("Campaign has no matching recipients.", code="campaign_no_recipients")
 
         results: list[CampaignSendRecipientResult] = []
+        remaining_sends = await _remaining_email_sends_today(repository, settings)
         for recipient in recipients:
             if recipient.segment != campaign.segment:
                 results.append(
@@ -463,6 +536,17 @@ class CommunicationsService:
                         email=recipient.email,
                         status="skipped",
                         error="Recipient is suppressed or unsubscribed.",
+                    )
+                )
+                continue
+
+            if not payload.dry_run and remaining_sends <= 0:
+                results.append(
+                    CampaignSendRecipientResult(
+                        recipient_id=recipient.id,
+                        email=recipient.email,
+                        status="skipped",
+                        error="Daily email send cap reached.",
                     )
                 )
                 continue
@@ -494,6 +578,8 @@ class CommunicationsService:
             await repository.add_email_send(
                 EmailSend(
                     assignment_id=None,
+                    campaign_id=campaign.id,
+                    campaign_recipient_id=recipient.id,
                     recipient_email=recipient.email,
                     template_key="campaign",
                     template_version=1,
@@ -513,6 +599,8 @@ class CommunicationsService:
                     error=result.error_details,
                 )
             )
+            if result.status == EmailDeliveryStatus.accepted:
+                remaining_sends -= 1
 
         if not payload.dry_run and any(result.status == "accepted" for result in results):
             campaign.status = CampaignStatus.completed
@@ -552,10 +640,23 @@ class CommunicationsService:
         payload: CampaignSendRequest,
     ) -> list[CampaignRecipient]:
         repository = self._require_repository()
-        if payload.recipient_ids:
+        if payload.recipient_ids and "mode" not in payload.model_fields_set:
+            payload.mode = "selected"
+        if payload.mode == "selected":
+            if not payload.recipient_ids:
+                raise DomainError(
+                    "Selected campaign send requires recipient_ids.",
+                    code="campaign_selected_recipients_required",
+                )
             return await repository.list_campaign_recipients_by_ids(payload.recipient_ids)
         recipients = await repository.list_campaign_recipients()
-        return [recipient for recipient in recipients if recipient.segment == campaign.segment]
+        matching = [recipient for recipient in recipients if recipient.segment == campaign.segment]
+        if payload.mode == "all":
+            return matching
+        if not hasattr(repository, "list_accepted_campaign_recipient_ids"):
+            return matching
+        sent_recipient_ids = await repository.list_accepted_campaign_recipient_ids(campaign.id)
+        return [recipient for recipient in matching if recipient.id not in sent_recipient_ids]
 
     async def record_campaign_recipient_event(
         self,
@@ -903,11 +1004,12 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
-    html_body = (
-        EMAIL_SHELL_OPEN
-        + html_body
-        + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
-    )
+    if "font-family:Inter,Arial,sans-serif" not in html_body:
+        html_body = (
+            EMAIL_SHELL_OPEN
+            + html_body
+            + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
+        )
     text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
     return EmailMessage(
         to=EmailAddress(recipient.email),
@@ -932,6 +1034,20 @@ def _require_calendly_target(target_url: str) -> None:
             code="campaign_tracking_invalid_target",
         )
 
+
+async def _remaining_email_sends_today(
+    repository: CommunicationsRepository,
+    settings: Settings,
+) -> int:
+    cap = max(settings.email_daily_send_cap, 0)
+    if cap == 0:
+        return 0
+    now = datetime.now(UTC)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if not hasattr(repository, "count_accepted_sends_since"):
+        return cap
+    already_sent = await repository.count_accepted_sends_since(day_start)
+    return max(cap - already_sent, 0)
 
 
 @dataclass(frozen=True)
