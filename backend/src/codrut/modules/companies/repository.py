@@ -31,7 +31,10 @@ class CompanyRepository:
         result = await self.session.execute(select(Company).order_by(Company.name))
         return list(result.scalars().all())
 
-    async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int, int]]:
+    async def list_company_summaries(
+        self,
+        user_id: UUID,
+    ) -> list[tuple[Company, int, int, int, int, int]]:
         from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
 
         completed_statuses = (
@@ -84,6 +87,8 @@ class CompanyRepository:
                 func.coalesce(assignment_counts.c.completed_count, 0),
                 func.coalesce(assignment_counts.c.scored_count, 0),
             )
+            .join(CompanyMembership, CompanyMembership.company_id == Company.id)
+            .where(CompanyMembership.user_id == user_id)
             .outerjoin(participant_counts, participant_counts.c.company_id == Company.id)
             .outerjoin(project_counts, project_counts.c.company_id == Company.id)
             .outerjoin(assignment_counts, assignment_counts.c.company_id == Company.id)
@@ -133,10 +138,12 @@ class CompanyRepository:
         )
         return list(result.scalars().all())
 
-    async def list_all_projects(self) -> list[tuple[CompanyProject, str]]:
+    async def list_projects_for_user(self, user_id: UUID) -> list[tuple[CompanyProject, str]]:
         result = await self.session.execute(
             select(CompanyProject, Company.name)
             .join(Company, Company.id == CompanyProject.company_id)
+            .join(CompanyMembership, CompanyMembership.company_id == Company.id)
+            .where(CompanyMembership.user_id == user_id)
             .order_by(CompanyProject.created_at.desc(), CompanyProject.name)
         )
         return [(project, company_name) for project, company_name in result.all()]

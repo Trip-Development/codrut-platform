@@ -163,6 +163,7 @@ async def get_company_report_aggregate(
     project_id: Annotated[UUID | None, Query()] = None,
 ) -> CompanyReportAggregateResponse:
     require_trainer_principal(principal)
+    await AssignmentService(session).require_company_manager(principal.user_id, company_id)
     return await ScoringService(session).get_company_report_aggregate(company_id, project_id)
 
 

@@ -42,8 +42,7 @@ async def list_companies(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanyResponse]:
     require_trainer_principal(principal)
-    # Trainers see all companies — they are trusted platform operators
-    return await CompanyService(session).list_all_companies()
+    return await CompanyService(session).list_companies(principal.user_id)
 
 
 @router.get("/summary", response_model=list[CompanySummaryResponse])
@@ -52,7 +51,7 @@ async def list_company_summaries(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanySummaryResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_company_summaries()
+    return await CompanyService(session).list_company_summaries(principal.user_id)
 
 
 @router.get("/projects", response_model=list[CompanyProjectListItemResponse])
@@ -61,7 +60,7 @@ async def list_all_company_projects(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanyProjectListItemResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_all_projects()
+    return await CompanyService(session).list_all_projects(principal.user_id)
 
 
 @router.post("", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)

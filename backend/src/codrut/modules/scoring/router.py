@@ -5,6 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
+from codrut.modules.companies.models import CompanyMembershipRole
+from codrut.modules.companies.repository import CompanyRepository
+from codrut.modules.forms.models import QuestionnaireResponseStatus
 from codrut.modules.forms.repository import FormsRepository
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
@@ -20,10 +23,29 @@ async def get_assignment_scoring_result(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> ScoringResultResponse:
-    # 1. Authorize: Trainer can see all. Respondent can only see their own.
+    # 1. Authorize: trainers see only their companies; respondents see only their own.
     is_trainer = principal.role == UserRole.trainer
-    if not is_trainer:
-        forms_repo = FormsRepository(session)
+    forms_repo = FormsRepository(session)
+    if is_trainer:
+        assignment = await forms_repo.get_assignment_by_id(assignment_id)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Scoring result not found or assignment not submitted yet",
+            )
+        membership = await CompanyRepository(session).get_membership(
+            assignment.company_id,
+            principal.user_id,
+        )
+        if membership is None or membership.role not in {
+            CompanyMembershipRole.owner,
+            CompanyMembershipRole.trainer,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this assignment's result",
+            )
+    else:
         assignment = await forms_repo.get_assignment_for_user(assignment_id, principal.user_id)
         if assignment is None:
             raise HTTPException(
@@ -37,9 +59,8 @@ async def get_assignment_scoring_result(
 
     if result is None:
         # Check if there is a submitted response to compute score on-the-fly
-        forms_repo = FormsRepository(session)
         response = await forms_repo.get_response_by_assignment(assignment_id)
-        if response is not None:
+        if response is not None and response.status == QuestionnaireResponseStatus.submitted:
             definition = await forms_repo.get_definition(
                 response.questionnaire_key,
                 version=response.questionnaire_version,
