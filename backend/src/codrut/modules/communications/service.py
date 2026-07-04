@@ -1,7 +1,7 @@
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from string import Template
 from urllib.parse import urlparse
 from uuid import UUID
@@ -15,8 +15,11 @@ from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAss
 from codrut.modules.communications.campaign_policy import require_campaign_send_allowed
 from codrut.modules.communications.campaign_tracking import (
     CampaignRecipientActionClaims,
+    CampaignTrackingClaims,
+    build_campaign_tracking_url,
     build_campaign_unsubscribe_url,
     create_campaign_recipient_action_token,
+    create_campaign_tracking_token,
     parse_campaign_recipient_action_token,
     parse_campaign_tracking_token,
 )
@@ -637,7 +640,7 @@ class CommunicationsService:
                 unsubscribe_url=unsubscribe_url,
                 allow_insecure_localhost=not settings.is_production,
             )
-            message = _render_campaign_message(campaign, recipient, unsubscribe_url)
+            message = _render_campaign_message(campaign, recipient, unsubscribe_url, settings)
 
             if payload.dry_run:
                 results.append(
@@ -1067,6 +1070,7 @@ def _render_campaign_message(
     campaign: Campaign,
     recipient: CampaignRecipient,
     unsubscribe_url: str,
+    settings: Settings,
 ) -> EmailMessage:
     contact_name = recipient.contact_name or ""
     context = {
@@ -1085,10 +1089,11 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
+    calendly_tracking_url = _campaign_calendly_tracking_url(campaign, recipient, settings)
     if CAMPAIGN_CALENDLY_URL not in html_body:
         html_body += (
             '<p style="margin-top:24px;">'
-            f'<a href="{CAMPAIGN_CALENDLY_URL}" '
+            f'<a href="{calendly_tracking_url}" '
             'style="display:inline-block;background:#890505;color:#ffffff;'
             'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
             "Programează o discuție"
@@ -1101,7 +1106,7 @@ def _render_campaign_message(
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
     if CAMPAIGN_CALENDLY_URL not in text_body:
-        text_body = f"{text_body}\n\nProgramează o discuție: {CAMPAIGN_CALENDLY_URL}"
+        text_body = f"{text_body}\n\nProgramează o discuție: {calendly_tracking_url}"
     text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
     return EmailMessage(
         to=EmailAddress(recipient.email),
@@ -1109,6 +1114,24 @@ def _render_campaign_message(
         html_body=html_body,
         text_body=text_body,
     )
+
+
+def _campaign_calendly_tracking_url(
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    settings: Settings,
+) -> str:
+    token = create_campaign_tracking_token(
+        CampaignTrackingClaims(
+            recipient_id=recipient.id,
+            target_url=CAMPAIGN_CALENDLY_URL,
+            event_type="calendly_clicked",
+            variant_key=str(campaign.id),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
+        ),
+        settings,
+    )
+    return build_campaign_tracking_url(token, settings)
 
 
 def _render_campaign_template(template: str, context: dict[str, str]) -> str:

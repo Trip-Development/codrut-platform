@@ -417,6 +417,14 @@ async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscr
         "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/"
         in provider.sent[0].html_body
     )
+    assert (
+        "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
+        in provider.sent[0].html_body
+    )
+    assert (
+        "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
+        in provider.sent[0].text_body
+    )
     assert "Ai primit acest email deoarece" in provider.sent[0].html_body
     assert "Str. Exemplu Nr. 10" in provider.sent[0].html_body
     assert len(repository.sends) == 1

@@ -34,7 +34,7 @@ const MOCK_REPLACEMENTS: Record<string, string> = {
   "{first_name}": "Ioana",
   "{last_name}": "Popescu",
   "{participant_name}": "Ioana Popescu",
-  "{trainer_name}": "Echipa Codruț",
+  "{trainer_name}": "Andrei Vacaru",
   "{company_name}": "Compania Pilot",
   "{organization_name}": "Compania Pilot",
   "{contact_name}": "Ioana Popescu",
@@ -2023,7 +2023,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   {/* Simulated Mailbox Header */}
                   <div className="bg-surface-muted p-5 border-b border-[var(--border)] space-y-2 text-xs text-foreground/60">
                     <div className="flex justify-between items-center">
-                      <p><strong className="text-foreground/80">De la:</strong> Echipa Codruț</p>
+                      <p><strong className="text-foreground/80">De la:</strong> Andrei Vacaru</p>
                       <span className="text-[10px] font-mono opacity-50">10:42 AM</span>
                     </div>
                     <p><strong className="text-foreground/80">Către:</strong> {MOCK_REPLACEMENTS["{first_name}"]}</p>

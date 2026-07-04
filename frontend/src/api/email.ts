@@ -25,7 +25,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
     baseKey: "account_setup",
     version: 1,
     name: "Invitație înrolare",
-    subject: "Invitație Codruț: activează contul pentru {company_name}",
+    subject: "Andrei Vacaru: activează contul pentru {company_name}",
     lane: "transactional",
     placeholders: ["{participant_name}", "{trainer_name}", "{company_name}", "{action_url}"],
     body: `<p>Bună, {participant_name}.</p><p>{trainer_name} te-a invitat în Codruț pentru {company_name}. După activare vei vedea spațiul tău de participant și sarcinile pregătite pentru proiect.</p><p><a href="{action_url}">Activează contul</a></p>`
@@ -35,7 +35,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
     baseKey: "assignment_bundle",
     version: 1,
     name: "Sarcini de completat",
-    subject: "Chestionarele tale Codruț pentru {company_name}",
+    subject: "Andrei Vacaru: chestionarele pentru {company_name}",
     lane: "transactional",
     placeholders: ["{participant_name}", "{company_name}", "{task_count}", "{action_url}"],
     body: `<p>Bună, {participant_name}.</p><p>Pentru {company_name}, trainerul a pregătit {task_count} sarcini într-un link securizat. Răspunsurile sunt tratate confidențial și folosite în agregare.</p><p><a href="{action_url}">Deschide chestionarele</a></p>`
