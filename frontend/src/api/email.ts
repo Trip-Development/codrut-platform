@@ -434,7 +434,7 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
 }
 
 export type CampaignRecipientCreate = {
-  email: string;
+  email?: string;
   contact_name?: string;
   organization_name?: string;
   segment: "past_customer" | "potential_customer";

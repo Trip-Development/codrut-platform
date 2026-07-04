@@ -66,6 +66,7 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
         if isinstance(constraint, UniqueConstraint)
     }
     assert ("email",) in unique_columns
+    assert Base.metadata.tables["campaign_recipients"].columns["email"].nullable
 
 
 def test_campaign_model_supports_template_and_video_link_design() -> None:
