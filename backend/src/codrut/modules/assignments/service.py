@@ -33,8 +33,22 @@ from codrut.modules.companies.models import CompanyMembershipRole, ParticipantPr
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.forms.definitions import get_approved_questionnaire_definition
 from codrut.modules.forms.repository import FormsRepository
-from codrut.modules.identity.models import UserRole
-from codrut.modules.identity.repository import IdentityRepository
+from codrut.modules.scoring.repository import ScoringRepository
+
+COMPLETED_ASSIGNMENT_STATUSES = frozenset(
+    {
+        AssignmentStatus.submitted,
+        AssignmentStatus.validated,
+        AssignmentStatus.scored,
+    }
+)
+EDITABLE_ASSIGNMENT_STATUSES = frozenset(
+    {
+        AssignmentStatus.assigned,
+        AssignmentStatus.invited,
+        AssignmentStatus.started,
+    }
+)
 
 
 class AssignmentService:
@@ -42,7 +56,7 @@ class AssignmentService:
         self.assignment_repository = AssignmentRepository(session)
         self.company_repository = CompanyRepository(session)
         self.forms_repository = FormsRepository(session)
-        self.identity_repository = IdentityRepository(session)
+        self.scoring_repository = ScoringRepository(session)
 
     async def create_team(
         self,
@@ -139,6 +153,9 @@ class AssignmentService:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, project_id)
         return await self.assignment_repository.list_assignments(company_id, project_id)
+
+    async def require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
+        await self._require_company_manager(user_id, company_id)
 
     async def build_default_assignment_plan(
         self,
@@ -407,7 +424,17 @@ class AssignmentService:
         assignment = await self.assignment_repository.get_assignment(company_id, assignment_id)
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
+        previous_status = assignment.status
         assignment.status = payload.status
+        if (
+            previous_status in COMPLETED_ASSIGNMENT_STATUSES
+            and payload.status in EDITABLE_ASSIGNMENT_STATUSES
+        ):
+            await self.forms_repository.unlock_response_for_assignment(assignment_id)
+            await self.scoring_repository.delete_by_assignment(assignment_id)
+            assignment.submitted_at = None
+            assignment.validated_at = None
+            assignment.scored_at = None
         _stamp_status_time(assignment)
         return assignment
 
@@ -520,10 +547,6 @@ class AssignmentService:
             CompanyMembershipRole.owner,
             CompanyMembershipRole.trainer,
         }:
-            return
-
-        user = await self.identity_repository.get_user_by_id(user_id)
-        if user is not None and user.role == UserRole.trainer:
             return
 
         raise DomainError(

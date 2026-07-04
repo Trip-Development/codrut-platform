@@ -100,7 +100,15 @@ class FakeCompanyRepository:
     async def list_all_companies(self) -> list[Company]:
         return sorted(self.companies_by_name.values(), key=lambda item: item.name)
 
-    async def list_company_summaries(self) -> list[tuple[Company, int, int, int, int, int]]:
+    async def list_company_summaries(
+        self,
+        user_id: uuid.UUID,
+    ) -> list[tuple[Company, int, int, int, int, int]]:
+        company_ids = {
+            membership.company_id
+            for membership in self.memberships
+            if membership.user_id == user_id
+        }
         return [
             (
                 company,
@@ -111,6 +119,7 @@ class FakeCompanyRepository:
                 1,
             )
             for company in sorted(self.companies_by_name.values(), key=lambda item: item.name)
+            if company.id in company_ids
         ]
 
     async def get_company(self, company_id: uuid.UUID) -> Company | None:
@@ -149,12 +158,17 @@ class FakeCompanyRepository:
     async def list_projects(self, company_id: uuid.UUID) -> list[CompanyProject]:
         return [project for project in self.projects if project.company_id == company_id]
 
-    async def list_all_projects(self) -> list[tuple[CompanyProject, str]]:
+    async def list_projects_for_user(self, user_id: uuid.UUID) -> list[tuple[CompanyProject, str]]:
         companies = self.companies_by_id
+        company_ids = {
+            membership.company_id
+            for membership in self.memberships
+            if membership.user_id == user_id
+        }
         return [
             (project, companies[project.company_id].name)
             for project in self.projects
-            if project.company_id in companies
+            if project.company_id in companies and project.company_id in company_ids
         ]
 
     async def get_project(
@@ -375,15 +389,15 @@ async def test_create_company_strips_name_and_rejects_duplicates() -> None:
         await service.create_company(owner_id, CompanyCreateRequest(name="Acme"))
 
 
-async def test_list_companies_returns_all_companies_for_trainers() -> None:
+async def test_list_companies_returns_only_membership_companies() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
     other_owner_id = uuid.uuid4()
     first = await service.create_company(owner_id, CompanyCreateRequest(name="First"))
-    second = await service.create_company(other_owner_id, CompanyCreateRequest(name="Second"))
+    await service.create_company(other_owner_id, CompanyCreateRequest(name="Second"))
 
-    assert await service.list_companies(owner_id) == [first, second]
+    assert await service.list_companies(owner_id) == [first]
 
 
 async def test_list_company_summaries_returns_operational_counts() -> None:
@@ -393,7 +407,7 @@ async def test_list_company_summaries_returns_operational_counts() -> None:
     await service.create_company(owner_id, CompanyCreateRequest(name="Second"))
     first = await service.create_company(owner_id, CompanyCreateRequest(name="First"))
 
-    summaries = await service.list_company_summaries()
+    summaries = await service.list_company_summaries(owner_id)
 
     assert [summary.name for summary in summaries] == ["First", "Second"]
     assert summaries[0].id == first.id
@@ -426,7 +440,12 @@ async def test_list_company_summaries_counts_roster_and_assignments_from_databas
                 full_name="Mihai Pop",
                 email=f"mihai-{uuid.uuid4().hex[:8]}@example.com",
             )
-            session.add_all([company, trainer, first_participant, second_participant])
+            membership = CompanyMembership(
+                company_id=company.id,
+                user_id=trainer.id,
+                role=CompanyMembershipRole.owner,
+            )
+            session.add_all([company, trainer, membership, first_participant, second_participant])
             await session.flush()
             session.add_all(
                 [
@@ -448,7 +467,7 @@ async def test_list_company_summaries_counts_roster_and_assignments_from_databas
             )
             await session.flush()
 
-            summaries = await CompanyService(session).list_company_summaries()
+            summaries = await CompanyService(session).list_company_summaries(trainer.id)
             summary = next(item for item in summaries if item.id == company.id)
 
             assert summary.participant_count == 2
@@ -486,7 +505,7 @@ async def test_delete_company_removes_company_and_related_local_records() -> Non
     assert repository.projects == []
 
 
-async def test_trainer_can_delete_any_company_without_membership() -> None:
+async def test_trainer_without_company_membership_cannot_delete_company() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -500,9 +519,11 @@ async def test_trainer_can_delete_any_company_without_membership() -> None:
     identity_repository.users_by_id[trainer.id] = trainer
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
 
-    await service.delete_company(trainer.id, company.id)
+    with pytest.raises(DomainError) as exc_info:
+        await service.delete_company(trainer.id, company.id)
 
-    assert await repository.get_company(company.id) is None
+    assert exc_info.value.code == "company_access_denied"
+    assert await repository.get_company(company.id) == company
 
 
 async def test_create_project_is_company_scoped_and_cleans_fields() -> None:
@@ -612,7 +633,7 @@ async def test_delete_project_removes_only_that_project() -> None:
     assert await service.list_projects(owner_id, company.id) == [second]
 
 
-async def test_trainer_can_manage_projects_without_company_membership() -> None:
+async def test_trainer_without_company_membership_cannot_manage_projects() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -626,13 +647,14 @@ async def test_trainer_can_manage_projects_without_company_membership() -> None:
     identity_repository.users_by_id[trainer.id] = trainer
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
 
-    project = await service.create_project(
-        trainer.id,
-        company.id,
-        CompanyProjectCreateRequest(name="Leadership"),
-    )
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_project(
+            trainer.id,
+            company.id,
+            CompanyProjectCreateRequest(name="Leadership"),
+        )
 
-    assert project.name == "Leadership"
+    assert exc_info.value.code == "company_access_denied"
 
 
 async def test_create_participant_is_company_scoped_and_cleans_fields() -> None:
@@ -685,7 +707,7 @@ async def test_create_participant_rejects_missing_company() -> None:
         )
 
 
-async def test_create_participant_allows_trainer_without_company_membership() -> None:
+async def test_create_participant_rejects_trainer_without_company_membership() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
@@ -698,13 +720,14 @@ async def test_create_participant_allows_trainer_without_company_membership() ->
     )
     service.identity_repository.users_by_id[trainer.id] = trainer
 
-    participant = await service.create_participant(
-        trainer.id,
-        company.id,
-        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
-    )
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_participant(
+            trainer.id,
+            company.id,
+            ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+        )
 
-    assert participant.email == "ana@example.com"
+    assert exc_info.value.code == "company_access_denied"
 
 
 async def test_create_participant_rejects_non_trainer_without_company_membership() -> None:

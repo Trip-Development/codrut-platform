@@ -170,7 +170,7 @@ class CommunicationsRepository:
             select(EmailSend.campaign_recipient_id)
             .where(EmailSend.campaign_id == campaign_id)
             .where(EmailSend.campaign_recipient_id.is_not(None))
-            .where(EmailSend.status == EmailSendStatus.accepted)
+            .where(EmailSend.status.in_((EmailSendStatus.queued, EmailSendStatus.accepted)))
         )
         return {recipient_id for recipient_id in result.scalars().all() if recipient_id is not None}
 

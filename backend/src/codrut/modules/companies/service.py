@@ -44,7 +44,6 @@ from codrut.modules.companies.schemas import (
     RosterImportResponse,
     RosterImportRow,
 )
-from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.repository import IdentityRepository
 
 logger = logging.getLogger(__name__)
@@ -55,13 +54,13 @@ class CompanyService:
         self.identity_repository = IdentityRepository(session)
         self.repository = CompanyRepository(session)
 
-    async def list_companies(self, _user_id: UUID) -> list[Company]:
-        return await self.repository.list_all_companies()
+    async def list_companies(self, user_id: UUID) -> list[Company]:
+        return await self.repository.list_companies_for_user(user_id)
 
     async def list_all_companies(self) -> list[Company]:
         return await self.repository.list_all_companies()
 
-    async def list_company_summaries(self) -> list[CompanySummaryResponse]:
+    async def list_company_summaries(self, user_id: UUID) -> list[CompanySummaryResponse]:
         return [
             CompanySummaryResponse(
                 id=company.id,
@@ -80,7 +79,7 @@ class CompanyService:
                 assignment_count,
                 completed_count,
                 scored_count,
-            ) in await self.repository.list_company_summaries()
+            ) in await self.repository.list_company_summaries(user_id)
         ]
 
     async def create_company(self, owner_user_id: UUID, payload: CompanyCreateRequest) -> Company:
@@ -103,7 +102,7 @@ class CompanyService:
         await self._require_company_manager(user_id, company_id)
         await self.repository.delete_company(company)
 
-    async def list_all_projects(self) -> list[CompanyProjectListItemResponse]:
+    async def list_all_projects(self, user_id: UUID) -> list[CompanyProjectListItemResponse]:
         return [
             CompanyProjectListItemResponse(
                 id=project.id,
@@ -120,7 +119,7 @@ class CompanyService:
                 created_at=project.created_at,
                 updated_at=project.updated_at,
             )
-            for project, company_name in await self.repository.list_all_projects()
+            for project, company_name in await self.repository.list_projects_for_user(user_id)
         ]
 
     async def list_projects(
@@ -1079,10 +1078,6 @@ class CompanyService:
             CompanyMembershipRole.owner,
             CompanyMembershipRole.trainer,
         }:
-            return
-
-        user = await self.identity_repository.get_user_by_id(user_id)
-        if user is not None and user.role == UserRole.trainer:
             return
 
         raise DomainError(

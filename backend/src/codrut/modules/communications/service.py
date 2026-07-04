@@ -652,13 +652,7 @@ class CommunicationsService:
                 )
                 continue
 
-            result = await provider.send(message)
-            send_status = (
-                EmailSendStatus.accepted
-                if result.status == EmailDeliveryStatus.accepted
-                else EmailSendStatus.failed
-            )
-            await repository.add_email_send(
+            email_send = await repository.add_email_send(
                 EmailSend(
                     assignment_id=None,
                     campaign_id=campaign.id,
@@ -666,13 +660,23 @@ class CommunicationsService:
                     recipient_email=recipient.email,
                     template_key="campaign",
                     template_version=1,
-                    provider=result.provider.value,
-                    provider_message_id=result.message_id,
-                    status=send_status,
-                    error_details=result.error_details,
+                    provider=str(getattr(provider, "key", "unknown")),
+                    provider_message_id=None,
+                    status=EmailSendStatus.queued,
                     last_event_at=datetime.now(UTC),
                 )
             )
+            result = await provider.send(message)
+            send_status = (
+                EmailSendStatus.accepted
+                if result.status == EmailDeliveryStatus.accepted
+                else EmailSendStatus.failed
+            )
+            email_send.provider = result.provider.value
+            email_send.provider_message_id = result.message_id
+            email_send.status = send_status
+            email_send.error_details = result.error_details
+            email_send.last_event_at = datetime.now(UTC)
             results.append(
                 CampaignSendRecipientResult(
                     recipient_id=recipient.id,
@@ -799,7 +803,7 @@ class CommunicationsService:
 
         from collections import defaultdict
 
-        from sqlalchemy import select
+        from sqlalchemy import func, select
 
         from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
         from codrut.modules.communications.models import EmailSend, EmailSendStatus
@@ -828,25 +832,55 @@ class CommunicationsService:
         for a in assignments:
             profile_assignments[a.respondent_profile_id].append(a)
 
-        # 3. Fetch all EmailSend records
-        sends_result = await session.execute(
-            select(EmailSend).order_by(EmailSend.created_at.desc())
+        # 3. Fetch latest delivery state per email without loading historical sends.
+        ranked_sends = (
+            select(
+                EmailSend.recipient_email.label("recipient_email"),
+                EmailSend.status.label("status"),
+                func.row_number()
+                .over(
+                    partition_by=EmailSend.recipient_email,
+                    order_by=EmailSend.created_at.desc(),
+                )
+                .label("row_number"),
+            )
+            .subquery()
         )
-        sends = list(sends_result.scalars().all())
-
-        latest_send_by_email = {}
-        for s in sends:
-            if s.recipient_email not in latest_send_by_email:
-                latest_send_by_email[s.recipient_email] = s
+        latest_sends_result = await session.execute(
+            select(ranked_sends.c.recipient_email, ranked_sends.c.status).where(
+                ranked_sends.c.row_number == 1
+            )
+        )
+        latest_send_status_by_email = {
+            recipient_email: send_status
+            for recipient_email, send_status in latest_sends_result.all()
+        }
 
         campaign_recipients = await repository.list_campaign_recipients()
-        campaign_events = await repository.list_campaign_recipient_events()
         campaign_event_counts: dict[UUID, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         campaign_variant_by_recipient: dict[UUID, str] = {}
-        for event in campaign_events:
-            campaign_event_counts[event.recipient_id][event.event_type] += 1
-            if event.variant_key and event.recipient_id not in campaign_variant_by_recipient:
-                campaign_variant_by_recipient[event.recipient_id] = event.variant_key
+        campaign_event_counts_result = await session.execute(
+            select(
+                CampaignRecipientEvent.recipient_id,
+                CampaignRecipientEvent.event_type,
+                func.count(CampaignRecipientEvent.id),
+            ).group_by(CampaignRecipientEvent.recipient_id, CampaignRecipientEvent.event_type)
+        )
+        for recipient_id, event_type, event_count in campaign_event_counts_result.all():
+            campaign_event_counts[recipient_id][event_type] = int(event_count)
+        campaign_variant_result = await session.execute(
+            select(
+                CampaignRecipientEvent.recipient_id,
+                func.max(CampaignRecipientEvent.variant_key),
+            )
+            .where(CampaignRecipientEvent.variant_key.is_not(None))
+            .group_by(CampaignRecipientEvent.recipient_id)
+        )
+        campaign_variant_by_recipient = {
+            recipient_id: variant_key
+            for recipient_id, variant_key in campaign_variant_result.all()
+            if variant_key
+        }
 
         # 4. Process rows
         rows = []
@@ -878,17 +912,17 @@ class CommunicationsService:
             else:
                 completion_state = "not_started"
 
-            latest_send = latest_send_by_email.get(profile.email)
-            if latest_send is None:
+            latest_send_status = latest_send_status_by_email.get(profile.email)
+            if latest_send_status is None:
                 delivery_state = "draft"
             else:
                 total_invites_sent += 1
-                if latest_send.status == EmailSendStatus.failed:
+                if latest_send_status == EmailSendStatus.failed:
                     delivery_state = "failed"
-                elif latest_send.status == EmailSendStatus.accepted:
+                elif latest_send_status == EmailSendStatus.accepted:
                     delivery_state = "sent"
                 else:
-                    delivery_state = latest_send.status.value
+                    delivery_state = latest_send_status.value
 
             has_entered = profile.user_id is not None or any(a.status in {
                 AssignmentStatus.started,
@@ -914,7 +948,7 @@ class CommunicationsService:
                 next_action = "Completat"
             elif is_reminder_due:
                 next_action = "Trimite reminder"
-            elif latest_send is None:
+            elif latest_send_status is None:
                 next_action = "Trimite invitatie"
             else:
                 next_action = "Asteapta raspuns"
@@ -1233,28 +1267,35 @@ class TransactionalEmailService:
             },
         )
 
+        email_send: EmailSend | None = None
+        if self.session is not None:
+            email_send = EmailSend(
+                assignment_id=assignment.id,
+                recipient_email=respondent.email,
+                template_key=template_key.value,
+                template_version=version,
+                provider=str(getattr(self.provider, "key", "unknown")),
+                provider_message_id=None,
+                status=EmailSendStatus.queued,
+                last_event_at=datetime.now(UTC),
+            )
+            self.session.add(email_send)
+            await self.session.flush()
+
         result = await self.provider.send(message)
 
-        if self.session is not None:
-            from codrut.modules.communications.models import EmailSend, EmailSendStatus
+        if email_send is not None:
             send_status = EmailSendStatus.queued
             if result.status == EmailDeliveryStatus.accepted:
                 send_status = EmailSendStatus.accepted
             elif result.status == EmailDeliveryStatus.failed:
                 send_status = EmailSendStatus.failed
 
-            email_send = EmailSend(
-                assignment_id=assignment.id,
-                recipient_email=respondent.email,
-                template_key=template_key.value,
-                template_version=version,
-                provider=result.provider.value,
-                provider_message_id=result.message_id,
-                status=send_status,
-                error_details=result.error_details,
-                last_event_at=datetime.now(UTC),
-            )
-            self.session.add(email_send)
+            email_send.provider = result.provider.value
+            email_send.provider_message_id = result.message_id
+            email_send.status = send_status
+            email_send.error_details = result.error_details
+            email_send.last_event_at = datetime.now(UTC)
             await self.session.flush()
 
         if (
