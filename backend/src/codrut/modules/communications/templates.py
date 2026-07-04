@@ -97,12 +97,12 @@ def _video_cta(alt: str = "Vezi video-ul") -> str:
     return (
         '<p style="margin:24px 0;">'
         '<a href="${landing_page_url}" style="display:block;text-decoration:none;color:inherit;">'
-        '<span style="display:block;position:relative;max-width:620px;border-radius:16px;'
+        '<span style="display:block;position:relative;max-width:420px;border-radius:14px;'
         'overflow:hidden;background:#2b211f;">'
         '<img src="${thumbnail_url}" alt="'
         + alt
-        + '" style="display:block;width:100%;max-width:620px;height:auto;border:0;'
-        'border-radius:16px;" />'
+        + '" style="display:block;width:100%;max-width:420px;height:auto;border:0;'
+        'border-radius:14px;" />'
         '<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);'
         'width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.92);'
         'box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;'

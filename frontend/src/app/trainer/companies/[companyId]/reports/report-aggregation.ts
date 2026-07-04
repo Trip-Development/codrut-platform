@@ -205,6 +205,7 @@ function buildScoreSummary(
     if (!result?.scores) continue;
 
     if (lencioniKeys.has(assignment.questionnaire_key)) {
+      if (!hasAnyNumericScore(result.scores, Object.keys(lencioniSums))) continue;
       lencioniCount += 1;
       for (const key of Object.keys(lencioniSums)) {
         const value = result.scores[key];
@@ -212,11 +213,15 @@ function buildScoreSummary(
         lencioniSums[key] += Number(score || 0);
       }
     } else if (distressDriverKeys.has(assignment.questionnaire_key)) {
+      if (!hasAnyNumericScore(result.scores, Object.keys(driverSums))) continue;
       driverCount += 1;
       for (const key of Object.keys(driverSums)) {
-        driverSums[key] += Number(result.scores[key] || 0);
+        const value = result.scores[key];
+        const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
+        driverSums[key] += Number(score || 0);
       }
     } else if (boss360Keys.has(assignment.questionnaire_key)) {
+      if (!hasAnyNumericScore(result.scores, Object.keys(boss360Sums))) continue;
       boss360Count += 1;
       for (const key of Object.keys(boss360Sums)) {
         const value = result.scores[key];
@@ -238,6 +243,14 @@ function buildScoreSummary(
     }),
     boss360Averages: averagesFromSums(boss360Sums, boss360Labels, boss360Count),
   };
+}
+
+function hasAnyNumericScore(scores: Record<string, unknown>, keys: string[]): boolean {
+  return keys.some((key) => {
+    const value = scores[key];
+    const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
+    return Number.isFinite(Number(score));
+  });
 }
 
 function zeroRecord(labels: Record<string, string>): Record<string, number> {
