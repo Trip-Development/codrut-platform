@@ -231,7 +231,7 @@ async def update_campaign_recipient(
     await session.commit()
     return {
         "id": str(recipient.id),
-        "email": recipient.email,
+        "email": recipient.email or "",
         "contact_name": recipient.contact_name,
         "organization_name": recipient.organization_name,
         "segment": recipient.segment.value,

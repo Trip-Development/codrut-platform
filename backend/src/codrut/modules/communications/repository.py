@@ -99,7 +99,10 @@ class CommunicationsRepository:
     ) -> list[CampaignRecipient]:
         if not emails:
             return []
-        stmt = select(CampaignRecipient).where(func.lower(CampaignRecipient.email).in_(emails))
+        stmt = select(CampaignRecipient).where(
+            CampaignRecipient.email.is_not(None),
+            func.lower(CampaignRecipient.email).in_(emails),
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
