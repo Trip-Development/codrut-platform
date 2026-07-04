@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from datetime import datetime
 from typing import Literal
 from urllib.parse import urlparse
@@ -143,20 +144,74 @@ class CampaignRecipientCreateRequest(BaseModel):
 
 CAMPAIGN_RECIPIENT_IMPORT_HEADERS = {
     "de trimis",
+    "trimite",
+    "send",
     "primul prenume",
     "al doilea prenume",
+    "prenume",
+    "prenume 1",
+    "prenume 2",
     "nume de familie",
+    "nume familie",
+    "nume",
+    "surname",
+    "last name",
     "tip client",
     "organizație",
     "organizatie",
+    "companie",
+    "company",
     "telefon",
     "funcția",
     "functia",
 }
 
+FIRST_NAME_KEYS = ["Primul prenume", "Prenume", "Prenume 1", "First name", "first_name"]
+MIDDLE_NAME_KEYS = [
+    "Al doilea prenume",
+    "Prenume 2",
+    "Middle name",
+    "middle_name",
+]
+LAST_NAME_KEYS = [
+    "Nume de familie",
+    "Nume familie",
+    "Nume",
+    "Familie",
+    "Surname",
+    "Last name",
+    "last_name",
+]
+FULL_NAME_KEYS = [
+    "contact_name",
+    "Contact name",
+    "Nume contact",
+    "Nume complet",
+    "Full name",
+    "Name",
+    "name",
+]
+FALLBACK_FULL_NAME_KEYS = ["Nume"]
+ORGANIZATION_KEYS = [
+    "organization_name",
+    "Organizație",
+    "Organizatie",
+    "Organizaţie",
+    "Organizația",
+    "Organizatia",
+    "Companie",
+    "company",
+    "Company",
+]
+
 
 def _normalize_import_key(value: str) -> str:
-    return " ".join(value.strip().lower().split())
+    without_marks = "".join(
+        char
+        for char in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(char)
+    )
+    return " ".join(without_marks.strip().lower().split())
 
 
 def _normalize_import_value(value: object) -> str:
@@ -181,10 +236,10 @@ def _is_spreadsheet_import_row(row: dict[str, object]) -> bool:
 
 
 def _is_marked_for_campaign_send(row: dict[str, object]) -> bool:
-    send_value = _read_import_value(row, ["De trimis"])
+    send_value = _read_import_value(row, ["De trimis", "Trimite", "Send", "Active"])
     if not send_value:
         return True
-    return _normalize_import_key(send_value) in {"da", "yes", "y", "1", "true"}
+    return _normalize_import_key(send_value) in {"da", "yes", "y", "1", "true", "activ"}
 
 
 def _is_valid_import_email(value: str) -> bool:
@@ -207,18 +262,23 @@ def _campaign_recipient_segment(value: str) -> str:
 
 
 def _campaign_recipient_contact_name(row: dict[str, object]) -> str:
-    explicit_name = _read_import_value(row, ["name", "nume", "Name", "Nume"])
+    explicit_name = _read_import_value(row, FULL_NAME_KEYS)
     if explicit_name:
         return explicit_name
-    return " ".join(
+
+    composed_name = " ".join(
         value
         for value in [
-            _read_import_value(row, ["Primul prenume"]),
-            _read_import_value(row, ["Al doilea prenume"]),
-            _read_import_value(row, ["Nume de familie"]),
+            _read_import_value(row, FIRST_NAME_KEYS),
+            _read_import_value(row, MIDDLE_NAME_KEYS),
+            _read_import_value(row, LAST_NAME_KEYS),
         ]
         if value
     )
+    if composed_name:
+        return composed_name
+
+    return _read_import_value(row, FALLBACK_FULL_NAME_KEYS)
 
 
 def _normalize_campaign_recipient_import_row(row: dict[str, object]) -> dict[str, object] | None:
@@ -236,10 +296,7 @@ def _normalize_campaign_recipient_import_row(row: dict[str, object]) -> dict[str
         **row,
         "email": email if email_is_valid else None,
         "contact_name": _campaign_recipient_contact_name(row) or None,
-        "organization_name": _read_import_value(
-            row,
-            ["company", "companie", "Company", "Companie", "Organizație", "Organizatie"],
-        ) or None,
+        "organization_name": _read_import_value(row, ORGANIZATION_KEYS) or None,
         "segment": _campaign_recipient_segment(segment_value),
         "status": status,
         "source": _read_import_value(row, ["source", "Source"]) or "excel_import",

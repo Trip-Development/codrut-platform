@@ -6,6 +6,7 @@ import {
   renderEmailTemplatePreviewBody,
   replacePreviewPlaceholders,
   selectCampaignRecipientImportSheetName,
+  uniqueCampaignImportDrafts,
 } from "./EmailWorkspace";
 
 describe("renderEmailTemplatePreviewBody", () => {
@@ -152,6 +153,100 @@ describe("buildCampaignRecipientImport", () => {
         source: "excel_import",
       },
     ]);
+  });
+
+  it("accepts name surname aliases and unaccented organization headers", () => {
+    const drafts = buildCampaignRecipientImportDrafts([
+      {
+        Trimite: "Da",
+        Prenume: "Cristina",
+        Nume: "Luncan",
+        "Tip Client": "Nu e client",
+        Organizatie: "Viarom",
+        Email: "cristina.luncan@viarom.ro",
+      },
+      {
+        Send: "yes",
+        "First name": "Diana",
+        "Middle name": "Maria",
+        Surname: "Ene",
+        Segment: "past customer",
+        Company: "Clinica Meridian",
+        Email: "diana.ene@example.com",
+      },
+      {
+        "De trimis": "Nu",
+        Name: "Full Name Fallback",
+        Company: "Fallback Co",
+        Email: "fallback@example.com",
+      },
+    ]);
+
+    expect(drafts[0]).toMatchObject({
+      contact_name: "Cristina Luncan",
+      organization_name: "Viarom",
+      send: true,
+    });
+    expect(drafts[1]).toMatchObject({
+      contact_name: "Diana Maria Ene",
+      organization_name: "Clinica Meridian",
+      segment: "past_customer",
+      send: true,
+    });
+    expect(drafts[2]).toMatchObject({
+      contact_name: "Full Name Fallback",
+      organization_name: "Fallback Co",
+      send: false,
+    });
+  });
+
+  it("prefers explicit full name when mixed exports also include surname columns", () => {
+    const drafts = buildCampaignRecipientImportDrafts([
+      {
+        Name: "Ana Popescu",
+        Surname: "Popescu",
+        Company: "Mixed Export Co",
+        Email: "ana.popescu@example.com",
+      },
+    ]);
+
+    expect(drafts[0]).toMatchObject({
+      contact_name: "Ana Popescu",
+      organization_name: "Mixed Export Co",
+      send: true,
+    });
+  });
+
+  it("counts and removes duplicate valid emails before bulk import", () => {
+    const drafts = buildCampaignRecipientImportDrafts([
+      {
+        Name: "First Contact",
+        Company: "First Co",
+        Email: "duplicate@example.com",
+      },
+      {
+        Name: "Second Contact",
+        Company: "Second Co",
+        Email: "DUPLICATE@example.com",
+      },
+      {
+        Name: "No Email Contact",
+        Company: "No Email Co",
+      },
+    ]);
+
+    const result = uniqueCampaignImportDrafts(drafts);
+
+    expect(result.duplicateEmailCount).toBe(1);
+    expect(result.uniqueDrafts).toHaveLength(2);
+    expect(result.uniqueDrafts[0]).toMatchObject({
+      contact_name: "First Contact",
+      email: "duplicate@example.com",
+    });
+    expect(result.uniqueDrafts[1]).toMatchObject({
+      contact_name: "No Email Contact",
+      email: "",
+    });
   });
 
   it("builds editable import drafts with original send flags", () => {

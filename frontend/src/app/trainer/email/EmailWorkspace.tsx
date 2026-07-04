@@ -208,7 +208,12 @@ type CampaignImportDraft = {
 };
 
 function normalizeImportKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function normalizeImportValue(value: unknown): string {
@@ -229,11 +234,11 @@ function readImportValue(row: Record<string, unknown>, keys: string[]): string {
 }
 
 function isMarkedForCampaignSend(row: Record<string, unknown>): boolean {
-  const sendValue = readImportValue(row, ["De trimis"]);
+  const sendValue = readImportValue(row, ["De trimis", "Trimite", "Send", "Active"]);
   if (!sendValue) {
     return true;
   }
-  return ["da", "yes", "y", "1", "true"].includes(normalizeImportKey(sendValue));
+  return ["da", "yes", "y", "1", "true", "activ"].includes(normalizeImportKey(sendValue));
 }
 
 function isValidImportEmail(value: string): boolean {
@@ -269,15 +274,35 @@ function importSegmentFromValue(value: string): "past_customer" | "potential_cus
 }
 
 function importContactName(row: Record<string, unknown>): string {
-  const explicitName = readImportValue(row, ["name", "nume", "Name", "Nume"]);
+  const explicitName = readImportValue(row, ["contact_name", "Contact name", "Nume contact", "Nume complet", "Full name", "Name", "name"]);
   if (explicitName) {
     return explicitName;
   }
-  return [
-    readImportValue(row, ["Primul prenume"]),
-    readImportValue(row, ["Al doilea prenume"]),
-    readImportValue(row, ["Nume de familie"]),
+
+  const composedName = [
+    readImportValue(row, ["Primul prenume", "Prenume", "Prenume 1", "First name", "first_name"]),
+    readImportValue(row, ["Al doilea prenume", "Prenume 2", "Middle name", "middle_name"]),
+    readImportValue(row, ["Nume de familie", "Nume familie", "Nume", "Familie", "Surname", "Last name", "last_name"]),
   ].filter(Boolean).join(" ");
+  if (composedName) {
+    return composedName;
+  }
+
+  return readImportValue(row, ["Nume"]);
+}
+
+function importOrganizationName(row: Record<string, unknown>): string {
+  return readImportValue(row, [
+    "organization_name",
+    "Organizație",
+    "Organizatie",
+    "Organizaţie",
+    "Organizația",
+    "Organizatia",
+    "Companie",
+    "company",
+    "Company",
+  ]);
 }
 
 export function buildCampaignRecipientImportDrafts(rows: Record<string, unknown>[]): CampaignImportDraft[] {
@@ -289,7 +314,7 @@ export function buildCampaignRecipientImportDrafts(rows: Record<string, unknown>
       rowNumber: index + 2,
       email,
       contact_name: importContactName(row),
-      organization_name: readImportValue(row, ["company", "companie", "Company", "Companie", "Organizație"]),
+      organization_name: importOrganizationName(row),
       segment: importSegmentFromValue(segmentValue),
       send: isMarkedForCampaignSend(row) && isValidImportEmail(email),
       source: "excel_import",
@@ -309,6 +334,29 @@ function campaignImportDraftToRecipient(row: CampaignImportDraft): CampaignRecip
   };
 }
 
+export function uniqueCampaignImportDrafts(drafts: CampaignImportDraft[]): {
+  duplicateEmailCount: number;
+  uniqueDrafts: CampaignImportDraft[];
+} {
+  const seenEmails = new Set<string>();
+  const uniqueDrafts: CampaignImportDraft[] = [];
+  let duplicateEmailCount = 0;
+
+  for (const draft of drafts) {
+    const normalizedEmail = draft.email.trim().toLowerCase();
+    if (normalizedEmail && isValidImportEmail(normalizedEmail)) {
+      if (seenEmails.has(normalizedEmail)) {
+        duplicateEmailCount += 1;
+        continue;
+      }
+      seenEmails.add(normalizedEmail);
+    }
+    uniqueDrafts.push(draft);
+  }
+
+  return { duplicateEmailCount, uniqueDrafts };
+}
+
 export function buildCampaignRecipientImport(rows: Record<string, unknown>[]): CampaignRecipientImportResult {
   return rows.reduce<CampaignRecipientImportResult>(
     (result, row) => {
@@ -319,7 +367,7 @@ export function buildCampaignRecipientImport(rows: Record<string, unknown>[]): C
       result.recipients.push({
         email: validEmail ? email : undefined,
         contact_name: importContactName(row) || undefined,
-        organization_name: readImportValue(row, ["company", "companie", "Company", "Companie", "Organizație"]) || undefined,
+        organization_name: importOrganizationName(row) || undefined,
         segment: importSegmentFromValue(segmentValue),
         status: isMarkedForCampaignSend(row) && validEmail ? "active" : "suppressed",
         source: "excel_import",
@@ -568,6 +616,10 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   const invalidImportDraftCount = importDrafts.filter(importDraftHasEmailError).length;
   const activeImportDraftCount = importDrafts.filter((draft) => draft.send).length;
+  const duplicateImportDraftEmailCount = useMemo(
+    () => uniqueCampaignImportDrafts(importDrafts).duplicateEmailCount,
+    [importDrafts],
+  );
 
   const confirmCampaignRecipientImport = async () => {
     if (invalidImportDraftCount > 0) {
@@ -576,9 +628,12 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
     setIsImportingContacts(true);
     try {
-      await bulkCreateCampaignRecipientsOnServer(importDrafts.map(campaignImportDraftToRecipient));
+      const { duplicateEmailCount, uniqueDrafts } = uniqueCampaignImportDrafts(importDrafts);
+      const activeUniqueDraftCount = uniqueDrafts.filter((draft) => draft.send).length;
+      const result = await bulkCreateCampaignRecipientsOnServer(uniqueDrafts.map(campaignImportDraftToRecipient));
+      const savedCount = typeof result?.count === "number" ? result.count : uniqueDrafts.length;
       setCampaignContactMessage(
-        `S-au importat ${importDrafts.length} contacte: ${activeImportDraftCount} active, ${importDrafts.length - activeImportDraftCount} inactive.`,
+        `S-au importat sau actualizat ${savedCount} contacte: ${activeUniqueDraftCount} active, ${uniqueDrafts.length - activeUniqueDraftCount} inactive.${duplicateEmailCount > 0 ? ` ${duplicateEmailCount} duplicate cu același email au fost ignorate.` : ""}`,
       );
       setImportDrafts([]);
       setImportSheetName(null);
@@ -775,6 +830,53 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi șters.");
     } finally {
       setDeletingContactId(null);
+    }
+  };
+
+  const toggleContactActive = async (recipient: CampaignRecipientRow) => {
+    const draft = contactDrafts[recipient.id] ?? campaignRecipientDraft(recipient);
+    const nextStatus: CampaignContactDraft["status"] = recipient.status === "suppressed" ? "active" : "suppressed";
+    if (nextStatus === "active" && !draft.email.trim() && !recipient.email.trim()) {
+      setCampaignContactMessage("Adaugă email înainte să activezi contactul.");
+      return;
+    }
+
+    setSavingContactId(recipient.id);
+    setCampaignContactMessage(null);
+    try {
+      await updateCampaignRecipientOnServer(recipient.id, {
+        status: nextStatus,
+      });
+      setSummary((currentSummary) => ({
+        ...currentSummary,
+        campaign: {
+          ...currentSummary.campaign,
+          recipients: currentSummary.campaign.recipients.map((currentRecipient) =>
+            currentRecipient.id === recipient.id
+              ? {
+                  ...currentRecipient,
+                  status: nextStatus === "suppressed"
+                    ? "suppressed"
+                    : campaignRecipientName(currentRecipient)
+                    ? "ready"
+                    : "needs_contact_name",
+                }
+              : currentRecipient,
+          ),
+        },
+      }));
+      setContactDrafts((drafts) => ({
+        ...drafts,
+        [recipient.id]: {
+          ...(drafts[recipient.id] ?? campaignRecipientDraft(recipient)),
+          status: nextStatus,
+        },
+      }));
+      setCampaignContactMessage(nextStatus === "active" ? "Contactul este activ pentru campanii." : "Contactul este inactiv.");
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Statusul contactului nu a putut fi actualizat.");
+    } finally {
+      setSavingContactId(null);
     }
   };
 
@@ -1424,7 +1526,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       <th className="px-6 py-4">Select</th>
                       <th className="px-6 py-4">Companie & Contact</th>
                       <th className="px-6 py-4">Tip client</th>
-                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Activ</th>
                       <th className="px-6 py-4">Evenimente</th>
                       <th className="px-6 py-4">Reply / Calendly</th>
                       <th className="px-6 py-4">Rezultat</th>
@@ -1436,8 +1538,9 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       summary.campaign.recipients.map((recipient) => {
                         const isEditingContact = editingContactId === recipient.id;
                         const draft = contactDrafts[recipient.id] ?? campaignRecipientDraft(recipient);
+                        const isContactActive = recipient.status !== "suppressed";
                         return (
-                          <tr key={recipient.id} className={`transition-colors hover:bg-surface-muted ${recipient.status === "suppressed" ? "bg-surface-muted/50 text-foreground/55" : ""}`}>
+                          <tr key={recipient.id} className={`transition-colors hover:bg-surface-muted ${!isContactActive ? "bg-surface-muted/50 text-foreground/55" : ""}`}>
                             <td className="px-6 py-4">
                               <input
                                 type="checkbox"
@@ -1508,9 +1611,32 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                               )}
                             </td>
                             <td className="px-6 py-4">
-                              <span className="rounded-full bg-surface px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground/70 border border-[var(--border)] shadow-sm">
-                                {recipient.status}
-                              </span>
+                              <div className="flex min-w-[9rem] flex-col items-start gap-2">
+                                <button
+                                  type="button"
+                                  disabled={savingContactId === recipient.id || isEditingContact}
+                                  onClick={() => toggleContactActive(recipient)}
+                                  aria-pressed={isContactActive}
+                                  className={`inline-flex min-w-[5.5rem] items-center justify-center rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    isContactActive
+                                      ? "border-emerald-500/30 bg-emerald-500/12 text-emerald-700 hover:border-emerald-600/50 dark:text-emerald-200"
+                                      : "border-[var(--border)] bg-surface text-foreground/50 hover:border-burgundy/35 hover:text-burgundy"
+                                  }`}
+                                  aria-label={`${isContactActive ? "Activ în campanii" : "Inactiv în campanii"} pentru ${recipient.email}`}
+                                  title={isEditingContact ? "Salvează sau anulează editarea înainte de schimbarea statusului." : undefined}
+                                >
+                                  {isContactActive ? "Da" : "Nu"}
+                                </button>
+                                <span className="rounded-full border border-[var(--border)] bg-surface px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-foreground/55">
+                                  {recipient.status === "needs_contact_name"
+                                    ? "nume lipsă"
+                                    : recipient.status === "sent"
+                                    ? "trimis"
+                                    : recipient.status === "ready"
+                                    ? "pregătit"
+                                    : "inactiv"}
+                                </span>
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
                               {recipient.openCount ?? 0} desch. / {recipient.clickCount ?? 0} click / {recipient.viewCount ?? 0} video
@@ -2096,7 +2222,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Import contacte</p>
                   <h2 className="mt-1 text-xl font-bold text-foreground">Previzualizare {importSheetName ?? "sheet"}</h2>
                   <p className="mt-1 text-xs font-semibold text-foreground/55">
-                    {importDrafts.length} contacte · {activeImportDraftCount} active · {importDrafts.length - activeImportDraftCount} inactive · {invalidImportDraftCount} emailuri de corectat
+                    {importDrafts.length} contacte · {activeImportDraftCount} active · {importDrafts.length - activeImportDraftCount} inactive · {invalidImportDraftCount} emailuri de corectat{duplicateImportDraftEmailCount > 0 ? ` · ${duplicateImportDraftEmailCount} duplicate` : ""}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -2126,7 +2252,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               <table className="min-w-[1040px] w-full text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-surface text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/50">
                   <tr>
-                    <th className="px-3 py-2">Trimite</th>
+                    <th className="px-3 py-2">Activ</th>
                     <th className="px-3 py-2">Nume</th>
                     <th className="px-3 py-2">Organizație</th>
                     <th className="px-3 py-2">Email</th>
@@ -2143,6 +2269,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                           <button
                             type="button"
                             onClick={() => updateImportDraft(draft.id, "send", !draft.send)}
+                            aria-pressed={draft.send}
+                            aria-label={`${draft.send ? "Activ" : "Inactiv"} pentru importul rândului ${draft.rowNumber}`}
                             className={`rounded-full px-3 py-1 text-[10px] font-bold ${draft.send ? "bg-green-100 text-green-800" : "bg-surface border border-[var(--border)] text-foreground/50"}`}
                           >
                             {draft.send ? "Da" : "Nu"}

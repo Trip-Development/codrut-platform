@@ -63,3 +63,46 @@ def test_campaign_recipient_bulk_request_normalizes_romanian_import_rows() -> No
     assert missing.email is None
     assert missing.contact_name == "Fără Email"
     assert missing.status == "suppressed"
+
+
+def test_campaign_recipient_bulk_request_accepts_name_surname_aliases() -> None:
+    payload = CampaignRecipientBulkCreateRequest.model_validate(
+        {
+            "recipients": [
+                {
+                    "Trimite": "Da",
+                    "Prenume": "Cristina",
+                    "Nume": "Luncan",
+                    "Tip Client": "Nu e client",
+                    "Organizatie": "Viarom",
+                    "Email": "cristina.luncan@viarom.ro",
+                },
+                {
+                    "Send": "yes",
+                    "First name": "Diana",
+                    "Middle name": "Maria",
+                    "Surname": "Ene",
+                    "Segment": "past customer",
+                    "Company": "Clinica Meridian",
+                    "Email": "diana.ene@example.com",
+                },
+                {
+                    "De trimis": "Nu",
+                    "Name": "Full Name Fallback",
+                    "Surname": "Fallback",
+                    "Company": "Fallback Co",
+                    "Email": "fallback@example.com",
+                },
+            ]
+        }
+    )
+
+    assert payload.recipients[0].contact_name == "Cristina Luncan"
+    assert payload.recipients[0].organization_name == "Viarom"
+    assert payload.recipients[0].status == "active"
+    assert payload.recipients[1].contact_name == "Diana Maria Ene"
+    assert payload.recipients[1].organization_name == "Clinica Meridian"
+    assert payload.recipients[1].segment == "past_customer"
+    assert payload.recipients[1].status == "active"
+    assert payload.recipients[2].contact_name == "Full Name Fallback"
+    assert payload.recipients[2].status == "suppressed"
