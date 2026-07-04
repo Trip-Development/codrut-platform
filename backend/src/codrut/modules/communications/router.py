@@ -1,8 +1,9 @@
+from html import escape
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -293,17 +294,144 @@ async def track_campaign_calendly_click(
 
 
 @router.get("/campaigns/unsubscribe/{token}")
+async def confirm_unsubscribe_campaign_recipient(
+    token: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> HTMLResponse:
+    recipient = await CommunicationsService(session).get_campaign_unsubscribe_recipient(
+        token,
+        settings,
+    )
+    email = escape(recipient.email or "acest contact")
+    action = escape(f"/api/communications/campaigns/unsubscribe/{token}", quote=True)
+    return HTMLResponse(
+        f"""
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Confirmă dezabonarea</title>
+  <style>
+    body {{
+      font-family: Inter, Arial, sans-serif;
+      margin: 0;
+      background: #f8f5f2;
+      color: #2b211f;
+    }}
+    main {{
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }}
+    section {{
+      max-width: 560px;
+      border: 1px solid #eadfdb;
+      border-radius: 18px;
+      background: #fffdfb;
+      padding: 28px;
+      box-shadow: 0 18px 45px rgba(43, 33, 31, 0.08);
+    }}
+    p {{ line-height: 1.6; }}
+    button {{
+      border: 0;
+      border-radius: 999px;
+      background: #890505;
+      color: white;
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    a {{ color: #890505; font-weight: 700; }}
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;">
+        Andrei Vacaru
+      </p>
+      <h1 style="margin:0 0 14px;font-size:24px;">Confirmă dezabonarea</h1>
+      <p>
+        Ai cerut dezabonarea pentru <strong>{email}</strong>.
+        Pentru a evita dezabonările accidentale făcute de scanerele de email,
+        confirmarea se face prin butonul de mai jos.
+      </p>
+      <form method="post" action="{action}">
+        <button type="submit">Dezabonează-mă</button>
+      </form>
+      <p style="margin-bottom:0;font-size:13px;color:#6d5f5b;">
+        Dacă ai ajuns aici din greșeală, poți închide pagina.
+      </p>
+    </section>
+  </main>
+</body>
+</html>"""
+    )
+
+
+@router.post("/campaigns/unsubscribe/{token}")
 async def unsubscribe_campaign_recipient(
     token: str,
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(db_session)],
-) -> dict:
+) -> HTMLResponse:
     recipient = await CommunicationsService(session).unsubscribe_campaign_recipient(
         token,
         settings,
     )
     await session.commit()
-    return {"status": "unsubscribed", "email": recipient.email}
+    email = escape(recipient.email or "acest contact")
+    return HTMLResponse(
+        f"""
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dezabonare confirmată</title>
+  <style>
+    body {{
+      font-family: Inter, Arial, sans-serif;
+      margin: 0;
+      background: #f8f5f2;
+      color: #2b211f;
+    }}
+    main {{
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }}
+    section {{
+      max-width: 560px;
+      border: 1px solid #eadfdb;
+      border-radius: 18px;
+      background: #fffdfb;
+      padding: 28px;
+      box-shadow: 0 18px 45px rgba(43, 33, 31, 0.08);
+    }}
+    p {{ line-height: 1.6; }}
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;">
+        Andrei Vacaru
+      </p>
+      <h1 style="margin:0 0 14px;font-size:24px;">Dezabonare confirmată</h1>
+      <p>
+        <strong>{email}</strong> a fost dezabonat de la comunicările de campanie.
+      </p>
+      <p style="margin-bottom:0;font-size:13px;color:#6d5f5b;">Poți închide această pagină.</p>
+    </section>
+  </main>
+</body>
+</html>"""
+    )
 
 
 @router.post("/campaigns")
