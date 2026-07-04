@@ -114,7 +114,7 @@ def _video_cta(alt: str = "Vezi video-ul") -> str:
 PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     CatalogEmailTemplate(
         key="promo_past_report_2022_2025",
-        version=1,
+        version=2,
         subject="Raportul de activitate pe care nu l-a cerut nimeni",
         audience="campaign:past_customer",
         required_context=frozenset({"first_name", "landing_page_url", "thumbnail_url", "unsubscribe_url"}),
@@ -141,7 +141,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_past_reactivation",
-        version=1,
+        version=2,
         subject="Departamentul de Reconectări Nesolicitate",
         audience="campaign:past_customer",
         required_context=frozenset({"first_name", "company_name", "landing_page_url", "thumbnail_url", "unsubscribe_url"}),
@@ -168,7 +168,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_current_programs",
-        version=1,
+        version=2,
         subject="Acesta nu e un email de vânzare. (Dar dacă era, era bun.)",
         audience="campaign:past_customer",
         required_context=frozenset({"first_name", "landing_page_url", "thumbnail_url", "unsubscribe_url"}),
@@ -195,7 +195,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_potential_intro",
-        version=1,
+        version=2,
         subject="Asta e un spam, dar e un spam bun. Nu am avut cum să fac altfel prima interacțiune.",
         audience="campaign:potential_customer",
         required_context=frozenset({"first_name", "landing_page_url", "thumbnail_url", "unsubscribe_url"}),
@@ -227,7 +227,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
 EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     CatalogEmailTemplate(
         key="evaluation_leadership_invite",
-        version=1,
+        version=2,
         subject="Primul pas pe drumul nostru: o radiografie sinceră a echipei de direcție",
         audience="transactional:leadership",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -250,7 +250,7 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="evaluation_leadership_reminder",
-        version=1,
+        version=2,
         subject="Reminder: mai sunt câteva zile pentru chestionare",
         audience="transactional:leadership",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -270,7 +270,7 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="evaluation_team_invite",
-        version=1,
+        version=2,
         subject="Avem nevoie de părerea ta",
         audience="transactional:team",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -292,7 +292,7 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="evaluation_team_reminder",
-        version=1,
+        version=2,
         subject="Mai e puțin timp — părerea ta încă lipsește",
         audience="transactional:team",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -317,7 +317,7 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
 TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] = {
     TransactionalTemplateKey.account_setup: TransactionalTemplate(
         key=TransactionalTemplateKey.account_setup,
-        version=2,
+        version=3,
         subject="Andrei Vacaru: activează contul pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
@@ -344,7 +344,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     ),
     TransactionalTemplateKey.assignment_bundle: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_bundle,
-        version=2,
+        version=3,
         subject="Andrei Vacaru: ai ${task_count} chestionare pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
