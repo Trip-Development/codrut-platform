@@ -211,9 +211,16 @@ async def bulk_create_campaign_recipients(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> dict:
     _require_trainer(principal)
-    recipients = await CommunicationsService(session).bulk_create_campaign_recipients(payload)
+    result = await CommunicationsService(session).bulk_create_campaign_recipients_with_result(
+        payload
+    )
     await session.commit()
-    return {"status": "success", "count": len(recipients)}
+    return {
+        "status": "success",
+        "count": len(result.recipients),
+        "created": result.created,
+        "updated": result.updated,
+    }
 
 
 @router.patch("/campaigns/recipients/{recipient_id}")

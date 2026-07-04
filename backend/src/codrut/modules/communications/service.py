@@ -1,7 +1,7 @@
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from string import Template
 from urllib.parse import urlparse
 from uuid import UUID
@@ -15,8 +15,11 @@ from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAss
 from codrut.modules.communications.campaign_policy import require_campaign_send_allowed
 from codrut.modules.communications.campaign_tracking import (
     CampaignRecipientActionClaims,
+    CampaignTrackingClaims,
+    build_campaign_tracking_url,
     build_campaign_unsubscribe_url,
     create_campaign_recipient_action_token,
+    create_campaign_tracking_token,
     parse_campaign_recipient_action_token,
     parse_campaign_tracking_token,
 )
@@ -66,6 +69,13 @@ SYSTEM_TEMPLATE_REQUIRED_VARS = {
     "assignment_bundle": {"participant_name", "company_name", "task_count", "action_url"},
 }
 CAMPAIGN_CALENDLY_URL = "https://calendly.com/andreivacaru/intalnire-de-apropiere"
+
+
+@dataclass(frozen=True)
+class CampaignRecipientBulkCreateResult:
+    recipients: list[CampaignRecipient]
+    created: int
+    updated: int
 
 
 def extract_placeholders(text: str) -> set[str]:
@@ -326,6 +336,13 @@ class CommunicationsService:
         self,
         payload: CampaignRecipientBulkCreateRequest,
     ) -> list[CampaignRecipient]:
+        result = await self.bulk_create_campaign_recipients_with_result(payload)
+        return result.recipients
+
+    async def bulk_create_campaign_recipients_with_result(
+        self,
+        payload: CampaignRecipientBulkCreateRequest,
+    ) -> CampaignRecipientBulkCreateResult:
         repository = self._require_repository()
 
         recipients_by_email: dict[str, CampaignRecipient] = {}
@@ -361,17 +378,14 @@ class CommunicationsService:
                     )
                 )
                 continue
-            status_provided_by_email.setdefault(normalized_email, req.status is not None)
-            recipients_by_email.setdefault(
-                normalized_email,
-                CampaignRecipient(
-                    email=normalized_email,
-                    contact_name=req.contact_name,
-                    organization_name=req.organization_name,
-                    segment=req.segment,
-                    source=req.source,
-                    status=recipient_status,
-                ),
+            status_provided_by_email[normalized_email] = req.status is not None
+            recipients_by_email[normalized_email] = CampaignRecipient(
+                email=normalized_email,
+                contact_name=req.contact_name,
+                organization_name=req.organization_name,
+                segment=req.segment,
+                source=req.source,
+                status=recipient_status,
             )
 
         existing = await repository.list_campaign_recipients_by_emails(
@@ -403,7 +417,11 @@ class CommunicationsService:
         recipients_to_create.extend(recipients_without_email)
         if recipients_to_create:
             await repository.add_campaign_recipients(recipients_to_create)
-        return [*existing, *recipients_to_create]
+        return CampaignRecipientBulkCreateResult(
+            recipients=[*existing, *recipients_to_create],
+            created=len(recipients_to_create),
+            updated=len(existing),
+        )
 
     async def update_campaign_recipient(
         self,
@@ -443,12 +461,21 @@ class CommunicationsService:
                 ) from exc
         if payload.status is not None:
             try:
-                recipient.status = CampaignRecipientStatus(payload.status)
+                next_status = CampaignRecipientStatus(payload.status)
             except ValueError as exc:
                 raise DomainError(
                     "Invalid campaign recipient status.",
                     code="campaign_recipient_status_invalid",
                 ) from exc
+            if (
+                recipient.status == CampaignRecipientStatus.unsubscribed
+                and next_status != CampaignRecipientStatus.unsubscribed
+            ):
+                raise DomainError(
+                    "Unsubscribed campaign recipients cannot be reactivated from contact editing.",
+                    code="campaign_recipient_unsubscribe_preserved",
+                )
+            recipient.status = next_status
         if recipient.status == CampaignRecipientStatus.active and not recipient.email:
             raise DomainError(
                 "Active campaign recipients require an email.",
@@ -613,7 +640,7 @@ class CommunicationsService:
                 unsubscribe_url=unsubscribe_url,
                 allow_insecure_localhost=not settings.is_production,
             )
-            message = _render_campaign_message(campaign, recipient, unsubscribe_url)
+            message = _render_campaign_message(campaign, recipient, unsubscribe_url, settings)
 
             if payload.dry_run:
                 results.append(
@@ -1019,7 +1046,9 @@ def _campaign_client_type(segment: str) -> str:
 
 
 def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
-    if recipient.status.value in {"suppressed", "unsubscribed"}:
+    if recipient.status == CampaignRecipientStatus.unsubscribed:
+        return "unsubscribed"
+    if recipient.status == CampaignRecipientStatus.suppressed:
         return "suppressed"
     if not recipient.contact_name:
         return "needs_contact_name"
@@ -1041,6 +1070,7 @@ def _render_campaign_message(
     campaign: Campaign,
     recipient: CampaignRecipient,
     unsubscribe_url: str,
+    settings: Settings,
 ) -> EmailMessage:
     contact_name = recipient.contact_name or ""
     context = {
@@ -1059,10 +1089,11 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
+    calendly_tracking_url = _campaign_calendly_tracking_url(campaign, recipient, settings)
     if CAMPAIGN_CALENDLY_URL not in html_body:
         html_body += (
             '<p style="margin-top:24px;">'
-            f'<a href="{CAMPAIGN_CALENDLY_URL}" '
+            f'<a href="{calendly_tracking_url}" '
             'style="display:inline-block;background:#890505;color:#ffffff;'
             'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
             "Programează o discuție"
@@ -1075,7 +1106,7 @@ def _render_campaign_message(
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
     if CAMPAIGN_CALENDLY_URL not in text_body:
-        text_body = f"{text_body}\n\nProgramează o discuție: {CAMPAIGN_CALENDLY_URL}"
+        text_body = f"{text_body}\n\nProgramează o discuție: {calendly_tracking_url}"
     text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
     return EmailMessage(
         to=EmailAddress(recipient.email),
@@ -1083,6 +1114,24 @@ def _render_campaign_message(
         html_body=html_body,
         text_body=text_body,
     )
+
+
+def _campaign_calendly_tracking_url(
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    settings: Settings,
+) -> str:
+    token = create_campaign_tracking_token(
+        CampaignTrackingClaims(
+            recipient_id=recipient.id,
+            target_url=CAMPAIGN_CALENDLY_URL,
+            event_type="calendly_clicked",
+            variant_key=str(campaign.id),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
+        ),
+        settings,
+    )
+    return build_campaign_tracking_url(token, settings)
 
 
 def _render_campaign_template(template: str, context: dict[str, str]) -> str:
