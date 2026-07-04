@@ -33,6 +33,7 @@ import {
   getCompanyDefaultAssignmentPlan,
   getCompanyList,
   getCompanyParticipants,
+  getCompanyProjectById,
   getCompanyProjects,
   getCompanyReportAggregate,
   getCompanyTeamMemberships,
@@ -1080,6 +1081,13 @@ describe("frontend API adapter stubs", () => {
           name: "Pilot leadership iulie",
         }),
       ]),
+    );
+    await expect(getCompanyProjectById("demo-project")).resolves.toEqual(
+      expect.objectContaining({
+        id: "demo-project",
+        company_id: "demo-project",
+        name: "Leadership operațional Q3",
+      }),
     );
     await expect(getCompanyProjects("demo-project")).resolves.toEqual([
       expect.objectContaining({ id: "demo-project", company_id: "demo-project" }),

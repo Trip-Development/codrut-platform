@@ -145,18 +145,29 @@ class CommunicationsService:
     def __init__(self, session: AsyncSession | None = None) -> None:
         self.repository = CommunicationsRepository(session) if session is not None else None
 
-    async def list_templates(self, *, active_only: bool = True) -> list[EmailTemplateResponse]:
+    async def list_templates(
+        self,
+        *,
+        active_only: bool = True,
+        owner_id: UUID | None = None,
+    ) -> list[EmailTemplateResponse]:
         repository = self._require_repository()
         await self._seed_catalog_templates(repository)
-        templates = await repository.list_templates(active_only=active_only)
+        templates = await repository.list_templates(active_only=active_only, owner_id=owner_id)
         return [EmailTemplateResponse.model_validate(t) for t in templates]
 
-    async def get_template(self, key: str, *, version: int | None = None) -> EmailTemplateResponse:
+    async def get_template(
+        self,
+        key: str,
+        *,
+        version: int | None = None,
+        owner_id: UUID | None = None,
+    ) -> EmailTemplateResponse:
         repository = self._require_repository()
-        template = await repository.get_template(key, version=version)
+        template = await repository.get_template(key, version=version, owner_id=owner_id)
         if template is None:
             await self._seed_catalog_templates(repository)
-            template = await repository.get_template(key, version=version)
+            template = await repository.get_template(key, version=version, owner_id=owner_id)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
         return EmailTemplateResponse.model_validate(template)
@@ -177,7 +188,7 @@ class CommunicationsService:
         )
         version = await repository.get_latest_version(payload.key) + 1
         if payload.active:
-            await repository.deactivate_templates_for_key(payload.key)
+            await repository.deactivate_templates_for_key(payload.key, owner_id=owner_id)
         template = await repository.add_template(
             EmailTemplate(
                 key=payload.key,
@@ -199,9 +210,10 @@ class CommunicationsService:
         payload: EmailTemplateUpdateRequest,
         *,
         version: int | None = None,
+        owner_id: UUID | None = None,
     ) -> EmailTemplateResponse:
         repository = self._require_repository()
-        template = await repository.get_template(key, version=version)
+        template = await repository.get_template(key, version=version, owner_id=owner_id)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
 
@@ -221,9 +233,9 @@ class CommunicationsService:
         )
 
         has_sends = await repository.has_sent_emails(key, template.version)
-        if has_sends:
+        if has_sends or (owner_id is not None and template.owner_id is None):
             next_version = await repository.get_latest_version(key) + 1
-            await repository.deactivate_templates_for_key(key)
+            await repository.deactivate_templates_for_key(key, owner_id=owner_id)
             template = await repository.add_template(
                 EmailTemplate(
                     key=key,
@@ -238,7 +250,7 @@ class CommunicationsService:
                         else template.audience
                     ),
                     active=payload.active if payload.active is not None else True,
-                    owner_id=template.owner_id,
+                    owner_id=owner_id if owner_id is not None else template.owner_id,
                 )
             )
         else:
@@ -252,17 +264,46 @@ class CommunicationsService:
                 template.active = payload.active
 
         if template.active:
-            await repository.deactivate_templates_for_key(key, except_version=template.version)
+            await repository.deactivate_templates_for_key(
+                key,
+                except_version=template.version,
+                owner_id=owner_id,
+            )
 
         return EmailTemplateResponse.model_validate(template)
 
-    async def activate_template(self, key: str, version: int) -> EmailTemplateResponse:
+    async def activate_template(
+        self,
+        key: str,
+        version: int,
+        *,
+        owner_id: UUID | None = None,
+    ) -> EmailTemplateResponse:
         repository = self._require_repository()
-        template = await repository.get_template(key, version=version)
+        template = await repository.get_template(key, version=version, owner_id=owner_id)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
-        await repository.deactivate_templates_for_key(key, except_version=template.version)
-        template.active = True
+        if owner_id is not None and template.owner_id is None:
+            template = await repository.add_template(
+                EmailTemplate(
+                    key=key,
+                    version=await repository.get_latest_version(key) + 1,
+                    subject=template.subject,
+                    html_body=template.html_body,
+                    text_body=template.text_body,
+                    variables=template.variables,
+                    audience=template.audience,
+                    active=True,
+                    owner_id=owner_id,
+                )
+            )
+        else:
+            template.active = True
+        await repository.deactivate_templates_for_key(
+            key,
+            except_version=template.version,
+            owner_id=owner_id,
+        )
         return EmailTemplateResponse.model_validate(template)
 
     async def retire_template(
@@ -270,13 +311,19 @@ class CommunicationsService:
         key: str,
         *,
         version: int | None = None,
+        owner_id: UUID | None = None,
     ) -> EmailTemplateResponse:
         repository = self._require_repository()
-        template = await repository.get_template(key, version=version)
+        template = await repository.get_template(key, version=version, owner_id=owner_id)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
+        if owner_id is not None and template.owner_id is None:
+            raise DomainError(
+                "System email templates cannot be retired from a trainer workspace.",
+                code="email_template_system_retire_forbidden",
+            )
         if version is None:
-            await repository.deactivate_templates_for_key(key)
+            await repository.deactivate_templates_for_key(key, owner_id=owner_id)
         else:
             template.active = False
         return EmailTemplateResponse.model_validate(template)
@@ -335,13 +382,20 @@ class CommunicationsService:
     async def bulk_create_campaign_recipients(
         self,
         payload: CampaignRecipientBulkCreateRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> list[CampaignRecipient]:
-        result = await self.bulk_create_campaign_recipients_with_result(payload)
+        result = await self.bulk_create_campaign_recipients_with_result(
+            payload,
+            owner_id=owner_id,
+        )
         return result.recipients
 
     async def bulk_create_campaign_recipients_with_result(
         self,
         payload: CampaignRecipientBulkCreateRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> CampaignRecipientBulkCreateResult:
         repository = self._require_repository()
 
@@ -369,6 +423,7 @@ class CommunicationsService:
                     )
                 recipients_without_email.append(
                     CampaignRecipient(
+                        owner_id=owner_id,
                         email=None,
                         contact_name=req.contact_name,
                         organization_name=req.organization_name,
@@ -380,6 +435,7 @@ class CommunicationsService:
                 continue
             status_provided_by_email[normalized_email] = req.status is not None
             recipients_by_email[normalized_email] = CampaignRecipient(
+                owner_id=owner_id,
                 email=normalized_email,
                 contact_name=req.contact_name,
                 organization_name=req.organization_name,
@@ -390,6 +446,7 @@ class CommunicationsService:
 
         existing = await repository.list_campaign_recipients_by_emails(
             set(recipients_by_email),
+            owner_id=owner_id,
         )
         existing_by_email = {
             recipient.email.lower(): recipient
@@ -427,9 +484,11 @@ class CommunicationsService:
         self,
         recipient_id: UUID,
         payload: CampaignRecipientUpdateRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> CampaignRecipient:
         repository = self._require_repository()
-        recipient = await repository.get_campaign_recipient(recipient_id)
+        recipient = await repository.get_campaign_recipient(recipient_id, owner_id=owner_id)
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
 
@@ -437,6 +496,7 @@ class CommunicationsService:
             normalized_email = str(payload.email).lower()
             existing_email_recipient = await repository.get_campaign_recipient_by_email(
                 normalized_email,
+                owner_id=owner_id,
             )
             if (
                 existing_email_recipient is not None
@@ -487,9 +547,14 @@ class CommunicationsService:
         await repository.flush()
         return recipient
 
-    async def delete_campaign_recipient(self, recipient_id: UUID) -> None:
+    async def delete_campaign_recipient(
+        self,
+        recipient_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> None:
         repository = self._require_repository()
-        recipient = await repository.get_campaign_recipient(recipient_id)
+        recipient = await repository.get_campaign_recipient(recipient_id, owner_id=owner_id)
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
         if recipient.status == CampaignRecipientStatus.active:
@@ -499,10 +564,13 @@ class CommunicationsService:
     async def create_campaign(
         self,
         payload: CampaignCreateRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> Campaign:
         repository = self._require_repository()
 
         campaign = Campaign(
+            owner_id=owner_id,
             name=payload.name,
             segment=payload.segment,
             status=CampaignStatus.ready,
@@ -519,9 +587,11 @@ class CommunicationsService:
         self,
         campaign_id: UUID,
         payload: CampaignUpdateRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> Campaign:
         repository = self._require_repository()
-        campaign = await repository.get_campaign(campaign_id)
+        campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
 
@@ -566,13 +636,18 @@ class CommunicationsService:
         await repository.flush()
         return campaign
 
-    async def list_campaigns(self) -> list[Campaign]:
+    async def list_campaigns(self, *, owner_id: UUID | None = None) -> list[Campaign]:
         repository = self._require_repository()
-        return await repository.list_campaigns()
+        return await repository.list_campaigns(owner_id=owner_id)
 
-    async def delete_campaign(self, campaign_id: UUID) -> None:
+    async def delete_campaign(
+        self,
+        campaign_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> None:
         repository = self._require_repository()
-        campaign = await repository.get_campaign(campaign_id)
+        campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
         await repository.delete_campaign(campaign)
@@ -584,9 +659,10 @@ class CommunicationsService:
         *,
         provider: EmailProvider,
         settings: Settings,
+        owner_id: UUID | None = None,
     ) -> CampaignSendResponse:
         repository = self._require_repository()
-        campaign = await repository.get_campaign(campaign_id)
+        campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
         if campaign.status not in {CampaignStatus.ready, CampaignStatus.completed}:
@@ -595,7 +671,7 @@ class CommunicationsService:
                 code="campaign_not_ready",
             )
 
-        recipients = await self._campaign_send_recipients(campaign, payload)
+        recipients = await self._campaign_send_recipients(campaign, payload, owner_id=owner_id)
         if not recipients:
             raise DomainError("Campaign has no matching recipients.", code="campaign_no_recipients")
 
@@ -733,6 +809,8 @@ class CommunicationsService:
         self,
         campaign: Campaign,
         payload: CampaignSendRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> list[CampaignRecipient]:
         repository = self._require_repository()
         if payload.recipient_ids and "mode" not in payload.model_fields_set:
@@ -743,8 +821,11 @@ class CommunicationsService:
                     "Selected campaign send requires recipient_ids.",
                     code="campaign_selected_recipients_required",
                 )
-            return await repository.list_campaign_recipients_by_ids(payload.recipient_ids)
-        recipients = await repository.list_campaign_recipients()
+            return await repository.list_campaign_recipients_by_ids(
+                payload.recipient_ids,
+                owner_id=owner_id,
+            )
+        recipients = await repository.list_campaign_recipients(owner_id=owner_id)
         matching = [recipient for recipient in recipients if recipient.segment == campaign.segment]
         if payload.mode == "all":
             return matching
@@ -757,9 +838,11 @@ class CommunicationsService:
         self,
         recipient_id: UUID,
         payload: CampaignRecipientEventCreateRequest,
+        *,
+        owner_id: UUID | None = None,
     ) -> CampaignRecipientEventResponse:
         repository = self._require_repository()
-        recipient = await repository.get_campaign_recipient(recipient_id)
+        recipient = await repository.get_campaign_recipient(recipient_id, owner_id=owner_id)
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
 
@@ -797,13 +880,13 @@ class CommunicationsService:
         )
         return claims.target_url
 
-    async def get_email_ops_summary(self) -> dict:
+    async def get_email_ops_summary(self, *, owner_id: UUID | None = None) -> dict:
         repository = self._require_repository()
         session = repository.session
 
         from collections import defaultdict
 
-        from sqlalchemy import func, select
+        from sqlalchemy import false, func, select
 
         from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
         from codrut.modules.communications.models import EmailSend, EmailSendStatus
@@ -811,13 +894,23 @@ class CommunicationsService:
             DEFAULT_REMINDER_POLICY,
             reminder_candidates,
         )
-        from codrut.modules.companies.models import Company, ParticipantProfile
+        from codrut.modules.companies.models import (
+            Company,
+            CompanyMembership,
+            ParticipantProfile,
+        )
 
         # 1. Fetch all participants and their company details
-        profiles_result = await session.execute(
+        profiles_stmt = (
             select(ParticipantProfile, Company.name)
             .join(Company, ParticipantProfile.company_id == Company.id)
         )
+        if owner_id is not None:
+            profiles_stmt = profiles_stmt.join(
+                CompanyMembership,
+                CompanyMembership.company_id == Company.id,
+            ).where(CompanyMembership.user_id == owner_id)
+        profiles_result = await session.execute(profiles_stmt)
         profiles = []
         company_names = {}
         for profile, comp_name in profiles_result.all():
@@ -825,7 +918,16 @@ class CommunicationsService:
             company_names[profile.id] = comp_name
 
         # 2. Fetch all assignments
-        assignments_result = await session.execute(select(QuestionnaireAssignment))
+        profile_ids = {profile.id for profile in profiles}
+        assignments_stmt = select(QuestionnaireAssignment)
+        if owner_id is not None:
+            if profile_ids:
+                assignments_stmt = assignments_stmt.where(
+                    QuestionnaireAssignment.respondent_profile_id.in_(profile_ids)
+                )
+            else:
+                assignments_stmt = assignments_stmt.where(false())
+        assignments_result = await session.execute(assignments_stmt)
         assignments = list(assignments_result.scalars().all())
 
         profile_assignments = defaultdict(list)
@@ -844,6 +946,7 @@ class CommunicationsService:
                 )
                 .label("row_number"),
             )
+            .where(EmailSend.assignment_id.is_not(None))
             .subquery()
         )
         latest_sends_result = await session.execute(
@@ -856,31 +959,36 @@ class CommunicationsService:
             for recipient_email, send_status in latest_sends_result.all()
         }
 
-        campaign_recipients = await repository.list_campaign_recipients()
+        campaign_recipients = await repository.list_campaign_recipients(owner_id=owner_id)
         campaign_event_counts: dict[UUID, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         campaign_variant_by_recipient: dict[UUID, str] = {}
-        campaign_event_counts_result = await session.execute(
-            select(
-                CampaignRecipientEvent.recipient_id,
-                CampaignRecipientEvent.event_type,
-                func.count(CampaignRecipientEvent.id),
-            ).group_by(CampaignRecipientEvent.recipient_id, CampaignRecipientEvent.event_type)
-        )
-        for recipient_id, event_type, event_count in campaign_event_counts_result.all():
-            campaign_event_counts[recipient_id][event_type] = int(event_count)
-        campaign_variant_result = await session.execute(
-            select(
-                CampaignRecipientEvent.recipient_id,
-                func.max(CampaignRecipientEvent.variant_key),
+        campaign_recipient_ids = {recipient.id for recipient in campaign_recipients}
+        if campaign_recipient_ids:
+            campaign_event_counts_result = await session.execute(
+                select(
+                    CampaignRecipientEvent.recipient_id,
+                    CampaignRecipientEvent.event_type,
+                    func.count(CampaignRecipientEvent.id),
+                )
+                .where(CampaignRecipientEvent.recipient_id.in_(campaign_recipient_ids))
+                .group_by(CampaignRecipientEvent.recipient_id, CampaignRecipientEvent.event_type)
             )
-            .where(CampaignRecipientEvent.variant_key.is_not(None))
-            .group_by(CampaignRecipientEvent.recipient_id)
-        )
-        campaign_variant_by_recipient = {
-            recipient_id: variant_key
-            for recipient_id, variant_key in campaign_variant_result.all()
-            if variant_key
-        }
+            for recipient_id, event_type, event_count in campaign_event_counts_result.all():
+                campaign_event_counts[recipient_id][event_type] = int(event_count)
+            campaign_variant_result = await session.execute(
+                select(
+                    CampaignRecipientEvent.recipient_id,
+                    func.max(CampaignRecipientEvent.variant_key),
+                )
+                .where(CampaignRecipientEvent.recipient_id.in_(campaign_recipient_ids))
+                .where(CampaignRecipientEvent.variant_key.is_not(None))
+                .group_by(CampaignRecipientEvent.recipient_id)
+            )
+            campaign_variant_by_recipient = {
+                recipient_id: variant_key
+                for recipient_id, variant_key in campaign_variant_result.all()
+                if variant_key
+            }
 
         # 4. Process rows
         rows = []

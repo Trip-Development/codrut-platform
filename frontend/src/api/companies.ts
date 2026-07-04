@@ -1028,6 +1028,31 @@ export async function getAllCompanyProjects(
   }
 }
 
+export async function getCompanyProjectById(
+  projectId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyProject | null> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/companies/projects/${projectId}`, {
+      cache: "no-store",
+      credentials: "include",
+      ...options,
+    });
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-a putut obține proiectul.`);
+      }
+      return fallbackCompanyProjects().find((project) => project.id === projectId) ?? null;
+    }
+    return (await response.json()) as CompanyProject;
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
+    return fallbackCompanyProjects().find((project) => project.id === projectId) ?? null;
+  }
+}
+
 export async function createCompanyProject(
   companyId: string,
   payload: CompanyProjectPayload & { name: string },

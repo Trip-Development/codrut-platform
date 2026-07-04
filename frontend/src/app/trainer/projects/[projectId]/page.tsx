@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
-  getAllCompanyProjects,
   getCompanyAssignments,
   getCompanyInvitationStatuses,
+  getCompanyProjectById,
   getProjectParticipants,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
@@ -17,8 +17,7 @@ export default async function ProjectOverviewPage({
 }) {
   const { projectId } = await params;
   const requestOptions = await getServerApiRequestOptions();
-  const projects = await getAllCompanyProjects(requestOptions);
-  const project = projects.find((item) => item.id === projectId);
+  const project = await getCompanyProjectById(projectId, requestOptions);
 
   if (!project) {
     notFound();

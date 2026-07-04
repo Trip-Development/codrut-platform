@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import {
   createCompany,
   importCompanyRoster,
@@ -13,6 +12,7 @@ import {
   type RosterInviteResult,
 } from "@/api/companies";
 import { normalizeReportsToName } from "@/api/roster-format";
+import { readSpreadsheetFile, type SpreadsheetCell } from "@/utils/spreadsheet-import";
 
 type CompanyOption = {
   id: string;
@@ -137,7 +137,7 @@ function isLegendOnlyRow(row: unknown[], headers: string[]): boolean {
 }
 
 function inferPcmFromMatrix(
-  worksheet: XLSX.WorkSheet,
+  cells: SpreadsheetCell[][],
   headers: string[],
   row: unknown[],
   zeroBasedSheetRowIndex: number,
@@ -146,11 +146,10 @@ function inferPcmFromMatrix(
   let phase = "";
   const maxCols = Math.max(headers.length, row.length);
   for (let colIdx = 0; colIdx < maxCols; colIdx += 1) {
-    const address = XLSX.utils.encode_cell({ r: zeroBasedSheetRowIndex, c: colIdx });
-    const cell = worksheet[address] as (XLSX.CellObject & { s?: { fill?: { fgColor?: { rgb?: string }; patternType?: string } } }) | undefined;
-    const rgb = cell?.s?.fill?.fgColor?.rgb?.replace(/^FF/i, "").toUpperCase();
+    const cell = cells[zeroBasedSheetRowIndex]?.[colIdx];
+    const rgb = cell?.rgb;
     const normalizedCell = normalizeHeader(
-      cell?.w ?? cell?.v?.toString() ?? row[colIdx]?.toString() ?? "",
+      cell?.text ?? row[colIdx]?.toString() ?? "",
     );
     const normalizedHeader = normalizeHeader(headers[colIdx] ?? "");
     const pcmKey =
@@ -273,7 +272,6 @@ export function RosterImporter({
   const [editedCells, setEditedCells] = useState<Record<string, Record<string, string>>>({});
   const [editingCellId, setEditingCellId] = useState<{ rowIndex: number; field: DbField } | null>(null);
 
-  // Read Excel/CSV file using SheetJS
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -284,21 +282,12 @@ export function RosterImporter({
     setEditedCells({});
     setEditingCellId(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array", cellStyles: true });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-
-        // Read headers and rows as array of arrays
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawSheetData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
-        if (rawSheetData.length === 0) {
-          setImportState({ status: "error", message: "Fișierul este gol sau invalid." });
-          return;
-        }
+    try {
+      const { rows: rawSheetData, cells } = await readSpreadsheetFile(file);
+      if (rawSheetData.length === 0) {
+        setImportState({ status: "error", message: "Fișierul este gol sau invalid." });
+        return;
+      }
 
         let rawHeaders = buildRosterHeaders(rawSheetData[0], rawSheetData.slice(1));
         let dataRows = rawSheetData.slice(1);
@@ -333,7 +322,12 @@ export function RosterImporter({
           rawHeaders.forEach((header, colIdx) => {
             obj[header] = row[colIdx] !== undefined ? String(row[colIdx]).trim() : "";
           });
-          const pcmFromMatrix = inferPcmFromMatrix(worksheet, rawHeaders, row, firstDataSheetRowIndex + rowOffset);
+          const pcmFromMatrix = inferPcmFromMatrix(
+            cells,
+            rawHeaders,
+            row,
+            firstDataSheetRowIndex + rowOffset,
+          );
           if (pcmFromMatrix.base) obj["PCM Bază"] = pcmFromMatrix.base;
           if (pcmFromMatrix.phase) obj["PCM Fază"] = pcmFromMatrix.phase;
           // Only keep rows that have some content
@@ -392,12 +386,12 @@ export function RosterImporter({
           status: "ready",
           message: `Am încărcat ${objects.length} rânduri. Vă rugăm să validați maparea coloanelor și corectitudinea datelor.`,
         });
-      } catch (err) {
-        console.error(err);
-        setImportState({ status: "error", message: "Eroare la procesarea fișierului. Verificați formatul." });
-      }
-    };
-    reader.readAsArrayBuffer(file);
+    } catch (err) {
+      console.error(err);
+      setImportState({ status: "error", message: "Eroare la procesarea fișierului. Verificați formatul." });
+    } finally {
+      event.target.value = "";
+    }
   }
 
   // Update a single column mapping dropdown
@@ -816,7 +810,7 @@ export function RosterImporter({
                 <label className="min-w-0 flex-1">
                   <input
                     type="file"
-                    accept=".csv,.xlsx,.xls"
+                    accept=".csv,.xlsx"
                     onChange={handleFileChange}
                     className="w-full rounded-xl border border-dashed border-burgundy/35 bg-surface px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
                   />
@@ -829,7 +823,7 @@ export function RosterImporter({
                   + Participant manual
                 </button>
               </div>
-              <span className="mt-2 block text-xs text-foreground/50">Excel (.xlsx, .xls), CSV (.csv) sau introducere manuală</span>
+              <span className="mt-2 block text-xs text-foreground/50">Excel (.xlsx), CSV (.csv) sau introducere manuală</span>
             </div>
           </div>
         </div>
@@ -837,7 +831,7 @@ export function RosterImporter({
         {importState.status === "idle" && (
           <div className="border-t border-[var(--border)] bg-surface-muted px-5 py-5 text-center text-foreground/55">
             <p className="text-sm font-semibold">Aștept fișierul de import.</p>
-            <p className="mt-1 text-xs">Acceptă Excel (.xlsx, .xls) și CSV (.csv).</p>
+            <p className="mt-1 text-xs">Acceptă Excel (.xlsx) și CSV (.csv).</p>
           </div>
         )}
 

@@ -64,9 +64,12 @@ class FakeCommunicationsRepository:
         self,
         *,
         active_only: bool = True,
+        owner_id: uuid.UUID | None = None,
     ) -> list[EmailTemplate]:
         self.list_template_calls += 1
         templates = self.templates
+        if owner_id is not None:
+            templates = [t for t in templates if t.owner_id in {None, owner_id}]
         if active_only:
             templates = [t for t in templates if t.active]
         return sorted(templates, key=lambda t: (t.key, -t.version))
@@ -76,11 +79,19 @@ class FakeCommunicationsRepository:
         key: str,
         *,
         version: int | None = None,
+        owner_id: uuid.UUID | None = None,
     ) -> EmailTemplate | None:
         templates = [t for t in self.templates if t.key == key]
+        if owner_id is not None:
+            templates = [t for t in templates if t.owner_id in {None, owner_id}]
         if version is None:
             templates = [t for t in templates if t.active]
-            return max(templates, key=lambda t: t.version, default=None)
+            templates = sorted(
+                templates,
+                key=lambda t: (t.owner_id is not None, t.version),
+                reverse=True,
+            )
+            return templates[0] if templates else None
         return next(
             (t for t in templates if t.version == version),
             None,
@@ -103,19 +114,27 @@ class FakeCommunicationsRepository:
         key: str,
         *,
         except_version: int | None = None,
+        owner_id: uuid.UUID | None = None,
     ) -> None:
         for t in self.templates:
-            if t.key == key and t.version != except_version:
+            if (
+                t.key == key
+                and t.version != except_version
+                and (owner_id is None or t.owner_id == owner_id)
+            ):
                 t.active = False
 
     async def list_campaign_recipients_by_emails(
         self,
         emails: set[str],
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> list[CampaignRecipient]:
         return [
             recipient
             for recipient in self.campaign_recipients
             if recipient.email is not None and recipient.email.lower() in emails
+            and (owner_id is None or recipient.owner_id == owner_id)
         ]
 
     async def add_campaign_recipients(
@@ -124,8 +143,21 @@ class FakeCommunicationsRepository:
     ) -> None:
         self.campaign_recipients.extend(recipients)
 
-    async def get_campaign(self, campaign_id: uuid.UUID) -> Campaign | None:
-        return next((campaign for campaign in self.campaigns if campaign.id == campaign_id), None)
+    async def get_campaign(
+        self,
+        campaign_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> Campaign | None:
+        return next(
+            (
+                campaign
+                for campaign in self.campaigns
+                if campaign.id == campaign_id
+                and (owner_id is None or campaign.owner_id == owner_id)
+            ),
+            None,
+        )
 
     async def add_campaign(self, campaign: Campaign) -> Campaign:
         self.campaigns.append(campaign)
@@ -138,32 +170,59 @@ class FakeCommunicationsRepository:
             if saved_campaign.id != campaign.id
         ]
 
-    async def list_campaign_recipients(self) -> list[CampaignRecipient]:
-        return self.campaign_recipients
+    async def list_campaign_recipients(
+        self,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> list[CampaignRecipient]:
+        return [
+            recipient
+            for recipient in self.campaign_recipients
+            if owner_id is None or recipient.owner_id == owner_id
+        ]
 
     async def list_campaign_recipients_by_ids(
         self,
         recipient_ids: list[uuid.UUID],
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> list[CampaignRecipient]:
         recipient_id_set = set(recipient_ids)
         return [
             recipient
             for recipient in self.campaign_recipients
             if recipient.id in recipient_id_set
+            and (owner_id is None or recipient.owner_id == owner_id)
         ]
 
-    async def get_campaign_recipient(self, recipient_id: uuid.UUID) -> CampaignRecipient | None:
+    async def get_campaign_recipient(
+        self,
+        recipient_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> CampaignRecipient | None:
         return next(
-            (recipient for recipient in self.campaign_recipients if recipient.id == recipient_id),
+            (
+                recipient
+                for recipient in self.campaign_recipients
+                if recipient.id == recipient_id
+                and (owner_id is None or recipient.owner_id == owner_id)
+            ),
             None,
         )
 
-    async def get_campaign_recipient_by_email(self, email: str) -> CampaignRecipient | None:
+    async def get_campaign_recipient_by_email(
+        self,
+        email: str,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> CampaignRecipient | None:
         return next(
             (
                 recipient
                 for recipient in self.campaign_recipients
                 if recipient.email is not None and recipient.email.lower() == email.lower()
+                and (owner_id is None or recipient.owner_id == owner_id)
             ),
             None,
         )
@@ -329,6 +388,39 @@ async def test_bulk_create_campaign_recipients_reports_created_and_updated_count
 
 
 @pytest.mark.asyncio
+async def test_bulk_create_campaign_recipients_dedupes_within_owner_scope() -> None:
+    first_owner_id = uuid.uuid4()
+    second_owner_id = uuid.uuid4()
+    repository = FakeCommunicationsRepository()
+    existing = persisted_campaign_recipient(email="shared@example.com")
+    existing.owner_id = second_owner_id
+    repository.campaign_recipients.append(existing)
+    service = make_service(repository)
+
+    result = await service.bulk_create_campaign_recipients_with_result(
+        CampaignRecipientBulkCreateRequest(
+            recipients=[
+                CampaignRecipientCreateRequest(
+                    email="shared@example.com",
+                    contact_name="Owner One",
+                    organization_name="Compania owner one",
+                    segment="potential_customer",
+                    source="csv",
+                ),
+            ]
+        ),
+        owner_id=first_owner_id,
+    )
+
+    assert result.created == 1
+    assert result.updated == 0
+    assert {recipient.owner_id for recipient in repository.campaign_recipients} == {
+        first_owner_id,
+        second_owner_id,
+    }
+
+
+@pytest.mark.asyncio
 async def test_bulk_create_campaign_recipients_allows_suppressed_contacts_without_email() -> None:
     repository = FakeCommunicationsRepository()
     service = make_service(repository)
@@ -491,6 +583,34 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
 
 
 @pytest.mark.asyncio
+async def test_send_campaign_does_not_use_other_owner_recipients() -> None:
+    owner_id = uuid.uuid4()
+    other_owner_id = uuid.uuid4()
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.owner_id = owner_id
+    matching = persisted_campaign_recipient(email="owner@example.com", contact_name="Owner")
+    matching.owner_id = owner_id
+    other_owner = persisted_campaign_recipient(email="other@example.com", contact_name="Other")
+    other_owner.owner_id = other_owner_id
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([matching, other_owner])
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(mode="all"),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        owner_id=owner_id,
+    )
+
+    assert response.sent == 1
+    assert provider.sent[0].to.value == "owner@example.com"
+
+
+@pytest.mark.asyncio
 async def test_send_campaign_respects_daily_email_cap() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
@@ -580,6 +700,23 @@ async def test_delete_campaign_rejects_unknown_campaign() -> None:
         await service.delete_campaign(uuid.uuid4())
 
     assert exc_info.value.code == "campaign_not_found"
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign_rejects_other_owner_campaign() -> None:
+    owner_id = uuid.uuid4()
+    other_owner_id = uuid.uuid4()
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.owner_id = other_owner_id
+    repository.campaigns.append(campaign)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.delete_campaign(campaign.id, owner_id=owner_id)
+
+    assert exc_info.value.code == "campaign_not_found"
+    assert repository.campaigns == [campaign]
 
 
 @pytest.mark.asyncio
