@@ -17,4 +17,4 @@ def test_default_email_sender_name_is_andrei_vacaru(monkeypatch) -> None:
     monkeypatch.delenv("CODRUT_EMAIL_FROM_NAME", raising=False)
     settings = Settings(_env_file=None)
 
-    assert settings.email_from_name == "Andrei Văcaru"
+    assert settings.email_from_name == "Andrei Vacaru"

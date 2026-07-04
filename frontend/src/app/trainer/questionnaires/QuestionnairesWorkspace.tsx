@@ -115,7 +115,7 @@ export function QuestionnairesWorkspace() {
   const loadStubs = useCallback(async () => {
     setIsCatalogLoading(true);
     try {
-      const allVersions = await listQuestionnaireDefinitionStubs(true, { latestOnly: false });
+      const allVersions = await listQuestionnaireDefinitionStubs(false, { latestOnly: false });
       setVersionStubs(allVersions);
       setStubs(latestDefinitionStubs(allVersions));
     } finally {
@@ -380,7 +380,7 @@ export function QuestionnairesWorkspace() {
     setIsDefinitionLoading(true);
     try {
       await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
-      const remainingVersions = await listQuestionnaireDefinitionStubs(true, { latestOnly: false });
+      const remainingVersions = await listQuestionnaireDefinitionStubs(false, { latestOnly: false });
       const remainingLatest = latestDefinitionStubs(remainingVersions);
       setVersionStubs(remainingVersions);
       setStubs(remainingLatest);

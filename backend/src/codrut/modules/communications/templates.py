@@ -18,7 +18,7 @@ EMAIL_SHELL_OPEN = (
     '<div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;'
     'background:#fffdfb;">'
     '<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;'
-    'letter-spacing:.08em;text-transform:uppercase;">Codruț</p>'
+    'letter-spacing:.08em;text-transform:uppercase;">Andrei Vacaru</p>'
 )
 EMAIL_SHELL_CLOSE = "</div></div>"
 
@@ -124,7 +124,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<p {GREETING_STYLE}>Salut, ${{first_name}}.</p>"
             + _paragraphs(
                 "Nu mi-ai cerut niciun update. Dar ți-l dau oricum, pentru că am 3 ani de freelancing și tu ești unul dintre oamenii pe care îmi doresc să îi revăd.",
-                "Andrei Văcaru. Raport 2022-2025: freelancer din 2022, certificat Process Communication Model, certificat Rapid Transformation Therapy by Marisa Peer și peste 1200 de sesiuni livrate.",
+                "Andrei Vacaru. Raport 2022-2025: freelancer din 2022, certificat Process Communication Model, certificat Rapid Transformation Therapy by Marisa Peer și peste 1200 de sesiuni livrate.",
                 "A neglijat să se reconecteze cu oameni cu care a lucrat bine. Ultimul punct e motivul pentru care ești pe lista mea de primit emailul ăsta.",
                 "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.",
             )
@@ -150,18 +150,18 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<h1 {HEADING_STYLE}>Relația profesională poate fi reactivată</h1>"
             + f"<p {GREETING_STYLE}>Salut, ${{first_name}}.</p>"
             + _paragraphs(
-                "Îți scriu pentru a te informa că relația profesională cu Andrei Văcaru a fost marcată ca inactivă în sistem.",
+                "Îți scriu pentru a te informa că relația profesională cu Andrei Vacaru a fost marcată ca inactivă în sistem.",
                 "Conform datelor disponibile, ultima interacțiune cu ${company_name} a avut loc în urmă cu mai mult timp decât ar fi trebuit.",
                 "Ai la dispoziție două opțiuni: ignori emailul și toată lumea merge mai departe, sau reactivezi contul printr-o cafea, un apel ori 30 de minute de Zoom în care nimeni nu vinde nimic.",
                 "Motive de reactivare recomandate: curiozitate și chef de o discuție bună.",
             )
             + _video_cta("Video reactivare cont")
-            + _paragraphs("Dă reply și revin eu cu un mail pentru stabilirea unei întâlniri.", "Andrei Văcaru")
+            + _paragraphs("Dă reply și revin eu cu un mail pentru stabilirea unei întâlniri.", "Andrei Vacaru")
             + PROMOTIONAL_SHELL_CLOSE
         ),
         text_body=(
             "Salut, ${first_name}.\n\n"
-            "Relația profesională cu Andrei Văcaru poate fi reactivată printr-o cafea, un apel sau 30 de minute de Zoom.\n"
+            "Relația profesională cu Andrei Vacaru poate fi reactivată printr-o cafea, un apel sau 30 de minute de Zoom.\n"
             "Vezi contextul aici: ${landing_page_url}\n\n"
             "Dezabonare: ${unsubscribe_url}"
         ),
@@ -206,16 +206,16 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + _paragraphs(
                 "Dacă totul merge perfect - stakeholderii sunt încântați, conversațiile dificile se rezolvă singure și toată lumea pleacă din ședințe motivată - poți închide acum.",
                 "Dacă ai continuat, probabil recunoști momentul în care ai știut exact ce trebuia spus și tot nu a ieșit cum trebuia.",
-                "Mă numesc Andrei Văcaru. 13 ani jurnalist TV, 10 ani trainer, 1200+ sesiuni, 15000+ oameni. Certificat PCM și din 2025 certificat Rapid Transformation Therapy by Marisa Peer.",
+                "Mă numesc Andrei Vacaru. 13 ani jurnalist TV, 10 ani trainer, 1200+ sesiuni, 15000+ oameni. Certificat PCM și din 2025 certificat Rapid Transformation Therapy by Marisa Peer.",
                 "Nu am un pitch. Am o întrebare: dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea, ce ar fi?",
             )
             + _video_cta("Video de prezentare")
-            + _paragraphs("Poți răspunde la emailul ăsta sau putem stabili o conversație online.", "Zi faină să ai! Andrei Văcaru")
+            + _paragraphs("Poți răspunde la emailul ăsta sau putem stabili o conversație online.", "Zi faină să ai! Andrei Vacaru")
             + PROMOTIONAL_SHELL_CLOSE
         ),
         text_body=(
             "Salut, ${first_name}.\n\n"
-            "Mă numesc Andrei Văcaru: 13 ani jurnalist TV, 10 ani trainer, 1200+ sesiuni, certificat PCM și RTT.\n"
+            "Mă numesc Andrei Vacaru: 13 ani jurnalist TV, 10 ani trainer, 1200+ sesiuni, certificat PCM și RTT.\n"
             "Dacă ai putea schimba un singur lucru în felul în care oamenii tăi comunică sau gestionează presiunea, ce ar fi?\n"
             "Video: ${landing_page_url}\n\n"
             "Dezabonare: ${unsubscribe_url}"
@@ -318,7 +318,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     TransactionalTemplateKey.account_setup: TransactionalTemplate(
         key=TransactionalTemplateKey.account_setup,
         version=2,
-        subject="Codruț: activează contul pentru ${company_name}",
+        subject="Andrei Vacaru: activează contul pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Contul tău Codruț este pregătit</h1>"
@@ -345,7 +345,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     TransactionalTemplateKey.assignment_bundle: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_bundle,
         version=2,
-        subject="Codruț: ai ${task_count} chestionare pentru ${company_name}",
+        subject="Andrei Vacaru: ai ${task_count} chestionare pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Chestionarele tale sunt pregătite</h1>"

@@ -119,6 +119,7 @@ export function QuestionnaireRunner({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "submitted" | "error">(
     initialStatus === "submitted" ? "submitted" : "idle",
   );
+  const [saveError, setSaveError] = useState<string | null>(null);
   const latestAnswersRef = useRef<AnswerState>(initialAnswers ?? {});
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveSequenceRef = useRef(0);
@@ -134,6 +135,7 @@ export function QuestionnaireRunner({
       autosaveTimerRef.current = null;
     }
     setSaveState(initialStatus === "submitted" ? "submitted" : "idle");
+    setSaveError(null);
     setAnswers(nextAnswers);
   }, [initialAnswers, initialStatus, assignmentId]);
 
@@ -181,6 +183,7 @@ export function QuestionnaireRunner({
     const sequence = saveSequenceRef.current + 1;
     saveSequenceRef.current = sequence;
     setSaveState("saving");
+    setSaveError(null);
     autosaveTimerRef.current = setTimeout(() => {
       void runAutosave(currentAssignmentId, sequence);
     }, AUTOSAVE_DELAY_MS);
@@ -197,14 +200,16 @@ export function QuestionnaireRunner({
       await saveQuestionnaireResponse(currentAssignmentId, latestAnswersRef.current);
       if (saveSequenceRef.current === sequence) {
         setSaveState("saved");
+        setSaveError(null);
       }
     })();
     autosaveInFlightPromiseRef.current = request;
     try {
       await request;
-    } catch {
+    } catch (error) {
       if (saveSequenceRef.current === sequence) {
         setSaveState("error");
+        setSaveError(errorMessage(error, "A apărut o eroare la salvarea draftului."));
       }
     } finally {
       autosaveInFlightRef.current = false;
@@ -230,13 +235,16 @@ export function QuestionnaireRunner({
     }
     saveSequenceRef.current += 1;
     setSaveState("saving");
+    setSaveError(null);
     try {
       await autosaveInFlightPromiseRef.current?.catch(() => undefined);
       await saveQuestionnaireResponse(assignmentId, latestAnswersRef.current);
       setSaveState("saved");
+      setSaveError(null);
       router.push(returnHref);
-    } catch {
+    } catch (error) {
       setSaveState("error");
+      setSaveError(errorMessage(error, "A apărut o eroare la salvarea draftului."));
     }
   }
 
@@ -252,13 +260,16 @@ export function QuestionnaireRunner({
     }
     saveSequenceRef.current += 1;
     setSaveState("saving");
+    setSaveError(null);
     try {
       await autosaveInFlightPromiseRef.current?.catch(() => undefined);
       await submitQuestionnaireResponse(assignmentId, latestAnswersRef.current);
       setSaveState("submitted");
+      setSaveError(null);
       router.push(returnHref);
-    } catch {
+    } catch (error) {
       setSaveState("error");
+      setSaveError(errorMessage(error, "A apărut o eroare la trimiterea răspunsurilor."));
     }
   }
 
@@ -381,7 +392,9 @@ export function QuestionnaireRunner({
         </div>
         <p className="mt-3 text-xs leading-5 text-foreground/55">
           {assignmentId
-            ? statusMessage(saveState)
+            ? saveState === "error" && saveError
+              ? saveError
+              : statusMessage(saveState)
             : "Linkul demo nu are încă o sarcină reală pentru salvare."}
         </p>
       </aside>
@@ -410,6 +423,10 @@ function statusMessage(status: "idle" | "saving" | "saved" | "submitted" | "erro
   if (status === "submitted") return "Răspunsuri trimise. Poți reveni la lista de chestionare.";
   if (status === "error") return "A apărut o eroare la salvare.";
   return "Poți salva un draft oricând și poți trimite după ce ai completat toate câmpurile.";
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
 function CompletionPanel({

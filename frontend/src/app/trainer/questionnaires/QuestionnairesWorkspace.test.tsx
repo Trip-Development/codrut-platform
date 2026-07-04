@@ -127,7 +127,7 @@ describe("QuestionnairesWorkspace", () => {
     render(<QuestionnairesWorkspace />);
 
     await waitFor(() =>
-      expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(true, { latestOnly: false }),
+      expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(false, { latestOnly: false }),
     );
     expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledTimes(1);
   });

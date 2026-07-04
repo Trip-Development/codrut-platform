@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 
@@ -159,6 +159,19 @@ describe("QuestionnaireRunner", () => {
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
     });
+  });
+
+  it("shows the concrete save error when auto-save fails", async () => {
+    vi.useFakeTimers();
+    vi.mocked(saveQuestionnaireResponse).mockRejectedValueOnce(new Error("Serverul nu a putut salva draftul."));
+    render(<QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />);
+
+    fireEvent.click(screen.getByText("Rar"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    expect(screen.getByText("Serverul nu a putut salva draftul.")).toBeTruthy();
   });
 
   it("merges rapid answers from different questions before the debounced save", async () => {
