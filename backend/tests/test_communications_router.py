@@ -264,7 +264,7 @@ def test_campaign_calendly_tracking_redirect_is_public_and_records_event() -> No
     assert saved_event.variant_key == "variant_a"
 
 
-def test_campaign_unsubscribe_is_public_and_updates_recipient() -> None:
+def test_campaign_unsubscribe_get_is_public_confirmation_without_mutation() -> None:
     app = create_app()
     recipient_id = uuid4()
     recipient = CampaignRecipient(
@@ -303,7 +303,50 @@ def test_campaign_unsubscribe_is_public_and_updates_recipient() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {"status": "unsubscribed", "email": "ceo@example.com"}
+    assert "Confirmă dezabonarea" in response.text
+    assert "ceo@example.com" in response.text
+    assert recipient.status == CampaignRecipientStatus.active
+    session.flush.assert_not_awaited()
+    session.commit.assert_not_awaited()
+
+
+def test_campaign_unsubscribe_post_updates_recipient() -> None:
+    app = create_app()
+    recipient_id = uuid4()
+    recipient = CampaignRecipient(
+        id=recipient_id,
+        email="ceo@example.com",
+        contact_name="Ana Director",
+        organization_name="Compania B",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.active,
+    )
+    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=FakeScalarOneResult(recipient))
+    session.flush = AsyncMock()
+    session.commit = AsyncMock()
+    token = create_campaign_recipient_action_token(
+        CampaignRecipientActionClaims(
+            recipient_id=recipient_id,
+            action="unsubscribe",
+        ),
+        settings,
+    )
+
+    async def db_override():
+        yield session
+
+    app.dependency_overrides[db_session] = db_override
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    response = TestClient(app).post(
+        f"/api/communications/campaigns/unsubscribe/{token}",
+    )
+
+    assert response.status_code == 200
+    assert "Dezabonare confirmată" in response.text
+    assert "ceo@example.com" in response.text
     assert recipient.status == CampaignRecipientStatus.unsubscribed
     session.flush.assert_awaited_once()
     session.commit.assert_awaited_once()

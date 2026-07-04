@@ -107,12 +107,6 @@ export default function RegisterPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (isDemoFallbackEnabled() && token === "demo-token") {
-          console.warn("Bypassing API registration error for demo-token in prototype mode.");
-          sessionStorage.removeItem("codrut_invite");
-          router.push("/participant");
-          return;
-        }
         throw new Error(data.error?.message || "Înregistrarea a eșuat. Reîncearcă.");
       }
 
@@ -120,12 +114,6 @@ export default function RegisterPage() {
       sessionStorage.removeItem("codrut_invite");
       router.push("/participant");
     } catch (err) {
-      if (isDemoFallbackEnabled() && token === "demo-token") {
-        console.warn("Bypassing registration error for demo-token in prototype mode:", err);
-        sessionStorage.removeItem("codrut_invite");
-        router.push("/participant");
-        return;
-      }
       const msg = err instanceof Error ? err.message : "A apărut o eroare la înregistrare.";
       setError(msg);
       setSubmitting(false);

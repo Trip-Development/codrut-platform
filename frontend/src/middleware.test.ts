@@ -3,8 +3,8 @@ import { NextRequest } from "next/server";
 
 import { middleware } from "./middleware";
 
-function requestFor(path: string, cookie?: string) {
-  return new NextRequest(`http://localhost:3000${path}`, {
+function requestFor(path: string, cookie?: string, origin = "http://localhost:3000") {
+  return new NextRequest(`${origin}${path}`, {
     headers: cookie ? { cookie } : undefined,
   });
 }
@@ -61,6 +61,26 @@ describe("middleware", () => {
 
   it("allows protected routes with a session cookie", () => {
     const response = middleware(requestFor("/trainer/email", "codrut_session=test-token"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("hides dev routes in production when demo fallback is disabled", () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+
+    const response = middleware(requestFor("/dev/routes", undefined, "https://codrut.andreivacaru.ro"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("allows dev routes during explicit demo fallback", () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+
+    const response = middleware(requestFor("/dev/routes", undefined, "https://codrut.andreivacaru.ro"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();

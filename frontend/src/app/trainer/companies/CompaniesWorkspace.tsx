@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
 
-import { createCompany, getCompanyList, type CompanyListItem } from "@/api/companies";
+import { createCompany, type CompanyListItem } from "@/api/companies";
 
 type CompaniesWorkspaceProps = {
   initialCompanies: CompanyListItem[];
@@ -21,16 +21,6 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
-    getCompanyList()
-      .then((freshCompanies) => {
-        setCompanies((current) => mergeCompanies(current, freshCompanies));
-      })
-      .catch(() => {
-        setMessage("Lista de companii nu a putut fi reîmprospătată.");
-      });
-  }, []);
 
   const sortedCompanies = useMemo(() => {
     const query = normalizeSearchText(searchQuery);

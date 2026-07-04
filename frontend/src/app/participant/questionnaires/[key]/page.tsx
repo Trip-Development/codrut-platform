@@ -22,10 +22,11 @@ export default async function ParticipantQuestionnaireRunPage({
     secureInvite: access === "secure",
   });
   const requestOptions = await getServerApiRequestOptions();
-  const [definition, responseRecord] = await Promise.all([
-    getQuestionnaireDefinition(key, requestOptions),
-    assignmentId ? getQuestionnaireResponse(assignmentId, requestOptions) : Promise.resolve(null),
-  ]);
+  const responseRecord = assignmentId ? await getQuestionnaireResponse(assignmentId, requestOptions) : null;
+  const definitionKey = responseRecord
+    ? `${responseRecord.questionnaire_key}@${responseRecord.questionnaire_version}`
+    : key;
+  const definition = await getQuestionnaireDefinition(definitionKey, requestOptions);
 
   if (access === "secure") {
     return (

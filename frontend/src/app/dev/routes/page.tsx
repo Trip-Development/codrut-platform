@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
+import { isSeededDemoFallbackEnabled } from "@/api/runtime";
 import { BrandMark } from "@/components/brand/brand-mark";
 
 const routeGroups = [
@@ -41,6 +43,10 @@ const routeGroups = [
 ];
 
 export default function DevRoutesPage() {
+  if (!isSeededDemoFallbackEnabled()) {
+    notFound();
+  }
+
   return (
     <main className="app-min-height bg-background px-4 py-10 text-foreground md:px-6">
       <section className="mx-auto max-w-6xl">

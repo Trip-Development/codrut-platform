@@ -918,6 +918,24 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("does not fabricate companies when backend creation returns unauthorized in demo mode", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    await expect(createCompany("Local-only Company")).rejects.toThrow(
+      "Nu sunteți autentificat. Vă rugăm să vă reconectați.",
+    );
+  });
+
+  it("does not fabricate companies when backend creation cannot be reached in demo mode", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("failed to fetch")));
+
+    await expect(createCompany("Local-only Company")).rejects.toThrow("failed to fetch");
+  });
+
   it("deletes companies through the backend only", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
