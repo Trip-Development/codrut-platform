@@ -329,10 +329,10 @@ class CommunicationsService:
         repository = self._require_repository()
 
         recipients_by_email: dict[str, CampaignRecipient] = {}
+        recipients_without_email: list[CampaignRecipient] = []
         status_provided_by_email: dict[str, bool] = {}
         for req in payload.recipients:
-            normalized_email = req.email.lower()
-            status_provided_by_email.setdefault(normalized_email, req.status is not None)
+            normalized_email = str(req.email).lower() if req.email is not None else None
             try:
                 recipient_status = (
                     CampaignRecipientStatus(req.status)
@@ -344,6 +344,24 @@ class CommunicationsService:
                     "Invalid campaign recipient status.",
                     code="campaign_recipient_status_invalid",
                 ) from exc
+            if normalized_email is None:
+                if recipient_status == CampaignRecipientStatus.active:
+                    raise DomainError(
+                        "Active campaign recipients require an email.",
+                        code="campaign_recipient_email_required",
+                    )
+                recipients_without_email.append(
+                    CampaignRecipient(
+                        email=None,
+                        contact_name=req.contact_name,
+                        organization_name=req.organization_name,
+                        segment=req.segment,
+                        source=req.source,
+                        status=recipient_status,
+                    )
+                )
+                continue
+            status_provided_by_email.setdefault(normalized_email, req.status is not None)
             recipients_by_email.setdefault(
                 normalized_email,
                 CampaignRecipient(
@@ -359,7 +377,11 @@ class CommunicationsService:
         existing = await repository.list_campaign_recipients_by_emails(
             set(recipients_by_email),
         )
-        existing_by_email = {recipient.email.lower(): recipient for recipient in existing}
+        existing_by_email = {
+            recipient.email.lower(): recipient
+            for recipient in existing
+            if recipient.email is not None
+        }
         recipients_to_create = [
             recipient
             for email, recipient in recipients_by_email.items()
@@ -378,6 +400,7 @@ class CommunicationsService:
                 and existing_recipient.status != CampaignRecipientStatus.unsubscribed
             ):
                 existing_recipient.status = recipient.status
+        recipients_to_create.extend(recipients_without_email)
         if recipients_to_create:
             await repository.add_campaign_recipients(recipients_to_create)
         return [*existing, *recipients_to_create]
@@ -426,6 +449,11 @@ class CommunicationsService:
                     "Invalid campaign recipient status.",
                     code="campaign_recipient_status_invalid",
                 ) from exc
+        if recipient.status == CampaignRecipientStatus.active and not recipient.email:
+            raise DomainError(
+                "Active campaign recipients require an email.",
+                code="campaign_recipient_email_required",
+            )
         if payload.source is not None:
             recipient.source = payload.source.strip() or None
 
@@ -551,17 +579,17 @@ class CommunicationsService:
                 results.append(
                     CampaignSendRecipientResult(
                         recipient_id=recipient.id,
-                        email=recipient.email,
+                        email=recipient.email or "",
                         status="skipped",
                         error="Recipient segment does not match campaign segment.",
                     )
                 )
                 continue
-            if recipient.status != CampaignRecipientStatus.active:
+            if recipient.status != CampaignRecipientStatus.active or not recipient.email:
                 results.append(
                     CampaignSendRecipientResult(
                         recipient_id=recipient.id,
-                        email=recipient.email,
+                        email=recipient.email or "",
                         status="skipped",
                         error="Recipient is suppressed or unsubscribed.",
                     )
@@ -572,7 +600,7 @@ class CommunicationsService:
                 results.append(
                     CampaignSendRecipientResult(
                         recipient_id=recipient.id,
-                        email=recipient.email,
+                        email=recipient.email or "",
                         status="skipped",
                         error="Daily email send cap reached.",
                     )
@@ -917,7 +945,7 @@ class CommunicationsService:
                 "company": recipient.organization_name or "Companie necompletată",
                 "firstName": _first_name(recipient.contact_name),
                 "lastName": _last_name(recipient.contact_name),
-                "email": recipient.email,
+                "email": recipient.email or "",
                 "clientType": _campaign_client_type(recipient.segment.value),
                 "status": _campaign_recipient_status(recipient),
                 "openRate": None,
@@ -932,7 +960,6 @@ class CommunicationsService:
                 "outcome": None,
             }
             for recipient in campaign_recipients
-            if recipient.status == CampaignRecipientStatus.active
         ]
 
         campaign = {
@@ -1022,7 +1049,7 @@ def _render_campaign_message(
         "contact_name": contact_name,
         "company_name": recipient.organization_name or "",
         "organization_name": recipient.organization_name or "",
-        "email": recipient.email,
+        "email": recipient.email or "",
         "video_url": campaign.video_url or "",
         "thumbnail_url": campaign.thumbnail_url or "",
         "landing_page_url": campaign.landing_page_url or campaign.video_url or "",

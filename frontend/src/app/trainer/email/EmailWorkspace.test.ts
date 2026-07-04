@@ -82,6 +82,13 @@ describe("buildCampaignRecipientImport", () => {
         "Organizație": "Example",
         "Email": "not an email",
       },
+      {
+        "De trimis": "Nu",
+        "Primul prenume": "Missing",
+        "Nume de familie": "Email",
+        "Tip Client": "Nu e client",
+        "Organizație": "No Mail Co",
+      },
     ]);
 
     expect(result).toEqual({
@@ -102,10 +109,26 @@ describe("buildCampaignRecipientImport", () => {
           status: "suppressed",
           source: "excel_import",
         },
+        {
+          email: undefined,
+          contact_name: "Invalid Email",
+          organization_name: "Example",
+          segment: "potential_customer",
+          status: "suppressed",
+          source: "excel_import",
+        },
+        {
+          email: undefined,
+          contact_name: "Missing Email",
+          organization_name: "No Mail Co",
+          segment: "potential_customer",
+          status: "suppressed",
+          source: "excel_import",
+        },
       ],
       skippedBySendFlag: 0,
       skippedMissingEmail: 0,
-      skippedInvalidEmail: 1,
+      skippedInvalidEmail: 0,
     });
   });
 
@@ -141,6 +164,14 @@ describe("buildCampaignRecipientImport", () => {
         "Organizație": "Example",
         "Email": "",
       },
+      {
+        "De trimis": "Da",
+        "Primul prenume": "Invalid",
+        "Nume de familie": "Email",
+        "Tip Client": "Nu e client",
+        "Organizație": "Example",
+        "Email": "not an email",
+      },
     ]);
 
     expect(drafts[0]).toMatchObject({
@@ -148,6 +179,11 @@ describe("buildCampaignRecipientImport", () => {
       contact_name: "Maria Ionescu",
       organization_name: "Example",
       segment: "past_customer",
+      send: false,
+    });
+    expect(drafts[1]).toMatchObject({
+      contact_name: "Invalid Email",
+      email: "not an email",
       send: false,
     });
   });

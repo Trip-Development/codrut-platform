@@ -240,6 +240,10 @@ function isValidImportEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function importDraftHasEmailError(draft: Pick<CampaignImportDraft, "email" | "send">): boolean {
+  return draft.send && !isValidImportEmail(draft.email.trim());
+}
+
 export function selectCampaignRecipientImportSheetName(sheetNames: string[]): string | undefined {
   return sheetNames.find((sheetName) => normalizeImportKey(sheetName) === "revised") ?? sheetNames[0];
 }
@@ -279,22 +283,24 @@ function importContactName(row: Record<string, unknown>): string {
 export function buildCampaignRecipientImportDrafts(rows: Record<string, unknown>[]): CampaignImportDraft[] {
   return rows.map((row, index) => {
     const segmentValue = readImportValue(row, ["segment", "Segment", "Tip Client"]);
+    const email = readImportValue(row, ["email", "Email", "EMAIL"]);
     return {
-      id: `${index}-${readImportValue(row, ["email", "Email", "EMAIL"]) || "missing"}`,
+      id: `${index}-${email || "missing"}`,
       rowNumber: index + 2,
-      email: readImportValue(row, ["email", "Email", "EMAIL"]),
+      email,
       contact_name: importContactName(row),
       organization_name: readImportValue(row, ["company", "companie", "Company", "Companie", "Organizație"]),
       segment: importSegmentFromValue(segmentValue),
-      send: isMarkedForCampaignSend(row),
+      send: isMarkedForCampaignSend(row) && isValidImportEmail(email),
       source: "excel_import",
     };
   });
 }
 
 function campaignImportDraftToRecipient(row: CampaignImportDraft): CampaignRecipientCreate {
+  const email = row.email.trim();
   return {
-    email: row.email.trim(),
+    email: isValidImportEmail(email) ? email : undefined,
     contact_name: row.contact_name.trim() || undefined,
     organization_name: row.organization_name.trim() || undefined,
     segment: row.segment,
@@ -307,22 +313,15 @@ export function buildCampaignRecipientImport(rows: Record<string, unknown>[]): C
   return rows.reduce<CampaignRecipientImportResult>(
     (result, row) => {
       const email = readImportValue(row, ["email", "Email", "EMAIL"]);
-      if (!email) {
-        result.skippedMissingEmail += 1;
-        return result;
-      }
-      if (!isValidImportEmail(email)) {
-        result.skippedInvalidEmail += 1;
-        return result;
-      }
+      const validEmail = isValidImportEmail(email);
 
       const segmentValue = readImportValue(row, ["segment", "Segment", "Tip Client"]);
       result.recipients.push({
-        email,
+        email: validEmail ? email : undefined,
         contact_name: importContactName(row) || undefined,
         organization_name: readImportValue(row, ["company", "companie", "Company", "Companie", "Organizație"]) || undefined,
         segment: importSegmentFromValue(segmentValue),
-        status: isMarkedForCampaignSend(row) ? "active" : "suppressed",
+        status: isMarkedForCampaignSend(row) && validEmail ? "active" : "suppressed",
         source: "excel_import",
       });
       return result;
@@ -424,7 +423,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
 
   const activeCampaignRecipientIdSet = useMemo(
-    () => new Set(summary.campaign.recipients.filter((recipient) => recipient.status !== "suppressed").map((recipient) => recipient.id)),
+    () => new Set(summary.campaign.recipients.filter((recipient) => recipient.status !== "suppressed" && recipient.email.trim()).map((recipient) => recipient.id)),
     [summary.campaign.recipients],
   );
   const activeSelectedCampaignRecipientIds = useMemo(
@@ -532,14 +531,14 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       const drafts = buildCampaignRecipientImportDrafts(rows);
 
       if (drafts.length > 0) {
-        const invalidCount = drafts.filter((draft) => !isValidImportEmail(draft.email.trim())).length;
+        const invalidCount = drafts.filter(importDraftHasEmailError).length;
         setImportSheetName(sheetName ?? null);
         setImportDrafts(drafts);
         setCampaignContactMessage(
           `Previzualizare ${drafts.length} contacte din sheet-ul ${sheetName}.${invalidCount > 0 ? ` ${invalidCount} emailuri trebuie corectate.` : ""}`,
         );
       } else {
-        setCampaignContactMessage("Fișierul nu conține coloana email. Folosește un cap de tabel valid.");
+        setCampaignContactMessage("Fișierul nu conține contacte de importat.");
       }
     } catch (error) {
       setCampaignContactMessage(error instanceof Error ? error.message : "Fișierul nu a putut fi procesat.");
@@ -556,12 +555,18 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   ) => {
     setImportDrafts((previousDrafts) =>
       previousDrafts.map((draft) =>
-        draft.id === rowId ? { ...draft, [field]: value } : draft,
+        draft.id === rowId
+          ? {
+              ...draft,
+              [field]: value,
+              send: field === "email" && !isValidImportEmail(String(value).trim()) ? false : draft.send,
+            }
+          : draft,
       ),
     );
   };
 
-  const invalidImportDraftCount = importDrafts.filter((draft) => !isValidImportEmail(draft.email.trim())).length;
+  const invalidImportDraftCount = importDrafts.filter(importDraftHasEmailError).length;
   const activeImportDraftCount = importDrafts.filter((draft) => draft.send).length;
 
   const confirmCampaignRecipientImport = async () => {
@@ -701,8 +706,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   const saveContact = async (recipient: CampaignRecipientRow) => {
     const draft = contactDrafts[recipient.id] ?? campaignRecipientDraft(recipient);
-    if (!draft.email.trim()) {
-      setCampaignContactMessage("Emailul contactului este obligatoriu.");
+    if (draft.status === "active" && !draft.email.trim()) {
+      setCampaignContactMessage("Adaugă email înainte să activezi contactul.");
       return;
     }
 
@@ -730,7 +735,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                   firstName: nameParts.firstName,
                   lastName: nameParts.lastName,
                   clientType: draft.segment === "past_customer" ? "tip_1" : "tip_2",
-                  status: draft.status === "suppressed" ? "suppressed" : "ready",
+                  status: draft.status === "suppressed" ? "suppressed" : draft.contact_name.trim() ? "ready" : "needs_contact_name",
                 }
               : currentRecipient,
           ),
@@ -2131,7 +2136,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
                   {importDrafts.map((draft) => {
-                    const invalidEmail = !isValidImportEmail(draft.email.trim());
+                    const invalidEmail = importDraftHasEmailError(draft);
                     return (
                       <tr key={draft.id} className={draft.send ? "bg-surface" : "bg-surface-muted/70 text-foreground/50"}>
                         <td className="px-3 py-2">

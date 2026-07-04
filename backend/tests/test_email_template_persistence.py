@@ -115,7 +115,7 @@ class FakeCommunicationsRepository:
         return [
             recipient
             for recipient in self.campaign_recipients
-            if recipient.email.lower() in emails
+            if recipient.email is not None and recipient.email.lower() in emails
         ]
 
     async def add_campaign_recipients(
@@ -163,7 +163,7 @@ class FakeCommunicationsRepository:
             (
                 recipient
                 for recipient in self.campaign_recipients
-                if recipient.email.lower() == email.lower()
+                if recipient.email is not None and recipient.email.lower() == email.lower()
             ),
             None,
         )
@@ -282,6 +282,31 @@ async def test_bulk_create_campaign_recipients_deduplicates_by_email() -> None:
         "new@example.com",
     ]
     assert repository.campaign_recipients[1].contact_name == "New Contact"
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_campaign_recipients_allows_suppressed_contacts_without_email() -> None:
+    repository = FakeCommunicationsRepository()
+    service = make_service(repository)
+
+    recipients = await service.bulk_create_campaign_recipients(
+        CampaignRecipientBulkCreateRequest(
+            recipients=[
+                CampaignRecipientCreateRequest(
+                    email=None,
+                    contact_name="No Email",
+                    organization_name="Missing Mail Org",
+                    segment="potential_customer",
+                    status="suppressed",
+                    source="excel_import",
+                ),
+            ]
+        )
+    )
+
+    assert len(recipients) == 1
+    assert recipients[0].email is None
+    assert recipients[0].status == CampaignRecipientStatus.suppressed
 
 
 def persisted_campaign() -> Campaign:

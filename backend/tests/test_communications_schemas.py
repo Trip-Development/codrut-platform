@@ -32,11 +32,18 @@ def test_campaign_recipient_bulk_request_normalizes_romanian_import_rows() -> No
                     "Organizație": "Example",
                     "Email": "not an email",
                 },
+                {
+                    "De trimis": "Nu",
+                    "Primul prenume": "Fără",
+                    "Nume de familie": "Email",
+                    "Tip Client": "Nu e client",
+                    "Organizație": "Missing Email",
+                },
             ]
         }
     )
 
-    assert len(payload.recipients) == 2
+    assert len(payload.recipients) == 4
     recipient = payload.recipients[0]
     assert recipient.email == "andreicristian.popescu@genpact.com"
     assert recipient.contact_name == "Andrei Cristian Popescu"
@@ -49,3 +56,10 @@ def test_campaign_recipient_bulk_request_normalizes_romanian_import_rows() -> No
     assert suppressed.contact_name == "Maria Ionescu"
     assert suppressed.segment == "past_customer"
     assert suppressed.status == "suppressed"
+    invalid = payload.recipients[2]
+    assert invalid.email is None
+    assert invalid.status == "suppressed"
+    missing = payload.recipients[3]
+    assert missing.email is None
+    assert missing.contact_name == "Fără Email"
+    assert missing.status == "suppressed"

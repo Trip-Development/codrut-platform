@@ -120,12 +120,25 @@ class EmailOpsSummaryResponse(BaseModel):
 
 
 class CampaignRecipientCreateRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr | None = None
     contact_name: str | None = None
     organization_name: str | None = None
     segment: str  # "past_customer" | "potential_customer"
     status: str | None = None
     source: str | None = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_email_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def require_email_for_active_recipient(self) -> "CampaignRecipientCreateRequest":
+        if (self.status is None or self.status == "active") and self.email is None:
+            raise ValueError("Active campaign recipients require an email.")
+        return self
 
 
 CAMPAIGN_RECIPIENT_IMPORT_HEADERS = {
@@ -210,22 +223,25 @@ def _campaign_recipient_contact_name(row: dict[str, object]) -> str:
 
 def _normalize_campaign_recipient_import_row(row: dict[str, object]) -> dict[str, object] | None:
     email = _read_import_value(row, ["email", "Email", "EMAIL"])
-    if not email:
-        return None if _is_spreadsheet_import_row(row) else row
-    if _is_spreadsheet_import_row(row) and not _is_valid_import_email(email):
-        return None
+    is_spreadsheet_row = _is_spreadsheet_import_row(row)
+    if not email and not is_spreadsheet_row:
+        return row
+
+    marked_for_send = _is_marked_for_campaign_send(row)
+    email_is_valid = bool(email) and _is_valid_import_email(email)
+    status = "active" if marked_for_send and email_is_valid else "suppressed"
 
     segment_value = _read_import_value(row, ["segment", "Segment", "Tip Client"])
     return {
         **row,
-        "email": email,
+        "email": email if email_is_valid else None,
         "contact_name": _campaign_recipient_contact_name(row) or None,
         "organization_name": _read_import_value(
             row,
             ["company", "companie", "Company", "Companie", "Organizație", "Organizatie"],
         ) or None,
         "segment": _campaign_recipient_segment(segment_value),
-        "status": "active" if _is_marked_for_campaign_send(row) else "suppressed",
+        "status": status,
         "source": _read_import_value(row, ["source", "Source"]) or "excel_import",
     }
 
@@ -261,6 +277,13 @@ class CampaignRecipientUpdateRequest(BaseModel):
     status: str | None = None
     source: str | None = Field(default=None, max_length=255)
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_email_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
 
 class CampaignRecipientEventCreateRequest(BaseModel):
     event_type: CampaignRecipientEventType
@@ -284,7 +307,7 @@ class CampaignSendRequest(BaseModel):
 
 class CampaignSendRecipientResult(BaseModel):
     recipient_id: UUID
-    email: EmailStr
+    email: str
     status: str
     message_id: str | None = None
     error: str | None = None
