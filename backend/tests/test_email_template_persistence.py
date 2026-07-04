@@ -232,7 +232,7 @@ def persisted_template(
 
 
 @pytest.mark.asyncio
-async def test_bulk_create_campaign_recipients_deduplicates_by_email() -> None:
+async def test_bulk_create_campaign_recipients_dedupes_email_last_row_wins() -> None:
     repository = FakeCommunicationsRepository()
     existing = CampaignRecipient(
         id=uuid.uuid4(),
@@ -281,7 +281,51 @@ async def test_bulk_create_campaign_recipients_deduplicates_by_email() -> None:
         "existing@example.com",
         "new@example.com",
     ]
-    assert repository.campaign_recipients[1].contact_name == "New Contact"
+    assert repository.campaign_recipients[1].contact_name == "Duplicate Contact"
+    assert repository.campaign_recipients[1].organization_name == "Duplicate Org"
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_campaign_recipients_reports_created_and_updated_counts() -> None:
+    repository = FakeCommunicationsRepository()
+    existing = CampaignRecipient(
+        id=uuid.uuid4(),
+        email="existing@example.com",
+        contact_name="Existing Contact",
+        organization_name="Existing Org",
+        segment="potential_customer",
+        source="manual",
+    )
+    repository.campaign_recipients.append(existing)
+    service = make_service(repository)
+
+    result = await service.bulk_create_campaign_recipients_with_result(
+        CampaignRecipientBulkCreateRequest(
+            recipients=[
+                CampaignRecipientCreateRequest(
+                    email="new@example.com",
+                    contact_name="New Contact",
+                    organization_name="New Org",
+                    segment="potential_customer",
+                    source="csv",
+                ),
+                CampaignRecipientCreateRequest(
+                    email="existing@example.com",
+                    contact_name="Existing Again",
+                    organization_name="Existing Org Updated",
+                    segment="past_customer",
+                    source="csv",
+                ),
+            ]
+        )
+    )
+
+    assert result.created == 1
+    assert result.updated == 1
+    assert len(result.recipients) == 2
+    assert existing.contact_name == "Existing Again"
+    assert existing.organization_name == "Existing Org Updated"
+    assert existing.segment == "past_customer"
 
 
 @pytest.mark.asyncio
@@ -570,6 +614,23 @@ async def test_update_campaign_recipient_rejects_duplicate_email() -> None:
 
     assert exc_info.value.code == "campaign_recipient_email_exists"
     assert recipient.email == "first@example.com"
+
+
+@pytest.mark.asyncio
+async def test_update_campaign_recipient_preserves_unsubscribe_status() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient(status=CampaignRecipientStatus.unsubscribed)
+    repository.campaign_recipients.append(recipient)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.update_campaign_recipient(
+            recipient.id,
+            CampaignRecipientUpdateRequest(status="active"),
+        )
+
+    assert exc_info.value.code == "campaign_recipient_unsubscribe_preserved"
+    assert recipient.status == CampaignRecipientStatus.unsubscribed
 
 
 @pytest.mark.asyncio

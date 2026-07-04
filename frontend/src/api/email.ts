@@ -290,7 +290,7 @@ export type CampaignRecipientRow = {
   lastName?: string;
   email: string;
   clientType: "tip_1" | "tip_2" | "tip_3" | "tip_4";
-  status: "ready" | "needs_contact_name" | "suppressed" | "sent";
+  status: "ready" | "needs_contact_name" | "suppressed" | "unsubscribed" | "sent";
   openRate?: string;
   clickRate?: string;
   viewRate?: string;
@@ -442,11 +442,20 @@ export type CampaignRecipientCreate = {
   source?: string;
 };
 
-export type CampaignRecipientUpdate = Partial<CampaignRecipientCreate> & {
+export type CampaignRecipientBulkCreateResponse = {
+  status: "success";
+  count: number;
+  created?: number;
+  updated?: number;
+};
+
+export type CampaignRecipientUpdate = Omit<Partial<CampaignRecipientCreate>, "status"> & {
   status?: "active" | "suppressed" | "unsubscribed";
 };
 
-export async function bulkCreateCampaignRecipientsOnServer(recipients: CampaignRecipientCreate[]) {
+export async function bulkCreateCampaignRecipientsOnServer(
+  recipients: CampaignRecipientCreate[],
+): Promise<CampaignRecipientBulkCreateResponse> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/bulk`, {
       method: "POST",
@@ -457,14 +466,14 @@ export async function bulkCreateCampaignRecipientsOnServer(recipients: CampaignR
     });
     if (!response.ok) {
       if (isDemoFallbackEnabled()) {
-        return { success: true, count: recipients.length };
+        return { status: "success", count: recipients.length, created: recipients.length, updated: 0 };
       }
       throw new Error(`Failed to upload recipients: ${response.status}`);
     }
     return await response.json();
   } catch (err) {
     if (isDemoFallbackEnabled()) {
-      return { success: true, count: recipients.length };
+      return { status: "success", count: recipients.length, created: recipients.length, updated: 0 };
     }
     throw err;
   }

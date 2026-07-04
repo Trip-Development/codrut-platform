@@ -68,6 +68,13 @@ SYSTEM_TEMPLATE_REQUIRED_VARS = {
 CAMPAIGN_CALENDLY_URL = "https://calendly.com/andreivacaru/intalnire-de-apropiere"
 
 
+@dataclass(frozen=True)
+class CampaignRecipientBulkCreateResult:
+    recipients: list[CampaignRecipient]
+    created: int
+    updated: int
+
+
 def extract_placeholders(text: str) -> set[str]:
     return set(PLACEHOLDER_PATTERN.findall(text))
 
@@ -326,6 +333,13 @@ class CommunicationsService:
         self,
         payload: CampaignRecipientBulkCreateRequest,
     ) -> list[CampaignRecipient]:
+        result = await self.bulk_create_campaign_recipients_with_result(payload)
+        return result.recipients
+
+    async def bulk_create_campaign_recipients_with_result(
+        self,
+        payload: CampaignRecipientBulkCreateRequest,
+    ) -> CampaignRecipientBulkCreateResult:
         repository = self._require_repository()
 
         recipients_by_email: dict[str, CampaignRecipient] = {}
@@ -361,17 +375,14 @@ class CommunicationsService:
                     )
                 )
                 continue
-            status_provided_by_email.setdefault(normalized_email, req.status is not None)
-            recipients_by_email.setdefault(
-                normalized_email,
-                CampaignRecipient(
-                    email=normalized_email,
-                    contact_name=req.contact_name,
-                    organization_name=req.organization_name,
-                    segment=req.segment,
-                    source=req.source,
-                    status=recipient_status,
-                ),
+            status_provided_by_email[normalized_email] = req.status is not None
+            recipients_by_email[normalized_email] = CampaignRecipient(
+                email=normalized_email,
+                contact_name=req.contact_name,
+                organization_name=req.organization_name,
+                segment=req.segment,
+                source=req.source,
+                status=recipient_status,
             )
 
         existing = await repository.list_campaign_recipients_by_emails(
@@ -403,7 +414,11 @@ class CommunicationsService:
         recipients_to_create.extend(recipients_without_email)
         if recipients_to_create:
             await repository.add_campaign_recipients(recipients_to_create)
-        return [*existing, *recipients_to_create]
+        return CampaignRecipientBulkCreateResult(
+            recipients=[*existing, *recipients_to_create],
+            created=len(recipients_to_create),
+            updated=len(existing),
+        )
 
     async def update_campaign_recipient(
         self,
@@ -443,12 +458,21 @@ class CommunicationsService:
                 ) from exc
         if payload.status is not None:
             try:
-                recipient.status = CampaignRecipientStatus(payload.status)
+                next_status = CampaignRecipientStatus(payload.status)
             except ValueError as exc:
                 raise DomainError(
                     "Invalid campaign recipient status.",
                     code="campaign_recipient_status_invalid",
                 ) from exc
+            if (
+                recipient.status == CampaignRecipientStatus.unsubscribed
+                and next_status != CampaignRecipientStatus.unsubscribed
+            ):
+                raise DomainError(
+                    "Unsubscribed campaign recipients cannot be reactivated from contact editing.",
+                    code="campaign_recipient_unsubscribe_preserved",
+                )
+            recipient.status = next_status
         if recipient.status == CampaignRecipientStatus.active and not recipient.email:
             raise DomainError(
                 "Active campaign recipients require an email.",
@@ -1019,7 +1043,9 @@ def _campaign_client_type(segment: str) -> str:
 
 
 def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
-    if recipient.status.value in {"suppressed", "unsubscribed"}:
+    if recipient.status == CampaignRecipientStatus.unsubscribed:
+        return "unsubscribed"
+    if recipient.status == CampaignRecipientStatus.suppressed:
         return "suppressed"
     if not recipient.contact_name:
         return "needs_contact_name"

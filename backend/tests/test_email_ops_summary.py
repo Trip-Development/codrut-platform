@@ -240,6 +240,33 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
 
 
 @pytest.mark.asyncio
+async def test_get_email_ops_summary_keeps_unsubscribed_campaign_status() -> None:
+    recipient = CampaignRecipient(
+        id=uuid.uuid4(),
+        email="stop@example.com",
+        contact_name="Stop Contact",
+        organization_name="Compania C",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.unsubscribed,
+    )
+
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.execute.side_effect = [
+        FakeTupleResult([]),
+        FakeScalarsResult([]),
+        FakeScalarsResult([]),
+        FakeScalarsResult([recipient]),
+        FakeScalarsResult([]),
+    ]
+
+    summary = await CommunicationsService(session).get_email_ops_summary()
+
+    [row] = summary["campaign"]["recipients"]
+    assert row["status"] == "unsubscribed"
+
+
+@pytest.mark.asyncio
 async def test_record_campaign_recipient_event_persists_allowed_event() -> None:
     recipient_id = uuid.uuid4()
     occurred_at = datetime.now(UTC)
