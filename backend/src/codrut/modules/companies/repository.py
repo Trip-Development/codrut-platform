@@ -33,7 +33,7 @@ class CompanyRepository:
 
     async def list_company_summaries(
         self,
-        user_id: UUID,
+        user_id: UUID | None = None,
     ) -> list[tuple[Company, int, int, int, int, int]]:
         from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
 
@@ -78,7 +78,7 @@ class CompanyRepository:
             .group_by(CompanyProject.company_id)
             .subquery()
         )
-        result = await self.session.execute(
+        stmt = (
             select(
                 Company,
                 func.coalesce(participant_counts.c.participant_count, 0),
@@ -87,13 +87,18 @@ class CompanyRepository:
                 func.coalesce(assignment_counts.c.completed_count, 0),
                 func.coalesce(assignment_counts.c.scored_count, 0),
             )
-            .join(CompanyMembership, CompanyMembership.company_id == Company.id)
-            .where(CompanyMembership.user_id == user_id)
             .outerjoin(participant_counts, participant_counts.c.company_id == Company.id)
             .outerjoin(project_counts, project_counts.c.company_id == Company.id)
             .outerjoin(assignment_counts, assignment_counts.c.company_id == Company.id)
             .order_by(Company.name)
         )
+        if user_id is not None:
+            stmt = stmt.join(
+                CompanyMembership,
+                CompanyMembership.company_id == Company.id,
+            ).where(CompanyMembership.user_id == user_id)
+        result = await self.session.execute(stmt)
+        result = await self.session.execute(stmt)
         return [
             (
                 company,
@@ -138,15 +143,42 @@ class CompanyRepository:
         )
         return list(result.scalars().all())
 
-    async def list_projects_for_user(self, user_id: UUID) -> list[tuple[CompanyProject, str]]:
-        result = await self.session.execute(
+    async def list_projects_with_company(
+        self,
+        *,
+        user_id: UUID | None = None,
+    ) -> list[tuple[CompanyProject, str]]:
+        stmt = (
             select(CompanyProject, Company.name)
             .join(Company, Company.id == CompanyProject.company_id)
-            .join(CompanyMembership, CompanyMembership.company_id == Company.id)
-            .where(CompanyMembership.user_id == user_id)
             .order_by(CompanyProject.created_at.desc(), CompanyProject.name)
         )
+        if user_id is not None:
+            stmt = stmt.join(
+                CompanyMembership,
+                CompanyMembership.company_id == Company.id,
+            ).where(CompanyMembership.user_id == user_id)
+        result = await self.session.execute(stmt)
         return [(project, company_name) for project, company_name in result.all()]
+
+    async def get_project_by_id(
+        self,
+        project_id: UUID,
+        *,
+        user_id: UUID | None = None,
+    ) -> tuple[CompanyProject, str] | None:
+        stmt = (
+            select(CompanyProject, Company.name)
+            .join(Company, Company.id == CompanyProject.company_id)
+            .where(CompanyProject.id == project_id)
+        )
+        if user_id is not None:
+            stmt = stmt.join(
+                CompanyMembership,
+                CompanyMembership.company_id == Company.id,
+            ).where(CompanyMembership.user_id == user_id)
+        result = await self.session.execute(stmt.limit(1))
+        return result.one_or_none()
 
     async def get_project(
         self,

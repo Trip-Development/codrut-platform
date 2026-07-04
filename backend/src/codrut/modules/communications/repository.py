@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.communications.models import (
@@ -23,11 +23,16 @@ class CommunicationsRepository:
         self,
         *,
         active_only: bool = True,
+        owner_id: UUID | None = None,
     ) -> list[EmailTemplate]:
         stmt = select(EmailTemplate).order_by(
             EmailTemplate.key,
             EmailTemplate.version.desc(),
         )
+        if owner_id is not None:
+            stmt = stmt.where(
+                or_(EmailTemplate.owner_id == owner_id, EmailTemplate.owner_id.is_(None))
+            )
         if active_only:
             stmt = stmt.where(EmailTemplate.active.is_(True))
         result = await self.session.execute(stmt)
@@ -38,10 +43,16 @@ class CommunicationsRepository:
         key: str,
         *,
         version: int | None = None,
+        owner_id: UUID | None = None,
     ) -> EmailTemplate | None:
         stmt = select(EmailTemplate).where(EmailTemplate.key == key)
+        if owner_id is not None:
+            stmt = stmt.where(
+                or_(EmailTemplate.owner_id == owner_id, EmailTemplate.owner_id.is_(None))
+            )
         if version is None:
             stmt = stmt.where(EmailTemplate.active.is_(True)).order_by(
+                EmailTemplate.owner_id.is_(None),
                 EmailTemplate.version.desc()
             )
         else:
@@ -70,9 +81,12 @@ class CommunicationsRepository:
         key: str,
         *,
         except_version: int | None = None,
+        owner_id: UUID | None = None,
     ) -> None:
         # Fetch all templates for this key to modify them in the session
         stmt = select(EmailTemplate).where(EmailTemplate.key == key)
+        if owner_id is not None:
+            stmt = stmt.where(EmailTemplate.owner_id == owner_id)
         result = await self.session.execute(stmt)
         templates = result.scalars().all()
         for template in templates:
@@ -96,6 +110,8 @@ class CommunicationsRepository:
     async def list_campaign_recipients_by_emails(
         self,
         emails: set[str],
+        *,
+        owner_id: UUID | None = None,
     ) -> list[CampaignRecipient]:
         if not emails:
             return []
@@ -103,37 +119,58 @@ class CommunicationsRepository:
             CampaignRecipient.email.is_not(None),
             func.lower(CampaignRecipient.email).in_(emails),
         )
+        if owner_id is not None:
+            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_campaign_recipients(self) -> list[CampaignRecipient]:
+    async def list_campaign_recipients(
+        self,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[CampaignRecipient]:
         stmt = select(CampaignRecipient).order_by(CampaignRecipient.created_at.desc())
+        if owner_id is not None:
+            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_campaign_recipient(self, recipient_id: UUID) -> CampaignRecipient | None:
-        result = await self.session.execute(
-            select(CampaignRecipient).where(CampaignRecipient.id == recipient_id).limit(1)
-        )
+    async def get_campaign_recipient(
+        self,
+        recipient_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> CampaignRecipient | None:
+        stmt = select(CampaignRecipient).where(CampaignRecipient.id == recipient_id)
+        if owner_id is not None:
+            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
+        result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
-    async def get_campaign_recipient_by_email(self, email: str) -> CampaignRecipient | None:
-        result = await self.session.execute(
-            select(CampaignRecipient)
-            .where(func.lower(CampaignRecipient.email) == email.lower())
-            .limit(1)
-        )
+    async def get_campaign_recipient_by_email(
+        self,
+        email: str,
+        *,
+        owner_id: UUID | None = None,
+    ) -> CampaignRecipient | None:
+        stmt = select(CampaignRecipient).where(func.lower(CampaignRecipient.email) == email.lower())
+        if owner_id is not None:
+            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
+        result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
     async def list_campaign_recipients_by_ids(
         self,
         recipient_ids: list[UUID],
+        *,
+        owner_id: UUID | None = None,
     ) -> list[CampaignRecipient]:
         if not recipient_ids:
             return []
-        result = await self.session.execute(
-            select(CampaignRecipient).where(CampaignRecipient.id.in_(recipient_ids))
-        )
+        stmt = select(CampaignRecipient).where(CampaignRecipient.id.in_(recipient_ids))
+        if owner_id is not None:
+            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def list_campaign_recipient_events(self) -> list[CampaignRecipientEvent]:
@@ -154,14 +191,26 @@ class CommunicationsRepository:
         await self.session.flush()
         return campaign
 
-    async def get_campaign(self, campaign_id: UUID) -> Campaign | None:
-        result = await self.session.execute(
-            select(Campaign).where(Campaign.id == campaign_id).limit(1)
-        )
+    async def get_campaign(
+        self,
+        campaign_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> Campaign | None:
+        stmt = select(Campaign).where(Campaign.id == campaign_id)
+        if owner_id is not None:
+            stmt = stmt.where(Campaign.owner_id == owner_id)
+        result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
-    async def list_campaigns(self) -> list[Campaign]:
+    async def list_campaigns(
+        self,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[Campaign]:
         stmt = select(Campaign).order_by(Campaign.created_at.desc())
+        if owner_id is not None:
+            stmt = stmt.where(Campaign.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

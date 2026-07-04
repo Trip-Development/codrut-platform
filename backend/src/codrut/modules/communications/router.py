@@ -133,7 +133,10 @@ async def get_email_template(
     version: int | None = None,
 ) -> EmailTemplateResponse:
     _require_trainer(principal)
-    template = await CommunicationsService(session).get_template(key, version=version)
+    template = await CommunicationsService(session).get_template(
+        key,
+        version=version,
+    )
     await session.commit()
     return template
 
@@ -162,7 +165,9 @@ async def update_email_template(
 ) -> EmailTemplateResponse:
     _require_trainer(principal)
     template = await CommunicationsService(session).update_template(
-        key, payload, version=version
+        key,
+        payload,
+        version=version,
     )
     await session.commit()
     return template
@@ -176,7 +181,10 @@ async def activate_email_template(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> EmailTemplateResponse:
     _require_trainer(principal)
-    template = await CommunicationsService(session).activate_template(key, version)
+    template = await CommunicationsService(session).activate_template(
+        key,
+        version,
+    )
     await session.commit()
     return template
 
@@ -189,7 +197,10 @@ async def retire_email_template(
     version: int | None = None,
 ) -> EmailTemplateResponse:
     _require_trainer(principal)
-    template = await CommunicationsService(session).retire_template(key, version=version)
+    template = await CommunicationsService(session).retire_template(
+        key,
+        version=version,
+    )
     await session.commit()
     return template
 
@@ -213,7 +224,7 @@ async def bulk_create_campaign_recipients(
 ) -> dict:
     _require_trainer(principal)
     result = await CommunicationsService(session).bulk_create_campaign_recipients_with_result(
-        payload
+        payload,
     )
     await session.commit()
     return {
@@ -255,7 +266,9 @@ async def delete_campaign_recipient(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> Response:
     _require_trainer(principal)
-    await CommunicationsService(session).delete_campaign_recipient(recipient_id)
+    await CommunicationsService(session).delete_campaign_recipient(
+        recipient_id,
+    )
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -441,7 +454,9 @@ async def create_campaign(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> dict:
     _require_trainer(principal)
-    campaign = await CommunicationsService(session).create_campaign(payload)
+    campaign = await CommunicationsService(session).create_campaign(
+        payload,
+    )
     await session.commit()
     return {"status": "success", "campaign_id": str(campaign.id)}
 
@@ -473,7 +488,10 @@ async def update_campaign(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> dict:
     _require_trainer(principal)
-    campaign = await CommunicationsService(session).update_campaign(campaign_id, payload)
+    campaign = await CommunicationsService(session).update_campaign(
+        campaign_id,
+        payload,
+    )
     await session.commit()
     return {
         "id": str(campaign.id),

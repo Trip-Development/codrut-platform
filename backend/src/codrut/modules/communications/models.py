@@ -103,6 +103,11 @@ class CampaignRecipient(TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("email"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)
     contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     organization_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -136,6 +141,11 @@ class Campaign(TimestampMixin, Base):
     __tablename__ = "campaigns"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     segment: Mapped[CampaignRecipientSegment] = mapped_column(
         Enum(CampaignRecipientSegment),

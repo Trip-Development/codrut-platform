@@ -16,10 +16,13 @@ from codrut.modules.communications.campaign_tracking import (
     create_campaign_tracking_token,
 )
 from codrut.modules.communications.models import (
+    Campaign,
     CampaignRecipient,
     CampaignRecipientSegment,
     CampaignRecipientStatus,
+    CampaignStatus,
 )
+from codrut.modules.communications.service import CommunicationsService
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 
@@ -136,6 +139,32 @@ def test_campaign_delete_requires_trainer_role() -> None:
     response = client.delete(f"/api/communications/campaigns/{uuid4()}")
 
     assert response.status_code == 403
+
+
+def test_trainer_can_list_campaigns(monkeypatch) -> None:
+    campaign_id = uuid4()
+
+    async def list_campaigns_override(self) -> list[Campaign]:
+        return [
+            Campaign(
+                id=campaign_id,
+                name="Campanie pilot",
+                segment=CampaignRecipientSegment.potential_customer,
+                status=CampaignStatus.ready,
+                subject="Salut",
+                html_body="<p>Salut</p>",
+                text_body="Salut",
+            )
+        ]
+
+    monkeypatch.setattr(CommunicationsService, "list_campaigns", list_campaigns_override)
+    client = _client_as(UserRole.trainer)
+
+    response = client.get("/api/communications/campaigns")
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == str(campaign_id)
+    assert response.json()[0]["name"] == "Campanie pilot"
 
 
 def test_campaign_asset_upload_requires_trainer_role() -> None:

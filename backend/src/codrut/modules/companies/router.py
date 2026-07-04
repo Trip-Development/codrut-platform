@@ -42,7 +42,7 @@ async def list_companies(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanyResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_companies(principal.user_id)
+    return await CompanyService(session).list_all_companies()
 
 
 @router.get("/summary", response_model=list[CompanySummaryResponse])
@@ -51,7 +51,7 @@ async def list_company_summaries(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanySummaryResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_company_summaries(principal.user_id)
+    return await CompanyService(session).list_company_summaries()
 
 
 @router.get("/projects", response_model=list[CompanyProjectListItemResponse])
@@ -60,7 +60,17 @@ async def list_all_company_projects(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[CompanyProjectListItemResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_all_projects(principal.user_id)
+    return await CompanyService(session).list_all_projects()
+
+
+@router.get("/projects/{project_id}", response_model=CompanyProjectListItemResponse)
+async def get_company_project_by_id(
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CompanyProjectListItemResponse:
+    require_trainer_principal(principal)
+    return await CompanyService(session).get_project_by_id(project_id)
 
 
 @router.post("", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
