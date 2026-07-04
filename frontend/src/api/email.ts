@@ -438,6 +438,7 @@ export type CampaignRecipientCreate = {
   contact_name?: string;
   organization_name?: string;
   segment: "past_customer" | "potential_customer";
+  status?: "active" | "suppressed";
   source?: string;
 };
 
@@ -600,8 +601,8 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
         "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
         [
           `<p><a href="${safeLandingUrl}" style="display:block;text-decoration:none;color:inherit;">`,
-          `<span style="display:block;position:relative;max-width:620px;border-radius:16px;overflow:hidden;background:#2b211f;">`,
-          `<img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;width:100%;max-width:620px;height:auto;border:0;border-radius:16px;" />`,
+          `<span style="display:block;position:relative;max-width:420px;border-radius:14px;overflow:hidden;background:#2b211f;">`,
+          `<img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" />`,
           `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
           "</span>",
           "</a></p>",

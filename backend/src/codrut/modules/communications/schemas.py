@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Literal
 from urllib.parse import urlparse
@@ -123,11 +124,133 @@ class CampaignRecipientCreateRequest(BaseModel):
     contact_name: str | None = None
     organization_name: str | None = None
     segment: str  # "past_customer" | "potential_customer"
+    status: str | None = None
     source: str | None = None
+
+
+CAMPAIGN_RECIPIENT_IMPORT_HEADERS = {
+    "de trimis",
+    "primul prenume",
+    "al doilea prenume",
+    "nume de familie",
+    "tip client",
+    "organizație",
+    "organizatie",
+    "telefon",
+    "funcția",
+    "functia",
+}
+
+
+def _normalize_import_key(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
+def _normalize_import_value(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def _read_import_value(row: dict[str, object], keys: list[str]) -> str:
+    wanted_keys = {_normalize_import_key(key) for key in keys}
+    for key, value in row.items():
+        if _normalize_import_key(str(key)) in wanted_keys:
+            normalized_value = _normalize_import_value(value)
+            if normalized_value:
+                return normalized_value
+    return ""
+
+
+def _is_spreadsheet_import_row(row: dict[str, object]) -> bool:
+    return any(
+        _normalize_import_key(str(key)) in CAMPAIGN_RECIPIENT_IMPORT_HEADERS
+        for key in row
+    )
+
+
+def _is_marked_for_campaign_send(row: dict[str, object]) -> bool:
+    send_value = _read_import_value(row, ["De trimis"])
+    if not send_value:
+        return True
+    return _normalize_import_key(send_value) in {"da", "yes", "y", "1", "true"}
+
+
+def _is_valid_import_email(value: str) -> bool:
+    return re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value) is not None
+
+
+def _campaign_recipient_segment(value: str) -> str:
+    normalized = _normalize_import_key(value)
+    if (
+        "nu e client" in normalized
+        or "nu este client" in normalized
+        or "non-client" in normalized
+        or "potential" in normalized
+        or "potențial" in normalized
+    ):
+        return "potential_customer"
+    if "past" in normalized or "client" in normalized:
+        return "past_customer"
+    return "potential_customer"
+
+
+def _campaign_recipient_contact_name(row: dict[str, object]) -> str:
+    explicit_name = _read_import_value(row, ["name", "nume", "Name", "Nume"])
+    if explicit_name:
+        return explicit_name
+    return " ".join(
+        value
+        for value in [
+            _read_import_value(row, ["Primul prenume"]),
+            _read_import_value(row, ["Al doilea prenume"]),
+            _read_import_value(row, ["Nume de familie"]),
+        ]
+        if value
+    )
+
+
+def _normalize_campaign_recipient_import_row(row: dict[str, object]) -> dict[str, object] | None:
+    email = _read_import_value(row, ["email", "Email", "EMAIL"])
+    if not email:
+        return None if _is_spreadsheet_import_row(row) else row
+    if _is_spreadsheet_import_row(row) and not _is_valid_import_email(email):
+        return None
+
+    segment_value = _read_import_value(row, ["segment", "Segment", "Tip Client"])
+    return {
+        **row,
+        "email": email,
+        "contact_name": _campaign_recipient_contact_name(row) or None,
+        "organization_name": _read_import_value(
+            row,
+            ["company", "companie", "Company", "Companie", "Organizație", "Organizatie"],
+        ) or None,
+        "segment": _campaign_recipient_segment(segment_value),
+        "status": "active" if _is_marked_for_campaign_send(row) else "suppressed",
+        "source": _read_import_value(row, ["source", "Source"]) or "excel_import",
+    }
 
 
 class CampaignRecipientBulkCreateRequest(BaseModel):
     recipients: list[CampaignRecipientCreateRequest]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_import_rows(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        recipients = value.get("recipients")
+        if not isinstance(recipients, list):
+            return value
+
+        normalized_recipients: list[object] = []
+        for recipient in recipients:
+            if isinstance(recipient, dict):
+                normalized = _normalize_campaign_recipient_import_row(recipient)
+                if normalized is not None:
+                    normalized_recipients.append(normalized)
+            else:
+                normalized_recipients.append(recipient)
+        return {**value, "recipients": normalized_recipients}
 
 
 class CampaignRecipientUpdateRequest(BaseModel):
