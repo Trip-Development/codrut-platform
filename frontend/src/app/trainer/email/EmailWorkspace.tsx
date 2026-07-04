@@ -21,6 +21,7 @@ import {
   type EmailOpsSummary,
   type AssessmentDeliveryRow,
   type CampaignRecipientRow,
+  type CampaignRecipientCreate,
   type CampaignSendResponse,
   type EmailCampaign,
   type EmailTemplate
@@ -186,6 +187,101 @@ type CampaignContactDraft = {
   organization_name: string;
   segment: "past_customer" | "potential_customer";
 };
+
+type CampaignRecipientImportResult = {
+  recipients: CampaignRecipientCreate[];
+  skippedBySendFlag: number;
+  skippedMissingEmail: number;
+};
+
+function normalizeImportKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeImportValue(value: unknown): string {
+  return value == null ? "" : String(value).trim();
+}
+
+function readImportValue(row: Record<string, unknown>, keys: string[]): string {
+  const wantedKeys = new Set(keys.map(normalizeImportKey));
+  for (const [key, value] of Object.entries(row)) {
+    if (wantedKeys.has(normalizeImportKey(key))) {
+      const normalizedValue = normalizeImportValue(value);
+      if (normalizedValue) {
+        return normalizedValue;
+      }
+    }
+  }
+  return "";
+}
+
+function isMarkedForCampaignSend(row: Record<string, unknown>): boolean {
+  const sendValue = readImportValue(row, ["De trimis"]);
+  if (!sendValue) {
+    return true;
+  }
+  return ["da", "yes", "y", "1", "true"].includes(normalizeImportKey(sendValue));
+}
+
+function importSegmentFromValue(value: string): "past_customer" | "potential_customer" {
+  const normalized = normalizeImportKey(value);
+  if (!normalized) {
+    return "potential_customer";
+  }
+  if (
+    normalized.includes("nu e client")
+    || normalized.includes("nu este client")
+    || normalized.includes("non-client")
+    || normalized.includes("potential")
+    || normalized.includes("potențial")
+  ) {
+    return "potential_customer";
+  }
+  if (normalized.includes("past") || normalized.includes("client")) {
+    return "past_customer";
+  }
+  return "potential_customer";
+}
+
+function importContactName(row: Record<string, unknown>): string {
+  const explicitName = readImportValue(row, ["name", "nume", "Name", "Nume"]);
+  if (explicitName) {
+    return explicitName;
+  }
+  return [
+    readImportValue(row, ["Primul prenume"]),
+    readImportValue(row, ["Al doilea prenume"]),
+    readImportValue(row, ["Nume de familie"]),
+  ].filter(Boolean).join(" ");
+}
+
+export function buildCampaignRecipientImport(rows: Record<string, unknown>[]): CampaignRecipientImportResult {
+  return rows.reduce<CampaignRecipientImportResult>(
+    (result, row) => {
+      if (!isMarkedForCampaignSend(row)) {
+        result.skippedBySendFlag += 1;
+        return result;
+      }
+
+      const email = readImportValue(row, ["email", "Email", "EMAIL"]);
+      if (!email) {
+        result.skippedMissingEmail += 1;
+        return result;
+      }
+
+      const segmentValue = readImportValue(row, ["segment", "Segment", "Tip Client"]);
+      result.recipients.push({
+        email,
+        contact_name: importContactName(row) || undefined,
+        organization_name: readImportValue(row, ["company", "companie", "Company", "Companie", "Organizație"]) || undefined,
+        segment: importSegmentFromValue(segmentValue),
+        source: "excel_import",
+      });
+      return result;
+    },
+    { recipients: [], skippedBySendFlag: 0, skippedMissingEmail: 0 },
+  );
+}
 
 function campaignRecipientName(recipient: CampaignRecipientRow): string {
   return [recipient.firstName, recipient.lastName].filter(Boolean).join(" ");
@@ -367,27 +463,18 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(firstSheet) as Record<string, string>[];
-      
-      const payload = rows.map((row) => {
-        const email = row["email"] || row["Email"] || row["EMAIL"];
-        const name = row["name"] || row["nume"] || row["Name"] || row["Nume"];
-        const company = row["company"] || row["companie"] || row["Company"] || row["Companie"];
-        const segmentStr = row["segment"] || row["Segment"];
-        const segment = segmentStr?.toString().toLowerCase().includes("past") ? "past_customer" : "potential_customer";
-        
-        return {
-          email,
-          contact_name: name,
-          organization_name: company,
-          segment: segment as "past_customer" | "potential_customer",
-        };
-      }).filter(r => r.email);
+      const rows = XLSX.utils.sheet_to_json(firstSheet) as Record<string, unknown>[];
+      const importResult = buildCampaignRecipientImport(rows);
 
-      if (payload.length > 0) {
-        await bulkCreateCampaignRecipientsOnServer(payload);
-        setCampaignContactMessage(`S-au importat ${payload.length} contacte.`);
+      if (importResult.recipients.length > 0) {
+        await bulkCreateCampaignRecipientsOnServer(importResult.recipients);
+        const skippedMessage = importResult.skippedBySendFlag > 0
+          ? ` ${importResult.skippedBySendFlag} rânduri au fost omise pentru că nu sunt marcate cu „De trimis = Da”.`
+          : "";
+        setCampaignContactMessage(`S-au importat ${importResult.recipients.length} contacte.${skippedMessage}`);
         await refreshSummary();
+      } else if (importResult.skippedBySendFlag > 0) {
+        setCampaignContactMessage("Nu există rânduri marcate cu „De trimis = Da”.");
       } else {
         setCampaignContactMessage("Fișierul nu conține coloana email. Folosește un cap de tabel valid.");
       }
