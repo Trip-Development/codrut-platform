@@ -18,10 +18,8 @@ from codrut.modules.communications.campaign_tracking import (
 )
 from codrut.modules.communications.models import (
     CampaignRecipient,
-    CampaignRecipientEvent,
     CampaignRecipientSegment,
     CampaignRecipientStatus,
-    EmailSend,
     EmailSendStatus,
 )
 from codrut.modules.communications.schemas import CampaignRecipientEventCreateRequest
@@ -107,19 +105,7 @@ async def test_get_email_ops_summary_success() -> None:
 
     assignments_result = FakeScalarsResult([assignment_1, assignment_2])
 
-    # 3. EmailSends
-    send_1 = EmailSend(
-        assignment_id=assignment_1.id,
-        recipient_email="ana@example.com",
-        template_key="account_setup",
-        template_version=1,
-        provider="test",
-        provider_message_id="test:1",
-        status=EmailSendStatus.accepted,
-        created_at=datetime.now(UTC) - timedelta(days=4),
-    )
-
-    sends_result = FakeScalarsResult([send_1])
+    sends_result = FakeTupleResult([("ana@example.com", EmailSendStatus.accepted)])
 
     # Setup session
     session = MagicMock()
@@ -129,7 +115,8 @@ async def test_get_email_ops_summary_success() -> None:
         assignments_result,
         sends_result,
         FakeScalarsResult([]),
-        FakeScalarsResult([]),
+        FakeTupleResult([]),
+        FakeTupleResult([]),
     ]
 
     service = CommunicationsService(session)
@@ -178,47 +165,21 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
         source="variant_a",
         status=CampaignRecipientStatus.active,
     )
-    events = [
-        CampaignRecipientEvent(
-            recipient_id=recipient_id,
-            event_type="opened",
-            variant_key="variant_a",
-            occurred_at=datetime.now(UTC) - timedelta(hours=4),
-        ),
-        CampaignRecipientEvent(
-            recipient_id=recipient_id,
-            event_type="clicked",
-            variant_key="variant_a",
-            occurred_at=datetime.now(UTC) - timedelta(hours=3),
-        ),
-        CampaignRecipientEvent(
-            recipient_id=recipient_id,
-            event_type="video_viewed",
-            variant_key="variant_a",
-            occurred_at=datetime.now(UTC) - timedelta(hours=2),
-        ),
-        CampaignRecipientEvent(
-            recipient_id=recipient_id,
-            event_type="calendly_clicked",
-            variant_key="variant_a",
-            occurred_at=datetime.now(UTC) - timedelta(hours=1),
-        ),
-        CampaignRecipientEvent(
-            recipient_id=recipient_id,
-            event_type="replied",
-            variant_key="variant_a",
-            occurred_at=datetime.now(UTC),
-        ),
-    ]
-
     session = MagicMock()
     session.execute = AsyncMock()
     session.execute.side_effect = [
         FakeTupleResult([]),
         FakeScalarsResult([]),
-        FakeScalarsResult([]),
+        FakeTupleResult([]),
         FakeScalarsResult([recipient]),
-        FakeScalarsResult(events),
+        FakeTupleResult([
+            (recipient_id, "opened", 1),
+            (recipient_id, "clicked", 1),
+            (recipient_id, "video_viewed", 1),
+            (recipient_id, "calendly_clicked", 1),
+            (recipient_id, "replied", 1),
+        ]),
+        FakeTupleResult([(recipient_id, "variant_a")]),
     ]
 
     summary = await CommunicationsService(session).get_email_ops_summary()
@@ -255,9 +216,10 @@ async def test_get_email_ops_summary_keeps_unsubscribed_campaign_status() -> Non
     session.execute.side_effect = [
         FakeTupleResult([]),
         FakeScalarsResult([]),
-        FakeScalarsResult([]),
+        FakeTupleResult([]),
         FakeScalarsResult([recipient]),
-        FakeScalarsResult([]),
+        FakeTupleResult([]),
+        FakeTupleResult([]),
     ]
 
     summary = await CommunicationsService(session).get_email_ops_summary()

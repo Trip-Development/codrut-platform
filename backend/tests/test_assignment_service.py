@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import pytest
@@ -15,6 +16,7 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.assignments.schemas import (
     AssignmentCreateRequest,
+    AssignmentStatusUpdateRequest,
     TeamMembershipCreateRequest,
 )
 from codrut.modules.assignments.service import (
@@ -31,6 +33,7 @@ from codrut.modules.companies.models import (
     ParticipantReportingRelationship,
     ProjectMembership,
 )
+from codrut.modules.forms.models import QuestionnaireResponse, QuestionnaireResponseStatus
 from codrut.modules.identity.models import User
 
 
@@ -88,6 +91,16 @@ class FakeAssignmentRepository:
         assignment.id = uuid.uuid4()
         self.assignments.append(assignment)
         return assignment
+
+    async def get_assignment(
+        self,
+        company_id: uuid.UUID,
+        assignment_id: uuid.UUID,
+    ) -> QuestionnaireAssignment | None:
+        for assignment in self.assignments:
+            if assignment.company_id == company_id and assignment.id == assignment_id:
+                return assignment
+        return None
 
     async def get_matching_assignment(
         self,
@@ -209,6 +222,7 @@ class FakeFormsRepository:
     def __init__(self) -> None:
         self.active_keys: set[str] = set()
         self.persisted_keys: set[str] = set()
+        self.responses_by_assignment: dict[uuid.UUID, QuestionnaireResponse] = {}
 
     async def get_definition(self, key: str) -> object | None:
         if key in self.active_keys:
@@ -218,6 +232,25 @@ class FakeFormsRepository:
     async def get_latest_version(self, key: str) -> int:
         return 1 if key in self.persisted_keys or key in self.active_keys else 0
 
+    async def unlock_response_for_assignment(
+        self,
+        assignment_id: uuid.UUID,
+    ) -> QuestionnaireResponse | None:
+        response = self.responses_by_assignment.get(assignment_id)
+        if response is None:
+            return None
+        response.status = QuestionnaireResponseStatus.draft
+        response.submitted_at = None
+        return response
+
+
+class FakeScoringRepository:
+    def __init__(self) -> None:
+        self.deleted_assignment_ids: list[uuid.UUID] = []
+
+    async def delete_by_assignment(self, assignment_id: uuid.UUID) -> None:
+        self.deleted_assignment_ids.append(assignment_id)
+
 
 def make_assignment_service(
     *,
@@ -225,12 +258,14 @@ def make_assignment_service(
     company_repository: FakeCompanyRepository,
     forms_repository: FakeFormsRepository | None = None,
     identity_repository: FakeIdentityRepository | None = None,
+    scoring_repository: FakeScoringRepository | None = None,
 ) -> AssignmentService:
     service = AssignmentService(cast(Any, None))
     service.assignment_repository = cast(Any, assignment_repository)
     service.company_repository = cast(Any, company_repository)
     service.forms_repository = cast(Any, forms_repository or FakeFormsRepository())
     service.identity_repository = cast(Any, identity_repository or FakeIdentityRepository())
+    service.scoring_repository = cast(Any, scoring_repository or FakeScoringRepository())
     return service
 
 
@@ -514,6 +549,61 @@ async def test_create_assignment_rejects_project_from_another_company() -> None:
         )
 
     assert exc_info.value.code == "project_not_found"
+
+
+async def test_reopening_completed_assignment_unlocks_response_and_clears_score() -> None:
+    (
+        service,
+        assignment_repository,
+        _company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    forms_repository = FakeFormsRepository()
+    scoring_repository = FakeScoringRepository()
+    service.forms_repository = cast(Any, forms_repository)
+    service.scoring_repository = cast(Any, scoring_repository)
+    now = datetime.now(UTC)
+    assignment = QuestionnaireAssignment(
+        id=uuid.uuid4(),
+        company_id=company_id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="lencioni",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.scored,
+        submitted_at=now,
+        validated_at=now,
+        scored_at=now,
+    )
+    assignment_repository.assignments.append(assignment)
+    response = QuestionnaireResponse(
+        id=uuid.uuid4(),
+        assignment_id=assignment.id,
+        questionnaire_key="lencioni",
+        questionnaire_version=1,
+        status=QuestionnaireResponseStatus.submitted,
+        answers={"lencioni_q01": 3},
+        submitted_at=now,
+    )
+    forms_repository.responses_by_assignment[assignment.id] = response
+
+    updated = await service.update_assignment_status(
+        user_id,
+        company_id,
+        assignment.id,
+        AssignmentStatusUpdateRequest(status=AssignmentStatus.started),
+    )
+
+    assert updated.status == AssignmentStatus.started
+    assert updated.submitted_at is None
+    assert updated.validated_at is None
+    assert updated.scored_at is None
+    assert response.status == QuestionnaireResponseStatus.draft
+    assert response.submitted_at is None
+    assert scoring_repository.deleted_assignment_ids == [assignment.id]
 
 
 async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_teams() -> None:

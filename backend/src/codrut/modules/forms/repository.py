@@ -33,6 +33,15 @@ class FormsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_assignment_by_id(
+        self,
+        assignment_id: UUID,
+    ) -> QuestionnaireAssignment | None:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment).where(QuestionnaireAssignment.id == assignment_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_participant_for_user(self, user_id: UUID) -> ParticipantProfile | None:
         result = await self.session.execute(
             select(ParticipantProfile).where(ParticipantProfile.user_id == user_id)
@@ -83,6 +92,17 @@ class FormsRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def unlock_response_for_assignment(
+        self,
+        assignment_id: UUID,
+    ) -> QuestionnaireResponse | None:
+        response = await self.get_response_by_assignment(assignment_id)
+        if response is None:
+            return None
+        response.status = QuestionnaireResponseStatus.draft
+        response.submitted_at = None
+        return response
 
     async def get_project_for_assignment(
         self,

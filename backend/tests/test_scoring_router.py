@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
+from codrut.modules.companies.models import CompanyMembershipRole
+from codrut.modules.forms.models import QuestionnaireResponseStatus
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.scoring.models import ScoringResult
@@ -15,6 +18,7 @@ class FakeQuestionnaireResponse:
     questionnaire_key: str
     questionnaire_version: int
     answers: dict[str, Any]
+    status: QuestionnaireResponseStatus = QuestionnaireResponseStatus.submitted
 
 
 @dataclass
@@ -22,7 +26,18 @@ class FakeQuestionnaireDefinition:
     schema: dict[str, Any]
 
 
+@dataclass
+class FakeAssignment:
+    company_id: uuid.UUID
+
+
+@dataclass
+class FakeCompanyMembership:
+    role: CompanyMembershipRole
+
+
 class FakeFormsRepository:
+    company_id = uuid.uuid4()
     response = FakeQuestionnaireResponse(
         questionnaire_key="custom_lencioni",
         questionnaire_version=7,
@@ -42,6 +57,12 @@ class FakeFormsRepository:
     def __init__(self, _session: object) -> None:
         return None
 
+    async def get_assignment_by_id(
+        self,
+        _assignment_id: uuid.UUID,
+    ) -> FakeAssignment:
+        return FakeAssignment(company_id=self.company_id)
+
     async def get_response_by_assignment(
         self,
         _assignment_id: uuid.UUID,
@@ -57,6 +78,20 @@ class FakeFormsRepository:
         assert key == self.response.questionnaire_key
         assert version == self.response.questionnaire_version
         return self.definition
+
+
+class FakeCompanyRepository:
+    membership: FakeCompanyMembership | None = FakeCompanyMembership(CompanyMembershipRole.owner)
+
+    def __init__(self, _session: object) -> None:
+        return None
+
+    async def get_membership(
+        self,
+        _company_id: uuid.UUID,
+        _user_id: uuid.UUID,
+    ) -> FakeCompanyMembership | None:
+        return self.membership
 
 
 class FakeScoringService:
@@ -91,7 +126,15 @@ class FakeSession:
 async def test_lazy_scoring_uses_response_version_and_persisted_definition_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    FakeFormsRepository.response = FakeQuestionnaireResponse(
+        questionnaire_key="custom_lencioni",
+        questionnaire_version=7,
+        answers={"custom_q01": 3},
+        status=QuestionnaireResponseStatus.submitted,
+    )
+    FakeCompanyRepository.membership = FakeCompanyMembership(CompanyMembershipRole.owner)
     monkeypatch.setattr("codrut.modules.scoring.router.FormsRepository", FakeFormsRepository)
+    monkeypatch.setattr("codrut.modules.scoring.router.CompanyRepository", FakeCompanyRepository)
     monkeypatch.setattr("codrut.modules.scoring.router.ScoringService", FakeScoringService)
     assignment_id = uuid.uuid4()
     session = FakeSession()
@@ -117,3 +160,58 @@ async def test_lazy_scoring_uses_response_version_and_persisted_definition_schem
         "answers": {"custom_q01": 3},
         "definition_schema": FakeFormsRepository.definition.schema,
     }
+
+
+@pytest.mark.asyncio
+async def test_lazy_scoring_refuses_draft_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeFormsRepository.response = FakeQuestionnaireResponse(
+        questionnaire_key="custom_lencioni",
+        questionnaire_version=7,
+        answers={"custom_q01": 3},
+        status=QuestionnaireResponseStatus.draft,
+    )
+    FakeCompanyRepository.membership = FakeCompanyMembership(CompanyMembershipRole.owner)
+    monkeypatch.setattr("codrut.modules.scoring.router.FormsRepository", FakeFormsRepository)
+    monkeypatch.setattr("codrut.modules.scoring.router.CompanyRepository", FakeCompanyRepository)
+    monkeypatch.setattr("codrut.modules.scoring.router.ScoringService", FakeScoringService)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_assignment_scoring_result(
+            uuid.uuid4(),
+            SessionPrincipal(
+                user_id=uuid.uuid4(),
+                email="trainer@example.com",
+                role=UserRole.trainer,
+                session_token="test-token",  # noqa: S106
+            ),
+            FakeSession(),  # type: ignore[arg-type]
+        )
+
+    assert getattr(exc_info.value, "status_code", None) == 404
+
+
+@pytest.mark.asyncio
+async def test_trainer_scoring_result_requires_company_membership(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeCompanyRepository.membership = None
+    monkeypatch.setattr("codrut.modules.scoring.router.FormsRepository", FakeFormsRepository)
+    monkeypatch.setattr("codrut.modules.scoring.router.CompanyRepository", FakeCompanyRepository)
+    monkeypatch.setattr("codrut.modules.scoring.router.ScoringService", FakeScoringService)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_assignment_scoring_result(
+            uuid.uuid4(),
+            SessionPrincipal(
+                user_id=uuid.uuid4(),
+                email="trainer@example.com",
+                role=UserRole.trainer,
+                session_token="test-token",  # noqa: S106
+            ),
+            FakeSession(),  # type: ignore[arg-type]
+        )
+
+    assert exc_info.value.status_code == 403
+    FakeCompanyRepository.membership = FakeCompanyMembership(CompanyMembershipRole.owner)
