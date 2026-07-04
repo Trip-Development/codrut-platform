@@ -26,6 +26,7 @@ import {
   type EmailCampaign,
   type EmailTemplate
 } from "@/api/email";
+import { readSpreadsheetFile, spreadsheetRowsToObjects } from "@/utils/spreadsheet-import";
 
 type TabKey = "delivery" | "campaigns" | "templates";
 
@@ -584,14 +585,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     if (!file) return;
     setIsUploadingCSV(true);
     try {
-      const XLSX = await import("xlsx");
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
-      const sheetName = selectCampaignRecipientImportSheetName(workbook.SheetNames);
-      const selectedSheet = sheetName ? workbook.Sheets[sheetName] : undefined;
-      const rows = selectedSheet
-        ? XLSX.utils.sheet_to_json(selectedSheet) as Record<string, unknown>[]
-        : [];
+      const spreadsheet = await readSpreadsheetFile(file, selectCampaignRecipientImportSheetName);
+      const sheetName = spreadsheet.sheetName;
+      const rows = spreadsheetRowsToObjects(spreadsheet.rows);
       const drafts = buildCampaignRecipientImportDrafts(rows);
 
       if (drafts.length > 0) {
@@ -599,7 +595,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         setImportSheetName(sheetName ?? null);
         setImportDrafts(drafts);
         setCampaignContactMessage(
-          `Previzualizare ${drafts.length} contacte din sheet-ul ${sheetName}.${invalidCount > 0 ? ` ${invalidCount} emailuri trebuie corectate.` : ""}`,
+          `Previzualizare ${drafts.length} contacte din sheet-ul ${sheetName ?? "selectat"}.${invalidCount > 0 ? ` ${invalidCount} emailuri trebuie corectate.` : ""}`,
         );
       } else {
         setCampaignContactMessage("Fișierul nu conține contacte de importat.");
@@ -1434,7 +1430,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 )}
                 <input 
                   type="file" 
-                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   className="hidden" 
                   onChange={handleFileUpload}
                   disabled={isUploadingCSV}

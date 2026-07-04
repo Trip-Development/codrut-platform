@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getAllCompanyProjects } from "@/api/companies";
+import { getCompanyProjectById } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
@@ -15,8 +15,7 @@ export default async function ProjectLayout({
 }) {
   const { projectId } = await params;
   const requestOptions = await getServerApiRequestOptions();
-  const projects = await getAllCompanyProjects(requestOptions);
-  const project = projects.find((item) => item.id === projectId);
+  const project = await getCompanyProjectById(projectId, requestOptions);
 
   if (!project) {
     notFound();

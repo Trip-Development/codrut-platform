@@ -171,6 +171,25 @@ class FakeCompanyRepository:
             if project.company_id in companies and project.company_id in company_ids
         ]
 
+    async def get_project_by_id(
+        self,
+        project_id: uuid.UUID,
+        *,
+        user_id: uuid.UUID | None = None,
+    ) -> tuple[CompanyProject, str] | None:
+        company_ids = {
+            membership.company_id
+            for membership in self.memberships
+            if membership.user_id == user_id
+        } if user_id is not None else None
+        for project in self.projects:
+            if (
+                project.id == project_id
+                and (company_ids is None or project.company_id in company_ids)
+            ):
+                return project, self.companies_by_id[project.company_id].name
+        return None
+
     async def get_project(
         self,
         company_id: uuid.UUID,
@@ -419,6 +438,42 @@ async def test_list_company_summaries_returns_operational_counts() -> None:
     assert summaries[0].stage == "completion"
 
 
+async def test_get_project_by_id_returns_any_project_with_company_name_for_trainers() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership"),
+    )
+
+    result = await service.get_project_by_id(project.id)
+
+    assert result.id == project.id
+    assert result.company_id == company.id
+    assert result.company_name == "Client"
+
+
+async def test_get_project_by_id_can_still_filter_by_membership_for_future_tenancy() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    other_owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership"),
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.get_project_by_id(project.id, user_id=other_owner_id)
+
+    assert exc_info.value.code == "project_not_found"
+
+
 @pytest.mark.asyncio
 async def test_list_company_summaries_counts_roster_and_assignments_from_database() -> None:
     try:
@@ -505,7 +560,7 @@ async def test_delete_company_removes_company_and_related_local_records() -> Non
     assert repository.projects == []
 
 
-async def test_trainer_without_company_membership_cannot_delete_company() -> None:
+async def test_trainer_without_company_membership_can_delete_company_for_pilot() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -519,11 +574,9 @@ async def test_trainer_without_company_membership_cannot_delete_company() -> Non
     identity_repository.users_by_id[trainer.id] = trainer
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.delete_company(trainer.id, company.id)
+    await service.delete_company(trainer.id, company.id)
 
-    assert exc_info.value.code == "company_access_denied"
-    assert await repository.get_company(company.id) == company
+    assert await repository.get_company(company.id) is None
 
 
 async def test_create_project_is_company_scoped_and_cleans_fields() -> None:
@@ -633,7 +686,7 @@ async def test_delete_project_removes_only_that_project() -> None:
     assert await service.list_projects(owner_id, company.id) == [second]
 
 
-async def test_trainer_without_company_membership_cannot_manage_projects() -> None:
+async def test_trainer_without_company_membership_can_manage_projects_for_pilot() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -647,14 +700,13 @@ async def test_trainer_without_company_membership_cannot_manage_projects() -> No
     identity_repository.users_by_id[trainer.id] = trainer
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.create_project(
-            trainer.id,
-            company.id,
-            CompanyProjectCreateRequest(name="Leadership"),
-        )
+    project = await service.create_project(
+        trainer.id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership"),
+    )
 
-    assert exc_info.value.code == "company_access_denied"
+    assert project.name == "Leadership"
 
 
 async def test_create_participant_is_company_scoped_and_cleans_fields() -> None:
@@ -707,7 +759,7 @@ async def test_create_participant_rejects_missing_company() -> None:
         )
 
 
-async def test_create_participant_rejects_trainer_without_company_membership() -> None:
+async def test_create_participant_allows_trainer_without_company_membership_for_pilot() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
@@ -720,14 +772,13 @@ async def test_create_participant_rejects_trainer_without_company_membership() -
     )
     service.identity_repository.users_by_id[trainer.id] = trainer
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.create_participant(
-            trainer.id,
-            company.id,
-            ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
-        )
+    participant = await service.create_participant(
+        trainer.id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
 
-    assert exc_info.value.code == "company_access_denied"
+    assert participant.full_name == "Ana"
 
 
 async def test_create_participant_rejects_non_trainer_without_company_membership() -> None:

@@ -44,6 +44,7 @@ from codrut.modules.companies.schemas import (
     RosterImportResponse,
     RosterImportRow,
 )
+from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.repository import IdentityRepository
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,10 @@ class CompanyService:
     async def list_all_companies(self) -> list[Company]:
         return await self.repository.list_all_companies()
 
-    async def list_company_summaries(self, user_id: UUID) -> list[CompanySummaryResponse]:
+    async def list_company_summaries(
+        self,
+        user_id: UUID | None = None,
+    ) -> list[CompanySummaryResponse]:
         return [
             CompanySummaryResponse(
                 id=company.id,
@@ -102,7 +106,10 @@ class CompanyService:
         await self._require_company_manager(user_id, company_id)
         await self.repository.delete_company(company)
 
-    async def list_all_projects(self, user_id: UUID) -> list[CompanyProjectListItemResponse]:
+    async def list_all_projects(
+        self,
+        user_id: UUID | None = None,
+    ) -> list[CompanyProjectListItemResponse]:
         return [
             CompanyProjectListItemResponse(
                 id=project.id,
@@ -119,8 +126,36 @@ class CompanyService:
                 created_at=project.created_at,
                 updated_at=project.updated_at,
             )
-            for project, company_name in await self.repository.list_projects_for_user(user_id)
+            for project, company_name in await self.repository.list_projects_with_company(
+                user_id=user_id
+            )
         ]
+
+    async def get_project_by_id(
+        self,
+        project_id: UUID,
+        *,
+        user_id: UUID | None = None,
+    ) -> CompanyProjectListItemResponse:
+        result = await self.repository.get_project_by_id(project_id, user_id=user_id)
+        if result is None:
+            raise DomainError("Project not found.", code="project_not_found")
+        project, company_name = result
+        return CompanyProjectListItemResponse(
+            id=project.id,
+            company_id=project.company_id,
+            company_name=company_name,
+            name=project.name,
+            description=project.description,
+            project_type=project.project_type,
+            status=project.status,
+            starts_at=project.starts_at,
+            due_at=project.due_at,
+            form_opens_at=project.form_opens_at,
+            form_closes_at=project.form_closes_at,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
+        )
 
     async def list_projects(
         self,
@@ -1073,6 +1108,9 @@ class CompanyService:
             raise DomainError("Project not found in this company.", code="project_not_found")
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
+        user = await self.identity_repository.get_user_by_id(user_id)
+        if user is not None and user.role == UserRole.trainer:
+            return
         membership = await self.repository.get_membership(company_id, user_id)
         if membership is not None and membership.role in {
             CompanyMembershipRole.owner,
