@@ -65,6 +65,7 @@ SYSTEM_TEMPLATE_REQUIRED_VARS = {
     "account_setup": {"participant_name", "trainer_name", "company_name", "action_url"},
     "assignment_bundle": {"participant_name", "company_name", "task_count", "action_url"},
 }
+CAMPAIGN_CALENDLY_URL = "https://calendly.com/andreivacaru/intalnire-de-apropiere"
 
 
 def extract_placeholders(text: str) -> set[str]:
@@ -328,8 +329,21 @@ class CommunicationsService:
         repository = self._require_repository()
 
         recipients_by_email: dict[str, CampaignRecipient] = {}
+        status_provided_by_email: dict[str, bool] = {}
         for req in payload.recipients:
             normalized_email = req.email.lower()
+            status_provided_by_email.setdefault(normalized_email, req.status is not None)
+            try:
+                recipient_status = (
+                    CampaignRecipientStatus(req.status)
+                    if req.status is not None
+                    else CampaignRecipientStatus.active
+                )
+            except ValueError as exc:
+                raise DomainError(
+                    "Invalid campaign recipient status.",
+                    code="campaign_recipient_status_invalid",
+                ) from exc
             recipients_by_email.setdefault(
                 normalized_email,
                 CampaignRecipient(
@@ -338,6 +352,7 @@ class CommunicationsService:
                     organization_name=req.organization_name,
                     segment=req.segment,
                     source=req.source,
+                    status=recipient_status,
                 ),
             )
 
@@ -350,6 +365,19 @@ class CommunicationsService:
             for email, recipient in recipients_by_email.items()
             if email not in existing_by_email
         ]
+        for email, recipient in recipients_by_email.items():
+            existing_recipient = existing_by_email.get(email)
+            if existing_recipient is None:
+                continue
+            existing_recipient.contact_name = recipient.contact_name
+            existing_recipient.organization_name = recipient.organization_name
+            existing_recipient.segment = recipient.segment
+            existing_recipient.source = recipient.source
+            if (
+                status_provided_by_email.get(email, False)
+                and existing_recipient.status != CampaignRecipientStatus.unsubscribed
+            ):
+                existing_recipient.status = recipient.status
         if recipients_to_create:
             await repository.add_campaign_recipients(recipients_to_create)
         return [*existing, *recipients_to_create]
@@ -1004,12 +1032,23 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
+    if CAMPAIGN_CALENDLY_URL not in html_body:
+        html_body += (
+            '<p style="margin-top:24px;">'
+            f'<a href="{CAMPAIGN_CALENDLY_URL}" '
+            'style="display:inline-block;background:#890505;color:#ffffff;'
+            'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
+            "Programează o discuție"
+            "</a></p>"
+        )
     if "font-family:Inter,Arial,sans-serif" not in html_body:
         html_body = (
             EMAIL_SHELL_OPEN
             + html_body
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
+    if CAMPAIGN_CALENDLY_URL not in text_body:
+        text_body = f"{text_body}\n\nProgramează o discuție: {CAMPAIGN_CALENDLY_URL}"
     text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
     return EmailMessage(
         to=EmailAddress(recipient.email),

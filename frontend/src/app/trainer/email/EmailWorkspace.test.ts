@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCampaignRecipientImport,
+  buildCampaignRecipientImportDrafts,
   renderEmailTemplatePreviewBody,
   replacePreviewPlaceholders,
+  selectCampaignRecipientImportSheetName,
 } from "./EmailWorkspace";
 
 describe("renderEmailTemplatePreviewBody", () => {
@@ -51,7 +53,7 @@ describe("renderEmailTemplatePreviewBody", () => {
 });
 
 describe("buildCampaignRecipientImport", () => {
-  it("normalizes the Romanian campaign recipient template and skips rows not marked for sending", () => {
+  it("normalizes the Romanian campaign recipient template and suppresses rows not marked for sending", () => {
     const result = buildCampaignRecipientImport([
       {
         "De trimis": "Da",
@@ -72,6 +74,14 @@ describe("buildCampaignRecipientImport", () => {
         "Organizație": "Example",
         "Email": "maria@example.com",
       },
+      {
+        "De trimis": "Da",
+        "Primul prenume": "Invalid",
+        "Nume de familie": "Email",
+        "Tip Client": "Nu e client",
+        "Organizație": "Example",
+        "Email": "not an email",
+      },
     ]);
 
     expect(result).toEqual({
@@ -81,11 +91,21 @@ describe("buildCampaignRecipientImport", () => {
           contact_name: "Andrei Cristian Popescu",
           organization_name: "(Genpact) Vodaphone",
           segment: "potential_customer",
+          status: "active",
+          source: "excel_import",
+        },
+        {
+          email: "maria@example.com",
+          contact_name: "Maria Ionescu",
+          organization_name: "Example",
+          segment: "past_customer",
+          status: "suppressed",
           source: "excel_import",
         },
       ],
-      skippedBySendFlag: 1,
+      skippedBySendFlag: 0,
       skippedMissingEmail: 0,
+      skippedInvalidEmail: 1,
     });
   });
 
@@ -105,8 +125,38 @@ describe("buildCampaignRecipientImport", () => {
         contact_name: "Client Existing",
         organization_name: "Client Co",
         segment: "past_customer",
+        status: "active",
         source: "excel_import",
       },
     ]);
+  });
+
+  it("builds editable import drafts with original send flags", () => {
+    const drafts = buildCampaignRecipientImportDrafts([
+      {
+        "De trimis": "Nu",
+        "Primul prenume": "Maria",
+        "Nume de familie": "Ionescu",
+        "Tip Client": "Client",
+        "Organizație": "Example",
+        "Email": "",
+      },
+    ]);
+
+    expect(drafts[0]).toMatchObject({
+      rowNumber: 2,
+      contact_name: "Maria Ionescu",
+      organization_name: "Example",
+      segment: "past_customer",
+      send: false,
+    });
+  });
+
+  it("prefers the Revised sheet from the campaign workbook", () => {
+    expect(selectCampaignRecipientImportSheetName([
+      "Extragere Nume din Document",
+      "Revised",
+      "Sheet2",
+    ])).toBe("Revised");
   });
 });

@@ -289,6 +289,44 @@ describe("buildReportAggregation", () => {
     ).toEqual([]);
   });
 
+  it("does not count legacy 360 result keys as reportable iCARE aggregate scores", () => {
+    const aggregation = buildReportAggregation(
+      [assignment("legacy-360", "boss_360", "scored", "2026-06-11T09:00:00Z")],
+      new Map([
+        [
+          "legacy-360",
+          result("legacy-360", {
+            inspiring: { score: 75 },
+            create_trust: { score: 80 },
+            awareness: { score: 65 },
+            results: { score: 90 },
+            empowerment: { score: 85 },
+          }),
+        ],
+      ]),
+    );
+
+    expect(aggregation.totalCompleted).toBe(1);
+    expect(aggregation.boss360Count).toBe(0);
+    expect(
+      findReportAggregationMismatches(
+        {
+          total_assigned: aggregation.totalAssigned,
+          total_completed: aggregation.totalCompleted,
+          completion_rate: aggregation.completionRate,
+          lencioni_count: aggregation.lencioniCount,
+          driver_count: aggregation.driverCount,
+          boss_360_count: 0,
+          lencioni_averages: aggregation.lencioniAverages,
+          driver_averages: aggregation.driverAverages,
+          boss_360_averages: aggregation.boss360Averages,
+          results: [],
+        },
+        aggregation,
+      ),
+    ).toEqual([]);
+  });
+
   it("surfaces count mismatches instead of silently preferring the larger value", () => {
     const aggregation = buildReportAggregation(
       [assignment("score", "lencioni", "scored", "2026-06-11T09:00:00Z")],

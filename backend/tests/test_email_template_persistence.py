@@ -45,6 +45,7 @@ from codrut.modules.communications.templates import (
     get_transactional_template,
 )
 from codrut.modules.companies.models import ParticipantProfile
+from codrut.modules.identity import models as _identity_models  # noqa: F401
 
 
 class FakeCommunicationsRepository:
