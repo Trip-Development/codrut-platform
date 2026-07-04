@@ -16,6 +16,7 @@ CampaignRecipientEventType = Literal[
     "calendly_clicked",
     "replied",
 ]
+CampaignSegmentValue = Literal["past_customer", "potential_customer"]
 
 
 class EmailTestSendRequest(BaseModel):
@@ -124,7 +125,7 @@ class CampaignRecipientCreateRequest(BaseModel):
     email: EmailStr | None = None
     contact_name: str | None = None
     organization_name: str | None = None
-    segment: str  # "past_customer" | "potential_customer"
+    segment: CampaignSegmentValue
     status: str | None = None
     source: str | None = None
 
@@ -389,7 +390,7 @@ class CampaignAssetUploadResponse(BaseModel):
 
 class CampaignCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    segment: str
+    segment: CampaignSegmentValue
     subject: str = Field(min_length=1, max_length=255)
     html_body: str = Field(min_length=1)
     text_body: str = Field(min_length=1)

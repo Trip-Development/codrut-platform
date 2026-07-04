@@ -26,7 +26,10 @@ export default async function TaskRunnerPage({ params, searchParams }: TaskRunne
 
   // 2. Fetch the corresponding questionnaire definition based on the key
   const definition = responseRecord
-    ? await getQuestionnaireDefinition(responseRecord.questionnaire_key, requestOptions)
+    ? await getQuestionnaireDefinition(
+        `${responseRecord.questionnaire_key}@${responseRecord.questionnaire_version}`,
+        requestOptions,
+      )
     : null;
 
   if (secureInvite) {

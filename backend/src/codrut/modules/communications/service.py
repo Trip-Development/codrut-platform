@@ -703,6 +703,16 @@ class CommunicationsService:
         token: str,
         settings: Settings,
     ) -> CampaignRecipient:
+        recipient = await self.get_campaign_unsubscribe_recipient(token, settings)
+        recipient.status = CampaignRecipientStatus.unsubscribed
+        await self._require_repository().flush()
+        return recipient
+
+    async def get_campaign_unsubscribe_recipient(
+        self,
+        token: str,
+        settings: Settings,
+    ) -> CampaignRecipient:
         repository = self._require_repository()
         claims = parse_campaign_recipient_action_token(token, settings)
         if claims.action != "unsubscribe":
@@ -713,8 +723,6 @@ class CommunicationsService:
         recipient = await repository.get_campaign_recipient(claims.recipient_id)
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
-        recipient.status = CampaignRecipientStatus.unsubscribed
-        await repository.flush()
         return recipient
 
     async def _campaign_send_recipients(

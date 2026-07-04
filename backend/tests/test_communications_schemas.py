@@ -1,4 +1,11 @@
-from codrut.modules.communications.schemas import CampaignRecipientBulkCreateRequest
+import pytest
+from pydantic import ValidationError
+
+from codrut.modules.communications.schemas import (
+    CampaignCreateRequest,
+    CampaignRecipientBulkCreateRequest,
+    CampaignRecipientCreateRequest,
+)
 
 
 def test_campaign_recipient_bulk_request_normalizes_romanian_import_rows() -> None:
@@ -106,3 +113,28 @@ def test_campaign_recipient_bulk_request_accepts_name_surname_aliases() -> None:
     assert payload.recipients[1].status == "active"
     assert payload.recipients[2].contact_name == "Full Name Fallback"
     assert payload.recipients[2].status == "suppressed"
+
+
+def test_campaign_recipient_create_rejects_invalid_segment() -> None:
+    with pytest.raises(ValidationError):
+        CampaignRecipientCreateRequest.model_validate(
+            {
+                "email": "ana@example.com",
+                "contact_name": "Ana",
+                "organization_name": "Example",
+                "segment": "not_a_segment",
+            }
+        )
+
+
+def test_campaign_create_rejects_invalid_segment() -> None:
+    with pytest.raises(ValidationError):
+        CampaignCreateRequest.model_validate(
+            {
+                "name": "Campanie",
+                "segment": "not_a_segment",
+                "subject": "Subiect",
+                "html_body": "<p>Test</p>",
+                "text_body": "Test",
+            }
+        )

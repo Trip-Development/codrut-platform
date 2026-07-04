@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,7 +21,7 @@ describe("CompaniesWorkspace", () => {
     vi.clearAllMocks();
   });
 
-  it("renders backend companies without resurrecting stale local companies", async () => {
+  it("renders backend companies without refetching or resurrecting stale local companies", async () => {
     window.localStorage.setItem(
       "codrut_local_companies",
       JSON.stringify([{ id: "local-company", name: "Local-only client" }]),
@@ -43,10 +43,9 @@ describe("CompaniesWorkspace", () => {
       />,
     );
 
-    await waitFor(() => expect(getCompanyList).toHaveBeenCalled());
-
     expect(screen.getByText("Michelin")).toBeTruthy();
     expect(screen.queryByText("Local-only client")).toBeNull();
+    expect(getCompanyList).not.toHaveBeenCalled();
   });
 
   it("keeps destructive company actions out of the company grid", async () => {

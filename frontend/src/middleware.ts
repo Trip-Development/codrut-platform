@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const protectedPrefixes = ["/participant", "/trainer"];
+const devPrefixes = ["/dev"];
 const publicPaths = new Set(["/trainer/login"]);
 
 function isDemoFallbackEnabled(request: NextRequest): boolean {
@@ -22,6 +23,13 @@ export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-codrut-pathname", pathname);
+
+  const isDevPath = devPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  if (isDevPath && !isDemoFallbackEnabled(request)) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   const isProtectedPath = protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -49,5 +57,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/trainer/:path*", "/participant/:path*"],
+  matcher: ["/trainer/:path*", "/participant/:path*", "/dev/:path*"],
 };
