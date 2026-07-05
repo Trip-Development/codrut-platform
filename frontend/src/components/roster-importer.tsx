@@ -12,6 +12,7 @@ import {
   type RosterInviteResult,
 } from "@/api/companies";
 import { normalizeReportsToName } from "@/api/roster-format";
+import { ModalLayer } from "@/components/ui/modal-layer";
 import { readSpreadsheetFile, type SpreadsheetCell } from "@/utils/spreadsheet-import";
 
 type CompanyOption = {
@@ -1150,12 +1151,22 @@ export function RosterImporter({
 
       {/* Add Company Modal */}
       {showAddCompanyModal && !lockCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <ModalLayer
+          labelledBy="roster-add-company-title"
+          onClose={() => {
+            if (!isCreatingCompany) {
+              setShowAddCompanyModal(false);
+              setNewCompanyName("");
+            }
+          }}
+          closeOnBackdrop={!isCreatingCompany}
+          panelClassName="max-w-md"
+        >
           <form
             onSubmit={handleAddCompany}
-            className="w-full max-w-md rounded-xl border border-[var(--border)] bg-surface p-6 shadow-xl space-y-4"
+            className="space-y-4"
           >
-            <h3 className="text-lg font-semibold text-foreground">Adaugă companie nouă</h3>
+            <h3 id="roster-add-company-title" className="text-lg font-semibold text-foreground">Adaugă companie nouă</h3>
 
             <div className="space-y-1">
               <label className="text-xs font-semibold text-foreground/60">Nume companie / organizație</label>
@@ -1189,7 +1200,7 @@ export function RosterImporter({
               </button>
             </div>
           </form>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

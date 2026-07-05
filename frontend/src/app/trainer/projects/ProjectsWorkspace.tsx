@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { CompanyProject, CompanyProjectStatus } from "@/api/companies";
 import { ProjectCardLink } from "@/components/projects/project-card";
+import { useUrlState } from "@/hooks/use-url-state";
 
 type ProjectFilters = {
   q?: string;
@@ -21,12 +22,23 @@ type ProjectsWorkspaceProps = {
 };
 
 export function ProjectsWorkspace({ projects, initialFilters, companies, projectTypes }: ProjectsWorkspaceProps) {
+  const urlState = useUrlState();
+  const { get, searchKey, setParam } = urlState;
   const [values, setValues] = useState({
     q: initialFilters.q ?? "",
     company: initialFilters.company ?? "",
     status: initialFilters.status ?? "",
     type: initialFilters.type ?? "",
   });
+
+  useEffect(() => {
+    setValues({
+      q: get("q") ?? "",
+      company: get("company") ?? "",
+      status: get("status") ?? "",
+      type: get("type") ?? "",
+    });
+  }, [get, searchKey]);
 
   const filteredProjects = useMemo(() => {
     const query = values.q.trim().toLowerCase();
@@ -44,6 +56,7 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
 
   function updateValue(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
+    setParam(key, value, "replace");
   }
 
   return (

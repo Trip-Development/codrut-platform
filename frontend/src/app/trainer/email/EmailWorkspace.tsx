@@ -26,9 +26,20 @@ import {
   type EmailCampaign,
   type EmailTemplate
 } from "@/api/email";
+import { ModalLayer } from "@/components/ui/modal-layer";
+import { useUrlState } from "@/hooks/use-url-state";
 import { readSpreadsheetFile, spreadsheetRowsToObjects } from "@/utils/spreadsheet-import";
 
 type TabKey = "delivery" | "campaigns" | "templates";
+type CampaignViewKey = "contacts" | "campaigns";
+
+function normalizeEmailTab(value: string | null): TabKey {
+  return value === "delivery" || value === "campaigns" || value === "templates" ? value : "templates";
+}
+
+function normalizeCampaignView(value: string | null): CampaignViewKey {
+  return value === "campaigns" ? "campaigns" : "contacts";
+}
 
 
 const MOCK_REPLACEMENTS: Record<string, string> = {
@@ -418,9 +429,26 @@ type EmailWorkspaceProps = {
 };
 
 export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("templates");
+  const { get, searchKey, setParam, setParams } = useUrlState();
+  const [activeTab, setActiveTabState] = useState<TabKey>(normalizeEmailTab(get("tab")));
   const [summary, setSummary] = useState<EmailOpsSummary>(initialSummary);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  function setActiveTab(tab: TabKey) {
+    setActiveTabState(tab);
+    setParams(
+      {
+        tab: tab === "templates" ? null : tab,
+        modal: null,
+        campaignId: null,
+      },
+      "push",
+    );
+  }
+
+  useEffect(() => {
+    setActiveTabState(normalizeEmailTab(get("tab")));
+  }, [get, searchKey]);
 
   const refreshSummary = async () => {
     setIsRefreshing(true);
@@ -435,9 +463,14 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   // Template Manager States
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateIdState] = useState<string>(get("templateId") ?? "");
   const [isEditing, setIsEditing] = useState(false);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+
+  function setSelectedTemplateId(templateId: string) {
+    setSelectedTemplateIdState(templateId);
+    setParam("templateId", templateId || null, "push");
+  }
 
   // Editor fields
   const [editName, setEditName] = useState("");
@@ -453,9 +486,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
-  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [showCampaignModal, setShowCampaignModal] = useState(get("modal") === "new-campaign" || get("modal") === "edit-campaign");
   const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
-  const [campaignView, setCampaignView] = useState<"contacts" | "campaigns">("contacts");
+  const [campaignView, setCampaignViewState] = useState<CampaignViewKey>(normalizeCampaignView(get("view")));
   const [campaignName, setCampaignName] = useState("Campanie video leadership");
   const [campaignSegment, setCampaignSegment] = useState<"past_customer" | "potential_customer">("potential_customer");
   const [campaignTemplateId, setCampaignTemplateId] = useState("");
@@ -477,6 +510,22 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [contactDrafts, setContactDrafts] = useState<Record<string, CampaignContactDraft>>({});
   const [savingContactId, setSavingContactId] = useState<string | null>(null);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
+
+  function setCampaignView(view: CampaignViewKey) {
+    setCampaignViewState(view);
+    setParam("view", view === "contacts" ? null : view, "push");
+  }
+
+  function closeCampaignModal(mode: "push" | "replace" = "push") {
+    setShowCampaignModal(false);
+    setEditingCampaign(null);
+    setParams({ modal: null, campaignId: null }, mode);
+  }
+
+  function closeManualAddModal(mode: "push" | "replace" = "push") {
+    setShowManualAddModal(false);
+    setParam("modal", null, mode);
+  }
 
   const activeCampaignRecipientIdSet = useMemo(
     () =>
@@ -529,6 +578,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     resetCampaignModal();
     setCampaignMessage(null);
     setShowCampaignModal(true);
+    setParams({ tab: "campaigns", modal: "new-campaign", campaignId: null }, "push");
   }
 
   function openEditCampaignModal(campaign: EmailCampaign) {
@@ -545,10 +595,51 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setCampaignAssetMessage(null);
     setCampaignMessage(null);
     setShowCampaignModal(true);
+    setParams({ tab: "campaigns", view: "campaigns", modal: "edit-campaign", campaignId: campaign.id }, "push");
   }
 
+  useEffect(() => {
+    setSelectedTemplateIdState(get("templateId") ?? "");
+    setCampaignViewState(normalizeCampaignView(get("view")));
+    setShowManualAddModal(get("modal") === "add-contact");
+
+    const modal = get("modal");
+    if (modal === "new-campaign") {
+      if (!showCampaignModal || editingCampaign) {
+        resetCampaignModal();
+        setCampaignMessage(null);
+      }
+      setShowCampaignModal(true);
+      return;
+    }
+
+    if (modal === "edit-campaign") {
+      const campaignId = get("campaignId");
+      const campaign = campaignId ? campaigns.find((item) => item.id === campaignId) : null;
+      if (campaign && (!editingCampaign || editingCampaign.id !== campaign.id || !showCampaignModal)) {
+        setEditingCampaign(campaign);
+        setCampaignName(campaign.name);
+        setCampaignSegment(campaign.segment);
+        setCampaignTemplateId("");
+        setCampaignSubject(campaign.subject.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
+        setCampaignBody(campaign.html_body.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
+        setCampaignTextBody(campaign.text_body.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
+        setCampaignVideoUrl(campaign.video_url ?? "");
+        setCampaignThumbnailUrl(campaign.thumbnail_url ?? "");
+        setCampaignLandingUrl(campaign.landing_page_url ?? "");
+        setCampaignAssetMessage(null);
+        setCampaignMessage(null);
+      }
+      setShowCampaignModal(Boolean(campaign));
+      return;
+    }
+
+    setShowCampaignModal(false);
+    setEditingCampaign(null);
+  }, [campaigns, editingCampaign, get, searchKey, showCampaignModal]);
+
   // Manual Add State
-  const [showManualAddModal, setShowManualAddModal] = useState(false);
+  const [showManualAddModal, setShowManualAddModal] = useState(get("modal") === "add-contact");
   const [manualEmail, setManualEmail] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualCompany, setManualCompany] = useState("");
@@ -568,7 +659,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         segment: manualSegment,
       }]);
       setCampaignContactMessage("Contactul a fost adăugat.");
-      setShowManualAddModal(false);
+      closeManualAddModal("replace");
       setManualEmail("");
       setManualName("");
       setManualCompany("");
@@ -728,8 +819,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         await createCampaignOnServer(payload);
         setCampaignMessage("Campania a fost salvată.");
       }
-      setShowCampaignModal(false);
-      setEditingCampaign(null);
+      closeCampaignModal("replace");
       await loadCampaigns();
     } catch (error) {
       setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi salvată.");
@@ -983,7 +1073,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   };
 
   // Search state
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(get("q") ?? "");
+
+  useEffect(() => {
+    setSearchQuery(get("q") ?? "");
+  }, [get, searchKey]);
 
   const filteredTemplates = React.useMemo(() => {
     const visibleTemplates = templates.filter((template) => !template.baseKey.startsWith("template_"));
@@ -1439,7 +1533,10 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => setShowManualAddModal(true)}
+                onClick={() => {
+                  setShowManualAddModal(true);
+                  setParams({ tab: "campaigns", modal: "add-contact" }, "push");
+                }}
               >
                 + Adaugă contact
               </button>
@@ -1750,7 +1847,15 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                           <p>Niciun contact înregistrat încă.</p>
                           <div className="mt-4 flex items-center justify-center gap-3">
                             <span className="text-foreground/40">Importă un fișier CSV sau</span>
-                            <button onClick={() => setShowManualAddModal(true)} className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-burgundy hover:border-burgundy/45 hover:text-burgundy-dark">adaugă manual</button>
+                        <button
+                          onClick={() => {
+                            setShowManualAddModal(true);
+                            setParams({ tab: "campaigns", modal: "add-contact" }, "push");
+                          }}
+                          className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-burgundy hover:border-burgundy/45 hover:text-burgundy-dark"
+                        >
+                          adaugă manual
+                        </button>
                           </div>
                         </td>
                       </tr>
@@ -1773,11 +1878,14 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
                   </svg>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Caută șabloane..."
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setParam("q", e.target.value, "replace");
+                      }}
+                      placeholder="Caută șabloane..."
                     className="control-input control-search w-full py-3 pl-12 pr-4"
                   />
                 </div>
@@ -2056,21 +2164,28 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
 
       {/* New Campaign Modal */}
       {showCampaignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[var(--border)] bg-surface p-6 shadow-2xl">
+        <ModalLayer
+          labelledBy="campaign-modal-title"
+          onClose={() => {
+            if (!isCreatingCampaign) closeCampaignModal();
+          }}
+          closeOnBackdrop={!isCreatingCampaign}
+          panelClassName="max-w-2xl"
+        >
             <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">
                   {editingCampaign ? "Editează campanie" : "Campanie nouă"}
                 </p>
-                <h2 className="mt-2 text-xl font-bold text-foreground">Email video cu thumbnail</h2>
+                <h2 id="campaign-modal-title" className="mt-2 text-xl font-bold text-foreground">Email video cu thumbnail</h2>
                 <p className="mt-2 text-xs font-medium leading-relaxed text-foreground/55">
                   Linkul video poate fi Vimeo. Landing page-ul Codruț este opțional și se folosește doar când vrei tracking sau CTA-uri dedicate.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowCampaignModal(false)}
+                onClick={() => closeCampaignModal()}
+                disabled={isCreatingCampaign}
                 className="rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/60"
               >
                 Închide
@@ -2244,7 +2359,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
               <div className="flex justify-end gap-3 border-t border-[var(--border)] pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowCampaignModal(false)}
+                  onClick={() => closeCampaignModal()}
                   className="rounded-full px-4 py-2 font-bold text-foreground/60 hover:bg-surface-muted"
                 >
                   Anulează
@@ -2254,18 +2369,26 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </ModalLayer>
       )}
 
       {importDrafts.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-surface shadow-2xl">
+        <ModalLayer
+          labelledBy="campaign-import-title"
+          onClose={() => {
+            if (!isImportingContacts) {
+              setImportDrafts([]);
+              setImportSheetName(null);
+            }
+          }}
+          closeOnBackdrop={!isImportingContacts}
+          panelClassName="flex max-w-6xl flex-col overflow-hidden p-0"
+        >
             <div className="border-b border-[var(--border)] bg-surface-muted px-6 py-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Import contacte</p>
-                  <h2 className="mt-1 text-xl font-bold text-foreground">Previzualizare {importSheetName ?? "sheet"}</h2>
+                  <h2 id="campaign-import-title" className="mt-1 text-xl font-bold text-foreground">Previzualizare {importSheetName ?? "sheet"}</h2>
                   <p className="mt-1 text-xs font-semibold text-foreground/55">
                     {importDrafts.length} contacte · {activeImportDraftCount} active · {importDrafts.length - activeImportDraftCount} inactive · {invalidImportDraftCount} emailuri de corectat{duplicateImportDraftEmailCount > 0 ? ` · ${duplicateImportDraftEmailCount} duplicate` : ""}
                   </p>
@@ -2362,15 +2485,20 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+        </ModalLayer>
       )}
 
       {/* Manual Add Contact Modal */}
       {showManualAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm">
-          <div className="bg-surface rounded-xl p-6 shadow-xl w-full max-w-md border border-[var(--border)]">
-            <h2 className="text-xl font-bold text-foreground mb-4">Adaugă Contact Manual</h2>
+        <ModalLayer
+          labelledBy="manual-contact-title"
+          onClose={() => {
+            if (!isAddingManual) closeManualAddModal();
+          }}
+          closeOnBackdrop={!isAddingManual}
+          panelClassName="max-w-md"
+        >
+            <h2 id="manual-contact-title" className="text-xl font-bold text-foreground mb-4">Adaugă contact manual</h2>
             <form onSubmit={handleAddManualContact} className="space-y-4">
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wider text-foreground/60 mb-1 block">Email</span>
@@ -2392,14 +2520,13 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 </select>
               </label>
               <div className="pt-4 flex justify-end gap-3 border-t border-[var(--border)]">
-                <button type="button" onClick={() => setShowManualAddModal(false)} className="rounded-full px-4 py-2 font-bold text-foreground/60 hover:bg-surface-muted">Anulează</button>
+                <button type="button" onClick={() => closeManualAddModal()} disabled={isAddingManual} className="rounded-full px-4 py-2 font-bold text-foreground/60 hover:bg-surface-muted disabled:opacity-50">Anulează</button>
                 <button type="submit" disabled={isAddingManual} className="btn-primary !px-6 !py-2 !rounded-full !text-sm">
                   {isAddingManual ? "Se adaugă..." : "Adaugă contact"}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

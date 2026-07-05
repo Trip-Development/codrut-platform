@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -13,6 +13,8 @@ import {
 } from "@/api/companies";
 import { displayReportsToName, normalizeReportsToName } from "@/api/roster-format";
 import { RosterImporter } from "@/components/roster-importer";
+import { ModalLayer } from "@/components/ui/modal-layer";
+import { useUrlState } from "@/hooks/use-url-state";
 
 type ProjectParticipantsWorkspaceProps = {
   companyId: string;
@@ -53,6 +55,10 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "roster", label: "Roster" },
   { key: "access", label: "Acces intern" },
 ];
+
+function normalizeParticipantsTab(value: string | null): TabKey {
+  return value === "access" ? "access" : "roster";
+}
 
 const emptyManualForm: ManualAddForm = {
   fullName: "",
@@ -122,10 +128,11 @@ export function ProjectParticipantsWorkspace({
   invitationStatuses,
 }: ProjectParticipantsWorkspaceProps) {
   const router = useRouter();
+  const { get, searchKey, setParam, setParams } = useUrlState();
   const [participants, setParticipants] = useState(initialParticipants);
-  const [activeTab, setActiveTab] = useState<TabKey>("roster");
-  const [showAddPanel, setShowAddPanel] = useState(initialParticipants.length === 0);
-  const [showImportModal, setShowImportModal] = useState(false);
+  const [activeTab, setActiveTabState] = useState<TabKey>(normalizeParticipantsTab(get("view")));
+  const [showAddPanel, setShowAddPanel] = useState(get("panel") === "add" || initialParticipants.length === 0);
+  const [showImportModal, setShowImportModal] = useState(get("modal") === "import");
   const [manualForm, setManualForm] = useState<ManualAddForm>(emptyManualForm);
   const [pasteText, setPasteText] = useState("");
   const [adding, setAdding] = useState(false);
@@ -147,6 +154,27 @@ export function ProjectParticipantsWorkspace({
   const temporaryCount = accessRows.length - permanentCount;
   const activeAccountCount = accessRows.filter((row) => row.hasAccount).length;
   const activeSecureLinkCount = accessRows.filter((row) => row.hasSecureLink).length;
+
+  useEffect(() => {
+    setActiveTabState(normalizeParticipantsTab(get("view")));
+    setShowImportModal(get("modal") === "import");
+    setShowAddPanel(get("panel") === "add" || (participants.length === 0 && get("panel") !== "closed"));
+  }, [get, participants.length, searchKey]);
+
+  const selectTab = (tab: TabKey) => {
+    setActiveTabState(tab);
+    setParams({ view: tab === "roster" ? null : tab }, "push");
+  };
+
+  const setAddPanelOpen = (open: boolean) => {
+    setShowAddPanel(open);
+    setParam("panel", open ? "add" : "closed", "push");
+  };
+
+  const setImportModalOpen = (open: boolean) => {
+    setShowImportModal(open);
+    setParam("modal", open ? "import" : null, open ? "push" : "replace");
+  };
 
   const startEdit = (participant: CompanyParticipant) => {
     setError(null);
@@ -235,7 +263,7 @@ export function ProjectParticipantsWorkspace({
       setParticipants(result.participants);
       setManualForm(emptyManualForm);
       setPasteText("");
-      setShowAddPanel(false);
+      setAddPanelOpen(false);
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Participanții nu au putut fi salvați.");
@@ -258,14 +286,14 @@ export function ProjectParticipantsWorkspace({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setShowImportModal(true)}
+              onClick={() => setImportModalOpen(true)}
               className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy-700"
             >
               Importă participanți
             </button>
             <button
               type="button"
-              onClick={() => setShowAddPanel((current) => !current)}
+              onClick={() => setAddPanelOpen(!showAddPanel)}
               className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
             >
               {showAddPanel ? "Ascunde adăugarea" : "Adaugă manual"}
@@ -279,7 +307,7 @@ export function ProjectParticipantsWorkspace({
               type="button"
               role="tab"
               aria-selected={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => selectTab(tab.key)}
               className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
                 activeTab === tab.key
                   ? "border-burgundy bg-burgundy text-white"
@@ -335,14 +363,11 @@ export function ProjectParticipantsWorkspace({
       )}
 
       {showImportModal ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowImportModal(false)}>
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="project-import-title"
-            className="modal-panel max-w-5xl"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
+        <ModalLayer
+          labelledBy="project-import-title"
+          onClose={() => setImportModalOpen(false)}
+          panelClassName="max-w-5xl"
+        >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
@@ -352,7 +377,7 @@ export function ProjectParticipantsWorkspace({
               </div>
               <button
                 type="button"
-                onClick={() => setShowImportModal(false)}
+                onClick={() => setImportModalOpen(false)}
                 className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy"
               >
                 Închide
@@ -370,8 +395,7 @@ export function ProjectParticipantsWorkspace({
                 compact
               />
             </div>
-          </section>
-        </div>
+        </ModalLayer>
       ) : null}
     </section>
   );

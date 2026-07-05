@@ -1,5 +1,13 @@
 import { vi } from "vitest";
 
+const nextRouterMock = {
+  push: vi.fn(),
+  replace: vi.fn(),
+  prefetch: vi.fn(),
+  back: vi.fn(),
+  refresh: vi.fn(),
+};
+
 const localStorageMock = (function () {
   let store: Record<string, string> = {};
   return {
@@ -22,13 +30,7 @@ Object.defineProperty(window, "localStorage", {
 });
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-    back: vi.fn(),
-    refresh: vi.fn(),
-  }),
+  useRouter: () => nextRouterMock,
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "",
 }));

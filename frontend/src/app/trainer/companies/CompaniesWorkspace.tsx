@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 
 import { createCompany, type CompanyListItem } from "@/api/companies";
+import { ModalLayer } from "@/components/ui/modal-layer";
+import { useUrlState } from "@/hooks/use-url-state";
 
 type CompaniesWorkspaceProps = {
   initialCompanies: CompanyListItem[];
@@ -15,12 +17,18 @@ type CompanyIdentity = {
 };
 
 export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps) {
+  const { get, searchKey, setParam, setParams } = useUrlState();
   const [companies, setCompanies] = useState<CompanyListItem[]>(initialCompanies);
   const [name, setName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [createOpen, setCreateOpen] = useState(get("modal") === "create-company");
+  const [searchQuery, setSearchQuery] = useState(get("q") ?? "");
+
+  useEffect(() => {
+    setSearchQuery(get("q") ?? "");
+    setCreateOpen(get("modal") === "create-company");
+  }, [get, searchKey]);
 
   const sortedCompanies = useMemo(() => {
     const query = normalizeSearchText(searchQuery);
@@ -35,6 +43,11 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   const totalProjects = companies.reduce((total, company) => total + company.projectCount, 0);
   const activeCompanies = companies.filter((company) => !company.dataUnavailable).length;
 
+  function closeCreateModal() {
+    setCreateOpen(false);
+    setParams({ modal: null }, "replace");
+  }
+
   async function handleCreateCompany(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
@@ -46,7 +59,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       const created = await createCompany(trimmedName);
       setCompanies((current) => mergeCompanies(current, [companyToListItem(created)]));
       setName("");
-      setCreateOpen(false);
+      closeCreateModal();
       setMessage("Compania a fost creată și salvată.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Compania nu a putut fi creată.");
@@ -64,14 +77,20 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
           </svg>
           <input
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setParam("q", event.target.value, "replace");
+            }}
             placeholder="Caută companie..."
             className="control-input control-search w-full py-3 pl-12 pr-4"
           />
         </div>
         <button
           type="button"
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            setCreateOpen(true);
+            setParam("modal", "create-company");
+          }}
           className="btn-primary shrink-0"
         >
           Adaugă companie
@@ -91,14 +110,13 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
       )}
 
       {createOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => !isSubmitting && setCreateOpen(false)}>
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-company-title"
-            className="modal-panel"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
+        <ModalLayer
+          labelledBy="create-company-title"
+          onClose={() => {
+            if (!isSubmitting) closeCreateModal();
+          }}
+          closeOnBackdrop={!isSubmitting}
+        >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Companie nouă</p>
@@ -109,7 +127,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
               </div>
               <button
                 type="button"
-                onClick={() => setCreateOpen(false)}
+                onClick={closeCreateModal}
                 disabled={isSubmitting}
                 className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy disabled:opacity-50"
               >
@@ -135,8 +153,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
                 {isSubmitting ? "Se salvează..." : "Salvează compania"}
               </button>
             </form>
-          </section>
-        </div>
+        </ModalLayer>
       ) : null}
 
       {companies.length === 0 ? (
