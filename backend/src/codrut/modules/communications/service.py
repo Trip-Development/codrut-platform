@@ -55,7 +55,6 @@ from codrut.modules.communications.templates import (
     EVALUATION_TEMPLATES,
     PROMOTIONAL_SHELL_CLOSE,
     PROMOTIONAL_TEMPLATES,
-    TRANSACTIONAL_TEMPLATES,
     TransactionalTemplateKey,
     get_transactional_template,
 )
@@ -338,26 +337,6 @@ class CommunicationsService:
             (template.key, template.version): template
             for template in await repository.list_templates(active_only=False)
         }
-        for k, catalog_template in TRANSACTIONAL_TEMPLATES.items():
-            existing = existing_templates.get((k.value, catalog_template.version))
-            if existing is None:
-                existing = await repository.add_template(
-                    EmailTemplate(
-                        key=k.value,
-                        version=catalog_template.version,
-                        subject=catalog_template.subject,
-                        html_body=catalog_template.html_body,
-                        text_body=catalog_template.text_body,
-                        variables=list(catalog_template.required_context),
-                        audience="participant",
-                        active=True,
-                    )
-                )
-                existing_templates[(k.value, catalog_template.version)] = existing
-                await repository.deactivate_templates_for_key(
-                    k.value,
-                    except_version=catalog_template.version,
-                )
         for catalog_template in (*PROMOTIONAL_TEMPLATES, *EVALUATION_TEMPLATES):
             existing = existing_templates.get((catalog_template.key, catalog_template.version))
             if existing is None:

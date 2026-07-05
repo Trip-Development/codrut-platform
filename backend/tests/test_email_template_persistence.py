@@ -981,6 +981,21 @@ async def test_list_templates_does_not_reactivate_retired_catalog_template() -> 
 
 
 @pytest.mark.asyncio
+async def test_list_templates_does_not_seed_transactional_templates() -> None:
+    repository = FakeCommunicationsRepository()
+    service = make_service(repository)
+
+    result = await service.list_templates(active_only=True)
+
+    transactional_keys = {
+        TransactionalTemplateKey.account_setup.value,
+        TransactionalTemplateKey.assignment_bundle.value,
+    }
+    assert transactional_keys.isdisjoint({item.key for item in result})
+    assert transactional_keys.isdisjoint({template.key for template in repository.templates})
+
+
+@pytest.mark.asyncio
 async def test_get_template_does_not_seed_when_template_exists() -> None:
     repository = FakeCommunicationsRepository(
         [
