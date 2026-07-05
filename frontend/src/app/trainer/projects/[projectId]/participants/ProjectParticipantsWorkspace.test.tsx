@@ -225,6 +225,37 @@ describe("ProjectParticipantsWorkspace", () => {
     );
     expect(await screen.findByText("Ioana Nouă")).toBeTruthy();
   });
+
+  it("keeps existing participants visible when manual import returns only changed rows", async () => {
+    vi.mocked(importCompanyRoster).mockResolvedValue({
+      participants: [
+        {
+          ...participants[1],
+          id: "member-2",
+          full_name: "Ioana Nouă",
+          email: "ioana@example.test",
+          position: "Designer",
+          reports_to_name: null,
+        },
+      ],
+      email_results: [],
+      total_imported: 1,
+      emails_sent: 0,
+      emails_failed: 0,
+    });
+
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Adaugă manual" }));
+    fireEvent.change(screen.getByPlaceholderText(/Ana Popescu/), {
+      target: { value: "Ioana Nouă, ioana@example.test, Designer, -" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează participanții" }));
+
+    expect(await screen.findByText("Ioana Nouă")).toBeTruthy();
+    expect(screen.getAllByText("Ana Manager").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Dan Membru")).toBeTruthy();
+  });
 });
 
 function renderWorkspace() {
