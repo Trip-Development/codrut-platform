@@ -1358,17 +1358,24 @@ export async function getCompanyInvitationStatuses(
   options: ApiRequestOptions = {},
   scope: ProjectScopeOptions = {},
 ): Promise<ParticipantInvitationStatus[]> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status${projectQuery(scope)}`,
-    { cache: "no-store", credentials: "include", ...options },
-  );
-  if (!response.ok) {
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status${projectQuery(scope)}`,
+      { cache: "no-store", credentials: "include", ...options },
+    );
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-a putut obține statusul invitațiilor.`);
+      }
+      return [];
+    }
+    return (await response.json()) as ParticipantInvitationStatus[];
+  } catch (e) {
     if (!isDemoFallbackEnabled()) {
-      throw new Error(`Eroare server (${response.status}): Nu s-a putut obține statusul invitațiilor.`);
+      throw e;
     }
     return [];
   }
-  return (await response.json()) as ParticipantInvitationStatus[];
 }
 
 export async function createCompanyTeam(

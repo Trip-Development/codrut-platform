@@ -482,8 +482,12 @@ html {
   }
 
   .modal-backdrop {
-    @apply fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/40 px-4 py-6 sm:py-8;
+    @apply fixed inset-0 z-[80] flex justify-center overflow-y-auto bg-black/45 px-4 py-6 backdrop-blur-sm sm:py-8;
     align-items: flex-start;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior: contain;
+    -webkit-backdrop-filter: blur(4px);
   }
 
   .modal-panel {

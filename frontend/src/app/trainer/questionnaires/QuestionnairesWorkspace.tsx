@@ -15,11 +15,18 @@ import {
   type QuestionnaireQuestion,
   type QuestionnaireScaleOption,
 } from "@/api/questionnaires";
+import { ModalLayer } from "@/components/ui/modal-layer";
+import { useUrlState } from "@/hooks/use-url-state";
 
 const destructiveButtonClass =
   "tap-soft rounded-full border border-[#890505]/35 bg-transparent px-3 py-1.5 text-xs font-bold text-[#890505] shadow-none transition hover:bg-[#890505]/10 disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-transparent disabled:text-foreground/35 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+function parseQuestionnaireVersion(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
 
 function estimateQuestionnaireItems(definition: QuestionnaireDefinition): number {
   return definition.schema.sections.reduce((count, section) => {
@@ -56,10 +63,11 @@ type ScaleGroup = {
 };
 
 export function QuestionnairesWorkspace() {
+  const { get, searchKey, setParam, setParams } = useUrlState();
   const [stubs, setStubs] = useState<QuestionnaireDefinitionStub[]>([]);
   const [versionStubs, setVersionStubs] = useState<QuestionnaireDefinitionStub[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [selectedVersion, setSelectedVersion] = useState<number>(1);
+  const [selectedKey, setSelectedKey] = useState<string | null>(get("key"));
+  const [selectedVersion, setSelectedVersion] = useState<number>(parseQuestionnaireVersion(get("version")));
   const [availableVersions, setAvailableVersions] = useState<number[]>([]);
   const [currentDefinition, setCurrentDefinition] = useState<QuestionnaireDefinition | null>(null);
   const [isCatalogLoading, setIsCatalogLoading] = useState<boolean>(false);
@@ -92,14 +100,14 @@ export function QuestionnairesWorkspace() {
   );
 
   // New Questionnaire Modal State
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(get("modal") === "create");
   const [newKey, setNewKey] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAudience, setNewAudience] = useState<"leadership" | "team" | "participant">("team");
 
   // Search State
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(get("q") ?? "");
   const [expandedLocalScaleIds, setExpandedLocalScaleIds] = useState<Set<string>>(new Set());
 
   const filteredStubs = useMemo(() => {
@@ -110,6 +118,34 @@ export function QuestionnairesWorkspace() {
       (s.id && s.id.toLowerCase().includes(q))
     );
   }, [stubs, searchQuery]);
+
+  useEffect(() => {
+    setSearchQuery(get("q") ?? "");
+    setShowCreateModal(get("modal") === "create");
+
+    const nextKey = get("key");
+    const nextVersion = parseQuestionnaireVersion(get("version"));
+    if (nextKey === selectedKey && nextVersion === selectedVersion) return;
+
+    if (!canDiscardDraftForNavigation()) {
+      setParams(
+        {
+          key: selectedKey,
+          version: selectedKey ? selectedVersion : null,
+        },
+        "replace",
+      );
+      return;
+    }
+
+    setSelectedKey(nextKey);
+    setSelectedVersion(nextVersion);
+    if (!nextKey) {
+      currentDefinitionRef.current = null;
+      setCurrentDefinition(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchKey]);
 
   // Load stubs list
   const loadStubs = useCallback(async () => {
@@ -146,8 +182,9 @@ export function QuestionnairesWorkspace() {
     // If selectedVersion is not in the list, set to the highest version
     if (!allVersions.includes(selectedVersion)) {
       setSelectedVersion(allVersions[0]);
+      setParam("version", allVersions[0], "replace");
     }
-  }, [selectedKey, selectedVersion, versionStubsByKey]);
+  }, [selectedKey, selectedVersion, setParam, versionStubsByKey]);
 
   useEffect(() => {
     if (!selectedKey) {
@@ -315,12 +352,14 @@ export function QuestionnairesWorkspace() {
     if (!canDiscardDraftForNavigation()) return;
     setSelectedKey(key);
     setSelectedVersion(version);
+    setParams({ key, version, modal: null }, "push");
   };
 
   const handleSelectVersion = (version: number) => {
     if (version === selectedVersion) return;
     if (!canDiscardDraftForNavigation()) return;
     setSelectedVersion(version);
+    setParam("version", version, "push");
   };
 
   const updateDefinitionDraft = (updater: (current: QuestionnaireDefinition) => QuestionnaireDefinition) => {
@@ -361,6 +400,7 @@ export function QuestionnairesWorkspace() {
         active: true,
       });
       setSelectedVersion(saved.version);
+      setParam("version", saved.version, "replace");
       await loadStubs();
     } catch (e) {
       alert((e as Error).message ?? "Eroare la crearea unei noi versiuni.");
@@ -388,12 +428,14 @@ export function QuestionnairesWorkspace() {
       if (nextSelection) {
         setSelectedKey(nextSelection.id);
         setSelectedVersion(nextSelection.version ?? 1);
+        setParams({ key: nextSelection.id, version: nextSelection.version ?? 1 }, "replace");
       } else {
         setSelectedKey(null);
         currentDefinitionRef.current = null;
         persistedDefinitionRef.current = null;
         setCurrentDefinition(null);
         setAvailableVersions([]);
+        setParams({ key: null, version: null }, "replace");
       }
     } catch (e) {
       alert((e as Error).message ?? "Eroare la ștergerea/pensionarea chestionarului.");
@@ -435,6 +477,7 @@ export function QuestionnairesWorkspace() {
       setNewDescription("");
       setSelectedKey(saved.key);
       setSelectedVersion(saved.version);
+      setParams({ key: saved.key, version: saved.version, modal: null }, "replace");
       await loadStubs();
     } catch (e) {
       alert((e as Error).message ?? "Eroare la crearea chestionarului.");
@@ -747,12 +790,18 @@ export function QuestionnairesWorkspace() {
                 type="text"
                 placeholder="Caută chestionar..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setParam("q", e.target.value, "replace");
+                }}
                 className="control-input control-search w-full py-3 pl-12 pr-4"
               />
             </div>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setShowCreateModal(true);
+                setParam("modal", "create", "push");
+              }}
               disabled={isCatalogLoading}
               className="btn-primary shrink-0"
             >
@@ -830,6 +879,7 @@ export function QuestionnairesWorkspace() {
                   setSelectedKey(null);
                   currentDefinitionRef.current = null;
                   setCurrentDefinition(null);
+                  setParams({ key: null, version: null }, "push");
                 }
               }}
               className="tap-soft rounded-full bg-surface px-4 py-2 text-sm font-bold text-foreground border border-[var(--border)] hover:bg-surface-muted hover:border-burgundy/30 transition-all flex items-center gap-2"
@@ -1145,11 +1195,11 @@ export function QuestionnairesWorkspace() {
                       </p>
                     ) : (
                       section.questions.map((question, qIndex) => (
-	                        <div
-	                          key={question.id}
-	                          data-testid={`question-editor-${question.id}`}
-	                          className="rounded-xl border border-[var(--border)] bg-surface p-4 space-y-3 shadow-sm"
-	                        >
+                        <div
+                          key={question.id}
+                          data-testid={`question-editor-${question.id}`}
+                          className="rounded-xl border border-[var(--border)] bg-surface p-4 space-y-3 shadow-sm"
+                        >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="flex gap-2 items-center flex-1">
                               <input
@@ -1369,12 +1419,19 @@ export function QuestionnairesWorkspace() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <ModalLayer
+          labelledBy="create-questionnaire-title"
+          onClose={() => {
+            setShowCreateModal(false);
+            setParam("modal", null, "replace");
+          }}
+          panelClassName="max-w-md"
+        >
           <form
             onSubmit={handleAddQuestionnaire}
-            className="w-full max-w-md rounded-xl border border-[var(--border)] bg-surface p-6 shadow-xl space-y-4"
+            className="space-y-4"
           >
-            <h3 className="text-lg font-bold text-foreground">Adaugă chestionar nou</h3>
+            <h3 id="create-questionnaire-title" className="text-lg font-bold text-foreground">Adaugă chestionar nou</h3>
             
             <div className="space-y-1">
               <label className="text-xs font-bold text-foreground/60">Cod unic (slug / categorie)</label>
@@ -1462,7 +1519,10 @@ export function QuestionnairesWorkspace() {
             <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
               <button
                 type="button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setParam("modal", null, "replace");
+                }}
                 className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:bg-surface-muted"
               >
                 Anulează
@@ -1475,7 +1535,7 @@ export function QuestionnairesWorkspace() {
               </button>
             </div>
           </form>
-        </div>
+        </ModalLayer>
       )}
     </div>
   );

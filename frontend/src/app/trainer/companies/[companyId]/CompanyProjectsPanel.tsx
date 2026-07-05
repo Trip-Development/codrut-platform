@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import {
   createCompanyProject,
@@ -9,6 +9,8 @@ import {
   type CompanyProjectStatus,
 } from "@/api/companies";
 import { ProjectCardLink } from "@/components/projects/project-card";
+import { ModalLayer } from "@/components/ui/modal-layer";
+import { useUrlState } from "@/hooks/use-url-state";
 
 type CompanyProjectsPanelProps = {
   companyId: string;
@@ -21,6 +23,7 @@ export function CompanyProjectsPanel({
   companyId,
   initialProjects,
 }: CompanyProjectsPanelProps) {
+  const { get, searchKey, setParam, setParams } = useUrlState();
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -32,8 +35,18 @@ export function CompanyProjectsPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(get("archived") === "1");
+  const [createOpen, setCreateOpen] = useState(get("modal") === "create-project");
+
+  useEffect(() => {
+    setShowArchived(get("archived") === "1");
+    setCreateOpen(get("modal") === "create-project");
+  }, [get, searchKey]);
+
+  function closeCreateModal() {
+    setCreateOpen(false);
+    setParam("modal", null, "replace");
+  }
 
   const activeProjects = useMemo(
     () => projects.filter((project) => project.status === "active").length,
@@ -84,7 +97,7 @@ export function CompanyProjectsPanel({
       setDueDate("");
       setFormOpenDate("");
       setFormCloseDate("");
-      setCreateOpen(false);
+      closeCreateModal();
       setMessage("Proiectul a fost salvat.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Proiectul nu a putut fi salvat.");
@@ -107,9 +120,13 @@ export function CompanyProjectsPanel({
         </div>
         <div className="flex flex-wrap gap-2">
           {archivedCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowArchived((current) => !current)}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !showArchived;
+                  setShowArchived(next);
+                  setParam("archived", next ? "1" : null, "push");
+                }}
               className="btn-secondary !px-4 !py-2"
             >
               {showArchived ? "Ascunde arhiva" : `Arată arhiva (${archivedCount})`}
@@ -117,7 +134,10 @@ export function CompanyProjectsPanel({
           ) : null}
           <button
             type="button"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => {
+              setCreateOpen(true);
+              setParams({ modal: "create-project" }, "push");
+            }}
             className="btn-primary"
           >
             Adaugă proiect
@@ -132,14 +152,14 @@ export function CompanyProjectsPanel({
       ) : null}
 
       {createOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => !isCreating && setCreateOpen(false)}>
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-project-title"
-            className="modal-panel max-w-2xl"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
+        <ModalLayer
+          labelledBy="create-project-title"
+          onClose={() => {
+            if (!isCreating) closeCreateModal();
+          }}
+          closeOnBackdrop={!isCreating}
+          panelClassName="max-w-2xl"
+        >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Proiect nou</p>
@@ -151,7 +171,7 @@ export function CompanyProjectsPanel({
               </div>
               <button
                 type="button"
-                onClick={() => setCreateOpen(false)}
+                onClick={closeCreateModal}
                 disabled={isCreating}
                 className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy disabled:opacity-50"
               >
@@ -230,8 +250,7 @@ export function CompanyProjectsPanel({
                 {isCreating ? "Se salvează..." : "Salvează proiectul"}
               </button>
             </form>
-          </section>
-        </div>
+        </ModalLayer>
       ) : null}
 
       {visibleProjects.length === 0 ? (
