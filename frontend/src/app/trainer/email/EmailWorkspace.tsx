@@ -60,6 +60,7 @@ const MOCK_REPLACEMENTS: Record<string, string> = {
   "{video_url}": "https://vimeo.com/123456789",
   "{thumbnail_url}": "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg",
   "{landing_page_url}": "https://vimeo.com/123456789",
+  "{calendly_url}": "https://calendly.com/andreivacaru/intalnire-de-apropiere",
   "{unsubscribe_url}": "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/demo-token",
 };
 
@@ -94,9 +95,12 @@ function sanitizePreviewHref(value: string): string {
   return "#";
 }
 
-export function replacePreviewPlaceholders(value: string): string {
+export function replacePreviewPlaceholders(
+  value: string,
+  replacements: Record<string, string> = MOCK_REPLACEMENTS,
+): string {
   let replaced = value;
-  Object.entries(MOCK_REPLACEMENTS).forEach(([key, replacement]) => {
+  Object.entries(replacements).forEach(([key, replacement]) => {
     replaced = replaced
       .replace(new RegExp(escapeRegExp(`$${key}`), "g"), replacement)
       .replace(new RegExp(escapeRegExp(key), "g"), replacement);
@@ -424,6 +428,99 @@ function campaignRecipientDraft(recipient: CampaignRecipientRow): CampaignContac
   };
 }
 
+function campaignRecipientSortKey(recipient: CampaignRecipientRow): string {
+  return [
+    recipient.company,
+    campaignRecipientName(recipient),
+    recipient.email,
+  ].join(" ").toLocaleLowerCase("ro-RO");
+}
+
+function campaignRecipientStatusLabel(status: CampaignRecipientRow["status"]): string {
+  const labels: Record<CampaignRecipientRow["status"], string> = {
+    needs_contact_name: "Nume lipsă",
+    ready: "Pregătit",
+    sent: "Trimis",
+    suppressed: "Inactiv",
+    unsubscribed: "Dezabonat",
+  };
+  return labels[status] ?? status;
+}
+
+function isCampaignRecipientEffectivelyActive(recipient: CampaignRecipientRow): boolean {
+  return recipient.status !== "suppressed" && recipient.status !== "unsubscribed";
+}
+
+function campaignRecipientSourceLabel(source?: string | null): string {
+  if (!source) return "Manual";
+  if (source === "excel_import") return "Excel";
+  return source.replace(/_/g, " ");
+}
+
+function EditIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L8.582 18.07a4.5 4.5 0 0 1-1.897 1.13L3 20l.8-3.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166M19.228 5.79 18.16 19.673A2.25 2.25 0 0 1 15.916 21H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .563c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m4.5 12.75 6 6 9-13.5" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function IconButton({
+  label,
+  children,
+  tone = "neutral",
+  disabled,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  tone?: "neutral" | "danger" | "success";
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const toneClass = tone === "danger"
+    ? "border-red-500/35 bg-red-500/10 text-red-700 hover:border-red-500/55 hover:bg-red-500/15 dark:text-red-200"
+    : tone === "success"
+    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-emerald-500/50 hover:bg-emerald-500/15 dark:text-emerald-200"
+    : "border-[var(--border)] bg-surface text-foreground/62 hover:border-burgundy/40 hover:text-burgundy";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`tap-soft inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${toneClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 type EmailWorkspaceProps = {
   initialSummary: EmailOpsSummary;
 };
@@ -477,6 +574,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
   const [editLane, setEditLane] = useState<"transactional" | "campaign">("transactional");
+  const [previewCalendlyUrl, setPreviewCalendlyUrl] = useState(MOCK_REPLACEMENTS["{calendly_url}"]);
 
   // Campaign Manager States
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
@@ -506,6 +604,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
   const [campaignContactMessage, setCampaignContactMessage] = useState<string | null>(null);
   const [selectedCampaignRecipientIds, setSelectedCampaignRecipientIds] = useState<string[]>([]);
+  const [showInactiveCampaignContacts, setShowInactiveCampaignContacts] = useState(false);
+  const [bulkContactAction, setBulkContactAction] = useState<null | "activate" | "suppress" | "delete">(null);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [contactDrafts, setContactDrafts] = useState<Record<string, CampaignContactDraft>>({});
   const [savingContactId, setSavingContactId] = useState<string | null>(null);
@@ -527,6 +627,36 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setParam("modal", null, mode);
   }
 
+  const sortedCampaignRecipients = useMemo(
+    () =>
+      [...summary.campaign.recipients].sort((first, second) =>
+        campaignRecipientSortKey(first).localeCompare(campaignRecipientSortKey(second), "ro-RO"),
+      ),
+    [summary.campaign.recipients],
+  );
+  const activeCampaignContacts = useMemo(
+    () => sortedCampaignRecipients.filter((recipient) => recipient.status !== "suppressed"),
+    [sortedCampaignRecipients],
+  );
+  const inactiveCampaignContacts = useMemo(
+    () => sortedCampaignRecipients.filter((recipient) => recipient.status === "suppressed"),
+    [sortedCampaignRecipients],
+  );
+  const visibleCampaignContacts = useMemo(
+    () => showInactiveCampaignContacts
+      ? sortedCampaignRecipients
+      : activeCampaignContacts,
+    [activeCampaignContacts, showInactiveCampaignContacts, sortedCampaignRecipients],
+  );
+  const selectableCampaignRecipientIdSet = useMemo(
+    () =>
+      new Set(
+        visibleCampaignContacts
+          .filter((recipient) => recipient.status !== "unsubscribed" && recipient.email.trim())
+          .map((recipient) => recipient.id),
+      ),
+    [visibleCampaignContacts],
+  );
   const activeCampaignRecipientIdSet = useMemo(
     () =>
       new Set(
@@ -540,9 +670,30 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       ),
     [summary.campaign.recipients],
   );
+  const visibleSelectableCampaignRecipientIds = useMemo(
+    () => visibleCampaignContacts
+      .filter((recipient) => selectableCampaignRecipientIdSet.has(recipient.id))
+      .map((recipient) => recipient.id),
+    [selectableCampaignRecipientIdSet, visibleCampaignContacts],
+  );
+  const visibleSelectedCampaignRecipientIds = useMemo(
+    () => selectedCampaignRecipientIds.filter((recipientId) => selectableCampaignRecipientIdSet.has(recipientId)),
+    [selectableCampaignRecipientIdSet, selectedCampaignRecipientIds],
+  );
+  const isSelectedCampaignContactBeingEdited = editingContactId !== null
+    && visibleSelectedCampaignRecipientIds.includes(editingContactId);
   const activeSelectedCampaignRecipientIds = useMemo(
     () => selectedCampaignRecipientIds.filter((recipientId) => activeCampaignRecipientIdSet.has(recipientId)),
     [activeCampaignRecipientIdSet, selectedCampaignRecipientIds],
+  );
+  const visibleContactsAllSelected = visibleSelectableCampaignRecipientIds.length > 0
+    && visibleSelectableCampaignRecipientIds.every((recipientId) => selectedCampaignRecipientIds.includes(recipientId));
+  const previewReplacements = useMemo(
+    () => ({
+      ...MOCK_REPLACEMENTS,
+      "{calendly_url}": previewCalendlyUrl,
+    }),
+    [previewCalendlyUrl],
   );
 
   const campaignTemplates = useMemo(
@@ -1003,12 +1154,133 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   };
 
   const toggleSelectedCampaignRecipient = (recipientId: string) => {
-    if (!activeCampaignRecipientIdSet.has(recipientId)) return;
+    if (!selectableCampaignRecipientIdSet.has(recipientId)) return;
     setSelectedCampaignRecipientIds((currentIds) =>
       currentIds.includes(recipientId)
         ? currentIds.filter((id) => id !== recipientId)
         : [...currentIds, recipientId],
     );
+  };
+
+  const toggleAllVisibleCampaignRecipients = () => {
+    setSelectedCampaignRecipientIds((currentIds) => {
+      const currentSet = new Set(currentIds);
+      if (visibleContactsAllSelected) {
+        return currentIds.filter((recipientId) => !visibleSelectableCampaignRecipientIds.includes(recipientId));
+      }
+      for (const recipientId of visibleSelectableCampaignRecipientIds) {
+        currentSet.add(recipientId);
+      }
+      return Array.from(currentSet);
+    });
+  };
+
+  const toggleInactiveCampaignContacts = () => {
+    setShowInactiveCampaignContacts((current) => {
+      if (current) {
+        const inactiveIds = new Set(inactiveCampaignContacts.map((recipient) => recipient.id));
+        setSelectedCampaignRecipientIds((currentIds) =>
+          currentIds.filter((recipientId) => !inactiveIds.has(recipientId)),
+        );
+      }
+      return !current;
+    });
+  };
+
+  const updateSelectedCampaignContactsStatus = async (nextStatus: "active" | "suppressed") => {
+    if (visibleSelectedCampaignRecipientIds.length === 0) {
+      setCampaignContactMessage("Selectează cel puțin un contact.");
+      return;
+    }
+    if (isSelectedCampaignContactBeingEdited) {
+      setCampaignContactMessage("Salvează sau anulează editarea înainte de operațiuni în masă.");
+      return;
+    }
+    const selectedContacts = summary.campaign.recipients.filter((recipient) =>
+      visibleSelectedCampaignRecipientIds.includes(recipient.id),
+    );
+    const contactsToUpdate = selectedContacts.filter((recipient) => {
+      if (recipient.status === "unsubscribed") return false;
+      const isActive = isCampaignRecipientEffectivelyActive(recipient);
+      return nextStatus === "active" ? !isActive : isActive;
+    });
+    if (contactsToUpdate.length === 0) {
+      setCampaignContactMessage(nextStatus === "active" ? "Contactele selectate sunt deja active." : "Contactele selectate sunt deja inactive.");
+      return;
+    }
+
+    setBulkContactAction(nextStatus === "active" ? "activate" : "suppress");
+    setCampaignContactMessage(null);
+    try {
+      await Promise.all(
+        contactsToUpdate.map((recipient) =>
+          updateCampaignRecipientOnServer(recipient.id, { status: nextStatus }),
+        ),
+      );
+      setSummary((currentSummary) => ({
+        ...currentSummary,
+        campaign: {
+          ...currentSummary.campaign,
+          recipients: currentSummary.campaign.recipients.map((recipient) =>
+            contactsToUpdate.some((updated) => updated.id === recipient.id)
+              ? {
+                  ...recipient,
+                  status: nextStatus === "suppressed"
+                    ? "suppressed"
+                    : campaignRecipientName(recipient)
+                    ? "ready"
+                    : "needs_contact_name",
+                }
+              : recipient,
+          ),
+        },
+      }));
+      setCampaignContactMessage(
+        nextStatus === "active"
+          ? `${contactsToUpdate.length} contacte au fost activate.`
+          : `${contactsToUpdate.length} contacte au fost dezactivate.`,
+      );
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Operațiunea pe contacte nu a putut fi finalizată.");
+    } finally {
+      setBulkContactAction(null);
+    }
+  };
+
+  const deleteSelectedCampaignContacts = async () => {
+    if (visibleSelectedCampaignRecipientIds.length === 0) {
+      setCampaignContactMessage("Selectează cel puțin un contact.");
+      return;
+    }
+    if (isSelectedCampaignContactBeingEdited) {
+      setCampaignContactMessage("Salvează sau anulează editarea înainte de ștergerea în masă.");
+      return;
+    }
+    const confirmed = window.confirm(`Ștergi ${visibleSelectedCampaignRecipientIds.length} contacte selectate? Istoricul agregat de email rămâne în rapoarte.`);
+    if (!confirmed) return;
+
+    setBulkContactAction("delete");
+    setCampaignContactMessage(null);
+    try {
+      await Promise.all(visibleSelectedCampaignRecipientIds.map((recipientId) => deleteCampaignRecipientOnServer(recipientId)));
+      setSummary((currentSummary) => ({
+        ...currentSummary,
+        campaign: {
+          ...currentSummary.campaign,
+          recipients: currentSummary.campaign.recipients.filter(
+            (recipient) => !visibleSelectedCampaignRecipientIds.includes(recipient.id),
+          ),
+        },
+      }));
+      setSelectedCampaignRecipientIds((currentIds) =>
+        currentIds.filter((recipientId) => !visibleSelectedCampaignRecipientIds.includes(recipientId)),
+      );
+      setCampaignContactMessage(`${visibleSelectedCampaignRecipientIds.length} contacte au fost șterse.`);
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Contactele selectate nu au putut fi șterse.");
+    } finally {
+      setBulkContactAction(null);
+    }
   };
 
   const handleSendCampaign = async (
@@ -1217,12 +1489,12 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
   };
 
   // Convert markdown to clean, basic HTML preview
-  const getRenderedPreview = (subjectText: string, bodyText: string, lane: string) => {
+  const getRenderedPreview = useCallback((subjectText: string, bodyText: string, lane: string) => {
     let replacedSubject = subjectText;
     let replacedBody = bodyText;
 
-    replacedSubject = replacePreviewPlaceholders(replacedSubject);
-    replacedBody = replacePreviewPlaceholders(replacedBody);
+    replacedSubject = replacePreviewPlaceholders(replacedSubject, previewReplacements);
+    replacedBody = replacePreviewPlaceholders(replacedBody, previewReplacements);
 
     let html = renderEmailTemplatePreviewBody(replacedBody);
 
@@ -1242,7 +1514,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
       subject: replacedSubject,
       bodyHtml: html,
     };
-  };
+  }, [previewReplacements]);
 
   const preview = useMemo(
     () =>
@@ -1253,7 +1525,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
             isEditing ? editLane : selectedTemplate.lane,
           )
         : { subject: "", bodyHtml: "" },
-    [editBody, editLane, editSubject, isEditing, selectedTemplate],
+    [editBody, editLane, editSubject, getRenderedPreview, isEditing, selectedTemplate],
   );
   const campaignPreview = useMemo(
     () => getRenderedPreview(
@@ -1261,7 +1533,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
       campaignBody || selectedCampaignTemplate?.body || "",
       "campaign",
     ),
-    [campaignBody, campaignSubject, selectedCampaignTemplate],
+    [campaignBody, campaignSubject, getRenderedPreview, selectedCampaignTemplate],
   );
 
   const deliveryLabel = (delivery: AssessmentDeliveryRow["delivery"]) => {
@@ -1590,14 +1862,13 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                               </p>
                             </div>
                             <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                              <button
-                                type="button"
+                              <IconButton
+                                label={`Editează campania ${campaign.name}`}
                                 disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id}
                                 onClick={() => openEditCampaignModal(campaign)}
-                                className="btn-secondary px-3 py-1.5 text-[10px]"
                               >
-                                Editează
-                              </button>
+                                <EditIcon />
+                              </IconButton>
                               <button
                                 type="button"
                                 disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id || activeSelectedCampaignRecipientIds.length === 0}
@@ -1622,14 +1893,14 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                               >
                                 Trimite tuturor
                               </button>
-                              <button
-                                type="button"
+                              <IconButton
+                                label={deletingCampaignId === campaign.id ? "Se șterge campania" : `Șterge campania ${campaign.name}`}
+                                tone="danger"
                                 disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id}
                                 onClick={() => handleDeleteCampaign(campaign)}
-                                className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold text-red-700 transition hover:-translate-y-0.5 hover:border-red-500/55 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-200"
                               >
-                                {deletingCampaignId === campaign.id ? "Se șterge..." : "Șterge"}
-                              </button>
+                                <TrashIcon />
+                              </IconButton>
                             </div>
                           </div>
                           {campaignSendResults[campaign.id] ? (
@@ -1643,45 +1914,94 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto p-2">
+              <div className="p-4">
                 {campaignContactMessage ? (
-                  <p aria-live="polite" className="mx-4 mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-xs font-semibold text-foreground/65">
+                  <p aria-live="polite" className="mb-4 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-xs font-semibold text-foreground/65">
                     {campaignContactMessage}
                   </p>
                 ) : null}
+                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-surface-muted p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={toggleAllVisibleCampaignRecipients}
+                      disabled={visibleSelectableCampaignRecipientIds.length === 0}
+                      className="btn-secondary px-3 py-2 text-xs"
+                    >
+                      {visibleContactsAllSelected ? "Deselectează vizibile" : "Selectează vizibile"}
+                    </button>
+                    <span className="rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-[11px] font-bold text-foreground/60">
+                      {visibleSelectedCampaignRecipientIds.length} selectate
+                    </span>
+                    <button
+                      type="button"
+                      onClick={toggleInactiveCampaignContacts}
+                      className="btn-secondary px-3 py-2 text-xs"
+                      aria-expanded={showInactiveCampaignContacts}
+                    >
+                      {showInactiveCampaignContacts ? "Ascunde inactive" : `Arată inactive (${inactiveCampaignContacts.length})`}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void updateSelectedCampaignContactsStatus("active")}
+                      disabled={bulkContactAction !== null || visibleSelectedCampaignRecipientIds.length === 0 || isSelectedCampaignContactBeingEdited}
+                      className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-55 dark:text-emerald-200"
+                    >
+                      {bulkContactAction === "activate" ? "Activez..." : "Activează"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void updateSelectedCampaignContactsStatus("suppressed")}
+                      disabled={bulkContactAction !== null || visibleSelectedCampaignRecipientIds.length === 0 || isSelectedCampaignContactBeingEdited}
+                      className="btn-secondary px-3 py-2 text-xs"
+                    >
+                      {bulkContactAction === "suppress" ? "Dezactivez..." : "Dezactivează"}
+                    </button>
+                    <IconButton
+                      label="Șterge contactele selectate"
+                      tone="danger"
+                      disabled={bulkContactAction !== null || visibleSelectedCampaignRecipientIds.length === 0 || isSelectedCampaignContactBeingEdited}
+                      onClick={() => void deleteSelectedCampaignContacts()}
+                    >
+                      <TrashIcon />
+                    </IconButton>
+                  </div>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/50 border-b border-[var(--border)]">
+                  <thead className="border-b border-[var(--border)] bg-surface-muted text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/50">
                     <tr>
-                      <th className="px-6 py-4">Select</th>
-                      <th className="px-6 py-4">Companie & Contact</th>
-                      <th className="px-6 py-4">Tip client</th>
-                      <th className="px-6 py-4">Activ</th>
-                      <th className="px-6 py-4">Evenimente</th>
-                      <th className="px-6 py-4">Reply / Calendly</th>
-                      <th className="px-6 py-4">Rezultat</th>
-                      <th className="px-6 py-4 text-right">Acțiuni</th>
+                      <th className="w-12 px-4 py-3">Select</th>
+                      <th className="px-4 py-3">Contact</th>
+                      <th className="px-4 py-3">Tip / status</th>
+                      <th className="px-4 py-3">Evenimente</th>
+                      <th className="px-4 py-3">Reply / Calendly</th>
+                      <th className="px-4 py-3">Rezultat</th>
+                      <th className="px-4 py-3 text-right">Acțiuni</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
-                    {summary.campaign.recipients.length > 0 ? (
-                      summary.campaign.recipients.map((recipient) => {
+                    {visibleCampaignContacts.length > 0 ? (
+                      visibleCampaignContacts.map((recipient) => {
                         const isEditingContact = editingContactId === recipient.id;
                         const draft = contactDrafts[recipient.id] ?? campaignRecipientDraft(recipient);
                         const isUnsubscribedContact = recipient.status === "unsubscribed";
                         const isContactActive = recipient.status !== "suppressed" && !isUnsubscribedContact;
                         return (
                           <tr key={recipient.id} className={`transition-colors hover:bg-surface-muted ${!isContactActive ? "bg-surface-muted/50 text-foreground/55" : ""}`}>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-3">
                               <input
                                 type="checkbox"
-                                checked={activeCampaignRecipientIdSet.has(recipient.id) && selectedCampaignRecipientIds.includes(recipient.id)}
-                                disabled={!activeCampaignRecipientIdSet.has(recipient.id)}
+                                checked={selectableCampaignRecipientIdSet.has(recipient.id) && selectedCampaignRecipientIds.includes(recipient.id)}
+                                disabled={!selectableCampaignRecipientIdSet.has(recipient.id)}
                                 onChange={() => toggleSelectedCampaignRecipient(recipient.id)}
                                 className="h-4 w-4 accent-burgundy disabled:opacity-40"
                                 aria-label={`Selectează ${recipient.email}`}
                               />
                             </td>
-                            <td className="min-w-[17rem] px-6 py-4">
+                            <td className="min-w-[17rem] px-4 py-3">
                               {isEditingContact ? (
                                 <div className="space-y-2">
                                   <input
@@ -1711,10 +2031,15 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                                     {campaignRecipientName(recipient) || "Contact lipsă"}
                                   </p>
                                   <p className="mt-1 text-[11px] text-foreground/40 font-mono">{recipient.email}</p>
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    <span className="rounded-full border border-[var(--border)] bg-surface px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-foreground/50">
+                                      {campaignRecipientSourceLabel(recipient.emailVariant)}
+                                    </span>
+                                  </div>
                                 </>
                               )}
                             </td>
-                            <td className="min-w-[11rem] px-6 py-4">
+                            <td className="min-w-[11rem] px-4 py-3">
                               {isEditingContact ? (
                                 <div className="space-y-2">
                                   <select
@@ -1739,101 +2064,91 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                                   </select>
                                 </div>
                               ) : (
-                                <span className="capitalize text-[11px] font-bold uppercase tracking-wider text-foreground/60">
-                                  {recipient.clientType === "tip_1" ? "Client existent" : "Prospect"}
-                                </span>
+                                <div className="flex min-w-[9rem] flex-col items-start gap-2">
+                                  <span className="capitalize text-[11px] font-bold uppercase tracking-wider text-foreground/60">
+                                    {recipient.clientType === "tip_1" ? "Client existent" : "Prospect"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={savingContactId === recipient.id || isEditingContact || isUnsubscribedContact}
+                                    onClick={() => toggleContactActive(recipient)}
+                                    aria-pressed={isContactActive}
+                                    className={`inline-flex min-w-[5.5rem] items-center justify-center rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                      isContactActive
+                                        ? "border-emerald-500/30 bg-emerald-500/12 text-emerald-700 hover:border-emerald-600/50 dark:text-emerald-200"
+                                        : "border-[var(--border)] bg-surface text-foreground/50 hover:border-burgundy/35 hover:text-burgundy"
+                                    }`}
+                                    aria-label={`${isUnsubscribedContact ? "Dezabonat din campanii" : isContactActive ? "Activ în campanii" : "Inactiv în campanii"} pentru ${recipient.email}`}
+                                    title={
+                                      isUnsubscribedContact
+                                        ? "Contactul s-a dezabonat și nu poate fi reactivat din listă."
+                                        : isEditingContact
+                                        ? "Salvează sau anulează editarea înainte de schimbarea statusului."
+                                        : undefined
+                                    }
+                                  >
+                                    {isUnsubscribedContact ? "Stop" : isContactActive ? "Da" : "Nu"}
+                                  </button>
+                                  <span className="rounded-full border border-[var(--border)] bg-surface px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-foreground/55">
+                                    {campaignRecipientStatusLabel(recipient.status)}
+                                  </span>
+                                </div>
                               )}
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="flex min-w-[9rem] flex-col items-start gap-2">
-                                <button
-                                  type="button"
-                                  disabled={savingContactId === recipient.id || isEditingContact || isUnsubscribedContact}
-                                  onClick={() => toggleContactActive(recipient)}
-                                  aria-pressed={isContactActive}
-                                  className={`inline-flex min-w-[5.5rem] items-center justify-center rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    isContactActive
-                                      ? "border-emerald-500/30 bg-emerald-500/12 text-emerald-700 hover:border-emerald-600/50 dark:text-emerald-200"
-                                      : "border-[var(--border)] bg-surface text-foreground/50 hover:border-burgundy/35 hover:text-burgundy"
-                                  }`}
-                                  aria-label={`${isUnsubscribedContact ? "Dezabonat din campanii" : isContactActive ? "Activ în campanii" : "Inactiv în campanii"} pentru ${recipient.email}`}
-                                  title={
-                                    isUnsubscribedContact
-                                      ? "Contactul s-a dezabonat și nu poate fi reactivat din listă."
-                                      : isEditingContact
-                                      ? "Salvează sau anulează editarea înainte de schimbarea statusului."
-                                      : undefined
-                                  }
-                                >
-                                  {isUnsubscribedContact ? "Stop" : isContactActive ? "Da" : "Nu"}
-                                </button>
-                                <span className="rounded-full border border-[var(--border)] bg-surface px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-foreground/55">
-                                  {recipient.status === "needs_contact_name"
-                                    ? "nume lipsă"
-                                    : recipient.status === "unsubscribed"
-                                    ? "dezabonat"
-                                    : recipient.status === "sent"
-                                    ? "trimis"
-                                    : recipient.status === "ready"
-                                    ? "pregătit"
-                                    : "inactiv"}
-                                </span>
+                            <td className="px-4 py-3">
+                              <div className="flex min-w-[9rem] flex-wrap gap-1.5">
+                                <span className="rounded-full border border-[var(--border)] bg-surface px-2 py-1 text-[10px] font-bold text-foreground/62">{recipient.openCount ?? 0} desch.</span>
+                                <span className="rounded-full border border-[var(--border)] bg-surface px-2 py-1 text-[10px] font-bold text-foreground/62">{recipient.clickCount ?? 0} click</span>
+                                <span className="rounded-full border border-[var(--border)] bg-surface px-2 py-1 text-[10px] font-bold text-foreground/62">{recipient.viewCount ?? 0} video</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
-                              {recipient.openCount ?? 0} desch. / {recipient.clickCount ?? 0} click / {recipient.viewCount ?? 0} video
-                              {recipient.emailVariant ? (
-                                <span className="mt-1 block font-sans text-[10px] font-bold uppercase tracking-wider text-burgundy/70">
-                                  variantă {recipient.emailVariant}
-                                </span>
-                              ) : null}
+                            <td className="px-4 py-3">
+                              <div className="flex min-w-[7rem] flex-wrap gap-1.5">
+                                <span className="rounded-full border border-[var(--border)] bg-surface px-2 py-1 text-[10px] font-bold text-foreground/62">{recipient.replyCount ?? 0} reply</span>
+                                <span className="rounded-full border border-[var(--border)] bg-surface px-2 py-1 text-[10px] font-bold text-foreground/62">{recipient.calendlyClickCount ?? 0} calendly</span>
+                              </div>
                             </td>
-                            <td className="px-6 py-4 text-foreground/70 font-mono text-xs">
-                              {recipient.replyCount ?? 0} / {recipient.calendlyClickCount ?? 0}
-                            </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-3">
                               <span className="rounded-full bg-burgundy/10 border border-burgundy/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
                                 {recipient.outcome ?? "pending"}
                               </span>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-3">
                               <div className="flex justify-end gap-2">
                                 {isEditingContact ? (
                                   <>
-                                    <button
-                                      type="button"
+                                    <IconButton
+                                      label={savingContactId === recipient.id ? "Se salvează contactul" : `Salvează ${recipient.email}`}
+                                      tone="success"
                                       disabled={savingContactId === recipient.id}
                                       onClick={() => saveContact(recipient)}
-                                      className="btn-secondary px-3 py-1.5 text-[10px]"
                                     >
-                                      {savingContactId === recipient.id ? "Se salvează..." : "Salvează"}
-                                    </button>
-                                    <button
-                                      type="button"
+                                      <SaveIcon />
+                                    </IconButton>
+                                    <IconButton
+                                      label={`Anulează editarea pentru ${recipient.email}`}
                                       disabled={savingContactId === recipient.id}
                                       onClick={() => cancelEditingContact(recipient.id)}
-                                      className="rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-[10px] font-bold text-foreground/60"
                                     >
-                                      Anulează
-                                    </button>
+                                      <CloseIcon />
+                                    </IconButton>
                                   </>
                                 ) : (
                                   <>
-                                    <button
-                                      type="button"
+                                    <IconButton
+                                      label={`Editează ${recipient.email}`}
                                       onClick={() => startEditingContact(recipient)}
-                                      className="btn-secondary px-3 py-1.5 text-[10px]"
                                     >
-                                      Editează
-                                    </button>
-                                    <button
-                                      type="button"
+                                      <EditIcon />
+                                    </IconButton>
+                                    <IconButton
+                                      label={deletingContactId === recipient.id ? "Se șterge contactul" : `Șterge ${recipient.email}`}
+                                      tone="danger"
                                       disabled={deletingContactId === recipient.id}
                                       onClick={() => deleteContact(recipient)}
-                                      className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-[10px] font-bold text-red-700 dark:text-red-200"
                                     >
-                                      {deletingContactId === recipient.id ? "Se șterge..." : "Șterge"}
-                                    </button>
+                                      <TrashIcon />
+                                    </IconButton>
                                   </>
                                 )}
                               </div>
@@ -1843,7 +2158,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       })
                     ) : (
                       <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center text-foreground/50 text-sm font-medium">
+                        <td colSpan={7} className="px-6 py-12 text-center text-foreground/50 text-sm font-medium">
                           <p>Niciun contact înregistrat încă.</p>
                           <div className="mt-4 flex items-center justify-center gap-3">
                             <span className="text-foreground/40">Importă un fișier CSV sau</span>
@@ -1862,6 +2177,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </section>
@@ -2018,13 +2334,13 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       </>
                     ) : (
                       <>
-                        <button
+                        <IconButton
+                          label="Editează șablonul"
                           onClick={() => setIsEditing(true)}
                           disabled={isLoadingTemplates}
-                          className="tap-soft rounded-full bg-burgundy/10 border border-burgundy/20 px-4 py-2 text-xs font-bold text-burgundy hover:bg-burgundy/20 transition-colors"
                         >
-                          Editează
-                        </button>
+                          <EditIcon />
+                        </IconButton>
                         <button
                           onClick={handleCreateTemplateVersion}
                           disabled={isLoadingTemplates}
@@ -2032,13 +2348,14 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                         >
                           Versiune nouă
                         </button>
-                        <button
+                        <IconButton
+                          label="Șterge șablonul"
+                          tone="danger"
                           onClick={handleDeleteTemplate}
                           disabled={isLoadingTemplates}
-                          className="tap-soft rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition-colors shadow-sm"
                         >
-                          Șterge
-                        </button>
+                          <TrashIcon />
+                        </IconButton>
                       </>
                     )}
                   </div>
@@ -2141,6 +2458,22 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                   />
                 </div>
 
+                <label className="mt-5 block rounded-xl border border-[var(--border)] bg-surface-muted p-4">
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-foreground/60">
+                    Link Calendly pentru previzualizare
+                  </span>
+                  <input
+                    type="url"
+                    value={previewCalendlyUrl}
+                    onChange={(event) => setPreviewCalendlyUrl(event.target.value)}
+                    className="control-input w-full py-3 font-mono text-xs"
+                    placeholder="https://calendly.com/andreivacaru/intalnire-de-apropiere"
+                  />
+                  <span className="mt-2 block text-[11px] font-medium leading-relaxed text-foreground/55">
+                    Folosit pentru tag-ul <code className="rounded bg-foreground/5 px-1">{`{calendly_url}`}</code> în previzualizare. La trimitere, backendul inserează linkul real configurat pentru campanii.
+                  </span>
+                </label>
+
                 <div className="mt-5 rounded-xl bg-surface-muted p-4 border border-[var(--border)]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 text-burgundy/60">
@@ -2149,7 +2482,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-1">Informație utilă</p>
                       <p className="text-[11px] text-foreground/60 leading-relaxed font-medium">
-                        Tag-urile ca <code className="bg-foreground/5 px-1 rounded mx-0.5">{`{first_name}`}</code> sunt înlocuite automat la expediere. Puteți formata corpul emailului folosind <strong className="text-foreground">**text**</strong> pentru bold și <span className="text-burgundy underline">[linkuri](url)</span>.
+                        Tag-urile ca <code className="bg-foreground/5 px-1 rounded mx-0.5">{`{first_name}`}</code> și <code className="bg-foreground/5 px-1 rounded mx-0.5">{`{calendly_url}`}</code> sunt înlocuite automat la expediere. Puteți formata corpul emailului folosind <strong className="text-foreground">**text**</strong> pentru bold și <span className="text-burgundy underline">[linkuri](url)</span>.
                       </p>
                     </div>
                   </div>
