@@ -10,14 +10,17 @@ import {
 } from "./auth";
 import {
   buildVideoCampaignCreatePayload,
+  createEmailTemplateOnServer,
   deleteCampaignOnServer,
   deleteCampaignRecipientOnServer,
   deleteEmailTemplateOnServer,
   getEmailOpsSummary,
+  htmlToPlainText,
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
   sendCampaignOnServer,
   updateCampaignRecipientOnServer,
+  updateEmailTemplateOnServer,
   uploadCampaignAssetOnServer,
 } from "./email";
 import { inviteQuestionnaireLabel, inviteTaskHref, participantTaskTypeLabel, resolveInviteBundle } from "./invites";
@@ -1839,6 +1842,129 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
       }),
     );
+  });
+
+  it("falls back to the editable campaign and evaluation catalog, not transactional placeholders", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+
+    const templates = await listEmailTemplatesOnServer();
+    const keys = templates.map((template) => template.baseKey);
+    const report = templates.find((template) => template.baseKey === "promo_past_report_2022_2025");
+    const leadershipInvite = templates.find((template) => template.baseKey === "evaluation_leadership_invite");
+
+    expect(keys).toContain("promo_past_report_2022_2025");
+    expect(keys).toContain("promo_potential_intro");
+    expect(keys).toContain("evaluation_leadership_invite");
+    expect(keys).not.toContain("account_setup");
+    expect(keys).not.toContain("assignment_bundle");
+    expect(report).toMatchObject({
+      version: 8,
+      lane: "campaign",
+      audience: "campaign:past_customer",
+    });
+    expect(report?.body).toContain('data-codrut-cta="calendly"');
+    expect(report?.body).toContain("A supraviețuit tranziției la freelancing");
+    expect(report?.body).toContain("A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală");
+    expect(report?.body).toContain("A neglijat să se reconecteze cu oameni cu care a lucrat bine");
+    expect(report?.body).toContain("Aici ai calendarul meu");
+    expect(report?.body).toContain("Link calendar");
+    expect(report?.textBody).toContain("✓ A supraviețuit tranziției la freelancing");
+    expect(report?.textBody).toContain("✗ A neglijat să se reconecteze");
+    expect(report?.textBody).toContain("Aici ai calendarul meu: {calendly_url}");
+    expect(report?.placeholders).toContain("{calendly_url}");
+    expect(report?.placeholders).toContain("{thumbnail_url}");
+    expect(leadershipInvite).toMatchObject({ version: 7, audience: "transactional:leadership" });
+    expect(leadershipInvite?.body).toContain("Link platformă");
+    expect(leadershipInvite?.textBody).toContain("Link platformă: {action_url}");
+  });
+
+  it("preserves server text bodies when saving existing HTML email templates", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        key: "promo_test",
+        version: 2,
+        subject: "Raport pentru ${first_name}",
+        html_body: "<p>ok</p>",
+        text_body: "ok",
+        variables: ["first_name", "calendly_url"],
+        audience: "campaign:past_customer",
+        active: true,
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateEmailTemplateOnServer({
+      id: "promo_test@1",
+      baseKey: "promo_test",
+      version: 1,
+      name: "Promo test",
+      subject: "Raport pentru {first_name}",
+      lane: "campaign",
+      audience: "campaign:past_customer",
+      placeholders: ["{first_name}", "{calendly_url}"],
+      body:
+        '<table><tr><td style="color:#890505;">✓</td><td>A supraviețuit tranziției la freelancing.</td></tr><tr><td>✗</td><td>A neglijat reconectarea.</td></tr></table><p><a href="{calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>',
+      textBody:
+        "Salut, {first_name}.\nVideo: {landing_page_url}\nAlege un slot: {calendly_url}",
+    });
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(payload.text_body).toBe(
+      "Salut, ${first_name}.\nVideo: ${landing_page_url}\nAlege un slot: ${calendly_url}",
+    );
+    expect(payload.variables).toEqual(expect.arrayContaining(["first_name", "landing_page_url", "calendly_url"]));
+    expect(payload.html_body).toContain('data-codrut-cta="calendly"');
+  });
+
+  it("generates readable fallback text bodies for new HTML email templates", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        key: "promo_test",
+        version: 1,
+        subject: "Raport pentru ${first_name}",
+        html_body: "<p>ok</p>",
+        text_body: "ok",
+        variables: ["first_name", "calendly_url"],
+        audience: "campaign:past_customer",
+        active: true,
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createEmailTemplateOnServer({
+      id: "promo_test",
+      baseKey: "promo_test",
+      version: 0,
+      name: "Promo test",
+      subject: "Raport pentru {first_name}",
+      lane: "campaign",
+      audience: "campaign:past_customer",
+      placeholders: ["{first_name}", "{calendly_url}"],
+      body:
+        '<table><tr><td style="color:#890505;">✓</td><td>A supraviețuit tranziției la freelancing.</td></tr><tr><td>✗</td><td>A neglijat reconectarea.</td></tr></table><p><a href="{calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>',
+    });
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(payload.text_body).toContain("✓ A supraviețuit tranziției la freelancing.");
+    expect(payload.text_body).toContain("✗ A neglijat reconectarea.");
+    expect(payload.text_body).toContain("Alege un slot");
+    expect(payload.text_body).toContain("${calendly_url}");
+    expect(payload.text_body).not.toContain("<td>");
+  });
+
+  it("keeps href-only links in generated plain text email bodies", () => {
+    const text = htmlToPlainText(
+      '<p>Video de reconectare</p><a href="{landing_page_url}"><span><img alt="Video" src="{thumbnail_url}" /></span></a><p><a href="{calendly_url}">Alege un slot</a></p>',
+    );
+
+    expect(text).toContain("Video {landing_page_url}");
+    expect(text).toContain("Alege un slot {calendly_url}");
   });
 
   it("does not return seeded email templates when demo fallback is disabled", async () => {

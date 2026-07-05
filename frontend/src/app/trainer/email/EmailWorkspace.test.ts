@@ -152,6 +152,16 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(html).not.toContain("<script>");
   });
 
+  it("preserves email-safe table checklist markup in previews", () => {
+    const html = renderEmailTemplatePreviewBody(
+      '<table role="presentation"><tbody><tr><td>✓</td><td>A supraviețuit tranziției</td></tr><tr><td>✗</td><td>A neglijat reconectarea</td></tr></tbody></table>',
+    );
+
+    expect(html).toContain("<table");
+    expect(html).toContain("<td>✓</td>");
+    expect(html).toContain("A neglijat reconectarea");
+  });
+
   it("sanitizes unsafe html preview attributes and urls", () => {
     const html = renderEmailTemplatePreviewBody(
       '<div><a href=javascript:alert(1) onclick="alert(2)">Click</a><img src="JaVaScRiPt:alert(3)" onerror="alert(4)" style="background:url(javascript:alert(5))" /></div>',
@@ -192,6 +202,7 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.change(subjectInput, { target: { value: "Salut AB" } });
     expect((subjectInput as HTMLInputElement).value).toBe("Salut AB");
 
+    fireEvent.click(screen.getByText("Editor HTML avansat"));
     const bodyInput = screen.getByLabelText("Corp email");
     fireEvent.change(bodyInput, { target: { value: "Primul rând" } });
     fireEvent.change(bodyInput, { target: { value: "Primul rând\nAl doilea rând" } });

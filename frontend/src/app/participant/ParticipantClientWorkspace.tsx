@@ -335,7 +335,7 @@ export function ParticipantResultsPanel({
       </div>
 
       {results.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 xl:grid-cols-2">
           {results.map((result) => (
             <ResultCard key={result.assignmentId} result={result} />
           ))}
@@ -374,7 +374,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-burgundy/75">{resultKindLabel(kind)}</p>
-          <h3 className="mt-1 truncate text-base font-semibold text-foreground" title={result.title}>{result.title}</h3>
+          <h3 className="mt-1 text-base font-semibold leading-6 text-foreground" title={result.title}>{result.title}</h3>
           <p className="mt-1 text-sm text-foreground/55">{result.targetLabel}</p>
           <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-foreground/42">
             {items.length} dimensiuni · scor mediu {average === null ? "N/A" : formatScore(average)} · scală 0-{max}
@@ -413,7 +413,7 @@ function ScoreRow({
     <>
       <span className="flex items-center justify-between gap-4">
         <span className="min-w-0">
-          <span className="block truncate text-sm font-bold text-foreground">{item.label}</span>
+          <span className="block text-sm font-bold leading-5 text-foreground">{item.label}</span>
           {item.interpretation ? (
             <span className="mt-1 block text-xs leading-5 text-foreground/56">{item.interpretation}</span>
           ) : null}

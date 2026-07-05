@@ -18,7 +18,7 @@ EMAIL_SHELL_OPEN = (
     '<div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;'
     'background:#fffdfb;">'
     '<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;'
-    'letter-spacing:.08em;text-transform:uppercase;">Andrei Vacaru</p>'
+    'letter-spacing:.08em;text-transform:uppercase;">Andrei Văcaru</p>'
 )
 EMAIL_SHELL_CLOSE = "</div></div>"
 
@@ -87,10 +87,27 @@ def _paragraphs(*items: str) -> str:
 
 
 def _bullets(*items: str) -> str:
+    rows: list[str] = []
+    for item in items:
+        marker = "•"
+        body = item
+        if item.startswith(("✓", "✗")):
+            marker = item[0]
+            body = item[1:].strip()
+        rows.append(
+            '<tr>'
+            '<td style="width:24px;padding:0 8px 8px 0;vertical-align:top;'
+            f'color:#890505;font-weight:700;">{marker}</td>'
+            '<td style="padding:0 0 8px;vertical-align:top;">'
+            f"{body}</td>"
+            "</tr>"
+        )
     return (
-        '<ul style="margin:0 0 18px;padding-left:0;font-size:15px;line-height:1.65;list-style:none;">'
-        + "".join(f'<li style="margin:0 0 8px;">{item}</li>' for item in items)
-        + "</ul>"
+        '<table role="presentation" cellpadding="0" cellspacing="0" '
+        'style="width:100%;margin:0 0 18px;font-size:15px;line-height:1.65;'
+        'border-collapse:collapse;">'
+        + "".join(rows)
+        + "</table>"
     )
 
 
@@ -98,6 +115,9 @@ def _cta(label: str, url_placeholder: str = "action_url") -> str:
     return (
         f'<p style="margin:24px 0;"><a href="${{{url_placeholder}}}" '
         f'style="{PRIMARY_BUTTON_STYLE}">{label}</a></p>'
+        f'<p {HELP_TEXT_STYLE}>Link platformă: '
+        f'<a href="${{{url_placeholder}}}" style="color:#890505;text-decoration:underline;">'
+        f'${{{url_placeholder}}}</a></p>'
     )
 
 
@@ -123,6 +143,8 @@ def _calendly_cta(label: str = "Alege un slot") -> str:
     return (
         f'<p style="margin:24px 0;"><a href="${{calendly_url}}" '
         f'data-codrut-cta="calendly" style="{PRIMARY_BUTTON_STYLE}">{label}</a></p>'
+        f'<p {HELP_TEXT_STYLE}>Link calendar: '
+        '<a href="${calendly_url}" style="color:#890505;text-decoration:underline;">${calendly_url}</a></p>'
     )
 
 
@@ -138,59 +160,61 @@ PROMOTIONAL_REQUIRED_CONTEXT = frozenset({
 PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     CatalogEmailTemplate(
         key="promo_past_report_2022_2025",
-        version=4,
+        version=8,
         subject="Raportul de activitate pe care nu l-a cerut nimeni",
         audience="campaign:past_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT,
         html_body=(
             EMAIL_SHELL_OPEN
-            + f"<h1 {HEADING_STYLE}>Raport 2022-2025. Nesolicitat, dar sincer.</h1>"
+            + f"<h1 {HEADING_STYLE}>Raportul de activitate pe care nu l-a cerut nimeni</h1>"
             + f"<p {GREETING_STYLE}>${{first_name}},</p>"
             + _paragraphs(
                 "Nu mi-ai cerut niciun update. Dar ți-l dau oricum, pentru că am 3 ani de freelancing și tu ești unul dintre oamenii pe care îmi doresc să îi revăd.",
-                "Andrei Văcaru. Raport 2022-2025. Nesolicitat, dar sincer.",
+                "Andrei Văcaru. Raport 2022–2025. Nesolicitat dar sincer.",
             )
             + _bullets(
-                "✓ A supraviețuit tranziției la freelancing fără episoade dramatice majore.",
-                "✓ A obținut o certificare în Process Communication Model - pentru a duce comunicarea și înțelegerea personalității umane la următorul nivel.",
-                "✓ A construit Influencing Skills for Trusted Stakeholder Partnerships - un program de 3 zile despre cum influențezi oameni fără să devii un personaj pe care nu ți-ar plăcea să îl întâlnești la o negociere.",
-                "✓ A construit Născut pentru a Învinge - un program despre mintea subconștientă, starea de bine și de ce sabotăm exact ce ne dorim.",
-                "✓ A adăugat în 2025 certificarea în Rapid Transformation Therapy by Marisa Peer - pentru ca rezultatele să fie cât mai rapide.",
-                "✓ A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală, cel puțin nimeni pe care l-a văzut.",
-                "✗ A neglijat să se reconecteze cu oameni cu care a lucrat bine.",
+                "✓ A supraviețuit tranziției la freelancing fără episoade dramatice majore",
+                "✓ A obținut o certificare în Process Communication Model - pentru a duce comunicarea și înțelegerea personalității umane la următorul nivel",
+                "✓ A construit Influencing Skills for Trusted Stakeholder Partnerships - un program de 3 zile despre cum influențezi oameni fără să devii un personaj pe care nu ți-ar plăcea să îl întâlnești la o negociere",
+                "✓ A construit Născut pentru a Învinge - un program despre mintea subconștientă, starea de bine și de ce sabotăm exact ce ne dorim",
+                "✓ A adăugat în 2025 certificarea în Rapid Transformation Therapy by Marisa Peer - pentru ca rezultatele să fie cât mai rapide",
+                "✓ A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală (cel puțin nimeni pe care l-a văzut)",
+                "✗ A neglijat să se reconecteze cu oameni cu care a lucrat bine",
             )
             + _paragraphs(
                 "Ultimul punct e motivul pentru care ești pe lista mea de primit emailul ăsta.",
                 "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.",
             )
             + _video_cta("Video — 2 minute, mai interesante decât raportul de mai sus")
+            + _paragraphs("Aici ai calendarul meu:")
             + _calendly_cta("Alege un format — cafea, apel, Zoom")
-            + _paragraphs("Dă reply acestui email sau alege un slot și revin eu cu propuneri de întâlnire.")
+            + _paragraphs("Sau dă reply acestui email și revin eu cu propuneri de întâlnire.")
             + _paragraphs("Andrei")
             + PROMOTIONAL_SHELL_CLOSE
         ),
         text_body=(
             "${first_name},\n\n"
-            "Nu mi-ai cerut niciun update. Dar ți-l dau oricum.\n\n"
-            "Andrei Văcaru. Raport 2022-2025. Nesolicitat, dar sincer.\n"
-            "✓ A supraviețuit tranziției la freelancing fără episoade dramatice majore.\n"
-            "✓ A obținut o certificare în Process Communication Model.\n"
-            "✓ A construit Influencing Skills for Trusted Stakeholder Partnerships.\n"
-            "✓ A construit Născut pentru a Învinge.\n"
-            "✓ A adăugat în 2025 certificarea în Rapid Transformation Therapy by Marisa Peer.\n"
-            "✓ A livrat peste 1200 de sesiuni.\n"
-            "✗ A neglijat să se reconecteze cu oameni cu care a lucrat bine.\n\n"
+            "Nu mi-ai cerut niciun update. Dar ți-l dau oricum, pentru că am 3 ani de freelancing și tu ești unul dintre oamenii pe care îmi doresc să îi revăd.\n\n"
+            "Andrei Văcaru. Raport 2022–2025. Nesolicitat dar sincer.\n"
+            "✓ A supraviețuit tranziției la freelancing fără episoade dramatice majore\n"
+            "✓ A obținut o certificare în Process Communication Model - pentru a duce comunicarea și înțelegerea personalității umane la următorul nivel\n"
+            "✓ A construit Influencing Skills for Trusted Stakeholder Partnerships - un program de 3 zile despre cum influențezi oameni fără să devii un personaj pe care nu ți-ar plăcea să îl întâlnești la o negociere\n"
+            "✓ A construit Născut pentru a Învinge - un program despre mintea subconștientă, starea de bine și de ce sabotăm exact ce ne dorim\n"
+            "✓ A adăugat în 2025 certificarea în Rapid Transformation Therapy by Marisa Peer - pentru ca rezultatele să fie cât mai rapide\n"
+            "✓ A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală (cel puțin nimeni pe care l-a văzut)\n"
+            "✗ A neglijat să se reconecteze cu oameni cu care a lucrat bine\n\n"
+            "Ultimul punct e motivul pentru care ești pe lista mea de primit emailul ăsta.\n"
             "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.\n"
             "Video: ${landing_page_url}\n"
-            "Alege un format — cafea, apel, Zoom: ${calendly_url}\n"
-            "Sau dă reply acestui mail și revin eu cu propuneri de întâlnire.\n\n"
+            "Aici ai calendarul meu: ${calendly_url}\n"
+            "Sau dă reply acestui email și revin eu cu propuneri de întâlnire.\n\n"
             "Andrei\n\n"
             "Dezabonare: ${unsubscribe_url}"
         ),
     ),
     CatalogEmailTemplate(
         key="promo_past_reactivation",
-        version=4,
+        version=8,
         subject="Departamentul de Reconectări Nesolicitate",
         audience="campaign:past_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT | frozenset({"company_name"}),
@@ -199,7 +223,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<h1 {HEADING_STYLE}>Relația profesională poate fi reactivată</h1>"
             + f"<p {GREETING_STYLE}>Salut, ${{first_name}}.</p>"
             + _paragraphs(
-                "Îți scriu pentru a te informa că relația profesională cu Andrei Vacaru a fost marcată ca inactivă în sistem.",
+                "Îți scriu pentru a te informa că relația profesională cu Andrei Văcaru a fost marcată ca inactivă în sistem.",
                 "Conform datelor disponibile, ultima interacțiune cu ${company_name} a avut loc în urmă cu mai mult timp decât ar fi trebuit.",
                 "Motivul identificat: acel fenomen comun denumit viață ocupată, timp puțin.",
                 "Ai la dispoziție două opțiuni:",
@@ -215,22 +239,33 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
                 "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.",
             )
             + _calendly_cta("Reactivează contul — alege un slot")
-            + _paragraphs("Dă reply sau alege un slot și revin eu cu un mail pentru stabilirea unei întâlniri.")
+            + _paragraphs("Dă reply sau alege un slot și revin eu cu un email pentru stabilirea unei întâlniri.")
             + _video_cta("Vezi ce s-a întâmplat cu contul în ultimii 3 ani — 2 minute")
-            + _paragraphs("Andrei Vacaru")
+            + _paragraphs("Andrei Văcaru")
             + PROMOTIONAL_SHELL_CLOSE
         ),
         text_body=(
             "Salut, ${first_name}.\n\n"
-            "Relația profesională cu Andrei Vacaru poate fi reactivată printr-o cafea, un apel sau 30 de minute de Zoom.\n"
+            "Îți scriu pentru a te informa că relația profesională cu Andrei Văcaru a fost marcată ca inactivă în sistem.\n"
+            "Conform datelor disponibile, ultima interacțiune cu ${company_name} a avut loc în urmă cu mai mult timp decât ar fi trebuit.\n"
+            "Motivul identificat: acel fenomen comun denumit viață ocupată, timp puțin.\n\n"
+            "Ai la dispoziție două opțiuni:\n"
+            "• Opțiunea A: Ignoră emailul. Relația se arhivează automat. Andrei supraviețuiește. Tu la fel. Toată lumea merge mai departe.\n"
+            "• Opțiunea B: Reactivează contul printr-o cafea, un apel sau 30 de minute de Zoom în care nimeni nu vinde nimic și toată lumea pleacă cu ceva util.\n\n"
+            "Datele cont:\n"
+            "Titular: Andrei Văcaru.\n"
+            "Status: freelancer din 2022, certificat PCM, certificat Rapid Transformation Therapy by Marisa Peer (2025), 1200+ sesiuni livrate, două programe noi super faine și perfecte pentru echipa ta, construite de la zero.\n"
+            "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.\n\n"
             "Alege un slot: ${calendly_url}\n"
-            "Vezi contextul aici: ${landing_page_url}\n\n"
+            "Dă reply sau alege un slot și revin eu cu un email pentru stabilirea unei întâlniri.\n"
+            "Video: ${landing_page_url}\n\n"
+            "Andrei Văcaru\n\n"
             "Dezabonare: ${unsubscribe_url}"
         ),
     ),
     CatalogEmailTemplate(
         key="promo_current_programs",
-        version=4,
+        version=8,
         subject="Acesta nu e un email de vânzare. (Dar dacă era, era bun.)",
         audience="campaign:past_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT,
@@ -241,23 +276,29 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + _paragraphs(
                 'Știu ce crezi: "Andrei vrea ceva."',
                 "Nu. Andrei a terminat ceva și vrea să îți arate.",
-                "În ultimele luni am construit două programe noi care m-au ținut treaz noaptea - nu de stres, ci de entuziasm, ceea ce e mult mai periculos.",
-                "Programul 1: Influencing Skills - cum să convingi oameni fără să te simți că ești un politician în campanie electorală. Cu PCM, cu Cialdini, cu stakeholder maps și conversații dificile.",
-                "Programul 2: Născut pentru a Învinge - mind & well-being pentru oameni care nu vor corporate yoga. Scenarii de viață, subconștient, stări alterate, RTT (Rapid Transformation Therapy by Marisa Peer, proaspăt certificat în 2025). Genul de training după care oamenii sună acasă și zic că au înțeles ceva despre ei înșiși.",
+                "În ultimele luni am construit două programe noi care m-au ținut treaz noaptea — nu de stres, ci de entuziasm, ceea ce e mult mai periculos.",
+                "Programul 1: Influencing Skills — cum să convingi oameni fără să te simți că ești un politician în campanie electorală. Cu PCM, cu Cialdini, cu stakeholder maps și conversații dificile.",
+                "Programul 2: Născut pentru a Învinge — mind & well-being pentru oameni care nu vor corporate yoga. Scenarii de viață, subconștient, stări alterate, RTT (Rapid Transformation Therapy by Marisa Peer, proaspăt certificat în 2025). Genul de training după care oamenii sună acasă și zic că au înțeles ceva despre ei înșiși.",
                 "A, încă un lucru: am dezvoltat un companion digital dotat cu inteligență artificială care este de-a dreptul fabulos pentru că va ajuta la testarea cunoștințelor, va face role-play cu participanții și va măsura evoluția lor în timp.",
                 "Am făcut și un video scurt. E mai bun decât emailul ăsta.",
             )
             + _video_cta("Uită-te. 2 minute. Promit că nu cântă nimeni.")
-            + _paragraphs("Dacă îți vine să vorbim - nu despre contracte, ci despre idei - iată calendarul meu:")
+            + _paragraphs("Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu:")
             + _calendly_cta("Alege un slot. Promit o cafea bună.")
             + _paragraphs("Sau dă reply și revin eu cu niște propuneri de întâlnire.", "Zi faină să ai!", "Andrei")
             + PROMOTIONAL_SHELL_CLOSE
         ),
         text_body=(
             "Salut, ${first_name}.\n\n"
-            "Știu ce crezi: Andrei vrea ceva. Nu. Andrei a terminat ceva și vrea să îți arate.\n"
-            "Am construit Influencing Skills, Născut pentru a Învinge și un companion digital cu inteligență artificială.\n"
+            'Știu ce crezi: "Andrei vrea ceva."\n'
+            "Nu. Andrei a terminat ceva și vrea să îți arate.\n\n"
+            "În ultimele luni am construit două programe noi care m-au ținut treaz noaptea — nu de stres, ci de entuziasm, ceea ce e mult mai periculos.\n"
+            "Programul 1: Influencing Skills — cum să convingi oameni fără să te simți că ești un politician în campanie electorală. Cu PCM, cu Cialdini, cu stakeholder maps și conversații dificile.\n"
+            "Programul 2: Născut pentru a Învinge — mind & well-being pentru oameni care nu vor corporate yoga. Scenarii de viață, subconștient, stări alterate, RTT (Rapid Transformation Therapy by Marisa Peer, proaspăt certificat în 2025). Genul de training după care oamenii sună acasă și zic că au înțeles ceva despre ei înșiși.\n"
+            "A, încă un lucru: am dezvoltat un companion digital dotat cu inteligență artificială care este de-a dreptul fabulos pentru că va ajuta la testarea cunoștințelor, va face role-play cu participanții și va măsura evoluția lor în timp.\n\n"
+            "Am făcut și un video scurt. E mai bun decât emailul ăsta.\n"
             "Video: ${landing_page_url}\n"
+            "Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu:\n"
             "Alege un slot: ${calendly_url}\n"
             "Sau dă reply și revin eu cu niște propuneri de întâlnire.\n\n"
             "Zi faină să ai!\nAndrei\n\n"
@@ -266,7 +307,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_potential_intro",
-        version=4,
+        version=8,
         subject="Asta e un spam, dar e un spam bun. Nu am avut cum să fac altfel prima interacțiune.",
         audience="campaign:potential_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT,
@@ -279,7 +320,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
                 "Dacă continui să citești, bun.",
                 "Înseamnă că recunoști acel moment specific: ședința în care ai știut exact ce trebuia spus și tot nu a ieșit cum trebuia. Prezentarea pregătită perfect care nu a convins pe nimeni. Colegul sau stakeholderul față de care simți că vorbești o limbă diferită deși amândoi vorbiți română.",
                 "Eu lucrez cu exact spațiul ăla.",
-                "Mă numesc Andrei Văcaru. 13 ani jurnalist TV. 10 ani trainer. 1200+ sesiuni. 15000+ oameni. Certificat PCM și din 2025 certificat în Rapid Transformation Therapy by Marisa Peer - care înseamnă că știu nu doar ce face un om, ci de ce continuă să o facă deși știe că nu îl ajută.",
+                "Mă numesc Andrei Văcaru. 13 ani jurnalist TV. 10 ani trainer. 1200+ sesiuni. 15000+ oameni. Certificat PCM și din 2025 certificat în Rapid Transformation Therapy by Marisa Peer — care înseamnă că știu nu doar ce face un om, ci de ce continuă să o facă deși știe că nu îl ajută.",
                 "Nu am un pitch. Am o întrebare: dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea, ce ar fi?",
                 "Poți răspunde la emailul ăsta și stabilim o întâlnire de 30 sau 60 de minute. Sau, dacă preferi o conversație online:",
             )
@@ -291,12 +332,17 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
         ),
         text_body=(
             "Salut, ${first_name}.\n\n"
-            "Serios. Dacă totul merge perfect, poți închide acum. Nu am nimic pentru tine.\n"
-            "Mă numesc Andrei Văcaru: 13 ani jurnalist TV, 10 ani trainer, 1200+ sesiuni, 15000+ oameni, certificat PCM și RTT.\n"
-            "Dacă ai putea schimba un singur lucru în felul în care oamenii tăi comunică sau gestionează presiunea, ce ar fi?\n"
+            "Serios. Dacă totul merge perfect: stakeholderii sunt încântați, conversațiile dificile se rezolvă singure și toată lumea pleacă din ședințe motivată - închide acum. Nu am nimic pentru tine.\n"
+            "Dacă continui să citești, bun.\n\n"
+            "Înseamnă că recunoști acel moment specific: ședința în care ai știut exact ce trebuia spus și tot nu a ieșit cum trebuia. Prezentarea pregătită perfect care nu a convins pe nimeni. Colegul sau stakeholderul față de care simți că vorbești o limbă diferită deși amândoi vorbiți română.\n"
+            "Eu lucrez cu exact spațiul ăla.\n\n"
+            "Mă numesc Andrei Văcaru. 13 ani jurnalist TV. 10 ani trainer. 1200+ sesiuni. 15000+ oameni. Certificat PCM și din 2025 certificat în Rapid Transformation Therapy by Marisa Peer — care înseamnă că știu nu doar ce face un om, ci de ce continuă să o facă deși știe că nu îl ajută.\n\n"
+            "Nu am un pitch. Am o întrebare:\n"
+            "Dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea — ce ar fi?\n\n"
+            "Poți răspunde la emailul ăsta și stabilim o întâlnire de 30 sau 60 de minute. Sau, dacă preferi o conversație online:\n"
             "Alege un slot: ${calendly_url}\n"
-            "Video: ${landing_page_url}\n\n"
             "Fără obligații, fără vânzare. În cel mai rău caz, o discuție bună.\n"
+            "Video: ${landing_page_url}\n\n"
             "Zi faină să ai!\nAndrei Văcaru\n\n"
             "Dezabonare: ${unsubscribe_url}"
         ),
@@ -307,7 +353,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
 EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     CatalogEmailTemplate(
         key="evaluation_leadership_invite",
-        version=3,
+        version=7,
         subject="Primul pas pe drumul nostru: o radiografie sinceră a echipei de direcție",
         audience="transactional:leadership",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -316,9 +362,9 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<h1 {HEADING_STYLE}>Primul pas pe drumul nostru: o radiografie sinceră a echipei de direcție</h1>"
             + f"<p {GREETING_STYLE}>Dragi colegi,</p>"
             + _paragraphs(
-                "Știți deja că pornim împreună la un drum care merită cu adevărat parcurs - unul care țintește dezvoltarea, creșterea și evoluția noastră ca echipă de direcție. Credem că o companie puternică se construiește, înainte de toate, prin oamenii care o conduc - adică prin noi.",
+                "Știți deja că pornim împreună la un drum care merită cu adevărat parcurs — unul care țintește dezvoltarea, creșterea și evoluția noastră ca echipă de direcție. Credem că o companie puternică se construiește, înainte de toate, prin oamenii care o conduc — adică prin noi.",
                 "Ca orice demers serios, și acesta începe logic: cu o radiografie onestă, o imagine cât mai clară a punctului din care plecăm. Fără un punct de plecare bine măsurat, nu vom putea aprecia, mai târziu, cât de departe am ajuns.",
-                "De aceea, vă invit să facem împreună primul pas. Vă rog să completați câteva chestionare scurte - ne vor da exact informațiile de care avem nevoie ca să:",
+                "De aceea, vă invit să facem împreună primul pas. Vă rog să completați câteva chestionare scurte — ne vor da exact informațiile de care avem nevoie ca să:",
             )
             + _bullets(
                 "înțelegem nivelul de la care pornim pe comportamentele și competențele importante pentru noi;",
@@ -327,9 +373,9 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
                 "înțelegem mai bine cum funcționează echipele pe care le conducem.",
             )
             + _paragraphs(
-                "Un lucru esențial: totul este confidențial. Rezultatele sunt analizate doar agregat, la nivel de concluzii - nu de răspunsuri individuale. Singura persoană cu acces la răspunsuri este coach-ul extern care ne însoțește în acest proces, iar acestea rămân strict între el și fiecare dintre noi. Scopul nu este să evaluăm pe cineva, ci să construim o bază sănătoasă, de la care plecăm cu toții.",
+                "Un lucru esențial: totul este confidențial. Rezultatele sunt analizate doar agregat, la nivel de concluzii — nu de răspunsuri individuale. Singura persoană cu acces la răspunsuri este coach-ul extern care ne însoțește în acest proces, iar acestea rămân strict între el și fiecare dintre noi. Scopul nu este să evaluăm pe cineva, ci să construim o bază sănătoasă, de la care plecăm cu toții.",
                 "Cu cât suntem mai sinceri acum, cu atât tot ce urmează va fi mai relevant și mai util pentru fiecare dintre noi. Onestitatea de azi e investiția cu cel mai bun randament din tot acest proces.",
-                "Cum completați: dați click pe linkul de mai jos și parcurgeți chestionarele. Durează fiecare câteva minute bine investite. Vă rog să le finalizați până la ${due_date}.",
+                "Cum completați: dați click pe linkul de mai jos și parcurgeți chestionarele. Durează fiecare aproximativ câteva minute bine investite. Vă rog să le finalizați până la ${due_date}.",
             )
             + _cta("Deschide chestionarele")
             + _paragraphs("Mă bucur că pornim la drum împreună. Hai să-l începem așa cum ne dorim să-l și continuăm: cu curaj și cu sinceritate.", "Cu respect,", "${sender_name}")
@@ -337,16 +383,24 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
         ),
         text_body=(
             "Dragi colegi,\n\n"
-            "Pornim împreună la un drum care țintește dezvoltarea, creșterea și evoluția noastră ca echipă de direcție.\n"
-            "Vă invit să completați câteva chestionare scurte. Ne ajută să înțelegem nivelul de la care pornim, cum ne percepem reciproc, tiparele proprii sub presiune și felul în care funcționează echipele pe care le conducem.\n\n"
-            "Totul este confidențial, iar rezultatele sunt analizate agregat.\n"
-            "Vă rog să le finalizați până la ${due_date}: ${action_url}\n\n"
+            "Știți deja că pornim împreună la un drum care merită cu adevărat parcurs — unul care țintește dezvoltarea, creșterea și evoluția noastră ca echipă de direcție. Credem că o companie puternică se construiește, înainte de toate, prin oamenii care o conduc — adică prin noi.\n\n"
+            "Ca orice demers serios, și acesta începe logic: cu o radiografie onestă, o imagine cât mai clară a punctului din care plecăm. Fără un punct de plecare bine măsurat, nu vom putea aprecia, mai târziu, cât de departe am ajuns.\n\n"
+            "De aceea, vă invit să facem împreună primul pas. Vă rog să completați câteva chestionare scurte — ne vor da exact informațiile de care avem nevoie ca să:\n"
+            "• înțelegem nivelul de la care pornim pe comportamentele și competențele importante pentru noi;\n"
+            "• vedem cum ne percepem reciproc în interiorul echipei de direcție;\n"
+            "• devenim mai conștienți de tiparele proprii, inclusiv de felul în care reacționăm sub presiune;\n"
+            "• înțelegem mai bine cum funcționează echipele pe care le conducem.\n\n"
+            "Un lucru esențial: totul este confidențial. Rezultatele sunt analizate doar agregat, la nivel de concluzii — nu de răspunsuri individuale. Singura persoană cu acces la răspunsuri este coach-ul extern care ne însoțește în acest proces, iar acestea rămân strict între el și fiecare dintre noi. Scopul nu este să evaluăm pe cineva, ci să construim o bază sănătoasă, de la care plecăm cu toții.\n\n"
+            "Cu cât suntem mai sinceri acum, cu atât tot ce urmează va fi mai relevant și mai util pentru fiecare dintre noi. Onestitatea de azi e investiția cu cel mai bun randament din tot acest proces.\n\n"
+            "Cum completați: dați click pe linkul de mai jos și parcurgeți chestionarele. Durează fiecare aproximativ câteva minute bine investite. Vă rog să le finalizați până la ${due_date}.\n"
+            "Link platformă: ${action_url}\n\n"
+            "Mă bucur că pornim la drum împreună. Hai să-l începem așa cum ne dorim să-l și continuăm: cu curaj și cu sinceritate.\n\n"
             "Cu respect,\n${sender_name}"
         ),
     ),
     CatalogEmailTemplate(
         key="evaluation_leadership_reminder",
-        version=3,
+        version=7,
         subject="Reminder: mai sunt câteva zile pentru chestionare",
         audience="transactional:leadership",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -355,8 +409,8 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<h1 {HEADING_STYLE}>Reminder pentru chestionare</h1>"
             + f"<p {GREETING_STYLE}>Dragi colegi,</p>"
             + _paragraphs(
-                "O scurtă revenire - mai avem puțin până la ${due_date}, termenul pentru completarea chestionarelor cu care pornim pe acest drum.",
-                "Dacă le-ați completat deja, vă mulțumesc - ați făcut deja primul pas. Dacă nu încă, știu bine că timpul vostru e prețios și agendele, pline. Tocmai de aceea vă cer doar câteva minute: rămâne una dintre cele mai bune investiții pe care le putem face acum în noi și în echipele noastre.",
+                "O scurtă revenire — mai avem puțin până la ${due_date}, termenul pentru completarea chestionarelor cu care pornim pe acest drum.",
+                "Dacă le-ați completat deja, vă mulțumesc — ați făcut deja primul pas. Dacă nu încă, știu bine că timpul vostru e prețios și agendele, pline. Tocmai de aceea vă cer doar câteva minute: rămâne una dintre cele mai bune investiții pe care le putem face acum în noi și în echipele noastre.",
                 "Iar practic, lucrurile sunt simple: radiografia noastră de început este completă și corectă doar dacă suntem toți în ea. Lipsa unui singur răspuns ne schimbă imaginea de ansamblu.",
             )
             + _cta("Continuă chestionarele")
@@ -365,15 +419,17 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
         ),
         text_body=(
             "Dragi colegi,\n\n"
-            "O scurtă revenire: mai avem puțin până la ${due_date}, termenul pentru completarea chestionarelor.\n"
-            "Radiografia noastră de început este completă și corectă doar dacă suntem toți în ea.\n"
-            "Deschide chestionarele aici: ${action_url}\n\n"
+            "O scurtă revenire — mai avem puțin până la ${due_date}, termenul pentru completarea chestionarelor cu care pornim pe acest drum.\n\n"
+            "Dacă le-ați completat deja, vă mulțumesc — ați făcut deja primul pas. Dacă nu încă, știu bine că timpul vostru e prețios și agendele, pline. Tocmai de aceea vă cer doar câteva minute: rămâne una dintre cele mai bune investiții pe care le putem face acum în noi și în echipele noastre.\n\n"
+            "Iar practic, lucrurile sunt simple: radiografia noastră de început este completă și corectă doar dacă suntem toți în ea. Lipsa unui singur răspuns ne schimbă imaginea de ansamblu.\n\n"
+            "Link platformă: ${action_url}\n\n"
+            "Hai să închidem împreună acest prim pas.\n\n"
             "Cu respect,\n${sender_name}"
         ),
     ),
     CatalogEmailTemplate(
         key="evaluation_team_invite",
-        version=3,
+        version=7,
         subject="Avem nevoie de părerea ta",
         audience="transactional:team",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -382,34 +438,39 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<h1 {HEADING_STYLE}>Avem nevoie de părerea ta</h1>"
             + f"<p {GREETING_STYLE}>Bună ziua,</p>"
             + _paragraphs(
-                "Noi, echipa de direcție, am pornit un proces prin care ne dorim să menținem aceleași standarde înalte pe care le cerem fiecăruia dintre voi - și credem că asta trebuie să înceapă cu noi înșine. Ca să facem asta cu adevărat, avem nevoie și de părerea ta.",
+                "Noi, echipa de direcție, am pornit un proces prin care ne dorim să menținem aceleași standarde înalte pe care le cerem fiecăruia dintre voi — și credem că asta trebuie să înceapă cu noi înșine. Ca să facem asta cu adevărat, avem nevoie și de părerea ta.",
                 "Te invităm să completezi două chestionare scurte care ne ajută să înțelegem două lucruri:",
             )
             + _bullets(
-                "cât de bine reușim noi, echipa de direcție, să fim cu adevărat alături de tine și de colegii tăi - să vă sprijinim creșterea, să vă ajutăm să rezolvați mai ușor și mai repede provocările de zi cu zi și să facem asta într-un climat de lucru sănătos;",
+                "cât de bine reușim noi, echipa de direcție, să fim cu adevărat alături de tine și de colegii tăi — să vă sprijinim creșterea, să vă ajutăm să rezolvați mai ușor și mai repede provocările de zi cu zi și să facem asta într-un climat de lucru sănătos;",
                 "cum se vede, din interior, echipa din care faci parte.",
             )
             + _paragraphs(
-                "Răspunsurile tale sunt 100% anonime și confidențiale. Nu vom putea ști niciodată cine ce a răspuns - vedem doar concluziile agregate, imaginea de ansamblu, nu răspunsul tău individual. Tocmai de aceea te rugăm să fii cât mai sincer: feedbackul tău onest este singurul care ne ajută cu adevărat.",
+                "Răspunsurile tale sunt 100% anonime și confidențiale. Nu vom putea ști niciodată cine ce a răspuns — vedem doar concluziile agregate, imaginea de ansamblu, nu răspunsul tău individual. Tocmai de aceea te rugăm să fii cât mai sincer: feedbackul tău onest este singurul care ne ajută cu adevărat.",
                 "Schimbarea reală într-o companie nu vine doar de sus în jos. Vine atunci când cei care conduc înțeleg, din perspectiva ta, ce funcționează bine și ce avem de îmbunătățit. Părerea ta contează exact în acest punct.",
                 "Cum completezi: dă click pe linkul de mai jos și parcurge chestionarele. Durează aproximativ câteva minute. Te rugăm să le finalizezi până la ${due_date}.",
             )
             + _cta("Deschide chestionarele")
-            + _paragraphs("Îți mulțumim că ne ajuți să fim o echipă de conducere mai bună - pentru tine și pentru toți colegii tăi.", "Cu mulțumiri,", "${sender_name}")
+            + _paragraphs("Îți mulțumim că ne ajuți să fim o echipă de conducere mai bună — pentru tine și pentru toți colegii tăi.", "Cu mulțumiri,", "${sender_name}")
             + EMAIL_SHELL_CLOSE
         ),
         text_body=(
             "Bună ziua,\n\n"
-            "Echipa de direcție a pornit un proces prin care își dorește să mențină aceleași standarde înalte pe care le cere fiecăruia dintre voi.\n"
-            "Te invităm să completezi două chestionare scurte despre felul în care echipa de direcție este alături de tine și despre cum se vede, din interior, echipa din care faci parte.\n\n"
-            "Răspunsurile tale sunt 100% anonime și confidențiale.\n"
-            "Te rugăm să le finalizezi până la ${due_date}: ${action_url}\n\n"
+            "Noi, echipa de direcție, am pornit un proces prin care ne dorim să menținem aceleași standarde înalte pe care le cerem fiecăruia dintre voi — și credem că asta trebuie să înceapă cu noi înșine. Ca să facem asta cu adevărat, avem nevoie și de părerea ta.\n\n"
+            "Te invităm să completezi două chestionare scurte care ne ajută să înțelegem două lucruri:\n"
+            "• cât de bine reușim noi, echipa de direcție, să fim cu adevărat alături de tine și de colegii tăi — să vă sprijinim creșterea, să vă ajutăm să rezolvați mai ușor și mai repede provocările de zi cu zi și să facem asta într-un climat de lucru sănătos;\n"
+            "• cum se vede, din interior, echipa din care faci parte.\n\n"
+            "Răspunsurile tale sunt 100% anonime și confidențiale. Nu vom putea ști niciodată cine ce a răspuns — vedem doar concluziile agregate, imaginea de ansamblu, nu răspunsul tău individual. Tocmai de aceea te rugăm să fii cât mai sincer: feedbackul tău onest este singurul care ne ajută cu adevărat.\n\n"
+            "Schimbarea reală într-o companie nu vine doar de sus în jos. Vine atunci când cei care conduc înțeleg, din perspectiva ta, ce funcționează bine și ce avem de îmbunătățit. Părerea ta contează exact în acest punct.\n\n"
+            "Cum completezi: dă click pe linkul de mai jos și parcurge chestionarele. Durează aproximativ câteva minute. Te rugăm să le finalizezi până la ${due_date}.\n"
+            "Link platformă: ${action_url}\n\n"
+            "Îți mulțumim că ne ajuți să fim o echipă de conducere mai bună — pentru tine și pentru toți colegii tăi.\n\n"
             "Cu mulțumiri,\n${sender_name}"
         ),
     ),
     CatalogEmailTemplate(
         key="evaluation_team_reminder",
-        version=3,
+        version=7,
         subject="Mai e puțin timp — părerea ta încă lipsește",
         audience="transactional:team",
         required_context=frozenset({"participant_name", "company_name", "action_url", "due_date", "sender_name"}),
@@ -419,7 +480,7 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
             + f"<p {GREETING_STYLE}>Bună ziua,</p>"
             + _paragraphs(
                 "Revin scurt: mai sunt câteva zile până la ${due_date}, ultima zi în care poți completa cele două chestionare.",
-                "Dacă le-ai completat deja, îți mulțumim din suflet. Dacă nu, te rugăm să-ți iei cele câteva minute necesare - fiecare răspuns în plus face imaginea mai corectă, iar a ta încă lipsește.",
+                "Dacă le-ai completat deja, îți mulțumim din suflet. Dacă nu, te rugăm să-ți iei cele câteva minute necesare — fiecare răspuns în plus face imaginea mai corectă, iar a ta încă lipsește.",
                 "Și, ca să fie clar din nou: totul rămâne 100% anonim. Nu vom ști niciodată cine ce a răspuns, vedem doar concluziile la nivel de ansamblu. Tocmai de asta poți fi complet sincer.",
             )
             + _cta("Completează chestionarele")
@@ -429,8 +490,9 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
         text_body=(
             "Bună ziua,\n\n"
             "Revin scurt: mai sunt câteva zile până la ${due_date}, ultima zi în care poți completa cele două chestionare.\n"
-            "Fiecare răspuns în plus face imaginea mai corectă, iar a ta încă lipsește. Totul rămâne 100% anonim.\n"
-            "Completează aici: ${action_url}\n\n"
+            "Dacă le-ai completat deja, îți mulțumim din suflet. Dacă nu, te rugăm să-ți iei cele câteva minute necesare — fiecare răspuns în plus face imaginea mai corectă, iar a ta încă lipsește.\n\n"
+            "Și, ca să fie clar din nou: totul rămâne 100% anonim. Nu vom ști niciodată cine ce a răspuns, vedem doar concluziile la nivel de ansamblu. Tocmai de asta poți fi complet sincer.\n\n"
+            "Link platformă: ${action_url}\n\n"
             "Mulțumim,\n${sender_name}"
         ),
     ),
@@ -441,7 +503,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     TransactionalTemplateKey.account_setup: TransactionalTemplate(
         key=TransactionalTemplateKey.account_setup,
         version=3,
-        subject="Andrei Vacaru: activează contul pentru ${company_name}",
+        subject="Andrei Văcaru: activează contul pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Contul tău Codruț este pregătit</h1>"
@@ -468,7 +530,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     TransactionalTemplateKey.assignment_bundle: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_bundle,
         version=3,
-        subject="Andrei Vacaru: ai ${task_count} chestionare pentru ${company_name}",
+        subject="Andrei Văcaru: ai ${task_count} chestionare pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
             + f"<h1 {HEADING_STYLE}>Chestionarele tale sunt pregătite</h1>"
