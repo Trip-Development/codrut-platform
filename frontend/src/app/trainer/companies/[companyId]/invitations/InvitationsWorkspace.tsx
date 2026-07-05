@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   createCompanyAssignment,
@@ -23,6 +24,8 @@ import {
   listQuestionnaireDefinitionStubs,
   type QuestionnaireDefinitionStub,
 } from "@/api/questionnaires";
+import { ModalLayer } from "@/components/ui/modal-layer";
+import { useUrlState } from "@/hooks/use-url-state";
 
 type InvitationsWorkspaceProps = {
   companyId: string;
@@ -75,6 +78,14 @@ type AvailableAssignmentScopeGuide = AssignmentScopeGuide & { questionnaireKey: 
 
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const activeInviteStatuses = new Set(["invited", "started", "submitted", "validated", "scored"]);
+
+function normalizeInvitationFilter(value: string | null): InvitationFilter {
+  if (value === "ready" || value === "errors" || value === "no_assignments" || value === "not_signed_up") {
+    return value;
+  }
+  return "all";
+}
+
 const questionnaireLabels: Record<string, string> = {
   lencioni: "Lencioni - evaluare echipă",
   lencioni_en: "Lencioni - evaluare echipă",
@@ -237,6 +248,7 @@ export function InvitationsWorkspace({
   mode = "combined",
   showProjectSelector = true,
 }: InvitationsWorkspaceProps) {
+  const { get, searchKey, setParam, setParams } = useUrlState();
   const [assignmentState, setAssignmentState] = useState(assignments);
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireDefinitionStub[]>([]);
   const [questionnaireMessage, setQuestionnaireMessage] = useState<string | null>(null);
@@ -257,8 +269,8 @@ export function InvitationsWorkspace({
   const [sendingMode, setSendingMode] = useState<ParticipantInvitationMode | "resend" | null>(null);
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
-  const [invitationFilter, setInvitationFilter] = useState<InvitationFilter>("all");
-  const [showAdvancedAssignmentModal, setShowAdvancedAssignmentModal] = useState(false);
+  const [invitationFilter, setInvitationFilterState] = useState<InvitationFilter>(normalizeInvitationFilter(get("filter")));
+  const [showAdvancedAssignmentModal, setShowAdvancedAssignmentModal] = useState(get("modal") === "advanced-assignment");
   const [expandedScopeCards, setExpandedScopeCards] = useState<Set<string>>(new Set());
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -271,6 +283,21 @@ export function InvitationsWorkspace({
   useEffect(() => {
     setAssignmentState(assignments);
   }, [assignments]);
+
+  useEffect(() => {
+    setInvitationFilterState(normalizeInvitationFilter(get("filter")));
+    setShowAdvancedAssignmentModal(get("modal") === "advanced-assignment");
+  }, [get, searchKey]);
+
+  const setInvitationFilter = (filter: InvitationFilter) => {
+    setInvitationFilterState(filter);
+    setParam("filter", filter === "all" ? null : filter, "push");
+  };
+
+  const setAdvancedAssignmentModalOpen = (open: boolean) => {
+    setShowAdvancedAssignmentModal(open);
+    setParams({ modal: open ? "advanced-assignment" : null }, open ? "push" : "replace");
+  };
 
   useEffect(() => {
     setPlan(null);
@@ -799,7 +826,7 @@ export function InvitationsWorkspace({
           </div>
           <button
             type="button"
-            onClick={() => setShowAdvancedAssignmentModal(true)}
+            onClick={() => setAdvancedAssignmentModalOpen(true)}
             disabled={!hasParticipants}
             className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
           >
@@ -878,14 +905,11 @@ export function InvitationsWorkspace({
       ) : null}
 
       {showAdvancedAssignmentModal ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowAdvancedAssignmentModal(false)}>
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="advanced-assignment-title"
-            className="modal-panel max-w-4xl"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
+        <ModalLayer
+          labelledBy="advanced-assignment-title"
+          onClose={() => setAdvancedAssignmentModalOpen(false)}
+          panelClassName="max-w-4xl"
+        >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold text-burgundy/75">Avansat</p>
@@ -898,7 +922,7 @@ export function InvitationsWorkspace({
               </div>
               <button
                 type="button"
-                onClick={() => setShowAdvancedAssignmentModal(false)}
+                onClick={() => setAdvancedAssignmentModalOpen(false)}
                 className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy"
               >
                 Închide
@@ -994,8 +1018,7 @@ export function InvitationsWorkspace({
                 Invitarea rămâne separată: creezi toate asignările, apoi alegi emailuri sau linkuri securizate.
               </p>
             </div>
-          </section>
-        </div>
+        </ModalLayer>
       ) : null}
 
       {showInvitationWorkspace ? (
@@ -1242,8 +1265,10 @@ function ProjectScopeSelector({
   projects: CompanyProject[];
   selectedProjectId: string | null;
 }) {
+  const router = useRouter();
+
   function handleChange(value: string) {
-    window.location.href = value ? `/trainer/projects/${value}/invitations` : "/trainer/projects";
+    router.push(value ? `/trainer/projects/${value}/invitations` : "/trainer/projects");
   }
 
   return (
