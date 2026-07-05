@@ -1202,6 +1202,7 @@ def _render_campaign_message(
     settings: Settings,
 ) -> EmailMessage:
     contact_name = recipient.contact_name or ""
+    calendly_tracking_url = _campaign_calendly_tracking_url(campaign, recipient, settings)
     context = {
         "first_name": _first_name(contact_name) or "",
         "last_name": _last_name(contact_name) or "",
@@ -1212,37 +1213,50 @@ def _render_campaign_message(
         "video_url": campaign.video_url or "",
         "thumbnail_url": campaign.thumbnail_url or "",
         "landing_page_url": campaign.landing_page_url or campaign.video_url or "",
+        "calendly_url": calendly_tracking_url,
         "unsubscribe_url": unsubscribe_url,
     }
 
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
-    calendly_tracking_url = _campaign_calendly_tracking_url(campaign, recipient, settings)
-    if CAMPAIGN_CALENDLY_URL not in html_body:
-        html_body += (
-            '<p style="margin-top:24px;">'
-            f'<a href="{calendly_tracking_url}" '
-            'style="display:inline-block;background:#890505;color:#ffffff;'
-            'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
-            "Programează o discuție"
-            "</a></p>"
-        )
+    if calendly_tracking_url not in html_body:
+        html_body = _append_campaign_calendly_cta(html_body, calendly_tracking_url)
     if "font-family:Inter,Arial,sans-serif" not in html_body:
         html_body = (
             EMAIL_SHELL_OPEN
             + html_body
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
-    if CAMPAIGN_CALENDLY_URL not in text_body:
-        text_body = f"{text_body}\n\nProgramează o discuție: {calendly_tracking_url}"
-    text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
+    if calendly_tracking_url not in text_body:
+        text_body = f"{text_body}\n\nAlege un slot: {calendly_tracking_url}"
+    if unsubscribe_url not in text_body:
+        text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
     return EmailMessage(
         to=EmailAddress(recipient.email),
         subject=subject,
         html_body=html_body,
         text_body=text_body,
     )
+
+
+def _append_campaign_calendly_cta(html_body: str, calendly_url: str) -> str:
+    cta = (
+        '<p style="margin-top:24px;">'
+        f'<a href="{calendly_url}" '
+        'style="display:inline-block;background:#890505;color:#ffffff;'
+        'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
+        "Alege un slot"
+        "</a></p>"
+    )
+    footer_marker = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;'
+    if footer_marker in html_body:
+        return html_body.replace(footer_marker, cta + footer_marker, 1)
+    shell_close = "</div></div>"
+    stripped = html_body.rstrip()
+    if stripped.endswith(shell_close):
+        return stripped[: -len(shell_close)] + cta + shell_close
+    return html_body + cta
 
 
 def _campaign_calendly_tracking_url(

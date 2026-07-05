@@ -41,6 +41,9 @@ function normalizeCampaignView(value: string | null): CampaignViewKey {
   return value === "campaigns" ? "campaigns" : "contacts";
 }
 
+function renderEditablePlaceholders(value: string): string {
+  return value.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}");
+}
 
 const MOCK_REPLACEMENTS: Record<string, string> = {
   "{first_name}": "Ioana",
@@ -586,6 +589,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [showCampaignModal, setShowCampaignModal] = useState(get("modal") === "new-campaign" || get("modal") === "edit-campaign");
   const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
+  const [campaignModalHydrationKey, setCampaignModalHydrationKey] = useState<string | null>(null);
   const [campaignView, setCampaignViewState] = useState<CampaignViewKey>(normalizeCampaignView(get("view")));
   const [campaignName, setCampaignName] = useState("Campanie video leadership");
   const [campaignSegment, setCampaignSegment] = useState<"past_customer" | "potential_customer">("potential_customer");
@@ -619,6 +623,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   function closeCampaignModal(mode: "push" | "replace" = "push") {
     setShowCampaignModal(false);
     setEditingCampaign(null);
+    setCampaignModalHydrationKey(null);
     setParams({ modal: null, campaignId: null }, mode);
   }
 
@@ -711,7 +716,22 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     [campaignTemplateId, campaignTemplates],
   );
 
-  function resetCampaignModal() {
+  const applyCampaignToModal = useCallback((campaign: EmailCampaign) => {
+    setEditingCampaign(campaign);
+    setCampaignName(campaign.name);
+    setCampaignSegment(campaign.segment);
+    setCampaignTemplateId("");
+    setCampaignSubject(renderEditablePlaceholders(campaign.subject));
+    setCampaignBody(renderEditablePlaceholders(campaign.html_body));
+    setCampaignTextBody(renderEditablePlaceholders(campaign.text_body));
+    setCampaignVideoUrl(campaign.video_url ?? "");
+    setCampaignThumbnailUrl(campaign.thumbnail_url ?? "");
+    setCampaignLandingUrl(campaign.landing_page_url ?? "");
+    setCampaignAssetMessage(null);
+    setCampaignMessage(null);
+  }, []);
+
+  const resetCampaignModal = useCallback(() => {
     setEditingCampaign(null);
     setCampaignName("Campanie video leadership");
     setCampaignSegment("potential_customer");
@@ -723,71 +743,74 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setCampaignThumbnailUrl("");
     setCampaignLandingUrl("");
     setCampaignAssetMessage(null);
-  }
+  }, []);
 
   function openCreateCampaignModal() {
     resetCampaignModal();
+    setCampaignModalHydrationKey("new");
     setCampaignMessage(null);
     setShowCampaignModal(true);
     setParams({ tab: "campaigns", modal: "new-campaign", campaignId: null }, "push");
   }
 
   function openEditCampaignModal(campaign: EmailCampaign) {
-    setEditingCampaign(campaign);
-    setCampaignName(campaign.name);
-    setCampaignSegment(campaign.segment);
-    setCampaignTemplateId("");
-    setCampaignSubject(campaign.subject.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
-    setCampaignBody(campaign.html_body.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
-    setCampaignTextBody(campaign.text_body.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
-    setCampaignVideoUrl(campaign.video_url ?? "");
-    setCampaignThumbnailUrl(campaign.thumbnail_url ?? "");
-    setCampaignLandingUrl(campaign.landing_page_url ?? "");
-    setCampaignAssetMessage(null);
-    setCampaignMessage(null);
+    applyCampaignToModal(campaign);
+    setCampaignModalHydrationKey(`edit:${campaign.id}`);
     setShowCampaignModal(true);
     setParams({ tab: "campaigns", view: "campaigns", modal: "edit-campaign", campaignId: campaign.id }, "push");
   }
 
-  useEffect(() => {
-    setSelectedTemplateIdState(get("templateId") ?? "");
-    setCampaignViewState(normalizeCampaignView(get("view")));
-    setShowManualAddModal(get("modal") === "add-contact");
+  const urlTemplateId = get("templateId") ?? "";
+  const urlCampaignView = normalizeCampaignView(get("view"));
+  const urlModal = get("modal");
+  const urlCampaignId = get("campaignId");
+  const isManualAddModalOpen = urlModal === "add-contact";
 
-    const modal = get("modal");
-    if (modal === "new-campaign") {
-      if (!showCampaignModal || editingCampaign) {
+  useEffect(() => {
+    setSelectedTemplateIdState(urlTemplateId);
+    setCampaignViewState(urlCampaignView);
+    setShowManualAddModal(isManualAddModalOpen);
+
+    if (urlModal === "new-campaign") {
+      if (campaignModalHydrationKey !== "new") {
         resetCampaignModal();
         setCampaignMessage(null);
+        setCampaignModalHydrationKey("new");
       }
       setShowCampaignModal(true);
       return;
     }
 
-    if (modal === "edit-campaign") {
-      const campaignId = get("campaignId");
-      const campaign = campaignId ? campaigns.find((item) => item.id === campaignId) : null;
-      if (campaign && (!editingCampaign || editingCampaign.id !== campaign.id || !showCampaignModal)) {
-        setEditingCampaign(campaign);
-        setCampaignName(campaign.name);
-        setCampaignSegment(campaign.segment);
-        setCampaignTemplateId("");
-        setCampaignSubject(campaign.subject.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
-        setCampaignBody(campaign.html_body.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
-        setCampaignTextBody(campaign.text_body.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}"));
-        setCampaignVideoUrl(campaign.video_url ?? "");
-        setCampaignThumbnailUrl(campaign.thumbnail_url ?? "");
-        setCampaignLandingUrl(campaign.landing_page_url ?? "");
-        setCampaignAssetMessage(null);
-        setCampaignMessage(null);
+    if (urlModal === "edit-campaign") {
+      const campaign = urlCampaignId ? campaigns.find((item) => item.id === urlCampaignId) : null;
+      if (campaign) {
+        const nextHydrationKey = `edit:${campaign.id}`;
+        if (campaignModalHydrationKey !== nextHydrationKey) {
+          applyCampaignToModal(campaign);
+          setCampaignModalHydrationKey(nextHydrationKey);
+        }
+        setShowCampaignModal(true);
+      } else {
+        setShowCampaignModal(false);
       }
-      setShowCampaignModal(Boolean(campaign));
       return;
     }
 
     setShowCampaignModal(false);
     setEditingCampaign(null);
-  }, [campaigns, editingCampaign, get, searchKey, showCampaignModal]);
+    setCampaignModalHydrationKey(null);
+  }, [
+    applyCampaignToModal,
+    campaignModalHydrationKey,
+    campaigns,
+    isManualAddModalOpen,
+    resetCampaignModal,
+    searchKey,
+    urlCampaignId,
+    urlCampaignView,
+    urlModal,
+    urlTemplateId,
+  ]);
 
   // Manual Add State
   const [showManualAddModal, setShowManualAddModal] = useState(get("modal") === "add-contact");

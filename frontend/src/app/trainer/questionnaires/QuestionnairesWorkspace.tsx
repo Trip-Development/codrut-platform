@@ -1113,7 +1113,7 @@ export function QuestionnairesWorkspace() {
                                   return scale;
                                 })
                               }
-                              className="rounded-xl border border-[var(--border)] bg-surface px-2 py-1 font-semibold text-foreground/75 focus:border-burgundy/45 focus:outline-none"
+                              className="control-input w-full px-2 py-1 text-xs"
                               placeholder="Etichetă"
                             />
                             <input
@@ -1128,7 +1128,7 @@ export function QuestionnairesWorkspace() {
                                   return scale;
                                 })
                               }
-                              className="rounded-xl border border-[var(--border)] bg-surface px-2 py-1 font-medium text-foreground/70 focus:border-burgundy/45 focus:outline-none"
+                              className="control-input w-full px-2 py-1 text-xs"
                               placeholder="Descriere opțională"
                             />
                             <button
@@ -1169,7 +1169,7 @@ export function QuestionnairesWorkspace() {
                       type="text"
                       value={section.title}
                       onChange={(e) => handleUpdateSectionTitle(sIndex, e.target.value)}
-                      className="bg-transparent text-base font-bold text-foreground border-b border-transparent hover:border-foreground/20 focus:border-burgundy px-1 py-0.5 focus:outline-none"
+                      className="control-input min-w-[12rem] flex-1 px-3 py-2 text-sm font-bold"
                     />
                     <div className="flex items-center gap-2">
                       <button
@@ -1209,7 +1209,7 @@ export function QuestionnairesWorkspace() {
                                   handleUpdateQuestion(sIndex, qIndex, { code: e.target.value })
                                 }
                                 placeholder="Cod"
-                                className="w-16 rounded-xl border border-[var(--border)] bg-background px-2 py-1 text-xs font-bold text-foreground text-center"
+                                className="control-input w-16 px-2 py-1 text-center text-xs font-bold"
                               />
                               <input
                                 type="text"
@@ -1218,7 +1218,7 @@ export function QuestionnairesWorkspace() {
                                   handleUpdateQuestion(sIndex, qIndex, { label: e.target.value })
                                 }
                                 placeholder="Textul întrebării"
-                                className="flex-1 rounded-xl border border-[var(--border)] bg-background px-3 py-1 text-xs font-semibold text-foreground"
+                                className="control-input flex-1 px-3 py-1 text-xs"
                               />
                             </div>
                             <div className="flex items-center gap-2">
@@ -1230,7 +1230,7 @@ export function QuestionnairesWorkspace() {
                                     statements: e.target.value === "statement_score_set" ? [] : undefined,
                                   })
                                 }
-                                className="rounded-xl border border-[var(--border)] bg-background px-2.5 py-1 text-xs font-semibold text-foreground"
+                                className="control-input px-2.5 py-1 text-xs"
                               >
                                 <option value="likert">Scările Likert</option>
                                 <option value="statement_score_set">Set de afirmații</option>
@@ -1265,7 +1265,7 @@ export function QuestionnairesWorkspace() {
                                 handleUpdateQuestion(sIndex, qIndex, { instructions: e.target.value || undefined })
                               }
                               placeholder="Indicații opționale de răspuns..."
-                              className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-1.5 text-xs font-semibold text-foreground/75 focus:border-burgundy/45"
+                              className="control-input w-full px-3 py-1.5 text-xs"
                             />
                           </div>
 
@@ -1313,7 +1313,7 @@ export function QuestionnairesWorkspace() {
                                               newScale[optIndex] = { ...newScale[optIndex], label: e.target.value };
                                               handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                             }}
-                                            className="rounded-xl border border-[var(--border)] bg-background px-2 py-1 font-semibold text-foreground/75 focus:border-burgundy/45 focus:outline-none text-xs"
+                                            className="control-input w-full px-2 py-1 text-xs"
                                             placeholder="Etichetă"
                                           />
                                           <input
@@ -1324,7 +1324,7 @@ export function QuestionnairesWorkspace() {
                                               newScale[optIndex] = { ...newScale[optIndex], description: e.target.value || undefined };
                                               handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                             }}
-                                            className="rounded-xl border border-[var(--border)] bg-background px-2 py-1 font-medium text-foreground/70 focus:border-burgundy/45 focus:outline-none text-xs"
+                                            className="control-input w-full px-2 py-1 text-xs"
                                             placeholder="Descriere opțională pentru această opțiune"
                                           />
                                           <button
@@ -1389,7 +1389,7 @@ export function QuestionnairesWorkspace() {
                                         handleUpdateStatementLabel(sIndex, qIndex, stmtIndex, e.target.value)
                                       }
                                       placeholder="Ex. Îmi place să organizez planuri clare..."
-                                      className="flex-1 rounded-xl border border-[var(--border)] bg-background px-3 py-1 text-xs font-semibold text-foreground"
+                                      className="control-input flex-1 px-3 py-1 text-xs"
                                     />
                                     <button
                                       onClick={() => handleDeleteStatement(sIndex, qIndex, stmtIndex)}
