@@ -34,6 +34,11 @@ from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 
 router = APIRouter()
+TRANSPARENT_GIF_BYTES = (
+    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+    b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+    b"\x00\x02\x02D\x01\x00;"
+)
 
 
 def _require_trainer(principal: SessionPrincipal) -> None:
@@ -301,6 +306,43 @@ async def track_campaign_calendly_click(
     target_url = await CommunicationsService(session).record_calendly_tracking_click(
         token,
         settings,
+    )
+    await session.commit()
+    return RedirectResponse(target_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@router.get("/campaigns/track/opened/{token}")
+async def track_campaign_open(
+    token: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    await CommunicationsService(session).record_campaign_tracking_link(
+        token,
+        settings,
+        expected_event_type="opened",
+    )
+    await session.commit()
+    return Response(
+        content=TRANSPARENT_GIF_BYTES,
+        media_type="image/gif",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+@router.get("/campaigns/track/{event_type}/{token}")
+async def track_campaign_click(
+    event_type: str,
+    token: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> RedirectResponse:
+    if event_type not in {"clicked", "video_viewed"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    target_url = await CommunicationsService(session).record_campaign_tracking_link(
+        token,
+        settings,
+        expected_event_type=event_type,
     )
     await session.commit()
     return RedirectResponse(target_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)

@@ -49,7 +49,7 @@ function catalogButton(label: string, href: string = "{action_url}") {
 }
 
 function calendlyButton(label: string) {
-  return `<p style="margin:24px 0;"><a href="{calendly_url}" data-codrut-cta="calendly" style="display:inline-block;background:#890505;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:700;">${label}</a></p><p style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;">Link calendar: <a href="{calendly_url}" style="color:#890505;text-decoration:underline;">{calendly_url}</a></p>`;
+  return `<p style="margin:24px 0;"><a href="{calendly_url}" data-codrut-cta="calendly" style="display:inline-block;background:#890505;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:700;">${label}</a></p>`;
 }
 
 function videoCard(alt: string) {
@@ -58,9 +58,9 @@ function videoCard(alt: string) {
 
 const SEEDED_TEMPLATES: EmailTemplate[] = [
   {
-    id: "promo_past_report_2022_2025@8",
+    id: "promo_past_report_2022_2025@9",
     baseKey: "promo_past_report_2022_2025",
-    version: 8,
+    version: 9,
     name: "Promo clienți vechi - raport 2022-2025",
     subject: "Raportul de activitate pe care nu l-a cerut nimeni",
     lane: "campaign",
@@ -89,7 +89,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
       ) +
       videoCard("Video — 2 minute, mai interesante decât raportul de mai sus") +
       catalogParagraphs("Aici ai calendarul meu:") +
-      calendlyButton("Alege un format — cafea, apel, Zoom") +
+      calendlyButton("Alege un slot în Calendly") +
       catalogParagraphs("Sau dă reply acestui email și revin eu cu propuneri de întâlnire.", "Andrei") +
       PROMO_SHELL_CLOSE,
     textBody:
@@ -106,15 +106,15 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
       "Ultimul punct e motivul pentru care ești pe lista mea de primit emailul ăsta.\n" +
       "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.\n" +
       "Video: {landing_page_url}\n" +
-      "Aici ai calendarul meu: {calendly_url}\n" +
+      "Alege un slot în Calendly: {calendly_url}\n" +
       "Sau dă reply acestui email și revin eu cu propuneri de întâlnire.\n\n" +
       "Andrei\n\n" +
       "Dezabonare: {unsubscribe_url}",
   },
   {
-    id: "promo_past_reactivation@8",
+    id: "promo_past_reactivation@9",
     baseKey: "promo_past_reactivation",
-    version: 8,
+    version: 9,
     name: "Promo clienți vechi - reactivare",
     subject: "Departamentul de Reconectări Nesolicitate",
     lane: "campaign",
@@ -140,7 +140,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
         "Status: freelancer din 2022, certificat PCM, certificat Rapid Transformation Therapy by Marisa Peer (2025), 1200+ sesiuni livrate, două programe noi super faine și perfecte pentru echipa ta, construite de la zero.",
         "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.",
       ) +
-      calendlyButton("Reactivează contul — alege un slot") +
+      calendlyButton("Alege un slot în Calendly") +
       catalogParagraphs("Dă reply sau alege un slot și revin eu cu un email pentru stabilirea unei întâlniri.") +
       videoCard("Vezi ce s-a întâmplat cu contul în ultimii 3 ani — 2 minute") +
       catalogParagraphs("Andrei Văcaru") +
@@ -157,16 +157,16 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
       "Titular: Andrei Văcaru.\n" +
       "Status: freelancer din 2022, certificat PCM, certificat Rapid Transformation Therapy by Marisa Peer (2025), 1200+ sesiuni livrate, două programe noi super faine și perfecte pentru echipa ta, construite de la zero.\n" +
       "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.\n\n" +
-      "Alege un slot: {calendly_url}\n" +
+      "Alege un slot în Calendly: {calendly_url}\n" +
       "Dă reply sau alege un slot și revin eu cu un email pentru stabilirea unei întâlniri.\n" +
       "Video: {landing_page_url}\n\n" +
       "Andrei Văcaru\n\n" +
       "Dezabonare: {unsubscribe_url}",
   },
   {
-    id: "promo_current_programs@8",
+    id: "promo_current_programs@9",
     baseKey: "promo_current_programs",
-    version: 8,
+    version: 9,
     name: "Promo clienți existenți - programe noi",
     subject: "Acesta nu e un email de vânzare. (Dar dacă era, era bun.)",
     lane: "campaign",
@@ -187,7 +187,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
       ) +
       videoCard("Uită-te. 2 minute. Promit că nu cântă nimeni.") +
       catalogParagraphs("Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu:") +
-      calendlyButton("Alege un slot. Promit o cafea bună.") +
+      calendlyButton("Alege un slot în Calendly") +
       catalogParagraphs("Sau dă reply și revin eu cu niște propuneri de întâlnire.", "Zi faină să ai!", "Andrei") +
       PROMO_SHELL_CLOSE,
     textBody:
@@ -201,15 +201,15 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
       "Am făcut și un video scurt. E mai bun decât emailul ăsta.\n" +
       "Video: {landing_page_url}\n" +
       "Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu:\n" +
-      "Alege un slot: {calendly_url}\n" +
+      "Alege un slot în Calendly: {calendly_url}\n" +
       "Sau dă reply și revin eu cu niște propuneri de întâlnire.\n\n" +
       "Zi faină să ai!\nAndrei\n\n" +
       "Dezabonare: {unsubscribe_url}",
   },
   {
-    id: "promo_potential_intro@8",
+    id: "promo_potential_intro@9",
     baseKey: "promo_potential_intro",
-    version: 8,
+    version: 9,
     name: "Promo prospect - prima interacțiune",
     subject: "Asta e un spam, dar e un spam bun. Nu am avut cum să fac altfel prima interacțiune.",
     lane: "campaign",
@@ -228,7 +228,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
         "Nu am un pitch. Am o întrebare: dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea, ce ar fi?",
         "Poți răspunde la emailul ăsta și stabilim o întâlnire de 30 sau 60 de minute. Sau, dacă preferi o conversație online:",
       ) +
-      calendlyButton("Alege un slot. Îți răspund la întrebare live. Și promit și o cafea bună.") +
+      calendlyButton("Alege un slot în Calendly") +
       catalogParagraphs("Fără obligații, fără vânzare. În cel mai rău caz, o discuție bună.") +
       videoCard("Sau uită-te mai întâi la 2 minute de video - ca să știi cu cine vorbești") +
       catalogParagraphs("Zi faină să ai!", "Andrei Văcaru") +
@@ -243,7 +243,7 @@ const SEEDED_TEMPLATES: EmailTemplate[] = [
       "Nu am un pitch. Am o întrebare:\n" +
       "Dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea — ce ar fi?\n\n" +
       "Poți răspunde la emailul ăsta și stabilim o întâlnire de 30 sau 60 de minute. Sau, dacă preferi o conversație online:\n" +
-      "Alege un slot: {calendly_url}\n" +
+      "Alege un slot în Calendly: {calendly_url}\n" +
       "Fără obligații, fără vânzare. În cel mai rău caz, o discuție bună.\n" +
       "Video: {landing_page_url}\n\n" +
       "Zi faină să ai!\nAndrei Văcaru\n\n" +
@@ -936,8 +936,8 @@ export type CampaignVideoDraft = {
   subject: string;
   htmlBody?: string;
   textBody?: string;
-  videoUrl: string;
-  thumbnailUrl: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
   landingUrl?: string;
 };
 
@@ -958,20 +958,23 @@ function escapeHtmlAttribute(value: string): string {
 
 export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): CampaignCreate | null {
   const trimmedName = draft.name.trim();
+  const hasVideoFields = Boolean(draft.videoUrl?.trim() || draft.thumbnailUrl?.trim());
   const videoUrl = normalizeHttpUrl(draft.videoUrl);
   const thumbnailUrl = normalizeHttpUrl(draft.thumbnailUrl);
   const landingUrl = normalizeHttpUrl(draft.landingUrl) ?? videoUrl;
 
-  if (!trimmedName || !videoUrl || !thumbnailUrl || !landingUrl) return null;
+  if (!trimmedName) return null;
+  if (hasVideoFields && (!videoUrl || !thumbnailUrl || !landingUrl)) return null;
 
-  const safeLandingUrl = escapeHtmlAttribute(landingUrl);
-  const safeThumbnailUrl = escapeHtmlAttribute(thumbnailUrl);
+  const safeLandingUrl = landingUrl ? escapeHtmlAttribute(landingUrl) : "";
+  const safeThumbnailUrl = thumbnailUrl ? escapeHtmlAttribute(thumbnailUrl) : "";
   const htmlBody = draft.htmlBody?.trim()
     ? draft.htmlBody
         .replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
         .replace(/\$\{landing_page_url\}/g, safeLandingUrl)
         .replace(/\$\{thumbnail_url\}/g, safeThumbnailUrl)
-    : [
+    : hasVideoFields
+      ? [
         "<p>Bună, ${first_name}.</p>",
         "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
         [
@@ -982,10 +985,13 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
           "</span>",
           "</a></p>",
         ].join(""),
-      ].join("");
+      ].join("")
+      : "<p>Bună, ${first_name}.</p><p>Dacă vrei, alege un slot în Calendly și stabilim o conversație.</p>";
   const textBody = draft.textBody?.trim()
     ? draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
-    : `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`;
+    : hasVideoFields
+      ? `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`
+      : "Bună, ${first_name}. Dacă vrei, alege un slot în Calendly și stabilim o conversație.";
 
   return {
     name: trimmedName,
@@ -993,9 +999,9 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
     subject: draft.subject.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
     html_body: htmlBody,
     text_body: textBody,
-    video_url: videoUrl,
-    thumbnail_url: thumbnailUrl,
-    landing_page_url: landingUrl === videoUrl ? undefined : landingUrl,
+    video_url: videoUrl ?? undefined,
+    thumbnail_url: thumbnailUrl ?? undefined,
+    landing_page_url: landingUrl && landingUrl !== videoUrl ? landingUrl : undefined,
   };
 }
 

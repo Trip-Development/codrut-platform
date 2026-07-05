@@ -2,6 +2,8 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from html import escape as html_escape
+from html import unescape as html_unescape
 from string import Template
 from urllib.parse import urlparse
 from uuid import UUID
@@ -843,17 +845,31 @@ class CommunicationsService:
         )
 
     async def record_calendly_tracking_click(self, token: str, settings: Settings) -> str:
+        target_url = await self.record_campaign_tracking_link(
+            token,
+            settings,
+            expected_event_type="calendly_clicked",
+        )
+        _require_calendly_target(target_url)
+        return target_url
+
+    async def record_campaign_tracking_link(
+        self,
+        token: str,
+        settings: Settings,
+        *,
+        expected_event_type: str,
+    ) -> str:
         claims = parse_campaign_tracking_token(token, settings)
-        if claims.event_type != "calendly_clicked":
+        if claims.event_type != expected_event_type:
             raise DomainError(
                 "Campaign tracking link has the wrong event type.",
                 code="campaign_tracking_invalid",
             )
-        _require_calendly_target(claims.target_url)
         await self.record_campaign_recipient_event(
             claims.recipient_id,
             CampaignRecipientEventCreateRequest(
-                event_type="calendly_clicked",
+                event_type=claims.event_type,  # type: ignore[arg-type]
                 variant_key=claims.variant_key,
             ),
         )
@@ -1220,16 +1236,27 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
+    if not campaign.video_url and not campaign.thumbnail_url:
+        html_body = _remove_empty_campaign_video_blocks(html_body)
+        text_body = _remove_empty_campaign_video_lines(text_body)
     if not _campaign_message_has_calendly_link(html_body, calendly_tracking_url):
         html_body = _append_campaign_calendly_cta(html_body, calendly_tracking_url)
+    html_body = _rewrite_campaign_tracking_links(
+        html_body,
+        campaign,
+        recipient,
+        settings,
+        calendly_tracking_url=calendly_tracking_url,
+    )
     if "font-family:Inter,Arial,sans-serif" not in html_body:
         html_body = (
             EMAIL_SHELL_OPEN
             + html_body
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
+    html_body = _append_campaign_open_pixel(html_body, campaign, recipient, settings)
     if not _campaign_message_has_calendly_link(text_body, calendly_tracking_url):
-        text_body = f"{text_body}\n\nAlege un slot: {calendly_tracking_url}"
+        text_body = f"{text_body}\n\nAlege un slot în Calendly: {calendly_tracking_url}"
     if unsubscribe_url not in text_body:
         text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
     return EmailMessage(
@@ -1238,6 +1265,22 @@ def _render_campaign_message(
         html_body=html_body,
         text_body=text_body,
     )
+
+
+_EMPTY_CAMPAIGN_VIDEO_BLOCK_RE = re.compile(
+    r'<p\b[^>]*>\s*<a\b[^>]*href=""[^>]*>.*?<img\b[^>]*src=""[^>]*>.*?</a>\s*</p>',
+    re.IGNORECASE | re.DOTALL,
+)
+_EMPTY_CAMPAIGN_VIDEO_LINE_RE = re.compile(r"(?m)^[^\n]*(?:Video|video)[^\n]*:\s*$\n?")
+_CAMPAIGN_HREF_RE = re.compile(r'href=(["\'])([^"\']+)\1', re.IGNORECASE)
+
+
+def _remove_empty_campaign_video_blocks(html_body: str) -> str:
+    return _EMPTY_CAMPAIGN_VIDEO_BLOCK_RE.sub("", html_body)
+
+
+def _remove_empty_campaign_video_lines(text_body: str) -> str:
+    return _EMPTY_CAMPAIGN_VIDEO_LINE_RE.sub("", text_body)
 
 
 def _campaign_message_has_calendly_link(body: str, calendly_tracking_url: str) -> bool:
@@ -1256,7 +1299,7 @@ def _append_campaign_calendly_cta(html_body: str, calendly_url: str) -> str:
         'data-codrut-cta="calendly" '
         'style="display:inline-block;background:#890505;color:#ffffff;'
         'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
-        "Alege un slot"
+        "Alege un slot în Calendly"
         "</a></p>"
     )
     footer_marker = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;'
@@ -1269,22 +1312,123 @@ def _append_campaign_calendly_cta(html_body: str, calendly_url: str) -> str:
     return html_body + cta
 
 
+def _append_campaign_open_pixel(
+    html_body: str,
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    settings: Settings,
+) -> str:
+    tracking_url = _campaign_tracking_url(
+        campaign,
+        recipient,
+        settings,
+        target_url=settings.public_app_url.rstrip("/") + "/",
+        event_type="opened",
+    )
+    pixel = (
+        f'<img src="{html_escape(tracking_url, quote=True)}" width="1" height="1" '
+        'alt="" aria-hidden="true" style="display:none!important;opacity:0;'
+        'width:1px;height:1px;border:0;" />'
+    )
+    shell_close = "</div></div>"
+    stripped = html_body.rstrip()
+    if stripped.endswith(shell_close):
+        return stripped[: -len(shell_close)] + pixel + shell_close
+    return html_body + pixel
+
+
+def _rewrite_campaign_tracking_links(
+    html_body: str,
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    settings: Settings,
+    *,
+    calendly_tracking_url: str,
+) -> str:
+    video_targets = {
+        target
+        for target in (campaign.video_url, campaign.landing_page_url or campaign.video_url)
+        if target
+    }
+
+    def replace_href(match: re.Match[str]) -> str:
+        quote = match.group(1)
+        raw_href = html_unescape(match.group(2)).strip()
+        if not _should_track_campaign_href(raw_href, settings, calendly_tracking_url):
+            return match.group(0)
+        if _is_calendly_target(raw_href):
+            event_type = "calendly_clicked"
+        elif raw_href in video_targets:
+            event_type = "video_viewed"
+        else:
+            event_type = "clicked"
+        tracking_url = _campaign_tracking_url(
+            campaign,
+            recipient,
+            settings,
+            target_url=raw_href,
+            event_type=event_type,
+        )
+        return f"href={quote}{html_escape(tracking_url, quote=True)}{quote}"
+
+    return _CAMPAIGN_HREF_RE.sub(replace_href, html_body)
+
+
+def _should_track_campaign_href(
+    href: str,
+    settings: Settings,
+    calendly_tracking_url: str,
+) -> bool:
+    if not href or href == calendly_tracking_url:
+        return False
+    parsed = urlparse(href)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    public_base = settings.public_app_url.rstrip("/")
+    tracking_prefix = f"{public_base}/api/communications/campaigns/"
+    if href.startswith(tracking_prefix):
+        return False
+    return True
+
+
+def _is_calendly_target(target_url: str) -> bool:
+    hostname = urlparse(target_url).hostname
+    return hostname == "calendly.com" or (hostname or "").endswith(".calendly.com")
+
+
 def _campaign_calendly_tracking_url(
     campaign: Campaign,
     recipient: CampaignRecipient,
     settings: Settings,
 ) -> str:
+    return _campaign_tracking_url(
+        campaign,
+        recipient,
+        settings,
+        target_url=CAMPAIGN_CALENDLY_URL,
+        event_type="calendly_clicked",
+    )
+
+
+def _campaign_tracking_url(
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    settings: Settings,
+    *,
+    target_url: str,
+    event_type: str,
+) -> str:
     token = create_campaign_tracking_token(
         CampaignTrackingClaims(
             recipient_id=recipient.id,
-            target_url=CAMPAIGN_CALENDLY_URL,
-            event_type="calendly_clicked",
+            target_url=target_url,
+            event_type=event_type,
             variant_key=str(campaign.id),
             expires_at=datetime.now(UTC) + timedelta(days=30),
         ),
         settings,
     )
-    return build_campaign_tracking_url(token, settings)
+    return build_campaign_tracking_url(token, settings, event_type=event_type)
 
 
 def _render_campaign_template(template: str, context: dict[str, str]) -> str:
@@ -1295,8 +1439,7 @@ def _render_campaign_template(template: str, context: dict[str, str]) -> str:
 
 
 def _require_calendly_target(target_url: str) -> None:
-    hostname = urlparse(target_url).hostname
-    if hostname != "calendly.com" and not (hostname or "").endswith(".calendly.com"):
+    if not _is_calendly_target(target_url):
         raise DomainError(
             "Campaign Calendly tracking link target is not allowed.",
             code="campaign_tracking_invalid_target",
