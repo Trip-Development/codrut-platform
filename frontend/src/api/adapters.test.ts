@@ -576,6 +576,27 @@ describe("frontend API adapter stubs", () => {
     expect(payload?.html_body).toContain('href="https://vimeo.com/123456789"');
   });
 
+  it("builds campaign payloads without video assets", () => {
+    const payload = buildVideoCampaignCreatePayload({
+      name: " Campanie fără video ",
+      segment: "potential_customer",
+      subject: "Salut {first_name}",
+      videoUrl: "",
+      thumbnailUrl: "",
+      landingUrl: "",
+    });
+
+    expect(payload).toMatchObject({
+      name: "Campanie fără video",
+      segment: "potential_customer",
+      subject: "Salut ${first_name}",
+    });
+    expect(payload?.video_url).toBeUndefined();
+    expect(payload?.thumbnail_url).toBeUndefined();
+    expect(payload?.landing_page_url).toBeUndefined();
+    expect(payload?.html_body).not.toContain("<img");
+  });
+
   it("uploads campaign thumbnail assets as raw image bodies", async () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
@@ -1858,7 +1879,7 @@ describe("frontend API adapter stubs", () => {
     expect(keys).not.toContain("account_setup");
     expect(keys).not.toContain("assignment_bundle");
     expect(report).toMatchObject({
-      version: 8,
+      version: 9,
       lane: "campaign",
       audience: "campaign:past_customer",
     });
@@ -1867,10 +1888,10 @@ describe("frontend API adapter stubs", () => {
     expect(report?.body).toContain("A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală");
     expect(report?.body).toContain("A neglijat să se reconecteze cu oameni cu care a lucrat bine");
     expect(report?.body).toContain("Aici ai calendarul meu");
-    expect(report?.body).toContain("Link calendar");
+    expect(report?.body).not.toContain("Link calendar");
     expect(report?.textBody).toContain("✓ A supraviețuit tranziției la freelancing");
     expect(report?.textBody).toContain("✗ A neglijat să se reconecteze");
-    expect(report?.textBody).toContain("Aici ai calendarul meu: {calendly_url}");
+    expect(report?.textBody).toContain("Alege un slot în Calendly: {calendly_url}");
     expect(report?.placeholders).toContain("{calendly_url}");
     expect(report?.placeholders).toContain("{thumbnail_url}");
     expect(leadershipInvite).toMatchObject({ version: 7, audience: "transactional:leadership" });

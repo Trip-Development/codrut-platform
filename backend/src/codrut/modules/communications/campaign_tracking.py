@@ -28,7 +28,7 @@ class CampaignRecipientActionClaims:
 
 
 def create_campaign_tracking_token(claims: CampaignTrackingClaims, settings: Settings) -> str:
-    _validate_tracking_target(claims.target_url)
+    _validate_tracking_target(claims.target_url, event_type=claims.event_type)
     payload = {
         "recipient_id": str(claims.recipient_id),
         "target_url": claims.target_url,
@@ -76,13 +76,19 @@ def parse_campaign_tracking_token(
         ) from exc
     if claims.expires_at <= (now or datetime.now(UTC)):
         raise DomainError("Campaign tracking link has expired.", code="campaign_tracking_expired")
-    _validate_tracking_target(claims.target_url)
+    _validate_tracking_target(claims.target_url, event_type=claims.event_type)
     return claims
 
 
-def build_campaign_tracking_url(token: str, settings: Settings) -> str:
+def build_campaign_tracking_url(
+    token: str,
+    settings: Settings,
+    *,
+    event_type: str = "calendly_clicked",
+) -> str:
     base_url = settings.public_app_url.rstrip("/")
-    return f"{base_url}/api/communications/campaigns/track/calendly/{quote(token, safe='')}"
+    path_event = "calendly" if event_type == "calendly_clicked" else event_type
+    return f"{base_url}/api/communications/campaigns/track/{path_event}/{quote(token, safe='')}"
 
 
 def create_campaign_recipient_action_token(
@@ -136,13 +142,15 @@ def build_campaign_unsubscribe_url(token: str, settings: Settings) -> str:
     return f"{base_url}/api/communications/campaigns/unsubscribe/{quote(token, safe='')}"
 
 
-def _validate_tracking_target(target_url: str) -> None:
+def _validate_tracking_target(target_url: str, *, event_type: str) -> None:
     parsed = urlparse(target_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise DomainError(
             "Campaign tracking target must be an absolute HTTP(S) URL.",
             code="campaign_tracking_invalid_target",
         )
+    if event_type != "calendly_clicked":
+        return
     host = parsed.hostname or ""
     if host != "calendly.com" and not host.endswith(".calendly.com"):
         raise DomainError(
