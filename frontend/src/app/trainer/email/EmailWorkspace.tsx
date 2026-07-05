@@ -979,7 +979,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
 
     if (!payload) {
-      setCampaignMessage("Completează numele, linkul Vimeo/video și un thumbnail valid.");
+      setCampaignMessage("Completează numele campaniei. Dacă folosești video, adaugă linkul și thumbnailul.");
       return;
     }
 
@@ -989,6 +989,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       if (editingCampaign) {
         await updateCampaignOnServer(editingCampaign.id, {
           ...payload,
+          video_url: campaignVideoUrl.trim() ? payload.video_url : null,
+          thumbnail_url: campaignThumbnailUrl.trim() ? payload.thumbnail_url : null,
           landing_page_url: campaignLandingUrl.trim() ? payload.landing_page_url : null,
           status: editingCampaign.status,
         });
@@ -2556,9 +2558,9 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">
                   {editingCampaign ? "Editează campanie" : "Campanie nouă"}
                 </p>
-                <h2 id="campaign-modal-title" className="mt-2 text-xl font-bold text-foreground">Email video cu thumbnail</h2>
+                <h2 id="campaign-modal-title" className="mt-2 text-xl font-bold text-foreground">Email campanie</h2>
                 <p className="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-foreground/55">
-                  Configurează șablonul, linkul video și thumbnailul într-un singur loc. Previewul din dreapta arată emailul pe care îl va vedea contactul.
+                  Configurează șablonul, Calendly și opțional video/thumbnail. Previewul din dreapta arată emailul pe care îl va vedea contactul.
                 </p>
               </div>
               <button
@@ -2667,7 +2669,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-4">
                       <div className="grid gap-4 md:grid-cols-2">
                         <label className="block">
-                          <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Link video</span>
+                          <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Link video (opțional)</span>
                           <input
                             type="url"
                             value={campaignVideoUrl}
@@ -2691,8 +2693,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       <div className="mt-4">
                         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                           <div>
-                            <span className="block text-xs font-bold uppercase tracking-wider text-foreground/60">Thumbnail</span>
-                            <p className="mt-1 text-[11px] font-medium text-foreground/50">Imagine sau GIF cu overlay de play în email.</p>
+                            <span className="block text-xs font-bold uppercase tracking-wider text-foreground/60">Thumbnail (opțional)</span>
+                            <p className="mt-1 text-[11px] font-medium text-foreground/50">Necesar doar pentru campaniile cu video.</p>
                           </div>
                           <label className="btn-secondary inline-flex cursor-pointer items-center justify-center px-4 py-2 text-xs">
                             {isUploadingCampaignAsset ? "Se încarcă..." : "Încarcă fișier"}
@@ -2721,7 +2723,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
 
                   <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
                     <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/60">Thumbnail</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/60">Video opțional</p>
                       {campaignThumbnailUrl ? (
                         <div className="relative mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-surface">
                           <Image
@@ -2740,7 +2742,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                         </div>
                       ) : (
                         <div className="mt-3 flex h-36 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-surface text-xs font-semibold text-foreground/45">
-                          Adaugă thumbnail pentru preview
+                          Fără video pentru această campanie
                         </div>
                       )}
                     </div>

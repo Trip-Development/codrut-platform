@@ -19,6 +19,7 @@ from codrut.modules.communications.campaign_tracking import (
 from codrut.modules.communications.models import (
     Campaign,
     CampaignRecipient,
+    CampaignRecipientEvent,
     CampaignRecipientSegment,
     CampaignRecipientStatus,
     CampaignStatus,
@@ -56,6 +57,7 @@ class FakeCommunicationsRepository:
         self.sends: list[EmailSend] = []
         self.sent_versions: set[tuple[str, int]] = set()
         self.campaign_recipients: list[CampaignRecipient] = []
+        self.campaign_recipient_events: list[CampaignRecipientEvent] = []
         self.campaigns: list[Campaign] = []
         self.list_template_calls = 0
 
@@ -232,6 +234,13 @@ class FakeCommunicationsRepository:
     async def add_email_send(self, send: EmailSend) -> EmailSend:
         self.sends.append(send)
         return send
+
+    async def add_campaign_recipient_event(
+        self,
+        event: CampaignRecipientEvent,
+    ) -> CampaignRecipientEvent:
+        self.campaign_recipient_events.append(event)
+        return event
 
     async def list_accepted_campaign_recipient_ids(self, campaign_id: uuid.UUID) -> set[uuid.UUID]:
         return {
@@ -564,8 +573,81 @@ async def test_send_campaign_does_not_append_duplicate_calendly_cta() -> None:
     assert provider.sent[0].text_body.count("Alege un slot") == 1
     assert (
         "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
-        not in provider.sent[0].html_body
+        in provider.sent[0].html_body
     )
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_adds_open_click_and_video_tracking() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.video_url = "https://vimeo.com/123456789"
+    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = "https://codrut.andreivacaru.ro/campanii/demo"
+    campaign.html_body = (
+        '<p><a href="${landing_page_url}"><img src="${thumbnail_url}" alt="Video" /></a></p>'
+        '<p><a href="https://example.com/articol">Citește articolul</a></p>'
+        '<p><a href="${calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>'
+    )
+    active = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(active)
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id]),
+        provider=provider,
+        settings=settings,
+    )
+
+    html_body = provider.sent[0].html_body
+    assert response.sent == 1
+    assert "/api/communications/campaigns/track/opened/" in html_body
+    assert "/api/communications/campaigns/track/video_viewed/" in html_body
+    assert "/api/communications/campaigns/track/clicked/" in html_body
+    assert html_body.count("/api/communications/campaigns/track/calendly/") == 1
+
+    clicked_token = (
+        html_body.split("/api/communications/campaigns/track/clicked/", 1)[1]
+        .split('"', 1)[0]
+    )
+    target_url = await service.record_campaign_tracking_link(
+        clicked_token,
+        settings,
+        expected_event_type="clicked",
+    )
+    assert target_url == "https://example.com/articol"
+    assert repository.campaign_recipient_events[-1].event_type == "clicked"
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_without_video_removes_empty_video_blocks() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.html_body = (
+        '<p>Intro.</p>'
+        '<p><a href="${landing_page_url}"><img src="${thumbnail_url}" alt="Video" /></a></p>'
+    )
+    campaign.text_body = "Intro.\nVideo: ${landing_page_url}\nFinal."
+    active = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(active)
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id]),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert '<img src=""' not in provider.sent[0].html_body
+    assert 'href=""' not in provider.sent[0].html_body
+    assert "Video:" not in provider.sent[0].text_body
 
 
 def test_promotional_catalog_templates_match_source_structure_and_include_calendly() -> None:
@@ -574,7 +656,7 @@ def test_promotional_catalog_templates_match_source_structure_and_include_calend
     current_programs = catalog_template("promo_current_programs")
     potential_intro = catalog_template("promo_potential_intro")
 
-    assert report.version == 8
+    assert report.version == 9
     assert "calendly_url" in report.required_context
     assert 'role="presentation"' in report.html_body
     assert "list-style:none" not in report.html_body
@@ -583,35 +665,35 @@ def test_promotional_catalog_templates_match_source_structure_and_include_calend
     assert "A neglijat să se reconecteze cu oameni cu care a lucrat bine" in report.html_body
     assert "Influencing Skills for Trusted Stakeholder Partnerships" in report.html_body
     assert "Aici ai calendarul meu" in report.html_body
-    assert "Alege un format — cafea, apel, Zoom" in report.html_body
-    assert "Link calendar" in report.html_body
+    assert "Alege un slot în Calendly" in report.html_body
+    assert "Link calendar" not in report.html_body
     assert "${calendly_url}" in report.html_body
     assert 'data-codrut-cta="calendly"' in report.html_body
-    assert report.html_body.index("Alege un format — cafea, apel, Zoom") < report.html_body.index(
+    assert report.html_body.index("Alege un slot în Calendly") < report.html_body.index(
         "reply acestui email"
     )
     assert "${calendly_url}" in report.text_body
     assert "Ultimul punct e motivul" in report.text_body
 
-    assert reactivation.version == 8
+    assert reactivation.version == 9
     assert "Opțiunea A: Ignoră emailul" in reactivation.html_body
-    assert "Reactivează contul — alege un slot" in reactivation.html_body
+    assert "Alege un slot în Calendly" in reactivation.html_body
     assert "${calendly_url}" in reactivation.html_body
     assert 'data-codrut-cta="calendly"' in reactivation.html_body
-    reactivation_cta_index = reactivation.html_body.index("Reactivează contul — alege un slot")
+    reactivation_cta_index = reactivation.html_body.index("Alege un slot în Calendly")
     reactivation_reply_index = reactivation.html_body.index("Dă reply sau alege un slot")
     assert reactivation_cta_index < reactivation_reply_index
 
-    assert current_programs.version == 8
+    assert current_programs.version == 9
     assert "Programul 1: Influencing Skills" in current_programs.html_body
     assert (
         "Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu"
         in current_programs.html_body
     )
-    assert "Alege un slot. Promit o cafea bună." in current_programs.html_body
+    assert "Alege un slot în Calendly" in current_programs.html_body
 
-    assert potential_intro.version == 8
-    assert "Alege un slot. Îți răspund la întrebare live." in potential_intro.html_body
+    assert potential_intro.version == 9
+    assert "Alege un slot în Calendly" in potential_intro.html_body
     assert "${calendly_url}" in potential_intro.text_body
 
 
@@ -671,7 +753,7 @@ async def test_send_campaign_uses_video_url_when_landing_page_is_missing() -> No
     )
 
     assert response.sent == 1
-    assert 'href="https://vimeo.com/123456789"' in provider.sent[0].html_body
+    assert "/api/communications/campaigns/track/video_viewed/" in provider.sent[0].html_body
     assert "Vezi video: https://vimeo.com/123456789" in provider.sent[0].text_body
 
 
