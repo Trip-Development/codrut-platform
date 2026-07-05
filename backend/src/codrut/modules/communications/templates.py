@@ -88,7 +88,7 @@ def _paragraphs(*items: str) -> str:
 
 def _bullets(*items: str) -> str:
     return (
-        '<ul style="margin:0 0 18px;padding-left:22px;font-size:15px;line-height:1.65;">'
+        '<ul style="margin:0 0 18px;padding-left:0;font-size:15px;line-height:1.65;list-style:none;">'
         + "".join(f'<li style="margin:0 0 8px;">{item}</li>' for item in items)
         + "</ul>"
     )
@@ -120,7 +120,10 @@ def _video_cta(alt: str = "Vezi video-ul") -> str:
 
 
 def _calendly_cta(label: str = "Alege un slot") -> str:
-    return _cta(label, "calendly_url")
+    return (
+        f'<p style="margin:24px 0;"><a href="${{calendly_url}}" '
+        f'data-codrut-cta="calendly" style="{PRIMARY_BUTTON_STYLE}">{label}</a></p>'
+    )
 
 
 PROMOTIONAL_REQUIRED_CONTEXT = frozenset({
@@ -135,7 +138,7 @@ PROMOTIONAL_REQUIRED_CONTEXT = frozenset({
 PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     CatalogEmailTemplate(
         key="promo_past_report_2022_2025",
-        version=3,
+        version=4,
         subject="Raportul de activitate pe care nu l-a cerut nimeni",
         audience="campaign:past_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT,
@@ -161,8 +164,8 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
                 "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.",
             )
             + _video_cta("Video — 2 minute, mai interesante decât raportul de mai sus")
-            + _paragraphs("Dă reply acestui email sau alege un slot și revin eu cu propuneri de întâlnire.")
             + _calendly_cta("Alege un format — cafea, apel, Zoom")
+            + _paragraphs("Dă reply acestui email sau alege un slot și revin eu cu propuneri de întâlnire.")
             + _paragraphs("Andrei")
             + PROMOTIONAL_SHELL_CLOSE
         ),
@@ -187,7 +190,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_past_reactivation",
-        version=3,
+        version=4,
         subject="Departamentul de Reconectări Nesolicitate",
         audience="campaign:past_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT | frozenset({"company_name"}),
@@ -211,8 +214,8 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
                 "Status: freelancer din 2022, certificat PCM, certificat Rapid Transformation Therapy by Marisa Peer (2025), 1200+ sesiuni livrate, două programe noi super faine și perfecte pentru echipa ta, construite de la zero.",
                 "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.",
             )
-            + _paragraphs("Dă reply sau alege un slot și revin eu cu un mail pentru stabilirea unei întâlniri.")
             + _calendly_cta("Reactivează contul — alege un slot")
+            + _paragraphs("Dă reply sau alege un slot și revin eu cu un mail pentru stabilirea unei întâlniri.")
             + _video_cta("Vezi ce s-a întâmplat cu contul în ultimii 3 ani — 2 minute")
             + _paragraphs("Andrei Vacaru")
             + PROMOTIONAL_SHELL_CLOSE
@@ -227,7 +230,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_current_programs",
-        version=3,
+        version=4,
         subject="Acesta nu e un email de vânzare. (Dar dacă era, era bun.)",
         audience="campaign:past_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT,
@@ -263,7 +266,7 @@ PROMOTIONAL_TEMPLATES: tuple[CatalogEmailTemplate, ...] = (
     ),
     CatalogEmailTemplate(
         key="promo_potential_intro",
-        version=3,
+        version=4,
         subject="Asta e un spam, dar e un spam bun. Nu am avut cum să fac altfel prima interacțiune.",
         audience="campaign:potential_customer",
         required_context=PROMOTIONAL_REQUIRED_CONTEXT,
