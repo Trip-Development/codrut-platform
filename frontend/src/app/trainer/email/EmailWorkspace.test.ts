@@ -30,6 +30,21 @@ const emailApiMocks = vi.hoisted(() => ({
   uploadCampaignAssetOnServer: vi.fn(),
 }));
 
+const navigationMocks = vi.hoisted(() => ({
+  searchParams: new URLSearchParams(),
+  push: vi.fn(),
+  replace: vi.fn(),
+  prefetch: vi.fn(),
+  back: vi.fn(),
+  refresh: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigationMocks,
+  useSearchParams: () => navigationMocks.searchParams,
+  usePathname: () => "/trainer/email",
+}));
+
 vi.mock("@/api/email", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/email")>();
   return {
@@ -53,6 +68,12 @@ vi.mock("@/api/email", async (importOriginal) => {
 
 beforeEach(() => {
   Object.values(emailApiMocks).forEach((mock) => mock.mockReset());
+  navigationMocks.searchParams = new URLSearchParams();
+  navigationMocks.push.mockReset();
+  navigationMocks.replace.mockReset();
+  navigationMocks.prefetch.mockReset();
+  navigationMocks.back.mockReset();
+  navigationMocks.refresh.mockReset();
   emailApiMocks.listCampaignsOnServer.mockResolvedValue([]);
   emailApiMocks.listEmailTemplatesOnServer.mockResolvedValue([]);
   emailApiMocks.updateCampaignRecipientOnServer.mockResolvedValue({});
@@ -152,6 +173,31 @@ describe("renderEmailTemplatePreviewBody", () => {
 });
 
 describe("EmailWorkspace campaign contacts", () => {
+  it("keeps campaign modal fields focused while typing", async () => {
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&modal=new-campaign");
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+
+    const nameInput = await screen.findByLabelText("Nume campanie");
+    nameInput.focus();
+    fireEvent.change(nameInput, { target: { value: "A" } });
+    expect(document.activeElement).toBe(nameInput);
+    fireEvent.change(nameInput, { target: { value: "AB" } });
+    expect(document.activeElement).toBe(nameInput);
+    expect((nameInput as HTMLInputElement).value).toBe("AB");
+
+    const subjectInput = screen.getByLabelText("Subiect");
+    fireEvent.click(subjectInput);
+    subjectInput.focus();
+    fireEvent.change(subjectInput, { target: { value: "Salut A" } });
+    fireEvent.change(subjectInput, { target: { value: "Salut AB" } });
+    expect((subjectInput as HTMLInputElement).value).toBe("Salut AB");
+
+    const bodyInput = screen.getByLabelText("Corp email");
+    fireEvent.change(bodyInput, { target: { value: "Primul rând" } });
+    fireEvent.change(bodyInput, { target: { value: "Primul rând\nAl doilea rând" } });
+    expect((bodyInput as HTMLTextAreaElement).value).toBe("Primul rând\nAl doilea rând");
+  });
+
   it("toggles an inactive campaign contact to active with clear Da/Nu state", async () => {
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
 
