@@ -156,6 +156,10 @@ export function ProjectParticipantsWorkspace({
   const activeSecureLinkCount = accessRows.filter((row) => row.hasSecureLink).length;
 
   useEffect(() => {
+    setParticipants(initialParticipants);
+  }, [initialParticipants]);
+
+  useEffect(() => {
     setActiveTabState(normalizeParticipantsTab(get("view")));
     setShowImportModal(get("modal") === "import");
     setShowAddPanel(get("panel") === "add" || (participants.length === 0 && get("panel") !== "closed"));
@@ -260,7 +264,7 @@ export function ProjectParticipantsWorkspace({
         })),
         { projectId },
       );
-      setParticipants(result.participants);
+      setParticipants((current) => mergeParticipants(current, result.participants));
       setManualForm(emptyManualForm);
       setPasteText("");
       setAddPanelOpen(false);
@@ -772,6 +776,22 @@ function EditField({
 function cleanOptional(value: string): string | null {
   const cleaned = value.trim();
   return cleaned || null;
+}
+
+function mergeParticipants(
+  current: CompanyParticipant[],
+  incoming: CompanyParticipant[],
+): CompanyParticipant[] {
+  const byId = new Map(current.map((participant) => [participant.id, participant]));
+  for (const participant of incoming) {
+    byId.set(participant.id, {
+      ...byId.get(participant.id),
+      ...participant,
+    });
+  }
+  return Array.from(byId.values()).sort((first, second) =>
+    first.full_name.localeCompare(second.full_name, "ro-RO"),
+  );
 }
 
 function buildManualImportRows(form: ManualAddForm, pasteText: string): ParsedManualParticipant[] {
