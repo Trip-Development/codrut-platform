@@ -147,6 +147,7 @@ describe("renderEmailTemplatePreviewBody", () => {
   it("previews both brace and backend-style placeholders cleanly", () => {
     expect(replacePreviewPlaceholders("Bună, {first_name}.")).toBe("Bună, Ioana.");
     expect(replacePreviewPlaceholders("Bună, ${first_name}.")).toBe("Bună, Ioana.");
+    expect(replacePreviewPlaceholders("Programează aici: {calendly_url}.")).toContain("calendly.com/andreivacaru");
   });
 });
 
@@ -155,6 +156,7 @@ describe("EmailWorkspace campaign contacts", () => {
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
 
     fireEvent.click(screen.getByRole("button", { name: "Campanii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Arată inactive (1)" }));
 
     const inactiveButton = await screen.findByRole("button", {
       name: "Inactiv în campanii pentru ioana@example.com",
@@ -176,7 +178,7 @@ describe("EmailWorkspace campaign contacts", () => {
     });
     expect(activeButton.getAttribute("aria-pressed")).toBe("true");
     expect(activeButton.textContent).toContain("Da");
-    expect(screen.getByText("pregătit")).toBeTruthy();
+    expect(screen.getByText("Pregătit")).toBeTruthy();
   });
 
   it("shows unsubscribed campaign contacts as protected and does not reactivate them", async () => {
@@ -189,8 +191,36 @@ describe("EmailWorkspace campaign contacts", () => {
     });
     expect((unsubscribedButton as HTMLButtonElement).disabled).toBe(true);
     expect(unsubscribedButton.textContent).toContain("Stop");
-    expect(screen.getByText("dezabonat")).toBeTruthy();
+    expect(screen.getByText("Dezabonat")).toBeTruthy();
     expect(emailApiMocks.updateCampaignRecipientOnServer).not.toHaveBeenCalled();
+  });
+
+  it("blocks bulk contact operations while a selected contact is being edited", async () => {
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready") }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Campanii" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează ioana@example.com" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Editează ioana@example.com" }));
+
+    expect((screen.getByRole("button", { name: "Activează" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Dezactivează" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Șterge contactele selectate" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("clears hidden inactive selections when inactive contacts are hidden", async () => {
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Campanii" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Arată inactive (1)" }));
+
+    const selection = await screen.findByRole("checkbox", { name: "Selectează ioana@example.com" });
+    fireEvent.click(selection);
+    expect((selection as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ascunde inactive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Arată inactive (1)" }));
+
+    expect(((await screen.findByRole("checkbox", { name: "Selectează ioana@example.com" })) as HTMLInputElement).checked).toBe(false);
   });
 });
 
