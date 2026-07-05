@@ -1220,7 +1220,7 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
-    if calendly_tracking_url not in html_body:
+    if not _campaign_message_has_calendly_link(html_body, calendly_tracking_url):
         html_body = _append_campaign_calendly_cta(html_body, calendly_tracking_url)
     if "font-family:Inter,Arial,sans-serif" not in html_body:
         html_body = (
@@ -1228,7 +1228,7 @@ def _render_campaign_message(
             + html_body
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
-    if calendly_tracking_url not in text_body:
+    if not _campaign_message_has_calendly_link(text_body, calendly_tracking_url):
         text_body = f"{text_body}\n\nAlege un slot: {calendly_tracking_url}"
     if unsubscribe_url not in text_body:
         text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
@@ -1240,10 +1240,20 @@ def _render_campaign_message(
     )
 
 
+def _campaign_message_has_calendly_link(body: str, calendly_tracking_url: str) -> bool:
+    normalized = body.lower()
+    return (
+        bool(calendly_tracking_url and calendly_tracking_url in body)
+        or 'data-codrut-cta="calendly"' in normalized
+        or "calendly.com" in normalized
+    )
+
+
 def _append_campaign_calendly_cta(html_body: str, calendly_url: str) -> str:
     cta = (
         '<p style="margin-top:24px;">'
         f'<a href="{calendly_url}" '
+        'data-codrut-cta="calendly" '
         'style="display:inline-block;background:#890505;color:#ffffff;'
         'padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;">'
         "Alege un slot"

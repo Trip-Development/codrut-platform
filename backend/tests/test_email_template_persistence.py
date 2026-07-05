@@ -532,30 +532,75 @@ async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscr
     assert repository.sends[0].template_key == "campaign"
 
 
+@pytest.mark.asyncio
+async def test_send_campaign_does_not_append_duplicate_calendly_cta() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.html_body = (
+        '<p>Bună, ${first_name}.</p>'
+        '<p><a href="https://calendly.com/andrei-vacaru/discutie">'
+        "Alege un slot"
+        "</a></p>"
+    )
+    campaign.text_body = (
+        "Bună, ${first_name}.\n"
+        "Alege un slot: https://calendly.com/andrei-vacaru/discutie"
+    )
+    active = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(active)
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id]),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert response.sent == 1
+    assert provider.sent[0].html_body.count("Alege un slot") == 1
+    assert provider.sent[0].text_body.count("Alege un slot") == 1
+    assert (
+        "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
+        not in provider.sent[0].html_body
+    )
+
+
 def test_promotional_catalog_templates_match_source_structure_and_include_calendly() -> None:
     report = catalog_template("promo_past_report_2022_2025")
     reactivation = catalog_template("promo_past_reactivation")
     current_programs = catalog_template("promo_current_programs")
     potential_intro = catalog_template("promo_potential_intro")
 
-    assert report.version == 3
+    assert report.version == 4
     assert "calendly_url" in report.required_context
+    assert "list-style:none" in report.html_body
     assert "A supraviețuit tranziției la freelancing" in report.html_body
     assert "Influencing Skills for Trusted Stakeholder Partnerships" in report.html_body
     assert "Alege un format — cafea, apel, Zoom" in report.html_body
     assert "${calendly_url}" in report.html_body
+    assert 'data-codrut-cta="calendly"' in report.html_body
+    assert report.html_body.index("Alege un format — cafea, apel, Zoom") < report.html_body.index(
+        "Dă reply acestui email"
+    )
     assert "${calendly_url}" in report.text_body
 
-    assert reactivation.version == 3
+    assert reactivation.version == 4
     assert "Opțiunea A: Ignoră emailul" in reactivation.html_body
     assert "Reactivează contul — alege un slot" in reactivation.html_body
     assert "${calendly_url}" in reactivation.html_body
+    assert 'data-codrut-cta="calendly"' in reactivation.html_body
+    reactivation_cta_index = reactivation.html_body.index("Reactivează contul — alege un slot")
+    reactivation_reply_index = reactivation.html_body.index("Dă reply sau alege un slot")
+    assert reactivation_cta_index < reactivation_reply_index
 
-    assert current_programs.version == 3
+    assert current_programs.version == 4
     assert "Programul 1: Influencing Skills" in current_programs.html_body
     assert "Alege un slot. Promit o cafea bună." in current_programs.html_body
 
-    assert potential_intro.version == 3
+    assert potential_intro.version == 4
     assert "Alege un slot. Îți răspund la întrebare live." in potential_intro.html_body
     assert "${calendly_url}" in potential_intro.text_body
 
