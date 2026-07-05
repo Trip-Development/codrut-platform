@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     docs_enabled: bool = True
     email_provider: str = "test"
     email_from_address: str = "no-reply@codrut.local"
-    email_from_name: str = "Andrei Vacaru"
+    email_from_name: str = "Andrei Văcaru"
     email_brevo_api_key: SecretStr | None = None
     email_smtp_host: str = "mailpit"
     email_smtp_port: int = 1025

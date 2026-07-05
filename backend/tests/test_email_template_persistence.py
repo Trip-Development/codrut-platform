@@ -574,20 +574,26 @@ def test_promotional_catalog_templates_match_source_structure_and_include_calend
     current_programs = catalog_template("promo_current_programs")
     potential_intro = catalog_template("promo_potential_intro")
 
-    assert report.version == 4
+    assert report.version == 8
     assert "calendly_url" in report.required_context
-    assert "list-style:none" in report.html_body
+    assert 'role="presentation"' in report.html_body
+    assert "list-style:none" not in report.html_body
     assert "A supraviețuit tranziției la freelancing" in report.html_body
+    assert "A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală" in report.html_body
+    assert "A neglijat să se reconecteze cu oameni cu care a lucrat bine" in report.html_body
     assert "Influencing Skills for Trusted Stakeholder Partnerships" in report.html_body
+    assert "Aici ai calendarul meu" in report.html_body
     assert "Alege un format — cafea, apel, Zoom" in report.html_body
+    assert "Link calendar" in report.html_body
     assert "${calendly_url}" in report.html_body
     assert 'data-codrut-cta="calendly"' in report.html_body
     assert report.html_body.index("Alege un format — cafea, apel, Zoom") < report.html_body.index(
-        "Dă reply acestui email"
+        "reply acestui email"
     )
     assert "${calendly_url}" in report.text_body
+    assert "Ultimul punct e motivul" in report.text_body
 
-    assert reactivation.version == 4
+    assert reactivation.version == 8
     assert "Opțiunea A: Ignoră emailul" in reactivation.html_body
     assert "Reactivează contul — alege un slot" in reactivation.html_body
     assert "${calendly_url}" in reactivation.html_body
@@ -596,11 +602,15 @@ def test_promotional_catalog_templates_match_source_structure_and_include_calend
     reactivation_reply_index = reactivation.html_body.index("Dă reply sau alege un slot")
     assert reactivation_cta_index < reactivation_reply_index
 
-    assert current_programs.version == 4
+    assert current_programs.version == 8
     assert "Programul 1: Influencing Skills" in current_programs.html_body
+    assert (
+        "Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu"
+        in current_programs.html_body
+    )
     assert "Alege un slot. Promit o cafea bună." in current_programs.html_body
 
-    assert potential_intro.version == 4
+    assert potential_intro.version == 8
     assert "Alege un slot. Îți răspund la întrebare live." in potential_intro.html_body
     assert "${calendly_url}" in potential_intro.text_body
 
@@ -611,24 +621,31 @@ def test_evaluation_catalog_templates_match_source_structure() -> None:
     team_invite = catalog_template("evaluation_team_invite")
     team_reminder = catalog_template("evaluation_team_reminder")
 
-    assert leadership_invite.version == 3
+    assert leadership_invite.version == 7
     assert "radiografie sinceră a echipei de direcție" in leadership_invite.subject
     assert "vedem cum ne percepem reciproc" in leadership_invite.html_body
     assert "Cu cât suntem mai sinceri acum" in leadership_invite.html_body
+    assert "Link platformă" in leadership_invite.html_body
+    assert "Link platformă: ${action_url}" in leadership_invite.text_body
 
-    assert leadership_reminder.version == 3
+    assert leadership_reminder.version == 7
     assert (
         "Lipsa unui singur răspuns ne schimbă imaginea de ansamblu"
         in leadership_reminder.html_body
     )
+    assert "vă mulțumesc — ați făcut deja primul pas" in leadership_reminder.html_body
+    assert "Link platformă" in leadership_reminder.html_body
 
-    assert team_invite.version == 3
+    assert team_invite.version == 7
     assert "Răspunsurile tale sunt 100% anonime și confidențiale" in team_invite.html_body
     assert "cum se vede, din interior, echipa din care faci parte" in team_invite.html_body
+    assert "Link platformă" in team_invite.html_body
 
-    assert team_reminder.version == 3
+    assert team_reminder.version == 7
     assert "părerea ta încă lipsește" in team_reminder.subject
     assert "fiecare răspuns în plus face imaginea mai corectă" in team_reminder.html_body
+    assert "necesare — fiecare răspuns" in team_reminder.html_body
+    assert "Link platformă" in team_reminder.html_body
 
 
 @pytest.mark.asyncio

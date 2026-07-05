@@ -40,7 +40,7 @@ jobs:
       CODRUT_PUBLIC_APP_URL: https://codrut.example.com
       CODRUT_EMAIL_PROVIDER: brevo
       CODRUT_EMAIL_FROM_ADDRESS: ops@example.com
-      CODRUT_EMAIL_FROM_NAME: Codrut
+      CODRUT_EMAIL_FROM_NAME: Andrei Văcaru
       CODRUT_EMAIL_BREVO_API_KEY: compose-config-placeholder
       CODRUT_DB_VOLUME_PATH: /tmp/codrut-postgres-data
     steps:

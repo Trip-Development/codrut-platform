@@ -38,10 +38,15 @@ export function ModalLayer({
   const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -59,7 +64,7 @@ export function ModalLayer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -91,7 +96,7 @@ export function ModalLayer({
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus({ preventScroll: true });
     };
-  }, [mounted, onClose]);
+  }, [mounted]);
 
   if (!mounted) return null;
 
