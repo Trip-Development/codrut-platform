@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CompanyAssignment } from "@/api/companies";
 import type { CompanyParticipant } from "@/api/companies";
 import type { ScoringResultRecord } from "@/api/trainer";
-import { buildReportAggregation, findReportAggregationMismatches } from "./report-aggregation";
+import { adaptReportTeamLenses, buildReportAggregation } from "./report-aggregation";
 
 function assignment(
   id: string,
@@ -240,55 +240,6 @@ describe("buildReportAggregation", () => {
     expect(aggregation.boss360Averages.find((item) => item.id === "icare_15_ajuta_echipa")).toMatchObject({ avg: 90 });
   });
 
-  it("reports no mismatch when backend and frontend aggregate the same report data", () => {
-    const assignments = [
-      assignment("lencioni", "lencioni", "scored", "2026-06-11T09:00:00Z"),
-      assignment("driver", "distress_drivers", "submitted", "2026-06-11T10:00:00Z"),
-    ];
-    const results = new Map<string, ScoringResultRecord | null>([
-      [
-        "lencioni",
-        result("lencioni", {
-          absence_of_trust: { score: 8 },
-          fear_of_conflict: { score: 7 },
-          lack_of_commitment: { score: 6 },
-          avoidance_of_accountability: { score: 5 },
-          inattention_to_results: { score: 4 },
-        }),
-      ],
-      [
-        "driver",
-        result("driver", {
-          be_strong: 40,
-          be_perfect: 50,
-          try_hard: 60,
-          hurry_up: 70,
-          please_people: 80,
-        }),
-      ],
-    ]);
-
-    const aggregation = buildReportAggregation(assignments, results);
-
-    expect(
-      findReportAggregationMismatches(
-        {
-          total_assigned: aggregation.totalAssigned,
-          total_completed: aggregation.totalCompleted,
-          completion_rate: aggregation.completionRate,
-          lencioni_count: aggregation.lencioniCount,
-          driver_count: aggregation.driverCount,
-          boss_360_count: aggregation.boss360Count,
-          lencioni_averages: aggregation.lencioniAverages,
-          driver_averages: aggregation.driverAverages.filter((item) => item.avg > 50),
-          boss_360_averages: aggregation.boss360Averages,
-          results: [],
-        },
-        aggregation,
-      ),
-    ).toEqual([]);
-  });
-
   it("does not count legacy 360 result keys as reportable iCARE aggregate scores", () => {
     const aggregation = buildReportAggregation(
       [assignment("legacy-360", "boss_360", "scored", "2026-06-11T09:00:00Z")],
@@ -308,95 +259,50 @@ describe("buildReportAggregation", () => {
 
     expect(aggregation.totalCompleted).toBe(1);
     expect(aggregation.boss360Count).toBe(0);
-    expect(
-      findReportAggregationMismatches(
-        {
-          total_assigned: aggregation.totalAssigned,
-          total_completed: aggregation.totalCompleted,
-          completion_rate: aggregation.completionRate,
-          lencioni_count: aggregation.lencioniCount,
-          driver_count: aggregation.driverCount,
-          boss_360_count: 0,
-          lencioni_averages: aggregation.lencioniAverages,
-          driver_averages: aggregation.driverAverages,
-          boss_360_averages: aggregation.boss360Averages,
-          results: [],
-        },
-        aggregation,
-      ),
-    ).toEqual([]);
   });
 
-  it("surfaces count mismatches instead of silently preferring the larger value", () => {
-    const aggregation = buildReportAggregation(
-      [assignment("score", "lencioni", "scored", "2026-06-11T09:00:00Z")],
-      new Map([
-        [
-          "score",
-          result("score", {
-            absence_of_trust: { score: 8 },
-            fear_of_conflict: { score: 8 },
-            lack_of_commitment: { score: 8 },
-            avoidance_of_accountability: { score: 8 },
-            inattention_to_results: { score: 8 },
-          }),
-        ],
-      ]),
-    );
-
+  it("adapts backend canonical team lenses to the report view model", () => {
     expect(
-      findReportAggregationMismatches(
+      adaptReportTeamLenses([
         {
-          total_assigned: 3,
-          total_completed: aggregation.totalCompleted,
-          completion_rate: 33,
-          lencioni_count: aggregation.lencioniCount,
-          driver_count: aggregation.driverCount,
-          boss_360_count: aggregation.boss360Count,
-          lencioni_averages: aggregation.lencioniAverages,
-          driver_averages: aggregation.driverAverages,
-          boss_360_averages: aggregation.boss360Averages,
-          results: [],
+          id: "manager:leader",
+          name: "Echipa Ana Manager",
+          member_count: 3,
+          assigned_count: 7,
+          completed_count: 5,
+          completion_rate: 71,
+          lencioni_count: 3,
+          driver_count: 2,
+          boss_360_count: 1,
+          pcm_base_count: 2,
+          pcm_phase_count: 2,
+          lencioni_averages: [{ id: "absence_of_trust", label: "Trust", avg: 8, interpretation: null, range_label: null }],
+          driver_averages: [{ id: "be_strong", label: "Fii Puternic", avg: 62, interpretation: ">50", range_label: ">50" }],
+          boss_360_averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 80 }],
+          pcm_base_distribution: [{ id: "thinker", label: "Gânditor", value: 1, color: null }],
+          pcm_phase_distribution: [{ id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" }],
         },
-        aggregation,
-      ).map((item) => item.field),
-    ).toEqual(["total_assigned"]);
-  });
-
-  it("surfaces average mismatches when backend aggregate data is empty or divergent", () => {
-    const aggregation = buildReportAggregation(
-      [assignment("score", "lencioni", "scored", "2026-06-11T09:00:00Z")],
-      new Map([
-        [
-          "score",
-          result("score", {
-            absence_of_trust: { score: 9 },
-            fear_of_conflict: { score: 9 },
-            lack_of_commitment: { score: 9 },
-            avoidance_of_accountability: { score: 9 },
-            inattention_to_results: { score: 9 },
-          }),
-        ],
       ]),
-    );
-
-    expect(
-      findReportAggregationMismatches(
-        {
-          total_assigned: aggregation.totalAssigned,
-          total_completed: aggregation.totalCompleted,
-          completion_rate: aggregation.completionRate,
-          lencioni_count: aggregation.lencioniCount,
-          driver_count: aggregation.driverCount,
-          boss_360_count: aggregation.boss360Count,
-          lencioni_averages: [],
-          driver_averages: aggregation.driverAverages,
-          boss_360_averages: aggregation.boss360Averages,
-          results: [],
-        },
-        aggregation,
-      ).map((item) => item.field),
-    ).toEqual(["lencioni_averages"]);
+    ).toEqual([
+      {
+        id: "manager:leader",
+        name: "Echipa Ana Manager",
+        memberCount: 3,
+        assignedCount: 7,
+        completedCount: 5,
+        completionRate: 71,
+        lencioniCount: 3,
+        driverCount: 2,
+        boss360Count: 1,
+        pcmBaseCount: 2,
+        pcmPhaseCount: 2,
+        lencioniAverages: [{ id: "absence_of_trust", label: "Trust", avg: 8, interpretation: null, range_label: null }],
+        driverAverages: [{ id: "be_strong", label: "Fii Puternic", avg: 62, interpretation: ">50", range_label: ">50" }],
+        boss360Averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 80 }],
+        pcmBaseDistribution: [{ id: "thinker", label: "Gânditor", value: 1, color: undefined }],
+        pcmPhaseDistribution: [{ id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" }],
+      },
+    ]);
   });
 
   it("builds PCM distributions and team lenses from project participants", () => {
@@ -511,12 +417,12 @@ describe("buildReportAggregation", () => {
         ["member-driver", result("member-driver", { be_strong: 40, be_perfect: 90 })],
       ]),
       [
-        participant("andrei", "Andrei Vacaru", null, "thinker", "thinker", "manager"),
-        participant("ilinca", "Ilinca Corbu", "Andrei Vacaru", "harmonizer", "harmonizer", "manager"),
-        participant("vlad", "Vlad Soimu", "Andrei Vacaru", "rebel", "promoter", "manager"),
-        participant("alex", "Alexandra Giurca", "Ilinca Corbu", "persister", "persister"),
-        participant("member-vlad", "Member Vlad", "Ilinca Corbu", "imaginer", "imaginer"),
-        participant("member-ilinca", "Member Ilinca", "Vlad Soimu", "promoter", "rebel"),
+        participant("andrei", "Andrei Vacaru", "1", "thinker", "thinker", "manager"),
+        participant("ilinca", "Ilinca Corbu", "AndreiVacaru", "harmonizer", "harmonizer", "manager"),
+        participant("vlad", "Vlad Soimu", "AndreiVacaru", "rebel", "promoter", "manager"),
+        participant("alex", "Alexandra Giurca", "IlincaCorbu", "persister", "persister"),
+        participant("member-vlad", "Member Vlad", "IlincaCorbu", "imaginer", "imaginer"),
+        participant("member-ilinca", "Member Ilinca", "VladSoimu", "promoter", "rebel"),
       ],
     );
 

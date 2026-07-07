@@ -100,6 +100,28 @@ describe("ProjectParticipantsWorkspace", () => {
     });
   });
 
+  it("derives permanent manager access from compact reports-to keys", () => {
+    const rows = buildProjectParticipantAccessRows(
+      [
+        participants[0],
+        {
+          ...participants[1],
+          reports_to_name: "AnaManager",
+        },
+      ],
+      [],
+    );
+
+    expect(rows[0]).toMatchObject({
+      internalRoleLabel: "Manager / leadership",
+      accountTypeLabel: "Cont permanent",
+    });
+    expect(rows[1]).toMatchObject({
+      internalRoleLabel: "Membru",
+      accountTypeLabel: "Acces temporar",
+    });
+  });
+
   it("shows the internal access tab with account type counts", () => {
     render(
       <ProjectParticipantsWorkspace

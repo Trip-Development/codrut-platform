@@ -376,6 +376,18 @@ html {
     color: var(--burgundy-dark);
   }
 
+  .status-chip-danger {
+    border: 1px solid color-mix(in srgb, var(--burgundy) 28%, var(--border));
+    background: color-mix(in srgb, var(--burgundy) 8%, var(--surface));
+    color: var(--burgundy);
+  }
+
+  [data-theme="dark"] .status-chip-danger {
+    border-color: color-mix(in srgb, var(--burgundy) 34%, var(--border));
+    background: color-mix(in srgb, var(--burgundy) 16%, var(--surface));
+    color: var(--burgundy-dark);
+  }
+
   .status-panel-danger {
     @apply rounded-xl border bg-surface text-sm font-semibold shadow-sm;
     border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
@@ -467,6 +479,10 @@ html {
     cursor: not-allowed;
     background: var(--surface-muted);
     color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  }
+
+  .control-input-square {
+    border-radius: 0.375rem;
   }
 
   textarea.control-input {

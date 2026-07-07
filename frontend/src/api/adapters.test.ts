@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  AuthSessionUnavailableError,
   audienceAccessNote,
   changePassword,
   getCurrentParticipant,
@@ -16,8 +17,10 @@ import {
   deleteEmailTemplateOnServer,
   getEmailOpsSummary,
   htmlToPlainText,
+  listCampaignRecipientMembershipOnServer,
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
+  replaceCampaignRecipientMembershipOnServer,
   sendCampaignOnServer,
   updateCampaignRecipientOnServer,
   updateEmailTemplateOnServer,
@@ -166,7 +169,7 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("window", undefined);
     vi.stubEnv("NODE_ENV", "development");
     process.env.INTERNAL_API_BASE_URL = "https://api.codrut.ro/api";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false } as Response));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
 
     try {
       expect(isDemoFallbackEnabled()).toBe(true);
@@ -236,6 +239,49 @@ describe("frontend API adapter stubs", () => {
           recipient_ids: ["recipient-1"],
           mode: "selected",
         }),
+      }),
+    );
+  });
+
+  it("loads and replaces campaign-specific recipient membership", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([{ id: "recipient-1", email: "ana@example.com", membershipSource: "manual" }]),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ recipients: [{ id: "recipient-2", email: "ioana@example.com" }] }),
+      } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listCampaignRecipientMembershipOnServer("campaign-1")).resolves.toEqual([
+      expect.objectContaining({ id: "recipient-1", membershipSource: "manual" }),
+    ]);
+    await expect(
+      replaceCampaignRecipientMembershipOnServer("campaign-1", ["recipient-2"]),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: "recipient-2" }),
+    ]);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/communications/campaigns/campaign-1/recipients"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/communications/campaigns/campaign-1/recipients"),
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "include",
+        body: JSON.stringify({ recipient_ids: ["recipient-2"] }),
       }),
     );
   });
@@ -895,17 +941,26 @@ describe("frontend API adapter stubs", () => {
   it("does not fall back to demo sessions when fallback is disabled", async () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
 
     await expect(getTrainerSession()).rejects.toThrow("Trainer authentication required");
     await expect(getParticipantSession()).rejects.toThrow("Participant authentication required");
+  });
+
+  it("does not treat transient session API failures as logout when fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 } as Response));
+
+    await expect(getTrainerSession()).rejects.toBeInstanceOf(AuthSessionUnavailableError);
+    await expect(getParticipantSession()).rejects.toThrow("Nu am putut verifica sesiunea");
   });
 
   it("changes password through the authenticated backend endpoint", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(changePassword("old-password-123", "new-password-123")).resolves.toBeUndefined();
+    await expect(changePassword("old-password-123", "New-password-123")).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/auth/change-password"),
@@ -914,10 +969,20 @@ describe("frontend API adapter stubs", () => {
         credentials: "include",
         body: JSON.stringify({
           current_password: "old-password-123",
-          new_password: "new-password-123",
+          new_password: "New-password-123",
         }),
       }),
     );
+  });
+
+  it("rejects weak password changes before calling the backend", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(changePassword("old-password-123", "weakpass")).rejects.toThrow(
+      "Parola trebuie să aibă cel puțin 8 caractere",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("creates companies through the backend only", async () => {
@@ -1143,8 +1208,25 @@ describe("frontend API adapter stubs", () => {
       total_assigned: 8,
       total_completed: 6,
       lencioni_count: 3,
-      driver_count: 3,
+      driver_count: 1,
       boss_360_count: 2,
+      pcm_base_count: 0,
+      pcm_phase_count: 0,
+      pcm_base_distribution: [],
+      pcm_phase_distribution: [],
+      hierarchy_ambiguous: false,
+      hierarchy_ambiguity_message: null,
+      hierarchy_issues: [],
+      team_lenses: [
+        expect.objectContaining({
+          id: "leadership",
+          name: "Leadership",
+          member_count: 6,
+          assigned_count: 8,
+          completed_count: 6,
+          driver_count: 1,
+        }),
+      ],
       results: expect.arrayContaining([
         expect.objectContaining({ assignment_id: "atlas-lencioni-radu" }),
         expect.objectContaining({ assignment_id: "atlas-driver-claudia" }),
@@ -1192,6 +1274,29 @@ describe("frontend API adapter stubs", () => {
       lencioni_count: 6,
       driver_count: 3,
       boss_360_count: 11,
+      pcm_base_count: 3,
+      pcm_phase_count: 3,
+      pcm_base_distribution: expect.arrayContaining([
+        expect.objectContaining({ id: "harmonizer", value: 1 }),
+        expect.objectContaining({ id: "persister", value: 1 }),
+        expect.objectContaining({ id: "thinker", value: 1 }),
+      ]),
+      pcm_phase_distribution: expect.arrayContaining([
+        expect.objectContaining({ id: "harmonizer", value: 1 }),
+        expect.objectContaining({ id: "persister", value: 1 }),
+        expect.objectContaining({ id: "thinker", value: 1 }),
+      ]),
+      hierarchy_ambiguous: false,
+      hierarchy_issues: [],
+      team_lenses: [
+        expect.objectContaining({
+          id: "leadership",
+          member_count: 6,
+          assigned_count: 23,
+          completed_count: 23,
+          pcm_base_count: 3,
+        }),
+      ],
       results: expect.arrayContaining([
         expect.objectContaining({ assignment_id: "leadership-lencioni-andrei" }),
         expect.objectContaining({ assignment_id: "icare-ilinca-on-andrei" }),

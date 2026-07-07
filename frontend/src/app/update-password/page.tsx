@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { confirmPasswordReset } from "@/api/auth";
+import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/api/password-policy";
 
 export default function UpdatePasswordPage() {
   return (
@@ -38,6 +39,11 @@ function UpdatePasswordForm() {
 
     if (!token) {
       setError("Linkul de resetare lipsește sau este invalid.");
+      return;
+    }
+    const passwordError = validatePasswordPolicy(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (password !== confirmPassword) {
@@ -78,11 +84,11 @@ function UpdatePasswordForm() {
               Parola nouă
               <input
                 className="control-input mt-1 w-full bg-surface-muted py-3 text-base"
-                placeholder="Minim 12 caractere"
+                placeholder={`Minim ${PASSWORD_MIN_LENGTH} caractere`}
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                minLength={12}
+                minLength={PASSWORD_MIN_LENGTH}
                 required
               />
             </label>
@@ -94,7 +100,7 @@ function UpdatePasswordForm() {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                minLength={12}
+                minLength={PASSWORD_MIN_LENGTH}
                 required
               />
             </label>

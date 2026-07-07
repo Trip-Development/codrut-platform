@@ -9,8 +9,8 @@ export class LoginPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.emailInput = page.locator('input[placeholder="nume@companie.ro"]');
-    this.passwordInput = page.locator('input[placeholder="Introdu parola"]');
+    this.emailInput = page.locator("#login-email, #trainer-login-email").first();
+    this.passwordInput = page.locator('input[type="password"]').first();
     this.submitButton = page.locator('button[type="submit"]');
     this.errorMessage = page.locator("p.text-red-700");
   }

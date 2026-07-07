@@ -689,6 +689,10 @@ export type CampaignOpsSummary = {
   };
 };
 
+export type CampaignRecipientMembershipRow = CampaignRecipientRow & {
+  membershipSource?: string | null;
+};
+
 export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
   return [
     { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },
@@ -883,6 +887,61 @@ export async function deleteCampaignRecipientOnServer(recipientId: string): Prom
     }
   } catch (err) {
     if (isDemoFallbackEnabled()) return;
+    throw err;
+  }
+}
+
+function campaignMembershipRowsFromPayload(payload: unknown): CampaignRecipientMembershipRow[] {
+  if (Array.isArray(payload)) {
+    return payload as CampaignRecipientMembershipRow[];
+  }
+  if (payload && typeof payload === "object" && Array.isArray((payload as { recipients?: unknown }).recipients)) {
+    return (payload as { recipients: CampaignRecipientMembershipRow[] }).recipients;
+  }
+  return [];
+}
+
+export async function listCampaignRecipientMembershipOnServer(
+  campaignId: string,
+): Promise<CampaignRecipientMembershipRow[]> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/recipients`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return [];
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut încărca destinatarii campaniei (${response.status}).`);
+    }
+    return campaignMembershipRowsFromPayload(await response.json());
+  } catch (err) {
+    if (isDemoFallbackEnabled()) return [];
+    throw err;
+  }
+}
+
+export async function replaceCampaignRecipientMembershipOnServer(
+  campaignId: string,
+  recipientIds: string[],
+): Promise<CampaignRecipientMembershipRow[]> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/recipients`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient_ids: recipientIds }),
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return [];
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut salva destinatarii campaniei (${response.status}).`);
+    }
+    if (response.status === 204) return [];
+    return campaignMembershipRowsFromPayload(await response.json());
+  } catch (err) {
+    if (isDemoFallbackEnabled()) return [];
     throw err;
   }
 }

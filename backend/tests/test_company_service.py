@@ -837,7 +837,7 @@ async def test_update_participant_changes_profile_and_project_membership_fields(
             project_id=project.id,
             full_name=" Andrei Văcaru ",
             email="ANDREY@example.com",
-            reports_to_name="fără manager",
+            reports_to_name="1",
             position="Director General",
             location="Cluj",
             role_group="leadership",
@@ -1033,6 +1033,18 @@ async def test_create_participant_cleans_top_level_reports_to_markers() -> None:
 
     assert participant.reports_to_name is None
 
+    numeric_root = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(
+            full_name="Ana",
+            email="ana@example.com",
+            reports_to_name=" 2 ",
+        ),
+    )
+
+    assert numeric_root.reports_to_name is None
+
 
 async def test_import_roster_rejects_duplicate_row_email() -> None:
     repository = FakeCompanyRepository()
@@ -1090,6 +1102,93 @@ async def test_import_roster_infers_managers_from_reports_to_names_without_posit
     assert participants_by_email["andrei.vacaru@tripdevelopment.ro"].role_group == "leadership"
     assert participants_by_email["ilincacrb4825@gmail.com"].role_group == "leadership"
     assert participants_by_email["vlad.soimu@yahoo.com"].role_group == "member"
+
+
+async def test_import_roster_infers_compact_manager_keys_and_numeric_root_marker() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+
+    result = await service.import_roster(
+        owner_id,
+        company.id,
+        RosterImportRequest(
+            rows=[
+                {
+                    "Name": "Chief Example",
+                    "Reports To": "1",
+                    "Position": "CEO",
+                    "email": "chief@example.com",
+                },
+                {
+                    "Name": "Operations Coordinator",
+                    "Reports To": "ChiefExample",
+                    "Position": "Operations",
+                    "email": "ops@example.com",
+                },
+                {
+                    "Name": "Team Member",
+                    "Reports To": "OperationsCoordinator",
+                    "Position": "Specialist",
+                    "email": "member@example.com",
+                },
+                {
+                    "Name": "Title Only Manager",
+                    "Reports To": "OperationsCoordinator",
+                    "Position": "Manager proiect",
+                    "email": "title-only@example.com",
+                },
+            ]
+        ),
+    )
+
+    participants_by_email = {participant.email: participant for participant in result.participants}
+    assert participants_by_email["chief@example.com"].reports_to_name is None
+    assert participants_by_email["chief@example.com"].role_group == "leadership"
+    assert participants_by_email["ops@example.com"].reports_to_name == "ChiefExample"
+    assert participants_by_email["ops@example.com"].role_group == "leadership"
+    assert participants_by_email["member@example.com"].role_group == "member"
+    assert participants_by_email["title-only@example.com"].role_group == "member"
+
+
+async def test_import_roster_does_not_promote_matrix_labels_to_internal_managers() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+
+    result = await service.import_roster(
+        owner_id,
+        company.id,
+        RosterImportRequest(
+            rows=[
+                {
+                    "Name": "Chief Example",
+                    "Reports To": "1",
+                    "Position": "CEO",
+                    "email": "chief@example.com",
+                },
+                {
+                    "Name": "External Leader - Matrix",
+                    "Reports To": "ChiefExample",
+                    "Position": "Plant Engineering Mgr",
+                    "email": "matrix@example.com",
+                },
+                {
+                    "Name": "Team Member",
+                    "Reports To": "ExternalLeaderMatrix",
+                    "Position": "Specialist",
+                    "email": "member@example.com",
+                },
+            ]
+        ),
+    )
+
+    participants_by_email = {participant.email: participant for participant in result.participants}
+    assert participants_by_email["chief@example.com"].role_group == "leadership"
+    assert participants_by_email["matrix@example.com"].role_group == "member"
+    assert participants_by_email["member@example.com"].role_group == "member"
 
 
 async def test_project_roster_reuses_company_participants_and_stores_project_context() -> None:
@@ -1885,7 +1984,7 @@ async def test_access_code_registration_is_disabled_for_public_profile_claims() 
             CompanyAccessCodeRegistrationRequest(
                 email="ANA@example.com",
                 access_code=code.code.lower(),
-                **{"password": "correct horse battery"},
+                **{"password": "Correct1!"},
             )
         )
 
@@ -1910,7 +2009,7 @@ async def test_access_code_registration_uses_generic_error_for_invalid_match() -
             CompanyAccessCodeRegistrationRequest(
                 email="missing@example.com",
                 access_code=code.code,
-                **{"password": "correct horse battery"},
+                **{"password": "Correct1!"},
             )
         )
 
@@ -1923,7 +2022,7 @@ async def test_access_code_registration_rejects_invalid_code_generically() -> No
             CompanyAccessCodeRegistrationRequest(
                 email="missing@example.com",
                 access_code="WRONG-CODE",
-                **{"password": "correct horse battery"},
+                **{"password": "Correct1!"},
             )
         )
 
@@ -1950,7 +2049,7 @@ async def test_access_code_registration_rejects_claimed_profile_generically() ->
             CompanyAccessCodeRegistrationRequest(
                 email="ana@example.com",
                 access_code=code.code.replace("-", ""),
-                **{"password": "correct horse battery"},
+                **{"password": "Correct1!"},
             )
         )
 
@@ -1967,7 +2066,7 @@ async def test_import_reporting_relationships_resolves_reports_to_names() -> Non
     manager = await service.create_participant(
         owner_id,
         company.id,
-        ParticipantCreateRequest(full_name="Maria", email="maria@example.com"),
+        ParticipantCreateRequest(full_name="Maria Manager", email="maria@example.com"),
     )
     participant = await service.create_participant(
         owner_id,
@@ -1975,7 +2074,7 @@ async def test_import_reporting_relationships_resolves_reports_to_names() -> Non
         ParticipantCreateRequest(
             full_name="Ana",
             email="ana@example.com",
-            reports_to_name="maria",
+            reports_to_name="MariaManager",
         ),
     )
 

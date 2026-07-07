@@ -20,6 +20,7 @@ from codrut.modules.communications.models import (
     Campaign,
     CampaignRecipient,
     CampaignRecipientEvent,
+    CampaignRecipientMembership,
     CampaignRecipientSegment,
     CampaignRecipientStatus,
     CampaignStatus,
@@ -31,6 +32,7 @@ from codrut.modules.communications.schemas import (
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientCreateRequest,
+    CampaignRecipientMembershipUpdateRequest,
     CampaignRecipientUpdateRequest,
     CampaignSendRequest,
     EmailTemplateCreateRequest,
@@ -57,6 +59,7 @@ class FakeCommunicationsRepository:
         self.sends: list[EmailSend] = []
         self.sent_versions: set[tuple[str, int]] = set()
         self.campaign_recipients: list[CampaignRecipient] = []
+        self.campaign_recipient_memberships: list[CampaignRecipientMembership] = []
         self.campaign_recipient_events: list[CampaignRecipientEvent] = []
         self.campaigns: list[Campaign] = []
         self.list_template_calls = 0
@@ -173,6 +176,11 @@ class FakeCommunicationsRepository:
             for saved_campaign in self.campaigns
             if saved_campaign.id != campaign.id
         ]
+        self.campaign_recipient_memberships = [
+            membership
+            for membership in self.campaign_recipient_memberships
+            if membership.campaign_id != campaign.id
+        ]
 
     async def list_campaign_recipients(
         self,
@@ -248,8 +256,81 @@ class FakeCommunicationsRepository:
             for send in self.sends
             if send.campaign_id == campaign_id
             and send.campaign_recipient_id is not None
-            and send.status == EmailSendStatus.accepted
+            and send.status in {EmailSendStatus.queued, EmailSendStatus.accepted}
         }
+
+    async def list_campaign_member_recipient_ids(
+        self,
+        campaign_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> list[uuid.UUID]:
+        campaign = await self.get_campaign(campaign_id, owner_id=owner_id)
+        if campaign is None:
+            return []
+        return [
+            membership.recipient_id
+            for membership in self.campaign_recipient_memberships
+            if membership.campaign_id == campaign_id
+        ]
+
+    async def list_campaign_member_recipients(
+        self,
+        campaign_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> list[CampaignRecipient]:
+        member_ids = await self.list_campaign_member_recipient_ids(
+            campaign_id,
+            owner_id=owner_id,
+        )
+        member_id_set = set(member_ids)
+        recipients = [
+            recipient
+            for recipient in self.campaign_recipients
+            if recipient.id in member_id_set
+            and (owner_id is None or recipient.owner_id == owner_id)
+        ]
+        recipients_by_id = {recipient.id: recipient for recipient in recipients}
+        return [
+            recipients_by_id[recipient_id]
+            for recipient_id in member_ids
+            if recipient_id in recipients_by_id
+        ]
+
+    async def replace_campaign_memberships(
+        self,
+        campaign_id: uuid.UUID,
+        recipient_ids: list[uuid.UUID],
+        *,
+        source: str = "manual",
+        owner_id: uuid.UUID | None = None,
+    ) -> None:
+        campaign = await self.get_campaign(campaign_id, owner_id=owner_id)
+        if campaign is None:
+            return
+        next_ids = list(dict.fromkeys(recipient_ids))
+        next_id_set = set(next_ids)
+        self.campaign_recipient_memberships = [
+            membership
+            for membership in self.campaign_recipient_memberships
+            if membership.campaign_id != campaign_id or membership.recipient_id in next_id_set
+        ]
+        existing_ids = {
+            membership.recipient_id
+            for membership in self.campaign_recipient_memberships
+            if membership.campaign_id == campaign_id
+        }
+        for recipient_id in next_ids:
+            if recipient_id not in existing_ids:
+                self.campaign_recipient_memberships.append(
+                    CampaignRecipientMembership(
+                        id=uuid.uuid4(),
+                        campaign_id=campaign_id,
+                        recipient_id=recipient_id,
+                        source=source,
+                    )
+                )
 
     async def count_accepted_sends_since(self, _since: object) -> int:
         return sum(1 for send in self.sends if send.status == EmailSendStatus.accepted)
@@ -765,15 +846,35 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
     second = persisted_campaign_recipient(email="second@example.com", contact_name="Second")
     repository.campaigns.append(campaign)
     repository.campaign_recipients.extend([first, second])
+    repository.campaign_recipient_memberships.extend([
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=first.id,
+            source="manual",
+        ),
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=second.id,
+            source="manual",
+        ),
+    ])
+    repository.sends.append(
+        EmailSend(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            campaign_recipient_id=first.id,
+            recipient_email=first.email or "",
+            template_key="campaign",
+            template_version=1,
+            provider="test",
+            status=EmailSendStatus.accepted,
+        )
+    )
     provider = FakeEmailProvider()
     service = make_service(repository)
 
-    first_response = await service.send_campaign(
-        campaign.id,
-        CampaignSendRequest(recipient_ids=[first.id]),
-        provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
-    )
     second_response = await service.send_campaign(
         campaign.id,
         CampaignSendRequest(),
@@ -781,11 +882,147 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert first_response.sent == 1
     assert second_response.sent == 1
-    assert provider.sent[0].to.value == first.email
-    assert provider.sent[1].to.value == second.email
-    assert len(provider.sent) == 2
+    assert provider.sent[0].to.value == second.email
+    assert len(provider.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_campaign_membership_isolated_between_campaigns_with_same_segment() -> None:
+    repository = FakeCommunicationsRepository()
+    first_campaign = persisted_campaign()
+    second_campaign = persisted_campaign()
+    second_campaign.id = uuid.uuid4()
+    second_campaign.name = "Altă campanie"
+    first = persisted_campaign_recipient(email="first@example.com", contact_name="First")
+    second = persisted_campaign_recipient(email="second@example.com", contact_name="Second")
+    repository.campaigns.extend([first_campaign, second_campaign])
+    repository.campaign_recipients.extend([first, second])
+    service = make_service(repository)
+
+    first_members = await service.replace_campaign_recipient_memberships(
+        first_campaign.id,
+        CampaignRecipientMembershipUpdateRequest(recipient_ids=[first.id]),
+    )
+    second_members = await service.replace_campaign_recipient_memberships(
+        second_campaign.id,
+        CampaignRecipientMembershipUpdateRequest(recipient_ids=[second.id]),
+    )
+
+    assert [member.email for member in first_members] == ["first@example.com"]
+    assert [member.email for member in second_members] == ["second@example.com"]
+    assert [
+        membership.recipient_id
+        for membership in repository.campaign_recipient_memberships
+        if membership.campaign_id == first_campaign.id
+    ] == [first.id]
+    assert [
+        membership.recipient_id
+        for membership in repository.campaign_recipient_memberships
+        if membership.campaign_id == second_campaign.id
+    ] == [second.id]
+
+
+@pytest.mark.asyncio
+async def test_empty_manual_campaign_membership_does_not_auto_backfill() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    first = persisted_campaign_recipient(email="first@example.com", contact_name="First")
+    second = persisted_campaign_recipient(email="second@example.com", contact_name="Second")
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([first, second])
+    service = make_service(repository)
+
+    members = await service.replace_campaign_recipient_memberships(
+        campaign.id,
+        CampaignRecipientMembershipUpdateRequest(recipient_ids=[]),
+    )
+    listed_members = await service.list_campaign_recipient_memberships(campaign.id)
+
+    assert members == []
+    assert listed_members == []
+    assert campaign.recipient_memberships_initialized is True
+    assert [
+        membership.recipient_id
+        for membership in repository.campaign_recipient_memberships
+        if membership.campaign_id == campaign.id
+    ] == []
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_uses_persisted_membership_not_all_segment_contacts() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    selected = persisted_campaign_recipient(email="selected@example.com", contact_name="Selected")
+    unselected = persisted_campaign_recipient(
+        email="unselected@example.com",
+        contact_name="Unselected",
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([selected, unselected])
+    repository.campaign_recipient_memberships.append(
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=selected.id,
+            source="manual",
+        )
+    )
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert response.sent == 1
+    assert provider.sent[0].to.value == "selected@example.com"
+    assert all(message.to.value != "unselected@example.com" for message in provider.sent)
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_all_resends_only_campaign_members() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    selected = persisted_campaign_recipient(email="selected@example.com", contact_name="Selected")
+    unselected = persisted_campaign_recipient(
+        email="unselected@example.com",
+        contact_name="Unselected",
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([selected, unselected])
+    repository.campaign_recipient_memberships.append(
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=selected.id,
+            source="manual",
+        )
+    )
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(mode="all"),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    assert response.sent == 1
+    assert [message.to.value for message in provider.sent] == [
+        "selected@example.com",
+        "selected@example.com",
+    ]
 
 
 @pytest.mark.asyncio

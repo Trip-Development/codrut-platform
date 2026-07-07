@@ -11,7 +11,12 @@ import {
   type CompanyProject,
   type ParticipantInvitationStatus,
 } from "@/api/companies";
-import { displayReportsToName, normalizeReportsToName } from "@/api/roster-format";
+import {
+  displayReportsToName,
+  isExternalMatrixManagerLabel,
+  managerReferenceKey,
+  normalizeReportsToName,
+} from "@/api/roster-format";
 import { RosterImporter } from "@/components/roster-importer";
 import { ModalLayer } from "@/components/ui/modal-layer";
 import { useUrlState } from "@/hooks/use-url-state";
@@ -109,13 +114,17 @@ function buildManagerNameKeys(participants: CompanyParticipant[]): Set<string> {
     participants
       .map((participant) => normalizeReportsToName(participant.reports_to_name))
       .filter((name): name is string => Boolean(name))
-      .map((name) => name.toLocaleLowerCase("ro-RO")),
+      .map((name) => managerReferenceKey(name))
+      .filter((key) => Boolean(key)),
   );
 }
 
 function isPermanentAccountParticipant(participant: CompanyParticipant, managerNameKeys: Set<string>): boolean {
   const role = participant.role_group?.trim().toLowerCase();
-  const participantName = participant.full_name.trim().toLocaleLowerCase("ro-RO");
+  if (isExternalMatrixManagerLabel(participant.full_name)) {
+    return role === "manager" || role === "leadership" || Boolean(participant.user_id);
+  }
+  const participantName = managerReferenceKey(participant.full_name);
   return role === "manager" || role === "leadership" || Boolean(participant.user_id) || managerNameKeys.has(participantName);
 }
 

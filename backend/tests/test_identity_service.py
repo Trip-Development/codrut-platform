@@ -213,11 +213,11 @@ async def test_change_password_verifies_current_password_and_updates_hash() -> N
         user.id,
         PasswordChangeRequest(
             current_password="old-password-123",
-            new_password="new-password-123",
+            new_password="New-password-123",
         ),
     )
 
-    assert verify_password("new-password-123", user.password_hash)
+    assert verify_password("New-password-123", user.password_hash)
     assert repository.deleted_session_user_ids == [user.id]
 
 
@@ -238,7 +238,7 @@ async def test_change_password_rejects_wrong_current_password() -> None:
             user.id,
             PasswordChangeRequest(
                 current_password="wrong-password",
-                new_password="new-password-123",
+                new_password="New-password-123",
             ),
         )
 
@@ -393,16 +393,16 @@ async def test_password_reset_confirm_updates_password_and_consumes_token() -> N
     service.repository = repository
 
     await service.confirm_password_reset(
-        PasswordResetConfirmRequest(token=raw_token, password="new-password-123")
+        PasswordResetConfirmRequest(token=raw_token, password="New-password-123")
     )
 
-    assert verify_password("new-password-123", user.password_hash)
+    assert verify_password("New-password-123", user.password_hash)
     assert repository.tokens[0].used_at is not None
     assert repository.deleted_session_user_ids == [user.id]
 
     with pytest.raises(DomainError, match="invalid"):
         await service.confirm_password_reset(
-            PasswordResetConfirmRequest(token=raw_token, password="another-password-123")
+            PasswordResetConfirmRequest(token=raw_token, password="Another-password-123")
         )
 
 
@@ -430,7 +430,7 @@ async def test_password_reset_confirm_rejects_temporary_shadow_user() -> None:
 
     with pytest.raises(DomainError) as exc_info:
         await service.confirm_password_reset(
-            PasswordResetConfirmRequest(token=raw_token, password="new-password-123")
+            PasswordResetConfirmRequest(token=raw_token, password="New-password-123")
         )
 
     assert exc_info.value.code == "password_reset_forbidden"
@@ -697,7 +697,7 @@ async def test_register_success() -> None:
 
     payload = RegisterRequest(
         email="test@example.com",
-        password="securepassword123",
+        password="Securepassword123!",
         token=token,
         terms_accepted=True,
     )
@@ -719,7 +719,7 @@ async def test_register_requires_terms_acceptance() -> None:
     service = IdentityService(mock_session)
     payload = RegisterRequest(
         email="test@example.com",
-        password="securepassword123",
+        password="Securepassword123!",
         token="token",
     )
 
@@ -779,7 +779,7 @@ async def test_register_forbidden_for_non_leadership() -> None:
     service = IdentityService(mock_session)
     payload = RegisterRequest(
         email="test@example.com",
-        password="securepassword123",
+        password="Securepassword123!",
         token=token,
         terms_accepted=True,
     )
@@ -837,7 +837,7 @@ async def test_register_mismatched_email() -> None:
     service = IdentityService(mock_session)
     payload = RegisterRequest(
         email="attacker@example.com",
-        password="securepassword123",
+        password="Securepassword123!",
         token=token,
         terms_accepted=True,
     )

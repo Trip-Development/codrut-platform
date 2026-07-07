@@ -1,3 +1,4 @@
+import { formatPcmLabel, getPcmColor } from "./pcm";
 import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 
 type ApiErrorPayload = {
@@ -285,6 +286,40 @@ export type ReportAverage = {
   range_label?: string | null;
 };
 
+export type ReportDistribution = {
+  id: string;
+  label: string;
+  value: number;
+  color?: string | null;
+};
+
+export type ReportTeamLens = {
+  id: string;
+  name: string;
+  member_count: number;
+  assigned_count: number;
+  completed_count: number;
+  completion_rate: number;
+  lencioni_count: number;
+  driver_count: number;
+  boss_360_count: number;
+  pcm_base_count: number;
+  pcm_phase_count: number;
+  lencioni_averages: ReportAverage[];
+  driver_averages: ReportAverage[];
+  boss_360_averages: ReportAverage[];
+  pcm_base_distribution: ReportDistribution[];
+  pcm_phase_distribution: ReportDistribution[];
+};
+
+export type ReportHierarchyIssue = {
+  code: string;
+  participant_id?: string | null;
+  participant_name?: string | null;
+  reports_to_name?: string | null;
+  message: string;
+};
+
 export type CompanyScoringResult = {
   id: string;
   assignment_id: string;
@@ -299,9 +334,17 @@ export type CompanyReportAggregate = {
   lencioni_count: number;
   driver_count: number;
   boss_360_count: number;
+  pcm_base_count: number;
+  pcm_phase_count: number;
   lencioni_averages: ReportAverage[];
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
+  pcm_base_distribution: ReportDistribution[];
+  pcm_phase_distribution: ReportDistribution[];
+  team_lenses: ReportTeamLens[];
+  hierarchy_ambiguous: boolean;
+  hierarchy_ambiguity_message: string | null;
+  hierarchy_issues: ReportHierarchyIssue[];
   results: CompanyScoringResult[];
 };
 
@@ -627,6 +670,7 @@ function isCompletedAssignment(assignment: CompanyAssignment): boolean {
 
 function fallbackCompanyReportAggregate(companyId: string, projectId?: string | null): CompanyReportAggregate {
   const assignments = fallbackCompanyAssignments(companyId, projectId);
+  const participants = fallbackCompanyParticipants(companyId);
   const completedAssignments = assignments.filter(isCompletedAssignment);
   const results = completedAssignments.map((assignment) => ({
     id: `score-${assignment.id}`,
@@ -634,17 +678,44 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
     scores: fallbackScoresForAssignment(assignment),
     primary_result: null,
   }));
+  const pcmBaseDistribution = fallbackPcmDistribution(participants, assignments, "pcm_base");
+  const pcmPhaseDistribution = fallbackPcmDistribution(participants, assignments, "pcm_phase");
+  const lencioniAverages = fallbackAverages(assignments, results, "lencioni", fallbackLencioniLabels, fallbackLencioniInterpretation);
+  const driverAverages = fallbackAverages(assignments, results, "distress_drivers", fallbackDriverLabels, fallbackDriverInterpretation);
+  const boss360Averages = fallbackAverages(assignments, results, "boss_360", fallbackBoss360Labels);
+  const lencioniCount = fallbackReportCount(assignments, results, "lencioni");
+  const driverCount = fallbackReportCount(assignments, results, "distress_drivers");
+  const boss360Count = fallbackReportCount(assignments, results, "boss_360");
 
   return {
     total_assigned: assignments.length,
     total_completed: completedAssignments.length,
     completion_rate: assignments.length > 0 ? Math.round((completedAssignments.length / assignments.length) * 100) : 0,
-    lencioni_count: assignments.filter((assignment) => assignment.questionnaire_key === "lencioni").length,
-    driver_count: assignments.filter((assignment) => assignment.questionnaire_key === "distress_drivers").length,
-    boss_360_count: assignments.filter((assignment) => assignment.questionnaire_key === "boss_360").length,
-    lencioni_averages: fallbackAverages(assignments, results, "lencioni", fallbackLencioniLabels, fallbackLencioniInterpretation),
-    driver_averages: fallbackAverages(assignments, results, "distress_drivers", fallbackDriverLabels, fallbackDriverInterpretation),
-    boss_360_averages: fallbackAverages(assignments, results, "boss_360", fallbackBoss360Labels),
+    lencioni_count: lencioniCount,
+    driver_count: driverCount,
+    boss_360_count: boss360Count,
+    pcm_base_count: fallbackDistributionCount(pcmBaseDistribution),
+    pcm_phase_count: fallbackDistributionCount(pcmPhaseDistribution),
+    lencioni_averages: lencioniAverages,
+    driver_averages: driverAverages,
+    boss_360_averages: boss360Averages,
+    pcm_base_distribution: pcmBaseDistribution,
+    pcm_phase_distribution: pcmPhaseDistribution,
+    team_lenses: fallbackReportTeamLenses({
+      participants,
+      assignments,
+      lencioniAverages,
+      driverAverages,
+      boss360Averages,
+      lencioniCount,
+      driverCount,
+      boss360Count,
+      pcmBaseDistribution,
+      pcmPhaseDistribution,
+    }),
+    hierarchy_ambiguous: false,
+    hierarchy_ambiguity_message: null,
+    hierarchy_issues: [],
     results,
   };
 }
@@ -711,6 +782,91 @@ function fallbackAverages(
       range_label: scoreInterpretation?.range ?? null,
     };
   });
+}
+
+function fallbackReportCount(
+  assignments: CompanyAssignment[],
+  results: CompanyScoringResult[],
+  questionnaireKey: string,
+): number {
+  const resultAssignmentIds = new Set(results.map((result) => result.assignment_id));
+  return assignments.filter((assignment) => assignment.questionnaire_key === questionnaireKey && resultAssignmentIds.has(assignment.id)).length;
+}
+
+function fallbackPcmDistribution(
+  participants: CompanyParticipant[],
+  assignments: CompanyAssignment[],
+  field: "pcm_base" | "pcm_phase",
+): ReportDistribution[] {
+  const participantsById = new Map(participants.map((participant) => [participant.id, participant]));
+  const completedPcmRespondents = new Set(
+    assignments
+      .filter((assignment) => isCompletedAssignment(assignment) && ["pcm_base", "pcm_phase", "phase"].includes(assignment.questionnaire_key))
+      .map((assignment) => assignment.respondent_profile_id),
+  );
+  const counts = new Map<string, number>();
+
+  for (const participantId of completedPcmRespondents) {
+    const value = participantsById.get(participantId)?.[field]?.trim();
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([id, value]) => ({ id, label: formatPcmLabel(id), value, color: getPcmColor(id) }))
+    .sort((first, second) => second.value - first.value || first.label.localeCompare(second.label));
+}
+
+function fallbackDistributionCount(distribution: ReportDistribution[]): number {
+  return distribution.reduce((total, item) => total + item.value, 0);
+}
+
+function fallbackReportTeamLenses({
+  participants,
+  assignments,
+  lencioniAverages,
+  driverAverages,
+  boss360Averages,
+  lencioniCount,
+  driverCount,
+  boss360Count,
+  pcmBaseDistribution,
+  pcmPhaseDistribution,
+}: {
+  participants: CompanyParticipant[];
+  assignments: CompanyAssignment[];
+  lencioniAverages: ReportAverage[];
+  driverAverages: ReportAverage[];
+  boss360Averages: ReportAverage[];
+  lencioniCount: number;
+  driverCount: number;
+  boss360Count: number;
+  pcmBaseDistribution: ReportDistribution[];
+  pcmPhaseDistribution: ReportDistribution[];
+}): ReportTeamLens[] {
+  if (participants.length === 0) return [];
+  const completedCount = assignments.filter(isCompletedAssignment).length;
+
+  return [
+    {
+      id: "leadership",
+      name: "Leadership",
+      member_count: participants.length,
+      assigned_count: assignments.length,
+      completed_count: completedCount,
+      completion_rate: assignments.length > 0 ? Math.round((completedCount / assignments.length) * 100) : 0,
+      lencioni_count: lencioniCount,
+      driver_count: driverCount,
+      boss_360_count: boss360Count,
+      pcm_base_count: fallbackDistributionCount(pcmBaseDistribution),
+      pcm_phase_count: fallbackDistributionCount(pcmPhaseDistribution),
+      lencioni_averages: lencioniAverages,
+      driver_averages: driverAverages,
+      boss_360_averages: boss360Averages,
+      pcm_base_distribution: pcmBaseDistribution,
+      pcm_phase_distribution: pcmPhaseDistribution,
+    },
+  ];
 }
 
 function coerceFallbackScore(value: unknown): number {

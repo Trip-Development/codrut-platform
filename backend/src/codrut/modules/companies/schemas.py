@@ -2,9 +2,14 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from codrut.modules.companies.models import CompanyProjectStatus
+from codrut.modules.identity.password_policy import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    validate_new_password,
+)
 
 
 class CompanyCreateRequest(BaseModel):
@@ -83,8 +88,13 @@ class CompanyAccessCodeResponse(BaseModel):
 
 class CompanyAccessCodeRegistrationRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
     access_code: str = Field(min_length=6, max_length=64)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_new_password(value)
 
 
 class ParticipantCreateRequest(BaseModel):

@@ -1,4 +1,3 @@
-from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -6,7 +5,6 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
-from codrut.core.config import get_settings
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.companies.schemas import (
     CompanyAccessCodeCreateRequest,
@@ -32,6 +30,7 @@ from codrut.modules.companies.schemas import (
 )
 from codrut.modules.companies.service import CompanyService
 from codrut.modules.identity.schemas import AuthResponse, SessionPrincipal
+from codrut.modules.identity.session_cookie import set_session_cookie
 
 router = APIRouter()
 
@@ -359,13 +358,4 @@ async def import_company_reporting_relationships(
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
-    settings = get_settings()
-    response.set_cookie(
-        "codrut_session",
-        token,
-        max_age=int(timedelta(days=14).total_seconds()),
-        httponly=True,
-        secure=settings.is_production,
-        samesite="lax",
-        path="/",
-    )
+    set_session_cookie(response, token)

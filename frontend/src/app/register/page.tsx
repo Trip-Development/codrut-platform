@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { isDemoFallbackEnabled } from "@/api/runtime";
+import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/api/password-policy";
+import { getApiBaseUrl, isDemoFallbackEnabled } from "@/api/runtime";
 
 const generateNickname = (name: string) => {
   if (!name) return "";
@@ -73,8 +74,9 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 12) {
-      setError("Parola trebuie să aibă cel puțin 12 caractere.");
+    const passwordError = validatePasswordPolicy(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -91,11 +93,12 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch(`${getApiBaseUrl()}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           email,
           password,
@@ -227,7 +230,7 @@ export default function RegisterPage() {
             <input
               className="control-input w-full bg-surface-muted py-3.5 text-base"
               type="password"
-              placeholder="Minim 12 caractere"
+              placeholder={`Minim ${PASSWORD_MIN_LENGTH} caractere`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

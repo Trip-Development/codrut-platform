@@ -16,8 +16,8 @@ export default async function TrainerEmailPage() {
     <AppShell
       audience="trainer"
       eyebrow="Email"
-      title="Șabloane email și arhivă globală"
-      description="Biblioteca de texte pentru invitații și remindere. Trimiterea și statusul operațional se gestionează din spațiul fiecărei companii."
+      title="Șabloane email și campanii"
+      description="Biblioteca de texte pentru invitații, remindere și campanii. Trimiterea operațională se gestionează din spațiul fiecărei companii."
       navItems={trainerNavItems}
       activeHref="/trainer/email"
       userLabel={trainer.user.name}

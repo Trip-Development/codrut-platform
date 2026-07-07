@@ -114,6 +114,25 @@ def test_campaign_send_requires_trainer_role() -> None:
     assert response.status_code == 403
 
 
+def test_campaign_membership_reads_require_trainer_role() -> None:
+    client = _client_as(UserRole.participant)
+
+    response = client.get(f"/api/communications/campaigns/{uuid4()}/recipients")
+
+    assert response.status_code == 403
+
+
+def test_campaign_membership_updates_require_trainer_role() -> None:
+    client = _client_as(UserRole.participant)
+
+    response = client.put(
+        f"/api/communications/campaigns/{uuid4()}/recipients",
+        json={"recipient_ids": [str(uuid4())]},
+    )
+
+    assert response.status_code == 403
+
+
 def test_campaign_recipient_update_requires_trainer_role() -> None:
     client = _client_as(UserRole.participant)
 
@@ -139,6 +158,84 @@ def test_campaign_delete_requires_trainer_role() -> None:
     response = client.delete(f"/api/communications/campaigns/{uuid4()}")
 
     assert response.status_code == 403
+
+
+def test_trainer_can_list_campaign_membership(monkeypatch) -> None:
+    campaign_id = uuid4()
+    recipient_id = uuid4()
+
+    async def list_memberships_override(self, campaign_id_arg):
+        assert campaign_id_arg == campaign_id
+        return [
+            {
+                "id": str(recipient_id),
+                "company": "Demo Co",
+                "firstName": "Ana",
+                "lastName": "Pop",
+                "email": "ana@example.com",
+                "clientType": "tip_2",
+                "status": "ready",
+                "openCount": 0,
+                "clickCount": 0,
+                "viewCount": 0,
+                "replyCount": 0,
+                "calendlyClickCount": 0,
+                "membershipSource": None,
+            }
+        ]
+
+    monkeypatch.setattr(
+        CommunicationsService,
+        "list_campaign_recipient_memberships",
+        list_memberships_override,
+    )
+    client = _client_as(UserRole.trainer)
+
+    response = client.get(f"/api/communications/campaigns/{campaign_id}/recipients")
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == str(recipient_id)
+
+
+def test_trainer_can_replace_campaign_membership(monkeypatch) -> None:
+    campaign_id = uuid4()
+    recipient_id = uuid4()
+
+    async def replace_memberships_override(self, campaign_id_arg, payload):
+        assert campaign_id_arg == campaign_id
+        assert payload.recipient_ids == [recipient_id]
+        return [
+            {
+                "id": str(recipient_id),
+                "company": "Demo Co",
+                "firstName": "Ana",
+                "lastName": "Pop",
+                "email": "ana@example.com",
+                "clientType": "tip_2",
+                "status": "ready",
+                "openCount": 0,
+                "clickCount": 0,
+                "viewCount": 0,
+                "replyCount": 0,
+                "calendlyClickCount": 0,
+                "membershipSource": "manual",
+            }
+        ]
+
+    monkeypatch.setattr(
+        CommunicationsService,
+        "replace_campaign_recipient_memberships",
+        replace_memberships_override,
+    )
+    client = _client_as(UserRole.trainer)
+
+    response = client.put(
+        f"/api/communications/campaigns/{campaign_id}/recipients",
+        json={"recipient_ids": [str(recipient_id)]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["membershipSource"] == "manual"
 
 
 def test_trainer_can_list_campaigns(monkeypatch) -> None:
