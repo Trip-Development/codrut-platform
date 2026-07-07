@@ -11,7 +11,7 @@ import {
   type ParticipantInvitationMode,
   type RosterInviteResult,
 } from "@/api/companies";
-import { normalizeReportsToName } from "@/api/roster-format";
+import { buildManagerReferenceKeySet, managerReferenceKey, normalizeReportsToName } from "@/api/roster-format";
 import { ModalLayer } from "@/components/ui/modal-layer";
 import { readSpreadsheetFile, type SpreadsheetCell } from "@/utils/spreadsheet-import";
 
@@ -455,14 +455,11 @@ export function RosterImporter({
     const errors: { rowIndex: number; name: string; field: DbField; error: string; type: "critical" | "warning" }[] = [];
     
     const emailsInFile = new Map<string, number[]>();
-    const namesInFile = new Set<string>();
+    const namesInFile = buildManagerReferenceKeySet(processedRows.map((row) => row.full_name));
     const existingEmails = new Set(existingParticipants.map((participant) => participant.email.trim().toLowerCase()));
     const existingNames = new Set(existingParticipants.map((participant) => participant.full_name.trim().toLowerCase()));
 
     processedRows.forEach((row, idx) => {
-      if (row.full_name) {
-        namesInFile.add(row.full_name.trim().toLowerCase());
-      }
       if (row.email) {
         const emailKey = row.email.trim().toLowerCase();
         if (!emailsInFile.has(emailKey)) {
@@ -513,7 +510,7 @@ export function RosterImporter({
         });
       }
       if (row.reports_to_name) {
-        const mgrKey = row.reports_to_name.trim().toLowerCase();
+        const mgrKey = managerReferenceKey(row.reports_to_name);
         if (!namesInFile.has(mgrKey)) {
           errors.push({
             rowIndex: idx,
