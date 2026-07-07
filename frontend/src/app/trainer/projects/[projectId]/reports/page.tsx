@@ -73,7 +73,7 @@ export default async function ProjectReportsPage({
           legend={lencioniLegend}
           suppressed={isSmallCohort(lencioniCount)}
           actionHref={`${reportsPath}/lencioni`}
-          actionLabel="Vezi pe echipe"
+          actionLabel="Detalii"
         />
         <ReportPanel
           title="Feedback 360 iCARE"
@@ -92,7 +92,7 @@ export default async function ProjectReportsPage({
           description="Toți driverii sunt afișați; interpretarea apare doar peste 50%."
           suppressed={isSmallCohort(driverCount)}
           actionHref={`${reportsPath}/drivers`}
-          actionLabel="Vezi detalii"
+          actionLabel="Detalii"
         />
       </section>
 
@@ -243,7 +243,7 @@ function ReportPanel({
         <div>
           <h3 className="font-semibold text-foreground">{title}</h3>
           {actionHref && actionLabel ? (
-            <span className="mt-2 inline-flex rounded-full border border-burgundy/18 bg-burgundy/10 px-3 py-1.5 text-xs font-bold text-burgundy transition group-hover:bg-burgundy group-hover:text-white">
+            <span className="mt-2 inline-flex rounded-full border border-[rgb(230,92,92)] bg-burgundy/10 px-3 py-1.5 text-xs font-bold text-burgundy transition group-hover:bg-burgundy group-hover:text-white">
               {actionLabel}
             </span>
           ) : null}

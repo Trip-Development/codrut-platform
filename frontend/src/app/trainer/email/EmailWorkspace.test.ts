@@ -228,6 +228,19 @@ describe("renderEmailTemplatePreviewBody", () => {
 });
 
 describe("EmailWorkspace campaign contacts", () => {
+  it("removes the global archive tab and normalizes legacy delivery links", async () => {
+    navigationMocks.searchParams = new URLSearchParams("tab=delivery");
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+
+    expect(screen.queryByRole("button", { name: "Arhivă globală" })).toBeNull();
+    expect(screen.queryByText("Invitațiile live se operează din companie")).toBeNull();
+    expect(screen.getByRole("button", { name: "Șabloane email" })).toBeTruthy();
+
+    await waitFor(() => {
+      expect(navigationMocks.replace).toHaveBeenCalledWith("/trainer/email", { scroll: false });
+    });
+  });
+
   it("keeps campaign modal fields focused while typing", async () => {
     navigationMocks.searchParams = new URLSearchParams("tab=campaigns&modal=new-campaign");
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));

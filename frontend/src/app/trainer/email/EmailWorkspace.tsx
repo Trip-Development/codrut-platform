@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listEmailTemplatesOnServer,
@@ -22,7 +21,6 @@ import {
   updateCampaignRecipientOnServer,
   uploadCampaignAssetOnServer,
   type EmailOpsSummary,
-  type AssessmentDeliveryRow,
   type CampaignRecipientRow,
   type CampaignRecipientCreate,
   type CampaignSendResponse,
@@ -33,12 +31,12 @@ import { ModalLayer } from "@/components/ui/modal-layer";
 import { useUrlState } from "@/hooks/use-url-state";
 import { readSpreadsheetFile, spreadsheetRowsToObjects } from "@/utils/spreadsheet-import";
 
-type TabKey = "delivery" | "campaigns" | "templates";
+type TabKey = "campaigns" | "templates";
 type CampaignViewKey = "contacts" | "campaigns";
 type CampaignContactTypeFilter = "all" | "past_customer" | "potential_customer";
 
 function normalizeEmailTab(value: string | null): TabKey {
-  return value === "delivery" || value === "campaigns" || value === "templates" ? value : "templates";
+  return value === "campaigns" || value === "templates" ? value : "templates";
 }
 
 function normalizeCampaignView(value: string | null): CampaignViewKey {
@@ -580,7 +578,6 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const { get, searchKey, setParam, setParams } = useUrlState();
   const [activeTab, setActiveTabState] = useState<TabKey>(normalizeEmailTab(get("tab")));
   const [summary, setSummary] = useState<EmailOpsSummary>(initialSummary);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   function setActiveTab(tab: TabKey) {
     setActiveTabState(tab);
@@ -595,18 +592,18 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   }
 
   useEffect(() => {
-    setActiveTabState(normalizeEmailTab(get("tab")));
-  }, [get, searchKey]);
+    const tab = get("tab");
+    const normalizedTab = normalizeEmailTab(tab);
+    setActiveTabState(normalizedTab);
+    if (tab && tab !== normalizedTab) {
+      setParams({ tab: normalizedTab === "templates" ? null : normalizedTab, modal: null, campaignId: null }, "replace");
+    }
+  }, [get, searchKey, setParams]);
 
   const refreshSummary = async () => {
-    setIsRefreshing(true);
-    try {
-      const { getEmailOpsSummary } = await import("@/api/email");
-      const fresh = await getEmailOpsSummary();
-      setSummary(fresh);
-    } finally {
-      setIsRefreshing(false);
-    }
+    const { getEmailOpsSummary } = await import("@/api/email");
+    const fresh = await getEmailOpsSummary();
+    setSummary(fresh);
   };
 
   // Template Manager States
@@ -1682,36 +1679,6 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
     [campaignBody, campaignSubject, getRenderedPreview, selectedCampaignTemplate],
   );
 
-  const deliveryLabel = (delivery: AssessmentDeliveryRow["delivery"]) => {
-    switch (delivery) {
-      case "draft":
-        return "Ciornă";
-      case "sent":
-        return "Trimis";
-      case "delivered":
-        return "Livrat";
-      case "opened":
-        return "Deschis";
-      case "failed":
-        return "Eșuat";
-      default:
-        return delivery;
-    }
-  };
-
-  const reminderLabel = (reminder: AssessmentDeliveryRow["reminder"]) => {
-    switch (reminder) {
-      case "today":
-        return "Azi";
-      case "tomorrow":
-        return "Mâine";
-      case "paused":
-        return "Oprit";
-      default:
-        return "Fără";
-    }
-  };
-
   return (
     <div className="space-y-8">
       <div className="surface-panel flex flex-wrap gap-2 p-2">
@@ -1726,16 +1693,6 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           Șabloane email
         </button>
         <button
-          onClick={() => setActiveTab("delivery")}
-          className={`rounded-full px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "delivery"
-              ? "bg-burgundy text-white shadow-sm"
-              : "text-foreground/55 hover:bg-surface-muted hover:text-foreground"
-          }`}
-        >
-          Arhivă globală
-        </button>
-        <button
           onClick={() => setActiveTab("campaigns")}
           className={`rounded-full px-5 py-2.5 text-sm font-bold transition-all ${
             activeTab === "campaigns"
@@ -1746,170 +1703,6 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
           Campanii
         </button>
       </div>
-
-      {activeTab === "delivery" && (
-        <div className="space-y-6">
-          <section className="surface-panel overflow-hidden">
-            <div className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Context global</p>
-                <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Invitațiile live se operează din companie</h2>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/60">
-                  Această pagină păstrează o privire agregată și șabloanele. Pentru a trimite emailuri, genera linkuri securizate sau verifica statusul unei persoane, deschide proiectul și tabul Invitații.
-                </p>
-              </div>
-              <Link
-                href="/trainer/companies"
-                className="btn-premium shrink-0"
-              >
-                Deschide companii
-              </Link>
-            </div>
-          </section>
-
-          {/* Metrics summary grid */}
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {summary.metrics.map((metric) => (
-              <article key={metric.label} className="surface-panel p-6">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-burgundy/70">{metric.label}</p>
-                  <p className="mt-3 font-display text-4xl font-bold text-foreground tracking-tight">{metric.value}</p>
-                  <p className="mt-2 text-sm leading-relaxed text-foreground/50">{metric.detail}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {/* Delivery Queue table */}
-            <section className="surface-panel overflow-hidden">
-            <div className="border-b border-[var(--border)] px-8 py-6 bg-surface-muted">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Invitații</p>
-              <h2 className="mt-2 text-xl font-bold text-foreground">Status acces participanți</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-foreground/60">
-                Liderii primesc cont complet, membrii primesc link securizat de completare rapidă.
-              </p>
-            </div>
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="min-w-[980px] w-full text-left text-sm">
-                <thead className="bg-surface-muted text-[11px] font-bold uppercase tracking-[0.15em] text-foreground/50 border-b border-[var(--border)]">
-                  <tr>
-                    <th className="px-8 py-4">Recipient</th>
-                    <th className="px-8 py-4">Acces</th>
-                    <th className="px-8 py-4">Sarcini</th>
-                    <th className="px-8 py-4">Status livrare</th>
-                    <th className="px-8 py-4">Reminder</th>
-                    <th className="px-8 py-4">Următorul pas</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {summary.assessmentRows.map((row) => (
-                    <tr key={row.id} className="align-top hover:bg-surface-muted transition-colors">
-                      <td className="px-8 py-5">
-                        <p className="font-bold text-foreground">{row.participant}</p>
-                        <p className="mt-1 text-[11px] text-foreground/50 font-mono">{row.email}</p>
-                        <p className="mt-1.5 text-xs font-bold text-burgundy">{row.project}</p>
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className="inline-flex items-center rounded-full bg-surface-muted px-3 py-1 text-xs font-bold text-foreground/70 border border-[var(--border)] shadow-sm whitespace-nowrap">
-                          {row.audience === "leadership_account" ? "Cont lider" : "Link securizat"}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5 text-foreground/70 font-bold">{row.tasks}</td>
-                      <td className="px-8 py-5">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold border uppercase tracking-wider whitespace-nowrap shadow-sm ${
-                          row.delivery === "delivered" || row.delivery === "opened"
-                            ? "bg-green-50 border-green-200 text-green-700"
-                            : row.delivery === "failed"
-                              ? "bg-red-50 border-red-200 text-red-700"
-                              : "bg-surface border-[var(--border)] text-foreground/60"
-                        }`}>
-                          {deliveryLabel(row.delivery)}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className="inline-flex items-center rounded-full bg-surface px-3 py-1 text-[11px] font-bold text-foreground/60 border border-[var(--border)] shadow-sm uppercase tracking-wider">
-                          {reminderLabel(row.reminder)}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5 text-foreground/60 font-semibold max-w-[200px] leading-relaxed">{row.nextAction}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="grid gap-4 p-6 xl:hidden">
-              {summary.assessmentRows.map((row) => (
-                <article key={row.id} className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="font-bold text-foreground text-lg">{row.participant}</p>
-                      <p className="mt-1 break-all text-xs text-foreground/50 font-mono">{row.email}</p>
-                      <p className="mt-2 text-xs font-bold text-burgundy uppercase tracking-wider">{row.project}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-1 text-xs font-bold text-foreground/70 shadow-sm">
-                        {row.audience === "leadership_account" ? "Cont lider" : "Link securizat"}
-                      </span>
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold border uppercase tracking-wider shadow-sm ${
-                        row.delivery === "delivered" || row.delivery === "opened"
-                          ? "bg-green-50 border-green-200 text-green-700"
-                          : row.delivery === "failed"
-                            ? "bg-red-50 border-red-200 text-red-700"
-                            : "bg-surface border-[var(--border)] text-foreground/60"
-                      }`}>
-                        {deliveryLabel(row.delivery)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <dl className="mt-5 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-surface-muted border border-[var(--border)] px-4 py-3">
-                      <dt className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1">Sarcini</dt>
-                      <dd className="text-sm font-bold text-foreground">{row.tasks}</dd>
-                    </div>
-                    <div className="rounded-xl bg-surface-muted border border-[var(--border)] px-4 py-3">
-                      <dt className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1">Reminder</dt>
-                      <dd className="text-sm font-bold text-foreground">{reminderLabel(row.reminder)}</dd>
-                    </div>
-                    <div className="rounded-xl bg-surface-muted border border-[var(--border)] px-4 py-3 sm:col-span-3">
-                      <dt className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1">Următorul pas</dt>
-                      <dd className="text-sm font-semibold leading-relaxed text-foreground/70">{row.nextAction}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          {/* Quick Actions Panel */}
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-            <section className="surface-panel flex flex-col justify-center p-6 md:p-8">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80 mb-4">Operare globală</p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <button
-                  type="button"
-                  disabled={isRefreshing}
-                  onClick={refreshSummary}
-                  className="btn-secondary min-h-[3rem] w-full"
-                >
-                  {isRefreshing ? "Se actualizează..." : "Actualizează starea"}
-                </button>
-              </div>
-            </section>
-
-            <section className="surface-panel-muted p-6 md:p-8">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80 mb-4">Reguli de livrare</p>
-              <div className="space-y-3">
-                {summary.rules.map((rule) => (
-                  <p key={rule} className="rounded-xl bg-surface px-4 py-3 text-xs font-medium leading-relaxed text-foreground/70 border border-[var(--border)] shadow-sm">
-                    {rule}
-                  </p>
-                ))}
-              </div>
-            </section>
-          </div>
-        </div>
-      )}
 
       {activeTab === "campaigns" && (
         <div className="space-y-6">

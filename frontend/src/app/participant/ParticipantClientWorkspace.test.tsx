@@ -1,18 +1,91 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { InviteTask } from "@/api/invites";
 
-import { ParticipantResultsPanel } from "./ParticipantClientWorkspace";
+import { ParticipantClientWorkspace, ParticipantResultsPanel } from "./ParticipantClientWorkspace";
 import { ParticipantTaskList } from "./ParticipantTaskList";
 import { groupParticipantTasks } from "./task-display";
+
+describe("ParticipantClientWorkspace", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("keeps the participant home copy focused and shows active work as a compact status", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Mihai Matei",
+            email: "mihai.matei@example.com",
+            role: "participant",
+          },
+        }}
+        summaryData={{
+          projectName: "Leadership operațional Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          anonymousName: "SignalHarbor5271",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "Fără termen",
+          pcmBase: null,
+          pcmPhase: null,
+          results: [],
+          tasks: [
+            {
+              id: "drivers-self",
+              title: "Driveri de stres TA",
+              status: "not_started",
+              detail: "Autoevaluare.",
+              href: "/participant/questionnaires/distress_drivers?assignmentId=drivers-self",
+              assignmentId: "drivers-self",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 8,
+              questionnaireKey: "distress_drivers",
+            },
+            {
+              id: "team-feedback",
+              title: "Feedback pentru echipă",
+              status: "not_started",
+              detail: "Răspunde pentru echipă.",
+              href: "/participant/questionnaires/lencioni?assignmentId=team-feedback",
+              assignmentId: "team-feedback",
+              targetLabel: "Echipa operațională Atlas",
+              estimatedMinutes: 12,
+              questionnaireKey: "lencioni",
+            },
+            {
+              id: "boss-360",
+              title: "Feedback confidențial",
+              status: "in_progress",
+              detail: "Feedback de completat.",
+              href: "/participant/questionnaires/boss_360?assignmentId=boss-360",
+              assignmentId: "boss-360",
+              targetLabel: "Bianca Pavel",
+              estimatedMinutes: 10,
+              questionnaireKey: "boss_360",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Ai chestionarele pregătite aici/)).toBeDefined();
+    expect(screen.queryByText(/baza de date/i)).toBeNull();
+    expect(screen.queryByText(/Fiecare sarcină vine din invitațiile pregătite de trainer/i)).toBeNull();
+    expect(screen.getByRole("status", { name: "3 sarcini active" })).toBeDefined();
+  });
+});
 
 describe("ParticipantResultsPanel", () => {
   afterEach(() => {
     cleanup();
   });
 
-  it("shows all distress driver scores and expands feedback from the matching bar", () => {
+  it("shows distress driver feedback inline without requiring expansion", () => {
     render(
       <ParticipantResultsPanel
         pcmBase="thinker"
@@ -40,16 +113,10 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("Fii Perfect")).toBeDefined();
     expect(screen.getByText("Străduiește-te")).toBeDefined();
     expect(screen.getByText("Mulțumește-i pe alții")).toBeDefined();
-    expect(screen.queryByText(/sub presiune poți simți/)).toBeNull();
-    expect(screen.queryByText(/standardele înalte ajută calitatea/)).toBeNull();
-    expect(screen.queryByText(/energia de a încerca poate fi valoroasă/)).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /Fii Puternic/i }));
     expect(screen.getByText(/sub presiune poți simți/)).toBeDefined();
-
-    fireEvent.click(screen.getByRole("button", { name: /Fii Perfect/i }));
     expect(screen.getByText(/standardele înalte ajută calitatea/)).toBeDefined();
     expect(screen.queryByText(/energia de a încerca poate fi valoroasă/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Fii Puternic/i })).toBeNull();
   });
 
   it("uses participant-facing labels and filters raw iCARE section keys", () => {

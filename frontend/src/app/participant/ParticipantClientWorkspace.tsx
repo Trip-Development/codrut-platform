@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
 
 import type { SessionState } from "@/api/auth";
 import type { InviteTask } from "@/api/invites";
@@ -95,7 +94,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
       audience="participant"
       eyebrow={summaryData.projectName}
       title={`Bună, ${anonymousIdentity}`}
-      description="Lucrezi sub identitate anonimă. Completează chestionarele active, iar progresul se actualizează din baza de date."
+      description="Ai chestionarele pregătite aici. Completează-le pe rând, iar progresul rămâne salvat automat."
       navItems={participantNavItems}
       activeHref="/participant"
       userLabel={anonymousIdentity}
@@ -112,21 +111,24 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
                     {pendingTaskGroups.length > 0 ? "Chestionare active" : isComplete ? "Ai finalizat partea ta" : "Ești la zi"}
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-                    {isComplete ? (
-                      "Nu mai ai nimic de făcut acum. Rezultatele calculate sunt în tabul dedicat."
-                    ) : (
-                      <>
-                        Fiecare sarcină vine din invitațiile pregătite de trainer. Identitatea afișată pentru acest proiect este{" "}
-                        <strong className="text-foreground">{displayIdentity}</strong>.
-                      </>
-                    )}
-                  </p>
+                  {isComplete ? (
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
+                      Nu mai ai nimic de făcut acum. Rezultatele calculate sunt în tabul dedicat.
+                    </p>
+                  ) : null}
                 </div>
-                <div className="w-fit rounded-xl bg-burgundy px-4 py-3 text-white shadow-sm">
-                  <span className="block text-2xl font-semibold leading-none">{pendingTaskGroups.length}</span>
-                  <span className="mt-1 block text-xs font-semibold text-white/78">
-                    {pendingTaskGroups.length === 1 ? "intrare activă" : "intrări active"}
+                <div
+                  className="inline-flex w-fit items-center gap-2 rounded-full border border-[rgb(230,92,92)] bg-burgundy/10 px-3 py-1.5 text-burgundy shadow-sm shadow-burgundy/5"
+                  role="status"
+                  aria-label={`${pendingTaskGroups.length} ${
+                    pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"
+                  }`}
+                >
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-burgundy px-1.5 text-xs font-bold leading-none text-white">
+                    {pendingTaskGroups.length}
+                  </span>
+                  <span className="text-xs font-bold">
+                    {pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}
                   </span>
                 </div>
               </div>
@@ -346,11 +348,9 @@ function ScoreRow({
   max: number;
   showExplanation: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const feedbackId = useId();
   const width = Math.max(0, Math.min(100, (item.score / max) * 100));
   const tone = showExplanation ? "bg-burgundy" : "bg-success";
-  const canExpand = showExplanation && Boolean(item.explanation);
+  const hasFeedback = showExplanation && Boolean(item.explanation);
   const content = (
     <>
       <span className="flex items-center justify-between gap-4">
@@ -361,9 +361,9 @@ function ScoreRow({
           ) : null}
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          {canExpand ? (
+          {hasFeedback ? (
             <span className="rounded-full bg-burgundy/10 px-2 py-1 text-[11px] font-bold text-burgundy">
-              {expanded ? "Ascunde" : "Feedback"}
+              Feedback
             </span>
           ) : null}
           <span className="text-base font-semibold text-foreground">{formatScore(item.score)}</span>
@@ -377,21 +377,9 @@ function ScoreRow({
 
   return (
     <div>
-      {canExpand ? (
-        <button
-          type="button"
-          className="tap-soft block w-full rounded-xl p-2 text-left transition hover:bg-burgundy/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-burgundy"
-          aria-expanded={expanded}
-          aria-controls={feedbackId}
-          onClick={() => setExpanded((current) => !current)}
-        >
-          {content}
-        </button>
-      ) : (
-        <div className="p-2">{content}</div>
-      )}
-      {canExpand && expanded ? (
-        <p id={feedbackId} className="mt-1 rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-foreground/68">
+      <div className="rounded-xl p-2">{content}</div>
+      {hasFeedback ? (
+        <p className="mt-1 rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-foreground/68">
           {item.explanation}
         </p>
       ) : null}

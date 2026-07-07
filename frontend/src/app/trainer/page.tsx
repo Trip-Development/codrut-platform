@@ -77,7 +77,7 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
         <div className="mt-3 flex flex-wrap gap-2">
           {company.blockers.length > 0 ? (
             company.blockers.map((blocker) => (
-              <span key={blocker} className="rounded-full bg-burgundy-50 dark:bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
+              <span key={blocker} className="status-chip-danger rounded-full px-2.5 py-1 text-xs font-semibold">
                 {blocker}
               </span>
             ))

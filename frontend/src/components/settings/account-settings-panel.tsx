@@ -15,10 +15,10 @@ type DetailRow = {
 type AccountSettingsPanelProps = {
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   accountRows: DetailRow[];
-  contextRows: DetailRow[];
-  notes: string[];
+  contextRows?: DetailRow[];
+  notes?: string[];
   passwordEnabled: boolean;
 };
 
@@ -36,6 +36,8 @@ export function AccountSettingsPanel({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const hasContextRows = Boolean(contextRows?.length);
+  const hasNotes = Boolean(notes?.length);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,12 +77,14 @@ export function AccountSettingsPanel({
         <div className="border-b border-[var(--border)] px-5 py-4 md:px-6">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">{eyebrow}</p>
           <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">{title}</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">{description}</p>
+          {description ? (
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">{description}</p>
+          ) : null}
         </div>
 
-        <div className="grid gap-0 lg:grid-cols-2">
+        <div className={`grid gap-0 ${hasContextRows ? "lg:grid-cols-2" : ""}`}>
           <SettingsList title="Cont" rows={accountRows} />
-          <SettingsList title="Context operațional" rows={contextRows} />
+          {hasContextRows ? <SettingsList title="Context operațional" rows={contextRows ?? []} /> : null}
         </div>
       </section>
 
@@ -139,17 +143,19 @@ export function AccountSettingsPanel({
           </p>
         )}
 
-        <div className="mt-6 border-t border-[var(--border)] pt-5">
-          <h3 className="text-sm font-bold text-foreground">Note</h3>
-          <ul className="mt-3 space-y-2 text-sm leading-6 text-foreground/62">
-            {notes.map((note) => (
-              <li key={note} className="flex gap-2">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-burgundy/70" />
-                <span>{note}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {hasNotes ? (
+          <div className="mt-6 border-t border-[var(--border)] pt-5">
+            <h3 className="text-sm font-bold text-foreground">Note</h3>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-foreground/62">
+              {(notes ?? []).map((note) => (
+                <li key={note} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-burgundy/70" />
+                  <span>{note}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </aside>
     </div>
   );

@@ -79,7 +79,7 @@ describe("QuestionnaireRunner", () => {
     expect(screen.getByText("Please answer all questions.")).toBeTruthy();
   });
 
-  it("shows the 360 target prompt using only the safe display name", () => {
+  it("shows the 360 target prompt as a single Romanian line using only the safe display name", () => {
     render(
       <QuestionnaireRunner
         definition={{ ...mockDefinition, key: "boss_360" }}
@@ -88,8 +88,10 @@ describe("QuestionnaireRunner", () => {
       />,
     );
 
-    expect(screen.getByText("You are reviewing Bianca Pavel")).toBeTruthy();
-    expect(screen.getByText("You are reviewing Bianca Pavel").className).toContain("text-red-700");
+    expect(screen.getByText("Completezi pentru Bianca Pavel")).toBeTruthy();
+    expect(screen.queryByText("Evaluezi")).toBeNull();
+    expect(screen.queryByText(/You are reviewing/i)).toBeNull();
+    expect(screen.queryByText(/Completezi feedback/i)).toBeNull();
   });
 
   it("does not expose account-like 360 target labels", () => {

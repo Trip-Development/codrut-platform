@@ -308,17 +308,14 @@ export function QuestionnaireRunner({
           </p>
           <h2 className="mt-2 text-2xl font-semibold text-foreground">{definition.title}</h2>
           <div className="mt-4 rounded-xl border border-burgundy/18 bg-surface-muted px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-burgundy/75">
-              {targetCopy.eyebrow}
-            </p>
-            <p className="mt-1 text-sm font-semibold leading-6 text-foreground">
-              {targetCopy.text}
-            </p>
-            {targetCopy.reviewPrompt ? (
-              <p className="mt-2 text-xl font-bold leading-7 text-red-700 md:text-2xl">
-                {targetCopy.reviewPrompt}
+            {targetCopy.eyebrow ? (
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-burgundy/75">
+                {targetCopy.eyebrow}
               </p>
             ) : null}
+            <p className={`${targetCopy.eyebrow ? "mt-1" : ""} text-sm font-semibold leading-6 text-foreground`}>
+              {targetCopy.text}
+            </p>
           </div>
           {hasQuestionnaireDetails ? (
             <div className="mt-4">
@@ -475,16 +472,14 @@ export function QuestionnaireRunner({
 function evaluationTargetCopy(
   targetLabel: string | undefined,
   questionnaireKey: string,
-): { eyebrow: string; text: string; reviewPrompt?: string } {
+): { eyebrow?: string; text: string } {
   const isReview360 = isReview360Questionnaire(questionnaireKey);
   const cleaned = targetLabel?.trim();
   if (isReview360) {
     const safeTarget = safeReviewTargetLabel(targetLabel);
     return safeTarget
       ? {
-          eyebrow: "Evaluezi",
-          text: "Completezi feedback pentru persoana indicată în această sarcină.",
-          reviewPrompt: `You are reviewing ${safeTarget}`,
+          text: `Completezi pentru ${safeTarget}`,
         }
       : {
           eyebrow: "Evaluezi",

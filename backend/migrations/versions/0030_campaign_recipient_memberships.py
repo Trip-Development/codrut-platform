@@ -1,6 +1,6 @@
 """persist campaign recipient memberships
 
-Revision ID: 0030_campaign_recipient_memberships
+Revision ID: 0030_campaign_memberships
 Revises: 0029_clear_campaign_contacts
 Create Date: 2026-07-07
 """
@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0030_campaign_recipient_memberships"
+revision: str = "0030_campaign_memberships"
 down_revision: str | None = "0029_clear_campaign_contacts"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -33,18 +33,28 @@ def upgrade() -> None:
         sa.Column("campaign_id", sa.Uuid(), nullable=False),
         sa.Column("recipient_id", sa.Uuid(), nullable=False),
         sa.Column("source", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(
             ["campaign_id"],
             ["campaigns.id"],
-            name="fk_campaign_recipient_memberships_campaign_id_campaigns",
+            name="fk_crm_campaign_id",
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["recipient_id"],
             ["campaign_recipients.id"],
-            name="fk_campaign_recipient_memberships_recipient_id_campaign_recipients",
+            name="fk_crm_recipient_id",
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_campaign_recipient_memberships"),
