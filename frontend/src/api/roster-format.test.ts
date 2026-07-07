@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildManagerReferenceKeySet,
   displayReportsToName,
   isExternalMatrixManagerLabel,
   managerReferenceKey,
@@ -27,6 +28,13 @@ describe("roster manager formatting", () => {
     expect(managerReferenceKey("Ana Maria Popescu")).toBe("anamariapopescu");
     expect(managerReferenceKey("AnaMariaPopescu")).toBe("anamariapopescu");
     expect(managerReferenceKey("Ștefan-Manager")).toBe("stefanmanager");
+  });
+
+  it("builds roster lookup keys that resolve compact manager references", () => {
+    const keys = buildManagerReferenceKeySet(["Titus Julien Botis", "Ștefan Manager", ""]);
+
+    expect(keys.has(managerReferenceKey("TitusJulienBotis"))).toBe(true);
+    expect(keys.has(managerReferenceKey("StefanManager"))).toBe(true);
   });
 
   it("recognizes matrix manager labels as external manager hints", () => {
