@@ -382,7 +382,7 @@ export default function HomePage() {
 
         <div className="mt-12 grid gap-6 md:grid-cols-4">
           <article className="surface-panel p-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--burgundy)_35%,transparent)] bg-[color-mix(in_srgb,var(--burgundy)_10%,transparent)] text-sm font-black text-burgundy">
               1
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Diagnostic Științific</h3>
@@ -391,7 +391,7 @@ export default function HomePage() {
             </p>
           </article>
           <article className="surface-panel p-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--burgundy)_35%,transparent)] bg-[color-mix(in_srgb,var(--burgundy)_10%,transparent)] text-sm font-black text-burgundy">
               2
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Workshop & Aliniere</h3>
@@ -400,7 +400,7 @@ export default function HomePage() {
             </p>
           </article>
           <article className="surface-panel p-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--burgundy)_35%,transparent)] bg-[color-mix(in_srgb,var(--burgundy)_10%,transparent)] text-sm font-black text-burgundy">
               3
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Coaching Continuu</h3>
@@ -409,7 +409,7 @@ export default function HomePage() {
             </p>
           </article>
           <article className="surface-panel p-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burgundy-50 dark:bg-burgundy/10 text-sm font-black text-burgundy">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--burgundy)_35%,transparent)] bg-[color-mix(in_srgb,var(--burgundy)_10%,transparent)] text-sm font-black text-burgundy">
               4
             </span>
             <h3 className="mt-5 text-xl font-bold text-foreground">Măsurarea Impactului</h3>
@@ -473,7 +473,7 @@ export default function HomePage() {
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row justify-center">
               <input
                 type="email"
-                placeholder="Adresa de email corporate"
+                placeholder="email@example.com"
                 className="control-input w-full sm:w-72 px-5 py-4 text-sm"
               />
               <button className="btn-primary w-full sm:w-auto !px-7 !py-4 !text-sm">

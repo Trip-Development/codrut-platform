@@ -695,14 +695,14 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
             if relationship.participant_profile_id == participant.id:
                 manager_name = company_repository.participants[
                     relationship.manager_profile_id
-                ].full_name
+                ].full_name.replace(" ", "")
                 break
         company_repository.project_memberships.append(
             ProjectMembership(
                 company_id=company_id,
                 project_id=project_id,
                 participant_profile_id=participant.id,
-                reports_to_name=manager_name,
+                reports_to_name=manager_name or "1",
                 position=None,
                 location=None,
                 role_group=participant.role_group,
@@ -793,6 +793,74 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
         if item.questionnaire_key == "pcm_base"
         and item.respondent_profile_id == respondent_id
     ]
+
+
+async def test_default_assignment_plan_does_not_build_manager_scope_for_matrix_label() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    matrix_id = uuid.uuid4()
+    member_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Matrix Managers",
+    )
+    company_repository.participants[respondent_id].full_name = "Chief Example"
+    company_repository.participants[respondent_id].role_group = "leadership"
+    company_repository.participants[target_id].full_name = "Operations Leader"
+    company_repository.participants[target_id].role_group = "leadership"
+    company_repository.participants[matrix_id] = ParticipantProfile(
+        id=matrix_id,
+        company_id=company_id,
+        full_name="External Leader - Matrix",
+        email="matrix@example.com",
+        role_group="member",
+    )
+    company_repository.participants[member_id] = ParticipantProfile(
+        id=member_id,
+        company_id=company_id,
+        full_name="Team Member",
+        email="member@example.com",
+        role_group="member",
+    )
+    for participant_id, reports_to_name in [
+        (respondent_id, "1"),
+        (target_id, "ChiefExample"),
+        (matrix_id, "ChiefExample"),
+        (member_id, "ExternalLeaderMatrix"),
+    ]:
+        company_repository.project_memberships.append(
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=participant_id,
+                reports_to_name=reports_to_name,
+                position=None,
+                location=None,
+                role_group=company_repository.participants[participant_id].role_group,
+                active=True,
+            )
+        )
+    assignment_repository.teams[uuid.uuid4()] = Team(
+        company_id=company_id,
+        name="Leadership",
+        type=TeamType.leadership,
+    )
+
+    plan = await service.build_default_assignment_plan(user_id, company_id, project_id)
+
+    manager_team_scopes = [scope.name for scope in plan.scopes if scope.type == "manager_team"]
+    assert "Echipa External Leader - Matrix" not in manager_team_scopes
 
 
 async def test_default_assignment_plan_rejects_ambiguous_project_manager_names() -> None:

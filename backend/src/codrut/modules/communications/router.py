@@ -18,6 +18,8 @@ from codrut.modules.communications.schemas import (
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
     CampaignRecipientEventResponse,
+    CampaignRecipientMembershipRowResponse,
+    CampaignRecipientMembershipUpdateRequest,
     CampaignRecipientUpdateRequest,
     CampaignSendRequest,
     CampaignSendResponse,
@@ -501,6 +503,42 @@ async def create_campaign(
     )
     await session.commit()
     return {"status": "success", "campaign_id": str(campaign.id)}
+
+
+@router.get(
+    "/campaigns/{campaign_id}/recipients",
+    response_model=list[CampaignRecipientMembershipRowResponse],
+)
+async def list_campaign_recipient_memberships(
+    campaign_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[CampaignRecipientMembershipRowResponse]:
+    _require_trainer(principal)
+    recipients = await CommunicationsService(session).list_campaign_recipient_memberships(
+        campaign_id,
+    )
+    await session.commit()
+    return recipients
+
+
+@router.put(
+    "/campaigns/{campaign_id}/recipients",
+    response_model=list[CampaignRecipientMembershipRowResponse],
+)
+async def replace_campaign_recipient_memberships(
+    campaign_id: UUID,
+    payload: CampaignRecipientMembershipUpdateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[CampaignRecipientMembershipRowResponse]:
+    _require_trainer(principal)
+    recipients = await CommunicationsService(session).replace_campaign_recipient_memberships(
+        campaign_id,
+        payload,
+    )
+    await session.commit()
+    return recipients
 
 
 @router.post("/campaigns/{campaign_id}/send", response_model=CampaignSendResponse)

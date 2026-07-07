@@ -8,7 +8,12 @@ from codrut.modules.assignments.models import (
     AssignmentTargetType,
     QuestionnaireAssignment,
 )
-from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
+from codrut.modules.companies.models import (
+    Company,
+    CompanyProject,
+    ParticipantProfile,
+    ProjectMembership,
+)
 from codrut.modules.forms.models import QuestionnaireKey
 from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.scoring.models import ScoringResult
@@ -366,6 +371,13 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 "please_people",
             ]
             assert [item.avg for item in aggregate.driver_averages] == [10, 20, 30, 60, 50]
+            assert aggregate.driver_averages[3].interpretation == (
+                "Driver prezent peste pragul de atenție; merită explorat în debrief."
+            )
+            assert aggregate.pcm_base_count == 0
+            assert aggregate.pcm_phase_count == 0
+            assert aggregate.pcm_base_distribution == []
+            assert aggregate.pcm_phase_distribution == []
             assert aggregate.boss_360_averages[0].avg == 80
             assert aggregate.boss_360_averages[-1].id == "icare_15_ajuta_echipa"
 
@@ -380,6 +392,262 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 driver_assignment.id,
                 boss_360_assignment.id,
             }
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warnings() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Hierarchy {uuid.uuid4().hex[:8]}")
+            session.add(company)
+            await session.flush()
+
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership canonical",
+            )
+            session.add(project)
+            await session.flush()
+
+            ceo = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Ana Maria",
+                email=f"ana-{uuid.uuid4().hex[:8]}@example.com",
+                pcm_base="harmonizer",
+                pcm_phase="thinker",
+            )
+            manager = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Bogdan Manager",
+                email=f"bogdan-{uuid.uuid4().hex[:8]}@example.com",
+                pcm_base="ganditor",
+                pcm_phase="persister",
+            )
+            member = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Clara Member",
+                email=f"clara-{uuid.uuid4().hex[:8]}@example.com",
+                pcm_base="promoter",
+                pcm_phase="rebel",
+            )
+            external = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Dorin External",
+                email=f"dorin-{uuid.uuid4().hex[:8]}@example.com",
+                pcm_base="imaginer",
+                pcm_phase="harmonizer",
+            )
+            session.add_all([ceo, manager, member, external])
+            await session.flush()
+
+            session.add_all(
+                [
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=ceo.id,
+                        reports_to_name="1",
+                        role_group="leadership",
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=manager.id,
+                        reports_to_name="AnaMaria",
+                        role_group="manager",
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=member.id,
+                        reports_to_name="Bogdan Manager",
+                        role_group="member",
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=external.id,
+                        reports_to_name="Outside Lead",
+                        role_group="member",
+                    ),
+                ]
+            )
+            await session.flush()
+
+            assignments = [
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    respondent_profile_id=ceo.id,
+                    questionnaire_key="pcm_base",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.submitted,
+                ),
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    respondent_profile_id=manager.id,
+                    questionnaire_key="pcm_base",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.submitted,
+                ),
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    respondent_profile_id=member.id,
+                    questionnaire_key="phase",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.submitted,
+                ),
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    respondent_profile_id=external.id,
+                    questionnaire_key="pcm_base",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.submitted,
+                ),
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    respondent_profile_id=manager.id,
+                    questionnaire_key="distress_drivers",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.scored,
+                ),
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    respondent_profile_id=member.id,
+                    questionnaire_key="lencioni",
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.scored,
+                ),
+            ]
+            session.add_all(assignments)
+            await session.flush()
+
+            session.add_all(
+                [
+                    ScoringResult(
+                        assignment_id=assignments[4].id,
+                        primary_result="hurry_up",
+                        scores={
+                            "be_strong": 10,
+                            "be_perfect": 20,
+                            "try_hard": 30,
+                            "hurry_up": 70,
+                            "please_people": 40,
+                        },
+                    ),
+                    ScoringResult(
+                        assignment_id=assignments[5].id,
+                        primary_result="absence_of_trust",
+                        scores={
+                            "absence_of_trust": {"score": 4},
+                            "fear_of_conflict": {"score": 5},
+                            "lack_of_commitment": {"score": 6},
+                            "avoidance_of_accountability": {"score": 7},
+                            "inattention_to_results": {"score": 8},
+                        },
+                    ),
+                ]
+            )
+            await session.flush()
+
+            aggregate = await ScoringService(session).get_company_report_aggregate(
+                company.id,
+                project.id,
+            )
+
+            assert aggregate.pcm_base_count == 4
+            assert aggregate.pcm_phase_count == 4
+            base_distribution = [
+                (item.id, item.label, item.value) for item in aggregate.pcm_base_distribution
+            ]
+            assert base_distribution == [
+                ("harmonizer", "Armonizator", 1),
+                ("ganditor", "Gânditor", 1),
+                ("imaginer", "Imaginator", 1),
+                ("promoter", "Promotor", 1),
+            ]
+            assert aggregate.hierarchy_ambiguous is False
+            assert [issue.code for issue in aggregate.hierarchy_issues] == ["manager_unresolved"]
+            assert aggregate.hierarchy_issues[0].reports_to_name == "Outside Lead"
+
+            team_by_id = {team.id: team for team in aggregate.team_lenses}
+            assert team_by_id["leadership"].member_count == 3
+            manager_team = next(
+                team for team in aggregate.team_lenses if team.name == "Echipa Bogdan Manager"
+            )
+            assert manager_team.member_count == 2
+            assert manager_team.assigned_count == 4
+            assert manager_team.completed_count == 4
+            assert manager_team.driver_count == 1
+            assert manager_team.lencioni_count == 1
+            assert manager_team.pcm_base_count == 2
+            assert manager_team.pcm_phase_count == 2
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_company_report_aggregate_flags_ambiguous_referenced_manager_names() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Ambiguous {uuid.uuid4().hex[:8]}")
+            session.add(company)
+            await session.flush()
+
+            first_manager = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Alex Dup",
+                email=f"alex-one-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            second_manager = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Alex Dup",
+                email=f"alex-two-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            member = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Mara Member",
+                email=f"mara-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name="AlexDup",
+            )
+            session.add_all([first_manager, second_manager, member])
+            await session.flush()
+
+            aggregate = await ScoringService(session).get_company_report_aggregate(company.id)
+
+            assert aggregate.hierarchy_ambiguous is True
+            assert aggregate.team_lenses == []
+            assert aggregate.hierarchy_issues[0].code == "manager_ambiguous"
+            assert "Alex Dup" in (aggregate.hierarchy_ambiguity_message or "")
 
             await session.rollback()
     finally:

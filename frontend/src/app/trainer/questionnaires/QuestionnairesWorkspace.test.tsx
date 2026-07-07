@@ -365,6 +365,7 @@ describe("QuestionnairesWorkspace", () => {
     expect(scaleCard).not.toBeNull();
 
     const labelInput = within(scaleCard as HTMLElement).getAllByDisplayValue("Rar")[0] as HTMLInputElement;
+    expect(labelInput.getAttribute("class")).toContain("control-input-square");
     labelInput.focus();
 
     fireEvent.change(labelInput, { target: { value: "Foarte r" } });
@@ -374,6 +375,46 @@ describe("QuestionnairesWorkspace", () => {
     fireEvent.change(labelInput, { target: { value: "Foarte rar" } });
     expect(document.activeElement).toBe(labelInput);
     expect(labelInput).toHaveProperty("value", "Foarte rar");
+  });
+
+  it("uses compact icon controls in the dense questionnaire editor", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
+
+    const globalPanel = await screen.findByText("Scări globale de răspuns");
+    const scaleCard = globalPanel.closest("section");
+    expect(scaleCard).not.toBeNull();
+
+    const addOptionButton = within(scaleCard as HTMLElement).getByRole("button", {
+      name: "Adaugă opțiune în scara Rar / Des",
+    });
+    expect(addOptionButton.textContent).not.toContain("Adaugă");
+    expect(addOptionButton.getAttribute("class")).not.toContain("rounded-full");
+    expect(addOptionButton.getAttribute("class")).not.toContain("border");
+    expect(addOptionButton.getAttribute("class")).not.toContain("bg-burgundy");
+
+    const addQuestionButton = await screen.findByRole("button", {
+      name: "Adaugă întrebare în secțiunea Section one",
+    });
+    expect(addQuestionButton.textContent).not.toContain("Adaugă");
+
+    const deleteSectionButton = screen.getByRole("button", {
+      name: "Șterge secțiunea Section one",
+    });
+    expect(deleteSectionButton.textContent).not.toContain("Șterge");
+
+    const questionCard = await screen.findByTestId("question-editor-q1");
+    const questionScope = within(questionCard);
+    fireEvent.change(questionScope.getByDisplayValue("Scările Likert"), {
+      target: { value: "statement_score_set" },
+    });
+
+    const addStatementButton = questionScope.getByRole("button", {
+      name: "Adaugă afirmație în întrebarea Q1",
+    });
+    expect(addStatementButton.textContent).not.toContain("Adaugă");
   });
 
   it("keeps local scale editing collapsed by default and stable while typing", async () => {

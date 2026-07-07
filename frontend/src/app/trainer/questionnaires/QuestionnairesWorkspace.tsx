@@ -20,6 +20,10 @@ import { useUrlState } from "@/hooks/use-url-state";
 
 const destructiveButtonClass =
   "tap-soft rounded-full border border-[#890505]/35 bg-transparent px-3 py-1.5 text-xs font-bold text-[#890505] shadow-none transition hover:bg-[#890505]/10 disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-transparent disabled:text-foreground/35 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
+const iconButtonClass =
+  "tap-soft inline-flex h-8 w-8 items-center justify-center text-burgundy transition hover:text-burgundy-dark";
+const destructiveIconButtonClass =
+  "tap-soft inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#890505]/35 bg-transparent text-[#890505] shadow-none transition hover:bg-[#890505]/10 disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-transparent disabled:text-foreground/35 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -61,6 +65,22 @@ type ScaleGroup = {
   questionCount: number;
   scale: QuestionnaireScaleOption[];
 };
+
+function PlusIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+      <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M10 11v6M14 11v6M9 7l1-2h4l1 2M8 7l1 13h6l1-13" />
+    </svg>
+  );
+}
 
 export function QuestionnairesWorkspace() {
   const { get, searchKey, setParam, setParams } = useUrlState();
@@ -1092,9 +1112,11 @@ export function QuestionnairesWorkspace() {
                               return [...scale, { value: nextValue, label: `Opțiune ${nextValue}` }];
                             })
                           }
-                          className="tap-soft rounded-full border border-dashed border-[var(--border)] px-2.5 py-1 text-[11px] font-bold text-foreground/60 hover:border-burgundy/45 hover:text-burgundy"
+                          className={iconButtonClass}
+                          aria-label={`Adaugă opțiune în scara ${group.title}`}
+                          title="Adaugă opțiune"
                         >
-                          + Adaugă opțiune
+                          <PlusIcon />
                         </button>
                       </div>
                       <div className="grid gap-2">
@@ -1113,7 +1135,7 @@ export function QuestionnairesWorkspace() {
                                   return scale;
                                 })
                               }
-                              className="control-input w-full px-2 py-1 text-xs"
+                              className="control-input control-input-square w-full px-2 py-1 text-xs"
                               placeholder="Etichetă"
                             />
                             <input
@@ -1128,7 +1150,7 @@ export function QuestionnairesWorkspace() {
                                   return scale;
                                 })
                               }
-                              className="control-input w-full px-2 py-1 text-xs"
+                              className="control-input control-input-square w-full px-2 py-1 text-xs"
                               placeholder="Descriere opțională"
                             />
                             <button
@@ -1174,15 +1196,19 @@ export function QuestionnairesWorkspace() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleAddQuestion(sIndex)}
-                        className="tap-soft rounded-full bg-burgundy/10 border border-burgundy/20 px-3 py-1.5 text-xs font-bold text-burgundy hover:bg-burgundy/20"
+                        className={iconButtonClass}
+                        aria-label={`Adaugă întrebare în secțiunea ${section.title}`}
+                        title="Adaugă întrebare"
                       >
-                        + Adaugă întrebare
+                        <PlusIcon />
                       </button>
                       <button
                         onClick={() => handleDeleteSection(sIndex)}
-                        className={destructiveButtonClass}
+                        className={destructiveIconButtonClass}
+                        aria-label={`Șterge secțiunea ${section.title}`}
+                        title="Șterge secțiunea"
                       >
-                        Șterge secțiunea
+                        <TrashIcon />
                       </button>
                     </div>
                   </div>
@@ -1313,7 +1339,7 @@ export function QuestionnairesWorkspace() {
                                               newScale[optIndex] = { ...newScale[optIndex], label: e.target.value };
                                               handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                             }}
-                                            className="control-input w-full px-2 py-1 text-xs"
+                                            className="control-input control-input-square w-full px-2 py-1 text-xs"
                                             placeholder="Etichetă"
                                           />
                                           <input
@@ -1324,7 +1350,7 @@ export function QuestionnairesWorkspace() {
                                               newScale[optIndex] = { ...newScale[optIndex], description: e.target.value || undefined };
                                               handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
                                             }}
-                                            className="control-input w-full px-2 py-1 text-xs"
+                                            className="control-input control-input-square w-full px-2 py-1 text-xs"
                                             placeholder="Descriere opțională pentru această opțiune"
                                           />
                                           <button
@@ -1370,9 +1396,11 @@ export function QuestionnairesWorkspace() {
                                 </p>
                                 <button
                                   onClick={() => handleAddStatement(sIndex, qIndex)}
-                                  className="tap-soft rounded-full border border-burgundy/20 bg-burgundy/10 px-3 py-1.5 text-[11px] font-bold text-burgundy hover:bg-burgundy/20"
+                                  className={iconButtonClass}
+                                  aria-label={`Adaugă afirmație în întrebarea ${question.code}`}
+                                  title="Adaugă afirmație"
                                 >
-                                  + Adaugă afirmație
+                                  <PlusIcon />
                                 </button>
                               </div>
 

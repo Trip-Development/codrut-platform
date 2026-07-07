@@ -54,13 +54,13 @@ export default function TrainerLoginPage() {
   };
 
   return (
-    <main className="app-min-height relative flex items-center justify-center overflow-hidden bg-background bg-vines-pattern px-4 py-10">
+    <main className="app-min-height relative flex items-center justify-center overflow-hidden bg-[#260707] bg-vines-pattern px-4 py-10">
       
       <section className="surface-panel relative w-full max-w-md p-8 transition-all duration-150 md:p-10">
         <div className="mb-8 flex flex-col items-center">
           <BrandMark size="lg" showText={false} />
 
-          <span className="mt-4 flex items-center gap-1 text-[11px] font-bold text-burgundy bg-burgundy/10 px-2.5 py-1 rounded-full border border-burgundy/20 uppercase tracking-wider shadow-sm">
+          <span className="mt-4 flex items-center gap-1 rounded-full border border-[rgb(230,92,92)] bg-burgundy/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
             Portal Trainer & Admin
           </span>
 
@@ -83,7 +83,7 @@ export default function TrainerLoginPage() {
             <input
               id="trainer-login-email"
               className="control-input w-full py-3.5 text-base"
-              placeholder="andrei@codrut.ro"
+              placeholder="example@email.com"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

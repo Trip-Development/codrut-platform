@@ -74,7 +74,7 @@ export default function LoginPage() {
             <input
               id="login-email"
               className="control-input w-full py-3.5 text-base"
-              placeholder="nume@companie.ro"
+              placeholder="example@email.com"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

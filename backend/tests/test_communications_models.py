@@ -3,6 +3,7 @@ from sqlalchemy.orm import configure_mappers
 
 from codrut.core.database import Base
 from codrut.modules.communications.models import (
+    CampaignRecipientMembership,
     CampaignRecipientSegment,
     CampaignRecipientStatus,
     CampaignStatus,
@@ -15,9 +16,13 @@ from codrut.modules.identity import models as identity_models  # noqa: F401
 
 
 def test_email_delivery_tables_are_registered() -> None:
-    assert {"email_sends", "email_events", "campaign_recipients", "campaigns"}.issubset(
-        Base.metadata.tables
-    )
+    assert {
+        "email_sends",
+        "email_events",
+        "campaign_recipients",
+        "campaigns",
+        "campaign_recipient_memberships",
+    }.issubset(Base.metadata.tables)
     configure_mappers()
 
 
@@ -85,7 +90,34 @@ def test_campaign_model_supports_template_and_video_link_design() -> None:
         "video_url",
         "thumbnail_url",
         "landing_page_url",
+        "recipient_memberships_initialized",
     }.issubset(columns.keys())
+
+
+def test_campaign_recipient_membership_model_is_campaign_scoped() -> None:
+    table = Base.metadata.tables[CampaignRecipientMembership.__tablename__]
+    unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    foreign_keys = {
+        constraint.name: constraint
+        for constraint in table.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+    }
+
+    assert ("campaign_id", "recipient_id") in unique_columns
+    assert (
+        foreign_keys["fk_campaign_recipient_memberships_campaign_id_campaigns"].ondelete
+        == "CASCADE"
+    )
+    assert (
+        foreign_keys[
+            "fk_campaign_recipient_memberships_recipient_id_campaign_recipients"
+        ].ondelete
+        == "CASCADE"
+    )
 
 
 def test_campaign_create_requires_http_video_asset_urls() -> None:

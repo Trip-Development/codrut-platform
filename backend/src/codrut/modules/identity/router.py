@@ -1,11 +1,9 @@
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
-from codrut.core.config import get_settings
 from codrut.modules.identity.schemas import (
     AuthResponse,
     ConsentRequest,
@@ -19,6 +17,7 @@ from codrut.modules.identity.schemas import (
     SessionPrincipal,
 )
 from codrut.modules.identity.service import IdentityService
+from codrut.modules.identity.session_cookie import delete_session_cookie, set_session_cookie
 
 router = APIRouter()
 
@@ -110,7 +109,7 @@ async def logout(
 ) -> Response:
     await IdentityService(session).logout(principal.session_token)
     await session.commit()
-    response.delete_cookie("codrut_session", path="/")
+    delete_session_cookie(response)
     return response
 
 
@@ -122,13 +121,4 @@ async def me(
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
-    settings = get_settings()
-    response.set_cookie(
-        "codrut_session",
-        token,
-        max_age=int(timedelta(days=90).total_seconds()),
-        httponly=True,
-        secure=settings.is_production,
-        samesite="lax",
-        path="/",
-    )
+    set_session_cookie(response, token)

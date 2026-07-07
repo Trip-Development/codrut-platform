@@ -1,4 +1,6 @@
+import { isAuthSessionUnavailableError } from "@/api/auth";
 import { getParticipantSession } from "@/api/auth-server";
+import { SessionUnavailableNotice } from "@/components/auth/session-unavailable-notice";
 import { redirect } from "next/navigation";
 
 export default async function ParticipantLayout({
@@ -11,7 +13,10 @@ export default async function ParticipantLayout({
     if (!session) {
       redirect("/login");
     }
-  } catch {
+  } catch (error) {
+    if (isAuthSessionUnavailableError(error)) {
+      return <SessionUnavailableNotice audience="participant" />;
+    }
     redirect("/login");
   }
 

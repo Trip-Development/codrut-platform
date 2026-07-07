@@ -1,7 +1,7 @@
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { normalizeReportsToName } from "@/api/roster-format";
-import type { CompanyParticipant } from "@/api/companies";
 import { getProjectWorkspaceData } from "../project-data";
+import { buildOrgChartModel } from "./org-chart-model";
+import { OrgChartTree } from "./OrgChartTree";
 
 export default async function ProjectOrgChartPage({
   params,
@@ -10,11 +10,7 @@ export default async function ProjectOrgChartPage({
 }) {
   const { projectId } = await params;
   const { participants } = await getProjectWorkspaceData(projectId, await getServerApiRequestOptions());
-  const nameMap = new Map(participants.map((participant) => [participant.full_name.trim().toLowerCase(), participant]));
-  const roots = participants.filter((participant) => {
-    const managerName = normalizeReportsToName(participant.reports_to_name);
-    return !managerName || !nameMap.has(managerName.toLowerCase());
-  });
+  const orgChart = buildOrgChartModel(participants);
 
   return (
     <section className="surface-panel p-5">
@@ -29,64 +25,8 @@ export default async function ProjectOrgChartPage({
           Importă rosterul proiectului pentru a vedea organigrama.
         </p>
       ) : (
-        <div className="mt-5 space-y-3 overflow-x-auto">
-          {roots.map((participant) => (
-            <OrgNode
-              key={participant.id}
-              participant={participant}
-              participants={participants}
-              depth={0}
-              visitedIds={new Set([participant.id])}
-            />
-          ))}
-        </div>
+        <OrgChartTree model={orgChart} />
       )}
     </section>
-  );
-}
-
-function OrgNode({
-  participant,
-  participants,
-  depth,
-  visitedIds,
-}: {
-  participant: CompanyParticipant;
-  participants: CompanyParticipant[];
-  depth: number;
-  visitedIds: Set<string>;
-}) {
-  const children = participants.filter((child) => {
-    const managerName = normalizeReportsToName(child.reports_to_name);
-    return managerName.toLowerCase() === participant.full_name.trim().toLowerCase();
-  });
-
-  return (
-    <div style={{ marginLeft: `${depth * 1.5}rem` }}>
-      <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3">
-        <p className="font-semibold text-foreground">{participant.full_name}</p>
-        <p className="mt-1 text-xs font-semibold text-foreground/48">
-          {participant.position ?? "Rol necompletat"} · {participant.location ?? "Locație necompletată"}
-        </p>
-      </div>
-      {children.length > 0 ? (
-        <div className="mt-2 space-y-2 border-l border-[var(--border)] pl-3">
-          {children.map((child) => {
-            if (visitedIds.has(child.id)) return null;
-            const nextVisited = new Set(visitedIds);
-            nextVisited.add(child.id);
-            return (
-              <OrgNode
-                key={child.id}
-                participant={child}
-                participants={participants}
-                depth={depth + 1}
-                visitedIds={nextVisited}
-              />
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
   );
 }

@@ -2,13 +2,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.communications.models import (
     Campaign,
     CampaignRecipient,
     CampaignRecipientEvent,
+    CampaignRecipientMembership,
     EmailSend,
     EmailSendStatus,
     EmailTemplate,
@@ -222,6 +223,80 @@ class CommunicationsRepository:
             .where(EmailSend.status.in_((EmailSendStatus.queued, EmailSendStatus.accepted)))
         )
         return {recipient_id for recipient_id in result.scalars().all() if recipient_id is not None}
+
+    async def list_campaign_member_recipient_ids(
+        self,
+        campaign_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[UUID]:
+        stmt = (
+            select(CampaignRecipientMembership.recipient_id)
+            .join(Campaign, Campaign.id == CampaignRecipientMembership.campaign_id)
+            .where(CampaignRecipientMembership.campaign_id == campaign_id)
+            .order_by(CampaignRecipientMembership.created_at.asc())
+        )
+        if owner_id is not None:
+            stmt = stmt.where(Campaign.owner_id == owner_id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_campaign_member_recipients(
+        self,
+        campaign_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[CampaignRecipient]:
+        stmt = (
+            select(CampaignRecipient)
+            .join(
+                CampaignRecipientMembership,
+                CampaignRecipientMembership.recipient_id == CampaignRecipient.id,
+            )
+            .join(Campaign, Campaign.id == CampaignRecipientMembership.campaign_id)
+            .where(CampaignRecipientMembership.campaign_id == campaign_id)
+            .order_by(CampaignRecipientMembership.created_at.asc())
+        )
+        if owner_id is not None:
+            stmt = stmt.where(
+                Campaign.owner_id == owner_id,
+                CampaignRecipient.owner_id == owner_id,
+            )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def replace_campaign_memberships(
+        self,
+        campaign_id: UUID,
+        recipient_ids: list[UUID],
+        *,
+        source: str = "manual",
+        owner_id: UUID | None = None,
+    ) -> None:
+        existing_ids = set(
+            await self.list_campaign_member_recipient_ids(campaign_id, owner_id=owner_id)
+        )
+        next_ids = set(recipient_ids)
+        delete_ids = existing_ids - next_ids
+        if delete_ids:
+            await self.session.execute(
+                delete(CampaignRecipientMembership)
+                .where(CampaignRecipientMembership.campaign_id == campaign_id)
+                .where(CampaignRecipientMembership.recipient_id.in_(delete_ids))
+            )
+        add_ids = next_ids - existing_ids
+        if add_ids:
+            self.session.add_all(
+                [
+                    CampaignRecipientMembership(
+                        campaign_id=campaign_id,
+                        recipient_id=recipient_id,
+                        source=source,
+                    )
+                    for recipient_id in add_ids
+                ]
+            )
+        await self.session.flush()
 
     async def count_accepted_sends_since(self, since: datetime) -> int:
         result = await self.session.execute(

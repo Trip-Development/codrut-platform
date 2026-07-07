@@ -1,5 +1,5 @@
-import { normalizeReportsToName } from "@/api/roster-format";
-import type { CompanyAssignment, CompanyParticipant, CompanyReportAggregate } from "@/api/companies";
+import { managerReferenceKey, normalizeReportsToName } from "@/api/roster-format";
+import type { CompanyAssignment, CompanyParticipant, ReportTeamLens } from "@/api/companies";
 import { formatPcmLabel, getPcmColor } from "@/api/pcm";
 import type { ScoringResultRecord } from "@/api/trainer";
 
@@ -103,18 +103,6 @@ export type ReportAggregation = {
   completionRate: number;
 };
 
-export type ReportAggregationMismatch = {
-  field:
-    | "total_assigned"
-    | "total_completed"
-    | "lencioni_count"
-    | "driver_count"
-    | "boss_360_count"
-    | "lencioni_averages"
-    | "driver_averages"
-    | "boss_360_averages";
-};
-
 export function buildReportAggregation(
   assignments: CompanyAssignment[],
   resultMap: Map<string, ScoringResultRecord | null>,
@@ -147,38 +135,25 @@ export function buildReportAggregation(
   };
 }
 
-export function findReportAggregationMismatches(
-  aggregate: CompanyReportAggregate,
-  report: ReportAggregation,
-): ReportAggregationMismatch[] {
-  const mismatches: ReportAggregationMismatch[] = [];
-
-  if (aggregate.total_assigned !== report.totalAssigned) {
-    mismatches.push({ field: "total_assigned" });
-  }
-  if (aggregate.total_completed !== report.totalCompleted) {
-    mismatches.push({ field: "total_completed" });
-  }
-  if (aggregate.lencioni_count !== report.lencioniCount) {
-    mismatches.push({ field: "lencioni_count" });
-  }
-  if (aggregate.driver_count !== report.driverCount) {
-    mismatches.push({ field: "driver_count" });
-  }
-  if (aggregate.boss_360_count !== report.boss360Count) {
-    mismatches.push({ field: "boss_360_count" });
-  }
-  if (!reportAveragesMatch(aggregate.lencioni_averages, report.lencioniAverages)) {
-    mismatches.push({ field: "lencioni_averages" });
-  }
-  if (!driverAveragesMatch(aggregate.driver_averages, report.driverAverages)) {
-    mismatches.push({ field: "driver_averages" });
-  }
-  if (!reportAveragesMatch(aggregate.boss_360_averages, report.boss360Averages)) {
-    mismatches.push({ field: "boss_360_averages" });
-  }
-
-  return mismatches;
+export function adaptReportTeamLenses(teamLenses: ReportTeamLens[]): TeamLens[] {
+  return teamLenses.map((team) => ({
+    id: team.id,
+    name: team.name,
+    memberCount: team.member_count,
+    assignedCount: team.assigned_count,
+    completedCount: team.completed_count,
+    completionRate: team.completion_rate,
+    lencioniCount: team.lencioni_count,
+    driverCount: team.driver_count,
+    boss360Count: team.boss_360_count,
+    pcmBaseCount: team.pcm_base_count,
+    pcmPhaseCount: team.pcm_phase_count,
+    lencioniAverages: team.lencioni_averages,
+    driverAverages: team.driver_averages,
+    boss360Averages: team.boss_360_averages,
+    pcmBaseDistribution: team.pcm_base_distribution.map((item) => ({ ...item, color: item.color ?? undefined })),
+    pcmPhaseDistribution: team.pcm_phase_distribution.map((item) => ({ ...item, color: item.color ?? undefined })),
+  }));
 }
 
 function buildScoreSummary(
@@ -255,30 +230,6 @@ function hasAnyNumericScore(scores: Record<string, unknown>, keys: string[]): bo
 
 function zeroRecord(labels: Record<string, string>): Record<string, number> {
   return Object.fromEntries(Object.keys(labels).map((key) => [key, 0]));
-}
-
-function reportAveragesMatch(expected: ReportAverage[], actual: ReportAverage[]): boolean {
-  if (expected.length !== actual.length) return false;
-
-  return expected.every((item, index) => {
-    const candidate = actual[index];
-    return (
-      candidate?.id === item.id &&
-      candidate.avg === item.avg &&
-      (candidate.interpretation ?? null) === (item.interpretation ?? null) &&
-      (candidate.range_label ?? null) === (item.range_label ?? null)
-    );
-  });
-}
-
-function driverAveragesMatch(expected: ReportAverage[], actual: ReportAverage[]): boolean {
-  return (
-    reportAveragesMatch(expected, actual) ||
-    reportAveragesMatch(
-      expected,
-      actual.filter((item) => item.avg > 50),
-    )
-  );
 }
 
 function averagesFromSums(
@@ -370,7 +321,7 @@ function buildTeamLenses(
   }
 
   const participantByName = new Map(
-    participants.map((participant) => [participant.full_name.trim().toLowerCase(), participant]),
+    participants.map((participant) => [managerReferenceKey(participant.full_name), participant]),
   );
   const teamsById = new Map<string, { id: string; name: string; memberIds: Set<string> }>();
   const directReportsByManagerId = new Map<string, CompanyParticipant[]>();
@@ -379,7 +330,7 @@ function buildTeamLenses(
 
   for (const participant of participants) {
     const managerName = normalizeReportsToName(participant.reports_to_name);
-    const manager = managerName ? participantByName.get(managerName.toLowerCase()) : null;
+    const manager = managerName ? participantByName.get(managerReferenceKey(managerName)) : null;
     if (!manager) {
       rootIds.add(participant.id);
       continue;
@@ -480,7 +431,8 @@ function findAmbiguousReferencedName(participants: CompanyParticipant[]): string
   for (const participant of participants) {
     const label = participant.full_name.trim();
     if (!label) continue;
-    const key = label.toLowerCase();
+    const key = managerReferenceKey(label);
+    if (!key) continue;
     const existing = names.get(key);
     names.set(key, { label: existing?.label ?? label, count: (existing?.count ?? 0) + 1 });
   }
@@ -489,7 +441,8 @@ function findAmbiguousReferencedName(participants: CompanyParticipant[]): string
     participants
       .map((participant) => normalizeReportsToName(participant.reports_to_name))
       .filter((name): name is string => Boolean(name))
-      .map((name) => name.toLowerCase()),
+      .map((name) => managerReferenceKey(name))
+      .filter((key) => Boolean(key)),
   );
 
   for (const [key, item] of names) {

@@ -29,6 +29,11 @@ from codrut.modules.assignments.schemas import (
     TeamCreateRequest,
     TeamMembershipCreateRequest,
 )
+from codrut.modules.companies.manager_matching import (
+    clean_manager_reference,
+    is_external_matrix_manager_label,
+    manager_reference_key,
+)
 from codrut.modules.companies.models import CompanyMembershipRole, ParticipantProfile
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.forms.definitions import get_approved_questionnaire_definition
@@ -193,10 +198,10 @@ class AssignmentService:
                 (membership.reports_to_name for membership, _participant in project_memberships),
             )
             for membership, participant in project_memberships:
-                reports_to_name = (membership.reports_to_name or "").strip()
-                if not reports_to_name:
+                reports_to_name = clean_manager_reference(membership.reports_to_name)
+                if reports_to_name is None:
                     continue
-                manager = participant_by_name.get(reports_to_name.casefold())
+                manager = participant_by_name.get(manager_reference_key(reports_to_name))
                 if manager is None or manager.id == participant.id:
                     continue
                 direct_reports_by_manager.setdefault(manager.id, []).append(participant.id)
@@ -650,9 +655,11 @@ def _participants_by_unique_referenced_name(
     labels_by_key: dict[str, str] = {}
     for participant in participants:
         label = participant.full_name.strip()
-        if not label:
+        if not label or is_external_matrix_manager_label(label):
             continue
-        key = label.casefold()
+        key = manager_reference_key(label)
+        if not key:
+            continue
         labels_by_key.setdefault(key, label)
         if key in names:
             duplicate_names.add(key)
@@ -660,9 +667,12 @@ def _participants_by_unique_referenced_name(
             names[key] = participant
 
     referenced_names = {
-        reports_to_name.strip().casefold()
+        key
         for reports_to_name in reports_to_names
-        if reports_to_name and reports_to_name.strip()
+        for cleaned_reports_to_name in (clean_manager_reference(reports_to_name),)
+        if cleaned_reports_to_name is not None
+        for key in (manager_reference_key(cleaned_reports_to_name),)
+        if key
     }
     ambiguous_names = duplicate_names & referenced_names
     if ambiguous_names:

@@ -123,6 +123,30 @@ class CampaignRecipient(TimestampMixin, Base):
     )
 
 
+class CampaignRecipientMembership(TimestampMixin, Base):
+    __tablename__ = "campaign_recipient_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "campaign_id",
+            "recipient_id",
+            name="uq_campaign_recipient_memberships_campaign_recipient",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recipient_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaign_recipients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class CampaignRecipientEvent(TimestampMixin, Base):
     __tablename__ = "campaign_recipient_events"
 
@@ -162,6 +186,12 @@ class Campaign(TimestampMixin, Base):
     video_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     landing_page_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    recipient_memberships_initialized: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
 
 
 class EmailTemplate(TimestampMixin, Base):
