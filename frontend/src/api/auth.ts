@@ -1,3 +1,4 @@
+import { validatePasswordPolicy } from "./password-policy";
 import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
 
 export type CurrentUser = {
@@ -24,6 +25,30 @@ type SessionPrincipalResponse = {
   email: string;
   role: "trainer" | "participant";
 };
+
+type AuthSessionUnavailableContext = {
+  expectedRole: "trainer" | "participant";
+  status?: number;
+  reason: "network" | "server" | "payload";
+};
+
+export class AuthSessionUnavailableError extends Error {
+  context: AuthSessionUnavailableContext;
+
+  constructor(context: AuthSessionUnavailableContext) {
+    super("Nu am putut verifica sesiunea. Reîncearcă în câteva momente.");
+    this.name = "AuthSessionUnavailableError";
+    this.context = context;
+  }
+}
+
+export function isAuthSessionUnavailableError(error: unknown): error is AuthSessionUnavailableError {
+  return error instanceof AuthSessionUnavailableError;
+}
+
+function logSessionUnavailable(context: AuthSessionUnavailableContext): void {
+  console.warn("[auth] Session check unavailable.", context);
+}
 
 export async function loginWithPassword(email: string, password: string): Promise<SessionState> {
   const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
@@ -67,6 +92,9 @@ export async function requestPasswordReset(email: string): Promise<void> {
 }
 
 export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  const passwordError = validatePasswordPolicy(password);
+  if (passwordError) throw new Error(passwordError);
+
   const response = await fetch(`${getApiBaseUrl()}/auth/reset-password/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -85,6 +113,9 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<void> {
+  const passwordError = validatePasswordPolicy(newPassword);
+  if (passwordError) throw new Error(passwordError);
+
   const response = await fetch(`${getApiBaseUrl()}/auth/change-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -108,8 +139,22 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       cache: "no-store",
       credentials: "include",
     });
-    if (!response.ok) return null;
+    if (response.status === 401 || response.status === 403) return null;
+    if (!response.ok) {
+      const context: AuthSessionUnavailableContext = {
+        expectedRole,
+        status: response.status,
+        reason: "server",
+      };
+      logSessionUnavailable(context);
+      throw new AuthSessionUnavailableError(context);
+    }
     const user = (await response.json()) as SessionPrincipalResponse;
+    if (!user.user_id || !user.email || !user.role) {
+      const context: AuthSessionUnavailableContext = { expectedRole, reason: "payload" };
+      logSessionUnavailable(context);
+      throw new AuthSessionUnavailableError(context);
+    }
     if (user.role !== expectedRole) return null;
     return {
       state: "authenticated",
@@ -120,8 +165,11 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
         role: user.role,
       },
     };
-  } catch {
-    return null;
+  } catch (error) {
+    if (isAuthSessionUnavailableError(error)) throw error;
+    const context: AuthSessionUnavailableContext = { expectedRole, reason: "network" };
+    logSessionUnavailable(context);
+    throw new AuthSessionUnavailableError(context);
   }
 }
 
@@ -134,7 +182,12 @@ export async function getCurrentParticipant(): Promise<CurrentUser> {
 }
 
 export async function getTrainerSession(): Promise<SessionState> {
-  const session = await getSessionFromApi("trainer");
+  let session: SessionState | null = null;
+  try {
+    session = await getSessionFromApi("trainer");
+  } catch (error) {
+    if (!isSeededDemoFallbackEnabled()) throw error;
+  }
   if (session) return session;
 
   if (!isSeededDemoFallbackEnabled()) {
@@ -152,7 +205,12 @@ export async function getTrainerSession(): Promise<SessionState> {
 }
 
 export async function getParticipantSession(): Promise<SessionState> {
-  const session = await getSessionFromApi("participant");
+  let session: SessionState | null = null;
+  try {
+    session = await getSessionFromApi("participant");
+  } catch (error) {
+    if (!isSeededDemoFallbackEnabled()) throw error;
+  }
   if (session) return session;
 
   if (!isSeededDemoFallbackEnabled()) {

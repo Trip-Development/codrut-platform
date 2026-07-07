@@ -1,12 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EmailOpsSummary } from "@/api/email";
+import type { EmailCampaign, EmailOpsSummary } from "@/api/email";
 import {
   buildCampaignRecipientImport,
   buildCampaignRecipientImportDrafts,
   EmailWorkspace,
+  renderCampaignEmailPreviewShell,
   renderEmailTemplatePreviewBody,
   replacePreviewPlaceholders,
   selectCampaignRecipientImportSheetName,
@@ -21,8 +22,10 @@ const emailApiMocks = vi.hoisted(() => ({
   deleteCampaignOnServer: vi.fn(),
   deleteCampaignRecipientOnServer: vi.fn(),
   deleteEmailTemplateOnServer: vi.fn(),
+  listCampaignRecipientMembershipOnServer: vi.fn(),
   listCampaignsOnServer: vi.fn(),
   listEmailTemplatesOnServer: vi.fn(),
+  replaceCampaignRecipientMembershipOnServer: vi.fn(),
   sendCampaignOnServer: vi.fn(),
   updateCampaignOnServer: vi.fn(),
   updateCampaignRecipientOnServer: vi.fn(),
@@ -56,8 +59,10 @@ vi.mock("@/api/email", async (importOriginal) => {
     deleteCampaignOnServer: emailApiMocks.deleteCampaignOnServer,
     deleteCampaignRecipientOnServer: emailApiMocks.deleteCampaignRecipientOnServer,
     deleteEmailTemplateOnServer: emailApiMocks.deleteEmailTemplateOnServer,
+    listCampaignRecipientMembershipOnServer: emailApiMocks.listCampaignRecipientMembershipOnServer,
     listCampaignsOnServer: emailApiMocks.listCampaignsOnServer,
     listEmailTemplatesOnServer: emailApiMocks.listEmailTemplatesOnServer,
+    replaceCampaignRecipientMembershipOnServer: emailApiMocks.replaceCampaignRecipientMembershipOnServer,
     sendCampaignOnServer: emailApiMocks.sendCampaignOnServer,
     updateCampaignOnServer: emailApiMocks.updateCampaignOnServer,
     updateCampaignRecipientOnServer: emailApiMocks.updateCampaignRecipientOnServer,
@@ -75,6 +80,8 @@ beforeEach(() => {
   navigationMocks.back.mockReset();
   navigationMocks.refresh.mockReset();
   emailApiMocks.listCampaignsOnServer.mockResolvedValue([]);
+  emailApiMocks.listCampaignRecipientMembershipOnServer.mockResolvedValue([]);
+  emailApiMocks.replaceCampaignRecipientMembershipOnServer.mockResolvedValue([]);
   emailApiMocks.listEmailTemplatesOnServer.mockResolvedValue([]);
   emailApiMocks.updateCampaignRecipientOnServer.mockResolvedValue({});
 });
@@ -83,8 +90,29 @@ afterEach(() => {
   cleanup();
 });
 
+type CampaignRecipient = EmailOpsSummary["campaign"]["recipients"][number];
+
+function makeCampaignRecipient(overrides: Partial<CampaignRecipient> = {}): CampaignRecipient {
+  return {
+    id: "recipient-1",
+    company: "Demo Co",
+    firstName: "Ioana",
+    lastName: "Popescu",
+    email: "ioana@example.com",
+    clientType: "tip_2",
+    status: "suppressed",
+    openCount: 0,
+    clickCount: 0,
+    viewCount: 0,
+    replyCount: 0,
+    calendlyClickCount: 0,
+    ...overrides,
+  };
+}
+
 function makeEmailSummary(
-  recipientStatus: EmailOpsSummary["campaign"]["recipients"][number]["status"] = "suppressed",
+  recipientStatus: CampaignRecipient["status"] = "suppressed",
+  recipients?: CampaignRecipient[],
 ): EmailOpsSummary {
   return {
     metrics: [],
@@ -102,28 +130,26 @@ function makeEmailSummary(
         ctaPrimary: "CTA",
         ctaSecondary: "CTA secundar",
       },
-      recipients: [
-        {
-          id: "recipient-1",
-          company: "Demo Co",
-          firstName: "Ioana",
-          lastName: "Popescu",
-          email: "ioana@example.com",
-          clientType: "tip_2",
-          status: recipientStatus,
-          openCount: 0,
-          clickCount: 0,
-          viewCount: 0,
-          replyCount: 0,
-          calendlyClickCount: 0,
-        },
-      ],
+      recipients: recipients ?? [makeCampaignRecipient({ status: recipientStatus })],
       weeklyReport: {
         cadence: "Săptămânal",
         metrics: [],
         notification: "Email",
       },
     },
+  };
+}
+
+function makeCampaign(overrides: Partial<EmailCampaign> = {}): EmailCampaign {
+  return {
+    id: "campaign-1",
+    name: "Campanie demo",
+    segment: "potential_customer",
+    status: "ready",
+    subject: "Salut, {first_name}",
+    html_body: "<p>Salut.</p>",
+    text_body: "Salut.",
+    ...overrides,
   };
 }
 
@@ -180,6 +206,25 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(replacePreviewPlaceholders("Bună, ${first_name}.")).toBe("Bună, Ioana.");
     expect(replacePreviewPlaceholders("Programează aici: {calendly_url}.")).toContain("calendly.com/andreivacaru");
   });
+
+  it("wraps plain campaign previews in the branded promotional email shell", () => {
+    const html = renderCampaignEmailPreviewShell("<p>Mesaj simplu</p>", {
+      "{unsubscribe_url}": "https://codrut.example/unsubscribe/demo",
+    });
+
+    expect(html).toContain("Andrei Văcaru");
+    expect(html).toContain("<p>Mesaj simplu</p>");
+    expect(html).toContain("Ai primit acest email deoarece");
+    expect(html).toContain("https://codrut.example/unsubscribe/demo");
+  });
+
+  it("does not double-wrap campaign previews that already have the branded shell", () => {
+    const wrapped = renderCampaignEmailPreviewShell(
+      '<div style="font-family:Inter,Arial,sans-serif"><p>Andrei Văcaru</p><p>Mesaj</p></div>',
+    );
+
+    expect(wrapped.match(/Andrei Văcaru/g)).toHaveLength(1);
+  });
 });
 
 describe("EmailWorkspace campaign contacts", () => {
@@ -202,11 +247,144 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.change(subjectInput, { target: { value: "Salut AB" } });
     expect((subjectInput as HTMLInputElement).value).toBe("Salut AB");
 
-    fireEvent.click(screen.getByText("Editor HTML avansat"));
+    const messageInput = screen.getByLabelText(/Mesaj email/);
+    fireEvent.change(messageInput, { target: { value: "Mesaj simplu" } });
+    expect((messageInput as HTMLTextAreaElement).value).toBe("Mesaj simplu");
+    const advancedEditorSummary = screen.getByText("Editor HTML avansat");
+    expect((advancedEditorSummary.closest("details") as HTMLDetailsElement | null)?.open).toBe(false);
+
+    fireEvent.click(advancedEditorSummary);
+    expect((advancedEditorSummary.closest("details") as HTMLDetailsElement | null)?.open).toBe(true);
     const bodyInput = screen.getByLabelText("Corp email");
     fireEvent.change(bodyInput, { target: { value: "Primul rând" } });
     fireEvent.change(bodyInput, { target: { value: "Primul rând\nAl doilea rând" } });
     expect((bodyInput as HTMLTextAreaElement).value).toBe("Primul rând\nAl doilea rând");
+  });
+
+  it("filters global campaign contacts by search and Existing/New client type", async () => {
+    render(React.createElement(EmailWorkspace, {
+      initialSummary: makeEmailSummary("ready", [
+        makeCampaignRecipient({
+          id: "recipient-existing",
+          company: "Client Co",
+          firstName: "Ana",
+          lastName: "Client",
+          email: "ana@client.example",
+          clientType: "tip_1",
+          status: "ready",
+        }),
+        makeCampaignRecipient({
+          id: "recipient-new",
+          company: "Prospect Co",
+          firstName: "Bogdan",
+          lastName: "Nou",
+          email: "bogdan@prospect.example",
+          clientType: "tip_2",
+          status: "ready",
+        }),
+      ]),
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Campanii" }));
+
+    expect(await screen.findByText("Client Co")).toBeTruthy();
+    expect(screen.getByText("Prospect Co")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Caută contacte campanie"), {
+      target: { value: "prospect" },
+    });
+    expect(screen.queryByText("Client Co")).toBeNull();
+    expect(screen.getByText("Prospect Co")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Caută contacte campanie"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Existing" }));
+    expect(screen.getByText("Client Co")).toBeTruthy();
+    expect(screen.queryByText("Prospect Co")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    expect(screen.queryByText("Client Co")).toBeNull();
+    expect(screen.getByText("Prospect Co")).toBeTruthy();
+  });
+
+  it("keeps recipient membership isolated between campaigns using the same segment", async () => {
+    const recipients = [
+      makeCampaignRecipient({
+        id: "recipient-1",
+        company: "Alpha Co",
+        firstName: "Ioana",
+        lastName: "Popescu",
+        email: "ioana@example.com",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+      makeCampaignRecipient({
+        id: "recipient-2",
+        company: "Beta Co",
+        firstName: "Mara",
+        lastName: "Ionescu",
+        email: "mara@example.com",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+    ];
+    const campaigns = [
+      makeCampaign({ id: "campaign-a", name: "Campania A", segment: "potential_customer" }),
+      makeCampaign({ id: "campaign-b", name: "Campania B", segment: "potential_customer" }),
+    ];
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    emailApiMocks.listCampaignsOnServer.mockResolvedValue(campaigns);
+    emailApiMocks.listCampaignRecipientMembershipOnServer.mockImplementation((campaignId: string) =>
+      Promise.resolve(campaignId === "campaign-a" ? [recipients[0]] : [recipients[1]]),
+    );
+    emailApiMocks.replaceCampaignRecipientMembershipOnServer.mockImplementation(
+      (_campaignId: string, recipientIds: string[]) =>
+        Promise.resolve(recipients.filter((recipient) => recipientIds.includes(recipient.id))),
+    );
+    emailApiMocks.sendCampaignOnServer.mockResolvedValue({
+      campaign_id: "campaign-b",
+      total: 1,
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      dry_run: false,
+      results: [],
+    });
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
+
+    try {
+      render(React.createElement(EmailWorkspace, {
+        initialSummary: makeEmailSummary("ready", recipients),
+      }));
+
+      const campaignA = (await screen.findByText("Campania A")).closest("article");
+      const campaignB = screen.getByText("Campania B").closest("article");
+      expect(campaignA).not.toBeNull();
+      expect(campaignB).not.toBeNull();
+
+      fireEvent.click(within(campaignA as HTMLElement).getByLabelText("Include mara@example.com în Campania A"));
+      fireEvent.click(within(campaignA as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
+
+      await waitFor(() => {
+        expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
+          "campaign-a",
+          ["recipient-1", "recipient-2"],
+        );
+      });
+
+      fireEvent.click(within(campaignB as HTMLElement).getByRole("button", { name: "Trimite lista (1)" }));
+
+      await waitFor(() => {
+        expect(emailApiMocks.sendCampaignOnServer).toHaveBeenCalledWith("campaign-b", {
+          mode: "selected",
+          recipientIds: ["recipient-2"],
+        });
+      });
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it("toggles an inactive campaign contact to active with clear Da/Nu state", async () => {

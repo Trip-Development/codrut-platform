@@ -63,14 +63,46 @@ describe("QuestionnaireRunner", () => {
     window.confirm = originalConfirm;
   });
 
-  it("renders questionnaire instructions, questions, and action buttons", () => {
+  it("keeps questionnaire details in a popup and renders questions/actions directly", () => {
     render(<QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />);
 
-    expect(screen.getByText("This is a test description")).toBeTruthy();
-    expect(screen.getByText("Please answer all questions.")).toBeTruthy();
+    expect(screen.queryByText("This is a test description")).toBeNull();
+    expect(screen.queryByText("Please answer all questions.")).toBeNull();
     expect(screen.getByText("Question One Label")).toBeTruthy();
     expect(screen.getByText("Rar")).toBeTruthy();
     expect(screen.getByText("De obicei")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Detalii chestionar" }));
+
+    expect(screen.getByRole("dialog", { name: "Detalii chestionar" })).toBeTruthy();
+    expect(screen.getByText("This is a test description")).toBeTruthy();
+    expect(screen.getByText("Please answer all questions.")).toBeTruthy();
+  });
+
+  it("shows the 360 target prompt using only the safe display name", () => {
+    render(
+      <QuestionnaireRunner
+        definition={{ ...mockDefinition, key: "boss_360" }}
+        assignmentId="test-assignment"
+        targetLabel="Bianca Pavel"
+      />,
+    );
+
+    expect(screen.getByText("You are reviewing Bianca Pavel")).toBeTruthy();
+    expect(screen.getByText("You are reviewing Bianca Pavel").className).toContain("text-red-700");
+  });
+
+  it("does not expose account-like 360 target labels", () => {
+    render(
+      <QuestionnaireRunner
+        definition={{ ...mockDefinition, key: "boss_360" }}
+        assignmentId="test-assignment"
+        targetLabel="bianca.pavel@example.com"
+      />,
+    );
+
+    expect(screen.queryByText(/bianca\.pavel@example\.com/i)).toBeNull();
+    expect(screen.queryByText(/You are reviewing/i)).toBeNull();
   });
 
   it("triggers background auto-save and updates progress when answer is clicked", async () => {

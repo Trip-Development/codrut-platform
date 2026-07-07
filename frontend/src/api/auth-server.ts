@@ -2,7 +2,12 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
-import type { CurrentUser, SessionState } from "./auth";
+import {
+  AuthSessionUnavailableError,
+  isAuthSessionUnavailableError,
+  type CurrentUser,
+  type SessionState,
+} from "./auth";
 import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
 
 type SessionPrincipalResponse = {
@@ -24,10 +29,23 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
         Cookie: `codrut_session=${sessionCookie.value}`,
       },
     });
-    if (!response.ok) return null;
+    if (response.status === 401 || response.status === 403) return null;
+    if (!response.ok) {
+      const context = { expectedRole, status: response.status, reason: "server" as const };
+      console.warn("[auth] Server session check unavailable.", context);
+      throw new AuthSessionUnavailableError(context);
+    }
     user = (await response.json()) as SessionPrincipalResponse;
-  } catch {
-    return null;
+    if (!user.user_id || !user.email || !user.role) {
+      const context = { expectedRole, reason: "payload" as const };
+      console.warn("[auth] Server session check returned an invalid payload.", context);
+      throw new AuthSessionUnavailableError(context);
+    }
+  } catch (error) {
+    if (isAuthSessionUnavailableError(error)) throw error;
+    const context = { expectedRole, reason: "network" as const };
+    console.warn("[auth] Server session check failed before a response.", context);
+    throw new AuthSessionUnavailableError(context);
   }
 
   if (user.role !== expectedRole) return null;
@@ -52,7 +70,12 @@ export async function getCurrentParticipant(): Promise<CurrentUser> {
 }
 
 export async function getTrainerSession(): Promise<SessionState> {
-  const session = await getSessionFromApi("trainer");
+  let session: SessionState | null = null;
+  try {
+    session = await getSessionFromApi("trainer");
+  } catch (error) {
+    if (!isSeededDemoFallbackEnabled()) throw error;
+  }
   if (session) return session;
 
   if (!isSeededDemoFallbackEnabled()) {
@@ -70,7 +93,12 @@ export async function getTrainerSession(): Promise<SessionState> {
 }
 
 export async function getParticipantSession(): Promise<SessionState> {
-  const session = await getSessionFromApi("participant");
+  let session: SessionState | null = null;
+  try {
+    session = await getSessionFromApi("participant");
+  } catch (error) {
+    if (!isSeededDemoFallbackEnabled()) throw error;
+  }
   if (session) return session;
 
   if (!isSeededDemoFallbackEnabled()) {

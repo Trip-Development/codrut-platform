@@ -43,6 +43,8 @@ from codrut.modules.communications.schemas import (
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
     CampaignRecipientEventResponse,
+    CampaignRecipientMembershipRowResponse,
+    CampaignRecipientMembershipUpdateRequest,
     CampaignRecipientUpdateRequest,
     CampaignSendRecipientResult,
     CampaignSendRequest,
@@ -633,6 +635,73 @@ class CommunicationsService:
             raise DomainError("Campaign not found.", code="campaign_not_found")
         await repository.delete_campaign(campaign)
 
+    async def list_campaign_recipient_memberships(
+        self,
+        campaign_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[CampaignRecipientMembershipRowResponse]:
+        repository = self._require_repository()
+        campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
+        if campaign is None:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
+
+        await self._ensure_default_campaign_memberships(campaign, owner_id=owner_id)
+        recipients = await repository.list_campaign_member_recipients(
+            campaign.id,
+            owner_id=owner_id,
+        )
+        return [_campaign_recipient_membership_row(recipient) for recipient in recipients]
+
+    async def replace_campaign_recipient_memberships(
+        self,
+        campaign_id: UUID,
+        payload: CampaignRecipientMembershipUpdateRequest,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[CampaignRecipientMembershipRowResponse]:
+        repository = self._require_repository()
+        campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
+        if campaign is None:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
+
+        recipient_ids = list(dict.fromkeys(payload.recipient_ids))
+        recipients = await repository.list_campaign_recipients_by_ids(
+            recipient_ids,
+            owner_id=owner_id,
+        )
+        recipients_by_id = {recipient.id: recipient for recipient in recipients}
+        missing_ids = [
+            recipient_id
+            for recipient_id in recipient_ids
+            if recipient_id not in recipients_by_id
+        ]
+        if missing_ids:
+            raise DomainError(
+                "Campaign recipient membership includes unknown contacts.",
+                code="campaign_membership_recipient_not_found",
+            )
+        wrong_segment = [
+            recipient.email or str(recipient.id)
+            for recipient in recipients
+            if recipient.segment != campaign.segment
+        ]
+        if wrong_segment:
+            raise DomainError(
+                "Campaign recipient membership must match the campaign segment.",
+                code="campaign_membership_segment_mismatch",
+            )
+
+        await repository.replace_campaign_memberships(
+            campaign.id,
+            recipient_ids,
+            source="manual",
+            owner_id=owner_id,
+        )
+        campaign.recipient_memberships_initialized = True
+        ordered_recipients = [recipients_by_id[recipient_id] for recipient_id in recipient_ids]
+        return [_campaign_recipient_membership_row(recipient) for recipient in ordered_recipients]
+
     async def send_campaign(
         self,
         campaign_id: UUID,
@@ -759,6 +828,42 @@ class CommunicationsService:
             results=results,
         )
 
+    async def _ensure_default_campaign_memberships(
+        self,
+        campaign: Campaign,
+        *,
+        owner_id: UUID | None = None,
+    ) -> list[UUID]:
+        repository = self._require_repository()
+        member_ids = await repository.list_campaign_member_recipient_ids(
+            campaign.id,
+            owner_id=owner_id,
+        )
+        if (
+            member_ids
+            or campaign.recipient_memberships_initialized
+            or campaign.status not in {CampaignStatus.draft, CampaignStatus.ready}
+        ):
+            return member_ids
+
+        recipients = await repository.list_campaign_recipients(owner_id=owner_id)
+        default_ids = [
+            recipient.id
+            for recipient in recipients
+            if recipient.segment == campaign.segment
+            and recipient.status == CampaignRecipientStatus.active
+            and recipient.email
+        ]
+        if default_ids:
+            await repository.replace_campaign_memberships(
+                campaign.id,
+                default_ids,
+                source="segment_backfill",
+                owner_id=owner_id,
+            )
+            campaign.recipient_memberships_initialized = True
+        return default_ids
+
     async def unsubscribe_campaign_recipient(
         self,
         token: str,
@@ -806,8 +911,11 @@ class CommunicationsService:
                 payload.recipient_ids,
                 owner_id=owner_id,
             )
-        recipients = await repository.list_campaign_recipients(owner_id=owner_id)
-        matching = [recipient for recipient in recipients if recipient.segment == campaign.segment]
+        await self._ensure_default_campaign_memberships(campaign, owner_id=owner_id)
+        matching = await repository.list_campaign_member_recipients(
+            campaign.id,
+            owner_id=owner_id,
+        )
         if payload.mode == "all":
             return matching
         if not hasattr(repository, "list_accepted_campaign_recipient_ids"):
@@ -1188,6 +1296,31 @@ def _last_name(full_name: str | None) -> str | None:
 
 def _campaign_client_type(segment: str) -> str:
     return "tip_1" if segment == "past_customer" else "tip_2"
+
+
+def _campaign_recipient_membership_row(
+    recipient: CampaignRecipient,
+) -> CampaignRecipientMembershipRowResponse:
+    return CampaignRecipientMembershipRowResponse(
+        id=str(recipient.id),
+        company=recipient.organization_name or "Companie necompletată",
+        firstName=_first_name(recipient.contact_name),
+        lastName=_last_name(recipient.contact_name),
+        email=recipient.email or "",
+        clientType=_campaign_client_type(recipient.segment.value),
+        status=_campaign_recipient_status(recipient),
+        openRate=None,
+        clickRate=None,
+        viewRate=None,
+        openCount=0,
+        clickCount=0,
+        viewCount=0,
+        replyCount=0,
+        calendlyClickCount=0,
+        emailVariant=recipient.source,
+        outcome=None,
+        membershipSource=None,
+    )
 
 
 def _campaign_recipient_status(recipient: CampaignRecipient) -> str:

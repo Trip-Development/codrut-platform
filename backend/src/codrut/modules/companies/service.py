@@ -2,7 +2,6 @@ import hashlib
 import logging
 import secrets
 import string
-import unicodedata
 from datetime import UTC, datetime
 from typing import Literal, NoReturn
 from uuid import UUID
@@ -11,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.modules.companies.anonymous import new_anonymous_name
+from codrut.modules.companies.manager_matching import (
+    clean_manager_reference,
+    is_external_matrix_manager_label,
+    manager_reference_key,
+)
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -300,7 +304,7 @@ class CompanyService:
                 company_id=company_id,
                 full_name=payload.full_name.strip(),
                 email=email,
-                reports_to_name=_clean_reports_to_name(payload.reports_to_name),
+                reports_to_name=clean_manager_reference(payload.reports_to_name),
                 position=_clean_optional(payload.position),
                 location=_clean_optional(payload.location),
                 role_group=_clean_optional(payload.role_group),
@@ -352,7 +356,7 @@ class CompanyService:
                 )
             participant.full_name = full_name
         if "reports_to_name" in fields_set:
-            participant.reports_to_name = _clean_reports_to_name(payload.reports_to_name)
+            participant.reports_to_name = clean_manager_reference(payload.reports_to_name)
         if "position" in fields_set:
             participant.position = _clean_optional(payload.position)
         if "location" in fields_set:
@@ -392,9 +396,11 @@ class CompanyService:
         await self._require_company_project(company_id, payload.project_id)
         rows = [_normalize_roster_row(row) for row in payload.rows]
         manager_names = {
-            row.reports_to_name.casefold()
+            manager_key
             for row in rows
             if row.reports_to_name is not None
+            for manager_key in (manager_reference_key(row.reports_to_name),)
+            if manager_key
         }
         seen_emails: set[str] = set()
         for row in rows:
@@ -1041,18 +1047,43 @@ class CompanyService:
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         participants = await self.repository.list_participants(company_id)
-        participants_by_name = {
-            participant.full_name.strip().casefold(): participant
-            for participant in participants
-        }
+        participants_by_name: dict[str, ParticipantProfile] = {}
+        external_manager_name_keys: set[str] = set()
+        duplicate_name_keys: set[str] = set()
+        for participant in participants:
+            if is_external_matrix_manager_label(participant.full_name):
+                external_key = manager_reference_key(participant.full_name)
+                if external_key:
+                    external_manager_name_keys.add(external_key)
+                continue
+            name_key = manager_reference_key(participant.full_name)
+            if not name_key:
+                continue
+            if name_key in participants_by_name:
+                duplicate_name_keys.add(name_key)
+            else:
+                participants_by_name[name_key] = participant
         manager_by_participant: dict[UUID, ParticipantProfile] = {}
         issues: list[ReportingRelationshipIssue] = []
 
         for participant in participants:
-            reports_to_name = _clean_reports_to_name(participant.reports_to_name)
+            reports_to_name = clean_manager_reference(participant.reports_to_name)
             if reports_to_name is None:
                 continue
-            manager = participants_by_name.get(reports_to_name.casefold())
+            manager_key = manager_reference_key(reports_to_name)
+            if manager_key in duplicate_name_keys:
+                issues.append(
+                    _relationship_issue(
+                        participant,
+                        reports_to_name,
+                        "manager_name_ambiguous",
+                        "Manager name is ambiguous in this company roster.",
+                    )
+                )
+                continue
+            if manager_key in external_manager_name_keys:
+                continue
+            manager = participants_by_name.get(manager_key)
             if manager is None:
                 issues.append(
                     _relationship_issue(
@@ -1196,41 +1227,10 @@ def _project_invite_expires_at(project: CompanyProject | None) -> datetime | Non
     return expires_at
 
 
-_TOP_LEVEL_REPORTS_TO_VALUES = {
-    "radacina",
-    "root",
-    "top",
-    "top level",
-    "nivel superior",
-    "fara manager",
-    "fara sef",
-    "none",
-    "n/a",
-    "na",
-    "-",
-    "—",
-}
-
-
-def _clean_reports_to_name(value: str | None) -> str | None:
-    cleaned = _clean_optional(value)
-    if cleaned is None:
-        return None
-    normalized = _normalize_reports_to_token(cleaned)
-    return None if normalized in _TOP_LEVEL_REPORTS_TO_VALUES else cleaned
-
-
-def _normalize_reports_to_token(value: str) -> str:
-    without_diacritics = "".join(
-        char for char in unicodedata.normalize("NFD", value) if unicodedata.category(char) != "Mn"
-    )
-    return " ".join(without_diacritics.casefold().split())
-
-
 def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
     return RosterImportRow(
         full_name=row.full_name.strip(),
-        reports_to_name=_clean_reports_to_name(row.reports_to_name),
+        reports_to_name=clean_manager_reference(row.reports_to_name),
         position=_clean_optional(row.position),
         location=_clean_optional(row.location),
         email=row.email.lower(),
@@ -1241,12 +1241,11 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
 
 
 def _infer_roster_role_group(row: RosterImportRow, manager_names: set[str]) -> str:
-    position = (row.position or "").casefold()
+    if is_external_matrix_manager_label(row.full_name):
+        return "member"
     if row.reports_to_name is None:
         return "leadership"
-    if row.full_name.casefold() in manager_names:
-        return "leadership"
-    if any(token in position for token in ("manager", "director", "lead")):
+    if manager_reference_key(row.full_name) in manager_names:
         return "leadership"
     return "member"
 

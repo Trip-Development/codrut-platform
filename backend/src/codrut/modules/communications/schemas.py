@@ -107,6 +107,14 @@ class CampaignRecipientRowResponse(BaseModel):
     outcome: str | None = None
 
 
+class CampaignRecipientMembershipRowResponse(CampaignRecipientRowResponse):
+    membershipSource: str | None = None
+
+
+class CampaignRecipientMembershipUpdateRequest(BaseModel):
+    recipient_ids: list[UUID] = Field(default_factory=list)
+
+
 class CampaignOpsSummaryResponse(BaseModel):
     videoHost: dict
     template: dict

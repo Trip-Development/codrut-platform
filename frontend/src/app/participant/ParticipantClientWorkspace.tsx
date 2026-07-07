@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useId, useState } from "react";
 
 import type { SessionState } from "@/api/auth";
-import { inviteTaskHref, type InviteTask } from "@/api/invites";
+import type { InviteTask } from "@/api/invites";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import type { ParticipantWorkspaceResult } from "@/api/participants";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
+import { ParticipantTaskList } from "./ParticipantTaskList";
+import { groupParticipantTasks } from "./task-display";
 
 type ParticipantClientWorkspaceProps = {
   session: SessionState;
@@ -73,30 +75,17 @@ const icareLabels: Record<string, string> = {
   icare_15_ajuta_echipa: "Ajută echipa",
 };
 
-const statusCopy: Record<InviteTask["status"], { label: string; helper: string }> = {
-  not_started: {
-    label: "De început",
-    helper: "Alege un moment liniștit pentru completare.",
-  },
-  in_progress: {
-    label: "În lucru",
-    helper: "Continuă de unde ai rămas.",
-  },
-  completed: {
-    label: "Finalizat",
-    helper: "Răspunsurile au fost salvate.",
-  },
-};
-
 export function ParticipantClientWorkspace({ session, summaryData }: ParticipantClientWorkspaceProps) {
   const realIdentity = summaryData.participantFullName || session.user.name || summaryData.participantEmail;
   const anonymousIdentity = summaryData.anonymousName || "Profil anonim";
   const displayIdentity = `${anonymousIdentity}${realIdentity ? ` (${realIdentity})` : ""}`;
   const pendingTasks = summaryData.tasks.filter((task) => task.status !== "completed");
+  const taskGroups = groupParticipantTasks(summaryData.tasks);
+  const pendingTaskGroups = taskGroups.filter((group) => group.status !== "completed");
   const completedTasksCount = summaryData.tasks.length - pendingTasks.length;
   const tasksProgressPct =
     summaryData.tasks.length > 0 ? Math.round((completedTasksCount / summaryData.tasks.length) * 100) : 100;
-  const nextTask = pendingTasks[0];
+  const nextGroup = pendingTaskGroups[0];
   const hasAnyTasks = summaryData.tasks.length > 0;
   const isComplete = hasAnyTasks && pendingTasks.length === 0;
   const resultCount = summaryData.results.length;
@@ -121,7 +110,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                     Prioritatea ta acum
                   </p>
                   <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                    {pendingTasks.length > 0 ? "Chestionare active" : isComplete ? "Ai finalizat partea ta" : "Ești la zi"}
+                    {pendingTaskGroups.length > 0 ? "Chestionare active" : isComplete ? "Ai finalizat partea ta" : "Ești la zi"}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
                     {isComplete ? (
@@ -135,31 +124,25 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   </p>
                 </div>
                 <div className="w-fit rounded-xl bg-burgundy px-4 py-3 text-white shadow-sm">
-                  <span className="block text-2xl font-semibold leading-none">{pendingTasks.length}</span>
+                  <span className="block text-2xl font-semibold leading-none">{pendingTaskGroups.length}</span>
                   <span className="mt-1 block text-xs font-semibold text-white/78">
-                    {pendingTasks.length === 1 ? "sarcină activă" : "sarcini active"}
+                    {pendingTaskGroups.length === 1 ? "intrare activă" : "intrări active"}
                   </span>
                 </div>
               </div>
 
-              {pendingTasks.length > 0 ? (
-                <div className="mt-6 grid gap-3">
-                  {pendingTasks.map((task) => (
-                    <TaskCard key={task.assignmentId ?? task.id} task={task} />
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-6 rounded-xl border border-success/24 bg-surface-muted p-5">
-                  <h3 className="text-base font-semibold text-foreground">
-                    {isComplete ? "Participarea ta este completă" : "Nu ai sarcini active"}
-                  </h3>
-                  <p className="mt-1 text-sm leading-6 text-foreground/62">
-                    {isComplete
+              <div className="mt-6">
+                <ParticipantTaskList
+                  groups={taskGroups}
+                  returnTo="/participant/questionnaires"
+                  emptyTitle={isComplete ? "Participarea ta este completă" : "Nu ai sarcini active"}
+                  emptyDescription={
+                    isComplete
                       ? "Rezultatele tale sunt disponibile în tabul Rezultate pentru chestionarele care au scor calculat."
-                      : "Când trainerul îți trimite o invitație nouă, o vei vedea aici și în pagina de chestionare."}
-                  </p>
-                </div>
-              )}
+                      : "Când trainerul îți trimite o invitație nouă, o vei vedea aici și în pagina de chestionare."
+                  }
+                />
+              </div>
             </div>
 
             <aside className="rounded-xl border border-[var(--border)] bg-surface-muted p-5">
@@ -167,7 +150,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/48">Următorul pas</p>
                   <h3 className="mt-2 text-xl font-semibold text-foreground">
-                    {nextTask ? nextTask.title : "Așteaptă următoarea invitație"}
+                    {nextGroup ? nextGroup.title : "Așteaptă următoarea invitație"}
                   </h3>
                 </div>
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/20 text-success-ink">
@@ -175,7 +158,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                 </span>
               </div>
               <p className="mt-4 text-sm leading-6 text-foreground/62">
-                {nextTask
+                {nextGroup
                   ? "Deschide chestionarul, completează răspunsurile și revino aici pentru restul pașilor."
                   : isComplete
                     ? "Ai terminat sarcinile disponibile. Poți consulta scorurile în Rezultate."
@@ -222,47 +205,6 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
         </section>
       </div>
     </AppShell>
-  );
-}
-
-function TaskCard({ task }: { task: InviteTask }) {
-  const copy = statusCopy[task.status];
-
-  return (
-    <article className="group/task rounded-xl border border-[var(--border)] bg-surface p-4 shadow-sm transition hover:border-burgundy/24">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-burgundy/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-burgundy">
-              {copy.label}
-            </span>
-            <span className="text-xs font-semibold text-foreground/45">{task.estimatedMinutes} min</span>
-          </div>
-          <h3 className="mt-3 text-lg font-semibold tracking-tight text-foreground">{task.title}</h3>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-foreground/62">{task.detail}</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-foreground/48">
-            <span>{task.targetLabel}</span>
-            <span aria-hidden="true">·</span>
-            <span>{copy.helper}</span>
-          </div>
-        </div>
-        {task.status === "completed" ? (
-          <span className="status-pill border-success/25 bg-surface-muted px-5 py-3 text-sm text-success-ink">
-            Finalizat
-          </span>
-        ) : (
-          <Link
-            href={inviteTaskHref(task, { returnTo: "/participant/questionnaires" })}
-            className="tap-soft inline-flex items-center justify-center gap-2 rounded-full bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-burgundy-dark"
-          >
-            Continuă
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
-            </svg>
-          </Link>
-        )}
-      </div>
-    </article>
   );
 }
 

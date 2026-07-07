@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
 
@@ -11,6 +12,7 @@ from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.identity.service import IdentityService
 
 CURRENT_TERMS_VERSION = "privacy-2026-06-12"
+logger = logging.getLogger(__name__)
 
 
 async def db_session() -> AsyncIterator[AsyncSession]:
@@ -25,8 +27,19 @@ async def current_principal(
     token = request.cookies.get("codrut_session")
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    principal = await IdentityService(session).principal_from_session_token(token)
+    try:
+        principal = await IdentityService(session).principal_from_session_token(token)
+    except Exception:
+        logger.exception(
+            "Session validation failed while resolving current principal.",
+            extra={"auth_event": "session_validation_failed"},
+        )
+        raise
     if principal is None:
+        logger.info(
+            "Rejected invalid or expired session cookie.",
+            extra={"auth_event": "session_rejected"},
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
     return principal
 

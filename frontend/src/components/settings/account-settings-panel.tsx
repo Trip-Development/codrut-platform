@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 
 import { changePassword } from "@/api/auth";
+import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/api/password-policy";
 
 type DetailRow = {
   label: string;
@@ -40,8 +41,9 @@ export function AccountSettingsPanel({
     event.preventDefault();
     setStatus(null);
 
-    if (newPassword.length < 12) {
-      setStatus({ kind: "error", message: "Parola nouă trebuie să aibă cel puțin 12 caractere." });
+    const passwordError = validatePasswordPolicy(newPassword);
+    if (passwordError) {
+      setStatus({ kind: "error", message: passwordError });
       return;
     }
 
@@ -86,7 +88,7 @@ export function AccountSettingsPanel({
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Securitate</p>
         <h2 className="mt-2 font-display text-xl font-semibold text-foreground">Schimbă parola</h2>
         <p className="mt-2 text-sm leading-6 text-foreground/62">
-          Introdu parola curentă, apoi setează o parolă nouă de minimum 12 caractere.
+          Introdu parola curentă, apoi setează o parolă nouă de minimum {PASSWORD_MIN_LENGTH} caractere.
         </p>
 
         {passwordEnabled ? (

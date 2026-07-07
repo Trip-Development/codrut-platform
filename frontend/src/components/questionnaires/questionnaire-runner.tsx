@@ -120,6 +120,8 @@ export function QuestionnaireRunner({
     initialStatus === "submitted" ? "submitted" : "idle",
   );
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const questionnaireDetailsId = useId();
   const latestAnswersRef = useRef<AnswerState>(initialAnswers ?? {});
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveSequenceRef = useRef(0);
@@ -144,6 +146,18 @@ export function QuestionnaireRunner({
       clearTimeout(autosaveTimerRef.current);
     }
   }, []);
+  useEffect(() => {
+    if (!detailsOpen) return undefined;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setDetailsOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [detailsOpen]);
   const questions = definition.schema.sections.flatMap((section) => section.questions);
   const requiredAnswerKeys = useMemo(
     () =>
@@ -162,7 +176,8 @@ export function QuestionnaireRunner({
     : 0;
   const canSubmit = answeredCount === requiredAnswerKeys.length && Boolean(assignmentId);
   const isComplete = saveState === "submitted";
-  const targetCopy = evaluationTargetCopy(targetLabel);
+  const targetCopy = evaluationTargetCopy(targetLabel, definition.key);
+  const hasQuestionnaireDetails = Boolean(definition.description || definition.schema.instructions);
 
   async function handleAnswerChange(key: string, value: QuestionnaireAnswerValue) {
     if (isComplete) return;
@@ -299,14 +314,69 @@ export function QuestionnaireRunner({
             <p className="mt-1 text-sm font-semibold leading-6 text-foreground">
               {targetCopy.text}
             </p>
+            {targetCopy.reviewPrompt ? (
+              <p className="mt-2 text-xl font-bold leading-7 text-red-700 md:text-2xl">
+                {targetCopy.reviewPrompt}
+              </p>
+            ) : null}
           </div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/68">{definition.description}</p>
-          {definition.schema.instructions ? (
-            <p className="mt-4 max-w-3xl rounded-xl border border-burgundy/18 bg-surface-muted px-4 py-3 text-sm leading-6 text-foreground/66">
-              {definition.schema.instructions}
-            </p>
+          {hasQuestionnaireDetails ? (
+            <div className="mt-4">
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={detailsOpen}
+                aria-controls={questionnaireDetailsId}
+                onClick={() => setDetailsOpen(true)}
+                className="tap-soft rounded-full border border-burgundy/30 bg-surface px-4 py-2 text-sm font-bold text-burgundy hover:border-burgundy/60 hover:bg-burgundy/5"
+              >
+                Detalii chestionar
+              </button>
+            </div>
           ) : null}
         </section>
+
+        {detailsOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setDetailsOpen(false);
+            }}
+          >
+            <section
+              id={questionnaireDetailsId}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`${questionnaireDetailsId}-title`}
+              className="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-surface p-5 shadow-xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-burgundy/75">Chestionar</p>
+                  <h3 id={`${questionnaireDetailsId}-title`} className="mt-1 text-xl font-semibold text-foreground">
+                    Detalii chestionar
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(false)}
+                  aria-label="Închide detaliile"
+                  className="tap-soft rounded-full border border-[var(--border)] px-3 py-1.5 text-sm font-bold text-foreground/64 hover:border-burgundy/30 hover:text-burgundy"
+                >
+                  Închide
+                </button>
+              </div>
+              {definition.description ? (
+                <p className="mt-4 text-sm leading-6 text-foreground/70">{definition.description}</p>
+              ) : null}
+              {definition.schema.instructions ? (
+                <p className="mt-4 rounded-xl border border-burgundy/18 bg-surface-muted px-4 py-3 text-sm leading-6 text-foreground/66">
+                  {definition.schema.instructions}
+                </p>
+              ) : null}
+            </section>
+          </div>
+        ) : null}
 
         {isComplete ? (
           <CompletionPanel
@@ -402,8 +472,26 @@ export function QuestionnaireRunner({
   );
 }
 
-function evaluationTargetCopy(targetLabel?: string): { eyebrow: string; text: string } {
+function evaluationTargetCopy(
+  targetLabel: string | undefined,
+  questionnaireKey: string,
+): { eyebrow: string; text: string; reviewPrompt?: string } {
+  const isReview360 = isReview360Questionnaire(questionnaireKey);
   const cleaned = targetLabel?.trim();
+  if (isReview360) {
+    const safeTarget = safeReviewTargetLabel(targetLabel);
+    return safeTarget
+      ? {
+          eyebrow: "Evaluezi",
+          text: "Completezi feedback pentru persoana indicată în această sarcină.",
+          reviewPrompt: `You are reviewing ${safeTarget}`,
+        }
+      : {
+          eyebrow: "Evaluezi",
+          text: "Completezi feedback pentru persoana indicată în această sarcină.",
+        };
+  }
+
   if (!cleaned || cleaned.toLocaleLowerCase("ro-RO") === "autoevaluare") {
     return {
       eyebrow: "Autoevaluare",
@@ -415,6 +503,20 @@ function evaluationTargetCopy(targetLabel?: string): { eyebrow: string; text: st
     eyebrow: "Evaluezi",
     text: `Răspunzi pentru ${cleaned}. După trimitere, această persoană nu mai poate fi redeschisă din sarcina ta.`,
   };
+}
+
+function isReview360Questionnaire(questionnaireKey: string): boolean {
+  return questionnaireKey === "boss_360" || questionnaireKey === "boss_360_en" || questionnaireKey === "icare";
+}
+
+function safeReviewTargetLabel(value?: string): string {
+  const cleaned = value?.trim().replace(/\s+/g, " ") ?? "";
+  if (!cleaned || cleaned.toLocaleLowerCase("ro-RO") === "autoevaluare") return "";
+  if (cleaned.includes("@")) return "";
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(cleaned)) {
+    return "";
+  }
+  return cleaned;
 }
 
 function statusMessage(status: "idle" | "saving" | "saved" | "submitted" | "error"): string {
