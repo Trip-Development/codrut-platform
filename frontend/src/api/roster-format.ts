@@ -41,6 +41,17 @@ export function managerReferenceKey(value: string | null | undefined): string {
     .toLowerCase();
 }
 
+export function buildManagerReferenceKeySet(values: Iterable<string | null | undefined>): Set<string> {
+  const keys = new Set<string>();
+  for (const value of values) {
+    const key = managerReferenceKey(value);
+    if (key) {
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
 function normalizeManagerToken(value: string): string {
   return value
     .normalize("NFD")
