@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { SessionState } from "@/api/auth";
 import type { InviteTask } from "@/api/invites";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
-import type { ParticipantWorkspaceResult } from "@/api/participants";
+import type { ParticipantReceivedFeedbackSummary, ParticipantWorkspaceResult } from "@/api/participants";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
 import { ParticipantTaskList } from "./ParticipantTaskList";
@@ -24,6 +24,7 @@ type ParticipantClientWorkspaceProps = {
     pcmBase?: string | null;
     pcmPhase?: string | null;
     results: ParticipantWorkspaceResult[];
+    receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
   };
 };
 
@@ -248,10 +249,12 @@ function ContextRow({ label, value }: { label: string; value: string }) {
 
 export function ParticipantResultsPanel({
   results,
+  receivedFeedback,
   pcmBase,
   pcmPhase,
 }: {
   results: ParticipantWorkspaceResult[];
+  receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
   pcmBase?: string | null;
   pcmPhase?: string | null;
 }) {
@@ -278,13 +281,15 @@ export function ParticipantResultsPanel({
         </Link>
       </div>
 
+      {receivedFeedback ? <ReceivedFeedbackPanel feedback={receivedFeedback} /> : null}
+
       {results.length > 0 ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {results.map((result) => (
             <ResultCard key={result.assignmentId} result={result} />
           ))}
         </div>
-      ) : (
+      ) : receivedFeedback ? null : (
         <div className="surface-panel p-5">
           <h3 className="text-base font-semibold text-foreground">Nu există scoruri calculate încă</h3>
           <p className="mt-1 text-sm leading-6 text-foreground/62">
@@ -293,6 +298,50 @@ export function ParticipantResultsPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
+  const visible = feedback.visible && feedback.overallAverage !== null && feedback.overallAverage !== undefined && feedback.dimensions.length > 0;
+
+  return (
+    <article className="surface-panel p-4 md:p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-burgundy/75">Feedback 360 primit anonim</p>
+          <h3 className="mt-1 text-base font-semibold leading-6 text-foreground">iCARE completat de ceilalți</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
+            Vezi doar media feedbackului primit. Identitatea celor care au completat nu este afișată.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-72">
+          <MiniMetric label="Completate" value={String(feedback.completedCount)} />
+          <MiniMetric label="Medie" value={visible ? formatScore(feedback.overallAverage ?? 0) : "N/A"} />
+        </div>
+      </div>
+
+      {visible ? (
+        <div className="mt-4 grid gap-3">
+          {feedback.dimensions.map((dimension) => (
+            <ScoreRow
+              key={dimension.id}
+              item={{
+                id: dimension.id,
+                label: labelForScore(dimension.id, "icare"),
+                score: dimension.averageScore,
+                interpretation: fallbackInterpretationForScore("icare", dimension.averageScore),
+              }}
+              max={5}
+              showExplanation={false}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-sm leading-6 text-foreground/62">
+          Media apare după minimum {feedback.minimumCompleted} feedbackuri completate. Pragul protejează anonimitatea respondenților.
+        </p>
+      )}
+    </article>
   );
 }
 
@@ -312,6 +361,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
   const items = scoreItemsForResult(result, kind);
   const max = maxScoreForKind(kind);
   const average = averageScore(items);
+  const scaleLabel = scaleLabelForKind(kind, max);
 
   return (
     <article className="surface-panel p-4 md:p-5">
@@ -321,7 +371,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
           <h3 className="mt-1 text-base font-semibold leading-6 text-foreground" title={result.title}>{result.title}</h3>
           <p className="mt-1 text-sm text-foreground/55">{result.targetLabel}</p>
           <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-foreground/42">
-            {items.length} dimensiuni · scor mediu {average === null ? "N/A" : formatScore(average)} · scală 0-{max}
+            {items.length} dimensiuni · scor mediu {average === null ? "N/A" : formatScore(average)} · {scaleLabel}
           </p>
         </div>
         {result.primaryResult ? (
@@ -413,7 +463,13 @@ function resultKindLabel(kind: ResultKind): string {
 
 function maxScoreForKind(kind: ResultKind): number {
   if (kind === "lencioni") return 10;
+  if (kind === "icare") return 5;
   return 100;
+}
+
+function scaleLabelForKind(kind: ResultKind, max: number): string {
+  if (kind === "icare") return "scală 1-5";
+  return `scală 0-${max}`;
 }
 
 function scoreItemsForResult(result: ParticipantWorkspaceResult, kind: ResultKind): ScoreItem[] {
@@ -466,8 +522,8 @@ function fallbackInterpretationForScore(kind: ResultKind, score: number): string
   }
 
   if (kind === "icare") {
-    if (score >= 75) return "Comportamentul este observat frecvent sau constant pe scala iCARE.";
-    if (score >= 50) return "Comportamentul este observat uneori; zona merită clarificată în feedback.";
+    if (score >= 4) return "Comportamentul este observat frecvent sau constant pe scala iCARE.";
+    if (score >= 3) return "Comportamentul este observat uneori; zona merită clarificată în feedback.";
     return "Comportamentul apare rar în evaluare; poate fi o zonă de dezvoltare.";
   }
 
@@ -492,6 +548,15 @@ function prettifyScoreKey(value: string): string {
 
 function formatScore(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    </div>
+  );
 }
 
 function CheckIcon() {

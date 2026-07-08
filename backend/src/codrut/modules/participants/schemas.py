@@ -21,6 +21,20 @@ class ParticipantWorkspaceResult(BaseModel):
     primary_result: str | None = None
 
 
+class ParticipantReceivedFeedbackDimension(BaseModel):
+    id: str
+    average_score: float
+    completed_count: int
+
+
+class ParticipantReceivedFeedbackSummary(BaseModel):
+    completed_count: int
+    minimum_completed: int
+    visible: bool
+    overall_average: float | None = None
+    dimensions: list[ParticipantReceivedFeedbackDimension] = Field(default_factory=list)
+
+
 class ParticipantWorkspaceSummary(BaseModel):
     participant_profile_id: UUID
     participant_full_name: str
@@ -36,5 +50,6 @@ class ParticipantWorkspaceSummary(BaseModel):
     deadline_at: datetime | None = None
     tasks: list[InviteTask]
     results: list[ParticipantWorkspaceResult] = Field(default_factory=list)
+    received_feedback: ParticipantReceivedFeedbackSummary | None = None
     cards: list[ParticipantWorkspaceCard]
     empty_state: ParticipantWorkspaceCard

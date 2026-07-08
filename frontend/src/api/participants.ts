@@ -20,6 +20,7 @@ export type ParticipantWorkspaceSummary = {
   deadlineLabel: string;
   tasks: InviteTask[];
   results: ParticipantWorkspaceResult[];
+  receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
   cards: ParticipantWorkspaceCard[];
   emptyState: {
     title: string;
@@ -34,6 +35,20 @@ export type ParticipantWorkspaceResult = {
   targetLabel: string;
   scores: Record<string, unknown>;
   primaryResult?: string | null;
+};
+
+export type ParticipantReceivedFeedbackDimension = {
+  id: string;
+  averageScore: number;
+  completedCount: number;
+};
+
+export type ParticipantReceivedFeedbackSummary = {
+  completedCount: number;
+  minimumCompleted: number;
+  visible: boolean;
+  overallAverage?: number | null;
+  dimensions: ParticipantReceivedFeedbackDimension[];
 };
 
 type BackendParticipantWorkspaceSummary = {
@@ -51,6 +66,7 @@ type BackendParticipantWorkspaceSummary = {
   deadline_at?: string | null;
   tasks: InviteTask[];
   results?: BackendParticipantWorkspaceResult[];
+  received_feedback?: BackendParticipantReceivedFeedbackSummary | null;
   cards: ParticipantWorkspaceCard[];
   empty_state: ParticipantWorkspaceCard;
 };
@@ -62,6 +78,20 @@ type BackendParticipantWorkspaceResult = {
   target_label: string;
   scores: Record<string, unknown>;
   primary_result?: string | null;
+};
+
+type BackendParticipantReceivedFeedbackDimension = {
+  id: string;
+  average_score: number;
+  completed_count: number;
+};
+
+type BackendParticipantReceivedFeedbackSummary = {
+  completed_count: number;
+  minimum_completed: number;
+  visible: boolean;
+  overall_average?: number | null;
+  dimensions?: BackendParticipantReceivedFeedbackDimension[];
 };
 
 export async function getParticipantWorkspaceSummary(
@@ -105,6 +135,7 @@ function mapParticipantWorkspaceSummary(
     deadlineLabel: data.deadline_label,
     tasks: data.tasks,
     results: (data.results ?? []).map(mapParticipantWorkspaceResult),
+    receivedFeedback: data.received_feedback ? mapParticipantReceivedFeedback(data.received_feedback) : null,
     cards: data.cards,
     emptyState: data.empty_state,
   };
@@ -123,6 +154,22 @@ function mapParticipantWorkspaceResult(
   };
 }
 
+function mapParticipantReceivedFeedback(
+  feedback: BackendParticipantReceivedFeedbackSummary,
+): ParticipantReceivedFeedbackSummary {
+  return {
+    completedCount: feedback.completed_count,
+    minimumCompleted: feedback.minimum_completed,
+    visible: feedback.visible,
+    overallAverage: feedback.overall_average,
+    dimensions: (feedback.dimensions ?? []).map((dimension) => ({
+      id: dimension.id,
+      averageScore: dimension.average_score,
+      completedCount: dimension.completed_count,
+    })),
+  };
+}
+
 async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspaceSummary> {
   const bundle = await resolveInviteBundle("demo-token");
   const tasks = bundle.state === "valid" ? bundle.tasks : [];
@@ -138,6 +185,17 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
     participantEmail: bundle.state === "valid" ? bundle.participantEmail : "mihai.matei@atlas-mobility.ro",
     deadlineLabel: bundle.state === "valid" ? bundle.deadlineLabel : "deadline-ul proiectului",
     tasks,
+    receivedFeedback: {
+      completedCount: 3,
+      minimumCompleted: 2,
+      visible: true,
+      overallAverage: 4.0,
+      dimensions: [
+        { id: "icare_01_dezvolta_oamenii", averageScore: 4.2, completedCount: 3 },
+        { id: "icare_02_conduce_prin_puterea_exemplului", averageScore: 3.8, completedCount: 3 },
+        { id: "icare_06_aduce_claritate", averageScore: 4.0, completedCount: 3 },
+      ],
+    },
     results: [
       {
         assignmentId: "demo-driver-result",
@@ -227,6 +285,7 @@ function getUnavailableParticipantWorkspaceSummary(reason?: string): Participant
     deadlineLabel: "după ce profilul este sincronizat",
     tasks: [],
     results: [],
+    receivedFeedback: null,
     cards: [
       {
         title: "Profil în verificare",
