@@ -1152,7 +1152,7 @@ async def test_import_roster_infers_compact_manager_keys_and_numeric_root_marker
     assert participants_by_email["title-only@example.com"].role_group == "member"
 
 
-async def test_import_roster_does_not_promote_matrix_labels_to_internal_managers() -> None:
+async def test_import_roster_treats_matrix_suffix_as_normal_name_text() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
@@ -1187,7 +1187,7 @@ async def test_import_roster_does_not_promote_matrix_labels_to_internal_managers
 
     participants_by_email = {participant.email: participant for participant in result.participants}
     assert participants_by_email["chief@example.com"].role_group == "leadership"
-    assert participants_by_email["matrix@example.com"].role_group == "member"
+    assert participants_by_email["matrix@example.com"].role_group == "leadership"
     assert participants_by_email["member@example.com"].role_group == "member"
 
 
@@ -1321,17 +1321,16 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
 
             assert planned == {
                 (manager.id, "lencioni", "team", None, "leadership"),
-                (member.id, "lencioni", "team", None, "functional"),
+                (member.id, "lencioni", "team", None, "leadership"),
                 (manager.id, "distress_drivers", "self", None, None),
                 (manager.id, "pcm_base", "self", None, None),
                 (manager.id, "boss_360", "person", manager.id, None),
                 (member.id, "boss_360", "person", manager.id, None),
+                (member.id, "distress_drivers", "self", None, None),
+                (member.id, "pcm_base", "self", None, None),
+                (member.id, "boss_360", "person", member.id, None),
+                (manager.id, "boss_360", "person", member.id, None),
             }
-            assert not any(
-                item.questionnaire_key == "distress_drivers"
-                and item.respondent_profile_id == member.id
-                for item in plan.assignments
-            )
 
             save_result = await assignment_service.save_assignment_plan(
                 trainer.id,

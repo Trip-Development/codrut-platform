@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+from codrut.modules.companies.hierarchy import (
+    HierarchyIssue,
+    HierarchyParticipant,
+    build_organization_hierarchy,
+)
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
-    is_external_matrix_manager_label,
-    manager_reference_key,
     normalize_manager_token,
 )
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
@@ -628,10 +631,12 @@ def _build_team_lenses(
     participants: list[ReportParticipant],
     assignment_results: list[tuple[QuestionnaireAssignment, ScoringResult | None]],
 ) -> TeamLensBuildResult:
-    ambiguous_name = _find_ambiguous_referenced_name(participants)
-    if ambiguous_name is not None:
+    hierarchy = build_organization_hierarchy(
+        [_hierarchy_participant_from_report(participant) for participant in participants]
+    )
+    if hierarchy.ambiguous_name is not None:
         message = (
-            f'Numele "{ambiguous_name}" apare de mai multe ori în roster și este folosit '
+            f'Numele "{hierarchy.ambiguous_name}" apare de mai multe ori în roster și este folosit '
             "ca manager."
         )
         return TeamLensBuildResult(
@@ -647,85 +652,38 @@ def _build_team_lenses(
         )
 
     participant_by_id = {participant.id: participant for participant in participants}
-    participant_by_name = {
-        manager_reference_key(participant.full_name): participant
-        for participant in participants
-        if manager_reference_key(participant.full_name)
-        and not is_external_matrix_manager_label(participant.full_name)
-    }
     teams_by_id: dict[str, tuple[str, set[UUID]]] = {}
-    direct_reports_by_manager_id: dict[UUID, list[ReportParticipant]] = {}
-    root_ids: set[UUID] = set()
-    manager_ids: set[UUID] = set()
-    hierarchy_issues: list[ReportHierarchyIssueResponse] = []
+    direct_reports_by_manager_id = {
+        manager_id: [
+            participant_by_id[direct_report.id]
+            for direct_report in direct_reports
+            if direct_report.id in participant_by_id
+        ]
+        for manager_id, direct_reports in hierarchy.direct_reports_by_manager_id.items()
+    }
+    leadership_ids = set(hierarchy.leadership_ids)
+    hierarchy_issues = [_report_hierarchy_issue(issue) for issue in hierarchy.issues]
 
-    for participant in participants:
-        manager_name = clean_manager_reference(participant.reports_to_name)
-        manager = (
-            participant_by_name.get(manager_reference_key(manager_name))
-            if manager_name is not None
-            else None
-        )
-        if manager_name is None:
-            root_ids.add(participant.id)
-            continue
-        if manager is None:
-            root_ids.add(participant.id)
-            hierarchy_issues.append(
-                ReportHierarchyIssueResponse(
-                    code="manager_unresolved",
-                    participant_id=participant.id,
-                    participant_name=participant.full_name,
-                    reports_to_name=manager_name,
-                    message=(
-                        f'Managerul "{manager_name}" nu a fost găsit în roster pentru '
-                        f"{participant.full_name}."
-                    ),
-                )
-            )
-            continue
-        if manager.id == participant.id:
-            root_ids.add(participant.id)
-            hierarchy_issues.append(
-                ReportHierarchyIssueResponse(
-                    code="manager_self_reference",
-                    participant_id=participant.id,
-                    participant_name=participant.full_name,
-                    reports_to_name=manager_name,
-                    message=f"{participant.full_name} este setat ca propriul manager.",
-                )
-            )
-            continue
-
-        manager_ids.add(manager.id)
-        direct_reports = direct_reports_by_manager_id.get(manager.id, [])
-        direct_reports.append(participant)
-        direct_reports_by_manager_id[manager.id] = direct_reports
-
-    for manager_id in manager_ids:
+    for manager_id in leadership_ids:
         manager = participant_by_id.get(manager_id)
         if manager is None:
             continue
         direct_reports = direct_reports_by_manager_id.get(manager.id, [])
-        root_leadership_manager = bool(root_ids) and manager.id in root_ids and any(
-            item.id in manager_ids for item in direct_reports
-        )
-        if root_leadership_manager and all(item.id in manager_ids for item in direct_reports):
+        direct_report_ids = {
+            direct_report.id
+            for direct_report in direct_reports
+            if direct_report.id not in leadership_ids
+        }
+        if not direct_report_ids:
             continue
 
         team_id = f"manager:{manager.id}"
         teams_by_id[team_id] = (
             f"Echipa {manager.full_name}",
-            {manager.id, *[direct_report.id for direct_report in direct_reports]},
+            {manager.id, *direct_report_ids},
         )
 
-    leadership_ids = set(root_ids)
-    for root_id in root_ids:
-        for direct_report in direct_reports_by_manager_id.get(root_id, []):
-            if _is_manager_like_participant(direct_report, manager_ids):
-                leadership_ids.add(direct_report.id)
-
-    if len(leadership_ids) > 1 or len(root_ids) > 1:
+    if len(leadership_ids) > 1 or len(hierarchy.top_level_ids) > 1:
         teams_by_id["leadership"] = ("Leadership", leadership_ids)
 
     team_lenses = [
@@ -802,41 +760,34 @@ def _build_team_lens(
     )
 
 
-def _is_manager_like_participant(
-    participant: ReportParticipant,
-    manager_ids: set[UUID],
-) -> bool:
-    role = participant.role_group.strip().casefold() if participant.role_group else ""
-    return (
-        participant.id in manager_ids
-        or role in {"manager", "leadership"}
-        or participant.user_id is not None
+def _hierarchy_participant_from_report(participant: ReportParticipant) -> HierarchyParticipant:
+    return HierarchyParticipant(
+        id=participant.id,
+        full_name=participant.full_name,
+        reports_to_name=participant.reports_to_name,
+        role_group=participant.role_group,
+        user_id=participant.user_id,
     )
 
 
-def _find_ambiguous_referenced_name(participants: list[ReportParticipant]) -> str | None:
-    names: dict[str, tuple[str, int]] = {}
-    for participant in participants:
-        label = participant.full_name.strip()
-        if is_external_matrix_manager_label(label):
-            continue
-        key = manager_reference_key(label)
-        if not key:
-            continue
-        existing = names.get(key)
-        names[key] = (existing[0] if existing else label, (existing[1] if existing else 0) + 1)
-
-    referenced_manager_keys = {
-        manager_reference_key(manager_name)
-        for manager_name in (
-            clean_manager_reference(participant.reports_to_name) for participant in participants
+def _report_hierarchy_issue(issue: HierarchyIssue) -> ReportHierarchyIssueResponse:
+    if issue.code == "manager_unresolved" and issue.participant_name and issue.reports_to_name:
+        message = (
+            f'Managerul "{issue.reports_to_name}" nu a fost găsit în roster pentru '
+            f"{issue.participant_name}."
         )
-        if manager_name
-    }
-    for key, (label, count) in names.items():
-        if count > 1 and key in referenced_manager_keys:
-            return label
-    return None
+    elif issue.code == "manager_self_reference" and issue.participant_name:
+        message = f"{issue.participant_name} este setat ca propriul manager."
+    else:
+        message = issue.message
+
+    return ReportHierarchyIssueResponse(
+        code=issue.code,
+        participant_id=issue.participant_id,
+        participant_name=issue.participant_name,
+        reports_to_name=issue.reports_to_name,
+        message=message,
+    )
 
 
 def _pcm_profile_key(value: str | None) -> str | None:

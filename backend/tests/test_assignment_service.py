@@ -689,7 +689,16 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
             ),
         ]
     )
-    for participant in company_repository.participants.values():
+    project_participant_ids = {
+        respondent_id,
+        target_id,
+        ilinca_id,
+        alexandra_id,
+        member_vlad_id,
+        member_ilinca_id,
+    }
+    for participant_id in project_participant_ids:
+        participant = company_repository.participants[participant_id]
         manager_name = None
         for relationship in company_repository.reporting_relationships:
             if relationship.participant_profile_id == participant.id:
@@ -795,7 +804,7 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
     ]
 
 
-async def test_default_assignment_plan_does_not_build_manager_scope_for_matrix_label() -> None:
+async def test_default_assignment_plan_treats_matrix_suffix_as_participant_name() -> None:
     (
         service,
         assignment_repository,
@@ -807,6 +816,7 @@ async def test_default_assignment_plan_does_not_build_manager_scope_for_matrix_l
         _outside_participant_id,
     ) = seed_assignment_scope()
     matrix_id = uuid.uuid4()
+    noemi_id = uuid.uuid4()
     member_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
@@ -826,6 +836,13 @@ async def test_default_assignment_plan_does_not_build_manager_scope_for_matrix_l
         email="matrix@example.com",
         role_group="member",
     )
+    company_repository.participants[noemi_id] = ParticipantProfile(
+        id=noemi_id,
+        company_id=company_id,
+        full_name="Noemi Demjen",
+        email="noemi@example.com",
+        role_group="member",
+    )
     company_repository.participants[member_id] = ParticipantProfile(
         id=member_id,
         company_id=company_id,
@@ -837,6 +854,7 @@ async def test_default_assignment_plan_does_not_build_manager_scope_for_matrix_l
         (respondent_id, "1"),
         (target_id, "ChiefExample"),
         (matrix_id, "ChiefExample"),
+        (noemi_id, "ChiefExample"),
         (member_id, "ExternalLeaderMatrix"),
     ]:
         company_repository.project_memberships.append(
@@ -859,8 +877,107 @@ async def test_default_assignment_plan_does_not_build_manager_scope_for_matrix_l
 
     plan = await service.build_default_assignment_plan(user_id, company_id, project_id)
 
+    leadership_scope = next(scope for scope in plan.scopes if scope.type == "leadership_team")
+    assert set(leadership_scope.participant_ids) == {
+        respondent_id,
+        target_id,
+        matrix_id,
+        noemi_id,
+    }
+
     manager_team_scopes = [scope.name for scope in plan.scopes if scope.type == "manager_team"]
-    assert "Echipa External Leader - Matrix" not in manager_team_scopes
+    assert "Echipa External Leader - Matrix" in manager_team_scopes
+
+    matrix_team_assignments = [
+        item
+        for item in plan.assignments
+        if item.questionnaire_key == "lencioni"
+        and item.scope_name == "Echipa External Leader - Matrix"
+    ]
+    assert {item.respondent_profile_id for item in matrix_team_assignments} == {member_id}
+
+
+async def test_default_assignment_plan_uses_project_roles_not_stale_profile_roles() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    stale_manager_id = uuid.uuid4()
+    stale_member_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Project-scoped leadership",
+    )
+    company_repository.participants[respondent_id].full_name = "Chief Example"
+    company_repository.participants[respondent_id].role_group = "leadership"
+    company_repository.participants[target_id].full_name = "Operations Leader"
+    company_repository.participants[target_id].role_group = "leadership"
+    company_repository.participants[stale_manager_id] = ParticipantProfile(
+        id=stale_manager_id,
+        company_id=company_id,
+        full_name="Lower Manager",
+        email="lower-manager@example.com",
+        role_group="leadership",
+    )
+    company_repository.participants[stale_member_id] = ParticipantProfile(
+        id=stale_member_id,
+        company_id=company_id,
+        full_name="Lower Member",
+        email="lower-member@example.com",
+        role_group="member",
+    )
+    for participant_id, reports_to_name, membership_role in [
+        (respondent_id, "1", "leadership"),
+        (target_id, "ChiefExample", "leadership"),
+        (stale_manager_id, "OperationsLeader", "member"),
+        (stale_member_id, "LowerManager", "member"),
+    ]:
+        company_repository.project_memberships.append(
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=participant_id,
+                reports_to_name=reports_to_name,
+                position=None,
+                location=None,
+                role_group=membership_role,
+                active=True,
+            )
+        )
+    assignment_repository.teams[uuid.uuid4()] = Team(
+        company_id=company_id,
+        name="Leadership",
+        type=TeamType.leadership,
+    )
+
+    plan = await service.build_default_assignment_plan(user_id, company_id, project_id)
+
+    leadership_scope = next(scope for scope in plan.scopes if scope.type == "leadership_team")
+    assert set(leadership_scope.participant_ids) == {respondent_id, target_id}
+
+    assert not [
+        item
+        for item in plan.assignments
+        if item.questionnaire_key == "boss_360" and item.target_person_id == stale_manager_id
+    ]
+    operations_team_assignments = [
+        item
+        for item in plan.assignments
+        if item.questionnaire_key == "lencioni"
+        and item.scope_name == "Echipa Operations Leader"
+    ]
+    assert {item.respondent_profile_id for item in operations_team_assignments} == {
+        stale_manager_id
+    }
 
 
 async def test_default_assignment_plan_rejects_ambiguous_project_manager_names() -> None:

@@ -595,7 +595,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
             assert aggregate.hierarchy_issues[0].reports_to_name == "Outside Lead"
 
             team_by_id = {team.id: team for team in aggregate.team_lenses}
-            assert team_by_id["leadership"].member_count == 3
+            assert team_by_id["leadership"].member_count == 2
             manager_team = next(
                 team for team in aggregate.team_lenses if team.name == "Echipa Bogdan Manager"
             )
