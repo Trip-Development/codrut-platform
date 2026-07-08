@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/api/http";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/api/password-policy";
 import { getApiBaseUrl, isDemoFallbackEnabled } from "@/api/runtime";
@@ -93,7 +94,7 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/auth/register`, {
+      const res = await apiFetch(`${getApiBaseUrl()}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

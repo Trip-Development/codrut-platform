@@ -1,12 +1,14 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
+from codrut.core.csrf import csrf_token_for_session, set_csrf_cookie
 from codrut.modules.identity.schemas import (
     AuthResponse,
     ConsentRequest,
+    CsrfTokenResponse,
     InviteVerifyResponse,
     LoginRequest,
     PasswordChangeRequest,
@@ -17,7 +19,11 @@ from codrut.modules.identity.schemas import (
     SessionPrincipal,
 )
 from codrut.modules.identity.service import IdentityService
-from codrut.modules.identity.session_cookie import delete_session_cookie, set_session_cookie
+from codrut.modules.identity.session_cookie import (
+    SESSION_COOKIE_NAME,
+    delete_session_cookie,
+    set_session_cookie,
+)
 
 router = APIRouter()
 
@@ -111,6 +117,15 @@ async def logout(
     await session.commit()
     delete_session_cookie(response)
     return response
+
+
+@router.get("/csrf", response_model=CsrfTokenResponse)
+async def csrf_token(request: Request, response: Response) -> CsrfTokenResponse:
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    set_csrf_cookie(response, session_token)
+    return CsrfTokenResponse(csrf_token=csrf_token_for_session(session_token))
 
 
 @router.get("/me", response_model=SessionPrincipal)

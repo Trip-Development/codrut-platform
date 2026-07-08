@@ -1,3 +1,4 @@
+import { apiFetch } from "./http";
 import { getApiBaseUrl, isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 import type { ApiRequestOptions } from "./companies";
 
@@ -473,7 +474,7 @@ export async function listEmailTemplatesOnServer(includeRetired: boolean = false
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/templates?include_retired=${includeRetired}`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/templates?include_retired=${includeRetired}`, {
       cache: "no-store",
       credentials: "include",
     });
@@ -498,7 +499,7 @@ export async function getEmailTemplateOnServer(key: string, version?: number): P
     const url = version
       ? `${getApiBaseUrl()}/communications/templates/${key}?version=${version}`
       : `${getApiBaseUrl()}/communications/templates/${key}`;
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       cache: "no-store",
       credentials: "include",
     });
@@ -520,7 +521,7 @@ export async function createEmailTemplateOnServer(template: EmailTemplate): Prom
   }
 
   const payload = frontendToBackendTemplate(template);
-  const response = await fetch(`${getApiBaseUrl()}/communications/templates`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/communications/templates`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -549,7 +550,7 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
   }
 
   const payload = frontendToBackendTemplate(template);
-  const response = await fetch(`${getApiBaseUrl()}/communications/templates/${template.baseKey}?version=${template.version}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/communications/templates/${template.baseKey}?version=${template.version}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -573,7 +574,7 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
 }
 
 export async function activateEmailTemplateOnServer(key: string, version: number): Promise<EmailTemplate> {
-  const response = await fetch(`${getApiBaseUrl()}/communications/templates/${key}/versions/${version}/activate`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/communications/templates/${key}/versions/${version}/activate`, {
     method: "POST",
     credentials: "include",
   });
@@ -604,7 +605,7 @@ export async function deleteEmailTemplateOnServer(key: string, version?: number)
   const url = version
     ? `${getApiBaseUrl()}/communications/templates/${key}?version=${version}`
     : `${getApiBaseUrl()}/communications/templates/${key}`;
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: "DELETE",
     credentials: "include",
   });
@@ -703,7 +704,7 @@ export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
 
 export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promise<EmailOpsSummary> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/ops-summary`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/ops-summary`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -827,7 +828,7 @@ export async function bulkCreateCampaignRecipientsOnServer(
   recipients: CampaignRecipientCreate[],
 ): Promise<CampaignRecipientBulkCreateResponse> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/bulk`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/recipients/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipients }),
@@ -854,7 +855,7 @@ export async function updateCampaignRecipientOnServer(
   recipient: CampaignRecipientUpdate,
 ) {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(recipient),
@@ -875,7 +876,7 @@ export async function updateCampaignRecipientOnServer(
 
 export async function deleteCampaignRecipientOnServer(recipientId: string): Promise<void> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}`, {
       method: "DELETE",
       cache: "no-store",
       credentials: "include",
@@ -905,7 +906,7 @@ export async function listCampaignRecipientMembershipOnServer(
   campaignId: string,
 ): Promise<CampaignRecipientMembershipRow[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/recipients`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/recipients`, {
       cache: "no-store",
       credentials: "include",
     });
@@ -926,7 +927,7 @@ export async function replaceCampaignRecipientMembershipOnServer(
   recipientIds: string[],
 ): Promise<CampaignRecipientMembershipRow[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/recipients`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/recipients`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipient_ids: recipientIds }),
@@ -972,7 +973,7 @@ export type CampaignAssetUpload = {
 };
 
 export async function uploadCampaignAssetOnServer(file: File): Promise<CampaignAssetUpload> {
-  const response = await fetch(`${getApiBaseUrl()}/communications/campaign-assets`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/communications/campaign-assets`, {
     method: "POST",
     headers: {
       "Content-Type": file.type || "application/octet-stream",
@@ -1119,7 +1120,7 @@ export type CampaignSendResponse = {
 
 export async function createCampaignOnServer(campaign: CampaignCreate) {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(campaign),
@@ -1143,7 +1144,7 @@ export async function createCampaignOnServer(campaign: CampaignCreate) {
 
 export async function updateCampaignOnServer(campaignId: string, campaign: CampaignUpdate): Promise<EmailCampaign> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(campaign),
@@ -1172,7 +1173,7 @@ export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns`, {
       cache: "no-store",
       credentials: "include",
     });
@@ -1193,7 +1194,7 @@ export async function deleteCampaignOnServer(campaignId: string): Promise<void> 
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}`, {
       method: "DELETE",
       cache: "no-store",
       credentials: "include",
@@ -1226,7 +1227,7 @@ export async function sendCampaignOnServer(
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/send`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",

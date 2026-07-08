@@ -1,3 +1,4 @@
+import { apiFetch } from "./http";
 import { validatePasswordPolicy } from "./password-policy";
 import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
 
@@ -70,7 +71,7 @@ function logSessionUnavailable(context: AuthSessionUnavailableContext): void {
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<SessionState> {
-  const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -113,7 +114,7 @@ export function dashboardHrefForRole(role: CurrentUser["role"]): "/trainer" | "/
 
 export async function getAuthenticatedSession(): Promise<SessionState | null> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/auth/me`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/auth/me`, {
       cache: "no-store",
       credentials: "include",
     });
@@ -127,7 +128,7 @@ export async function getAuthenticatedSession(): Promise<SessionState | null> {
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -145,7 +146,7 @@ export async function confirmPasswordReset(token: string, password: string): Pro
   const passwordError = validatePasswordPolicy(password);
   if (passwordError) throw new Error(passwordError);
 
-  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password/confirm`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/reset-password/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -166,7 +167,7 @@ export async function changePassword(
   const passwordError = validatePasswordPolicy(newPassword);
   if (passwordError) throw new Error(passwordError);
 
-  const response = await fetch(`${getApiBaseUrl()}/auth/change-password`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/change-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -185,7 +186,7 @@ export async function changePassword(
 
 async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/auth/me`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/auth/me`, {
       cache: "no-store",
       credentials: "include",
     });

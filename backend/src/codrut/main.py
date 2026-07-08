@@ -7,9 +7,14 @@ from fastapi.staticfiles import StaticFiles
 from codrut.api.openapi import generate_stable_operation_id
 from codrut.api.router import api_router
 from codrut.core.config import get_settings
+from codrut.core.csrf import install_csrf_middleware
 from codrut.core.errors import ERROR_RESPONSES, install_exception_handlers
 from codrut.core.logging import configure_logging
+from codrut.core.rate_limit import install_rate_limit_middleware
 from codrut.core.request_id import install_request_id_middleware
+from codrut.core.request_limits import install_request_limit_middleware
+from codrut.core.security_headers import install_security_headers_middleware
+from codrut.modules.identity.session_cookie import SESSION_COOKIE_NAME
 
 
 def create_app() -> FastAPI:
@@ -33,6 +38,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    install_rate_limit_middleware(app)
+    install_request_limit_middleware(app)
+    install_csrf_middleware(app, session_cookie_name=SESSION_COOKIE_NAME)
+    install_security_headers_middleware(app)
     install_request_id_middleware(app)
     install_exception_handlers(app)
     Path(settings.campaign_asset_dir).mkdir(parents=True, exist_ok=True)

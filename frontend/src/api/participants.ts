@@ -1,4 +1,5 @@
 import { resolveInviteBundle, type InviteTask } from "./invites";
+import { apiFetch } from "./http";
 import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
 
 export type ParticipantWorkspaceCard = {
@@ -99,7 +100,7 @@ export async function getParticipantWorkspaceSummary(
 ): Promise<ParticipantWorkspaceSummary> {
   let unavailableReason: string | undefined;
   try {
-    const response = await fetch(`${getApiBaseUrl()}/participants/me/workspace`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/participants/me/workspace`, {
       cache: "no-store",
       credentials: "include",
       ...options,

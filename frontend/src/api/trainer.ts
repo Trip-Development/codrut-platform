@@ -1,3 +1,4 @@
+import { apiFetch } from "./http";
 import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 import {
   getCompanyDetail,
@@ -539,7 +540,7 @@ export async function getScoringResult(
   options: ApiRequestOptions = {},
 ): Promise<ScoringResultRecord | null> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/scoring/assignments/${assignmentId}/result`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/scoring/assignments/${assignmentId}/result`, {
       cache: "no-store",
       credentials: "include",
       ...options,
