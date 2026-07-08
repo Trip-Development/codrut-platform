@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "generate-client": "openapi-typescript http://localhost:8000/api/openapi.json -o src/api/generated/schema.d.ts"
+    "generate-client": "openapi-typescript ${OPENAPI_URL:-http://localhost:8000/api/openapi.json} -o src/api/generated/schema.d.ts"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
