@@ -12,7 +12,6 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
-    is_external_matrix_manager_label,
     manager_reference_key,
 )
 from codrut.modules.companies.models import (
@@ -1048,14 +1047,8 @@ class CompanyService:
         await self._require_company_manager(user_id, company_id)
         participants = await self.repository.list_participants(company_id)
         participants_by_name: dict[str, ParticipantProfile] = {}
-        external_manager_name_keys: set[str] = set()
         duplicate_name_keys: set[str] = set()
         for participant in participants:
-            if is_external_matrix_manager_label(participant.full_name):
-                external_key = manager_reference_key(participant.full_name)
-                if external_key:
-                    external_manager_name_keys.add(external_key)
-                continue
             name_key = manager_reference_key(participant.full_name)
             if not name_key:
                 continue
@@ -1080,8 +1073,6 @@ class CompanyService:
                         "Manager name is ambiguous in this company roster.",
                     )
                 )
-                continue
-            if manager_key in external_manager_name_keys:
                 continue
             manager = participants_by_name.get(manager_key)
             if manager is None:
@@ -1241,8 +1232,6 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
 
 
 def _infer_roster_role_group(row: RosterImportRow, manager_names: set[str]) -> str:
-    if is_external_matrix_manager_label(row.full_name):
-        return "member"
     if row.reports_to_name is None:
         return "leadership"
     if manager_reference_key(row.full_name) in manager_names:

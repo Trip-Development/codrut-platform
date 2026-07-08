@@ -1,4 +1,3 @@
-from collections.abc import Iterable
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -29,12 +28,15 @@ from codrut.modules.assignments.schemas import (
     TeamCreateRequest,
     TeamMembershipCreateRequest,
 )
-from codrut.modules.companies.manager_matching import (
-    clean_manager_reference,
-    is_external_matrix_manager_label,
-    manager_reference_key,
+from codrut.modules.companies.hierarchy import (
+    HierarchyParticipant,
+    build_organization_hierarchy,
 )
-from codrut.modules.companies.models import CompanyMembershipRole, ParticipantProfile
+from codrut.modules.companies.models import (
+    CompanyMembershipRole,
+    ParticipantProfile,
+    ProjectMembership,
+)
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.forms.definitions import get_approved_questionnaire_definition
 from codrut.modules.forms.repository import FormsRepository
@@ -179,11 +181,6 @@ class AssignmentService:
         if project_id is not None:
             participants = [participant for _membership, participant in project_memberships]
         teams = await self.assignment_repository.list_teams(company_id)
-        relationships = (
-            await self.company_repository.list_reporting_relationships(company_id)
-            if project_id is None
-            else []
-        )
         existing_assignments = await self.assignment_repository.list_assignments(
             company_id,
             project_id,
@@ -191,37 +188,26 @@ class AssignmentService:
 
         participant_by_id = {participant.id: participant for participant in participants}
         teams_by_name = {team.name.strip().casefold(): team for team in teams}
-        direct_reports_by_manager: dict[UUID, list[UUID]] = {}
         if project_id is not None:
-            participant_by_name = _participants_by_unique_referenced_name(
-                participants,
-                (membership.reports_to_name for membership, _participant in project_memberships),
-            )
-            for membership, participant in project_memberships:
-                reports_to_name = clean_manager_reference(membership.reports_to_name)
-                if reports_to_name is None:
-                    continue
-                manager = participant_by_name.get(manager_reference_key(reports_to_name))
-                if manager is None or manager.id == participant.id:
-                    continue
-                direct_reports_by_manager.setdefault(manager.id, []).append(participant.id)
+            hierarchy_participants = [
+                _hierarchy_participant_from_membership(membership, participant)
+                for membership, participant in project_memberships
+            ]
         else:
-            for relationship in relationships:
-                if (
-                    relationship.manager_profile_id not in participant_by_id
-                    or relationship.participant_profile_id not in participant_by_id
-                ):
-                    continue
-                direct_reports_by_manager.setdefault(relationship.manager_profile_id, []).append(
-                    relationship.participant_profile_id
-                )
-
-        manager_ids = set(direct_reports_by_manager)
-        manager_ids.update(
-            participant.id
-            for participant in participants
-            if (participant.role_group or "").casefold() == "leadership"
-        )
+            hierarchy_participants = [
+                _hierarchy_participant_from_profile(participant) for participant in participants
+            ]
+        hierarchy = build_organization_hierarchy(hierarchy_participants)
+        if hierarchy.ambiguous_name is not None:
+            raise DomainError(
+                f'Manager name "{hierarchy.ambiguous_name}" is ambiguous in the project roster.',
+                code="manager_name_ambiguous",
+            )
+        direct_reports_by_manager = {
+            manager_id: [direct_report.id for direct_report in direct_reports]
+            for manager_id, direct_reports in hierarchy.direct_reports_by_manager_id.items()
+        }
+        manager_ids = set(hierarchy.leadership_ids)
 
         scopes: list[AssignmentPlanScopeResponse] = []
         plan_items: list[AssignmentPlanItemResponse] = []
@@ -646,43 +632,27 @@ def _assignment_match_key(
     )
 
 
-def _participants_by_unique_referenced_name(
-    participants: list[ParticipantProfile],
-    reports_to_names: Iterable[str | None],
-) -> dict[str, ParticipantProfile]:
-    names: dict[str, ParticipantProfile] = {}
-    duplicate_names: set[str] = set()
-    labels_by_key: dict[str, str] = {}
-    for participant in participants:
-        label = participant.full_name.strip()
-        if not label or is_external_matrix_manager_label(label):
-            continue
-        key = manager_reference_key(label)
-        if not key:
-            continue
-        labels_by_key.setdefault(key, label)
-        if key in names:
-            duplicate_names.add(key)
-        else:
-            names[key] = participant
+def _hierarchy_participant_from_profile(participant: ParticipantProfile) -> HierarchyParticipant:
+    return HierarchyParticipant(
+        id=participant.id,
+        full_name=participant.full_name,
+        reports_to_name=participant.reports_to_name,
+        role_group=participant.role_group,
+        user_id=participant.user_id,
+    )
 
-    referenced_names = {
-        key
-        for reports_to_name in reports_to_names
-        for cleaned_reports_to_name in (clean_manager_reference(reports_to_name),)
-        if cleaned_reports_to_name is not None
-        for key in (manager_reference_key(cleaned_reports_to_name),)
-        if key
-    }
-    ambiguous_names = duplicate_names & referenced_names
-    if ambiguous_names:
-        ambiguous_name = labels_by_key[sorted(ambiguous_names)[0]]
-        raise DomainError(
-            f'Manager name "{ambiguous_name}" is ambiguous in the project roster.',
-            code="manager_name_ambiguous",
-        )
 
-    return names
+def _hierarchy_participant_from_membership(
+    membership: ProjectMembership,
+    participant: ParticipantProfile,
+) -> HierarchyParticipant:
+    return HierarchyParticipant(
+        id=participant.id,
+        full_name=participant.full_name,
+        reports_to_name=membership.reports_to_name,
+        role_group=membership.role_group,
+        user_id=participant.user_id,
+    )
 
 
 def _plan_self_assignment(
