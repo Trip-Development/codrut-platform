@@ -4,10 +4,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from codrut.api.openapi import generate_stable_operation_id
 from codrut.api.router import api_router
 from codrut.core.config import get_settings
-from codrut.core.errors import install_exception_handlers
+from codrut.core.errors import ERROR_RESPONSES, install_exception_handlers
 from codrut.core.logging import configure_logging
+from codrut.core.request_id import install_request_id_middleware
 
 
 def create_app() -> FastAPI:
@@ -20,6 +22,8 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
         docs_url="/api/docs" if settings.docs_enabled else None,
         redoc_url=None,
+        generate_unique_id_function=generate_stable_operation_id,
+        responses=ERROR_RESPONSES,
     )
 
     app.add_middleware(
@@ -29,6 +33,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    install_request_id_middleware(app)
     install_exception_handlers(app)
     Path(settings.campaign_asset_dir).mkdir(parents=True, exist_ok=True)
     app.mount(

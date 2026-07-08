@@ -4,40 +4,53 @@ import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 type ApiErrorPayload = {
   error?: {
     message?: unknown;
+    details?: unknown;
   };
   detail?: unknown;
 };
 
+function formatApiErrorDetails(details: unknown): string | null {
+  if (!Array.isArray(details)) {
+    return null;
+  }
+
+  const messages = details
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const issue = item as { loc?: unknown; message?: unknown; msg?: unknown };
+      const issueMessage = issue.message ?? issue.msg;
+      if (typeof issueMessage !== "string" || !issueMessage.trim()) return null;
+
+      const path = Array.isArray(issue.loc)
+        ? issue.loc
+            .filter((part) => part !== "body")
+            .map(String)
+            .join(".")
+        : "";
+      return path ? `${path}: ${issueMessage}` : issueMessage;
+    })
+    .filter((message): message is string => Boolean(message));
+
+  if (messages.length > 0) {
+    const visibleMessages = messages.slice(0, 3).join("; ");
+    return messages.length > 3 ? `${visibleMessages}; încă ${messages.length - 3} erori.` : visibleMessages;
+  }
+
+  return null;
+}
+
 function formatApiError(payload: ApiErrorPayload | null, fallbackMessage: string): string {
+  const detailsMessage = formatApiErrorDetails(payload?.error?.details ?? payload?.detail);
+  if (detailsMessage) {
+    return detailsMessage;
+  }
+
   if (typeof payload?.error?.message === "string" && payload.error.message.trim()) {
     return payload.error.message;
   }
 
   if (typeof payload?.detail === "string" && payload.detail.trim()) {
     return payload.detail;
-  }
-
-  if (Array.isArray(payload?.detail)) {
-    const messages = payload.detail
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const issue = item as { loc?: unknown; msg?: unknown };
-        if (typeof issue.msg !== "string" || !issue.msg.trim()) return null;
-
-        const path = Array.isArray(issue.loc)
-          ? issue.loc
-              .filter((part) => part !== "body")
-              .map(String)
-              .join(".")
-          : "";
-        return path ? `${path}: ${issue.msg}` : issue.msg;
-      })
-      .filter((message): message is string => Boolean(message));
-
-    if (messages.length > 0) {
-      const visibleMessages = messages.slice(0, 3).join("; ");
-      return messages.length > 3 ? `${visibleMessages}; încă ${messages.length - 3} erori.` : visibleMessages;
-    }
   }
 
   return fallbackMessage;
