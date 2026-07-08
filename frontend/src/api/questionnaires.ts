@@ -1,3 +1,4 @@
+import { apiFetch } from "./http";
 import { getApiBaseUrl, isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 
 export type QuestionnaireDefinitionStub = {
@@ -773,7 +774,7 @@ export async function listQuestionnaireDefinitionStubs(
       const url = includeRetired
         ? `${getApiBaseUrl()}/forms/definitions?include_retired=true`
         : `${getApiBaseUrl()}/forms/definitions`;
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         cache: "no-store",
         credentials: "include",
       });
@@ -810,7 +811,7 @@ export async function getQuestionnaireDefinition(
       const url = targetVersion
         ? `${getApiBaseUrl()}/forms/definitions/${realKey}?version=${targetVersion}`
         : `${getApiBaseUrl()}/forms/definitions/${realKey}`;
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         cache: "no-store",
         credentials: "include",
         ...options,
@@ -829,7 +830,7 @@ export async function getQuestionnaireDefinition(
 export async function createQuestionnaireDefinitionOnServer(
   definition: Omit<QuestionnaireDefinition, "version"> & { active?: boolean }
 ): Promise<QuestionnaireDefinition> {
-  const response = await fetch(`${getApiBaseUrl()}/forms/definitions`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/forms/definitions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -858,7 +859,7 @@ export async function updateQuestionnaireDefinitionOnServer(
   const url = version
     ? `${getApiBaseUrl()}/forms/definitions/${key}?version=${version}`
     : `${getApiBaseUrl()}/forms/definitions/${key}`;
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -882,7 +883,7 @@ export async function activateQuestionnaireDefinitionOnServer(
   key: string,
   version: number
 ): Promise<QuestionnaireDefinition> {
-  const response = await fetch(`${getApiBaseUrl()}/forms/definitions/${key}/versions/${version}/activate`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/forms/definitions/${key}/versions/${version}/activate`, {
     method: "POST",
     credentials: "include",
   });
@@ -902,7 +903,7 @@ export async function deleteQuestionnaireDefinitionOnServer(
   const url = version
     ? `${getApiBaseUrl()}/forms/definitions/${key}?version=${version}`
     : `${getApiBaseUrl()}/forms/definitions/${key}`;
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: "DELETE",
     credentials: "include",
   });
@@ -931,7 +932,7 @@ export async function getQuestionnaireResponse(
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -955,7 +956,7 @@ export async function saveQuestionnaireResponse(
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -981,7 +982,7 @@ export async function submitQuestionnaireResponse(
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/forms/assignments/${assignmentId}/response/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

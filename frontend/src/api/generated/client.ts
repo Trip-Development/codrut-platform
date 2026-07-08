@@ -1,3 +1,4 @@
+import { apiFetch } from "../http";
 import { getApiBaseUrl } from "../runtime";
 import type { paths } from "./schema";
 
@@ -31,5 +32,5 @@ export function generatedApiFetch(
   path: GeneratedApiPath,
   init?: RequestInit,
 ): Promise<Response> {
-  return fetch(generatedApiUrl(path), init);
+  return apiFetch(generatedApiUrl(path), init);
 }

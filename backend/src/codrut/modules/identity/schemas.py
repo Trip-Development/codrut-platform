@@ -90,6 +90,10 @@ class PasswordResetResponse(BaseModel):
     ok: bool = True
 
 
+class CsrfTokenResponse(BaseModel):
+    csrf_token: str
+
+
 class SessionPrincipal(BaseModel):
     user_id: UUID
     email: EmailStr

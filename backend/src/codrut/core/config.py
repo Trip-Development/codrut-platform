@@ -1,5 +1,6 @@
 import json
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,6 +34,13 @@ class Settings(BaseSettings):
     campaign_asset_dir: str = "var/campaign-assets"
     campaign_asset_public_path: str = "/api/campaign-assets"
     campaign_asset_max_bytes: int = 5 * 1024 * 1024
+    api_request_max_bytes: int = 8 * 1024 * 1024
+    security_headers_enabled: bool = True
+    security_hsts_max_age_seconds: int = 31_536_000
+    rate_limit_enabled: bool = False
+    rate_limit_backend: Literal["noop", "redis"] = "noop"
+    rate_limit_max_requests: int = 120
+    rate_limit_window_seconds: int = 60
 
     @field_validator("cors_origins", mode="before")
     @classmethod
