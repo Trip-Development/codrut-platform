@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  AuthRoleMismatchError,
   AuthSessionUnavailableError,
   audienceAccessNote,
   changePassword,
@@ -81,6 +82,8 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("returns role-scoped local users", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
     await expect(getCurrentTrainer()).resolves.toMatchObject({ role: "trainer" });
     await expect(getCurrentParticipant()).resolves.toMatchObject({ role: "participant" });
     await expect(getTrainerSession()).resolves.toMatchObject({ state: "fallback" });
@@ -351,6 +354,8 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("returns trainer dashboard placeholder data", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
     const summary = await getTrainerDashboardSummary();
 
     expect(summary.stats).toHaveLength(4);
@@ -504,6 +509,19 @@ describe("frontend API adapter stubs", () => {
             primary_result: "be_strong",
           },
         ],
+        received_feedback: {
+          completed_count: 2,
+          minimum_completed: 2,
+          visible: true,
+          overall_average: 4.1,
+          dimensions: [
+            {
+              id: "icare_01_dezvolta_oamenii",
+              average_score: 4.5,
+              completed_count: 2,
+            },
+          ],
+        },
         cards: [{ title: "De completat", description: "1 sarcini active", meta: "Acum" }],
         empty_state: { title: "Nu ai sarcini active", description: "Revino mai târziu." },
       }),
@@ -522,6 +540,19 @@ describe("frontend API adapter stubs", () => {
       pcmPhase: "Perseverent",
       tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
       results: [expect.objectContaining({ assignmentId: "result-assignment-1" })],
+      receivedFeedback: {
+        completedCount: 2,
+        minimumCompleted: 2,
+        visible: true,
+        overallAverage: 4.1,
+        dimensions: [
+          {
+            id: "icare_01_dezvolta_oamenii",
+            averageScore: 4.5,
+            completedCount: 2,
+          },
+        ],
+      },
       emptyState: expect.objectContaining({ title: "Nu ai sarcini active" }),
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -976,6 +1007,30 @@ describe("frontend API adapter stubs", () => {
 
     await expect(getTrainerSession()).rejects.toBeInstanceOf(AuthSessionUnavailableError);
     await expect(getParticipantSession()).rejects.toThrow("Nu am putut verifica sesiunea");
+  });
+
+  it("does not replace an authenticated role mismatch with demo fallback", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          user_id: "participant-1",
+          email: "participant@example.com",
+          role: "participant",
+        }),
+      } as Response),
+    );
+
+    await expect(getTrainerSession()).rejects.toBeInstanceOf(AuthRoleMismatchError);
+    await expect(getParticipantSession()).resolves.toMatchObject({
+      state: "authenticated",
+      user: {
+        id: "participant-1",
+        role: "participant",
+      },
+    });
   });
 
   it("loads the active authenticated session without demo fallback", async () => {

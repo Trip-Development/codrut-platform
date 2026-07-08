@@ -13,9 +13,12 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
+from codrut.modules.forms.definitions.catalog import BOSS_360_DEFINITION
 from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
 from codrut.modules.participants.schemas import (
+    ParticipantReceivedFeedbackDimension,
+    ParticipantReceivedFeedbackSummary,
     ParticipantWorkspaceCard,
     ParticipantWorkspaceResult,
     ParticipantWorkspaceSummary,
@@ -27,6 +30,14 @@ COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.validated,
     AssignmentStatus.scored,
 }
+RECEIVED_360_QUESTIONNAIRE_KEYS = {"boss_360", "boss_360_en", "icare"}
+RECEIVED_360_MINIMUM_COMPLETED = 2
+ICARE_DIMENSION_IDS = [
+    question["id"]
+    for section in BOSS_360_DEFINITION.schema["sections"]
+    for question in section.get("questions", [])
+]
+ICARE_DIMENSION_ID_SET = set(ICARE_DIMENSION_IDS)
 
 
 class ParticipantWorkspaceService:
@@ -43,6 +54,7 @@ class ParticipantWorkspaceService:
         teams = await self._get_teams(assignments)
         people = await self._get_people(assignments, profile.company_id)
         scoring_results = await self._get_scoring_results(assignments)
+        received_feedback = await self._get_received_feedback_summary(profile)
 
         tasks = [
             self._assignment_to_task(
@@ -83,6 +95,7 @@ class ParticipantWorkspaceService:
             deadline_at=deadline_at,
             tasks=tasks,
             results=results,
+            received_feedback=received_feedback,
             cards=[
                 ParticipantWorkspaceCard(
                     title="De completat",
@@ -107,6 +120,89 @@ class ParticipantWorkspaceService:
                     "automat."
                 ),
             ),
+        )
+
+    async def _get_received_feedback_summary(
+        self,
+        profile: ParticipantProfile,
+    ) -> ParticipantReceivedFeedbackSummary | None:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.company_id == profile.company_id)
+            .where(QuestionnaireAssignment.target_type == AssignmentTargetType.person)
+            .where(QuestionnaireAssignment.target_person_id == profile.id)
+            .where(QuestionnaireAssignment.respondent_profile_id != profile.id)
+            .where(QuestionnaireAssignment.questionnaire_key.in_(RECEIVED_360_QUESTIONNAIRE_KEYS))
+        )
+        received_assignments = list(result.scalars().all())
+        if not received_assignments:
+            return None
+
+        completed_assignments = [
+            assignment
+            for assignment in received_assignments
+            if assignment.status in COMPLETED_ASSIGNMENT_STATUSES
+        ]
+        completed_count = len(completed_assignments)
+        if completed_count < RECEIVED_360_MINIMUM_COMPLETED:
+            return ParticipantReceivedFeedbackSummary(
+                completed_count=completed_count,
+                minimum_completed=RECEIVED_360_MINIMUM_COMPLETED,
+                visible=False,
+            )
+
+        completed_assignment_ids = {assignment.id for assignment in completed_assignments}
+        scoring_result = await self.session.execute(
+            select(ScoringResult).where(ScoringResult.assignment_id.in_(completed_assignment_ids))
+        )
+        scoring_results = list(scoring_result.scalars().all())
+        if len(scoring_results) < RECEIVED_360_MINIMUM_COMPLETED:
+            return ParticipantReceivedFeedbackSummary(
+                completed_count=completed_count,
+                minimum_completed=RECEIVED_360_MINIMUM_COMPLETED,
+                visible=False,
+            )
+
+        dimension_values: dict[str, list[float]] = {
+            dimension_id: [] for dimension_id in ICARE_DIMENSION_IDS
+        }
+        for scoring in scoring_results:
+            for dimension_id, value in scoring.scores.items():
+                if dimension_id not in ICARE_DIMENSION_ID_SET:
+                    continue
+                score = _extract_numeric_score(value)
+                if score is None:
+                    continue
+                dimension_values[dimension_id].append(score)
+
+        visible_dimension_values = {
+            dimension_id: values
+            for dimension_id, values in dimension_values.items()
+            if len(values) >= RECEIVED_360_MINIMUM_COMPLETED
+        }
+        visible_scores = [
+            score
+            for values in visible_dimension_values.values()
+            for score in values
+        ]
+        dimensions = [
+            ParticipantReceivedFeedbackDimension(
+                id=dimension_id,
+                average_score=round(sum(values) / len(values), 1),
+                completed_count=len(values),
+            )
+            for dimension_id, values in visible_dimension_values.items()
+        ]
+        return ParticipantReceivedFeedbackSummary(
+            completed_count=completed_count,
+            minimum_completed=RECEIVED_360_MINIMUM_COMPLETED,
+            visible=bool(dimensions),
+            overall_average=(
+                round(sum(visible_scores) / len(visible_scores), 1)
+                if visible_scores
+                else None
+            ),
+            dimensions=dimensions,
         )
 
     async def _get_profile_and_company(self, user_id: UUID) -> tuple[ParticipantProfile, Company]:
@@ -297,3 +393,10 @@ def _format_deadline(value: datetime | None) -> str:
     if value is None:
         return "finalul evaluării"
     return value.strftime("%d.%m.%Y")
+
+
+def _extract_numeric_score(value: object) -> float | None:
+    raw = value.get("score") if isinstance(value, dict) else value
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    return None

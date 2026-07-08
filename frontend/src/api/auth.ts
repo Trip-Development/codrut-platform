@@ -32,6 +32,11 @@ type AuthSessionUnavailableContext = {
   reason: "network" | "server" | "payload";
 };
 
+type AuthRoleMismatchContext = {
+  expectedRole: "trainer" | "participant";
+  actualRole: "trainer" | "participant";
+};
+
 export class AuthSessionUnavailableError extends Error {
   context: AuthSessionUnavailableContext;
 
@@ -44,6 +49,20 @@ export class AuthSessionUnavailableError extends Error {
 
 export function isAuthSessionUnavailableError(error: unknown): error is AuthSessionUnavailableError {
   return error instanceof AuthSessionUnavailableError;
+}
+
+export class AuthRoleMismatchError extends Error {
+  context: AuthRoleMismatchContext;
+
+  constructor(context: AuthRoleMismatchContext) {
+    super(`Sesiunea activă este pentru ${context.actualRole}, nu pentru ${context.expectedRole}.`);
+    this.name = "AuthRoleMismatchError";
+    this.context = context;
+  }
+}
+
+export function isAuthRoleMismatchError(error: unknown): error is AuthRoleMismatchError {
+  return error instanceof AuthRoleMismatchError;
 }
 
 function logSessionUnavailable(context: AuthSessionUnavailableContext): void {
@@ -186,10 +205,12 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       logSessionUnavailable(context);
       throw new AuthSessionUnavailableError(context);
     }
-    if (user.role !== expectedRole) return null;
+    if (user.role !== expectedRole) {
+      throw new AuthRoleMismatchError({ expectedRole, actualRole: user.role });
+    }
     return sessionStateFromPrincipal(user);
   } catch (error) {
-    if (isAuthSessionUnavailableError(error)) throw error;
+    if (isAuthSessionUnavailableError(error) || isAuthRoleMismatchError(error)) throw error;
     const context: AuthSessionUnavailableContext = { expectedRole, reason: "network" };
     logSessionUnavailable(context);
     throw new AuthSessionUnavailableError(context);
@@ -209,6 +230,7 @@ export async function getTrainerSession(): Promise<SessionState> {
   try {
     session = await getSessionFromApi("trainer");
   } catch (error) {
+    if (isAuthRoleMismatchError(error)) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
@@ -232,6 +254,7 @@ export async function getParticipantSession(): Promise<SessionState> {
   try {
     session = await getSessionFromApi("participant");
   } catch (error) {
+    if (isAuthRoleMismatchError(error)) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;

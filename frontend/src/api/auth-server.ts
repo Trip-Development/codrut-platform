@@ -3,7 +3,9 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import {
+  AuthRoleMismatchError,
   AuthSessionUnavailableError,
+  isAuthRoleMismatchError,
   isAuthSessionUnavailableError,
   type CurrentUser,
   type SessionState,
@@ -42,13 +44,15 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       throw new AuthSessionUnavailableError(context);
     }
   } catch (error) {
-    if (isAuthSessionUnavailableError(error)) throw error;
+    if (isAuthSessionUnavailableError(error) || isAuthRoleMismatchError(error)) throw error;
     const context = { expectedRole, reason: "network" as const };
     console.warn("[auth] Server session check failed before a response.", context);
     throw new AuthSessionUnavailableError(context);
   }
 
-  if (user.role !== expectedRole) return null;
+  if (user.role !== expectedRole) {
+    throw new AuthRoleMismatchError({ expectedRole, actualRole: user.role });
+  }
 
   return {
     state: "authenticated",
@@ -74,6 +78,7 @@ export async function getTrainerSession(): Promise<SessionState> {
   try {
     session = await getSessionFromApi("trainer");
   } catch (error) {
+    if (isAuthRoleMismatchError(error)) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
@@ -97,6 +102,7 @@ export async function getParticipantSession(): Promise<SessionState> {
   try {
     session = await getSessionFromApi("participant");
   } catch (error) {
+    if (isAuthRoleMismatchError(error)) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
