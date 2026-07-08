@@ -227,6 +227,8 @@ async def create_company_invitation(
     from codrut.modules.identity.service import IdentityService
 
     settings = get_settings()
+    assignment_service = AssignmentService(session)
+    await assignment_service.require_company_manager(principal.user_id, company_id)
     service = IdentityService(session)
 
     # 1. Generate/get invite
@@ -287,6 +289,7 @@ async def invalidate_company_invitation(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> None:
     require_trainer_principal(principal)
+    await AssignmentService(session).require_company_manager(principal.user_id, company_id)
     from codrut.modules.identity.service import IdentityService
     service = IdentityService(session)
     await service.invalidate_invite(company_id, respondent_profile_id)

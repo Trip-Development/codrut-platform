@@ -25,7 +25,6 @@ PUBLIC_UNSAFE_EXACT_PATHS = frozenset(
     }
 )
 PUBLIC_UNSAFE_PATTERNS: tuple[Pattern[str], ...] = (
-    compile(r"^/api/communications/campaigns/recipients/[^/]+/events$"),
     compile(r"^/api/communications/campaigns/unsubscribe/[^/]+$"),
 )
 

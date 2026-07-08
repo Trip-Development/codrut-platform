@@ -70,6 +70,19 @@ describe("apiFetch", () => {
     expect(headers.get("Content-Type")).toBe("application/json");
   });
 
+  it("attaches CSRF headers to authenticated campaign recipient events", async () => {
+    document.cookie = "codrut_csrf=cookie-token; path=/";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiFetch("http://localhost:3000/api/communications/campaigns/recipients/r1/events", {
+      method: "POST",
+    });
+
+    const finalInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(new Headers(finalInit.headers).get("X-CSRF-Token")).toBe("cookie-token");
+  });
+
   it("refreshes the CSRF token and retries once after a CSRF failure", async () => {
     const fetchMock = vi
       .fn()

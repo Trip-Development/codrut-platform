@@ -65,7 +65,6 @@ These endpoints do not depend on `current_principal`.
 | `POST` | `/api/auth/reset-password` | Yes | Creates reset token and sends email when eligible. |
 | `POST` | `/api/auth/reset-password/confirm` | Yes | Changes password, consumes reset token, deletes sessions. |
 | `POST` | `/api/companies/access-code-registration` | Yes | Creates/registers access-code account when enabled by service policy. |
-| `POST` | `/api/communications/campaigns/recipients/{recipient_id}/events` | Yes | Records campaign recipient event. |
 | `GET` | `/api/communications/campaigns/track/calendly/{token}` | Yes | Tracks campaign calendly click and redirects. |
 | `GET` | `/api/communications/campaigns/track/opened/{token}` | Yes | Tracks campaign open pixel. |
 | `GET` | `/api/communications/campaigns/track/{event_type}/{token}` | Yes | Tracks campaign click-like events. |
@@ -86,8 +85,8 @@ will need CSRF treatment if cookie auth remains the browser credential.
   invite resend, reporting-relationship import.
 - Access codes: `POST /api/companies/{company_id}/access-codes`.
 - Communications: test email, campaign asset upload, template create/update/
-  activate/delete, campaign recipient bulk/update/delete, campaign create/update/
-  delete, membership replace, campaign send.
+  activate/delete, campaign recipient bulk/update/delete/event recording,
+  campaign create/update/delete, membership replace, campaign send.
 - Teams: team create and team membership create.
 - Assignments: assignment create, default-plan save, assignment status update,
   company invitation create/invalidate.

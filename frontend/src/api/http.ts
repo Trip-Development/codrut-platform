@@ -11,7 +11,6 @@ const CSRF_EXEMPT_PATHS = new Set([
   "/api/companies/access-code-registration",
 ]);
 const CSRF_EXEMPT_PATTERNS = [
-  /^\/api\/communications\/campaigns\/recipients\/[^/]+\/events$/,
   /^\/api\/communications\/campaigns\/unsubscribe\/[^/]+$/,
 ];
 
