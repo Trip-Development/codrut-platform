@@ -142,9 +142,9 @@ describe("ParticipantResultsPanel", () => {
             targetLabel: "Manager direct",
             primaryResult: "icare_06_aduce_claritate",
             scores: {
-              icare_inspiring_developing_people: { score: 88 },
-              icare_01_dezvolta_oamenii: { score: 83 },
-              icare_06_aduce_claritate: { score: 61 },
+              icare_inspiring_developing_people: { score: 4.4 },
+              icare_01_dezvolta_oamenii: { score: 4.2 },
+              icare_06_aduce_claritate: { score: 3.1 },
             },
           },
         ]}

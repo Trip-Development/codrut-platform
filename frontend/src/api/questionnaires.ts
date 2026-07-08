@@ -73,6 +73,25 @@ export type QuestionnaireResponseRecord = {
   answers: Record<string, QuestionnaireAnswerValue>;
 };
 
+export class QuestionnaireRequestError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "QuestionnaireRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function isQuestionnaireSessionError(error: unknown): boolean {
+  return (
+    error instanceof QuestionnaireRequestError &&
+    (error.status === 401 || error.status === 403)
+  );
+}
+
 const seededAssignmentQuestionnaires: Record<string, string> = {
   "11111111-1111-4111-8111-111111111111": "lencioni",
   "22222222-2222-4222-8222-222222222222": "boss_360",
@@ -212,12 +231,10 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   },
 ];
 
-const icareFourPointScale: QuestionnaireScaleOption[] = [
-  { value: 1, label: "Rar" },
-  { value: 2, label: "Uneori" },
-  { value: 3, label: "Frecvent" },
-  { value: 4, label: "Întotdeauna" },
-];
+const icareGradeScale: QuestionnaireScaleOption[] = Array.from({ length: 5 }, (_, index) => ({
+  value: index + 1,
+  label: String(index + 1),
+}));
 
 const lencioniThreePointScale: QuestionnaireScaleOption[] = [
   { value: 1, label: "Rar" },
@@ -367,7 +384,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
     version: 1,
     title: "Comportamente de leadership ICARE",
     description:
-      "Evaluare comportamentală pe atributele ICARE. Versiune provizorie cu scală în 4 trepte, pregătită pentru ajustarea scalei finale.",
+      "Evaluare comportamentală pe atributele ICARE cu note de la 1 la 5.",
     schema: {
       schema_version: "questionnaire.v1",
       audience: "leadership",
@@ -377,11 +394,10 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         status: "provisional",
       },
       instructions:
-        "Alege frecvența care descrie cel mai bine comportamentul observat. Scala curentă are 4 opțiuni și poate fi modificată fără rescrierea itemilor.",
+        "Alege nota care descrie cel mai bine comportamentul observat. 1 este cel mai slab nivel, iar 5 este nivelul maxim.",
       scoring: {
-        scale_status: "provisional_4_point",
-        source_columns_used: ["2; Rar / 25%", "3; Uneori / 50%", "4; Frecvent / 75%", "5; Întotdeauna / 100%"],
-        source_column_excluded_for_now: "1; Niciodată / 0%",
+        scale_status: "grade_1_to_5",
+        score_unit: "grade_1_to_5",
       },
       sections: [
         {
@@ -395,7 +411,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Dezvoltarea oamenilor",
               required: true,
               instructions: "Dezvoltare continuă prin feedback constructiv, încurajare și follow-up.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_01", code: "S1", label: "Oferă feedback constructiv" },
                 { id: "icare_02", code: "S2", label: "Sprijină planurile de dezvoltare" },
@@ -409,7 +425,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Conducere prin exemplu",
               required: true,
               instructions: "Aliniere între valori, angajamente și comportamentul zilnic.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_04", code: "S1", label: "Acționează conform valorilor declarate" },
                 { id: "icare_05", code: "S2", label: "Respectă angajamentele asumate față de echipă" },
@@ -423,7 +439,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Crearea unui mediu care stimulează implicarea",
               required: true,
               instructions: "Mediu sigur, energizant și orientat către contribuția fiecărui membru.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_07", code: "S1", label: "Creează spațiu psihologic sigur pentru exprimare" },
                 { id: "icare_08", code: "S2", label: "Delegă cu sens, nu doar cu sarcini" },
@@ -443,7 +459,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Promotor al colaborării",
               required: true,
               instructions: "Transparență, colaborare și prioritizarea interesului comun.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_10", code: "S1", label: "Verifică înțelegerea comună după discuții" },
                 { id: "icare_11", code: "S2", label: "Împărtășește context și motivații proprii" },
@@ -457,7 +473,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Inspirație împărtășită",
               required: true,
               instructions: "Sens, ambiție și angajament construite împreună cu echipa.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_13", code: "S1", label: "Conectează munca echipei la un scop mai larg" },
                 { id: "icare_14", code: "S2", label: "Co-construiește ambiții îndrăznețe cu echipa" },
@@ -471,7 +487,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Ancorare în realitate",
               required: true,
               instructions: "Ascultare activă, informații relevante și realism onest.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_16", code: "S1", label: "Ascultă activ înainte de a răspunde sau decide" },
                 { id: "icare_17", code: "S2", label: "Împărtășește informații relevante proactiv" },
@@ -485,7 +501,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Clarificare",
               required: true,
               instructions: "Claritate strategică în contexte complexe și incerte.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_19", code: "S1", label: "Comunică strategia și direcția cu claritate" },
                 { id: "icare_20", code: "S2", label: "Oferă claritate în situații de ambiguitate" },
@@ -505,7 +521,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Modestie",
               required: true,
               instructions: "Feedback, limite personale și integrarea perspectivelor diferite.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_22", code: "S1", label: "Solicită feedback despre propriul comportament" },
                 { id: "icare_23", code: "S2", label: "Știe când să ceară ajutor sau să admită că nu știe" },
@@ -519,7 +535,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Inteligență emoțională și situațională",
               required: true,
               instructions: "Autoreglare, interes autentic și adaptarea comunicării.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_25", code: "S1", label: "Recunoaște și gestionează propriile emoții în interacțiuni" },
                 { id: "icare_26", code: "S2", label: "Arată interes autentic față de oameni ca indivizi" },
@@ -533,7 +549,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Deschidere către lume",
               required: true,
               instructions: "Curiozitate, benchmarkuri externe și facilitarea schimbării.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_28", code: "S1", label: "Caută activ benchmarkuri și tendințe externe" },
                 { id: "icare_29", code: "S2", label: "Îmbrățișează și facilitează schimbarea" },
@@ -553,7 +569,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Ambiție asumată pentru companie",
               required: true,
               instructions: "Inovație, asumarea riscului și învățare din performanță.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_31", code: "S1", label: "Propune soluții inovatoare și îndrăznețe" },
                 { id: "icare_32", code: "S2", label: "Promovează asumarea responsabilă a riscului" },
@@ -567,7 +583,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Grijă egală pentru angajați și clienți",
               required: true,
               instructions: "Echilibru între performanță, bunăstarea echipei și standarde realiste.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_34", code: "S1", label: "Echilibrează presiunile de performanță cu bunăstarea echipei" },
                 { id: "icare_35", code: "S2", label: "Acordă atenție echilibrului muncă-viață al membrilor echipei" },
@@ -581,7 +597,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Agilitate antreprenorială",
               required: true,
               instructions: "Testare rapidă, simplificare și conectarea rețelei externe la oportunități.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_37", code: "S1", label: "Testează și învață rapid (test & learn)" },
                 { id: "icare_38", code: "S2", label: "Livrează rezultate mai rapid prin simplificare și prioritizare" },
@@ -601,7 +617,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Decizie aproape de teren",
               required: true,
               instructions: "Autonomie, inițiativă și raportare transparentă.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_40", code: "S1", label: "Delegă autoritatea decizională la nivelul potrivit" },
                 { id: "icare_41", code: "S2", label: "Ia inițiativă și acționează fără să aștepte permisiunea" },
@@ -615,7 +631,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Cultivarea inteligenței colective",
               required: true,
               instructions: "Diversitate, co-construcție, decizii asumate și refuzul compromisului facil.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_43", code: "S1", label: "Susține decizia finală chiar dacă diferă de propria opinie" },
                 { id: "icare_44", code: "S2", label: "Caută și oferă sfaturi fără a impune soluții" },
@@ -629,7 +645,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               label: "Sprijinirea echipei",
               required: true,
               instructions: "Contribuție la dinamica echipei, deblocare și sharing de cunoaștere.",
-              scale: icareFourPointScale,
+              scale: icareGradeScale,
               statements: [
                 { id: "icare_46", code: "S1", label: "Alimentează dinamica și energia pozitivă a echipei" },
                 { id: "icare_47", code: "S2", label: "Facilitează deblocarea obstacolelor pentru colegii din echipă" },
@@ -989,8 +1005,11 @@ function canUseSeededAssignmentFallback(assignmentId: string): boolean {
 async function responseError(response: Response, fallbackMessage: string): Promise<Error> {
   const payload =
     typeof response.json === "function" ? await response.json().catch(() => null) : null;
-  const message = payload?.error?.message ?? fallbackMessage;
-  return new Error(message);
+  const message =
+    payload?.error?.message ??
+    (typeof payload?.detail === "string" ? payload.detail : fallbackMessage);
+  const code = typeof payload?.error?.code === "string" ? payload.error.code : undefined;
+  return new QuestionnaireRequestError(message, response.status, code);
 }
 
 function normalizeResponseError(error: unknown, fallbackMessage: string): Error {

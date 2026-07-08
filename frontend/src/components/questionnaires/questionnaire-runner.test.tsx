@@ -3,7 +3,11 @@ import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 
 import type { QuestionnaireDefinition } from "../../api/questionnaires";
-import { saveQuestionnaireResponse, submitQuestionnaireResponse } from "../../api/questionnaires";
+import {
+  QuestionnaireRequestError,
+  saveQuestionnaireResponse,
+  submitQuestionnaireResponse,
+} from "../../api/questionnaires";
 import { QuestionnaireRunner } from "./questionnaire-runner";
 
 const routerPush = vi.fn();
@@ -286,6 +290,28 @@ describe("QuestionnaireRunner", () => {
       expect(submitQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 2 });
       expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
     });
+  });
+
+  it("shows a stale-session message when another tab changes the active account", async () => {
+    window.confirm = vi.fn(() => true);
+    vi.mocked(submitQuestionnaireResponse).mockRejectedValueOnce(
+      new QuestionnaireRequestError("Sesiunea activă nu este un cont de participant.", 403),
+    );
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        returnHref="/participant/questionnaires"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Sesiunea activă s-a schimbat în altă filă/)).toBeTruthy();
+    });
+    expect(routerPush).not.toHaveBeenCalled();
   });
 
   it("locks a submitted assignment on direct revisit", () => {

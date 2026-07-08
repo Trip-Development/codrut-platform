@@ -76,6 +76,37 @@ export async function loginWithPassword(email: string, password: string): Promis
   };
 }
 
+function sessionStateFromPrincipal(user: SessionPrincipalResponse): SessionState {
+  return {
+    state: "authenticated",
+    user: {
+      id: user.user_id,
+      name: user.email.split("@")[0],
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
+
+export function dashboardHrefForRole(role: CurrentUser["role"]): "/trainer" | "/participant" {
+  return role === "trainer" ? "/trainer" : "/participant";
+}
+
+export async function getAuthenticatedSession(): Promise<SessionState | null> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/auth/me`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (response.status === 401 || response.status === 403 || !response.ok) return null;
+    const user = (await response.json()) as SessionPrincipalResponse;
+    if (!user.user_id || !user.email || !user.role) return null;
+    return sessionStateFromPrincipal(user);
+  } catch {
+    return null;
+  }
+}
+
 export async function requestPasswordReset(email: string): Promise<void> {
   const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
     method: "POST",
@@ -156,15 +187,7 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       throw new AuthSessionUnavailableError(context);
     }
     if (user.role !== expectedRole) return null;
-    return {
-      state: "authenticated",
-      user: {
-        id: user.user_id,
-        name: user.email.split("@")[0],
-        email: user.email,
-        role: user.role,
-      },
-    };
+    return sessionStateFromPrincipal(user);
   } catch (error) {
     if (isAuthSessionUnavailableError(error)) throw error;
     const context: AuthSessionUnavailableContext = { expectedRole, reason: "network" };

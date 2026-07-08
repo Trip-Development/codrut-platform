@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect, useRef } from "react";
 
+import { AccountAccessLink } from "../components/auth/account-access-link";
 import { BrandMark } from "../components/brand/brand-mark";
 import { ThemeToggle } from "../components/theme/theme-toggle";
 
@@ -213,12 +214,11 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2.5">
             <ThemeToggle />
-            <Link
-              href="/login"
+            <AccountAccessLink
               className="btn-secondary min-h-8 px-5 py-1.5 text-center text-sm"
             >
               Intră în cont
-            </Link>
+            </AccountAccessLink>
             <Link
               href="#contact"
               className="btn-primary hidden min-h-8 items-center !px-5 !py-1.5 md:flex"
@@ -250,12 +250,11 @@ export default function HomePage() {
             >
               Programează o discuție B2B
             </a>
-            <Link
-              href="/login"
+            <AccountAccessLink
               className="btn-secondary !px-6 !py-4 !text-base"
             >
               Intră în cont
-            </Link>
+            </AccountAccessLink>
           </div>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3">

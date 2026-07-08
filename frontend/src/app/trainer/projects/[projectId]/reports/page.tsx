@@ -79,8 +79,8 @@ export default async function ProjectReportsPage({
           title="Feedback 360 iCARE"
           count={boss360Count}
           items={boss360Averages}
-          suffix="%"
-          max={100}
+          max={5}
+          valueLabel="5"
           suppressed={isSmallCohort(boss360Count)}
         />
         <ReportPanel
