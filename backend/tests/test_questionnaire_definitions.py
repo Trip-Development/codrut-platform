@@ -139,6 +139,8 @@ def test_boss_360_definition_is_icare_form_complete_with_section_scoring() -> No
     assert definition.title == "Feedback 360 iCARE pentru manager"
     assert len(questions) == 3
     assert len(statements) == 45
+    assert [option["value"] for option in questions[0]["scale"]] == [1, 2, 3, 4, 5]
+    assert [option["value"] for option in statements[0]["scale"]] == [1, 2, 3, 4, 5]
     question_types = {
         question["type"]
         for section in definition.schema["sections"]
@@ -148,9 +150,8 @@ def test_boss_360_definition_is_icare_form_complete_with_section_scoring() -> No
     assert definition.schema["scoring"] == {
         "method": "average_statement_scores_by_section",
         "scale_min": 1,
-        "scale_max": 4,
-        "score_min": 0,
-        "score_unit": "percent",
+        "scale_max": 5,
+        "score_unit": "grade_1_to_5",
         "primary_result": "lowest_dimension",
         "source_sheet": "Agregare 360",
     }

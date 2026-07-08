@@ -125,6 +125,7 @@ async def get_assignment_response(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> QuestionnaireResponseResponse:
+    _require_participant(principal)
     require_current_terms(principal)
     return await FormsService(session).get_assignment_response(principal.user_id, assignment_id)
 
@@ -139,6 +140,7 @@ async def save_assignment_response(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> QuestionnaireResponseResponse:
+    _require_participant(principal)
     require_current_terms(principal)
     response = await FormsService(session).save_assignment_response(
         principal.user_id,
@@ -159,6 +161,7 @@ async def submit_assignment_response(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> QuestionnaireResponseResponse:
+    _require_participant(principal)
     require_current_terms(principal)
     response = await FormsService(session).save_assignment_response(
         principal.user_id,
@@ -168,6 +171,14 @@ async def submit_assignment_response(
     )
     await session.commit()
     return response
+
+
+def _require_participant(principal: SessionPrincipal) -> None:
+    if principal.role != UserRole.participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sesiunea activă nu este un cont de participant.",
+        )
 
 
 def _require_trainer(principal: SessionPrincipal) -> None:

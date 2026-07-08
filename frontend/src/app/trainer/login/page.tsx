@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { loginWithPassword } from "@/api/auth";
+import { dashboardHrefForRole, getAuthenticatedSession, loginWithPassword } from "@/api/auth";
 
 const quotes = [
   "„Performanța unei echipe crește atunci când feedback-ul devine obicei.”",
@@ -22,6 +22,18 @@ export default function TrainerLoginPage() {
   const [fade, setFade] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAuthenticatedSession().then((session) => {
+      if (cancelled || !session) return;
+      router.replace(dashboardHrefForRole(session.user.role));
+      router.refresh();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     const interval = setInterval(() => {

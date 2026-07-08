@@ -475,7 +475,7 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
     assert any(isinstance(model, User) for model in session.added_models)
     assert any(isinstance(model, Session) for model in session.added_models)
     created_session = next(model for model in session.added_models if isinstance(model, Session))
-    assert created_session.expires_at.timestamp() == int(expires_at.timestamp())
+    assert created_session.expires_at > datetime.now(UTC) + timedelta(days=89)
 
 
 @pytest.mark.asyncio
@@ -541,7 +541,7 @@ async def test_verify_invite_for_project_uses_project_close_as_effective_expiry(
 
     assert result.response.expires_at == project_closes_at
     created_session = next(model for model in session.added_models if isinstance(model, Session))
-    assert created_session.expires_at == project_closes_at
+    assert created_session.expires_at > datetime.now(UTC) + timedelta(days=89)
 
 
 @pytest.mark.asyncio

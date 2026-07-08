@@ -101,26 +101,26 @@ describe("buildReportAggregation", () => {
       [
         "feedback",
         result("feedback", {
-          inspiring: { score: 75 },
-          create_trust: { score: 80 },
-          awareness: { score: 65 },
-          results: { score: 90 },
-          empowerment: { score: 85 },
-          icare_01_dezvolta_oamenii: { score: 75 },
-          icare_02_conduce_prin_puterea_exemplului: { score: 80 },
-          icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 85 },
-          icare_04_promotor_al_colaborarii: { score: 90 },
-          icare_05_ancorat_in_realitate: { score: 95 },
-          icare_06_aduce_claritate: { score: 100 },
-          icare_07_modestie: { score: 65 },
-          icare_08_inteligenta_emotionala_si_situationala: { score: 60 },
-          icare_09_deschis_catre_lume: { score: 55 },
-          icare_10_ambitios_pentru_companie: { score: 50 },
-          icare_11_grija_egala_pentru_angajati_si_clienti: { score: 45 },
-          icare_12_agilitate_antreprenoriala: { score: 40 },
-          icare_13_decizii_cat_mai_aproape_de_teren: { score: 35 },
-          icare_14_cultiva_inteligenta_colectiva: { score: 30 },
-          icare_15_ajuta_echipa: { score: 25 },
+          inspiring: { score: 3.8 },
+          create_trust: { score: 4 },
+          awareness: { score: 3.3 },
+          results: { score: 4.5 },
+          empowerment: { score: 4.3 },
+          icare_01_dezvolta_oamenii: { score: 3.8 },
+          icare_02_conduce_prin_puterea_exemplului: { score: 4 },
+          icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 4.3 },
+          icare_04_promotor_al_colaborarii: { score: 4.5 },
+          icare_05_ancorat_in_realitate: { score: 4.8 },
+          icare_06_aduce_claritate: { score: 5 },
+          icare_07_modestie: { score: 3.3 },
+          icare_08_inteligenta_emotionala_si_situationala: { score: 3 },
+          icare_09_deschis_catre_lume: { score: 2.8 },
+          icare_10_ambitios_pentru_companie: { score: 2.5 },
+          icare_11_grija_egala_pentru_angajati_si_clienti: { score: 2.3 },
+          icare_12_agilitate_antreprenoriala: { score: 2 },
+          icare_13_decizii_cat_mai_aproape_de_teren: { score: 1.8 },
+          icare_14_cultiva_inteligenta_colectiva: { score: 1.5 },
+          icare_15_ajuta_echipa: { score: 1.3 },
         }),
       ],
     ]);
@@ -157,7 +157,7 @@ describe("buildReportAggregation", () => {
     });
     expect(aggregation.boss360Count).toBe(1);
     expect(aggregation.boss360Averages.find((item) => item.id === "icare_07_modestie")).toMatchObject({
-      avg: 65,
+      avg: 3.3,
     });
     expect(aggregation.lencioniAverages.find((item) => item.id === "fear_of_conflict")).toMatchObject({
       interpretation: "Disfuncția trebuie probabil abordată.",
@@ -221,12 +221,12 @@ describe("buildReportAggregation", () => {
         [
           "boss-en",
           result("boss-en", {
-            inspiring: { score: 70 },
-            create_trust: { score: 75 },
-            awareness: { score: 80 },
-            results: { score: 85 },
-            empowerment: { score: 90 },
-            icare_15_ajuta_echipa: { score: 90 },
+            inspiring: { score: 3.5 },
+            create_trust: { score: 3.8 },
+            awareness: { score: 4 },
+            results: { score: 4.3 },
+            empowerment: { score: 4.5 },
+            icare_15_ajuta_echipa: { score: 4.5 },
           }),
         ],
       ]),
@@ -237,7 +237,7 @@ describe("buildReportAggregation", () => {
     expect(aggregation.driverCount).toBe(1);
     expect(aggregation.driverAverages.find((item) => item.id === "please_people")).toMatchObject({ avg: 100 });
     expect(aggregation.boss360Count).toBe(1);
-    expect(aggregation.boss360Averages.find((item) => item.id === "icare_15_ajuta_echipa")).toMatchObject({ avg: 90 });
+    expect(aggregation.boss360Averages.find((item) => item.id === "icare_15_ajuta_echipa")).toMatchObject({ avg: 4.5 });
   });
 
   it("does not count legacy 360 result keys as reportable iCARE aggregate scores", () => {
@@ -247,11 +247,11 @@ describe("buildReportAggregation", () => {
         [
           "legacy-360",
           result("legacy-360", {
-            inspiring: { score: 75 },
-            create_trust: { score: 80 },
-            awareness: { score: 65 },
-            results: { score: 90 },
-            empowerment: { score: 85 },
+            inspiring: { score: 3.8 },
+            create_trust: { score: 4 },
+            awareness: { score: 3.3 },
+            results: { score: 4.5 },
+            empowerment: { score: 4.3 },
           }),
         ],
       ]),
@@ -278,7 +278,7 @@ describe("buildReportAggregation", () => {
           pcm_phase_count: 2,
           lencioni_averages: [{ id: "absence_of_trust", label: "Trust", avg: 8, interpretation: null, range_label: null }],
           driver_averages: [{ id: "be_strong", label: "Fii Puternic", avg: 62, interpretation: ">50", range_label: ">50" }],
-          boss_360_averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 80 }],
+          boss_360_averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 4 }],
           pcm_base_distribution: [{ id: "thinker", label: "Gânditor", value: 1, color: null }],
           pcm_phase_distribution: [{ id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" }],
         },
@@ -298,7 +298,7 @@ describe("buildReportAggregation", () => {
         pcmPhaseCount: 2,
         lencioniAverages: [{ id: "absence_of_trust", label: "Trust", avg: 8, interpretation: null, range_label: null }],
         driverAverages: [{ id: "be_strong", label: "Fii Puternic", avg: 62, interpretation: ">50", range_label: ">50" }],
-        boss360Averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 80 }],
+        boss360Averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 4 }],
         pcmBaseDistribution: [{ id: "thinker", label: "Gânditor", value: 1, color: undefined }],
         pcmPhaseDistribution: [{ id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" }],
       },
