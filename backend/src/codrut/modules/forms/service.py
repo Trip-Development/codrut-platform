@@ -207,17 +207,19 @@ class FormsService:
         assignment = await repository.get_assignment_for_user(assignment_id, user_id)
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
+        response = await repository.get_response_by_assignment(assignment_id)
+        if response is not None and response.status == QuestionnaireResponseStatus.submitted:
+            if submit and response.answers == payload.answers:
+                return _response_to_schema(response)
+            raise DomainError(
+                "Submitted responses are locked. Ask the trainer to reopen this assignment.",
+                code="response_locked",
+            )
         await _validate_assignment_response_window(repository, assignment)
         definition = await _resolve_definition(
             repository,
             assignment.questionnaire_key,
         )
-        response = await repository.get_response_by_assignment(assignment_id)
-        if response is not None and response.status == QuestionnaireResponseStatus.submitted:
-            raise DomainError(
-                "Submitted responses are locked. Ask the trainer to reopen this assignment.",
-                code="response_locked",
-            )
         if submit:
             _validate_submit_answers(definition.schema, payload.answers)
         if response is None:

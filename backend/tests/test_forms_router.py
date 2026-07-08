@@ -85,4 +85,7 @@ def test_assignment_response_routes_require_participant_role() -> None:
     response = client.get(f"/api/forms/assignments/{uuid4()}/response")
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Sesiunea activă nu este un cont de participant."
+    error = response.json()["error"]
+    assert error["code"] == "http_403"
+    assert error["message"] == "Sesiunea activă nu este un cont de participant."
+    assert error["request_id"]

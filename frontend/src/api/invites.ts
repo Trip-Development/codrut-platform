@@ -1,3 +1,4 @@
+import { apiFetch } from "./http";
 import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 
 export type InviteTaskStatus = "not_started" | "in_progress" | "completed";
@@ -170,7 +171,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
 }
 
 async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> {
-  const response = await fetch(`${getApiBaseUrl()}/auth/invite/verify?token=${encodeURIComponent(token)}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/invite/verify?token=${encodeURIComponent(token)}`, {
     cache: "no-store",
     credentials: "include",
   });

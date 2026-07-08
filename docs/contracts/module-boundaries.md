@@ -26,6 +26,35 @@ Use this default shape unless a module is intentionally tiny:
 - Shared infrastructure belongs in `backend/src/codrut/core/`.
 - Cross-module data contracts belong in `backend/src/codrut/contracts/`.
 
+These rules are enforced incrementally by
+`backend/tests/architecture/test_module_boundaries.py`. The tests are
+intentionally narrower than the ideal contract so they match the current code
+without false positives. New direct cross-module repository imports or
+router-to-service imports must be documented in that test file.
+
+Current documented cross-module repository imports:
+
+| Source | Target | Owner | Reason |
+| --- | --- | --- | --- |
+| `assignments.service` | `companies.repository` | assignments | Assignment planning needs project membership, hierarchy, and participant data. |
+| `assignments.service` | `forms.repository` | assignments | Assignment save/response flows need questionnaire response state. |
+| `assignments.service` | `scoring.repository` | assignments | Assignment completion views need existing scoring-result state. |
+| `companies.service` | `communications.repository` | companies | Company invite and campaign actions coordinate recipient/email state. |
+| `companies.service` | `identity.repository` | companies | Roster and account flows create or connect user identities. |
+| `scoring.router` | `companies.repository` | scoring | Report endpoints currently perform access lookups before service calls. |
+| `scoring.router` | `forms.repository` | scoring | Report endpoints currently fetch response state before service calls. |
+| `scoring.service` | `companies.repository` | scoring | Scoring aggregation needs hierarchy and project membership data. |
+
+Current documented router-to-service imports across modules:
+
+| Source | Target | Owner | Reason |
+| --- | --- | --- | --- |
+| `assignments.router` | `identity.service` | assignments | Task-link endpoints verify or create invite sessions. |
+| `assignments.router` | `scoring.service` | assignments | Assignment report endpoints reuse scoring aggregation behavior. |
+
+See `backend/src/codrut/modules/README.md` for module ownership and the
+standard layer responsibilities.
+
 ## Cross-Module Communication
 
 Prefer explicit contracts for work that crosses module boundaries:

@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from codrut.api.schemas import StrictRequestModel
 from codrut.modules.companies.models import CompanyProjectStatus
 from codrut.modules.identity.password_policy import (
     PASSWORD_MAX_LENGTH,
@@ -12,7 +13,7 @@ from codrut.modules.identity.password_policy import (
 )
 
 
-class CompanyCreateRequest(BaseModel):
+class CompanyCreateRequest(StrictRequestModel):
     name: str = Field(min_length=1, max_length=255)
 
 
@@ -32,7 +33,7 @@ class CompanySummaryResponse(CompanyResponse):
     stage: Literal["setup", "invites", "completion", "reporting"] = "setup"
 
 
-class CompanyProjectCreateRequest(BaseModel):
+class CompanyProjectCreateRequest(StrictRequestModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
     project_type: str | None = Field(default=None, max_length=120)
@@ -43,7 +44,7 @@ class CompanyProjectCreateRequest(BaseModel):
     form_closes_at: datetime | None = None
 
 
-class CompanyProjectUpdateRequest(BaseModel):
+class CompanyProjectUpdateRequest(StrictRequestModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
     project_type: str | None = Field(default=None, max_length=120)
@@ -75,7 +76,7 @@ class CompanyProjectListItemResponse(CompanyProjectResponse):
     company_name: str
 
 
-class CompanyAccessCodeCreateRequest(BaseModel):
+class CompanyAccessCodeCreateRequest(StrictRequestModel):
     label: str | None = Field(default=None, max_length=255)
 
 
@@ -86,7 +87,7 @@ class CompanyAccessCodeResponse(BaseModel):
     code: str
 
 
-class CompanyAccessCodeRegistrationRequest(BaseModel):
+class CompanyAccessCodeRegistrationRequest(StrictRequestModel):
     email: EmailStr
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
     access_code: str = Field(min_length=6, max_length=64)
@@ -97,7 +98,7 @@ class CompanyAccessCodeRegistrationRequest(BaseModel):
         return validate_new_password(value)
 
 
-class ParticipantCreateRequest(BaseModel):
+class ParticipantCreateRequest(StrictRequestModel):
     full_name: str = Field(min_length=1, max_length=255)
     email: EmailStr
     reports_to_name: str | None = Field(default=None, max_length=255)
@@ -109,7 +110,7 @@ class ParticipantCreateRequest(BaseModel):
     pcm_phase: str | None = Field(default=None, max_length=80)
 
 
-class ParticipantUpdateRequest(BaseModel):
+class ParticipantUpdateRequest(StrictRequestModel):
     project_id: UUID | None = None
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
     email: EmailStr | None = None
@@ -132,7 +133,7 @@ class RosterImportRow(BaseModel):
     pcm_phase: str | None = Field(default=None, alias="PCM Fază", max_length=80)
 
 
-class RosterImportRequest(BaseModel):
+class RosterImportRequest(StrictRequestModel):
     rows: list[RosterImportRow] = Field(min_length=1, max_length=1000)
     send_invites: bool = False
     project_id: UUID | None = None
@@ -206,7 +207,7 @@ class RosterImportResponse(BaseModel):
     emails_failed: int
 
 
-class ParticipantInviteBatchRequest(BaseModel):
+class ParticipantInviteBatchRequest(StrictRequestModel):
     participant_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=1000)
     project_id: UUID | None = None
     mode: Literal["email", "secure_links"] = "email"

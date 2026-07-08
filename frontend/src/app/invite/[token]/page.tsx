@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import NextLink from "next/link";
+import { apiFetch } from "@/api/http";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { TaskBundle } from "@/components/tasks/task-bundle";
 import { resolveInviteBundle, type InviteBundle } from "@/api/invites";
@@ -84,7 +85,7 @@ export default function InvitePage({ params }: InvitePageProps) {
     setConsentError(null);
     setConsentSubmitting(true);
     try {
-      const response = await fetch("/api/auth/consent", {
+      const response = await apiFetch("/api/auth/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

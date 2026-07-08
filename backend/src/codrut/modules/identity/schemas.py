@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from codrut.api.schemas import StrictRequestModel
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.password_policy import (
     PASSWORD_MAX_LENGTH,
@@ -12,7 +13,7 @@ from codrut.modules.identity.password_policy import (
 )
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(StrictRequestModel):
     email: EmailStr
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
     token: str
@@ -25,7 +26,7 @@ class RegisterRequest(BaseModel):
         return validate_new_password(value)
 
 
-class ConsentRequest(BaseModel):
+class ConsentRequest(StrictRequestModel):
     terms_accepted: bool = False
     terms_version: str = Field(default="privacy-2026-06-12", max_length=80)
 
@@ -57,16 +58,16 @@ class InviteVerifyResponse(BaseModel):
     tasks: list[InviteTask]
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(StrictRequestModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
 
 
-class PasswordResetRequest(BaseModel):
+class PasswordResetRequest(StrictRequestModel):
     email: EmailStr
 
 
-class PasswordResetConfirmRequest(BaseModel):
+class PasswordResetConfirmRequest(StrictRequestModel):
     token: str = Field(min_length=32, max_length=512)
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
@@ -76,7 +77,7 @@ class PasswordResetConfirmRequest(BaseModel):
         return validate_new_password(value)
 
 
-class PasswordChangeRequest(BaseModel):
+class PasswordChangeRequest(StrictRequestModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
@@ -88,6 +89,10 @@ class PasswordChangeRequest(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     ok: bool = True
+
+
+class CsrfTokenResponse(BaseModel):
+    csrf_token: str
 
 
 class SessionPrincipal(BaseModel):

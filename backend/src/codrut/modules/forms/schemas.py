@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from codrut.api.schemas import StrictRequestModel
 from codrut.modules.forms.models import QuestionnaireResponseStatus
 
 QuestionnaireSlug = Annotated[
@@ -27,7 +28,7 @@ class QuestionnaireDefinitionResponse(BaseModel):
     definition_schema: dict[str, Any] = Field(alias="schema")
 
 
-class QuestionnaireDefinitionCreateRequest(BaseModel):
+class QuestionnaireDefinitionCreateRequest(StrictRequestModel):
     key: QuestionnaireSlug
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
@@ -35,14 +36,14 @@ class QuestionnaireDefinitionCreateRequest(BaseModel):
     active: bool = True
 
 
-class QuestionnaireDefinitionUpdateRequest(BaseModel):
+class QuestionnaireDefinitionUpdateRequest(StrictRequestModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
     definition_schema: dict[str, Any] | None = Field(default=None, alias="schema")
     active: bool | None = None
 
 
-class QuestionnaireResponseSaveRequest(BaseModel):
+class QuestionnaireResponseSaveRequest(StrictRequestModel):
     answers: dict[str, Any] = Field(default_factory=dict)
 
 

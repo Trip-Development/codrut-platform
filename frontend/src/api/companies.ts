@@ -1,43 +1,57 @@
+import { apiFetch } from "./http";
 import { formatPcmLabel, getPcmColor } from "./pcm";
 import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
 
 type ApiErrorPayload = {
   error?: {
     message?: unknown;
+    details?: unknown;
   };
   detail?: unknown;
 };
 
+function formatApiErrorDetails(details: unknown): string | null {
+  if (!Array.isArray(details)) {
+    return null;
+  }
+
+  const messages = details
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const issue = item as { loc?: unknown; message?: unknown; msg?: unknown };
+      const issueMessage = issue.message ?? issue.msg;
+      if (typeof issueMessage !== "string" || !issueMessage.trim()) return null;
+
+      const path = Array.isArray(issue.loc)
+        ? issue.loc
+            .filter((part) => part !== "body")
+            .map(String)
+            .join(".")
+        : "";
+      return path ? `${path}: ${issueMessage}` : issueMessage;
+    })
+    .filter((message): message is string => Boolean(message));
+
+  if (messages.length > 0) {
+    const visibleMessages = messages.slice(0, 3).join("; ");
+    return messages.length > 3 ? `${visibleMessages}; încă ${messages.length - 3} erori.` : visibleMessages;
+  }
+
+  return null;
+}
+
 function formatApiError(payload: ApiErrorPayload | null, fallbackMessage: string): string {
+  const detailsMessage = formatApiErrorDetails(payload?.error?.details ?? payload?.detail);
+  if (detailsMessage) {
+    return detailsMessage;
+  }
+
   if (typeof payload?.error?.message === "string" && payload.error.message.trim()) {
     return payload.error.message;
   }
 
   if (typeof payload?.detail === "string" && payload.detail.trim()) {
     return payload.detail;
-  }
-
-  if (Array.isArray(payload?.detail)) {
-    const messages = payload.detail
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const issue = item as { loc?: unknown; msg?: unknown };
-        if (typeof issue.msg !== "string" || !issue.msg.trim()) return null;
-
-        const path = Array.isArray(issue.loc)
-          ? issue.loc
-              .filter((part) => part !== "body")
-              .map(String)
-              .join(".")
-          : "";
-        return path ? `${path}: ${issue.msg}` : issue.msg;
-      })
-      .filter((message): message is string => Boolean(message));
-
-    if (messages.length > 0) {
-      const visibleMessages = messages.slice(0, 3).join("; ");
-      return messages.length > 3 ? `${visibleMessages}; încă ${messages.length - 3} erori.` : visibleMessages;
-    }
   }
 
   return fallbackMessage;
@@ -937,7 +951,7 @@ export async function getCompanyParticipants(
   options: ApiRequestOptions = {},
 ): Promise<CompanyParticipant[]> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/participants`,
       { cache: "no-store", credentials: "include", ...options },
     );
@@ -962,7 +976,7 @@ export async function getProjectParticipants(
   options: ApiRequestOptions = {},
 ): Promise<CompanyParticipant[]> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/participants`,
       { cache: "no-store", credentials: "include", ...options },
     );
@@ -987,7 +1001,7 @@ export async function getCompanyAssignments(
   scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignment[]> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/assignments${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
@@ -1012,7 +1026,7 @@ export async function getCompanyReportAggregate(
   scope: ProjectScopeOptions = {},
 ): Promise<CompanyReportAggregate> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
@@ -1035,7 +1049,7 @@ export async function createCompanyAssignment(
   companyId: string,
   payload: CreateCompanyAssignmentPayload,
 ): Promise<CompanyAssignment> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/assignments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1063,7 +1077,7 @@ export async function getCompanyDefaultAssignmentPlan(
   options: ApiRequestOptions = {},
   scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignmentPlan> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery(scope)}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery(scope)}`, {
     cache: "no-store",
     credentials: "include",
     ...options,
@@ -1082,7 +1096,7 @@ export async function saveCompanyDefaultAssignmentPlan(
   assignments: CompanyAssignmentPlanItem[],
   projectId?: string | null,
 ): Promise<CompanyAssignmentPlanSaveResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery({ projectId })}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery({ projectId })}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1116,7 +1130,7 @@ export async function getCompanyTeams(
   options: ApiRequestOptions = {},
 ): Promise<CompanyTeam[]> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/teams`,
       { cache: "no-store", credentials: "include", ...options },
     );
@@ -1140,7 +1154,7 @@ export async function getCompanyProjects(
   options: ApiRequestOptions = {},
 ): Promise<CompanyProject[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -1164,7 +1178,7 @@ export async function getAllCompanyProjects(
   options: ApiRequestOptions = {},
 ): Promise<CompanyProject[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/companies/projects`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/companies/projects`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -1189,7 +1203,7 @@ export async function getCompanyProjectById(
   options: ApiRequestOptions = {},
 ): Promise<CompanyProject | null> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/companies/projects/${projectId}`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/companies/projects/${projectId}`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -1213,7 +1227,7 @@ export async function createCompanyProject(
   companyId: string,
   payload: CompanyProjectPayload & { name: string },
 ): Promise<CompanyProject> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1231,7 +1245,7 @@ export async function updateCompanyProject(
   projectId: string,
   payload: CompanyProjectPayload,
 ): Promise<CompanyProject> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1245,7 +1259,7 @@ export async function updateCompanyProject(
 }
 
 export async function deleteCompanyProject(companyId: string, projectId: string): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -1264,7 +1278,7 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
     return fallbackCompanyList();
   }
 
-  const summaryResponse = await fetch(`${getApiBaseUrl()}/companies/summary`, {
+  const summaryResponse = await apiFetch(`${getApiBaseUrl()}/companies/summary`, {
     cache: "no-store",
     credentials: "include",
     ...options,
@@ -1286,7 +1300,7 @@ export async function getCompanyList(options: ApiRequestOptions = {}): Promise<C
 
   let serverCompanies: Array<{ id: string; name: string }> = [];
   try {
-    const companiesResponse = await fetch(`${getApiBaseUrl()}/companies`, {
+    const companiesResponse = await apiFetch(`${getApiBaseUrl()}/companies`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -1368,7 +1382,7 @@ function companySummaryToListItem(summary: CompanySummaryResponse): CompanyListI
 }
 
 export async function createCompany(name: string): Promise<{ id: string; name: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/companies`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1385,7 +1399,7 @@ export async function createCompany(name: string): Promise<{ id: string; name: s
 }
 
 export async function deleteCompany(companyId: string): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -1409,7 +1423,7 @@ export async function importCompanyRoster(
   }>,
   options: { sendInvites?: boolean; projectId?: string | null } = {},
 ): Promise<RosterImportResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/roster`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/participants/roster`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1433,7 +1447,7 @@ export async function updateCompanyParticipant(
   participantId: string,
   payload: UpdateCompanyParticipantPayload,
 ): Promise<CompanyParticipant> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1466,7 +1480,7 @@ export async function sendParticipantInvitations(
     forceRotate?: boolean;
   },
 ): Promise<ParticipantInviteBatchResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/participants/invitations`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/participants/invitations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1492,7 +1506,7 @@ export async function resendParticipantInvitation(
   participantId: string,
   projectId?: string | null,
 ): Promise<RosterInviteResult | null> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite${projectQuery({ projectId })}`,
     {
       method: "POST",
@@ -1515,7 +1529,7 @@ export async function getCompanyInvitationStatuses(
   scope: ProjectScopeOptions = {},
 ): Promise<ParticipantInvitationStatus[]> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status${projectQuery(scope)}`,
       { cache: "no-store", credentials: "include", ...options },
     );
@@ -1538,7 +1552,7 @@ export async function createCompanyTeam(
   companyId: string,
   payload: { name: string; type: CompanyTeam["type"] },
 ): Promise<CompanyTeam> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/teams`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/teams`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1558,7 +1572,7 @@ export async function getCompanyTeamMemberships(
   teamId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyTeamMembership[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${getApiBaseUrl()}/companies/${companyId}/teams/${teamId}/memberships`,
     { cache: "no-store", credentials: "include", ...options },
   );
@@ -1573,7 +1587,7 @@ export async function addCompanyTeamMembership(
   teamId: string,
   payload: { participantProfileId: string; role: CompanyTeamMembership["role"] },
 ): Promise<CompanyTeamMembership> {
-  const response = await fetch(`${getApiBaseUrl()}/companies/${companyId}/teams/${teamId}/memberships`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/teams/${teamId}/memberships`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1597,7 +1611,7 @@ export async function getCompanyDetail(
 ): Promise<CompanyDetail | null> {
   let serverCompanies: Array<{ id: string; name: string }> = [];
   try {
-    const response = await fetch(`${getApiBaseUrl()}/companies`, {
+    const response = await apiFetch(`${getApiBaseUrl()}/companies`, {
       cache: "no-store",
       credentials: "include",
       ...options,

@@ -127,6 +127,7 @@ async def list_email_templates(
     _require_trainer(principal)
     templates = await CommunicationsService(session).list_templates(
         active_only=not include_retired,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return templates
@@ -143,6 +144,7 @@ async def get_email_template(
     template = await CommunicationsService(session).get_template(
         key,
         version=version,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return template
@@ -156,7 +158,8 @@ async def create_email_template(
 ) -> EmailTemplateResponse:
     _require_trainer(principal)
     template = await CommunicationsService(session).create_template(
-        payload, owner_id=principal.user_id
+        payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return template
@@ -175,6 +178,7 @@ async def update_email_template(
         key,
         payload,
         version=version,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return template
@@ -191,6 +195,7 @@ async def activate_email_template(
     template = await CommunicationsService(session).activate_template(
         key,
         version,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return template
@@ -207,6 +212,7 @@ async def retire_email_template(
     template = await CommunicationsService(session).retire_template(
         key,
         version=version,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return template
@@ -218,7 +224,7 @@ async def get_email_ops_summary(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> EmailOpsSummaryResponse:
     _require_trainer(principal)
-    summary = await CommunicationsService(session).get_email_ops_summary()
+    summary = await CommunicationsService(session).get_email_ops_summary(owner_id=principal.user_id)
     await session.commit()
     return summary
 
@@ -232,6 +238,7 @@ async def bulk_create_campaign_recipients(
     _require_trainer(principal)
     result = await CommunicationsService(session).bulk_create_campaign_recipients_with_result(
         payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return {
@@ -253,6 +260,7 @@ async def update_campaign_recipient(
     recipient = await CommunicationsService(session).update_campaign_recipient(
         recipient_id,
         payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return {
@@ -275,6 +283,7 @@ async def delete_campaign_recipient(
     _require_trainer(principal)
     await CommunicationsService(session).delete_campaign_recipient(
         recipient_id,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -294,6 +303,7 @@ async def record_campaign_recipient_event(
     event = await CommunicationsService(session).record_campaign_recipient_event(
         recipient_id,
         payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return event
@@ -500,6 +510,7 @@ async def create_campaign(
     _require_trainer(principal)
     campaign = await CommunicationsService(session).create_campaign(
         payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return {"status": "success", "campaign_id": str(campaign.id)}
@@ -517,6 +528,7 @@ async def list_campaign_recipient_memberships(
     _require_trainer(principal)
     recipients = await CommunicationsService(session).list_campaign_recipient_memberships(
         campaign_id,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return recipients
@@ -536,6 +548,7 @@ async def replace_campaign_recipient_memberships(
     recipients = await CommunicationsService(session).replace_campaign_recipient_memberships(
         campaign_id,
         payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return recipients
@@ -555,6 +568,7 @@ async def send_campaign(
         payload,
         provider=build_email_provider(settings),
         settings=settings,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return result
@@ -571,6 +585,7 @@ async def update_campaign(
     campaign = await CommunicationsService(session).update_campaign(
         campaign_id,
         payload,
+        owner_id=principal.user_id,
     )
     await session.commit()
     return {
@@ -594,7 +609,7 @@ async def delete_campaign(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> Response:
     _require_trainer(principal)
-    await CommunicationsService(session).delete_campaign(campaign_id)
+    await CommunicationsService(session).delete_campaign(campaign_id, owner_id=principal.user_id)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -605,7 +620,7 @@ async def list_campaigns(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> list[dict]:
     _require_trainer(principal)
-    campaigns = await CommunicationsService(session).list_campaigns()
+    campaigns = await CommunicationsService(session).list_campaigns(owner_id=principal.user_id)
     await session.commit()
     return [
         {

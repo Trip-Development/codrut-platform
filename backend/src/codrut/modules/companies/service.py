@@ -12,7 +12,6 @@ from codrut.core.errors import DomainError
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
-    is_external_matrix_manager_label,
     manager_reference_key,
 )
 from codrut.modules.companies.models import (
@@ -48,7 +47,6 @@ from codrut.modules.companies.schemas import (
     RosterImportResponse,
     RosterImportRow,
 )
-from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.repository import IdentityRepository
 
 logger = logging.getLogger(__name__)
@@ -562,12 +560,21 @@ class CompanyService:
                     code="participant_not_found",
                 )
 
+        had_invite_candidates = bool(participants)
         if payload.mode == "email" and payload.target_mode == "unsent":
             participants = await self._filter_participants_without_accepted_email(
                 company.id,
                 participants,
                 payload.project_id,
             )
+            if not participants and had_invite_candidates:
+                return ParticipantInviteBatchResponse(
+                    results=[],
+                    total=0,
+                    emails_sent=0,
+                    emails_failed=0,
+                    links_generated=0,
+                )
 
         if not participants:
             raise DomainError("No participants found for invite delivery.", code="no_participants")
@@ -1048,14 +1055,8 @@ class CompanyService:
         await self._require_company_manager(user_id, company_id)
         participants = await self.repository.list_participants(company_id)
         participants_by_name: dict[str, ParticipantProfile] = {}
-        external_manager_name_keys: set[str] = set()
         duplicate_name_keys: set[str] = set()
         for participant in participants:
-            if is_external_matrix_manager_label(participant.full_name):
-                external_key = manager_reference_key(participant.full_name)
-                if external_key:
-                    external_manager_name_keys.add(external_key)
-                continue
             name_key = manager_reference_key(participant.full_name)
             if not name_key:
                 continue
@@ -1080,8 +1081,6 @@ class CompanyService:
                         "Manager name is ambiguous in this company roster.",
                     )
                 )
-                continue
-            if manager_key in external_manager_name_keys:
                 continue
             manager = participants_by_name.get(manager_key)
             if manager is None:
@@ -1139,9 +1138,6 @@ class CompanyService:
             raise DomainError("Project not found in this company.", code="project_not_found")
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
-        user = await self.identity_repository.get_user_by_id(user_id)
-        if user is not None and user.role == UserRole.trainer:
-            return
         membership = await self.repository.get_membership(company_id, user_id)
         if membership is not None and membership.role in {
             CompanyMembershipRole.owner,
@@ -1241,8 +1237,6 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
 
 
 def _infer_roster_role_group(row: RosterImportRow, manager_names: set[str]) -> str:
-    if is_external_matrix_manager_label(row.full_name):
-        return "member"
     if row.reports_to_name is None:
         return "leadership"
     if manager_reference_key(row.full_name) in manager_names:

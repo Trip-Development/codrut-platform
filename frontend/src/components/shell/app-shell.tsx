@@ -8,6 +8,7 @@ import { ThemeToggle } from "../theme/theme-toggle";
 import type { ShellNavItem } from "./nav";
 import { SessionBanner } from "./session-banner";
 import type { SessionState } from "@/api/auth";
+import { apiFetch, ensureCsrfToken } from "@/api/http";
 import { getApiBaseUrl } from "@/api/runtime";
 
 type AppShellProps = {
@@ -171,18 +172,26 @@ export function AppShell({
     setOptimisticHref(activeHref);
   }, [activeHref]);
 
-
+  useEffect(() => {
+    void ensureCsrfToken();
+  }, []);
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
     try {
-      await fetch(`${getApiBaseUrl()}/auth/logout`, {
+      await ensureCsrfToken();
+      const response = await apiFetch(`${getApiBaseUrl()}/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
-    } finally {
+      if (!response.ok && response.status !== 401) {
+        setIsLoggingOut(false);
+        return;
+      }
       window.location.href = "/";
+    } catch {
+      setIsLoggingOut(false);
     }
   };
 
