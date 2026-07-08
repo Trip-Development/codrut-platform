@@ -157,6 +157,61 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.queryByText(/Icare Inspiring Developing People/i)).toBeNull();
     expect(screen.queryByText("icare_inspiring_developing_people")).toBeNull();
   });
+
+  it("shows anonymous received iCARE averages after the privacy threshold", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase="thinker"
+        pcmPhase="persister"
+        results={[]}
+        receivedFeedback={{
+          completedCount: 2,
+          minimumCompleted: 2,
+          visible: true,
+          overallAverage: 4,
+          dimensions: [
+            { id: "icare_01_dezvolta_oamenii", averageScore: 4.5, completedCount: 2 },
+            { id: "icare_02_conduce_prin_puterea_exemplului", averageScore: 3.5, completedCount: 2 },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Feedback 360 primit anonim")).toBeDefined();
+    expect(screen.getByText("iCARE completat de ceilalți")).toBeDefined();
+    expect(screen.getByText("Completate")).toBeDefined();
+    expect(screen.getByText("2")).toBeDefined();
+    expect(screen.getByText("Dezvoltă oamenii")).toBeDefined();
+    expect(screen.getByText("Conduce prin exemplu")).toBeDefined();
+    expect(screen.getByText("4.5")).toBeDefined();
+    expect(screen.getByText("3.5")).toBeDefined();
+    expect(screen.queryByText(/Reviewer One/i)).toBeNull();
+    expect(screen.queryByText(/reviewer-one@example\.com/i)).toBeNull();
+    expect(screen.queryByText("Nu există scoruri calculate încă")).toBeNull();
+  });
+
+  it("hides received iCARE averages below the privacy threshold", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase="thinker"
+        pcmPhase="persister"
+        results={[]}
+        receivedFeedback={{
+          completedCount: 1,
+          minimumCompleted: 2,
+          visible: false,
+          overallAverage: null,
+          dimensions: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Feedback 360 primit anonim")).toBeDefined();
+    expect(screen.getByText("1")).toBeDefined();
+    expect(screen.getByText(/Media apare după minimum 2 feedbackuri completate/)).toBeDefined();
+    expect(screen.queryByText("Dezvoltă oamenii")).toBeNull();
+    expect(screen.queryByText("4.5")).toBeNull();
+  });
 });
 
 describe("ParticipantTaskList", () => {

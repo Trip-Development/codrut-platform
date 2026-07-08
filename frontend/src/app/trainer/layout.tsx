@@ -1,4 +1,4 @@
-import { isAuthSessionUnavailableError } from "@/api/auth";
+import { dashboardHrefForRole, isAuthRoleMismatchError, isAuthSessionUnavailableError } from "@/api/auth";
 import { getTrainerSession } from "@/api/auth-server";
 import { SessionUnavailableNotice } from "@/components/auth/session-unavailable-notice";
 import { headers } from "next/headers";
@@ -20,6 +20,9 @@ export default async function TrainerLayout({
       redirect("/login");
     }
   } catch (error) {
+    if (isAuthRoleMismatchError(error)) {
+      redirect(dashboardHrefForRole(error.context.actualRole));
+    }
     if (isAuthSessionUnavailableError(error)) {
       return <SessionUnavailableNotice audience="trainer" />;
     }

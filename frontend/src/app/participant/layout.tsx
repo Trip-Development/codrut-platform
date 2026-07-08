@@ -1,4 +1,4 @@
-import { isAuthSessionUnavailableError } from "@/api/auth";
+import { dashboardHrefForRole, isAuthRoleMismatchError, isAuthSessionUnavailableError } from "@/api/auth";
 import { getParticipantSession } from "@/api/auth-server";
 import { SessionUnavailableNotice } from "@/components/auth/session-unavailable-notice";
 import { redirect } from "next/navigation";
@@ -14,6 +14,9 @@ export default async function ParticipantLayout({
       redirect("/login");
     }
   } catch (error) {
+    if (isAuthRoleMismatchError(error)) {
+      redirect(dashboardHrefForRole(error.context.actualRole));
+    }
     if (isAuthSessionUnavailableError(error)) {
       return <SessionUnavailableNotice audience="participant" />;
     }

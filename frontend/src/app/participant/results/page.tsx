@@ -29,6 +29,7 @@ export default async function ParticipantResultsPage() {
     >
       <ParticipantResultsPanel
         results={summary.results}
+        receivedFeedback={summary.receivedFeedback}
         pcmBase={summary.pcmBase}
         pcmPhase={summary.pcmPhase}
       />
