@@ -960,7 +960,13 @@ describe("frontend API adapter stubs", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
-      json: async () => ({ detail: "Sesiunea activă nu este un cont de participant." }),
+      json: async () => ({
+        error: {
+          code: "http_403",
+          message: "Sesiunea activă nu este un cont de participant.",
+          request_id: "req-participant",
+        },
+      }),
     } as Response);
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1505,13 +1511,18 @@ describe("frontend API adapter stubs", () => {
       ok: false,
       status: 422,
       json: async () => ({
-        detail: [
-          {
-            loc: ["body", "rows", 0, "email"],
-            msg: "value is not a valid email address: The part after the @-sign is a special-use or reserved name",
-            type: "value_error",
-          },
-        ],
+        error: {
+          code: "validation_error",
+          message: "Request validation failed.",
+          request_id: "req-validation",
+          details: [
+            {
+              loc: ["body", "rows", 0, "email"],
+              message: "value is not a valid email address: The part after the @-sign is a special-use or reserved name",
+              type: "value_error",
+            },
+          ],
+        },
       }),
     } as Response);
 

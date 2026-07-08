@@ -1,7 +1,7 @@
-import { getApiBaseUrl } from "./runtime";
+import { generatedApiFetch, type ApiHealth } from "./generated/client";
 
-export async function getHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/health/live`, {
+export async function getHealth(): Promise<ApiHealth> {
+  const response = await generatedApiFetch("/api/health/live", {
     cache: "no-store",
   });
 
@@ -9,5 +9,5 @@ export async function getHealth(): Promise<{ status: string }> {
     return { status: "unavailable" };
   }
 
-  return response.json();
+  return response.json() as Promise<ApiHealth>;
 }

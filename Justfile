@@ -72,6 +72,12 @@ generate-client:
 generate-client-host:
   cd frontend && pnpm generate-client
 
+export-openapi:
+  {{compose}} run --rm --workdir {{backend_workdir}} backend uv run python -m codrut.tools.export_openapi --output /workspace/docs/api/openapi.json
+
+openapi-snapshot-check:
+  {{compose}} run --rm --workdir {{backend_workdir}} backend uv run python -m codrut.tools.export_openapi --check --output /workspace/docs/api/openapi.json
+
 openapi-check:
   {{compose}} run --rm --workdir {{frontend_workdir}} frontend sh -lc 'pnpm exec openapi-typescript {{container_openapi_url}} -o /tmp/codrut-openapi-schema.d.ts'
 
