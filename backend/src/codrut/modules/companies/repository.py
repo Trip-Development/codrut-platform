@@ -98,7 +98,6 @@ class CompanyRepository:
                 CompanyMembership.company_id == Company.id,
             ).where(CompanyMembership.user_id == user_id)
         result = await self.session.execute(stmt)
-        result = await self.session.execute(stmt)
         return [
             (
                 company,

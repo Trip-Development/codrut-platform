@@ -438,7 +438,7 @@ async def test_list_company_summaries_returns_operational_counts() -> None:
     assert summaries[0].stage == "completion"
 
 
-async def test_get_project_by_id_returns_any_project_with_company_name_for_trainers() -> None:
+async def test_get_project_by_id_can_return_unscoped_project_for_internal_callers() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
@@ -560,7 +560,7 @@ async def test_delete_company_removes_company_and_related_local_records() -> Non
     assert repository.projects == []
 
 
-async def test_trainer_without_company_membership_can_delete_company_for_pilot() -> None:
+async def test_trainer_without_company_membership_cannot_delete_company() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -574,9 +574,11 @@ async def test_trainer_without_company_membership_can_delete_company_for_pilot()
     identity_repository.users_by_id[trainer.id] = trainer
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
 
-    await service.delete_company(trainer.id, company.id)
+    with pytest.raises(DomainError) as exc_info:
+        await service.delete_company(trainer.id, company.id)
 
-    assert await repository.get_company(company.id) is None
+    assert exc_info.value.code == "company_access_denied"
+    assert await repository.get_company(company.id) == company
 
 
 async def test_create_project_is_company_scoped_and_cleans_fields() -> None:
@@ -686,7 +688,7 @@ async def test_delete_project_removes_only_that_project() -> None:
     assert await service.list_projects(owner_id, company.id) == [second]
 
 
-async def test_trainer_without_company_membership_can_manage_projects_for_pilot() -> None:
+async def test_trainer_without_company_membership_cannot_manage_projects() -> None:
     repository = FakeCompanyRepository()
     identity_repository = FakeIdentityRepository()
     service = make_service(repository, identity_repository)
@@ -700,13 +702,14 @@ async def test_trainer_without_company_membership_can_manage_projects_for_pilot(
     identity_repository.users_by_id[trainer.id] = trainer
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
 
-    project = await service.create_project(
-        trainer.id,
-        company.id,
-        CompanyProjectCreateRequest(name="Leadership"),
-    )
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_project(
+            trainer.id,
+            company.id,
+            CompanyProjectCreateRequest(name="Leadership"),
+        )
 
-    assert project.name == "Leadership"
+    assert exc_info.value.code == "company_access_denied"
 
 
 async def test_create_participant_is_company_scoped_and_cleans_fields() -> None:
@@ -759,7 +762,7 @@ async def test_create_participant_rejects_missing_company() -> None:
         )
 
 
-async def test_create_participant_allows_trainer_without_company_membership_for_pilot() -> None:
+async def test_create_participant_denies_trainer_without_company_membership() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
@@ -772,13 +775,14 @@ async def test_create_participant_allows_trainer_without_company_membership_for_
     )
     service.identity_repository.users_by_id[trainer.id] = trainer
 
-    participant = await service.create_participant(
-        trainer.id,
-        company.id,
-        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
-    )
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_participant(
+            trainer.id,
+            company.id,
+            ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+        )
 
-    assert participant.full_name == "Ana"
+    assert exc_info.value.code == "company_access_denied"
 
 
 async def test_create_participant_rejects_non_trainer_without_company_membership() -> None:
@@ -1527,6 +1531,15 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         assert email_result.total == 3
         assert email_result.emails_sent == 3
         assert email_result.emails_failed == 0
+        assert len(provider.sent_messages) == 3
+        retry_email_result = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(mode="email"),
+        )
+        assert retry_email_result.total == 0
+        assert retry_email_result.emails_sent == 0
+        assert retry_email_result.emails_failed == 0
         assert len(provider.sent_messages) == 3
         email_send_result = await session.execute(
             select(EmailSend.template_key).where(EmailSend.recipient_email.in_([

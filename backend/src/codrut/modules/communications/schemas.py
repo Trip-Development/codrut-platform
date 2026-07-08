@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from codrut.api.schemas import StrictRequestModel
 from codrut.contracts.emails import EmailDeliveryStatus, EmailProviderKey
 
 CampaignRecipientEventType = Literal[
@@ -19,7 +20,7 @@ CampaignRecipientEventType = Literal[
 CampaignSegmentValue = Literal["past_customer", "potential_customer"]
 
 
-class EmailTestSendRequest(BaseModel):
+class EmailTestSendRequest(StrictRequestModel):
     to: EmailStr
     subject: str = Field(default="Test Codruț email", min_length=1, max_length=180)
     html_body: str = Field(default="<p>Test email din Codruț.</p>", min_length=1)
@@ -48,7 +49,7 @@ class EmailTemplateResponse(BaseModel):
     owner_id: UUID | None = None
 
 
-class EmailTemplateCreateRequest(BaseModel):
+class EmailTemplateCreateRequest(StrictRequestModel):
     key: str = Field(min_length=1, max_length=120)
     subject: str = Field(min_length=1, max_length=255)
     html_body: str = Field(min_length=1)
@@ -58,7 +59,7 @@ class EmailTemplateCreateRequest(BaseModel):
     active: bool = True
 
 
-class EmailTemplateUpdateRequest(BaseModel):
+class EmailTemplateUpdateRequest(StrictRequestModel):
     subject: str | None = Field(default=None, min_length=1, max_length=255)
     html_body: str | None = Field(default=None, min_length=1)
     text_body: str | None = Field(default=None, min_length=1)
@@ -111,7 +112,7 @@ class CampaignRecipientMembershipRowResponse(CampaignRecipientRowResponse):
     membershipSource: str | None = None
 
 
-class CampaignRecipientMembershipUpdateRequest(BaseModel):
+class CampaignRecipientMembershipUpdateRequest(StrictRequestModel):
     recipient_ids: list[UUID] = Field(default_factory=list)
 
 
@@ -129,7 +130,7 @@ class EmailOpsSummaryResponse(BaseModel):
     campaign: CampaignOpsSummaryResponse
 
 
-class CampaignRecipientCreateRequest(BaseModel):
+class CampaignRecipientCreateRequest(StrictRequestModel):
     email: EmailStr | None = None
     contact_name: str | None = None
     organization_name: str | None = None
@@ -291,18 +292,17 @@ def _campaign_recipient_contact_name(row: dict[str, object]) -> str:
 
 
 def _normalize_campaign_recipient_import_row(row: dict[str, object]) -> dict[str, object] | None:
-    email = _read_import_value(row, ["email", "Email", "EMAIL"])
     is_spreadsheet_row = _is_spreadsheet_import_row(row)
-    if not email and not is_spreadsheet_row:
+    if not is_spreadsheet_row:
         return row
 
+    email = _read_import_value(row, ["email", "Email", "EMAIL"])
     marked_for_send = _is_marked_for_campaign_send(row)
     email_is_valid = bool(email) and _is_valid_import_email(email)
     status = "active" if marked_for_send and email_is_valid else "suppressed"
 
     segment_value = _read_import_value(row, ["segment", "Segment", "Tip Client"])
     return {
-        **row,
         "email": email if email_is_valid else None,
         "contact_name": _campaign_recipient_contact_name(row) or None,
         "organization_name": _read_import_value(row, ORGANIZATION_KEYS) or None,
@@ -312,7 +312,7 @@ def _normalize_campaign_recipient_import_row(row: dict[str, object]) -> dict[str
     }
 
 
-class CampaignRecipientBulkCreateRequest(BaseModel):
+class CampaignRecipientBulkCreateRequest(StrictRequestModel):
     recipients: list[CampaignRecipientCreateRequest]
 
     @model_validator(mode="before")
@@ -335,7 +335,7 @@ class CampaignRecipientBulkCreateRequest(BaseModel):
         return {**value, "recipients": normalized_recipients}
 
 
-class CampaignRecipientUpdateRequest(BaseModel):
+class CampaignRecipientUpdateRequest(StrictRequestModel):
     email: EmailStr | None = None
     contact_name: str | None = Field(default=None, max_length=255)
     organization_name: str | None = Field(default=None, max_length=255)
@@ -351,7 +351,7 @@ class CampaignRecipientUpdateRequest(BaseModel):
         return value
 
 
-class CampaignRecipientEventCreateRequest(BaseModel):
+class CampaignRecipientEventCreateRequest(StrictRequestModel):
     event_type: CampaignRecipientEventType
     variant_key: str | None = Field(default=None, max_length=120)
     occurred_at: datetime | None = None
@@ -365,7 +365,7 @@ class CampaignRecipientEventResponse(BaseModel):
     occurred_at: datetime
 
 
-class CampaignSendRequest(BaseModel):
+class CampaignSendRequest(StrictRequestModel):
     recipient_ids: list[UUID] | None = None
     mode: Literal["new", "selected", "all"] = "new"
     dry_run: bool = False
@@ -396,7 +396,7 @@ class CampaignAssetUploadResponse(BaseModel):
     size_bytes: int
 
 
-class CampaignCreateRequest(BaseModel):
+class CampaignCreateRequest(StrictRequestModel):
     name: str = Field(min_length=1, max_length=255)
     segment: CampaignSegmentValue
     subject: str = Field(min_length=1, max_length=255)
@@ -435,7 +435,7 @@ class CampaignCreateRequest(BaseModel):
         return self
 
 
-class CampaignUpdateRequest(BaseModel):
+class CampaignUpdateRequest(StrictRequestModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     segment: str | None = None
     status: str | None = None

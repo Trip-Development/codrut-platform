@@ -25,11 +25,12 @@ from codrut.modules.communications.models import (
 from codrut.modules.communications.service import CommunicationsService
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
+from codrut.modules.identity.session_cookie import SESSION_COOKIE_NAME
 
 
-def _principal(role: UserRole) -> SessionPrincipal:
+def _principal(role: UserRole, user_id=None) -> SessionPrincipal:
     return SessionPrincipal(
-        user_id=uuid4(),
+        user_id=user_id or uuid4(),
         email=f"{role.value}@example.com",
         role=role,
         terms_accepted_at=datetime.now(UTC),
@@ -38,11 +39,11 @@ def _principal(role: UserRole) -> SessionPrincipal:
     )
 
 
-def _client_as(role: UserRole, settings: Settings | None = None) -> TestClient:
+def _client_as(role: UserRole, settings: Settings | None = None, user_id=None) -> TestClient:
     app = create_app()
 
     async def principal_override() -> SessionPrincipal:
-        return _principal(role)
+        return _principal(role, user_id=user_id)
 
     app.dependency_overrides[current_principal] = principal_override
     if settings is not None:
@@ -163,9 +164,11 @@ def test_campaign_delete_requires_trainer_role() -> None:
 def test_trainer_can_list_campaign_membership(monkeypatch) -> None:
     campaign_id = uuid4()
     recipient_id = uuid4()
+    trainer_id = uuid4()
 
-    async def list_memberships_override(self, campaign_id_arg):
+    async def list_memberships_override(self, campaign_id_arg, *, owner_id=None):
         assert campaign_id_arg == campaign_id
+        assert owner_id == trainer_id
         return [
             {
                 "id": str(recipient_id),
@@ -189,7 +192,7 @@ def test_trainer_can_list_campaign_membership(monkeypatch) -> None:
         "list_campaign_recipient_memberships",
         list_memberships_override,
     )
-    client = _client_as(UserRole.trainer)
+    client = _client_as(UserRole.trainer, user_id=trainer_id)
 
     response = client.get(f"/api/communications/campaigns/{campaign_id}/recipients")
 
@@ -200,10 +203,12 @@ def test_trainer_can_list_campaign_membership(monkeypatch) -> None:
 def test_trainer_can_replace_campaign_membership(monkeypatch) -> None:
     campaign_id = uuid4()
     recipient_id = uuid4()
+    trainer_id = uuid4()
 
-    async def replace_memberships_override(self, campaign_id_arg, payload):
+    async def replace_memberships_override(self, campaign_id_arg, payload, *, owner_id=None):
         assert campaign_id_arg == campaign_id
         assert payload.recipient_ids == [recipient_id]
+        assert owner_id == trainer_id
         return [
             {
                 "id": str(recipient_id),
@@ -227,7 +232,7 @@ def test_trainer_can_replace_campaign_membership(monkeypatch) -> None:
         "replace_campaign_recipient_memberships",
         replace_memberships_override,
     )
-    client = _client_as(UserRole.trainer)
+    client = _client_as(UserRole.trainer, user_id=trainer_id)
 
     response = client.put(
         f"/api/communications/campaigns/{campaign_id}/recipients",
@@ -240,8 +245,10 @@ def test_trainer_can_replace_campaign_membership(monkeypatch) -> None:
 
 def test_trainer_can_list_campaigns(monkeypatch) -> None:
     campaign_id = uuid4()
+    trainer_id = uuid4()
 
-    async def list_campaigns_override(self) -> list[Campaign]:
+    async def list_campaigns_override(self, *, owner_id=None) -> list[Campaign]:
+        assert owner_id == trainer_id
         return [
             Campaign(
                 id=campaign_id,
@@ -255,7 +262,7 @@ def test_trainer_can_list_campaigns(monkeypatch) -> None:
         ]
 
     monkeypatch.setattr(CommunicationsService, "list_campaigns", list_campaigns_override)
-    client = _client_as(UserRole.trainer)
+    client = _client_as(UserRole.trainer, user_id=trainer_id)
 
     response = client.get("/api/communications/campaigns")
 
@@ -336,6 +343,27 @@ def test_campaign_event_recording_rejects_unknown_event_type() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_campaign_event_recording_requires_csrf_for_session_cookie(monkeypatch) -> None:
+    async def record_event_override(self, recipient_id, payload, *, owner_id=None):
+        raise AssertionError("CSRF middleware should reject before route execution")
+
+    monkeypatch.setattr(
+        CommunicationsService,
+        "record_campaign_recipient_event",
+        record_event_override,
+    )
+    client = _client_as(UserRole.trainer)
+    client.cookies.set(SESSION_COOKIE_NAME, "test-session")
+
+    response = client.post(
+        f"/api/communications/campaigns/recipients/{uuid4()}/events",
+        json={"event_type": "replied"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "csrf_failed"
 
 
 def test_campaign_calendly_tracking_redirect_is_public_and_records_event() -> None:

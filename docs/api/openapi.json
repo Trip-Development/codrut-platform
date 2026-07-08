@@ -72,6 +72,7 @@
         "type": "string"
       },
       "AssignmentCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "project_id": {
             "anyOf": [
@@ -328,6 +329,7 @@
         "type": "object"
       },
       "AssignmentPlanSaveItem": {
+        "additionalProperties": false,
         "properties": {
           "questionnaire_key": {
             "maxLength": 120,
@@ -423,6 +425,7 @@
         "type": "object"
       },
       "AssignmentPlanSaveRequest": {
+        "additionalProperties": false,
         "properties": {
           "assignments": {
             "items": {
@@ -708,6 +711,7 @@
         "type": "string"
       },
       "AssignmentStatusUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "status": {
             "$ref": "#/components/schemas/AssignmentStatus"
@@ -804,6 +808,7 @@
         "type": "object"
       },
       "CampaignCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "html_body": {
             "minLength": 1,
@@ -917,6 +922,7 @@
         "type": "object"
       },
       "CampaignRecipientBulkCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "recipients": {
             "items": {
@@ -933,6 +939,7 @@
         "type": "object"
       },
       "CampaignRecipientCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "contact_name": {
             "anyOf": [
@@ -1006,6 +1013,7 @@
         "type": "object"
       },
       "CampaignRecipientEventCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "event_type": {
             "enum": [
@@ -1245,6 +1253,7 @@
         "type": "object"
       },
       "CampaignRecipientMembershipUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "recipient_ids": {
             "items": {
@@ -1394,6 +1403,7 @@
         "type": "object"
       },
       "CampaignRecipientUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "contact_name": {
             "anyOf": [
@@ -1516,6 +1526,7 @@
         "type": "object"
       },
       "CampaignSendRequest": {
+        "additionalProperties": false,
         "properties": {
           "dry_run": {
             "default": false,
@@ -1599,6 +1610,7 @@
         "type": "object"
       },
       "CampaignUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "html_body": {
             "anyOf": [
@@ -1713,6 +1725,7 @@
         "type": "object"
       },
       "CompanyAccessCodeCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "label": {
             "anyOf": [
@@ -1731,6 +1744,7 @@
         "type": "object"
       },
       "CompanyAccessCodeRegistrationRequest": {
+        "additionalProperties": false,
         "properties": {
           "access_code": {
             "maxLength": 64,
@@ -1796,6 +1810,7 @@
         "type": "object"
       },
       "CompanyCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "name": {
             "maxLength": 255,
@@ -1811,6 +1826,7 @@
         "type": "object"
       },
       "CompanyProjectCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "description": {
             "anyOf": [
@@ -2151,6 +2167,7 @@
         "type": "string"
       },
       "CompanyProjectUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "description": {
             "anyOf": [
@@ -2454,6 +2471,7 @@
         "type": "object"
       },
       "ConsentRequest": {
+        "additionalProperties": false,
         "properties": {
           "terms_accepted": {
             "default": false,
@@ -2561,6 +2579,7 @@
         "type": "string"
       },
       "EmailTemplateCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "active": {
             "default": true,
@@ -2694,6 +2713,7 @@
         "type": "object"
       },
       "EmailTemplateUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "active": {
             "anyOf": [
@@ -2774,6 +2794,7 @@
         "type": "object"
       },
       "EmailTestSendRequest": {
+        "additionalProperties": false,
         "properties": {
           "html_body": {
             "default": "<p>Test email din Codru\u021b.</p>",
@@ -2943,6 +2964,7 @@
         "type": "object"
       },
       "InvitationCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "assignment_ids": {
             "anyOf": [
@@ -3194,6 +3216,7 @@
         "type": "object"
       },
       "LoginRequest": {
+        "additionalProperties": false,
         "properties": {
           "email": {
             "format": "email",
@@ -3215,6 +3238,7 @@
         "type": "object"
       },
       "ParticipantCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "email": {
             "format": "email",
@@ -3416,6 +3440,7 @@
         "type": "object"
       },
       "ParticipantInviteBatchRequest": {
+        "additionalProperties": false,
         "properties": {
           "force_rotate": {
             "default": false,
@@ -3759,6 +3784,7 @@
         "type": "object"
       },
       "ParticipantUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "email": {
             "anyOf": [
@@ -4065,6 +4091,7 @@
         "type": "object"
       },
       "PasswordChangeRequest": {
+        "additionalProperties": false,
         "properties": {
           "current_password": {
             "maxLength": 128,
@@ -4087,6 +4114,7 @@
         "type": "object"
       },
       "PasswordResetConfirmRequest": {
+        "additionalProperties": false,
         "properties": {
           "password": {
             "maxLength": 128,
@@ -4109,6 +4137,7 @@
         "type": "object"
       },
       "PasswordResetRequest": {
+        "additionalProperties": false,
         "properties": {
           "email": {
             "format": "email",
@@ -4277,6 +4306,7 @@
         "type": "object"
       },
       "QuestionnaireDefinitionCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "active": {
             "default": true,
@@ -4362,6 +4392,7 @@
         "type": "object"
       },
       "QuestionnaireDefinitionUpdateRequest": {
+        "additionalProperties": false,
         "properties": {
           "active": {
             "anyOf": [
@@ -4456,6 +4487,7 @@
         "type": "object"
       },
       "QuestionnaireResponseSaveRequest": {
+        "additionalProperties": false,
         "properties": {
           "answers": {
             "additionalProperties": true,
@@ -4475,6 +4507,7 @@
         "type": "string"
       },
       "RegisterRequest": {
+        "additionalProperties": false,
         "properties": {
           "email": {
             "format": "email",
@@ -4870,6 +4903,7 @@
         "type": "object"
       },
       "RosterImportRequest": {
+        "additionalProperties": false,
         "properties": {
           "project_id": {
             "anyOf": [
@@ -5122,6 +5156,7 @@
         "type": "object"
       },
       "TeamCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "name": {
             "maxLength": 255,
@@ -5141,6 +5176,7 @@
         "type": "object"
       },
       "TeamMembershipCreateRequest": {
+        "additionalProperties": false,
         "properties": {
           "participant_profile_id": {
             "format": "uuid",

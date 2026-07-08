@@ -1,8 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from codrut.api.schemas import StrictRequestModel
 from codrut.modules.assignments.models import (
     AssignmentAccessMode,
     AssignmentStatus,
@@ -13,7 +14,7 @@ from codrut.modules.assignments.models import (
 )
 
 
-class TeamCreateRequest(BaseModel):
+class TeamCreateRequest(StrictRequestModel):
     name: str = Field(min_length=1, max_length=255)
     type: TeamType
 
@@ -27,7 +28,7 @@ class TeamResponse(BaseModel):
     type: TeamType
 
 
-class TeamMembershipCreateRequest(BaseModel):
+class TeamMembershipCreateRequest(StrictRequestModel):
     participant_profile_id: UUID
     role: TeamMembershipRole
 
@@ -41,7 +42,7 @@ class TeamMembershipResponse(BaseModel):
     role: TeamMembershipRole
 
 
-class AssignmentCreateRequest(BaseModel):
+class AssignmentCreateRequest(StrictRequestModel):
     project_id: UUID | None = None
     respondent_profile_id: UUID
     questionnaire_key: str = Field(min_length=1, max_length=120)
@@ -75,11 +76,11 @@ class AssignmentResponse(BaseModel):
     last_reminder_sent_at: datetime | None
 
 
-class AssignmentStatusUpdateRequest(BaseModel):
+class AssignmentStatusUpdateRequest(StrictRequestModel):
     status: AssignmentStatus
 
 
-class InvitationCreateRequest(BaseModel):
+class InvitationCreateRequest(StrictRequestModel):
     respondent_profile_id: UUID
     project_id: UUID | None = None
     assignment_ids: list[UUID] | None = None
@@ -135,7 +136,7 @@ class AssignmentPlanResponse(BaseModel):
     existing_count: int
 
 
-class AssignmentPlanSaveItem(BaseModel):
+class AssignmentPlanSaveItem(StrictRequestModel):
     respondent_profile_id: UUID
     questionnaire_key: str = Field(min_length=1, max_length=120)
     target_type: AssignmentTargetType
@@ -147,8 +148,25 @@ class AssignmentPlanSaveItem(BaseModel):
     target_team_leader_id: UUID | None = None
     visibility_policy: ResponseVisibilityPolicy = ResponseVisibilityPolicy.trainer_raw_review
 
+    @model_validator(mode="before")
+    @classmethod
+    def drop_planner_response_fields(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        response_only_fields = {
+            "key",
+            "scope_id",
+            "scope_name",
+            "scope_type",
+            "respondent_name",
+            "target_person_name",
+            "selected",
+            "existing_assignment_id",
+        }
+        return {key: item for key, item in value.items() if key not in response_only_fields}
 
-class AssignmentPlanSaveRequest(BaseModel):
+
+class AssignmentPlanSaveRequest(StrictRequestModel):
     project_id: UUID | None = None
     assignments: list[AssignmentPlanSaveItem] = Field(default_factory=list)
 

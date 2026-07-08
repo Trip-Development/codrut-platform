@@ -139,6 +139,31 @@ async def test_save_assignment_response_rejects_changes_after_submission() -> No
     assert exc_info.value.code == "response_locked"
 
 
+async def test_submit_assignment_response_is_idempotent_for_same_answers() -> None:
+    assignment = make_assignment()
+    service = make_service(FakeFormsRepository(assignment))
+    user_id = uuid.uuid4()
+    answers = complete_lencioni_answers()
+
+    first = await service.save_assignment_response(
+        user_id,
+        assignment.id,
+        QuestionnaireResponseSaveRequest(answers=answers),
+        submit=True,
+    )
+    submitted_at = assignment.submitted_at
+
+    second = await service.save_assignment_response(
+        user_id,
+        assignment.id,
+        QuestionnaireResponseSaveRequest(answers=answers),
+        submit=True,
+    )
+
+    assert second == first
+    assert assignment.submitted_at == submitted_at
+
+
 async def test_save_assignment_response_rejects_assignment_after_due_date() -> None:
     assignment = make_assignment()
     assignment.due_at = datetime.now(UTC) - timedelta(minutes=1)
