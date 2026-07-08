@@ -408,8 +408,9 @@ class IdentityService:
                     code="invite_profile_account_conflict",
                 )
 
-            # Create session for this user
-            session_token = await self._create_session(user, expires_at=verify_result.expires_at)
+            # The invite token expiry gates link reuse; the authenticated session uses
+            # the normal app lifetime and assignment/project windows enforce access.
+            session_token = await self._create_session(user)
 
         return InviteVerifyResult(
             response=verify_result,

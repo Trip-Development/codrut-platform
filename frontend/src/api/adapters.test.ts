@@ -4,6 +4,7 @@ import {
   AuthSessionUnavailableError,
   audienceAccessNote,
   changePassword,
+  getAuthenticatedSession,
   getCurrentParticipant,
   getCurrentTrainer,
   getParticipantSession,
@@ -54,7 +55,9 @@ import {
   getQuestionnaireDefinition,
   getQuestionnaireResponse,
   groupQuestionnaireStubsByKey,
+  isQuestionnaireSessionError,
   listQuestionnaireDefinitionStubs,
+  QuestionnaireRequestError,
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
   updateQuestionnaireDefinitionOnServer,
@@ -922,6 +925,25 @@ describe("frontend API adapter stubs", () => {
     ).rejects.toThrow("Nu am putut trimite răspunsurile.");
   });
 
+  it("surfaces stale participant-session errors from questionnaire saves", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ detail: "Sesiunea activă nu este un cont de participant." }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const error = await saveQuestionnaireResponse("assignment-1", { q1: 1 }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      name: "QuestionnaireRequestError",
+      status: 403,
+      message: "Sesiunea activă nu este un cont de participant.",
+    });
+    expect(error).toBeInstanceOf(QuestionnaireRequestError);
+    expect(isQuestionnaireSessionError(error)).toBe(true);
+  });
+
   it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
@@ -954,6 +976,41 @@ describe("frontend API adapter stubs", () => {
 
     await expect(getTrainerSession()).rejects.toBeInstanceOf(AuthSessionUnavailableError);
     await expect(getParticipantSession()).rejects.toThrow("Nu am putut verifica sesiunea");
+  });
+
+  it("loads the active authenticated session without demo fallback", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        user_id: "trainer-1",
+        email: "trainer@example.com",
+        role: "trainer",
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getAuthenticatedSession()).resolves.toMatchObject({
+      state: "authenticated",
+      user: {
+        id: "trainer-1",
+        email: "trainer@example.com",
+        role: "trainer",
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/me"),
+      expect.objectContaining({
+        cache: "no-store",
+        credentials: "include",
+      }),
+    );
+  });
+
+  it("returns null for missing active authenticated sessions", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    await expect(getAuthenticatedSession()).resolves.toBeNull();
   });
 
   it("changes password through the authenticated backend endpoint", async () => {

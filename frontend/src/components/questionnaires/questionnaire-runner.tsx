@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
+  isQuestionnaireSessionError,
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
   type QuestionnaireAnswerValue,
@@ -523,6 +524,9 @@ function statusMessage(status: "idle" | "saving" | "saved" | "submitted" | "erro
 }
 
 function errorMessage(error: unknown, fallback: string): string {
+  if (isQuestionnaireSessionError(error)) {
+    return "Sesiunea activă s-a schimbat în altă filă. Reîncarcă pagina sau intră din nou în contul de participant înainte să trimiți chestionarul.";
+  }
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 

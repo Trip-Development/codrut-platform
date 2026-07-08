@@ -338,9 +338,16 @@ class ScoringService:
 
         elif method == "average_statement_scores_by_section":
             scale_min = float(scoring_meta.get("scale_min", 1))
-            scale_max = float(scoring_meta.get("scale_max", 4))
+            scale_max = float(scoring_meta.get("scale_max", 5))
+            score_unit = scoring_meta.get("score_unit", "percent")
             score_min = float(scoring_meta.get("score_min", scale_min))
             score_range = max(scale_max - score_min, 1.0)
+
+            def output_score(raw_avg: float) -> float:
+                if score_unit == "grade_1_to_5":
+                    return round(raw_avg, 1)
+                percent_score = ((raw_avg - score_min) / score_range) * 100
+                return round(percent_score, 1)
 
             for section in definition_schema.get("sections", []):
                 section_id = section["id"]
@@ -364,9 +371,8 @@ class ScoringService:
                     continue
 
                 raw_avg = sum(values) / len(values)
-                percent_score = ((raw_avg - score_min) / score_range) * 100
                 scores[section_id] = {
-                    "score": round(percent_score, 1),
+                    "score": output_score(raw_avg),
                     "raw_avg": round(raw_avg, 2),
                     "answered": len(values),
                 }
@@ -391,9 +397,8 @@ class ScoringService:
                         continue
 
                     block_raw_avg = sum(block_values) / len(block_values)
-                    block_percent_score = ((block_raw_avg - score_min) / score_range) * 100
                     scores[question_id] = {
-                        "score": round(block_percent_score, 1),
+                        "score": output_score(block_raw_avg),
                         "raw_avg": round(block_raw_avg, 2),
                         "answered": len(block_values),
                     }

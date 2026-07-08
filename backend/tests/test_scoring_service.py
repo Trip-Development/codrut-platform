@@ -139,7 +139,7 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
     for section in BOSS_360_DEFINITION.schema.get("sections", []):
         for question in section.get("questions", []):
             for statement in question.get("statements", []):
-                score = 1 if section["id"] == "awareness" else 4
+                score = 1 if section["id"] == "awareness" else 5
                 answers[f"{question['id']}:{statement['id']}"] = score
 
     result = await service.compute_and_save_score(
@@ -149,16 +149,16 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["inspiring"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
-    assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
-    assert result.scores["awareness"] == {"score": 25.0, "raw_avg": 1.0, "answered": 9}
+    assert result.scores["inspiring"] == {"score": 5.0, "raw_avg": 5.0, "answered": 9}
+    assert result.scores["create_trust"] == {"score": 5.0, "raw_avg": 5.0, "answered": 9}
+    assert result.scores["awareness"] == {"score": 1.0, "raw_avg": 1.0, "answered": 9}
     assert result.scores["icare_01_dezvolta_oamenii"] == {
-        "score": 100.0,
-        "raw_avg": 4.0,
+        "score": 5.0,
+        "raw_avg": 5.0,
         "answered": 3,
     }
     assert result.scores["icare_07_modestie"] == {
-        "score": 25.0,
+        "score": 1.0,
         "raw_avg": 1.0,
         "answered": 3,
     }

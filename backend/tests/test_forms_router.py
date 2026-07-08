@@ -77,3 +77,12 @@ def test_participant_onboarding_requires_current_terms() -> None:
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "terms_required"
+
+
+def test_assignment_response_routes_require_participant_role() -> None:
+    client = _client_as(UserRole.trainer)
+
+    response = client.get(f"/api/forms/assignments/{uuid4()}/response")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Sesiunea activă nu este un cont de participant."
