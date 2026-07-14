@@ -1519,10 +1519,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
   };
 
-  const campaignEligibleRecipients = (campaign: EmailCampaign) =>
+  const campaignEligibleRecipients = (_campaign: EmailCampaign) =>
     summary.campaign.recipients.filter((recipient) =>
-      (campaign.segment === null || campaignRecipientSegment(recipient) === campaign.segment)
-      && isCampaignRecipientEffectivelyActive(recipient)
+      isCampaignRecipientEffectivelyActive(recipient)
       && recipient.email.trim()
     );
 
@@ -1538,7 +1537,6 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       const recipient = campaignContactsById.get(recipientId);
       return Boolean(
         recipient
-        && (campaign.segment === null || campaignRecipientSegment(recipient) === campaign.segment)
         && isCampaignRecipientEffectivelyActive(recipient)
         && recipient.email.trim(),
       );
@@ -2003,7 +2001,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                     [campaign.id]: event.target.value,
                                   }))}
                                   className="control-input w-full py-2 text-xs"
-                                  placeholder={campaign.segment === null ? "Caută în toate contactele..." : "Caută în segment..."}
+                                  placeholder="Caută în toate contactele..."
                                 />
                               </label>
                               <div className="mt-3 grid max-h-60 gap-2 overflow-y-auto pr-1">

@@ -997,7 +997,7 @@ async def test_no_group_campaign_accepts_recipients_from_both_segments() -> None
 
 
 @pytest.mark.asyncio
-async def test_segment_campaign_rejects_wrong_segment_membership() -> None:
+async def test_segment_campaign_accepts_manual_cross_segment_membership() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     existing = persisted_campaign_recipient(
@@ -1009,14 +1009,18 @@ async def test_segment_campaign_rejects_wrong_segment_membership() -> None:
     repository.campaign_recipients.append(existing)
     service = make_service(repository)
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.replace_campaign_recipient_memberships(
-            campaign.id,
-            CampaignRecipientMembershipUpdateRequest(recipient_ids=[existing.id]),
-        )
+    members = await service.replace_campaign_recipient_memberships(
+        campaign.id,
+        CampaignRecipientMembershipUpdateRequest(recipient_ids=[existing.id]),
+    )
 
-    assert exc_info.value.code == "campaign_membership_segment_mismatch"
-    assert repository.campaign_recipient_memberships == []
+    assert [member.email for member in members] == ["existing@example.com"]
+    assert campaign.recipient_memberships_initialized is True
+    assert [
+        membership.recipient_id
+        for membership in repository.campaign_recipient_memberships
+        if membership.campaign_id == campaign.id
+    ] == [existing.id]
 
 
 @pytest.mark.asyncio
