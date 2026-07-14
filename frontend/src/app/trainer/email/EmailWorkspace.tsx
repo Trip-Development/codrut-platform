@@ -924,6 +924,14 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       "{thumbnail_url}": thumbnailUrl || previewReplacements["{thumbnail_url}"],
     };
   }, [campaignLandingUrl, campaignThumbnailUrl, campaignVideoUrl, previewReplacements]);
+  const campaignMediaHasChanges = useMemo(() => {
+    if (!editingCampaign) return false;
+    return (
+      (editingCampaign.video_url ?? "") !== campaignVideoUrl.trim()
+      || (editingCampaign.thumbnail_url ?? "") !== campaignThumbnailUrl.trim()
+      || (editingCampaign.landing_page_url ?? "") !== campaignLandingUrl.trim()
+    );
+  }, [campaignLandingUrl, campaignThumbnailUrl, campaignVideoUrl, editingCampaign]);
 
   const campaignTemplates = useMemo(
     () => templates.filter((template) => {
@@ -1213,19 +1221,6 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       return;
     }
 
-    if (editingCampaign) {
-      const mediaChanged =
-        (editingCampaign.video_url ?? "") !== campaignVideoUrl.trim()
-        || (editingCampaign.thumbnail_url ?? "") !== campaignThumbnailUrl.trim()
-        || (editingCampaign.landing_page_url ?? "") !== campaignLandingUrl.trim();
-      if (mediaChanged) {
-        const confirmed = window.confirm(
-          `Schimbi linkul video, landing page sau thumbnailul pentru campania „${editingCampaign.name}”? Trimiterile viitoare vor folosi noile valori afișate în preview.`,
-        );
-        if (!confirmed) return;
-      }
-    }
-
     setIsCreatingCampaign(true);
     setCampaignMessage(null);
     try {
@@ -1237,7 +1232,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
           landing_page_url: campaignLandingUrl.trim() ? payload.landing_page_url : null,
           status: editingCampaign.status,
         });
-        setCampaignMessage("Campania a fost actualizată.");
+        setCampaignMessage(
+          campaignMediaHasChanges
+            ? "Campania a fost actualizată. Video-ul, landing page-ul și thumbnailul afișate în preview vor fi folosite la trimiterile viitoare."
+            : "Campania a fost actualizată.",
+        );
       } else {
         await createCampaignOnServer(payload);
         setCampaignMessage("Campania a fost salvată.");
@@ -3039,6 +3038,14 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                           Fără video pentru această campanie
                         </div>
                       )}
+                      {campaignMediaHasChanges ? (
+                        <div
+                          aria-live="polite"
+                          className="mt-3 rounded-xl border border-burgundy/20 bg-burgundy/5 px-3 py-2 text-xs font-semibold leading-5 text-burgundy"
+                        >
+                          Preview actualizat. După salvare, această campanie va folosi linkul video și thumbnailul afișate aici.
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="rounded-xl border border-[var(--border)] bg-surface-muted p-4">
