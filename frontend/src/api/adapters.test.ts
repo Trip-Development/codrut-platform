@@ -379,6 +379,17 @@ describe("frontend API adapter stubs", () => {
       expect.arrayContaining([expect.objectContaining({ id: "campaign-nova-retail" })]),
     );
 
+    await replaceCampaignRecipientMembershipOnServer(existingCampaign.id, [
+      "campaign-atlas-ceo",
+      "campaign-nova-retail",
+    ]);
+    await expect(listCampaignRecipientMembershipOnServer(existingCampaign.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "campaign-atlas-ceo" }),
+        expect.objectContaining({ id: "campaign-nova-retail" }),
+      ]),
+    );
+
     await replaceCampaignRecipientMembershipOnServer(existingCampaign.id, []);
     await expect(listCampaignRecipientMembershipOnServer(existingCampaign.id)).resolves.toEqual([]);
 

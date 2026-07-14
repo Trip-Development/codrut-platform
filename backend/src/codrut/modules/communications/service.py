@@ -683,19 +683,6 @@ class CommunicationsService:
                 "Campaign recipient membership includes unknown contacts.",
                 code="campaign_membership_recipient_not_found",
             )
-        wrong_segment = []
-        if campaign.segment is not None:
-            wrong_segment = [
-                recipient.email or str(recipient.id)
-                for recipient in recipients
-                if recipient.segment != campaign.segment
-            ]
-        if wrong_segment:
-            raise DomainError(
-                "Campaign recipient membership must match the campaign segment.",
-                code="campaign_membership_segment_mismatch",
-            )
-
         await repository.replace_campaign_memberships(
             campaign.id,
             recipient_ids,

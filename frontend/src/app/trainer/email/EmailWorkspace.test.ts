@@ -522,6 +522,69 @@ describe("EmailWorkspace campaign contacts", () => {
     }
   });
 
+  it("lets typed campaigns add recipients from other segments", async () => {
+    const recipients = [
+      makeCampaignRecipient({
+        id: "recipient-existing",
+        company: "Client Co",
+        firstName: "Ana",
+        lastName: "Client",
+        email: "ana@client.example",
+        clientType: "tip_1",
+        status: "ready",
+      }),
+      makeCampaignRecipient({
+        id: "recipient-prospect",
+        company: "Prospect Co",
+        firstName: "Mara",
+        lastName: "Prospect",
+        email: "mara@prospect.example",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+    ];
+    const campaign = makeCampaign({
+      id: "campaign-existing",
+      name: "Campanie clienți existenți",
+      segment: "past_customer",
+    });
+
+    emailApiMocks.listCampaignsOnServer.mockResolvedValue([campaign]);
+    emailApiMocks.listCampaignRecipientMembershipOnServer.mockResolvedValue([recipients[0]]);
+    emailApiMocks.replaceCampaignRecipientMembershipOnServer.mockImplementation(
+      (_campaignId: string, recipientIds: string[]) =>
+        Promise.resolve(recipients.filter((recipient) => recipientIds.includes(recipient.id))),
+    );
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
+
+    render(React.createElement(EmailWorkspace, {
+      initialSummary: makeEmailSummary("ready", recipients),
+    }));
+
+    const campaignCard = (await screen.findByText("Campanie clienți existenți")).closest("article");
+    expect(campaignCard).not.toBeNull();
+    expect(within(campaignCard as HTMLElement).getByText("Recipienti campanie (1/2)")).toBeTruthy();
+
+    const existingCheckbox = within(campaignCard as HTMLElement).getByLabelText(
+      "Include ana@client.example în Campanie clienți existenți",
+    ) as HTMLInputElement;
+    const prospectCheckbox = within(campaignCard as HTMLElement).getByLabelText(
+      "Include mara@prospect.example în Campanie clienți existenți",
+    ) as HTMLInputElement;
+    expect(existingCheckbox.checked).toBe(true);
+    expect(prospectCheckbox.checked).toBe(false);
+
+    fireEvent.click(prospectCheckbox);
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
+
+    await waitFor(() => {
+      expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
+        "campaign-existing",
+        ["recipient-existing", "recipient-prospect"],
+      );
+    });
+  });
+
   it("lets no-group campaigns search and select contacts across segments", async () => {
     const recipients = [
       makeCampaignRecipient({
