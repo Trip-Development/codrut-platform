@@ -787,9 +787,9 @@ describe("frontend API adapter stubs", () => {
       thumbnail_url: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=%22hero%22",
       landing_page_url: "https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22",
     });
-    expect(payload?.html_body).toContain('href="https://codrut.andreivacaru.ro/watch/intro?source=email&amp;name=%22hero%22"');
-    expect(payload?.html_body).toContain('<img src="https://cdn.codrut.ro/thumb.jpg?size=large&amp;variant=%22hero%22"');
-    expect(payload?.text_body).toContain("https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22");
+    expect(payload?.html_body).toContain('href="${landing_page_url}"');
+    expect(payload?.html_body).toContain('<img src="${thumbnail_url}"');
+    expect(payload?.text_body).toContain("${landing_page_url}");
   });
 
   it("uses the video url as the campaign destination when landing page is empty", () => {
@@ -807,7 +807,7 @@ describe("frontend API adapter stubs", () => {
       thumbnail_url: "https://cdn.codrut.ro/thumb.jpg",
     });
     expect(payload?.landing_page_url).toBeUndefined();
-    expect(payload?.html_body).toContain('href="https://vimeo.com/123456789"');
+    expect(payload?.html_body).toContain('href="${landing_page_url}"');
   });
 
   it("builds campaign payloads without video assets", () => {

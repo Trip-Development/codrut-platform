@@ -49,6 +49,20 @@ function renderEditablePlaceholders(value: string): string {
   return value.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}");
 }
 
+function replaceLiteral(value: string, literal: string | null | undefined, replacement: string): string {
+  if (!literal) return value;
+  const escapedLiteral = escapeHtmlAttribute(literal);
+  return value.split(literal).join(replacement).split(escapedLiteral).join(replacement);
+}
+
+function renderEditableCampaignBody(campaign: EmailCampaign): string {
+  let body = renderEditablePlaceholders(campaign.html_body);
+  body = replaceLiteral(body, campaign.landing_page_url ?? campaign.video_url, "{landing_page_url}");
+  body = replaceLiteral(body, campaign.thumbnail_url, "{thumbnail_url}");
+  body = replaceLiteral(body, campaign.video_url, "{video_url}");
+  return body;
+}
+
 const MOCK_REPLACEMENTS: Record<string, string> = {
   "{first_name}": "Ioana",
   "{last_name}": "Popescu",
@@ -800,6 +814,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
   const [campaignMemberships, setCampaignMemberships] = useState<Record<string, string[]>>({});
   const [campaignMembershipSearches, setCampaignMembershipSearches] = useState<Record<string, string>>({});
+  const [campaignMembershipTypeFilters, setCampaignMembershipTypeFilters] = useState<Record<string, CampaignContactTypeFilter>>({});
   const [savingCampaignMembershipId, setSavingCampaignMembershipId] = useState<string | null>(null);
   const [campaignContactMessage, setCampaignContactMessage] = useState<string | null>(null);
   const [selectedCampaignRecipientIds, setSelectedCampaignRecipientIds] = useState<string[]>([]);
@@ -891,13 +906,24 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   );
   const visibleContactsAllSelected = visibleSelectableCampaignRecipientIds.length > 0
     && visibleSelectableCampaignRecipientIds.every((recipientId) => selectedCampaignRecipientIds.includes(recipientId));
-  const previewReplacements = useMemo(
+  const previewReplacements = useMemo<Record<string, string>>(
     () => ({
       ...MOCK_REPLACEMENTS,
       "{calendly_url}": previewCalendlyUrl,
     }),
     [previewCalendlyUrl],
   );
+  const campaignPreviewReplacements = useMemo(() => {
+    const videoUrl = campaignVideoUrl.trim();
+    const landingUrl = campaignLandingUrl.trim() || videoUrl;
+    const thumbnailUrl = campaignThumbnailUrl.trim();
+    return {
+      ...previewReplacements,
+      "{video_url}": videoUrl || previewReplacements["{video_url}"],
+      "{landing_page_url}": landingUrl || previewReplacements["{landing_page_url}"],
+      "{thumbnail_url}": thumbnailUrl || previewReplacements["{thumbnail_url}"],
+    };
+  }, [campaignLandingUrl, campaignThumbnailUrl, campaignVideoUrl, previewReplacements]);
 
   const campaignTemplates = useMemo(
     () => templates.filter((template) => {
@@ -920,9 +946,10 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setCampaignName(campaign.name);
     setCampaignSegment(campaign.segment);
     setCampaignTemplateId("");
+    const editableBody = renderEditableCampaignBody(campaign);
     setCampaignSubject(renderEditablePlaceholders(campaign.subject));
-    setCampaignBody(renderEditablePlaceholders(campaign.html_body));
-    setCampaignPlainBody(htmlToPlainText(renderEditablePlaceholders(campaign.html_body)));
+    setCampaignBody(editableBody);
+    setCampaignPlainBody(htmlToPlainText(editableBody));
     setCampaignVideoUrl(campaign.video_url ?? "");
     setCampaignThumbnailUrl(campaign.thumbnail_url ?? "");
     setCampaignLandingUrl(campaign.landing_page_url ?? "");
@@ -1184,6 +1211,19 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     if (!payload) {
       setCampaignMessage("Completează numele campaniei. Dacă folosești video, adaugă linkul și thumbnailul.");
       return;
+    }
+
+    if (editingCampaign) {
+      const mediaChanged =
+        (editingCampaign.video_url ?? "") !== campaignVideoUrl.trim()
+        || (editingCampaign.thumbnail_url ?? "") !== campaignThumbnailUrl.trim()
+        || (editingCampaign.landing_page_url ?? "") !== campaignLandingUrl.trim();
+      if (mediaChanged) {
+        const confirmed = window.confirm(
+          `Schimbi linkul video, landing page sau thumbnailul pentru campania „${editingCampaign.name}”? Trimiterile viitoare vor folosi noile valori afișate în preview.`,
+        );
+        if (!confirmed) return;
+      }
     }
 
     setIsCreatingCampaign(true);
@@ -1519,7 +1559,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
   };
 
-  const campaignEligibleRecipients = (_campaign: EmailCampaign) =>
+  const campaignEligibleRecipients = () =>
     summary.campaign.recipients.filter((recipient) =>
       isCampaignRecipientEffectivelyActive(recipient)
       && recipient.email.trim()
@@ -1527,8 +1567,10 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   const visibleCampaignEligibleRecipients = (campaign: EmailCampaign) => {
     const search = campaignMembershipSearches[campaign.id] ?? "";
-    return campaignEligibleRecipients(campaign).filter((recipient) =>
-      campaignRecipientMatchesSearch(recipient, search),
+    const typeFilter = campaignMembershipTypeFilters[campaign.id] ?? "all";
+    return campaignEligibleRecipients().filter((recipient) =>
+      campaignRecipientMatchesSearch(recipient, search)
+      && (typeFilter === "all" || campaignRecipientSegment(recipient) === typeFilter),
     );
   };
 
@@ -1543,7 +1585,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
 
   const toggleCampaignMembershipRecipient = (campaign: EmailCampaign, recipientId: string) => {
-    const eligibleIds = new Set(campaignEligibleRecipients(campaign).map((recipient) => recipient.id));
+    const eligibleIds = new Set(campaignEligibleRecipients().map((recipient) => recipient.id));
     if (!eligibleIds.has(recipientId)) return;
     setCampaignMemberships((currentMemberships) => {
       const currentIds = currentMemberships[campaign.id] ?? [];
@@ -1638,6 +1680,16 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         const nextMemberships = { ...previousMemberships };
         delete nextMemberships[campaign.id];
         return nextMemberships;
+      });
+      setCampaignMembershipSearches((previousSearches) => {
+        const nextSearches = { ...previousSearches };
+        delete nextSearches[campaign.id];
+        return nextSearches;
+      });
+      setCampaignMembershipTypeFilters((previousFilters) => {
+        const nextFilters = { ...previousFilters };
+        delete nextFilters[campaign.id];
+        return nextFilters;
       });
       setCampaignMessage("Campania a fost ștearsă.");
       await loadCampaigns();
@@ -1806,17 +1858,22 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
   };
 
-  const getRenderedPreview = useCallback((subjectText: string, bodyText: string, lane: string) => {
+  const getRenderedPreview = useCallback((
+    subjectText: string,
+    bodyText: string,
+    lane: string,
+    replacements: Record<string, string> = previewReplacements,
+  ) => {
     let replacedSubject = subjectText;
     let replacedBody = bodyText;
 
-    replacedSubject = replacePreviewPlaceholders(replacedSubject, previewReplacements);
-    replacedBody = replacePreviewPlaceholders(replacedBody, previewReplacements);
+    replacedSubject = replacePreviewPlaceholders(replacedSubject, replacements);
+    replacedBody = replacePreviewPlaceholders(replacedBody, replacements);
 
     let html = renderEmailTemplatePreviewBody(replacedBody);
 
     if (lane === "campaign") {
-      html = renderCampaignEmailPreviewShell(html, previewReplacements);
+      html = renderCampaignEmailPreviewShell(html, replacements);
     }
 
     return {
@@ -1845,8 +1902,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       campaignSubject,
       campaignBody || selectedCampaignTemplate?.body || "",
       "campaign",
+      campaignPreviewReplacements,
     ),
-    [campaignBody, campaignSubject, getRenderedPreview, selectedCampaignTemplate],
+    [campaignBody, campaignPreviewReplacements, campaignSubject, getRenderedPreview, selectedCampaignTemplate],
   );
 
   return (
@@ -1963,9 +2021,10 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                     campaigns.map((campaign) => {
                       const memberIds = campaignMemberships[campaign.id] ?? [];
                       const activeMemberIds = activeCampaignMembershipIds(campaign);
-                      const eligibleRecipients = campaignEligibleRecipients(campaign);
+                      const eligibleRecipients = campaignEligibleRecipients();
                       const visibleEligibleRecipients = visibleCampaignEligibleRecipients(campaign);
                       const membershipSearch = campaignMembershipSearches[campaign.id] ?? "";
+                      const membershipTypeFilter = campaignMembershipTypeFilters[campaign.id] ?? "all";
 
                       return (
                         <article key={campaign.id} className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-4 shadow-sm">
@@ -1992,18 +2051,35 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                 <span>Recipienti campanie ({activeMemberIds.length}/{eligibleRecipients.length})</span>
                                 <span className="text-foreground/40">⌄</span>
                               </summary>
-                              <label className="mt-3 block">
-                                <span className="sr-only">Caută destinatari pentru {campaign.name}</span>
-                                <input
-                                  value={membershipSearch}
-                                  onChange={(event) => setCampaignMembershipSearches((current) => ({
-                                    ...current,
-                                    [campaign.id]: event.target.value,
-                                  }))}
-                                  className="control-input w-full py-2 text-xs"
-                                  placeholder="Caută în toate contactele..."
-                                />
-                              </label>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                                <label className="block">
+                                  <span className="sr-only">Caută destinatari pentru {campaign.name}</span>
+                                  <input
+                                    value={membershipSearch}
+                                    onChange={(event) => setCampaignMembershipSearches((current) => ({
+                                      ...current,
+                                      [campaign.id]: event.target.value,
+                                    }))}
+                                    className="control-input w-full py-2 text-xs"
+                                    placeholder="Caută în toate contactele..."
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="sr-only">Filtrează destinatari după tip pentru {campaign.name}</span>
+                                  <select
+                                    value={membershipTypeFilter}
+                                    onChange={(event) => setCampaignMembershipTypeFilters((current) => ({
+                                      ...current,
+                                      [campaign.id]: event.target.value as CampaignContactTypeFilter,
+                                    }))}
+                                    className="control-input w-full py-2 text-xs"
+                                  >
+                                    <option value="all">Toate tipurile</option>
+                                    <option value="past_customer">Existing</option>
+                                    <option value="potential_customer">New</option>
+                                  </select>
+                                </label>
+                              </div>
                               <div className="mt-3 grid max-h-60 gap-2 overflow-y-auto pr-1">
                                 {visibleEligibleRecipients.length > 0 ? (
                                   visibleEligibleRecipients.map((recipient) => (
@@ -2929,6 +3005,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                           value={campaignThumbnailUrl}
                           onChange={(event) => setCampaignThumbnailUrl(event.target.value)}
                           placeholder="https://codrut.andreivacaru.ro/api/campaign-assets/thumbnail.jpg"
+                          aria-label="Thumbnail campanie"
                           className="control-input w-full py-3"
                         />
                         {campaignAssetMessage ? (
