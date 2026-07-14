@@ -36,6 +36,12 @@ type CampaignViewKey = "contacts" | "campaigns";
 type CampaignSegmentKey = "past_customer" | "potential_customer";
 type CampaignTargetSegment = CampaignSegmentKey | null;
 type CampaignContactTypeFilter = "all" | CampaignSegmentKey;
+type CampaignMembershipCompanyGroup = {
+  key: string;
+  label: string;
+  recipientIds: string[];
+  selectedCount: number;
+};
 
 function normalizeEmailTab(value: string | null): TabKey {
   return value === "campaigns" || value === "templates" ? value : "templates";
@@ -604,6 +610,43 @@ function campaignSegmentLabel(segment: CampaignTargetSegment): string {
   return segment === "past_customer" ? "Client existent" : "Prospect";
 }
 
+function campaignRecipientCompanyLabel(recipient: CampaignRecipientRow): string {
+  const company = recipient.company.trim();
+  return company || "Companie necompletată";
+}
+
+function campaignRecipientCompanyKey(recipient: CampaignRecipientRow): string {
+  return campaignRecipientCompanyLabel(recipient).toLocaleLowerCase("ro-RO");
+}
+
+function campaignMembershipCompanyGroups(
+  recipients: CampaignRecipientRow[],
+  memberIds: string[],
+): CampaignMembershipCompanyGroup[] {
+  const selectedIds = new Set(memberIds);
+  const groups = new Map<string, CampaignMembershipCompanyGroup>();
+
+  for (const recipient of recipients) {
+    const key = campaignRecipientCompanyKey(recipient);
+    const label = campaignRecipientCompanyLabel(recipient);
+    const currentGroup = groups.get(key) ?? {
+      key,
+      label,
+      recipientIds: [],
+      selectedCount: 0,
+    };
+    currentGroup.recipientIds.push(recipient.id);
+    if (selectedIds.has(recipient.id)) {
+      currentGroup.selectedCount += 1;
+    }
+    groups.set(key, currentGroup);
+  }
+
+  return Array.from(groups.values()).sort((first, second) =>
+    first.label.localeCompare(second.label, "ro-RO"),
+  );
+}
+
 function campaignRecipientMatchesSearch(recipient: CampaignRecipientRow, query: string): boolean {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
@@ -815,6 +858,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignMemberships, setCampaignMemberships] = useState<Record<string, string[]>>({});
   const [campaignMembershipSearches, setCampaignMembershipSearches] = useState<Record<string, string>>({});
   const [campaignMembershipTypeFilters, setCampaignMembershipTypeFilters] = useState<Record<string, CampaignContactTypeFilter>>({});
+  const [campaignMembershipCompanySelections, setCampaignMembershipCompanySelections] = useState<Record<string, string>>({});
   const [savingCampaignMembershipId, setSavingCampaignMembershipId] = useState<string | null>(null);
   const [campaignContactMessage, setCampaignContactMessage] = useState<string | null>(null);
   const [selectedCampaignRecipientIds, setSelectedCampaignRecipientIds] = useState<string[]>([]);
@@ -1597,6 +1641,37 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
   };
 
+  const toggleCampaignMembershipCompany = (
+    campaign: EmailCampaign,
+    companyKey: string,
+    mode: "select" | "deselect",
+  ) => {
+    const companyRecipientIds = campaignEligibleRecipients()
+      .filter((recipient) => campaignRecipientCompanyKey(recipient) === companyKey)
+      .map((recipient) => recipient.id);
+    if (companyRecipientIds.length === 0) return;
+
+    setCampaignMemberships((currentMemberships) => {
+      const currentIds = currentMemberships[campaign.id] ?? [];
+      if (mode === "deselect") {
+        const companyRecipientIdSet = new Set(companyRecipientIds);
+        return {
+          ...currentMemberships,
+          [campaign.id]: currentIds.filter((recipientId) => !companyRecipientIdSet.has(recipientId)),
+        };
+      }
+
+      const nextIds = new Set(currentIds);
+      for (const recipientId of companyRecipientIds) {
+        nextIds.add(recipientId);
+      }
+      return {
+        ...currentMemberships,
+        [campaign.id]: Array.from(nextIds),
+      };
+    });
+  };
+
   const saveCampaignMembership = async (campaign: EmailCampaign) => {
     setSavingCampaignMembershipId(campaign.id);
     setCampaignMessage(null);
@@ -2024,6 +2099,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                       const visibleEligibleRecipients = visibleCampaignEligibleRecipients(campaign);
                       const membershipSearch = campaignMembershipSearches[campaign.id] ?? "";
                       const membershipTypeFilter = campaignMembershipTypeFilters[campaign.id] ?? "all";
+                      const membershipCompanyGroups = campaignMembershipCompanyGroups(eligibleRecipients, memberIds);
+                      const selectedMembershipCompanyKey = campaignMembershipCompanySelections[campaign.id] ?? "";
+                      const selectedMembershipCompanyGroup = membershipCompanyGroups.find(
+                        (group) => group.key === selectedMembershipCompanyKey,
+                      );
 
                       return (
                         <article key={campaign.id} className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-4 shadow-sm">
@@ -2050,7 +2130,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                 <span>Recipienti campanie ({activeMemberIds.length}/{eligibleRecipients.length})</span>
                                 <span className="text-foreground/40">⌄</span>
                               </summary>
-                              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                              <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_minmax(12rem,1fr)]">
                                 <label className="block">
                                   <span className="sr-only">Caută destinatari pentru {campaign.name}</span>
                                   <input
@@ -2078,7 +2158,48 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                     <option value="potential_customer">New</option>
                                   </select>
                                 </label>
+                                <label className="block">
+                                  <span className="sr-only">Alege companie pentru {campaign.name}</span>
+                                  <select
+                                    value={selectedMembershipCompanyKey}
+                                    onChange={(event) => setCampaignMembershipCompanySelections((current) => ({
+                                      ...current,
+                                      [campaign.id]: event.target.value,
+                                    }))}
+                                    className="control-input w-full py-2 text-xs"
+                                  >
+                                    <option value="">Companie...</option>
+                                    {membershipCompanyGroups.map((group) => (
+                                      <option key={group.key} value={group.key}>
+                                        {group.label} ({group.selectedCount}/{group.recipientIds.length})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
                               </div>
+                              {selectedMembershipCompanyGroup ? (
+                                <div className="mt-2 flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                                  <span className="font-semibold text-foreground/60">
+                                    {selectedMembershipCompanyGroup.label}: {selectedMembershipCompanyGroup.selectedCount}/{selectedMembershipCompanyGroup.recipientIds.length} selectați
+                                  </span>
+                                  <span className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      className="btn-secondary px-3 py-1.5 text-[10px]"
+                                      onClick={() => toggleCampaignMembershipCompany(campaign, selectedMembershipCompanyGroup.key, "select")}
+                                    >
+                                      Selectează compania
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-secondary px-3 py-1.5 text-[10px]"
+                                      onClick={() => toggleCampaignMembershipCompany(campaign, selectedMembershipCompanyGroup.key, "deselect")}
+                                    >
+                                      Deselectează
+                                    </button>
+                                  </span>
+                                </div>
+                              ) : null}
                               <div className="mt-3 grid max-h-60 gap-2 overflow-y-auto pr-1">
                                 {visibleEligibleRecipients.length > 0 ? (
                                   visibleEligibleRecipients.map((recipient) => (
