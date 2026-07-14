@@ -688,6 +688,95 @@ describe("EmailWorkspace campaign contacts", () => {
     });
   });
 
+  it("bulk selects and deselects campaign recipients by company", async () => {
+    const recipients = [
+      makeCampaignRecipient({
+        id: "recipient-alpha-1",
+        company: "Alpha Co",
+        firstName: "Ana",
+        lastName: "Alpha",
+        email: "ana@alpha.example",
+        clientType: "tip_1",
+        status: "ready",
+      }),
+      makeCampaignRecipient({
+        id: "recipient-alpha-2",
+        company: "Alpha Co",
+        firstName: "Alex",
+        lastName: "Alpha",
+        email: "alex@alpha.example",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+      makeCampaignRecipient({
+        id: "recipient-beta",
+        company: "Beta Co",
+        firstName: "Bianca",
+        lastName: "Beta",
+        email: "bianca@beta.example",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+    ];
+    const campaign = makeCampaign({
+      id: "campaign-company",
+      name: "Campanie pe companii",
+      segment: null,
+    });
+
+    emailApiMocks.listCampaignsOnServer.mockResolvedValue([campaign]);
+    emailApiMocks.listCampaignRecipientMembershipOnServer.mockResolvedValue([recipients[0]]);
+    emailApiMocks.replaceCampaignRecipientMembershipOnServer.mockImplementation(
+      (_campaignId: string, recipientIds: string[]) =>
+        Promise.resolve(recipients.filter((recipient) => recipientIds.includes(recipient.id))),
+    );
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
+
+    render(React.createElement(EmailWorkspace, {
+      initialSummary: makeEmailSummary("ready", recipients),
+    }));
+
+    const campaignCard = (await screen.findByText("Campanie pe companii")).closest("article");
+    expect(campaignCard).not.toBeNull();
+
+    const alphaCompanySelect = within(campaignCard as HTMLElement).getByLabelText(
+      "Alege companie pentru Campanie pe companii",
+    );
+    fireEvent.change(alphaCompanySelect, { target: { value: "alpha co" } });
+    expect(within(campaignCard as HTMLElement).getByText("Alpha Co: 1/2 selectați")).toBeTruthy();
+
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Selectează compania" }));
+
+    expect((
+      within(campaignCard as HTMLElement).getByLabelText("Include ana@alpha.example în Campanie pe companii") as HTMLInputElement
+    ).checked).toBe(true);
+    expect((
+      within(campaignCard as HTMLElement).getByLabelText("Include alex@alpha.example în Campanie pe companii") as HTMLInputElement
+    ).checked).toBe(true);
+    expect((
+      within(campaignCard as HTMLElement).getByLabelText("Include bianca@beta.example în Campanie pe companii") as HTMLInputElement
+    ).checked).toBe(false);
+
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
+
+    await waitFor(() => {
+      expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
+        "campaign-company",
+        ["recipient-alpha-1", "recipient-alpha-2"],
+      );
+    });
+
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Deselectează" }));
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
+
+    await waitFor(() => {
+      expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenLastCalledWith(
+        "campaign-company",
+        [],
+      );
+    });
+  });
+
   it("lets no-group campaigns search and select contacts across segments", async () => {
     const recipients = [
       makeCampaignRecipient({
