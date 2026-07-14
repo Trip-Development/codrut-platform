@@ -351,6 +351,85 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(navigationMocks.replace).toHaveBeenCalledWith("/trainer/email?tab=campaigns&view=campaigns", { scroll: false });
   });
 
+  it("confirms media changes and shows them in the campaign edit preview", async () => {
+    const campaign = makeCampaign({
+      id: "campaign-media",
+      name: "Campanie media",
+      subject: "Salut, {first_name}",
+      video_url: "https://old.example/video",
+      thumbnail_url: "https://old.example/thumb.jpg",
+      landing_page_url: "https://old.example/landing",
+      html_body:
+        '<p>Salut.</p><p><a href="https://old.example/landing"><img src="https://old.example/thumb.jpg" alt="Previzualizare video" /></a></p>',
+      text_body: "Salut. Video: https://old.example/landing",
+    });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    emailApiMocks.listCampaignsOnServer.mockResolvedValue([campaign]);
+    emailApiMocks.updateCampaignOnServer.mockResolvedValue({
+      ...campaign,
+      video_url: "https://new.example/video",
+      thumbnail_url: "https://new.example/thumb.jpg",
+      landing_page_url: "https://new.example/landing",
+    });
+    emailApiMocks.buildVideoCampaignCreatePayload.mockImplementation((draft) => ({
+      name: draft.name.trim(),
+      segment: draft.segment,
+      subject: draft.subject.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
+      html_body: draft.htmlBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
+      text_body: draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}"),
+      video_url: draft.videoUrl,
+      thumbnail_url: draft.thumbnailUrl,
+      landing_page_url: draft.landingUrl,
+    }));
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
+
+    try {
+      render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+
+      const campaignCard = (await screen.findByText("Campanie media")).closest("article");
+      expect(campaignCard).not.toBeNull();
+      fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Editează campania Campanie media" }));
+
+      fireEvent.change(await screen.findByLabelText("Link video (opțional)"), {
+        target: { value: "https://new.example/video" },
+      });
+      fireEvent.change(screen.getByLabelText("Landing page Codruț (opțional)"), {
+        target: { value: "https://new.example/landing" },
+      });
+      fireEvent.change(screen.getByLabelText("Thumbnail campanie"), {
+        target: { value: "https://new.example/thumb.jpg" },
+      });
+
+      await waitFor(() => {
+        expect(document.querySelector('a[href="https://new.example/landing"] img[src="https://new.example/thumb.jpg"]')).not.toBeNull();
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
+
+      await waitFor(() => {
+        expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("Schimbi linkul video"));
+      });
+      await waitFor(() => {
+        expect(emailApiMocks.updateCampaignOnServer).toHaveBeenCalledWith(
+          "campaign-media",
+          expect.objectContaining({
+            video_url: "https://new.example/video",
+            thumbnail_url: "https://new.example/thumb.jpg",
+            landing_page_url: "https://new.example/landing",
+          }),
+        );
+      });
+      const updatePayload = emailApiMocks.updateCampaignOnServer.mock.calls[0][1];
+      expect(updatePayload.html_body).toContain("${landing_page_url}");
+      expect(updatePayload.html_body).toContain("${thumbnail_url}");
+      expect(updatePayload.html_body).not.toContain("https://old.example/landing");
+      expect(updatePayload.html_body).not.toContain("https://old.example/thumb.jpg");
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
   it("filters global campaign contacts by search and Existing/New client type", async () => {
     render(React.createElement(EmailWorkspace, {
       initialSummary: makeEmailSummary("ready", [
@@ -574,7 +653,32 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(existingCheckbox.checked).toBe(true);
     expect(prospectCheckbox.checked).toBe(false);
 
-    fireEvent.click(prospectCheckbox);
+    fireEvent.change(within(campaignCard as HTMLElement).getByLabelText("Filtrează destinatari după tip pentru Campanie clienți existenți"), {
+      target: { value: "past_customer" },
+    });
+    expect(within(campaignCard as HTMLElement).getByLabelText(
+      "Include ana@client.example în Campanie clienți existenți",
+    )).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).queryByLabelText(
+      "Include mara@prospect.example în Campanie clienți existenți",
+    )).toBeNull();
+
+    fireEvent.change(within(campaignCard as HTMLElement).getByLabelText("Filtrează destinatari după tip pentru Campanie clienți existenți"), {
+      target: { value: "potential_customer" },
+    });
+    expect(within(campaignCard as HTMLElement).queryByLabelText(
+      "Include ana@client.example în Campanie clienți existenți",
+    )).toBeNull();
+    expect(within(campaignCard as HTMLElement).getByLabelText(
+      "Include mara@prospect.example în Campanie clienți existenți",
+    )).toBeTruthy();
+
+    fireEvent.change(within(campaignCard as HTMLElement).getByLabelText("Filtrează destinatari după tip pentru Campanie clienți existenți"), {
+      target: { value: "all" },
+    });
+    fireEvent.click(within(campaignCard as HTMLElement).getByLabelText(
+      "Include mara@prospect.example în Campanie clienți existenți",
+    ));
     fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
 
     await waitFor(() => {
