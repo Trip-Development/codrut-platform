@@ -120,8 +120,6 @@ class CommunicationsRepository:
             CampaignRecipient.email.is_not(None),
             func.lower(CampaignRecipient.email).in_(emails),
         )
-        if owner_id is not None:
-            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -131,8 +129,6 @@ class CommunicationsRepository:
         owner_id: UUID | None = None,
     ) -> list[CampaignRecipient]:
         stmt = select(CampaignRecipient).order_by(CampaignRecipient.created_at.desc())
-        if owner_id is not None:
-            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -143,8 +139,6 @@ class CommunicationsRepository:
         owner_id: UUID | None = None,
     ) -> CampaignRecipient | None:
         stmt = select(CampaignRecipient).where(CampaignRecipient.id == recipient_id)
-        if owner_id is not None:
-            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
@@ -155,8 +149,6 @@ class CommunicationsRepository:
         owner_id: UUID | None = None,
     ) -> CampaignRecipient | None:
         stmt = select(CampaignRecipient).where(func.lower(CampaignRecipient.email) == email.lower())
-        if owner_id is not None:
-            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
@@ -169,8 +161,6 @@ class CommunicationsRepository:
         if not recipient_ids:
             return []
         stmt = select(CampaignRecipient).where(CampaignRecipient.id.in_(recipient_ids))
-        if owner_id is not None:
-            stmt = stmt.where(CampaignRecipient.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -258,10 +248,7 @@ class CommunicationsRepository:
             .order_by(CampaignRecipientMembership.created_at.asc())
         )
         if owner_id is not None:
-            stmt = stmt.where(
-                Campaign.owner_id == owner_id,
-                CampaignRecipient.owner_id == owner_id,
-            )
+            stmt = stmt.where(Campaign.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

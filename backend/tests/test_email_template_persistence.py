@@ -141,7 +141,6 @@ class FakeCommunicationsRepository:
             recipient
             for recipient in self.campaign_recipients
             if recipient.email is not None and recipient.email.lower() in emails
-            and (owner_id is None or recipient.owner_id == owner_id)
         ]
 
     async def add_campaign_recipients(
@@ -190,7 +189,6 @@ class FakeCommunicationsRepository:
         return [
             recipient
             for recipient in self.campaign_recipients
-            if owner_id is None or recipient.owner_id == owner_id
         ]
 
     async def list_campaign_recipients_by_ids(
@@ -204,7 +202,6 @@ class FakeCommunicationsRepository:
             recipient
             for recipient in self.campaign_recipients
             if recipient.id in recipient_id_set
-            and (owner_id is None or recipient.owner_id == owner_id)
         ]
 
     async def get_campaign_recipient(
@@ -218,7 +215,6 @@ class FakeCommunicationsRepository:
                 recipient
                 for recipient in self.campaign_recipients
                 if recipient.id == recipient_id
-                and (owner_id is None or recipient.owner_id == owner_id)
             ),
             None,
         )
@@ -234,7 +230,6 @@ class FakeCommunicationsRepository:
                 recipient
                 for recipient in self.campaign_recipients
                 if recipient.email is not None and recipient.email.lower() == email.lower()
-                and (owner_id is None or recipient.owner_id == owner_id)
             ),
             None,
         )
@@ -289,7 +284,6 @@ class FakeCommunicationsRepository:
             recipient
             for recipient in self.campaign_recipients
             if recipient.id in member_id_set
-            and (owner_id is None or recipient.owner_id == owner_id)
         ]
         recipients_by_id = {recipient.id: recipient for recipient in recipients}
         return [
@@ -480,7 +474,7 @@ async def test_bulk_create_campaign_recipients_reports_created_and_updated_count
 
 
 @pytest.mark.asyncio
-async def test_bulk_create_campaign_recipients_dedupes_within_owner_scope() -> None:
+async def test_bulk_create_campaign_recipients_updates_shared_existing_contact() -> None:
     first_owner_id = uuid.uuid4()
     second_owner_id = uuid.uuid4()
     repository = FakeCommunicationsRepository()
@@ -504,12 +498,12 @@ async def test_bulk_create_campaign_recipients_dedupes_within_owner_scope() -> N
         owner_id=first_owner_id,
     )
 
-    assert result.created == 1
-    assert result.updated == 0
-    assert {recipient.owner_id for recipient in repository.campaign_recipients} == {
-        first_owner_id,
-        second_owner_id,
-    }
+    assert result.created == 0
+    assert result.updated == 1
+    assert repository.campaign_recipients == [existing]
+    assert existing.owner_id == second_owner_id
+    assert existing.contact_name == "Owner One"
+    assert existing.organization_name == "Compania owner one"
 
 
 @pytest.mark.asyncio
@@ -546,6 +540,7 @@ def persisted_campaign() -> Campaign:
         subject="Salut ${first_name}",
         html_body="<p>Bună, {first_name}.</p>",
         text_body="Bună, {first_name}.",
+        recipient_memberships_initialized=False,
     )
 
 
@@ -950,6 +945,81 @@ async def test_empty_manual_campaign_membership_does_not_auto_backfill() -> None
 
 
 @pytest.mark.asyncio
+async def test_no_group_campaign_does_not_auto_backfill_recipients() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.segment = None
+    first = persisted_campaign_recipient(email="first@example.com", contact_name="First")
+    second = persisted_campaign_recipient(
+        email="second@example.com",
+        contact_name="Second",
+        segment=CampaignRecipientSegment.past_customer,
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([first, second])
+    service = make_service(repository)
+
+    listed_members = await service.list_campaign_recipient_memberships(campaign.id)
+
+    assert listed_members == []
+    assert campaign.recipient_memberships_initialized is False
+    assert repository.campaign_recipient_memberships == []
+
+
+@pytest.mark.asyncio
+async def test_no_group_campaign_accepts_recipients_from_both_segments() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.segment = None
+    potential = persisted_campaign_recipient(
+        email="potential@example.com",
+        contact_name="Potential",
+    )
+    existing = persisted_campaign_recipient(
+        email="existing@example.com",
+        contact_name="Existing",
+        segment=CampaignRecipientSegment.past_customer,
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([potential, existing])
+    service = make_service(repository)
+
+    members = await service.replace_campaign_recipient_memberships(
+        campaign.id,
+        CampaignRecipientMembershipUpdateRequest(recipient_ids=[potential.id, existing.id]),
+    )
+
+    assert [member.email for member in members] == [
+        "potential@example.com",
+        "existing@example.com",
+    ]
+    assert campaign.recipient_memberships_initialized is True
+
+
+@pytest.mark.asyncio
+async def test_segment_campaign_rejects_wrong_segment_membership() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    existing = persisted_campaign_recipient(
+        email="existing@example.com",
+        contact_name="Existing",
+        segment=CampaignRecipientSegment.past_customer,
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(existing)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.replace_campaign_recipient_memberships(
+            campaign.id,
+            CampaignRecipientMembershipUpdateRequest(recipient_ids=[existing.id]),
+        )
+
+    assert exc_info.value.code == "campaign_membership_segment_mismatch"
+    assert repository.campaign_recipient_memberships == []
+
+
+@pytest.mark.asyncio
 async def test_send_campaign_uses_persisted_membership_not_all_segment_contacts() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
@@ -1026,7 +1096,7 @@ async def test_send_campaign_all_resends_only_campaign_members() -> None:
 
 
 @pytest.mark.asyncio
-async def test_send_campaign_does_not_use_other_owner_recipients() -> None:
+async def test_send_campaign_can_use_shared_contacts_from_any_owner() -> None:
     owner_id = uuid.uuid4()
     other_owner_id = uuid.uuid4()
     repository = FakeCommunicationsRepository()
@@ -1049,7 +1119,11 @@ async def test_send_campaign_does_not_use_other_owner_recipients() -> None:
         owner_id=owner_id,
     )
 
-    assert response.sent == 1
+    assert response.sent == 2
+    assert {message.to.value for message in provider.sent} == {
+        "owner@example.com",
+        "other@example.com",
+    }
     assert provider.sent[0].to.value == "owner@example.com"
 
 
@@ -1120,6 +1194,25 @@ async def test_create_campaign_marks_valid_campaign_ready() -> None:
         )
     )
 
+    assert campaign.status == CampaignStatus.ready
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_allows_no_preselected_group() -> None:
+    repository = FakeCommunicationsRepository()
+    service = make_service(repository)
+
+    campaign = await service.create_campaign(
+        CampaignCreateRequest(
+            name="Campanie fără grup",
+            segment=None,
+            subject="Salut ${first_name}",
+            html_body="<p>Bună.</p>",
+            text_body="Bună.",
+        )
+    )
+
+    assert campaign.segment is None
     assert campaign.status == CampaignStatus.ready
 
 

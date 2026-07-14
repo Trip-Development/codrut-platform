@@ -33,7 +33,9 @@ import { readSpreadsheetFile, spreadsheetRowsToObjects } from "@/utils/spreadshe
 
 type TabKey = "campaigns" | "templates";
 type CampaignViewKey = "contacts" | "campaigns";
-type CampaignContactTypeFilter = "all" | "past_customer" | "potential_customer";
+type CampaignSegmentKey = "past_customer" | "potential_customer";
+type CampaignTargetSegment = CampaignSegmentKey | null;
+type CampaignContactTypeFilter = "all" | CampaignSegmentKey;
 
 function normalizeEmailTab(value: string | null): TabKey {
   return value === "campaigns" || value === "templates" ? value : "templates";
@@ -71,8 +73,14 @@ const MOCK_REPLACEMENTS: Record<string, string> = {
 
 const EMAIL_PREVIEW_SHELL_OPEN =
   '<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:0 auto;padding:28px;color:#2b211f;"><div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;background:#fffdfb;"><p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;letter-spacing:.08em;text-transform:uppercase;">Andrei Văcaru</p>';
+const EMAIL_PREVIEW_SHELL_CLOSE = "</div></div>";
 const PROMOTIONAL_EMAIL_PREVIEW_SHELL_CLOSE =
   '</div><div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;font-size:12px;line-height:1.5;color:#8c7e7b;text-align:center;"><p style="margin:0 0 8px;">Ai primit acest email deoarece ești abonat la actualizările noastre sau ești un client.</p><p style="margin:0 0 8px;"><a href="{unsubscribe_url}" style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a></p><p style="margin:0;">Str. Exemplu Nr. 10, București, România</p></div></div>';
+const EMAIL_HEADING_STYLE = "margin:0 0 16px;font-size:24px;line-height:1.25;";
+const EMAIL_PARAGRAPH_STYLE = "margin:0 0 18px;font-size:15px;line-height:1.65;";
+const EMAIL_BUTTON_STYLE = "display:inline-block;background:#890505;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:700;";
+const DEFAULT_ACTION_TOKEN = "{action_button:Deschide chestionarele|{action_url}}";
+const DEFAULT_VIDEO_TOKEN = "{video_block}";
 
 function detectedPlaceholders(subject: string, body: string): string[] {
   const placeholderRegex = /\{[a-z0-9_]+\}/gi;
@@ -92,6 +100,10 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function escapeHtmlAttribute(value: string): string {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
 function plainCampaignContentToHtml(value: string): string {
   return value
     .split(/\n{2,}/)
@@ -105,6 +117,9 @@ function plainCampaignContentToHtml(value: string): string {
 
 function sanitizePreviewHref(value: string): string {
   const trimmed = value.trim();
+  if (/^\{[a-zA-Z_][a-zA-Z0-9_]*\}$/.test(trimmed)) {
+    return trimmed;
+  }
   try {
     const parsed = new URL(trimmed, "https://codrut.andreivacaru.ro");
     if (["http:", "https:", "mailto:"].includes(parsed.protocol)) {
@@ -114,6 +129,132 @@ function sanitizePreviewHref(value: string): string {
     // Fall through to a harmless placeholder when the markdown URL is invalid.
   }
   return "#";
+}
+
+function emailInlineMarkdownToHtml(value: string): string {
+  return escapeHtml(value)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[(.*?)\]\((.*?)\)/g, (_match, label: string, href: string) => {
+      const safeHref = escapeHtmlAttribute(sanitizePreviewHref(href));
+      return `<a href="${safeHref}" style="color:#890505;text-decoration:underline;font-weight:700;">${label}</a>`;
+    });
+}
+
+function emailParagraphHtml(value: string): string {
+  return `<p style="${EMAIL_PARAGRAPH_STYLE}">${emailInlineMarkdownToHtml(value).replace(/\r?\n/g, "<br />")}</p>`;
+}
+
+function emailButtonHtml(label: string, href: string): string {
+  const safeHref = escapeHtmlAttribute(sanitizePreviewHref(href));
+  const safeLabel = escapeHtml(label.trim() || "Deschide linkul");
+  return `<p style="margin:24px 0;"><a href="${safeHref}" style="${EMAIL_BUTTON_STYLE}">${safeLabel}</a></p><p style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;">Link platformă: <a href="${safeHref}" style="color:#890505;text-decoration:underline;">${safeHref}</a></p>`;
+}
+
+function emailVideoBlockHtml(): string {
+  return '<p style="margin:24px 0;"><a href="{landing_page_url}" style="display:block;text-decoration:none;color:inherit;"><span style="display:block;position:relative;max-width:420px;border-radius:14px;overflow:hidden;background:#2b211f;"><img src="{thumbnail_url}" alt="Previzualizare video" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" /><span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span></span></a></p>';
+}
+
+function emailBulletTableHtml(lines: string[]): string {
+  const rows = lines.map((line) => {
+    const match = line.match(/^\s*([•✓✗*-])\s+(.*)$/);
+    const marker = match?.[1] === "*" || match?.[1] === "-" ? "•" : match?.[1] ?? "•";
+    const body = match?.[2] ?? line;
+    return `<tr><td style="width:24px;padding:0 8px 8px 0;vertical-align:top;color:#890505;font-weight:700;">${escapeHtml(marker)}</td><td style="padding:0 0 8px;vertical-align:top;">${emailInlineMarkdownToHtml(body)}</td></tr>`;
+  }).join("");
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 18px;font-size:15px;line-height:1.65;border-collapse:collapse;">${rows}</table>`;
+}
+
+function friendlyEmailBlocksToHtml(body: string): string {
+  return body
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      if (block === DEFAULT_VIDEO_TOKEN) return emailVideoBlockHtml();
+      const actionMatch = block.match(/^\{action_button:([^|]+)\|(.+)\}$/);
+      if (actionMatch) return emailButtonHtml(actionMatch[1], actionMatch[2]);
+      const calendlyMatch = block.match(/^\{calendly_button:([^}]+)\}$/);
+      if (calendlyMatch) return emailButtonHtml(calendlyMatch[1], "{calendly_url}");
+      const lines = block.split(/\r?\n/);
+      if (lines.every((line) => /^\s*[•✓✗*-]\s+/.test(line))) {
+        return emailBulletTableHtml(lines);
+      }
+      return emailParagraphHtml(block);
+    })
+    .join("");
+}
+
+export function buildStyledEmailTemplateBody({
+  heading,
+  body,
+  lane,
+}: {
+  heading: string;
+  body: string;
+  lane: "transactional" | "campaign";
+}): string {
+  const headingHtml = heading.trim()
+    ? `<h1 style="${EMAIL_HEADING_STYLE}">${emailInlineMarkdownToHtml(heading.trim())}</h1>`
+    : "";
+  const shellClose = lane === "campaign" ? PROMOTIONAL_EMAIL_PREVIEW_SHELL_CLOSE : EMAIL_PREVIEW_SHELL_CLOSE;
+  return `${EMAIL_PREVIEW_SHELL_OPEN}${headingHtml}${friendlyEmailBlocksToHtml(body)}${shellClose}`;
+}
+
+export function parseEmailTemplateEditorDraft(body: string, fallbackHeading: string): { heading: string; body: string } {
+  if (!looksLikeHtml(body) || typeof DOMParser === "undefined") {
+    return { heading: fallbackHeading, body };
+  }
+
+  const parser = new DOMParser();
+  const document = parser.parseFromString(body, "text/html");
+  const headingNode = document.body.querySelector("h1,h2,h3");
+  const heading = headingNode?.textContent?.trim() || fallbackHeading;
+  const blocks: string[] = [];
+  const skipTexts = [
+    "Andrei Văcaru",
+    "Ai primit acest email deoarece",
+    "Str. Exemplu Nr. 10",
+  ];
+
+  Array.from(document.body.querySelectorAll("h1,h2,h3,p,table")).forEach((node) => {
+    if (node === headingNode) return;
+    const text = node.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    if (!text || skipTexts.some((skipText) => text.includes(skipText)) || text.startsWith("Link platformă:") || text === "Dezabonare") {
+      return;
+    }
+    if (node.tagName === "TABLE") {
+      const rows = Array.from(node.querySelectorAll("tr"))
+        .map((row) => {
+          const cells = Array.from(row.querySelectorAll("td,th"));
+          const marker = cells[0]?.textContent?.trim() || "•";
+          const value = cells.slice(1).map((cell) => cell.textContent?.trim() ?? "").join(" ").trim();
+          return value ? `${marker} ${value}` : "";
+        })
+        .filter(Boolean);
+      if (rows.length > 0) blocks.push(rows.join("\n"));
+      return;
+    }
+    if (node.querySelector("img")) {
+      blocks.push(DEFAULT_VIDEO_TOKEN);
+      return;
+    }
+    const link = node.querySelector("a[href]");
+    if (link) {
+      const href = link.getAttribute("href") ?? "";
+      const label = link.textContent?.trim() || "Deschide linkul";
+      if (href.includes("calendly_url")) {
+        blocks.push(`{calendly_button:${label}}`);
+      } else if (href.includes("action_url") || href.includes("landing_page_url") || link.getAttribute("style")?.includes("background")) {
+        blocks.push(`{action_button:${label}|${href}}`);
+      } else {
+        blocks.push(text);
+      }
+      return;
+    }
+    blocks.push(text);
+  });
+
+  return { heading, body: blocks.join("\n\n") };
 }
 
 export function replacePreviewPlaceholders(
@@ -444,6 +585,11 @@ function campaignRecipientSegment(recipient: CampaignRecipientRow): "past_custom
   return recipient.clientType === "tip_1" ? "past_customer" : "potential_customer";
 }
 
+function campaignSegmentLabel(segment: CampaignTargetSegment): string {
+  if (segment === null) return "Fără grup";
+  return segment === "past_customer" ? "Client existent" : "Prospect";
+}
+
 function campaignRecipientMatchesSearch(recipient: CampaignRecipientRow, query: string): boolean {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
@@ -620,6 +766,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   // Editor fields
   const [editName, setEditName] = useState("");
   const [editSubject, setEditSubject] = useState("");
+  const [editHeading, setEditHeading] = useState("");
   const [editBody, setEditBody] = useState("");
   const [editLane, setEditLane] = useState<"transactional" | "campaign">("transactional");
   const [previewCalendlyUrl, setPreviewCalendlyUrl] = useState(MOCK_REPLACEMENTS["{calendly_url}"]);
@@ -637,7 +784,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignModalHydrationKey, setCampaignModalHydrationKey] = useState<string | null>(null);
   const [campaignView, setCampaignViewState] = useState<CampaignViewKey>(normalizeCampaignView(get("view")));
   const [campaignName, setCampaignName] = useState("Campanie video leadership");
-  const [campaignSegment, setCampaignSegment] = useState<"past_customer" | "potential_customer">("potential_customer");
+  const [campaignSegment, setCampaignSegment] = useState<CampaignTargetSegment>("potential_customer");
   const [campaignTemplateId, setCampaignTemplateId] = useState("");
   const [campaignSubject, setCampaignSubject] = useState("O idee practică pentru echipa ta, {first_name}");
   const [campaignBody, setCampaignBody] = useState("");
@@ -652,6 +799,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
   const [campaignMemberships, setCampaignMemberships] = useState<Record<string, string[]>>({});
+  const [campaignMembershipSearches, setCampaignMembershipSearches] = useState<Record<string, string>>({});
   const [savingCampaignMembershipId, setSavingCampaignMembershipId] = useState<string | null>(null);
   const [campaignContactMessage, setCampaignContactMessage] = useState<string | null>(null);
   const [selectedCampaignRecipientIds, setSelectedCampaignRecipientIds] = useState<string[]>([]);
@@ -754,6 +902,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const campaignTemplates = useMemo(
     () => templates.filter((template) => {
       if (template.lane !== "campaign") return false;
+      if (campaignSegment === null) return true;
       const audience = template.audience ?? "";
       if (campaignSegment === "past_customer") return audience.includes("past_customer");
       return audience.includes("potential_customer");
@@ -1053,7 +1202,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         await createCampaignOnServer(payload);
         setCampaignMessage("Campania a fost salvată.");
       }
-      closeCampaignModal("replace");
+      setCampaignViewState("campaigns");
+      setShowCampaignModal(false);
+      setEditingCampaign(null);
+      setCampaignModalHydrationKey(null);
+      setParams({ tab: "campaigns", view: "campaigns", modal: null, campaignId: null }, "replace");
       await loadCampaigns();
     } catch (error) {
       setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi salvată.");
@@ -1368,17 +1521,24 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   const campaignEligibleRecipients = (campaign: EmailCampaign) =>
     summary.campaign.recipients.filter((recipient) =>
-      campaignRecipientSegment(recipient) === campaign.segment
-      && recipient.status !== "unsubscribed"
+      (campaign.segment === null || campaignRecipientSegment(recipient) === campaign.segment)
+      && isCampaignRecipientEffectivelyActive(recipient)
       && recipient.email.trim()
     );
+
+  const visibleCampaignEligibleRecipients = (campaign: EmailCampaign) => {
+    const search = campaignMembershipSearches[campaign.id] ?? "";
+    return campaignEligibleRecipients(campaign).filter((recipient) =>
+      campaignRecipientMatchesSearch(recipient, search),
+    );
+  };
 
   const activeCampaignMembershipIds = (campaign: EmailCampaign) =>
     (campaignMemberships[campaign.id] ?? []).filter((recipientId) => {
       const recipient = campaignContactsById.get(recipientId);
       return Boolean(
         recipient
-        && campaignRecipientSegment(recipient) === campaign.segment
+        && (campaign.segment === null || campaignRecipientSegment(recipient) === campaign.segment)
         && isCampaignRecipientEffectivelyActive(recipient)
         && recipient.email.trim(),
       );
@@ -1533,9 +1693,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const selectedTemplate = templatesById.get(selectedTemplateId);
   useEffect(() => {
     if (selectedTemplate) {
+      const draft = parseEmailTemplateEditorDraft(selectedTemplate.body, selectedTemplate.subject);
       setEditName(selectedTemplate.name);
       setEditSubject(selectedTemplate.subject);
-      setEditBody(selectedTemplate.body);
+      setEditHeading(draft.heading);
+      setEditBody(draft.body);
       setEditLane(selectedTemplate.lane);
     }
   }, [selectedTemplate]);
@@ -1544,17 +1706,21 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     if (!selectedTemplateId || !selectedTemplate) return;
     setIsLoadingTemplates(true);
     try {
+      const nextBody = buildStyledEmailTemplateBody({
+        heading: editHeading,
+        body: editBody,
+        lane: editLane,
+      });
+      const nextTextBody = htmlToPlainText(nextBody);
       const updatedTemp: EmailTemplate = {
         ...selectedTemplate,
         subject: editSubject,
-        body: editBody,
+        body: nextBody,
         lane: editLane,
-        textBody: editBody === selectedTemplate.body
-          ? selectedTemplate.textBody
-          : htmlToPlainText(editBody),
+        textBody: nextTextBody,
         placeholders: detectedPlaceholders(
           editSubject,
-          `${editBody}\n${editBody === selectedTemplate.body ? (selectedTemplate.textBody ?? "") : htmlToPlainText(editBody)}`,
+          `${nextBody}\n${nextTextBody}`,
         ),
       };
       const saved = await updateEmailTemplateOnServer(updatedTemp);
@@ -1578,9 +1744,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       subject: "Subiectul emailului {first_name}",
       lane: "transactional",
       placeholders: ["{first_name}"],
-      body: `Salut {first_name},
-
-Introduceți conținutul noului șablon email aici. Puteți folosi coduri între acolade pentru personalizare.`,
+      body: buildStyledEmailTemplateBody({
+        heading: "Titlul din email",
+        body: "Salut {first_name},\n\nIntroduceți conținutul noului șablon email aici. Puteți folosi coduri între acolade pentru personalizare.",
+        lane: "transactional",
+      }),
     };
     setIsLoadingTemplates(true);
     try {
@@ -1664,11 +1832,15 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
       selectedTemplate
         ? getRenderedPreview(
             isEditing ? editSubject : selectedTemplate.subject,
-            isEditing ? editBody : selectedTemplate.body,
+            isEditing ? buildStyledEmailTemplateBody({
+              heading: editHeading,
+              body: editBody,
+              lane: editLane,
+            }) : selectedTemplate.body,
             isEditing ? editLane : selectedTemplate.lane,
           )
         : { subject: "", bodyHtml: "" },
-    [editBody, editLane, editSubject, getRenderedPreview, isEditing, selectedTemplate],
+    [editBody, editHeading, editLane, editSubject, getRenderedPreview, isEditing, selectedTemplate],
   );
   const campaignPreview = useMemo(
     () => getRenderedPreview(
@@ -1794,6 +1966,8 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                       const memberIds = campaignMemberships[campaign.id] ?? [];
                       const activeMemberIds = activeCampaignMembershipIds(campaign);
                       const eligibleRecipients = campaignEligibleRecipients(campaign);
+                      const visibleEligibleRecipients = visibleCampaignEligibleRecipients(campaign);
+                      const membershipSearch = campaignMembershipSearches[campaign.id] ?? "";
 
                       return (
                         <article key={campaign.id} className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-4 shadow-sm">
@@ -1806,7 +1980,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                                 </span>
                               </div>
                               <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-foreground/55">
-                                {campaign.segment === "past_customer" ? "Client existent" : "Prospect"} · {campaign.subject}
+                                {campaignSegmentLabel(campaign.segment)} · {campaign.subject}
                               </p>
                               <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
                                 {campaign.video_url ? <span>Video</span> : null}
@@ -1820,9 +1994,21 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                                 <span>Recipienti campanie ({activeMemberIds.length}/{eligibleRecipients.length})</span>
                                 <span className="text-foreground/40">⌄</span>
                               </summary>
+                              <label className="mt-3 block">
+                                <span className="sr-only">Caută destinatari pentru {campaign.name}</span>
+                                <input
+                                  value={membershipSearch}
+                                  onChange={(event) => setCampaignMembershipSearches((current) => ({
+                                    ...current,
+                                    [campaign.id]: event.target.value,
+                                  }))}
+                                  className="control-input w-full py-2 text-xs"
+                                  placeholder={campaign.segment === null ? "Caută în toate contactele..." : "Caută în segment..."}
+                                />
+                              </label>
                               <div className="mt-3 grid max-h-60 gap-2 overflow-y-auto pr-1">
-                                {eligibleRecipients.length > 0 ? (
-                                  eligibleRecipients.map((recipient) => (
+                                {visibleEligibleRecipients.length > 0 ? (
+                                  visibleEligibleRecipients.map((recipient) => (
                                     <label
                                       key={recipient.id}
                                       className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs"
@@ -1846,7 +2032,7 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                                   ))
                                 ) : (
                                   <p className="rounded-lg border border-dashed border-[var(--border)] px-3 py-4 text-xs font-semibold text-foreground/45">
-                                    Nu există contacte active pentru segmentul campaniei.
+                                    {eligibleRecipients.length > 0 ? "Niciun contact nu corespunde căutării." : "Nu există contacte active pentru selecția campaniei."}
                                   </p>
                                 )}
                               </div>
@@ -2447,13 +2633,42 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                     />
                   </label>
 
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Titlu mare în email</span>
+                    <input
+                      type="text"
+                      disabled={!isEditing}
+                      value={isEditing ? editHeading : parseEmailTemplateEditorDraft(selectedTemplate.body, selectedTemplate.subject).heading}
+                      onChange={(e) => setEditHeading(e.target.value)}
+                      className="control-input w-full py-3 disabled:opacity-60"
+                    />
+                  </label>
+
                   <label className="block flex-1 flex flex-col">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Corp email (Markdown)</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/60 mb-2 block">Corp email</span>
+                    {isEditing ? (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_ACTION_TOKEN}`)}
+                          className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-[10px] font-bold text-foreground/65 hover:border-burgundy/35 hover:text-burgundy"
+                        >
+                          Adaugă buton link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_VIDEO_TOKEN}`)}
+                          className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-[10px] font-bold text-foreground/65 hover:border-burgundy/35 hover:text-burgundy"
+                        >
+                          Adaugă video
+                        </button>
+                      </div>
+                    ) : null}
                     <textarea
                       disabled={!isEditing}
-                      value={isEditing ? editBody : selectedTemplate.body}
+                      value={isEditing ? editBody : parseEmailTemplateEditorDraft(selectedTemplate.body, selectedTemplate.subject).body}
                       onChange={(e) => setEditBody(e.target.value)}
-                      className="control-input min-h-[200px] w-full flex-1 resize-none py-4 font-mono leading-relaxed disabled:opacity-60"
+                      className="control-input min-h-[200px] w-full flex-1 resize-none py-4 leading-relaxed disabled:opacity-60"
                     />
                   </label>
                 </div>
@@ -2574,13 +2789,14 @@ Introduceți conținutul noului șablon email aici. Puteți folosi coduri între
                         <label className="block">
                           <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-foreground/60">Segment</span>
                           <select
-                            value={campaignSegment}
+                            value={campaignSegment ?? ""}
                             onChange={(event) => {
-                              setCampaignSegment(event.target.value as "past_customer" | "potential_customer");
+                              setCampaignSegment(event.target.value ? event.target.value as CampaignSegmentKey : null);
                               setCampaignTemplateId("");
                             }}
                             className="control-input w-full py-3"
                           >
+                            <option value="">Fără grup preselectat</option>
                             <option value="potential_customer">Prospect / client potențial</option>
                             <option value="past_customer">Client vechi / existent</option>
                           </select>
