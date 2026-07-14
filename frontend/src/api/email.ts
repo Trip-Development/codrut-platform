@@ -1024,10 +1024,6 @@ function normalizeHttpUrl(value: string | undefined): string | null {
   }
 }
 
-function escapeHtmlAttribute(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-}
-
 export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): CampaignCreate | null {
   const trimmedName = draft.name.trim();
   const hasVideoFields = Boolean(draft.videoUrl?.trim() || draft.thumbnailUrl?.trim());
@@ -1038,21 +1034,17 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
   if (!trimmedName) return null;
   if (hasVideoFields && (!videoUrl || !thumbnailUrl || !landingUrl)) return null;
 
-  const safeLandingUrl = landingUrl ? escapeHtmlAttribute(landingUrl) : "";
-  const safeThumbnailUrl = thumbnailUrl ? escapeHtmlAttribute(thumbnailUrl) : "";
   const htmlBody = draft.htmlBody?.trim()
     ? draft.htmlBody
         .replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
-        .replace(/\$\{landing_page_url\}/g, safeLandingUrl)
-        .replace(/\$\{thumbnail_url\}/g, safeThumbnailUrl)
     : hasVideoFields
       ? [
         "<p>Bună, ${first_name}.</p>",
         "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
         [
-          `<p><a href="${safeLandingUrl}" style="display:block;text-decoration:none;color:inherit;">`,
+          '<p><a href="${landing_page_url}" style="display:block;text-decoration:none;color:inherit;">',
           `<span style="display:block;position:relative;max-width:420px;border-radius:14px;overflow:hidden;background:#2b211f;">`,
-          `<img src="${safeThumbnailUrl}" alt="Previzualizare video" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" />`,
+          '<img src="${thumbnail_url}" alt="Previzualizare video" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" />',
           `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
           "</span>",
           "</a></p>",
@@ -1062,7 +1054,7 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
   const textBody = draft.textBody?.trim()
     ? draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
     : hasVideoFields
-      ? `Bună, \${first_name}. Vezi video-ul aici: ${landingUrl}`
+      ? "Bună, ${first_name}. Vezi video-ul aici: ${landing_page_url}"
       : "Bună, ${first_name}. Dacă vrei, alege un slot în Calendly și stabilim o conversație.";
 
   return {
