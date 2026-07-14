@@ -12,7 +12,9 @@ import {
   getTrainerSession,
 } from "./auth";
 import {
+  bulkCreateCampaignRecipientsOnServer,
   buildVideoCampaignCreatePayload,
+  createCampaignOnServer,
   createEmailTemplateOnServer,
   deleteCampaignOnServer,
   deleteCampaignRecipientOnServer,
@@ -20,10 +22,12 @@ import {
   getEmailOpsSummary,
   htmlToPlainText,
   listCampaignRecipientMembershipOnServer,
+  listCampaignsOnServer,
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
   replaceCampaignRecipientMembershipOnServer,
   sendCampaignOnServer,
+  updateCampaignOnServer,
   updateCampaignRecipientOnServer,
   updateEmailTemplateOnServer,
   uploadCampaignAssetOnServer,
@@ -247,6 +251,145 @@ describe("frontend API adapter stubs", () => {
         }),
       }),
     );
+  });
+
+  it("keeps demo fallback campaigns visible after local create, update, and delete", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    const created = await createCampaignOnServer({
+      name: "Campanie locală",
+      segment: null,
+      subject: "Subiect local",
+      html_body: "<p>Salut.</p>",
+      text_body: "Salut.",
+    });
+
+    await expect(listCampaignsOnServer()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: created.id,
+          name: "Campanie locală",
+          segment: null,
+          status: "ready",
+        }),
+      ]),
+    );
+
+    await updateCampaignOnServer(created.id, { name: "Campanie locală actualizată" });
+    await expect(listCampaignsOnServer()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: created.id,
+          name: "Campanie locală actualizată",
+        }),
+      ]),
+    );
+
+    await deleteCampaignOnServer(created.id);
+    await expect(listCampaignsOnServer()).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: created.id })]),
+    );
+  });
+
+  it("persists demo fallback campaign recipient memberships after saving", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    const savedRows = await replaceCampaignRecipientMembershipOnServer("campaign-local", [
+      "recipient-1",
+      "recipient-2",
+      "recipient-1",
+    ]);
+    expect(savedRows.map((recipient) => recipient.id)).toEqual(["recipient-1", "recipient-2"]);
+
+    await expect(listCampaignRecipientMembershipOnServer("campaign-local")).resolves.toEqual([
+      expect.objectContaining({ id: "recipient-1", membershipSource: "manual" }),
+      expect.objectContaining({ id: "recipient-2", membershipSource: "manual" }),
+    ]);
+
+    await deleteCampaignOnServer("campaign-local");
+    await expect(listCampaignRecipientMembershipOnServer("campaign-local")).resolves.toEqual([]);
+  });
+
+  it("keeps demo fallback contacts visible after manual add, update, and delete", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    await expect(
+      bulkCreateCampaignRecipientsOnServer([
+        {
+          email: "ada@manual.example",
+          contact_name: "Ada Test",
+          organization_name: "Local Org",
+          segment: "potential_customer",
+        },
+      ]),
+    ).resolves.toMatchObject({ created: 1, updated: 0 });
+
+    await expect(
+      bulkCreateCampaignRecipientsOnServer([
+        {
+          email: "ada@manual.example",
+          contact_name: "Ada Lovelace",
+          organization_name: "Updated Org",
+          segment: "past_customer",
+        },
+      ]),
+    ).resolves.toMatchObject({ created: 0, updated: 1 });
+
+    const summary = await getEmailOpsSummary();
+    const addedContact = summary.campaign.recipients.find((recipient) => recipient.email === "ada@manual.example");
+    expect(addedContact).toEqual(
+      expect.objectContaining({
+        company: "Updated Org",
+        firstName: "Ada",
+        lastName: "Lovelace",
+        clientType: "tip_1",
+      }),
+    );
+
+    await deleteCampaignRecipientOnServer(addedContact?.id ?? "");
+    await expect(getEmailOpsSummary()).resolves.toEqual(
+      expect.objectContaining({
+        campaign: expect.objectContaining({
+          recipients: expect.not.arrayContaining([
+            expect.objectContaining({ email: "ada@manual.example" }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it("auto-selects active demo contacts for typed campaigns but keeps no-group campaigns empty", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    const existingCampaign = await createCampaignOnServer({
+      name: "Campanie clienți existenți",
+      segment: "past_customer",
+      subject: "Subiect clienți",
+      html_body: "<p>Salut.</p>",
+      text_body: "Salut.",
+    });
+
+    await expect(listCampaignRecipientMembershipOnServer(existingCampaign.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "campaign-atlas-ceo" }),
+        expect.objectContaining({ id: "campaign-meridian-director" }),
+      ]),
+    );
+    await expect(listCampaignRecipientMembershipOnServer(existingCampaign.id)).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "campaign-nova-retail" })]),
+    );
+
+    await replaceCampaignRecipientMembershipOnServer(existingCampaign.id, []);
+    await expect(listCampaignRecipientMembershipOnServer(existingCampaign.id)).resolves.toEqual([]);
+
+    const noGroupCampaign = await createCampaignOnServer({
+      name: "Campanie fără grup",
+      segment: null,
+      subject: "Subiect liber",
+      html_body: "<p>Salut.</p>",
+      text_body: "Salut.",
+    });
+    await expect(listCampaignRecipientMembershipOnServer(noGroupCampaign.id)).resolves.toEqual([]);
   });
 
   it("loads and replaces campaign-specific recipient membership", async () => {

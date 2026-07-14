@@ -1335,7 +1335,7 @@ export interface components {
              * Segment
              * @enum {string}
              */
-            segment: "past_customer" | "potential_customer";
+            segment?: "past_customer" | "potential_customer" | null;
             /** Subject */
             subject: string;
             /** Html Body */

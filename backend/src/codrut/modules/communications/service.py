@@ -555,7 +555,11 @@ class CommunicationsService:
         campaign = Campaign(
             owner_id=owner_id,
             name=payload.name,
-            segment=payload.segment,
+            segment=(
+                CampaignRecipientSegment(payload.segment)
+                if payload.segment is not None
+                else None
+            ),
             status=CampaignStatus.ready,
             subject=payload.subject,
             html_body=payload.html_body,
@@ -581,14 +585,12 @@ class CommunicationsService:
         provided_fields = payload.model_fields_set
         if "name" in provided_fields and payload.name is not None:
             campaign.name = payload.name.strip()
-        if "segment" in provided_fields and payload.segment is not None:
-            try:
-                campaign.segment = CampaignRecipientSegment(payload.segment)
-            except ValueError as exc:
-                raise DomainError(
-                    "Invalid campaign segment.",
-                    code="campaign_segment_invalid",
-                ) from exc
+        if "segment" in provided_fields:
+            campaign.segment = (
+                CampaignRecipientSegment(payload.segment)
+                if payload.segment is not None
+                else None
+            )
         if "status" in provided_fields and payload.status is not None:
             try:
                 campaign.status = CampaignStatus(payload.status)
@@ -681,11 +683,13 @@ class CommunicationsService:
                 "Campaign recipient membership includes unknown contacts.",
                 code="campaign_membership_recipient_not_found",
             )
-        wrong_segment = [
-            recipient.email or str(recipient.id)
-            for recipient in recipients
-            if recipient.segment != campaign.segment
-        ]
+        wrong_segment = []
+        if campaign.segment is not None:
+            wrong_segment = [
+                recipient.email or str(recipient.id)
+                for recipient in recipients
+                if recipient.segment != campaign.segment
+            ]
         if wrong_segment:
             raise DomainError(
                 "Campaign recipient membership must match the campaign segment.",
@@ -728,7 +732,7 @@ class CommunicationsService:
         results: list[CampaignSendRecipientResult] = []
         remaining_sends = await _remaining_email_sends_today(repository, settings)
         for recipient in recipients:
-            if recipient.segment != campaign.segment:
+            if campaign.segment is not None and recipient.segment != campaign.segment:
                 results.append(
                     CampaignSendRecipientResult(
                         recipient_id=recipient.id,
@@ -842,6 +846,7 @@ class CommunicationsService:
         if (
             member_ids
             or campaign.recipient_memberships_initialized
+            or campaign.segment is None
             or campaign.status not in {CampaignStatus.draft, CampaignStatus.ready}
         ):
             return member_ids

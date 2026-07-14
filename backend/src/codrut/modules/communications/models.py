@@ -171,9 +171,9 @@ class Campaign(TimestampMixin, Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    segment: Mapped[CampaignRecipientSegment] = mapped_column(
+    segment: Mapped[CampaignRecipientSegment | None] = mapped_column(
         Enum(CampaignRecipientSegment),
-        nullable=False,
+        nullable=True,
     )
     status: Mapped[CampaignStatus] = mapped_column(
         Enum(CampaignStatus),

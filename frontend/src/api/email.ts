@@ -694,6 +694,72 @@ export type CampaignRecipientMembershipRow = CampaignRecipientRow & {
   membershipSource?: string | null;
 };
 
+const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
+  {
+    id: "campaign-atlas-ceo",
+    company: "Atlas Mobility",
+    firstName: "Radu",
+    lastName: "Munteanu",
+    email: "radu.munteanu@atlas-mobility.ro",
+    clientType: "tip_1",
+    status: "sent",
+    openCount: 3,
+    clickCount: 2,
+    viewCount: 1,
+    replyCount: 1,
+    calendlyClickCount: 1,
+    emailVariant: "variant_a",
+    outcome: "intalnire",
+  },
+  {
+    id: "campaign-meridian-director",
+    company: "Clinica Meridian",
+    firstName: "Diana",
+    lastName: "Ene",
+    email: "diana.ene@clinica-meridian.ro",
+    clientType: "tip_1",
+    status: "ready",
+    openCount: 1,
+    clickCount: 1,
+    viewCount: 1,
+    replyCount: 0,
+    calendlyClickCount: 0,
+    emailVariant: "variant_b",
+  },
+  {
+    id: "campaign-nova-retail",
+    company: "Nova Retail Group",
+    firstName: "Cristina",
+    lastName: "Olaru",
+    email: "cristina.olaru@nova-retail.ro",
+    clientType: "tip_2",
+    status: "needs_contact_name",
+    openCount: 0,
+    clickCount: 0,
+    viewCount: 0,
+    replyCount: 0,
+    calendlyClickCount: 0,
+    emailVariant: "variant_a",
+  },
+  {
+    id: "campaign-suppressed",
+    company: "Fabrica Nord",
+    email: "office@fabricanord.ro",
+    clientType: "tip_2",
+    status: "suppressed",
+    openCount: 0,
+    clickCount: 0,
+    viewCount: 0,
+    replyCount: 0,
+    calendlyClickCount: 0,
+    emailVariant: "variant_c",
+  },
+];
+
+function getSeededCampaignRecipients(): CampaignRecipientRow[] {
+  return SEEDED_CAMPAIGN_RECIPIENTS.map((recipient) => ({ ...recipient }));
+}
+
 export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
   return [
     { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },
@@ -733,67 +799,7 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
           ctaPrimary: "Programează o discuție",
           ctaSecondary: "Vreau să fiu contactat",
         },
-        recipients: [
-          {
-            id: "campaign-atlas-ceo",
-            company: "Atlas Mobility",
-            firstName: "Radu",
-            lastName: "Munteanu",
-            email: "radu.munteanu@atlas-mobility.ro",
-            clientType: "tip_1",
-            status: "sent",
-            openCount: 3,
-            clickCount: 2,
-            viewCount: 1,
-            replyCount: 1,
-            calendlyClickCount: 1,
-            emailVariant: "variant_a",
-            outcome: "intalnire",
-          },
-          {
-            id: "campaign-meridian-director",
-            company: "Clinica Meridian",
-            firstName: "Diana",
-            lastName: "Ene",
-            email: "diana.ene@clinica-meridian.ro",
-            clientType: "tip_1",
-            status: "ready",
-            openCount: 1,
-            clickCount: 1,
-            viewCount: 1,
-            replyCount: 0,
-            calendlyClickCount: 0,
-            emailVariant: "variant_b",
-          },
-          {
-            id: "campaign-nova-retail",
-            company: "Nova Retail Group",
-            firstName: "Cristina",
-            lastName: "Olaru",
-            email: "cristina.olaru@nova-retail.ro",
-            clientType: "tip_2",
-            status: "needs_contact_name",
-            openCount: 0,
-            clickCount: 0,
-            viewCount: 0,
-            replyCount: 0,
-            calendlyClickCount: 0,
-            emailVariant: "variant_a",
-          },
-          {
-            id: "campaign-suppressed",
-            company: "Fabrica Nord",
-            email: "office@fabricanord.ro",
-            clientType: "tip_2",
-            status: "suppressed",
-            openCount: 0,
-            clickCount: 0,
-            viewCount: 0,
-            replyCount: 0,
-            calendlyClickCount: 0,
-            emailVariant: "variant_c",
-          },
-        ],
+        recipients: readDemoCampaignRecipients(),
         weeklyReport: {
           cadence: "Săptămânal",
           metrics: ["deschideri", "clickuri", "vizualizări video", "reply-uri", "clickuri Calendly", "variantă email"],
@@ -837,14 +843,14 @@ export async function bulkCreateCampaignRecipientsOnServer(
     });
     if (!response.ok) {
       if (isDemoFallbackEnabled()) {
-        return { status: "success", count: recipients.length, created: recipients.length, updated: 0 };
+        return bulkCreateDemoCampaignRecipients(recipients);
       }
       throw new Error(`Failed to upload recipients: ${response.status}`);
     }
     return await response.json();
   } catch (err) {
     if (isDemoFallbackEnabled()) {
-      return { status: "success", count: recipients.length, created: recipients.length, updated: 0 };
+      return bulkCreateDemoCampaignRecipients(recipients);
     }
     throw err;
   }
@@ -863,13 +869,13 @@ export async function updateCampaignRecipientOnServer(
       credentials: "include",
     });
     if (!response.ok) {
-      if (isDemoFallbackEnabled()) return { id: recipientId, ...recipient };
+      if (isDemoFallbackEnabled()) return updateDemoCampaignRecipient(recipientId, recipient);
       const errorBody = await response.json().catch(() => null);
       throw new Error(errorBody?.error?.message ?? `Nu am putut actualiza contactul (${response.status}).`);
     }
     return await response.json();
   } catch (err) {
-    if (isDemoFallbackEnabled()) return { id: recipientId, ...recipient };
+    if (isDemoFallbackEnabled()) return updateDemoCampaignRecipient(recipientId, recipient);
     throw err;
   }
 }
@@ -882,12 +888,18 @@ export async function deleteCampaignRecipientOnServer(recipientId: string): Prom
       credentials: "include",
     });
     if (!response.ok) {
-      if (isDemoFallbackEnabled()) return;
+      if (isDemoFallbackEnabled()) {
+        deleteDemoCampaignRecipient(recipientId);
+        return;
+      }
       const errorBody = await response.json().catch(() => null);
       throw new Error(errorBody?.error?.message ?? `Nu am putut șterge contactul (${response.status}).`);
     }
   } catch (err) {
-    if (isDemoFallbackEnabled()) return;
+    if (isDemoFallbackEnabled()) {
+      deleteDemoCampaignRecipient(recipientId);
+      return;
+    }
     throw err;
   }
 }
@@ -911,13 +923,13 @@ export async function listCampaignRecipientMembershipOnServer(
       credentials: "include",
     });
     if (!response.ok) {
-      if (isDemoFallbackEnabled()) return [];
+      if (isDemoFallbackEnabled()) return readDemoCampaignMembershipRows(campaignId);
       const errorBody = await response.json().catch(() => null);
       throw new Error(errorBody?.error?.message ?? `Nu am putut încărca destinatarii campaniei (${response.status}).`);
     }
     return campaignMembershipRowsFromPayload(await response.json());
   } catch (err) {
-    if (isDemoFallbackEnabled()) return [];
+    if (isDemoFallbackEnabled()) return readDemoCampaignMembershipRows(campaignId);
     throw err;
   }
 }
@@ -935,21 +947,21 @@ export async function replaceCampaignRecipientMembershipOnServer(
       credentials: "include",
     });
     if (!response.ok) {
-      if (isDemoFallbackEnabled()) return [];
+      if (isDemoFallbackEnabled()) return replaceDemoCampaignMembershipRows(campaignId, recipientIds);
       const errorBody = await response.json().catch(() => null);
       throw new Error(errorBody?.error?.message ?? `Nu am putut salva destinatarii campaniei (${response.status}).`);
     }
     if (response.status === 204) return [];
     return campaignMembershipRowsFromPayload(await response.json());
   } catch (err) {
-    if (isDemoFallbackEnabled()) return [];
+    if (isDemoFallbackEnabled()) return replaceDemoCampaignMembershipRows(campaignId, recipientIds);
     throw err;
   }
 }
 
 export type CampaignCreate = {
   name: string;
-  segment: "past_customer" | "potential_customer";
+  segment: "past_customer" | "potential_customer" | null;
   subject: string;
   html_body: string;
   text_body: string;
@@ -992,7 +1004,7 @@ export async function uploadCampaignAssetOnServer(file: File): Promise<CampaignA
 
 export type CampaignVideoDraft = {
   name: string;
-  segment: "past_customer" | "potential_customer";
+  segment: "past_customer" | "potential_customer" | null;
   subject: string;
   htmlBody?: string;
   textBody?: string;
@@ -1096,8 +1108,328 @@ const SEEDED_CAMPAIGNS: EmailCampaign[] = [
   },
 ];
 
+const DEMO_CAMPAIGN_STORAGE_KEY = "codrut_demo_campaigns";
+const DEMO_CAMPAIGN_MEMBERSHIP_STORAGE_KEY = "codrut_demo_campaign_memberships";
+const DEMO_CAMPAIGN_RECIPIENT_STORAGE_KEY = "codrut_demo_campaign_recipients";
+
 function getSeededCampaigns(): EmailCampaign[] {
   return SEEDED_CAMPAIGNS.map((campaign) => ({ ...campaign }));
+}
+
+function readDemoCampaignRecipients(): CampaignRecipientRow[] {
+  if (typeof window === "undefined") return getSeededCampaignRecipients();
+
+  try {
+    const stored = window.localStorage.getItem(DEMO_CAMPAIGN_RECIPIENT_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.map((recipient) => ({ ...recipient }));
+      }
+    }
+  } catch {
+    // Fall through to the seeded demo recipients if localStorage is unavailable or malformed.
+  }
+
+  const seeded = getSeededCampaignRecipients();
+  writeDemoCampaignRecipients(seeded);
+  return seeded;
+}
+
+function writeDemoCampaignRecipients(recipients: CampaignRecipientRow[]): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      DEMO_CAMPAIGN_RECIPIENT_STORAGE_KEY,
+      JSON.stringify(recipients.map((recipient) => ({ ...recipient }))),
+    );
+  } catch {
+    // Demo fallback should keep browsing usable even when localStorage is unavailable.
+  }
+}
+
+function demoRecipientClientType(segment: CampaignRecipientCreate["segment"]): CampaignRecipientRow["clientType"] {
+  return segment === "past_customer" ? "tip_1" : "tip_2";
+}
+
+function splitDemoContactName(value: string | undefined): { firstName?: string; lastName?: string } {
+  const [firstName, ...lastNameParts] = value?.trim().split(/\s+/).filter(Boolean) ?? [];
+  return {
+    firstName: firstName || undefined,
+    lastName: lastNameParts.join(" ") || undefined,
+  };
+}
+
+function demoRecipientStatus(
+  status: CampaignRecipientCreate["status"] | CampaignRecipientUpdate["status"] | undefined,
+  contactName: string | undefined,
+  existingStatus: CampaignRecipientRow["status"] | undefined,
+): CampaignRecipientRow["status"] {
+  if (status === "suppressed") return "suppressed";
+  if (status === "unsubscribed") return "unsubscribed";
+  if (!status && existingStatus) return existingStatus;
+  return contactName?.trim() ? "ready" : "needs_contact_name";
+}
+
+function buildDemoCampaignRecipient(
+  id: string,
+  payload: CampaignRecipientCreate | CampaignRecipientUpdate,
+  existing?: CampaignRecipientRow,
+): CampaignRecipientRow {
+  const contactName = payload.contact_name ?? [existing?.firstName, existing?.lastName].filter(Boolean).join(" ");
+  const splitName = splitDemoContactName(contactName);
+  return {
+    ...existing,
+    id,
+    company: payload.organization_name ?? existing?.company ?? "Companie necompletată",
+    firstName: splitName.firstName,
+    lastName: splitName.lastName,
+    email: payload.email?.trim() ?? existing?.email ?? "",
+    clientType: payload.segment ? demoRecipientClientType(payload.segment) : existing?.clientType ?? "tip_2",
+    status: demoRecipientStatus(payload.status, contactName, existing?.status),
+  };
+}
+
+function bulkCreateDemoCampaignRecipients(
+  recipients: CampaignRecipientCreate[],
+): CampaignRecipientBulkCreateResponse {
+  const nextRecipients = readDemoCampaignRecipients();
+  let created = 0;
+  let updated = 0;
+
+  recipients.forEach((recipient, index) => {
+    const emailKey = recipient.email?.trim().toLowerCase() ?? "";
+    const existingIndex = emailKey
+      ? nextRecipients.findIndex((item) => item.email.trim().toLowerCase() === emailKey)
+      : -1;
+    const existing = existingIndex >= 0 ? nextRecipients[existingIndex] : undefined;
+    const id = existing?.id ?? `campaign-local-${Date.now()}-${index}`;
+    const nextRecipient = buildDemoCampaignRecipient(id, recipient, existing);
+
+    if (existingIndex >= 0) {
+      nextRecipients[existingIndex] = nextRecipient;
+      updated += 1;
+    } else {
+      nextRecipients.push(nextRecipient);
+      created += 1;
+    }
+  });
+
+  writeDemoCampaignRecipients(nextRecipients);
+  return { status: "success", count: recipients.length, created, updated };
+}
+
+function updateDemoCampaignRecipient(
+  recipientId: string,
+  recipient: CampaignRecipientUpdate,
+): CampaignRecipientRow {
+  const recipients = readDemoCampaignRecipients();
+  const existing = recipients.find((item) => item.id === recipientId);
+  const updated = buildDemoCampaignRecipient(recipientId, recipient, existing);
+  writeDemoCampaignRecipients(
+    existing
+      ? recipients.map((item) => (item.id === recipientId ? updated : item))
+      : [...recipients, updated],
+  );
+  return updated;
+}
+
+function deleteDemoCampaignRecipient(recipientId: string): void {
+  writeDemoCampaignRecipients(readDemoCampaignRecipients().filter((recipient) => recipient.id !== recipientId));
+  const memberships = readDemoCampaignMemberships();
+  writeDemoCampaignMemberships(
+    Object.fromEntries(
+      Object.entries(memberships).map(([campaignId, recipientIds]) => [
+        campaignId,
+        recipientIds.filter((id) => id !== recipientId),
+      ]),
+    ),
+  );
+}
+
+function readDemoCampaigns(): EmailCampaign[] {
+  if (typeof window === "undefined") return getSeededCampaigns();
+
+  try {
+    const stored = window.localStorage.getItem(DEMO_CAMPAIGN_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.map((campaign) => ({ ...campaign }));
+      }
+    }
+  } catch {
+    // Fall through to the seeded demo campaigns if localStorage is unavailable or malformed.
+  }
+
+  const seeded = getSeededCampaigns();
+  writeDemoCampaigns(seeded);
+  return seeded;
+}
+
+function writeDemoCampaigns(campaigns: EmailCampaign[]): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      DEMO_CAMPAIGN_STORAGE_KEY,
+      JSON.stringify(campaigns.map((campaign) => ({ ...campaign }))),
+    );
+  } catch {
+    // Demo fallback should keep browsing usable even when localStorage is unavailable.
+  }
+}
+
+function readDemoCampaignMemberships(): Record<string, string[]> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const stored = window.localStorage.getItem(DEMO_CAMPAIGN_MEMBERSHIP_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return Object.fromEntries(
+        Object.entries(parsed).map(([campaignId, recipientIds]) => [
+          campaignId,
+          Array.isArray(recipientIds)
+            ? recipientIds.filter((recipientId): recipientId is string => typeof recipientId === "string")
+            : [],
+        ]),
+      );
+    }
+  } catch {
+    // Demo fallback memberships are best-effort local state.
+  }
+
+  return {};
+}
+
+function writeDemoCampaignMemberships(memberships: Record<string, string[]>): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(DEMO_CAMPAIGN_MEMBERSHIP_STORAGE_KEY, JSON.stringify(memberships));
+  } catch {
+    // Keep demo browsing usable if localStorage is unavailable.
+  }
+}
+
+function demoRecipientSegment(recipient: CampaignRecipientRow): CampaignCreate["segment"] {
+  return recipient.clientType === "tip_1" ? "past_customer" : "potential_customer";
+}
+
+function isDemoRecipientEligible(recipient: CampaignRecipientRow, segment: CampaignCreate["segment"]): boolean {
+  return (
+    segment !== null
+    && demoRecipientSegment(recipient) === segment
+    && recipient.status !== "suppressed"
+    && recipient.status !== "unsubscribed"
+    && Boolean(recipient.email.trim())
+  );
+}
+
+function defaultDemoMembershipRecipientIds(segment: CampaignCreate["segment"]): string[] {
+  return readDemoCampaignRecipients()
+    .filter((recipient) => isDemoRecipientEligible(recipient, segment))
+    .map((recipient) => recipient.id);
+}
+
+function demoMembershipRows(recipientIds: string[]): CampaignRecipientMembershipRow[] {
+  const recipientsById = new Map(readDemoCampaignRecipients().map((recipient) => [recipient.id, recipient]));
+  return recipientIds.map((recipientId) => {
+    const recipient = recipientsById.get(recipientId);
+    if (recipient) {
+      return {
+        ...recipient,
+        membershipSource: "manual",
+      };
+    }
+    return {
+      id: recipientId,
+      company: "",
+      email: "",
+      clientType: "tip_2",
+      status: "ready",
+      membershipSource: "manual",
+    };
+  });
+}
+
+function readDemoCampaignMembershipRows(campaignId: string): CampaignRecipientMembershipRow[] {
+  const memberships = readDemoCampaignMemberships();
+  if (Object.prototype.hasOwnProperty.call(memberships, campaignId)) {
+    return demoMembershipRows(memberships[campaignId] ?? []);
+  }
+
+  const campaign = readDemoCampaigns().find((item) => item.id === campaignId);
+  if (!campaign || campaign.segment === null) {
+    return [];
+  }
+
+  const defaultRecipientIds = defaultDemoMembershipRecipientIds(campaign.segment);
+  writeDemoCampaignMemberships({
+    ...memberships,
+    [campaignId]: defaultRecipientIds,
+  });
+  return demoMembershipRows(defaultRecipientIds);
+}
+
+function replaceDemoCampaignMembershipRows(
+  campaignId: string,
+  recipientIds: string[],
+): CampaignRecipientMembershipRow[] {
+  const uniqueRecipientIds = Array.from(new Set(recipientIds));
+  writeDemoCampaignMemberships({
+    ...readDemoCampaignMemberships(),
+    [campaignId]: uniqueRecipientIds,
+  });
+  return demoMembershipRows(uniqueRecipientIds);
+}
+
+function createDemoCampaign(campaign: CampaignCreate): EmailCampaign {
+  const created: EmailCampaign = {
+    id: "campaign_" + Date.now(),
+    status: "ready",
+    ...campaign,
+  };
+  writeDemoCampaigns([...readDemoCampaigns(), created]);
+  if (created.segment !== null) {
+    replaceDemoCampaignMembershipRows(created.id, defaultDemoMembershipRecipientIds(created.segment));
+  }
+  return { ...created };
+}
+
+function updateDemoCampaign(campaignId: string, campaign: CampaignUpdate): EmailCampaign {
+  const campaigns = readDemoCampaigns();
+  const existing = campaigns.find((item) => item.id === campaignId) ?? {
+    id: campaignId,
+    name: "",
+    segment: "potential_customer",
+    status: "ready",
+    subject: "",
+    html_body: "",
+    text_body: "",
+  };
+  const updated: EmailCampaign = {
+    ...existing,
+    ...campaign,
+    id: campaignId,
+    status: campaign.status ?? existing.status,
+    video_url: campaign.video_url === null ? undefined : campaign.video_url ?? existing.video_url,
+    thumbnail_url: campaign.thumbnail_url === null ? undefined : campaign.thumbnail_url ?? existing.thumbnail_url,
+    landing_page_url: campaign.landing_page_url === null ? undefined : campaign.landing_page_url ?? existing.landing_page_url,
+  };
+  writeDemoCampaigns(campaigns.some((item) => item.id === campaignId)
+    ? campaigns.map((item) => (item.id === campaignId ? updated : item))
+    : [...campaigns, updated]);
+  return { ...updated };
+}
+
+function deleteDemoCampaign(campaignId: string): void {
+  writeDemoCampaigns(readDemoCampaigns().filter((campaign) => campaign.id !== campaignId));
+  const memberships = readDemoCampaignMemberships();
+  delete memberships[campaignId];
+  writeDemoCampaignMemberships(memberships);
 }
 
 export type CampaignSendRecipientResult = {
@@ -1129,14 +1461,14 @@ export async function createCampaignOnServer(campaign: CampaignCreate) {
     });
     if (!response.ok) {
       if (isDemoFallbackEnabled()) {
-        return { id: "campaign_" + Date.now(), ...campaign };
+        return createDemoCampaign(campaign);
       }
       throw new Error(`Failed to create campaign: ${response.status}`);
     }
     return await response.json();
   } catch (err) {
     if (isDemoFallbackEnabled()) {
-      return { id: "campaign_" + Date.now(), ...campaign };
+      return createDemoCampaign(campaign);
     }
     throw err;
   }
@@ -1153,7 +1485,7 @@ export async function updateCampaignOnServer(campaignId: string, campaign: Campa
     });
     if (!response.ok) {
       if (isDemoFallbackEnabled()) {
-        return { id: campaignId, name: "", segment: "potential_customer", subject: "", html_body: "", text_body: "", status: "ready", ...campaign } as EmailCampaign;
+        return updateDemoCampaign(campaignId, campaign);
       }
       const errorBody = await response.json().catch(() => null);
       throw new Error(errorBody?.error?.message ?? `Nu am putut actualiza campania (${response.status}).`);
@@ -1161,7 +1493,7 @@ export async function updateCampaignOnServer(campaignId: string, campaign: Campa
     return await response.json();
   } catch (err) {
     if (isDemoFallbackEnabled()) {
-      return { id: campaignId, name: "", segment: "potential_customer", subject: "", html_body: "", text_body: "", status: "ready", ...campaign } as EmailCampaign;
+      return updateDemoCampaign(campaignId, campaign);
     }
     throw err;
   }
@@ -1169,7 +1501,7 @@ export async function updateCampaignOnServer(campaignId: string, campaign: Campa
 
 export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
   if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
-    return getSeededCampaigns();
+    return readDemoCampaigns();
   }
 
   try {
@@ -1178,18 +1510,19 @@ export async function listCampaignsOnServer(): Promise<EmailCampaign[]> {
       credentials: "include",
     });
     if (!response.ok) {
-      if (isDemoFallbackEnabled()) return getSeededCampaigns();
+      if (isDemoFallbackEnabled()) return readDemoCampaigns();
       throw new Error(`Failed to fetch campaigns: ${response.status}`);
     }
     return await response.json();
   } catch (err) {
-    if (isDemoFallbackEnabled()) return getSeededCampaigns();
+    if (isDemoFallbackEnabled()) return readDemoCampaigns();
     throw err;
   }
 }
 
 export async function deleteCampaignOnServer(campaignId: string): Promise<void> {
   if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
+    deleteDemoCampaign(campaignId);
     return;
   }
 
@@ -1200,12 +1533,18 @@ export async function deleteCampaignOnServer(campaignId: string): Promise<void> 
       credentials: "include",
     });
     if (!response.ok) {
-      if (isDemoFallbackEnabled()) return;
+      if (isDemoFallbackEnabled()) {
+        deleteDemoCampaign(campaignId);
+        return;
+      }
       const errorBody = await response.json().catch(() => null);
       throw new Error(errorBody?.error?.message ?? `Nu am putut șterge campania (${response.status}).`);
     }
   } catch (err) {
-    if (isDemoFallbackEnabled()) return;
+    if (isDemoFallbackEnabled()) {
+      deleteDemoCampaign(campaignId);
+      return;
+    }
     throw err;
   }
 }

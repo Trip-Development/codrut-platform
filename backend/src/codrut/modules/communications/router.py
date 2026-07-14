@@ -591,7 +591,7 @@ async def update_campaign(
     return {
         "id": str(campaign.id),
         "name": campaign.name,
-        "segment": campaign.segment.value,
+        "segment": campaign.segment.value if campaign.segment is not None else None,
         "status": campaign.status.value,
         "subject": campaign.subject,
         "html_body": campaign.html_body,
@@ -626,7 +626,7 @@ async def list_campaigns(
         {
             "id": str(c.id),
             "name": c.name,
-            "segment": c.segment.value,
+            "segment": c.segment.value if c.segment is not None else None,
             "status": c.status.value,
             "subject": c.subject,
             "html_body": c.html_body,
