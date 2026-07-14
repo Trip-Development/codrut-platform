@@ -398,7 +398,7 @@ class CampaignAssetUploadResponse(BaseModel):
 
 class CampaignCreateRequest(StrictRequestModel):
     name: str = Field(min_length=1, max_length=255)
-    segment: CampaignSegmentValue
+    segment: CampaignSegmentValue | None = None
     subject: str = Field(min_length=1, max_length=255)
     html_body: str = Field(min_length=1)
     text_body: str = Field(min_length=1)
@@ -437,7 +437,7 @@ class CampaignCreateRequest(StrictRequestModel):
 
 class CampaignUpdateRequest(StrictRequestModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    segment: str | None = None
+    segment: CampaignSegmentValue | None = None
     status: str | None = None
     subject: str | None = Field(default=None, min_length=1, max_length=255)
     html_body: str | None = Field(default=None, min_length=1)

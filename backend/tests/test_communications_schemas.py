@@ -138,3 +138,17 @@ def test_campaign_create_rejects_invalid_segment() -> None:
                 "text_body": "Test",
             }
         )
+
+
+def test_campaign_create_accepts_no_preselected_segment() -> None:
+    payload = CampaignCreateRequest.model_validate(
+        {
+            "name": "Campanie fără grup",
+            "segment": None,
+            "subject": "Subiect",
+            "html_body": "<p>Test</p>",
+            "text_body": "Test",
+        }
+    )
+
+    assert payload.segment is None
