@@ -351,7 +351,7 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(navigationMocks.replace).toHaveBeenCalledWith("/trainer/email?tab=campaigns&view=campaigns", { scroll: false });
   });
 
-  it("confirms media changes and shows them in the campaign edit preview", async () => {
+  it("shows media changes inline and saves without blocking confirmation", async () => {
     const campaign = makeCampaign({
       id: "campaign-media",
       name: "Campanie media",
@@ -363,7 +363,7 @@ describe("EmailWorkspace campaign contacts", () => {
         '<p>Salut.</p><p><a href="https://old.example/landing"><img src="https://old.example/thumb.jpg" alt="Previzualizare video" /></a></p>',
       text_body: "Salut. Video: https://old.example/landing",
     });
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     emailApiMocks.listCampaignsOnServer.mockResolvedValue([campaign]);
     emailApiMocks.updateCampaignOnServer.mockResolvedValue({
@@ -404,12 +404,11 @@ describe("EmailWorkspace campaign contacts", () => {
       await waitFor(() => {
         expect(document.querySelector('a[href="https://new.example/landing"] img[src="https://new.example/thumb.jpg"]')).not.toBeNull();
       });
+      expect(screen.getByText(/Preview actualizat/)).toBeTruthy();
 
       fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
 
-      await waitFor(() => {
-        expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("Schimbi linkul video"));
-      });
+      expect(confirmSpy).not.toHaveBeenCalled();
       await waitFor(() => {
         expect(emailApiMocks.updateCampaignOnServer).toHaveBeenCalledWith(
           "campaign-media",
