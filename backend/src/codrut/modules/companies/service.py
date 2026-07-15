@@ -297,7 +297,7 @@ class CompanyService:
                 "A participant with this email already exists for this company.",
                 code="participant_exists",
             )
-        return await self.repository.add_participant(
+        participant = await self.repository.add_participant(
             ParticipantProfile(
                 company_id=company_id,
                 full_name=payload.full_name.strip(),
@@ -305,13 +305,15 @@ class CompanyService:
                 reports_to_name=clean_manager_reference(payload.reports_to_name),
                 position=_clean_optional(payload.position),
                 location=_clean_optional(payload.location),
-                role_group=_clean_optional(payload.role_group),
+                role_group=_normalize_role_group(payload.role_group),
                 pcm_profile=_clean_optional(payload.pcm_profile),
                 pcm_base=_clean_optional(payload.pcm_base),
                 pcm_phase=_clean_optional(payload.pcm_phase),
                 anonymous_name=new_anonymous_name(),
             )
         )
+        await self._sync_leadership_team_membership(company_id, participant)
+        return participant
 
     async def update_participant(
         self,
@@ -360,7 +362,7 @@ class CompanyService:
         if "location" in fields_set:
             participant.location = _clean_optional(payload.location)
         if "role_group" in fields_set:
-            participant.role_group = _clean_optional(payload.role_group)
+            participant.role_group = _normalize_role_group(payload.role_group)
 
         if payload.project_id is not None:
             membership = await self.repository.get_project_membership(
@@ -380,6 +382,9 @@ class CompanyService:
                 membership.location = participant.location
             if "role_group" in fields_set:
                 membership.role_group = participant.role_group
+
+        if "role_group" in fields_set:
+            await self._sync_leadership_team_membership(company_id, participant)
 
         return participant
 
@@ -453,50 +458,8 @@ class CompanyService:
                     code=first_issue.code,
                 )
 
-        from codrut.modules.assignments.models import (
-            Team,
-            TeamMembership,
-            TeamMembershipRole,
-            TeamType,
-        )
-
-        leadership_participants = [
-            participant
-            for participant in participants
-            if participant.role_group == "leadership"
-        ]
-        if leadership_participants:
-            leadership_team = await self.repository.get_team_by_company_name(
-                company.id,
-                "Leadership",
-            )
-            if leadership_team is None:
-                leadership_team = Team(
-                    company_id=company.id,
-                    name="Leadership",
-                    type=TeamType.leadership,
-                )
-                self.repository.session.add(leadership_team)
-                await self.repository.session.flush()
-            existing_memberships = {
-                membership.participant_profile_id: membership
-                for membership in await self.repository.list_team_memberships_by_team(
-                    leadership_team.id
-                )
-            }
-            for participant in leadership_participants:
-                existing_membership = existing_memberships.get(participant.id)
-                if existing_membership is not None:
-                    existing_membership.role = TeamMembershipRole.leader
-                    continue
-                self.repository.session.add(
-                    TeamMembership(
-                        team_id=leadership_team.id,
-                        participant_profile_id=participant.id,
-                        role=TeamMembershipRole.leader,
-                    )
-                )
-            await self.repository.session.flush()
+        for participant in participants:
+            await self._sync_leadership_team_membership(company.id, participant)
 
         if not payload.send_invites:
             return RosterImportResponse(
@@ -596,6 +559,73 @@ class CompanyService:
             participant.anonymous_name = new_anonymous_name()
             changed = True
         if changed:
+            await self.repository.session.flush()
+
+    async def _sync_leadership_team_membership(
+        self,
+        company_id: UUID,
+        participant: ParticipantProfile,
+    ) -> None:
+        from codrut.modules.assignments.models import (
+            Team,
+            TeamMembership,
+            TeamMembershipRole,
+            TeamType,
+        )
+
+        should_be_leadership = _is_leadership_role(participant.role_group)
+        if not should_be_leadership:
+            memberships = await self.repository.list_project_memberships_for_participant(
+                company_id,
+                participant.id,
+            )
+            should_be_leadership = any(
+                _is_leadership_role(membership.role_group)
+                for membership in memberships
+            )
+
+        leadership_team = await self.repository.get_team_by_company_name(
+            company_id,
+            "Leadership",
+        )
+        if not should_be_leadership and leadership_team is None:
+            return
+
+        if leadership_team is None:
+            leadership_team = Team(
+                company_id=company_id,
+                name="Leadership",
+                type=TeamType.leadership,
+            )
+            self.repository.session.add(leadership_team)
+            await self.repository.session.flush()
+
+        existing_membership = next(
+            (
+                membership
+                for membership in await self.repository.list_team_memberships_by_team(
+                    leadership_team.id
+                )
+                if membership.participant_profile_id == participant.id
+            ),
+            None,
+        )
+        if should_be_leadership:
+            if existing_membership is not None:
+                existing_membership.role = TeamMembershipRole.leader
+            else:
+                self.repository.session.add(
+                    TeamMembership(
+                        team_id=leadership_team.id,
+                        participant_profile_id=participant.id,
+                        role=TeamMembershipRole.leader,
+                    )
+                )
+            await self.repository.session.flush()
+            return
+
+        if existing_membership is not None:
+            await self.repository.session.delete(existing_membership)
             await self.repository.session.flush()
 
     async def _upsert_project_membership(
@@ -1230,6 +1260,7 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
         position=_clean_optional(row.position),
         location=_clean_optional(row.location),
         email=row.email.lower(),
+        role_group=_normalize_role_group(row.role_group),
         pcm_profile=_clean_optional(row.pcm_profile),
         pcm_base=_clean_optional(row.pcm_base),
         pcm_phase=_clean_optional(row.pcm_phase),
@@ -1237,11 +1268,30 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
 
 
 def _infer_roster_role_group(row: RosterImportRow, manager_names: set[str]) -> str:
+    explicit_role = _normalize_role_group(row.role_group)
+    if explicit_role is not None:
+        return explicit_role
     if row.reports_to_name is None:
         return "leadership"
     if manager_reference_key(row.full_name) in manager_names:
         return "leadership"
     return "member"
+
+
+def _normalize_role_group(value: str | None) -> str | None:
+    cleaned = _clean_optional(value)
+    if cleaned is None:
+        return None
+    normalized = cleaned.casefold().replace("-", "_").replace(" ", "_")
+    if normalized in {"leadership", "leader", "manager", "management"}:
+        return "leadership"
+    if normalized in {"member", "team", "team_member", "non_leadership", "not_leadership"}:
+        return "member"
+    return cleaned.casefold()
+
+
+def _is_leadership_role(value: str | None) -> bool:
+    return _normalize_role_group(value) in {"leadership", "manager"}
 
 
 def _derive_company_stage(

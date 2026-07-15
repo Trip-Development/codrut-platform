@@ -109,10 +109,12 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Fii Puternic")).toBeDefined();
-    expect(screen.getByText("Fii Perfect")).toBeDefined();
-    expect(screen.getByText("Străduiește-te")).toBeDefined();
-    expect(screen.getByText("Mulțumește-i pe alții")).toBeDefined();
+    expect(screen.getByText("Tipar de distres A")).toBeDefined();
+    expect(screen.getByText("Tipar de distres B")).toBeDefined();
+    expect(screen.getByText("Tipar de distres C")).toBeDefined();
+    expect(screen.getByText("Tipar de distres E")).toBeDefined();
+    expect(screen.queryByText("Fii Puternic")).toBeNull();
+    expect(screen.queryByText("Fii Perfect")).toBeNull();
     expect(screen.getByText(/sub presiune poți simți/)).toBeDefined();
     expect(screen.getByText(/standardele înalte ajută calitatea/)).toBeDefined();
     expect(screen.queryByText(/energia de a încerca poate fi valoroasă/)).toBeNull();
@@ -142,9 +144,9 @@ describe("ParticipantResultsPanel", () => {
             targetLabel: "Manager direct",
             primaryResult: "icare_06_aduce_claritate",
             scores: {
-              icare_inspiring_developing_people: { score: 4.4 },
-              icare_01_dezvolta_oamenii: { score: 4.2 },
-              icare_06_aduce_claritate: { score: 3.1 },
+              icare_inspiring_developing_people: { score: 88 },
+              icare_01_dezvolta_oamenii: { score: 82 },
+              icare_06_aduce_claritate: { score: 53 },
             },
           },
         ]}
@@ -168,10 +170,10 @@ describe("ParticipantResultsPanel", () => {
           completedCount: 2,
           minimumCompleted: 2,
           visible: true,
-          overallAverage: 4,
+          overallAverage: 80,
           dimensions: [
-            { id: "icare_01_dezvolta_oamenii", averageScore: 4.5, completedCount: 2 },
-            { id: "icare_02_conduce_prin_puterea_exemplului", averageScore: 3.5, completedCount: 2 },
+            { id: "icare_01_dezvolta_oamenii", averageScore: 92, completedCount: 2 },
+            { id: "icare_02_conduce_prin_puterea_exemplului", averageScore: 68, completedCount: 2 },
           ],
         }}
       />,
@@ -183,8 +185,8 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("2")).toBeDefined();
     expect(screen.getByText("Dezvoltă oamenii")).toBeDefined();
     expect(screen.getByText("Conduce prin exemplu")).toBeDefined();
-    expect(screen.getByText("4.5")).toBeDefined();
-    expect(screen.getByText("3.5")).toBeDefined();
+    expect(screen.getByText("92")).toBeDefined();
+    expect(screen.getByText("68")).toBeDefined();
     expect(screen.queryByText(/Reviewer One/i)).toBeNull();
     expect(screen.queryByText(/reviewer-one@example\.com/i)).toBeNull();
     expect(screen.queryByText("Nu există scoruri calculate încă")).toBeNull();

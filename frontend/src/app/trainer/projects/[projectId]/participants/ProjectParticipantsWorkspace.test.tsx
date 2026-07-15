@@ -190,9 +190,32 @@ describe("ProjectParticipantsWorkspace", () => {
         reportsToName: "Ana Manager",
         position: "Consultant senior",
         location: "Cluj-Napoca",
+        roleGroup: "member",
       }),
     );
     expect(await screen.findByText("Dan Actualizat")).toBeTruthy();
+  });
+
+  it("persists a manual project leadership override from the edit row", async () => {
+    vi.mocked(updateCompanyParticipant).mockResolvedValue({
+      ...participants[1],
+      role_group: "leadership",
+    });
+
+    renderWorkspace();
+
+    const row = screen.getByText("Dan Membru").closest("tr");
+    expect(row).toBeTruthy();
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Editează" }));
+    fireEvent.click(screen.getByRole("button", { name: "Membru" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
+
+    await waitFor(() =>
+      expect(updateCompanyParticipant).toHaveBeenCalledWith("company-1", "member-1", expect.objectContaining({
+        projectId: "project-1",
+        roleGroup: "leadership",
+      })),
+    );
   });
 
   it("adds pasted participants through the roster import endpoint", async () => {

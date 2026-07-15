@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 
 import Link from "next/link";
 
-import { getCompanyReportAggregate, type ReportHierarchyIssue } from "@/api/companies";
+import {
+  getCompanyReportAggregate,
+  getIcareAnswerReview,
+  type IcareAnswerReviewRow,
+  type ReportHierarchyIssue,
+} from "@/api/companies";
 import { inviteQuestionnaireLabel } from "@/api/invites";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import {
@@ -22,6 +27,7 @@ export default async function ProjectReportsPage({
   const requestOptions = await getServerApiRequestOptions();
   const { project, participants, assignments } = await getProjectReportData(projectId, requestOptions);
   const aggregate = await getCompanyReportAggregate(project.company_id, requestOptions, { projectId: project.id });
+  const icareReview = await getIcareAnswerReview(project.company_id, requestOptions, { projectId: project.id });
   const totalAssigned = aggregate.total_assigned;
   const totalCompleted = aggregate.total_completed;
   const completionRate = aggregate.completion_rate;
@@ -79,8 +85,8 @@ export default async function ProjectReportsPage({
           title="Feedback 360 iCARE"
           count={boss360Count}
           items={boss360Averages}
-          max={5}
-          valueLabel="5"
+          suffix="%"
+          max={100}
           suppressed={isSmallCohort(boss360Count)}
         />
         <ReportPanel
@@ -95,6 +101,8 @@ export default async function ProjectReportsPage({
           actionLabel="Detalii"
         />
       </section>
+
+      <IcareAnswerReviewPanel rows={icareReview.rows} />
 
       {((pcmBaseDistribution.length > 0 && aggregate.pcm_base_count >= MIN_REPORT_COHORT_SIZE) ||
         (pcmPhaseDistribution.length > 0 && aggregate.pcm_phase_count >= MIN_REPORT_COHORT_SIZE) ||
@@ -319,6 +327,70 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
   );
 }
 
+function IcareAnswerReviewPanel({ rows }: { rows: IcareAnswerReviewRow[] }) {
+  const csvHref = buildIcareReviewCsvHref(rows);
+  return (
+    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold text-burgundy/75">Review trainer</p>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">Răspunsuri individuale iCARE</h2>
+          <p className="mt-1 text-sm leading-6 text-foreground/58">
+            Comportament specific, răspuns 1-4 și dimensiunea măsurată.
+          </p>
+        </div>
+        <a
+          href={csvHref}
+          download="icare-raspunsuri-individuale.csv"
+          className="inline-flex items-center justify-center rounded-full border border-burgundy/25 px-4 py-2 text-sm font-bold text-burgundy transition hover:bg-burgundy hover:text-white"
+        >
+          Export CSV
+        </a>
+      </div>
+      <div className="max-h-[520px] overflow-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="sticky top-0 bg-surface-muted text-xs font-semibold text-foreground/50">
+            <tr>
+              <th className="px-5 py-3">Participant</th>
+              <th className="px-5 py-3">Țintă</th>
+              <th className="px-5 py-3">Comportament specific</th>
+              <th className="px-5 py-3">Răspuns</th>
+              <th className="px-5 py-3">Ce măsurăm</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border)]">
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-5 py-6 text-center text-foreground/62">
+                  Nu există încă răspunsuri iCARE trimise pentru acest proiect.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={`${row.assignment_id}-${row.measurement_id}-${row.statement_id}`}>
+                  <td className="px-5 py-4 font-semibold text-foreground">{row.respondent_name}</td>
+                  <td className="px-5 py-4 text-foreground/68">{row.target_name ?? "—"}</td>
+                  <td className="px-5 py-4 text-foreground/72">{row.statement_label}</td>
+                  <td className="px-5 py-4">
+                    <p className="font-bold text-foreground">{row.answer_label}</p>
+                    {row.answer_description ? (
+                      <p className="mt-1 max-w-xl text-xs leading-5 text-foreground/56">{row.answer_description}</p>
+                    ) : null}
+                  </td>
+                  <td className="px-5 py-4 text-foreground/68">
+                    <p className="font-semibold text-foreground">{row.measurement_label}</p>
+                    <p className="mt-1 text-xs text-foreground/52">{row.section_label}</p>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 const lencioniLegend = [
   { range: "8-9", label: "Disfuncția probabil nu este o problemă." },
   { range: "6-7", label: "Disfuncția poate fi o problemă." },
@@ -336,4 +408,38 @@ function formatResponseCount(count: number): string {
 
 function isSmallCohort(count: number): boolean {
   return count > 0 && count < MIN_REPORT_COHORT_SIZE;
+}
+
+function buildIcareReviewCsvHref(rows: IcareAnswerReviewRow[]): string {
+  const header = [
+    "participant",
+    "target",
+    "comportament_specific",
+    "raspuns",
+    "descriere_raspuns",
+    "ce_masuram",
+    "sectiune",
+    "submitted_at",
+  ];
+  const csv = [
+    header,
+    ...rows.map((row) => [
+      row.respondent_name,
+      row.target_name ?? "",
+      row.statement_label,
+      row.answer_label,
+      row.answer_description ?? "",
+      row.measurement_label,
+      row.section_label,
+      row.submitted_at ?? "",
+    ]),
+  ]
+    .map((line) => line.map(csvEscape).join(","))
+    .join("\n");
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+}
+
+function csvEscape(value: string | number): string {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }

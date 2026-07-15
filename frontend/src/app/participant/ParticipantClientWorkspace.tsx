@@ -29,11 +29,11 @@ type ParticipantClientWorkspaceProps = {
 };
 
 const driverLabels: Record<string, string> = {
-  be_strong: "Fii Puternic",
-  be_perfect: "Fii Perfect",
-  try_hard: "Străduiește-te",
-  hurry_up: "Grăbește-te",
-  please_people: "Mulțumește-i pe alții",
+  be_strong: "Tipar de distres A",
+  be_perfect: "Tipar de distres B",
+  try_hard: "Tipar de distres C",
+  hurry_up: "Tipar de distres D",
+  please_people: "Tipar de distres E",
 };
 
 const driverExplanations: Record<string, string> = {
@@ -463,12 +463,11 @@ function resultKindLabel(kind: ResultKind): string {
 
 function maxScoreForKind(kind: ResultKind): number {
   if (kind === "lencioni") return 10;
-  if (kind === "icare") return 5;
   return 100;
 }
 
 function scaleLabelForKind(kind: ResultKind, max: number): string {
-  if (kind === "icare") return "scală 1-5";
+  if (kind === "icare") return "scor procentual";
   return `scală 0-${max}`;
 }
 
@@ -522,8 +521,8 @@ function fallbackInterpretationForScore(kind: ResultKind, score: number): string
   }
 
   if (kind === "icare") {
-    if (score >= 4) return "Comportamentul este observat frecvent sau constant pe scala iCARE.";
-    if (score >= 3) return "Comportamentul este observat uneori; zona merită clarificată în feedback.";
+    if (score >= 75) return "Comportamentul este observat frecvent sau constant pe scala iCARE.";
+    if (score >= 50) return "Comportamentul este observat uneori; zona merită clarificată în feedback.";
     return "Comportamentul apare rar în evaluare; poate fi o zonă de dezvoltare.";
   }
 

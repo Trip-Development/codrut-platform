@@ -54,6 +54,32 @@ class ReportHierarchyIssueResponse(BaseModel):
     message: str
 
 
+class IcareAnswerReviewRowResponse(BaseModel):
+    assignment_id: UUID
+    response_id: UUID
+    submitted_at: str | None = None
+    respondent_profile_id: UUID
+    respondent_name: str
+    respondent_email: str | None = None
+    target_profile_id: UUID | None = None
+    target_name: str | None = None
+    target_type: str
+    section_id: str
+    section_label: str
+    measurement_id: str
+    measurement_label: str
+    statement_id: str
+    statement_label: str
+    answer_value: int | str
+    answer_label: str
+    answer_description: str | None = None
+
+
+class IcareAnswerReviewResponse(BaseModel):
+    rows: list[IcareAnswerReviewRowResponse]
+    row_count: int
+
+
 class CompanyReportAggregateResponse(BaseModel):
     total_assigned: int
     total_completed: int

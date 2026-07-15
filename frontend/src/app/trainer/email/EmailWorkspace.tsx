@@ -1288,7 +1288,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
 
     if (!payload) {
-      setCampaignMessage("Completează numele campaniei. Dacă folosești video, adaugă linkul și thumbnailul.");
+      setCampaignMessage("Completează numele campaniei și folosește doar linkuri http/https valide. Dacă adaugi link video, adaugă și thumbnail.");
       return;
     }
 
@@ -1638,9 +1638,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const visibleCampaignEligibleRecipients = (campaign: EmailCampaign) => {
     const search = campaignMembershipSearches[campaign.id] ?? "";
     const typeFilter = campaignMembershipTypeFilters[campaign.id] ?? "all";
+    const companyKey = campaignMembershipCompanySelections[campaign.id] ?? "";
     return campaignEligibleRecipients().filter((recipient) =>
       campaignRecipientMatchesSearch(recipient, search)
-      && (typeFilter === "all" || campaignRecipientSegment(recipient) === typeFilter),
+      && (typeFilter === "all" || campaignRecipientSegment(recipient) === typeFilter)
+      && (!companyKey || campaignRecipientCompanyKey(recipient) === companyKey),
     );
   };
 
@@ -1668,62 +1670,23 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       (recipientId) => !campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId)),
     );
 
-  const toggleCampaignMembershipRecipient = (campaign: EmailCampaign, recipientId: string) => {
-    const eligibleIds = new Set(campaignEligibleRecipients().map((recipient) => recipient.id));
-    if (!eligibleIds.has(recipientId)) return;
-    if (campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId))) return;
-    setCampaignMemberships((currentMemberships) => {
-      const currentIds = currentMemberships[campaign.id] ?? [];
-      return {
-        ...currentMemberships,
-        [campaign.id]: currentIds.includes(recipientId)
-          ? currentIds.filter((id) => id !== recipientId)
-          : [...currentIds, recipientId],
-      };
-    });
-  };
-
-  const toggleCampaignMembershipCompany = (
+  const persistCampaignMembership = async (
     campaign: EmailCampaign,
-    companyKey: string,
-    mode: "select" | "deselect",
+    nextMemberIds: string[],
   ) => {
-    const companyRecipientIds = campaignEligibleRecipients()
-      .filter((recipient) => campaignRecipientCompanyKey(recipient) === companyKey)
-      .map((recipient) => recipient.id);
-    if (companyRecipientIds.length === 0) return;
+    const uniqueNextMemberIds = Array.from(new Set(nextMemberIds));
+    const previousMemberIds = campaignMemberships[campaign.id] ?? [];
+    const previousDeliveries = campaignMembershipDeliveries[campaign.id] ?? {};
 
-    setCampaignMemberships((currentMemberships) => {
-      const currentIds = currentMemberships[campaign.id] ?? [];
-      if (mode === "deselect") {
-        const companyRecipientIdSet = new Set(
-          companyRecipientIds.filter(
-            (recipientId) => !campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId)),
-          ),
-        );
-        return {
-          ...currentMemberships,
-          [campaign.id]: currentIds.filter((recipientId) => !companyRecipientIdSet.has(recipientId)),
-        };
-      }
-
-      const nextIds = new Set(currentIds);
-      for (const recipientId of companyRecipientIds) {
-        nextIds.add(recipientId);
-      }
-      return {
-        ...currentMemberships,
-        [campaign.id]: Array.from(nextIds),
-      };
-    });
-  };
-
-  const saveCampaignMembership = async (campaign: EmailCampaign) => {
+    setCampaignMemberships((currentMemberships) => ({
+      ...currentMemberships,
+      [campaign.id]: uniqueNextMemberIds,
+    }));
     setSavingCampaignMembershipId(campaign.id);
     setCampaignMessage(null);
+
     try {
-      const memberIds = activeCampaignMembershipIds(campaign);
-      const savedRows = await replaceCampaignRecipientMembershipOnServer(campaign.id, memberIds);
+      const savedRows = await replaceCampaignRecipientMembershipOnServer(campaign.id, uniqueNextMemberIds);
       setCampaignMemberships((currentMemberships) => ({
         ...currentMemberships,
         [campaign.id]: savedRows.map((recipient) => recipient.id),
@@ -1737,12 +1700,62 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
           ]),
         ) as Record<string, CampaignDeliveryState>,
       }));
-      setCampaignMessage(`Lista campaniei „${campaign.name}” a fost salvată: ${savedRows.length} destinatari.`);
+      setCampaignMessage(`Lista campaniei „${campaign.name}” a fost salvată automat: ${savedRows.length} destinatari.`);
     } catch (error) {
+      setCampaignMemberships((currentMemberships) => ({
+        ...currentMemberships,
+        [campaign.id]: previousMemberIds,
+      }));
+      setCampaignMembershipDeliveries((currentDeliveries) => ({
+        ...currentDeliveries,
+        [campaign.id]: previousDeliveries,
+      }));
       setCampaignMessage(error instanceof Error ? error.message : "Lista campaniei nu a putut fi salvată.");
     } finally {
       setSavingCampaignMembershipId(null);
     }
+  };
+
+  const toggleCampaignMembershipRecipient = async (campaign: EmailCampaign, recipientId: string) => {
+    const eligibleIds = new Set(campaignEligibleRecipients().map((recipient) => recipient.id));
+    if (!eligibleIds.has(recipientId)) return;
+    if (campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId))) return;
+    const currentIds = activeCampaignMembershipIds(campaign);
+    const nextIds = currentIds.includes(recipientId)
+      ? currentIds.filter((id) => id !== recipientId)
+      : [...currentIds, recipientId];
+    await persistCampaignMembership(campaign, nextIds);
+  };
+
+  const toggleCampaignMembershipCompany = (
+    campaign: EmailCampaign,
+    companyKey: string,
+    mode: "select" | "deselect",
+  ) => {
+    const companyRecipientIds = campaignEligibleRecipients()
+      .filter((recipient) => campaignRecipientCompanyKey(recipient) === companyKey)
+      .map((recipient) => recipient.id);
+    if (companyRecipientIds.length === 0) return;
+
+    const currentIds = activeCampaignMembershipIds(campaign);
+    if (mode === "deselect") {
+      const removableCompanyRecipientIds = new Set(
+        companyRecipientIds.filter(
+          (recipientId) => !campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId)),
+        ),
+      );
+      void persistCampaignMembership(
+        campaign,
+        currentIds.filter((recipientId) => !removableCompanyRecipientIds.has(recipientId)),
+      );
+      return;
+    }
+
+    const nextIds = new Set(currentIds);
+    for (const recipientId of companyRecipientIds) {
+      nextIds.add(recipientId);
+    }
+    void persistCampaignMembership(campaign, Array.from(nextIds));
   };
 
   const handleSendCampaign = async (
@@ -2240,7 +2253,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                     }))}
                                     className="control-input w-full py-2 text-xs"
                                   >
-                                    <option value="">Companie...</option>
+                                    <option value="">Toate companiile</option>
                                     {membershipCompanyGroups.map((group) => (
                                       <option key={group.key} value={group.key}>
                                         {group.label} ({group.selectedCount}/{group.recipientIds.length})
@@ -2289,7 +2302,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                           type="checkbox"
                                           checked={isChecked}
                                           disabled={deliveryLocked}
-                                          onChange={() => toggleCampaignMembershipRecipient(campaign, recipient.id)}
+                                          onChange={() => void toggleCampaignMembershipRecipient(campaign, recipient.id)}
                                           className="mt-0.5 h-4 w-4 accent-burgundy disabled:cursor-not-allowed disabled:opacity-45"
                                           aria-label={`Include ${recipient.email} în ${campaign.name}`}
                                         />
@@ -2323,16 +2336,12 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                   </p>
                                 )}
                               </div>
-                              <div className="mt-3 flex justify-end">
-                                <button
-                                  type="button"
-                                  disabled={savingCampaignMembershipId === campaign.id}
-                                  onClick={() => void saveCampaignMembership(campaign)}
-                                  className="btn-secondary px-3 py-1.5 text-[10px]"
-                                >
-                                  {savingCampaignMembershipId === campaign.id ? "Se salvează..." : "Salvează destinatarii"}
-                                </button>
-                              </div>
+                              <p
+                                aria-live="polite"
+                                className="mt-3 text-right text-[10px] font-bold uppercase tracking-wider text-foreground/45"
+                              >
+                                {savingCampaignMembershipId === campaign.id ? "Se salvează automat..." : "Bifele se salvează automat"}
+                              </p>
                             </details>
                             <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
                               <button
@@ -3059,7 +3068,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
             </div>
             </div>
 
-            <form onSubmit={handleSaveCampaign} className="flex min-h-0 flex-1 flex-col">
+            <form onSubmit={handleSaveCampaign} noValidate className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                 <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)]">
                   <div className="space-y-4">
@@ -3241,11 +3250,17 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                             unoptimized
                             className="h-36 w-full object-cover"
                           />
-                          <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-black/10">
-                            <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/65 bg-white/86 shadow-xl backdrop-blur-sm">
-                              <span className="ml-1 block h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-burgundy" />
-                            </span>
-                          </div>
+                          {campaignVideoUrl.trim() ? (
+                            <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-black/10">
+                              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/65 bg-white/86 shadow-xl backdrop-blur-sm">
+                                <span className="ml-1 block h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-burgundy" />
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="absolute inset-x-0 bottom-0 bg-surface/92 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-foreground/55">
+                              Thumbnail salvat. Adaugă link video pentru CTA.
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="mt-3 flex h-36 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-surface text-xs font-semibold text-foreground/45">

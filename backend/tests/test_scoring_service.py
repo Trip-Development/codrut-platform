@@ -14,7 +14,12 @@ from codrut.modules.companies.models import (
     ParticipantProfile,
     ProjectMembership,
 )
-from codrut.modules.forms.models import QuestionnaireKey
+from codrut.modules.forms.definitions.catalog import BOSS_360_DEFINITION
+from codrut.modules.forms.models import (
+    QuestionnaireKey,
+    QuestionnaireResponse,
+    QuestionnaireResponseStatus,
+)
 from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.service import ScoringService
@@ -133,13 +138,11 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
 
     assignment_id = uuid.uuid4()
 
-    from codrut.modules.forms.definitions.catalog import BOSS_360_DEFINITION
-
     answers = {}
     for section in BOSS_360_DEFINITION.schema.get("sections", []):
         for question in section.get("questions", []):
             for statement in question.get("statements", []):
-                score = 1 if section["id"] == "awareness" else 5
+                score = 1 if section["id"] == "awareness" else 4
                 answers[f"{question['id']}:{statement['id']}"] = score
 
     result = await service.compute_and_save_score(
@@ -149,20 +152,120 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["inspiring"] == {"score": 5.0, "raw_avg": 5.0, "answered": 9}
-    assert result.scores["create_trust"] == {"score": 5.0, "raw_avg": 5.0, "answered": 9}
-    assert result.scores["awareness"] == {"score": 1.0, "raw_avg": 1.0, "answered": 9}
+    assert result.scores["inspiring"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
+    assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
+    assert result.scores["awareness"] == {"score": 0.0, "raw_avg": 1.0, "answered": 9}
     assert result.scores["icare_01_dezvolta_oamenii"] == {
-        "score": 5.0,
-        "raw_avg": 5.0,
+        "score": 100.0,
+        "raw_avg": 4.0,
         "answered": 3,
     }
     assert result.scores["icare_07_modestie"] == {
-        "score": 1.0,
+        "score": 0.0,
         "raw_avg": 1.0,
         "answered": 3,
     }
     assert result.primary_result == "icare_07_modestie"
+
+
+async def test_icare_answer_review_returns_project_scoped_source_answers() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Icare Review {uuid.uuid4().hex[:8]}")
+            session.add(company)
+            await session.flush()
+
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership Review",
+            )
+            other_project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Other Review",
+            )
+            respondent = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Respondent One",
+                email=f"respondent-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            target = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Target Leader",
+                email=f"target-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            session.add_all([project, other_project, respondent, target])
+            await session.flush()
+
+            first_question = BOSS_360_DEFINITION.schema["sections"][0]["questions"][0]
+            first_statement = first_question["statements"][0]
+            answer_key = f"{first_question['id']}:{first_statement['id']}"
+            assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                respondent_profile_id=respondent.id,
+                questionnaire_key="boss_360",
+                target_type=AssignmentTargetType.person,
+                target_person_id=target.id,
+                status=AssignmentStatus.submitted,
+            )
+            other_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=other_project.id,
+                respondent_profile_id=respondent.id,
+                questionnaire_key="boss_360",
+                target_type=AssignmentTargetType.person,
+                target_person_id=target.id,
+                status=AssignmentStatus.submitted,
+            )
+            session.add_all([assignment, other_assignment])
+            await session.flush()
+
+            session.add_all(
+                [
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=assignment.id,
+                        questionnaire_key="boss_360",
+                        questionnaire_version=BOSS_360_DEFINITION.version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={answer_key: 1},
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=other_assignment.id,
+                        questionnaire_key="boss_360",
+                        questionnaire_version=BOSS_360_DEFINITION.version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={answer_key: 4},
+                    ),
+                ]
+            )
+            await session.flush()
+
+            review = await ScoringService(session).get_icare_answer_review(company.id, project.id)
+
+            assert review.row_count == 1
+            row = review.rows[0]
+            assert row.assignment_id == assignment.id
+            assert row.respondent_name == "Respondent One"
+            assert row.target_name == "Target Leader"
+            assert row.section_label == "Inspiră (Inspiring)"
+            assert row.measurement_label == "Dezvoltă oamenii"
+            assert row.statement_label == "Oferă feedback constructiv"
+            assert row.answer_value == 1
+            assert row.answer_label == "1"
+            assert row.answer_description == "Nu oferă feedback sau îl evită complet."
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
 
 
 async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results() -> None:

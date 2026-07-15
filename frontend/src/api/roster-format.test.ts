@@ -13,6 +13,9 @@ describe("roster manager formatting", () => {
     expect(normalizeReportsToName(" Rădăcină ")).toBe("");
     expect(normalizeReportsToName("root")).toBe("");
     expect(normalizeReportsToName("Fără manager")).toBe("");
+    expect(normalizeReportsToName("Manager")).toBe("");
+    expect(normalizeReportsToName("Manager direct")).toBe("");
+    expect(normalizeReportsToName("Șef")).toBe("");
     expect(normalizeReportsToName("—")).toBe("");
     expect(normalizeReportsToName("1")).toBe("");
     expect(normalizeReportsToName(" 002 ")).toBe("");
