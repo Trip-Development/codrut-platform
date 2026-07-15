@@ -23,6 +23,7 @@ import {
   type EmailOpsSummary,
   type CampaignRecipientRow,
   type CampaignRecipientCreate,
+  type CampaignRecipientMembershipRow,
   type CampaignSendResponse,
   type EmailCampaign,
   type EmailTemplate
@@ -36,6 +37,7 @@ type CampaignViewKey = "contacts" | "campaigns";
 type CampaignSegmentKey = "past_customer" | "potential_customer";
 type CampaignTargetSegment = CampaignSegmentKey | null;
 type CampaignContactTypeFilter = "all" | CampaignSegmentKey;
+type CampaignDeliveryState = NonNullable<CampaignRecipientMembershipRow["campaignDelivery"]>;
 type CampaignMembershipCompanyGroup = {
   key: string;
   label: string;
@@ -610,6 +612,16 @@ function campaignSegmentLabel(segment: CampaignTargetSegment): string {
   return segment === "past_customer" ? "Client existent" : "Prospect";
 }
 
+function campaignDeliveryLabel(delivery: CampaignDeliveryState): string {
+  const labels: Record<CampaignDeliveryState, string> = {
+    failed: "Eroare",
+    not_sent: "Netrimis",
+    queued: "În coadă",
+    sent: "Trimis",
+  };
+  return labels[delivery];
+}
+
 function campaignRecipientCompanyLabel(recipient: CampaignRecipientRow): string {
   const company = recipient.company.trim();
   return company || "Companie necompletată";
@@ -856,6 +868,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
   const [campaignMemberships, setCampaignMemberships] = useState<Record<string, string[]>>({});
+  const [campaignMembershipDeliveries, setCampaignMembershipDeliveries] = useState<Record<string, Record<string, CampaignDeliveryState>>>({});
   const [campaignMembershipSearches, setCampaignMembershipSearches] = useState<Record<string, string>>({});
   const [campaignMembershipTypeFilters, setCampaignMembershipTypeFilters] = useState<Record<string, CampaignContactTypeFilter>>({});
   const [campaignMembershipCompanySelections, setCampaignMembershipCompanySelections] = useState<Record<string, string>>({});
@@ -1213,10 +1226,24 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       const membershipEntries = await Promise.all(
         nextCampaigns.map(async (campaign) => {
           const recipients = await listCampaignRecipientMembershipOnServer(campaign.id);
-          return [campaign.id, recipients.map((recipient) => recipient.id)] as const;
+          return [
+            campaign.id,
+            recipients.map((recipient) => recipient.id),
+            Object.fromEntries(
+              recipients.map((recipient) => [
+                recipient.id,
+                recipient.campaignDelivery ?? "not_sent",
+              ]),
+            ) as Record<string, CampaignDeliveryState>,
+          ] as const;
         }),
       );
-      setCampaignMemberships(Object.fromEntries(membershipEntries));
+      setCampaignMemberships(Object.fromEntries(
+        membershipEntries.map(([campaignId, recipientIds]) => [campaignId, recipientIds]),
+      ));
+      setCampaignMembershipDeliveries(Object.fromEntries(
+        membershipEntries.map(([campaignId, , deliveries]) => [campaignId, deliveries]),
+      ));
     } finally {
       setIsLoadingCampaigns(false);
     }
@@ -1627,9 +1654,24 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       );
     });
 
+  const campaignRecipientDelivery = (
+    campaign: EmailCampaign,
+    recipientId: string,
+  ): CampaignDeliveryState =>
+    campaignMembershipDeliveries[campaign.id]?.[recipientId] ?? "not_sent";
+
+  const campaignDeliveryIsLocked = (delivery: CampaignDeliveryState) =>
+    delivery === "sent" || delivery === "queued";
+
+  const sendableCampaignMembershipIds = (campaign: EmailCampaign) =>
+    activeCampaignMembershipIds(campaign).filter(
+      (recipientId) => !campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId)),
+    );
+
   const toggleCampaignMembershipRecipient = (campaign: EmailCampaign, recipientId: string) => {
     const eligibleIds = new Set(campaignEligibleRecipients().map((recipient) => recipient.id));
     if (!eligibleIds.has(recipientId)) return;
+    if (campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId))) return;
     setCampaignMemberships((currentMemberships) => {
       const currentIds = currentMemberships[campaign.id] ?? [];
       return {
@@ -1654,7 +1696,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setCampaignMemberships((currentMemberships) => {
       const currentIds = currentMemberships[campaign.id] ?? [];
       if (mode === "deselect") {
-        const companyRecipientIdSet = new Set(companyRecipientIds);
+        const companyRecipientIdSet = new Set(
+          companyRecipientIds.filter(
+            (recipientId) => !campaignDeliveryIsLocked(campaignRecipientDelivery(campaign, recipientId)),
+          ),
+        );
         return {
           ...currentMemberships,
           [campaign.id]: currentIds.filter((recipientId) => !companyRecipientIdSet.has(recipientId)),
@@ -1682,6 +1728,15 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         ...currentMemberships,
         [campaign.id]: savedRows.map((recipient) => recipient.id),
       }));
+      setCampaignMembershipDeliveries((currentDeliveries) => ({
+        ...currentDeliveries,
+        [campaign.id]: Object.fromEntries(
+          savedRows.map((recipient) => [
+            recipient.id,
+            recipient.campaignDelivery ?? "not_sent",
+          ]),
+        ) as Record<string, CampaignDeliveryState>,
+      }));
       setCampaignMessage(`Lista campaniei „${campaign.name}” a fost salvată: ${savedRows.length} destinatari.`);
     } catch (error) {
       setCampaignMessage(error instanceof Error ? error.message : "Lista campaniei nu a putut fi salvată.");
@@ -1694,15 +1749,15 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     campaign: EmailCampaign,
     mode: "new" | "all" | "selected" = "new",
   ) => {
-    const selectedRecipientIds = mode === "selected" ? activeCampaignMembershipIds(campaign) : undefined;
+    const selectedRecipientIds = mode === "selected" ? sendableCampaignMembershipIds(campaign) : undefined;
     const selectedRecipientCount = selectedRecipientIds?.length ?? 0;
     if (mode === "selected" && selectedRecipientCount === 0) {
-      setCampaignMessage("Alege cel puțin un destinatar activ în lista acestei campanii.");
+      setCampaignMessage("Lista campaniei nu are destinatari netrimiși disponibili.");
       return;
     }
     const confirmed = window.confirm(
       mode === "selected"
-        ? `Trimiți campania „${campaign.name}” către ${selectedRecipientCount} destinatari din lista campaniei?`
+        ? `Trimiți campania „${campaign.name}” către ${selectedRecipientCount} destinatari netrimiși din lista campaniei?`
         : mode === "all"
         ? `Trimiți campania „${campaign.name}” către toți destinatarii salvați ai campaniei, inclusiv cei care au mai primit-o?`
         : `Trimiți campania „${campaign.name}” doar către destinatarii salvați care nu au primit-o încă?`,
@@ -1713,10 +1768,22 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setCampaignMessage(null);
     try {
       if (mode === "selected" && selectedRecipientIds) {
-        const savedRows = await replaceCampaignRecipientMembershipOnServer(campaign.id, selectedRecipientIds);
+        const savedRows = await replaceCampaignRecipientMembershipOnServer(
+          campaign.id,
+          activeCampaignMembershipIds(campaign),
+        );
         setCampaignMemberships((currentMemberships) => ({
           ...currentMemberships,
           [campaign.id]: savedRows.map((recipient) => recipient.id),
+        }));
+        setCampaignMembershipDeliveries((currentDeliveries) => ({
+          ...currentDeliveries,
+          [campaign.id]: Object.fromEntries(
+            savedRows.map((recipient) => [
+              recipient.id,
+              recipient.campaignDelivery ?? "not_sent",
+            ]),
+          ) as Record<string, CampaignDeliveryState>,
         }));
       }
       const result = await sendCampaignOnServer(campaign.id, { mode, recipientIds: selectedRecipientIds });
@@ -2095,6 +2162,10 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                     campaigns.map((campaign) => {
                       const memberIds = campaignMemberships[campaign.id] ?? [];
                       const activeMemberIds = activeCampaignMembershipIds(campaign);
+                      const sendableMemberIds = sendableCampaignMembershipIds(campaign);
+                      const sentMemberCount = activeMemberIds.filter(
+                        (recipientId) => campaignRecipientDelivery(campaign, recipientId) === "sent",
+                      ).length;
                       const eligibleRecipients = campaignEligibleRecipients();
                       const visibleEligibleRecipients = visibleCampaignEligibleRecipients(campaign);
                       const membershipSearch = campaignMembershipSearches[campaign.id] ?? "";
@@ -2123,11 +2194,12 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                                 {campaign.thumbnail_url ? <span>Thumbnail</span> : null}
                                 {campaign.landing_page_url ? <span>Landing</span> : <span>Direct video</span>}
                                 <span>{activeMemberIds.length} destinatari</span>
+                                {sentMemberCount > 0 ? <span>{sentMemberCount} trimiși</span> : null}
                               </div>
                             </div>
                             <details className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2">
                               <summary className="tap-soft flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-bold text-foreground/70">
-                                <span>Recipienti campanie ({activeMemberIds.length}/{eligibleRecipients.length})</span>
+                                <span>Recipienti campanie ({activeMemberIds.length}/{eligibleRecipients.length}, {sendableMemberIds.length} netrimiși)</span>
                                 <span className="text-foreground/40">⌄</span>
                               </summary>
                               <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_minmax(12rem,1fr)]">
@@ -2202,28 +2274,49 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                               ) : null}
                               <div className="mt-3 grid max-h-60 gap-2 overflow-y-auto pr-1">
                                 {visibleEligibleRecipients.length > 0 ? (
-                                  visibleEligibleRecipients.map((recipient) => (
-                                    <label
-                                      key={recipient.id}
-                                      className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={memberIds.includes(recipient.id)}
-                                        onChange={() => toggleCampaignMembershipRecipient(campaign, recipient.id)}
-                                        className="mt-0.5 h-4 w-4 accent-burgundy"
-                                        aria-label={`Include ${recipient.email} în ${campaign.name}`}
-                                      />
-                                      <span className="min-w-0">
-                                        <span className="block font-bold text-foreground">
-                                          {campaignRecipientName(recipient) || recipient.email}
+                                  visibleEligibleRecipients.map((recipient) => {
+                                    const campaignDelivery = campaignRecipientDelivery(campaign, recipient.id);
+                                    const deliveryLocked = campaignDeliveryIsLocked(campaignDelivery);
+                                    const isChecked = memberIds.includes(recipient.id) || deliveryLocked;
+                                    return (
+                                      <label
+                                        key={recipient.id}
+                                        className={`flex items-start gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs ${
+                                          deliveryLocked ? "bg-surface text-foreground/45" : "bg-surface-muted"
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          disabled={deliveryLocked}
+                                          onChange={() => toggleCampaignMembershipRecipient(campaign, recipient.id)}
+                                          className="mt-0.5 h-4 w-4 accent-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                                          aria-label={`Include ${recipient.email} în ${campaign.name}`}
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                          <span className={`block font-bold ${deliveryLocked ? "text-foreground/52" : "text-foreground"}`}>
+                                            {campaignRecipientName(recipient) || recipient.email}
+                                          </span>
+                                          <span className="mt-0.5 block truncate text-foreground/52">
+                                            {recipient.company} · {recipient.email}
+                                          </span>
                                         </span>
-                                        <span className="mt-0.5 block truncate text-foreground/52">
-                                          {recipient.company} · {recipient.email}
+                                        <span
+                                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                            campaignDelivery === "sent"
+                                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                              : campaignDelivery === "failed"
+                                                ? "border-red-200 bg-red-50 text-red-700"
+                                                : campaignDelivery === "queued"
+                                                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                                                  : "border-[var(--border)] bg-surface text-foreground/45"
+                                          }`}
+                                        >
+                                          {campaignDeliveryLabel(campaignDelivery)}
                                         </span>
-                                      </span>
-                                    </label>
-                                  ))
+                                      </label>
+                                    );
+                                  })
                                 ) : (
                                   <p className="rounded-lg border border-dashed border-[var(--border)] px-3 py-4 text-xs font-semibold text-foreground/45">
                                     {eligibleRecipients.length > 0 ? "Niciun contact nu corespunde căutării." : "Nu există contacte active pentru selecția campaniei."}
@@ -2244,11 +2337,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                             <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
                               <button
                                 type="button"
-                                disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id || activeMemberIds.length === 0}
+                                disabled={sendingCampaignId === campaign.id || deletingCampaignId === campaign.id || sendableMemberIds.length === 0}
                                 onClick={() => handleSendCampaign(campaign, "selected")}
                                 className="btn-secondary px-3 py-1.5 text-[10px]"
                               >
-                                Trimite lista ({activeMemberIds.length})
+                                Trimite lista ({sendableMemberIds.length})
                               </button>
                               <button
                                 type="button"

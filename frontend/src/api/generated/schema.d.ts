@@ -1479,6 +1479,11 @@ export interface components {
             outcome?: string | null;
             /** Membershipsource */
             membershipSource?: string | null;
+            /**
+             * Campaigndelivery
+             * @default not_sent
+             */
+            campaignDelivery: "not_sent" | "queued" | "sent" | "failed";
         };
         /** CampaignRecipientMembershipUpdateRequest */
         CampaignRecipientMembershipUpdateRequest: {

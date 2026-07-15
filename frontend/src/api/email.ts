@@ -692,6 +692,7 @@ export type CampaignOpsSummary = {
 
 export type CampaignRecipientMembershipRow = CampaignRecipientRow & {
   membershipSource?: string | null;
+  campaignDelivery?: "not_sent" | "queued" | "sent" | "failed";
 };
 
 const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
