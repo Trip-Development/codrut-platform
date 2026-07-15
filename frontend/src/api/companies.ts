@@ -362,6 +362,32 @@ export type CompanyReportAggregate = {
   results: CompanyScoringResult[];
 };
 
+export type IcareAnswerReviewRow = {
+  assignment_id: string;
+  response_id: string;
+  submitted_at: string | null;
+  respondent_profile_id: string;
+  respondent_name: string;
+  respondent_email?: string | null;
+  target_profile_id?: string | null;
+  target_name?: string | null;
+  target_type: string;
+  section_id: string;
+  section_label: string;
+  measurement_id: string;
+  measurement_label: string;
+  statement_id: string;
+  statement_label: string;
+  answer_value: number | string;
+  answer_label: string;
+  answer_description?: string | null;
+};
+
+export type IcareAnswerReview = {
+  rows: IcareAnswerReviewRow[];
+  row_count: number;
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -916,21 +942,21 @@ function fallbackScoresForAssignment(assignment: CompanyAssignment): Record<stri
   }
   if (assignment.questionnaire_key === "boss_360") {
     return {
-      icare_01_dezvolta_oamenii: { score: 3.9 },
-      icare_02_conduce_prin_puterea_exemplului: { score: 4.1 },
-      icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 3.7 },
-      icare_04_promotor_al_colaborarii: { score: 4.0 },
-      icare_05_ancorat_in_realitate: { score: 3.8 },
-      icare_06_aduce_claritate: { score: 4.2 },
-      icare_07_modestie: { score: 3.5 },
-      icare_08_inteligenta_emotionala_si_situationala: { score: 3.7 },
-      icare_09_deschis_catre_lume: { score: 3.4 },
-      icare_10_ambitios_pentru_companie: { score: 4.1 },
-      icare_11_grija_egala_pentru_angajati_si_clienti: { score: 3.9 },
-      icare_12_agilitate_antreprenoriala: { score: 3.8 },
-      icare_13_decizii_cat_mai_aproape_de_teren: { score: 4.0 },
-      icare_14_cultiva_inteligenta_colectiva: { score: 3.6 },
-      icare_15_ajuta_echipa: { score: 4.2 },
+      icare_01_dezvolta_oamenii: { score: 86 },
+      icare_02_conduce_prin_puterea_exemplului: { score: 90 },
+      icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 82 },
+      icare_04_promotor_al_colaborarii: { score: 88 },
+      icare_05_ancorat_in_realitate: { score: 84 },
+      icare_06_aduce_claritate: { score: 92 },
+      icare_07_modestie: { score: 76 },
+      icare_08_inteligenta_emotionala_si_situationala: { score: 82 },
+      icare_09_deschis_catre_lume: { score: 72 },
+      icare_10_ambitios_pentru_companie: { score: 90 },
+      icare_11_grija_egala_pentru_angajati_si_clienti: { score: 86 },
+      icare_12_agilitate_antreprenoriala: { score: 84 },
+      icare_13_decizii_cat_mai_aproape_de_teren: { score: 88 },
+      icare_14_cultiva_inteligenta_colectiva: { score: 78 },
+      icare_15_ajuta_echipa: { score: 92 },
     };
   }
   return {
@@ -1042,6 +1068,31 @@ export async function getCompanyReportAggregate(
       throw e;
     }
     return fallbackCompanyReportAggregate(companyId, scope.projectId);
+  }
+}
+
+export async function getIcareAnswerReview(
+  companyId: string,
+  options: ApiRequestOptions = {},
+  scope: ProjectScopeOptions = {},
+): Promise<IcareAnswerReview> {
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/companies/${companyId}/reports/icare-answers${projectQuery(scope)}`,
+      { cache: "no-store", credentials: "include", ...options },
+    );
+    if (!response.ok) {
+      if (!isDemoFallbackEnabled()) {
+        throw new Error(`Eroare server (${response.status}): Nu s-au putut obține răspunsurile iCARE.`);
+      }
+      return { rows: [], row_count: 0 };
+    }
+    return (await response.json()) as IcareAnswerReview;
+  } catch (e) {
+    if (!isDemoFallbackEnabled()) {
+      throw e;
+    }
+    return { rows: [], row_count: 0 };
   }
 }
 
@@ -1416,6 +1467,7 @@ export async function importCompanyRoster(
     "Reports To": string;
     Position: string;
     Location: string;
+    "Role Group"?: string;
     email: string;
     "Profil PCM": string;
     "PCM Bază"?: string;

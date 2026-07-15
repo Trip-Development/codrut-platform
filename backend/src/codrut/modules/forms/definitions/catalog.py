@@ -45,11 +45,6 @@ BOSS_360_SCALE = [
     {"value": 5, "label": "Aproape întotdeauna"},
 ]
 
-ICARE_GRADE_SCALE = [
-    {"value": value, "label": str(value)}
-    for value in range(1, 6)
-]
-
 PCM_TYPES = [
     {"value": "harmonizer", "label": "Armonizator", "description": "Cald, empatic, orientat către relații și armonie."},
     {"value": "thinker", "label": "Gânditor", "description": "Logic, organizat, atent la structură și date."},
@@ -1955,13 +1950,7 @@ ICARE_SOURCE_SECTIONS = [{'id': 'inspiring',
 
 
 def _icare_grade_sections() -> list[dict[str, Any]]:
-    sections = deepcopy(ICARE_SOURCE_SECTIONS)
-    for section in sections:
-        for question in section.get("questions", []):
-            question["scale"] = deepcopy(ICARE_GRADE_SCALE)
-            for statement in question.get("statements", []):
-                statement["scale"] = deepcopy(ICARE_GRADE_SCALE)
-    return sections
+    return deepcopy(ICARE_SOURCE_SECTIONS)
 
 
 def _boss_360_schema_from_icare(*, english: bool = False) -> DefinitionSchema:
@@ -1978,15 +1967,15 @@ def _boss_360_schema_from_icare(*, english: bool = False) -> DefinitionSchema:
         "instructions": (
             "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele "
             "iCARE observabile din perspectiva ta: autoevaluare, coleg manager sau raportor direct. "
-            "Notele sunt de la 1 la 5: 1 este cel mai slab nivel observat, iar 5 este nivelul maxim. "
+            "Notele sunt de la 1 la 4, cu descrieri specifice pentru fiecare comportament. "
             "Secțiunea N/A este ignorată în această versiune."
         ),
         "sections": _icare_grade_sections(),
         "scoring": {
             "method": "average_statement_scores_by_section",
             "scale_min": 1,
-            "scale_max": 5,
-            "score_unit": "grade_1_to_5",
+            "scale_max": 4,
+            "score_unit": "percent",
             "primary_result": "lowest_dimension",
             "source_sheet": "Agregare 360",
         },

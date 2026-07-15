@@ -83,6 +83,46 @@ describe("QuestionnaireRunner", () => {
     expect(screen.getByText("Please answer all questions.")).toBeTruthy();
   });
 
+  it("hides internal statement codes from participant-facing statement sets", () => {
+    const statementDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      schema: {
+        ...mockDefinition.schema,
+        sections: [
+          {
+            id: "icare",
+            title: "iCARE",
+            questions: [
+              {
+                id: "icare_01_dezvolta_oamenii",
+                code: "ICARE-1",
+                type: "statement_score_set",
+                label: "Dezvoltă oamenii",
+                required: true,
+                scale: [
+                  { value: 1, label: "1", description: "Niciodată." },
+                  { value: 4, label: "4", description: "Aproape întotdeauna." },
+                ],
+                statements: [
+                  {
+                    id: "icare_01",
+                    code: "S1",
+                    label: "Oferă feedback constructiv",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    render(<QuestionnaireRunner definition={statementDefinition} assignmentId="icare-assignment" />);
+
+    expect(screen.getByText("Oferă feedback constructiv")).toBeTruthy();
+    expect(screen.queryByText("S1.")).toBeNull();
+  });
+
   it("shows the 360 target prompt as a single Romanian line using only the safe display name", () => {
     render(
       <QuestionnaireRunner

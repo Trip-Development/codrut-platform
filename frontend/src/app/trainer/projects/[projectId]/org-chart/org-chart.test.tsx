@@ -23,6 +23,17 @@ describe("trainer project org chart", () => {
     expect(model.warnings).toEqual([]);
   });
 
+  it("treats placeholder manager labels as root nodes", () => {
+    const model = buildOrgChartModel([
+      participant("top", "Andrei Vacaru", { reports_to_name: "Manager", position: "Director General" }),
+      participant("lead", "Alexandra Giurca", { reports_to_name: "Andrei Vacaru" }),
+    ]);
+
+    expect(model.roots.map((root) => root.fullName)).toEqual(["Andrei Vacaru"]);
+    expect(model.roots[0].children.map((child) => child.fullName)).toEqual(["Alexandra Giurca"]);
+    expect(model.warnings).toEqual([]);
+  });
+
   it("renders unresolved manager references in the warning panel instead of the tree", () => {
     const model = buildOrgChartModel([
       participant("ceo", "Mara CEO", { reports_to_name: null, position: "CEO" }),

@@ -22,7 +22,7 @@ from codrut.modules.assignments.schemas import (
 from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.schemas import SessionPrincipal
-from codrut.modules.scoring.schemas import CompanyReportAggregateResponse
+from codrut.modules.scoring.schemas import CompanyReportAggregateResponse, IcareAnswerReviewResponse
 from codrut.modules.scoring.service import ScoringService
 
 router = APIRouter()
@@ -165,6 +165,21 @@ async def get_company_report_aggregate(
     require_trainer_principal(principal)
     await AssignmentService(session).require_company_manager(principal.user_id, company_id)
     return await ScoringService(session).get_company_report_aggregate(company_id, project_id)
+
+
+@router.get(
+    "/companies/{company_id}/reports/icare-answers",
+    response_model=IcareAnswerReviewResponse,
+)
+async def get_company_icare_answer_review(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID | None, Query()] = None,
+) -> IcareAnswerReviewResponse:
+    require_trainer_principal(principal)
+    await AssignmentService(session).require_company_manager(principal.user_id, company_id)
+    return await ScoringService(session).get_icare_answer_review(company_id, project_id)
 
 
 @router.post(

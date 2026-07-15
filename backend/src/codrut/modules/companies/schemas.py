@@ -128,6 +128,7 @@ class RosterImportRow(BaseModel):
     position: str | None = Field(default=None, alias="Position", max_length=255)
     location: str | None = Field(default=None, alias="Location", max_length=255)
     email: EmailStr = Field(alias="email")
+    role_group: str | None = Field(default=None, alias="Role Group", max_length=255)
     pcm_profile: str | None = Field(default=None, alias="Profil PCM", max_length=255)
     pcm_base: str | None = Field(default=None, alias="PCM Bază", max_length=80)
     pcm_phase: str | None = Field(default=None, alias="PCM Fază", max_length=80)

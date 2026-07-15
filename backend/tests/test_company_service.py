@@ -27,6 +27,7 @@ from codrut.modules.assignments.schemas import AssignmentPlanSaveRequest
 from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.communications.email_provider import LocalEmailProvider
 from codrut.modules.communications.models import EmailSend, EmailSendStatus
+from codrut.modules.companies.hierarchy import HierarchyParticipant, build_organization_hierarchy
 from codrut.modules.companies.models import (
     Company,
     CompanyAccessCode,
@@ -278,6 +279,19 @@ class FakeCompanyRepository:
             ):
                 return membership
         return None
+
+    async def list_project_memberships_for_participant(
+        self,
+        company_id: uuid.UUID,
+        participant_profile_id: uuid.UUID,
+    ) -> list[ProjectMembership]:
+        return [
+            membership
+            for membership in self.project_memberships
+            if membership.company_id == company_id
+            and membership.participant_profile_id == participant_profile_id
+            and membership.active
+        ]
 
     async def add_project_membership(
         self,
@@ -1049,6 +1063,18 @@ async def test_create_participant_cleans_top_level_reports_to_markers() -> None:
 
     assert numeric_root.reports_to_name is None
 
+    placeholder_root = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(
+            full_name="Andrei",
+            email="andrei@example.com",
+            reports_to_name="Manager",
+        ),
+    )
+
+    assert placeholder_root.reports_to_name is None
+
 
 async def test_import_roster_rejects_duplicate_row_email() -> None:
     repository = FakeCompanyRepository()
@@ -1106,6 +1132,142 @@ async def test_import_roster_infers_managers_from_reports_to_names_without_posit
     assert participants_by_email["andrei.vacaru@tripdevelopment.ro"].role_group == "leadership"
     assert participants_by_email["ilincacrb4825@gmail.com"].role_group == "leadership"
     assert participants_by_email["vlad.soimu@yahoo.com"].role_group == "member"
+
+
+async def test_import_roster_accepts_manual_project_leadership_overrides() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership"),
+    )
+
+    result = await service.import_roster(
+        owner_id,
+        company.id,
+        RosterImportRequest(
+            project_id=project.id,
+            rows=[
+                {
+                    "Name": "Titus Botis",
+                    "Reports To": "Manager",
+                    "email": "titus@example.com",
+                },
+                {
+                    "Name": "Mircea Ciprian Iacob",
+                    "Reports To": "Titus Botis",
+                    "Role Group": "leadership",
+                    "email": "mircea@example.com",
+                },
+                {
+                    "Name": "Veronica Grecu",
+                    "Reports To": "Titus Botis",
+                    "Role Group": "leadership",
+                    "email": "veronica@example.com",
+                },
+                {
+                    "Name": "Consultant Team",
+                    "Reports To": "Mircea Ciprian Iacob",
+                    "Role Group": "member",
+                    "email": "consultant@example.com",
+                },
+            ],
+        ),
+    )
+
+    participants_by_email = {participant.email: participant for participant in result.participants}
+    memberships_by_participant_id = {
+        membership.participant_profile_id: membership
+        for membership in repository.project_memberships
+    }
+    assert participants_by_email["titus@example.com"].reports_to_name is None
+    assert memberships_by_participant_id[
+        participants_by_email["mircea@example.com"].id
+    ].role_group == "leadership"
+    assert memberships_by_participant_id[
+        participants_by_email["veronica@example.com"].id
+    ].role_group == "leadership"
+    assert memberships_by_participant_id[
+        participants_by_email["consultant@example.com"].id
+    ].role_group == "member"
+
+
+async def test_update_project_participant_persists_leadership_override() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership"),
+    )
+    participant = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(
+            full_name="Veronica Grecu",
+            email="veronica@example.com",
+            reports_to_name="Titus Botis",
+            role_group="member",
+        ),
+    )
+    membership = await repository.add_project_membership(
+        ProjectMembership(
+            company_id=company.id,
+            project_id=project.id,
+            participant_profile_id=participant.id,
+            reports_to_name="Titus Botis",
+            role_group="member",
+            active=True,
+        )
+    )
+
+    updated = await service.update_participant(
+        owner_id,
+        company.id,
+        participant.id,
+        ParticipantUpdateRequest(project_id=project.id, role_group="leadership"),
+    )
+
+    assert updated.role_group == "leadership"
+    assert membership.role_group == "leadership"
+
+
+def test_hierarchy_includes_explicit_leadership_reporters() -> None:
+    leader_id = uuid.uuid4()
+    middle_manager_id = uuid.uuid4()
+    explicit_leader_id = uuid.uuid4()
+
+    hierarchy = build_organization_hierarchy(
+        [
+            HierarchyParticipant(
+                id=leader_id,
+                full_name="Titus Botis",
+                reports_to_name=None,
+                role_group="leadership",
+            ),
+            HierarchyParticipant(
+                id=middle_manager_id,
+                full_name="Mircea Ciprian Iacob",
+                reports_to_name="Titus Botis",
+                role_group="leadership",
+            ),
+            HierarchyParticipant(
+                id=explicit_leader_id,
+                full_name="Veronica Grecu",
+                reports_to_name="Mircea Ciprian Iacob",
+                role_group="leadership",
+            ),
+        ]
+    )
+
+    assert middle_manager_id in hierarchy.leadership_ids
+    assert explicit_leader_id in hierarchy.leadership_ids
+    assert explicit_leader_id in hierarchy.manager_ids
 
 
 async def test_import_roster_infers_compact_manager_keys_and_numeric_root_marker() -> None:

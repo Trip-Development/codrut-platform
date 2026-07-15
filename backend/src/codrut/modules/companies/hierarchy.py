@@ -117,7 +117,13 @@ def build_organization_hierarchy(
         manager_ids.add(manager.id)
         direct_reports_by_manager_id.setdefault(manager.id, []).append(participant)
 
-    leadership_ids = set(top_level_ids)
+    explicit_leadership_ids = {
+        participant.id
+        for participant in participant_list
+        if _is_leadership_role(participant.role_group)
+    }
+    manager_ids.update(explicit_leadership_ids)
+    leadership_ids = set(top_level_ids) | explicit_leadership_ids
     for top_level_id in top_level_ids:
         leadership_ids.update(
             direct_report.id
@@ -154,3 +160,7 @@ def _participants_by_name_key(
             participants_by_key[key] = participant
 
     return participants_by_key, duplicate_keys, labels_by_key
+
+
+def _is_leadership_role(value: str | None) -> bool:
+    return (value or "").strip().casefold() in {"leadership", "manager"}

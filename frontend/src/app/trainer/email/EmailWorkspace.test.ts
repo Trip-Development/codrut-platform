@@ -333,6 +333,7 @@ describe("EmailWorkspace campaign contacts", () => {
       subject: draft.subject,
       html_body: "<p>Bună, ${first_name}.</p>",
       text_body: "Bună, ${first_name}.",
+      thumbnail_url: draft.thumbnailUrl || undefined,
     }));
     emailApiMocks.createCampaignOnServer.mockResolvedValue(savedCampaign);
 
@@ -341,10 +342,15 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.change(await screen.findByLabelText("Nume campanie"), {
       target: { value: "Campanie vizibilă" },
     });
+    fireEvent.change(screen.getByLabelText("Thumbnail campanie"), {
+      target: { value: "https://cdn.codrut.ro/thumb-only.jpg" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Salvează campania" }));
 
     await waitFor(() => {
-      expect(emailApiMocks.createCampaignOnServer).toHaveBeenCalled();
+      expect(emailApiMocks.createCampaignOnServer).toHaveBeenCalledWith(expect.objectContaining({
+        thumbnail_url: "https://cdn.codrut.ro/thumb-only.jpg",
+      }));
     });
     expect(await screen.findByText("Campanie vizibilă")).toBeTruthy();
     expect(screen.getByText(/Subiect vizibil/)).toBeTruthy();
@@ -578,7 +584,6 @@ describe("EmailWorkspace campaign contacts", () => {
       expect(campaignB).not.toBeNull();
 
       fireEvent.click(within(campaignA as HTMLElement).getByLabelText("Include mara@example.com în Campania A"));
-      fireEvent.click(within(campaignA as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
 
       await waitFor(() => {
         expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
@@ -765,7 +770,6 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.click(within(campaignCard as HTMLElement).getByLabelText(
       "Include mara@prospect.example în Campanie clienți existenți",
     ));
-    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
 
     await waitFor(() => {
       expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
@@ -831,20 +835,11 @@ describe("EmailWorkspace campaign contacts", () => {
     );
     fireEvent.change(alphaCompanySelect, { target: { value: "alpha co" } });
     expect(within(campaignCard as HTMLElement).getByText("Alpha Co: 1/2 selectați")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).queryByLabelText(
+      "Include bianca@beta.example în Campanie pe companii",
+    )).toBeNull();
 
     fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Selectează compania" }));
-
-    expect((
-      within(campaignCard as HTMLElement).getByLabelText("Include ana@alpha.example în Campanie pe companii") as HTMLInputElement
-    ).checked).toBe(true);
-    expect((
-      within(campaignCard as HTMLElement).getByLabelText("Include alex@alpha.example în Campanie pe companii") as HTMLInputElement
-    ).checked).toBe(true);
-    expect((
-      within(campaignCard as HTMLElement).getByLabelText("Include bianca@beta.example în Campanie pe companii") as HTMLInputElement
-    ).checked).toBe(false);
-
-    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
 
     await waitFor(() => {
       expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
@@ -852,9 +847,14 @@ describe("EmailWorkspace campaign contacts", () => {
         ["recipient-alpha-1", "recipient-alpha-2"],
       );
     });
+    expect((
+      within(campaignCard as HTMLElement).getByLabelText("Include ana@alpha.example în Campanie pe companii") as HTMLInputElement
+    ).checked).toBe(true);
+    expect((
+      within(campaignCard as HTMLElement).getByLabelText("Include alex@alpha.example în Campanie pe companii") as HTMLInputElement
+    ).checked).toBe(true);
 
     fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Deselectează" }));
-    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
 
     await waitFor(() => {
       expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenLastCalledWith(
@@ -914,7 +914,6 @@ describe("EmailWorkspace campaign contacts", () => {
 
     expect(within(campaignCard as HTMLElement).queryByLabelText("Include mara@prospect.example în Campanie fără grup")).toBeNull();
     fireEvent.click(within(campaignCard as HTMLElement).getByLabelText("Include ana@client.example în Campanie fără grup"));
-    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Salvează destinatarii" }));
 
     await waitFor(() => {
       expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(

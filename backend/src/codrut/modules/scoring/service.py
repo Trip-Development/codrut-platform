@@ -19,11 +19,13 @@ from codrut.modules.companies.manager_matching import (
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
 from codrut.modules.companies.repository import CompanyRepository
 from codrut.modules.forms.definitions import get_approved_questionnaire_definition
-from codrut.modules.forms.models import QuestionnaireKey
+from codrut.modules.forms.models import QuestionnaireKey, QuestionnaireResponse
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
 from codrut.modules.scoring.schemas import (
     CompanyReportAggregateResponse,
+    IcareAnswerReviewResponse,
+    IcareAnswerReviewRowResponse,
     ReportAverageResponse,
     ReportDistributionResponse,
     ReportHierarchyIssueResponse,
@@ -235,6 +237,50 @@ class ScoringService:
             results=results,
         )
 
+    async def get_icare_answer_review(
+        self,
+        company_id: UUID,
+        project_id: UUID | None = None,
+    ) -> IcareAnswerReviewResponse:
+        company = await self.company_repository.get_company(company_id)
+        if company is None:
+            raise DomainError("Company not found.", code="company_not_found")
+        if project_id is not None:
+            project = await self.company_repository.get_project(company_id, project_id)
+            if project is None:
+                raise DomainError("Project not found in this company.", code="project_not_found")
+
+        definition_cache: dict[tuple[str, int], dict[str, Any]] = {}
+        rows: list[IcareAnswerReviewRowResponse] = []
+        answer_responses = await self.repository.list_company_icare_answer_responses(
+            company_id,
+            project_id,
+        )
+
+        for assignment, response, respondent, target in answer_responses:
+            cache_key = (response.questionnaire_key, response.questionnaire_version)
+            schema = definition_cache.get(cache_key)
+            if schema is None:
+                schema = await self.repository.get_questionnaire_definition_schema(
+                    response.questionnaire_key,
+                    response.questionnaire_version,
+                )
+                if schema is None:
+                    schema = _approved_schema_for_key(response.questionnaire_key)
+                definition_cache[cache_key] = schema
+
+            rows.extend(
+                _icare_answer_review_rows(
+                    assignment=assignment,
+                    response=response,
+                    respondent=respondent,
+                    target=target,
+                    schema=schema,
+                )
+            )
+
+        return IcareAnswerReviewResponse(rows=rows, row_count=len(rows))
+
     async def _list_report_participants(
         self,
         company_id: UUID,
@@ -439,6 +485,113 @@ class ScoringService:
             await self.repository.add_scoring_result(result)
 
         return result
+
+
+def _approved_schema_for_key(key: str) -> dict[str, Any]:
+    try:
+        questionnaire_key = QuestionnaireKey(key)
+    except ValueError:
+        return {"sections": []}
+    try:
+        return get_approved_questionnaire_definition(questionnaire_key).schema
+    except KeyError:
+        return {"sections": []}
+
+
+def _icare_answer_review_rows(
+    *,
+    assignment: QuestionnaireAssignment,
+    response: QuestionnaireResponse,
+    respondent: ParticipantProfile,
+    target: ParticipantProfile | None,
+    schema: dict[str, Any],
+) -> list[IcareAnswerReviewRowResponse]:
+    rows: list[IcareAnswerReviewRowResponse] = []
+    target_type = _enum_value(assignment.target_type)
+    target_profile_id = target.id if target is not None else None
+    target_name = target.full_name if target is not None else None
+    if target_type == "self" and target is None:
+        target_profile_id = respondent.id
+        target_name = respondent.full_name
+
+    for section in schema.get("sections", []):
+        section_id = str(section.get("id") or "")
+        section_label = str(section.get("title") or section_id or "Secțiune")
+        for question in section.get("questions", []):
+            if question.get("type") != "statement_score_set":
+                continue
+            question_id = str(question.get("id") or "")
+            if not question_id:
+                continue
+            measurement_label = str(question.get("label") or question_id)
+            question_scale = question.get("scale") or []
+            for statement in question.get("statements", []):
+                statement_id = str(statement.get("id") or "")
+                if not statement_id:
+                    continue
+                answer_key = f"{question_id}:{statement_id}"
+                if answer_key not in response.answers:
+                    continue
+                answer_value = response.answers[answer_key]
+                if isinstance(answer_value, bool) or answer_value is None:
+                    continue
+                option = _matching_scale_option(
+                    statement.get("scale") or question_scale,
+                    answer_value,
+                )
+                rows.append(
+                    IcareAnswerReviewRowResponse(
+                        assignment_id=assignment.id,
+                        response_id=response.id,
+                        submitted_at=response.submitted_at.isoformat()
+                        if response.submitted_at is not None
+                        else None,
+                        respondent_profile_id=respondent.id,
+                        respondent_name=respondent.full_name,
+                        respondent_email=respondent.email,
+                        target_profile_id=target_profile_id,
+                        target_name=target_name,
+                        target_type=target_type,
+                        section_id=section_id,
+                        section_label=section_label,
+                        measurement_id=question_id,
+                        measurement_label=measurement_label,
+                        statement_id=statement_id,
+                        statement_label=str(statement.get("label") or statement_id),
+                        answer_value=answer_value
+                        if isinstance(answer_value, int | str)
+                        else str(answer_value),
+                        answer_label=_scale_option_label(option, answer_value),
+                        answer_description=(
+                            str(option["description"])
+                            if option is not None and option.get("description") is not None
+                            else None
+                        ),
+                    )
+                )
+    return rows
+
+
+def _matching_scale_option(
+    scale: list[dict[str, Any]],
+    answer_value: Any,
+) -> dict[str, Any] | None:
+    for option in scale:
+        if str(option.get("value")) == str(answer_value):
+            return option
+    return None
+
+
+def _scale_option_label(option: dict[str, Any] | None, answer_value: Any) -> str:
+    if option is None:
+        return str(answer_value)
+    label = option.get("label")
+    return str(label if label is not None else answer_value)
+
+
+def _enum_value(value: Any) -> str:
+    enum_value = getattr(value, "value", value)
+    return str(enum_value)
 
 
 def _zero_record(labels: dict[str, str]) -> dict[str, float]:

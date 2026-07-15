@@ -232,10 +232,12 @@ const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
   },
 ];
 
-const icareGradeScale: QuestionnaireScaleOption[] = Array.from({ length: 5 }, (_, index) => ({
-  value: index + 1,
-  label: String(index + 1),
-}));
+const icareGradeScale: QuestionnaireScaleOption[] = [
+  { value: 1, label: "1", description: "Niciodată sau aproape niciodată." },
+  { value: 2, label: "2", description: "Rar." },
+  { value: 3, label: "3", description: "Deseori." },
+  { value: 4, label: "4", description: "Aproape întotdeauna." },
+];
 
 const lencioniThreePointScale: QuestionnaireScaleOption[] = [
   { value: 1, label: "Rar" },
@@ -319,7 +321,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "driver_be_strong",
               code: "D1",
               type: "statement_score_set",
-              label: "Fii Puternic",
+              label: "Set 1",
               required: true,
               scale: distressTenPointScale,
               statements: [
@@ -331,7 +333,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "driver_be_perfect",
               code: "D2",
               type: "statement_score_set",
-              label: "Fii Perfect",
+              label: "Set 2",
               required: true,
               scale: distressTenPointScale,
               statements: [
@@ -343,7 +345,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "driver_try_hard",
               code: "D3",
               type: "statement_score_set",
-              label: "Străduiește-te",
+              label: "Set 3",
               required: true,
               scale: distressTenPointScale,
               statements: [
@@ -355,7 +357,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "driver_hurry_up",
               code: "D4",
               type: "statement_score_set",
-              label: "Grăbește-te",
+              label: "Set 4",
               required: true,
               scale: distressTenPointScale,
               statements: [
@@ -367,7 +369,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
               id: "driver_please_people",
               code: "D5",
               type: "statement_score_set",
-              label: "Mulțumește-i pe alții",
+              label: "Set 5",
               required: true,
               scale: distressTenPointScale,
               statements: [
@@ -385,7 +387,7 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
     version: 1,
     title: "Comportamente de leadership ICARE",
     description:
-      "Evaluare comportamentală pe atributele ICARE cu note de la 1 la 5.",
+      "Evaluare comportamentală pe atributele ICARE cu note de la 1 la 4.",
     schema: {
       schema_version: "questionnaire.v1",
       audience: "leadership",
@@ -395,10 +397,10 @@ const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
         status: "provisional",
       },
       instructions:
-        "Alege nota care descrie cel mai bine comportamentul observat. 1 este cel mai slab nivel, iar 5 este nivelul maxim.",
+        "Alege nota care descrie cel mai bine comportamentul observat. Scala are valori de la 1 la 4.",
       scoring: {
-        scale_status: "grade_1_to_5",
-        score_unit: "grade_1_to_5",
+        scale_status: "approved_1_to_4",
+        score_unit: "percent",
       },
       sections: [
         {
@@ -755,7 +757,7 @@ fallbackDefinitionDetails.boss_360 = {
     audience: "participant",
     instructions:
       "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele iCARE observabile din perspectiva ta.",
-    scoring: undefined,
+    scoring: fallbackDefinitionDetails.icare.schema.scoring,
   },
 };
 
