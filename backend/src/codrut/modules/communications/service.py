@@ -653,7 +653,18 @@ class CommunicationsService:
             campaign.id,
             owner_id=owner_id,
         )
-        return [_campaign_recipient_membership_row(recipient) for recipient in recipients]
+        delivery_by_recipient_id = await _campaign_delivery_by_recipient_id(
+            repository,
+            campaign.id,
+            recipients,
+        )
+        return [
+            _campaign_recipient_membership_row(
+                recipient,
+                campaign_delivery=delivery_by_recipient_id.get(recipient.id, "not_sent"),
+            )
+            for recipient in recipients
+        ]
 
     async def replace_campaign_recipient_memberships(
         self,
@@ -691,7 +702,18 @@ class CommunicationsService:
         )
         campaign.recipient_memberships_initialized = True
         ordered_recipients = [recipients_by_id[recipient_id] for recipient_id in recipient_ids]
-        return [_campaign_recipient_membership_row(recipient) for recipient in ordered_recipients]
+        delivery_by_recipient_id = await _campaign_delivery_by_recipient_id(
+            repository,
+            campaign.id,
+            ordered_recipients,
+        )
+        return [
+            _campaign_recipient_membership_row(
+                recipient,
+                campaign_delivery=delivery_by_recipient_id.get(recipient.id, "not_sent"),
+            )
+            for recipient in ordered_recipients
+        ]
 
     async def send_campaign(
         self,
@@ -1292,6 +1314,8 @@ def _campaign_client_type(segment: str) -> str:
 
 def _campaign_recipient_membership_row(
     recipient: CampaignRecipient,
+    *,
+    campaign_delivery: str = "not_sent",
 ) -> CampaignRecipientMembershipRowResponse:
     return CampaignRecipientMembershipRowResponse(
         id=str(recipient.id),
@@ -1312,6 +1336,21 @@ def _campaign_recipient_membership_row(
         emailVariant=recipient.source,
         outcome=None,
         membershipSource=None,
+        campaignDelivery=campaign_delivery,
+    )
+
+
+async def _campaign_delivery_by_recipient_id(
+    repository: object,
+    campaign_id: UUID,
+    recipients: list[CampaignRecipient],
+) -> dict[UUID, str]:
+    if not recipients or not hasattr(repository, "list_campaign_delivery_status_by_recipient_ids"):
+        return {}
+    recipient_ids = [recipient.id for recipient in recipients]
+    return await repository.list_campaign_delivery_status_by_recipient_ids(
+        campaign_id,
+        recipient_ids,
     )
 
 

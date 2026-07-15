@@ -110,6 +110,7 @@ class CampaignRecipientRowResponse(BaseModel):
 
 class CampaignRecipientMembershipRowResponse(CampaignRecipientRowResponse):
     membershipSource: str | None = None
+    campaignDelivery: Literal["not_sent", "queued", "sent", "failed"] = "not_sent"
 
 
 class CampaignRecipientMembershipUpdateRequest(StrictRequestModel):

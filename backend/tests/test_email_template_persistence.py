@@ -254,6 +254,40 @@ class FakeCommunicationsRepository:
             and send.status in {EmailSendStatus.queued, EmailSendStatus.accepted}
         }
 
+    async def list_campaign_delivery_status_by_recipient_ids(
+        self,
+        campaign_id: uuid.UUID,
+        recipient_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, str]:
+        recipient_id_set = set(recipient_ids)
+        statuses: dict[uuid.UUID, str] = {}
+        priority = {
+            "failed": 1,
+            "queued": 2,
+            "sent": 3,
+        }
+        for send in self.sends:
+            if (
+                send.campaign_id != campaign_id
+                or send.campaign_recipient_id is None
+                or send.campaign_recipient_id not in recipient_id_set
+            ):
+                continue
+            if send.status == EmailSendStatus.accepted:
+                next_status = "sent"
+            elif send.status == EmailSendStatus.queued:
+                next_status = "queued"
+            elif send.status == EmailSendStatus.failed:
+                next_status = "failed"
+            else:
+                next_status = "not_sent"
+            if priority.get(next_status, 0) > priority.get(
+                statuses.get(send.campaign_recipient_id, "not_sent"),
+                0,
+            ):
+                statuses[send.campaign_recipient_id] = next_status
+        return statuses
+
     async def list_campaign_member_recipient_ids(
         self,
         campaign_id: uuid.UUID,
@@ -880,6 +914,75 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
     assert second_response.sent == 1
     assert provider.sent[0].to.value == second.email
     assert len(provider.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_campaign_membership_marks_sent_and_failed_delivery() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    sent_recipient = persisted_campaign_recipient(email="sent@example.com", contact_name="Sent")
+    failed_recipient = persisted_campaign_recipient(
+        email="failed@example.com",
+        contact_name="Failed",
+    )
+    unsent_recipient = persisted_campaign_recipient(
+        email="unsent@example.com",
+        contact_name="Unsent",
+    )
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.extend([sent_recipient, failed_recipient, unsent_recipient])
+    repository.campaign_recipient_memberships.extend([
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=sent_recipient.id,
+            source="manual",
+        ),
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=failed_recipient.id,
+            source="manual",
+        ),
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=unsent_recipient.id,
+            source="manual",
+        ),
+    ])
+    repository.sends.extend([
+        EmailSend(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            campaign_recipient_id=sent_recipient.id,
+            recipient_email=sent_recipient.email or "",
+            template_key="campaign",
+            template_version=1,
+            provider="test",
+            status=EmailSendStatus.accepted,
+        ),
+        EmailSend(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            campaign_recipient_id=failed_recipient.id,
+            recipient_email=failed_recipient.email or "",
+            template_key="campaign",
+            template_version=1,
+            provider="test",
+            status=EmailSendStatus.failed,
+        ),
+    ])
+    service = make_service(repository)
+
+    members = await service.list_campaign_recipient_memberships(campaign.id)
+
+    delivery_by_email = {member.email: member.campaignDelivery for member in members}
+    assert delivery_by_email == {
+        "sent@example.com": "sent",
+        "failed@example.com": "failed",
+        "unsent@example.com": "not_sent",
+    }
 
 
 @pytest.mark.asyncio
