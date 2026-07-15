@@ -1027,18 +1027,24 @@ function normalizeHttpUrl(value: string | undefined): string | null {
 
 export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): CampaignCreate | null {
   const trimmedName = draft.name.trim();
-  const hasVideoFields = Boolean(draft.videoUrl?.trim() || draft.thumbnailUrl?.trim());
+  const hasVideoInput = Boolean(draft.videoUrl?.trim());
+  const hasThumbnailInput = Boolean(draft.thumbnailUrl?.trim());
+  const hasLandingInput = Boolean(draft.landingUrl?.trim());
   const videoUrl = normalizeHttpUrl(draft.videoUrl);
   const thumbnailUrl = normalizeHttpUrl(draft.thumbnailUrl);
   const landingUrl = normalizeHttpUrl(draft.landingUrl) ?? videoUrl;
+  const hasVideoBlock = Boolean(videoUrl && thumbnailUrl);
 
   if (!trimmedName) return null;
-  if (hasVideoFields && (!videoUrl || !thumbnailUrl || !landingUrl)) return null;
+  if (hasVideoInput && !videoUrl) return null;
+  if (hasThumbnailInput && !thumbnailUrl) return null;
+  if (hasLandingInput && !normalizeHttpUrl(draft.landingUrl)) return null;
+  if (hasVideoInput && !thumbnailUrl) return null;
 
   const htmlBody = draft.htmlBody?.trim()
     ? draft.htmlBody
         .replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
-    : hasVideoFields
+    : hasVideoBlock
       ? [
         "<p>Bună, ${first_name}.</p>",
         "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
@@ -1054,7 +1060,7 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
       : "<p>Bună, ${first_name}.</p><p>Dacă vrei, alege un slot în Calendly și stabilim o conversație.</p>";
   const textBody = draft.textBody?.trim()
     ? draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
-    : hasVideoFields
+    : hasVideoBlock
       ? "Bună, ${first_name}. Vezi video-ul aici: ${landing_page_url}"
       : "Bună, ${first_name}. Dacă vrei, alege un slot în Calendly și stabilim o conversație.";
 

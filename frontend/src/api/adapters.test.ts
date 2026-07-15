@@ -43,6 +43,7 @@ import {
   getAllCompanyProjects,
   getCompanyAssignments,
   getCompanyDefaultAssignmentPlan,
+  getIcareAnswerReview,
   getCompanyList,
   getCompanyParticipants,
   getCompanyProjectById,
@@ -667,11 +668,11 @@ describe("frontend API adapter stubs", () => {
           completed_count: 2,
           minimum_completed: 2,
           visible: true,
-          overall_average: 4.1,
+          overall_average: 82,
           dimensions: [
             {
               id: "icare_01_dezvolta_oamenii",
-              average_score: 4.5,
+              average_score: 90,
               completed_count: 2,
             },
           ],
@@ -698,11 +699,11 @@ describe("frontend API adapter stubs", () => {
         completedCount: 2,
         minimumCompleted: 2,
         visible: true,
-        overallAverage: 4.1,
+        overallAverage: 82,
         dimensions: [
           {
             id: "icare_01_dezvolta_oamenii",
-            averageScore: 4.5,
+            averageScore: 90,
             completedCount: 2,
           },
         ],
@@ -831,6 +832,27 @@ describe("frontend API adapter stubs", () => {
     expect(payload?.html_body).not.toContain("<img");
   });
 
+  it("allows thumbnail-only campaign drafts without rendering a video block", () => {
+    const payload = buildVideoCampaignCreatePayload({
+      name: " Campanie cu thumbnail ",
+      segment: "past_customer",
+      subject: "Salut {first_name}",
+      videoUrl: "",
+      thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
+      landingUrl: "",
+    });
+
+    expect(payload).toMatchObject({
+      name: "Campanie cu thumbnail",
+      segment: "past_customer",
+      subject: "Salut ${first_name}",
+      thumbnail_url: "https://cdn.codrut.ro/thumb.jpg",
+    });
+    expect(payload?.video_url).toBeUndefined();
+    expect(payload?.landing_page_url).toBeUndefined();
+    expect(payload?.html_body).not.toContain("<img");
+  });
+
   it("uploads campaign thumbnail assets as raw image bodies", async () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
@@ -890,7 +912,7 @@ describe("frontend API adapter stubs", () => {
       videoUrl: "https://video.codrut.ro/watch/intro",
       thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
       landingUrl: "not-a-url",
-    })?.landing_page_url).toBeUndefined();
+    })).toBeNull();
   });
 
   it("resolves invite bundle fallback states", async () => {
@@ -1574,6 +1596,57 @@ describe("frontend API adapter stubs", () => {
         expect.objectContaining({ assignment_id: "icare-ilinca-on-andrei" }),
       ]),
     });
+  });
+
+  it("loads trainer iCARE answer review rows with project scoping", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          {
+            assignment_id: "assignment-1",
+            response_id: "response-1",
+            submitted_at: "2026-07-14T12:00:00+00:00",
+            respondent_profile_id: "respondent-1",
+            respondent_name: "Reviewer One",
+            respondent_email: "reviewer@example.com",
+            target_profile_id: "target-1",
+            target_name: "Target Leader",
+            target_type: "person",
+            section_id: "inspiring",
+            section_label: "Inspiră (Inspiring)",
+            measurement_id: "icare_01_dezvolta_oamenii",
+            measurement_label: "Dezvoltă oamenii",
+            statement_id: "icare_01",
+            statement_label: "Oferă feedback constructiv",
+            answer_value: 1,
+            answer_label: "1",
+            answer_description: "Nu oferă feedback sau îl evită complet.",
+          },
+        ],
+        row_count: 1,
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getIcareAnswerReview("company-1", {}, { projectId: "project-1" }),
+    ).resolves.toMatchObject({
+      row_count: 1,
+      rows: [
+        expect.objectContaining({
+          respondent_name: "Reviewer One",
+          target_name: "Target Leader",
+          statement_label: "Oferă feedback constructiv",
+          answer_description: "Nu oferă feedback sau îl evită complet.",
+        }),
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/companies/company-1/reports/icare-answers?project_id=project-1"),
+      expect.objectContaining({ credentials: "include" }),
+    );
   });
 
   it("imports roster first and sends participant access through an explicit batch action", async () => {

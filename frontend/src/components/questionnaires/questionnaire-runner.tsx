@@ -651,10 +651,7 @@ function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInp
             key={statement.id}
             className="border-b border-[var(--border)] bg-surface px-4 py-4 last:border-b-0"
           >
-            <p className="text-sm font-medium leading-6 text-foreground/72">
-              <span className="mr-2 font-semibold text-burgundy">{statement.code}.</span>
-              {statement.label}
-            </p>
+            <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
             {isTenPointScale(scale) ? (
               <DiscreteScaleSlider
                 label={statement.label}

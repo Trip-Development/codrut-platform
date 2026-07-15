@@ -54,8 +54,8 @@ describe("participant profile data", () => {
     ];
     const results = [
       result("self-driver", { be_strong: 76, be_perfect: 58 }, "be_strong"),
-      result("feedback-given", { icare_01_dezvolta_oamenii: { score: 4.5 } }, "icare_01_dezvolta_oamenii"),
-      result("self-360", { icare_01_dezvolta_oamenii: { score: 4.5 }, icare_02_conduce_prin_puterea_exemplului: { score: 3.5 } }, "icare_01_dezvolta_oamenii"),
+      result("feedback-given", { icare_01_dezvolta_oamenii: { score: 90 } }, "icare_01_dezvolta_oamenii"),
+      result("self-360", { icare_01_dezvolta_oamenii: { score: 90 }, icare_02_conduce_prin_puterea_exemplului: { score: 70 } }, "icare_01_dezvolta_oamenii"),
       result("pcm", { pcm_base: "thinker", pcm_phase: "persister" }, "pcm_base"),
     ];
 
@@ -76,7 +76,7 @@ describe("participant profile data", () => {
       questionnaireLabel: "iCARE 360 pentru manager",
       targetLabel: "Autoevaluare",
       dimensionCount: 2,
-      averageScore: 4,
+      averageScore: 80,
       primaryResultLabel: "Dezvolta Oamenii",
     });
     expect(countPrivateFeedbackGiven(assignments, "participant-1")).toBe(1);

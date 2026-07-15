@@ -36,9 +36,10 @@ type ParticipantEditForm = {
   reportsToName: string;
   position: string;
   location: string;
+  roleGroup: "leadership" | "member";
 };
 
-type ManualAddForm = Omit<ParticipantEditForm, "location">;
+type ManualAddForm = Omit<ParticipantEditForm, "location" | "roleGroup">;
 
 type ParsedManualParticipant = ManualAddForm & {
   key: string;
@@ -190,6 +191,7 @@ export function ProjectParticipantsWorkspace({
   };
 
   const startEdit = (participant: CompanyParticipant) => {
+    const storedRole = participant.role_group?.trim().toLowerCase();
     setError(null);
     setEditingId(participant.id);
     setForm({
@@ -198,6 +200,13 @@ export function ProjectParticipantsWorkspace({
       reportsToName: participant.reports_to_name ?? "",
       position: participant.position ?? "",
       location: participant.location ?? "",
+      roleGroup: storedRole === "leadership" || storedRole === "manager"
+        ? "leadership"
+        : storedRole === "member"
+          ? "member"
+          : isPermanentAccountParticipant(participant, buildManagerNameKeys(participants))
+            ? "leadership"
+            : "member",
     });
   };
 
@@ -224,6 +233,7 @@ export function ProjectParticipantsWorkspace({
         reportsToName: cleanOptional(form.reportsToName),
         position: cleanOptional(form.position),
         location: cleanOptional(form.location),
+        roleGroup: form.roleGroup,
       });
 
       setParticipants((current) =>
@@ -567,13 +577,28 @@ function ParticipantRow({
             value={form.location}
             onChange={(value) => onUpdateField("location", value)}
           />
+          <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-3">
+            <span className="text-xs font-bold text-foreground/58">Rol proiect</span>
+            <button
+              type="button"
+              onClick={() => onUpdateField("roleGroup", form.roleGroup === "leadership" ? "member" : "leadership")}
+              className={`tap-soft mt-2 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${
+                form.roleGroup === "leadership"
+                  ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-700"
+                  : "border-[var(--border)] bg-background text-foreground/55 hover:border-burgundy/35 hover:text-burgundy"
+              }`}
+              aria-pressed={form.roleGroup === "leadership"}
+            >
+              {form.roleGroup === "leadership" ? "Leadership" : "Membru"}
+            </button>
+          </div>
           <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3">
             <span className="text-xs font-bold text-foreground/58">Tip acces</span>
             <div className="mt-2">
               <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
             </div>
             <p className="mt-2 text-xs font-medium leading-5 text-foreground/52">
-              Tipul de acces se schimbă prin invitații și apartenența la echipa de leadership, nu prin editarea câmpurilor operaționale.
+              Tipul de acces urmează rolul de leadership salvat pentru proiect și starea invitațiilor.
             </p>
           </div>
         </div>

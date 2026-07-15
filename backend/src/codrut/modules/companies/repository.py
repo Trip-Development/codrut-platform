@@ -275,6 +275,19 @@ class CompanyRepository:
         )
         return result.scalar_one_or_none()
 
+    async def list_project_memberships_for_participant(
+        self,
+        company_id: UUID,
+        participant_profile_id: UUID,
+    ) -> list[ProjectMembership]:
+        result = await self.session.execute(
+            select(ProjectMembership)
+            .where(ProjectMembership.company_id == company_id)
+            .where(ProjectMembership.participant_profile_id == participant_profile_id)
+            .where(ProjectMembership.active.is_(True))
+        )
+        return list(result.scalars().all())
+
     async def add_project_membership(
         self,
         membership: ProjectMembership,

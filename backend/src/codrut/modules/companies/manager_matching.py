@@ -1,6 +1,7 @@
 import unicodedata
 
 TOP_LEVEL_MANAGER_VALUES = {
+    "direct manager",
     "radacina",
     "root",
     "top",
@@ -8,9 +9,16 @@ TOP_LEVEL_MANAGER_VALUES = {
     "nivel superior",
     "fara manager",
     "fara sef",
+    "line manager",
+    "manager",
+    "manager direct",
     "none",
     "n/a",
     "na",
+    "sef",
+    "seful direct",
+    "superior",
+    "superior direct",
     "-",
     "\u2014",
 }

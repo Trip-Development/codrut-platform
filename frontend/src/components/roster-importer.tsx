@@ -31,11 +31,11 @@ type RosterImporterProps = {
   compact?: boolean;
 };
 
-type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "pcm_profile" | "pcm_base" | "pcm_phase";
+type DbField = "full_name" | "email" | "reports_to_name" | "position" | "location" | "role_group" | "pcm_profile" | "pcm_base" | "pcm_phase";
 type FlowStepKey = "upload" | "review" | "import" | "access";
 type FlowStepState = "complete" | "current" | "upcoming" | "error";
 const MAPPING_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location"];
-const PREVIEW_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location", "pcm_base", "pcm_phase"];
+const PREVIEW_FIELDS: DbField[] = ["full_name", "email", "reports_to_name", "position", "location", "role_group", "pcm_base", "pcm_phase"];
 const MANUAL_HEADERS = ["Name", "email", "Reports To", "Position", "Location"];
 const MANUAL_MAPPINGS: Record<DbField, string> = {
   full_name: "Name",
@@ -43,6 +43,7 @@ const MANUAL_MAPPINGS: Record<DbField, string> = {
   reports_to_name: "Reports To",
   position: "Position",
   location: "Location",
+  role_group: "",
   pcm_profile: "",
   pcm_base: "",
   pcm_phase: "",
@@ -54,6 +55,7 @@ const FIELD_LABELS: Record<DbField, string> = {
   reports_to_name: "Raportează Către / Manager (Opțional)",
   position: "Poziție / Rol (Opțional)",
   location: "Locație (Opțional)",
+  role_group: "Leadership",
   pcm_profile: "Profil PCM",
   pcm_base: "PCM Bază (din matrice)",
   pcm_phase: "PCM Fază (din matrice)",
@@ -65,6 +67,7 @@ const FIELD_ALIASES: Record<DbField, string[]> = {
   reports_to_name: ["reports to", "reports_to", "manager", "reports_to_name", "sefi", "boss", "raporteaza catre", "manager direct"],
   position: ["position", "role", "rol", "pozitie", "functie", "job title", "post", "titlu"],
   location: ["location", "locatie", "oras", "city", "site", "punct lucru"],
+  role_group: [],
   pcm_profile: [],
   pcm_base: [],
   pcm_phase: [],
@@ -97,6 +100,25 @@ function normalizeHeader(value: string): string {
     .toLowerCase()
     .replace(/[()]/g, "")
     .trim();
+}
+
+function normalizeRosterRole(value: string | null | undefined): "leadership" | "member" | null {
+  const normalized = (value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!normalized) return null;
+  if (["leadership", "leader", "manager", "management"].includes(normalized)) return "leadership";
+  if (["member", "team", "team_member", "non_leadership", "not_leadership"].includes(normalized)) return "member";
+  return null;
+}
+
+function inferredRosterRole(
+  row: Record<DbField, string>,
+  managerNames: Set<string>,
+): "leadership" | "member" {
+  const explicitRole = normalizeRosterRole(row.role_group);
+  if (explicitRole) return explicitRole;
+  if (!row.reports_to_name) return "leadership";
+  if (managerNames.has(managerReferenceKey(row.full_name))) return "leadership";
+  return "member";
 }
 
 function buildRosterHeaders(headerRow: unknown[], rows: unknown[][]): string[] {
@@ -242,6 +264,7 @@ export function RosterImporter({
     reports_to_name: "",
     position: "",
     location: "",
+    role_group: "",
     pcm_profile: "",
     pcm_base: "",
     pcm_phase: "",
@@ -354,6 +377,7 @@ export function RosterImporter({
           reports_to_name: "",
           position: "",
           location: "",
+          role_group: "",
           pcm_profile: "",
           pcm_base: "",
           pcm_phase: "",
@@ -440,6 +464,7 @@ export function RosterImporter({
       reports_to_name: normalizeReportsToName(getVal("reports_to_name")),
       position: getVal("position"),
       location: getVal("location"),
+      role_group: normalizeRosterRole(getVal("role_group")) ?? "",
       pcm_profile: getVal("pcm_profile"),
       pcm_base: getVal("pcm_base"),
       pcm_phase: getVal("pcm_phase"),
@@ -450,6 +475,10 @@ export function RosterImporter({
   const processedRows = useMemo(() => {
     return rawRows.map((rawRow, idx) => getNormalizedRow(rawRow, idx));
   }, [rawRows, getNormalizedRow]);
+  const referencedManagerNameKeys = useMemo(
+    () => buildManagerReferenceKeySet(processedRows.map((row) => row.reports_to_name)),
+    [processedRows],
+  );
 
   const validationErrors = useMemo(() => {
     const errors: { rowIndex: number; name: string; field: DbField; error: string; type: "critical" | "warning" }[] = [];
@@ -599,7 +628,11 @@ export function RosterImporter({
         ...prev,
         [rowIndex]: {
           ...rowEdits,
-          [field]: field === "reports_to_name" ? normalizeReportsToName(value) : value.trim(),
+          [field]: field === "reports_to_name"
+            ? normalizeReportsToName(value)
+            : field === "role_group"
+              ? normalizeRosterRole(value) ?? ""
+              : value.trim(),
         },
       };
     });
@@ -621,6 +654,7 @@ export function RosterImporter({
           "Reports To": r.reports_to_name,
           Position: r.position,
           Location: r.location,
+          "Role Group": r.role_group,
           email: r.email,
           "Profil PCM": "",
           "PCM Bază": r.pcm_base,
@@ -1092,6 +1126,30 @@ export function RosterImporter({
 
                     {/* Render fields with double click inline editing support */}
                     {PREVIEW_FIELDS.map((field) => {
+                      if (field === "role_group") {
+                        const effectiveRole = inferredRosterRole(row, referencedManagerNameKeys);
+                        const explicitRole = normalizeRosterRole(row.role_group);
+                        return (
+                          <td key={field} className="px-5 py-3">
+                            <button
+                              type="button"
+                              onClick={() => handleCellEditSave(rIdx, field, effectiveRole === "leadership" ? "member" : "leadership")}
+                              className={`tap-soft rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${
+                                effectiveRole === "leadership"
+                                  ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-700"
+                                  : "border-[var(--border)] bg-background text-foreground/55 hover:border-burgundy/35 hover:text-burgundy"
+                              }`}
+                              aria-pressed={effectiveRole === "leadership"}
+                              aria-label={`Setează ${row.full_name || `rândul ${rIdx + 1}`} ca ${effectiveRole === "leadership" ? "membru" : "leadership"}`}
+                            >
+                              {effectiveRole === "leadership" ? "Leadership" : "Membru"}
+                            </button>
+                            <span className="mt-1 block text-[10px] font-medium text-foreground/42">
+                              {explicitRole ? "setat manual" : "inferat automat"}
+                            </span>
+                          </td>
+                        );
+                      }
                       const isEditing = editingCellId?.rowIndex === rIdx && editingCellId?.field === field;
                       const hasError = validationErrors.some((e) => e.rowIndex === rIdx && e.field === field);
                       const isRequired = field === "full_name" || field === "email";

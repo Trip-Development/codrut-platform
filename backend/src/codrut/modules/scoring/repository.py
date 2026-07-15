@@ -2,8 +2,15 @@ from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from codrut.modules.assignments.models import QuestionnaireAssignment
+from codrut.modules.companies.models import ParticipantProfile
+from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
+    QuestionnaireResponse,
+    QuestionnaireResponseStatus,
+)
 from codrut.modules.scoring.models import ScoringResult
 
 
@@ -21,6 +28,19 @@ class ScoringRepository:
         await self.session.flush()
         return result
 
+    async def get_questionnaire_definition_schema(
+        self,
+        key: str,
+        version: int,
+    ) -> dict | None:
+        result = await self.session.execute(
+            select(QuestionnaireDefinition.schema)
+            .where(QuestionnaireDefinition.key == key)
+            .where(QuestionnaireDefinition.version == version)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def list_company_assignment_results(
         self,
         company_id: UUID,
@@ -35,6 +55,49 @@ class ScoringRepository:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
         result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
         return [(assignment, scoring_result) for assignment, scoring_result in result.all()]
+
+    async def list_company_icare_answer_responses(
+        self,
+        company_id: UUID,
+        project_id: UUID | None = None,
+    ) -> list[
+        tuple[
+            QuestionnaireAssignment,
+            QuestionnaireResponse,
+            ParticipantProfile,
+            ParticipantProfile | None,
+        ]
+    ]:
+        respondent = aliased(ParticipantProfile)
+        target = aliased(ParticipantProfile)
+        stmt = (
+            select(QuestionnaireAssignment, QuestionnaireResponse, respondent, target)
+            .join(
+                QuestionnaireResponse,
+                QuestionnaireResponse.assignment_id == QuestionnaireAssignment.id,
+            )
+            .join(respondent, respondent.id == QuestionnaireAssignment.respondent_profile_id)
+            .outerjoin(target, target.id == QuestionnaireAssignment.target_person_id)
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(
+                QuestionnaireAssignment.questionnaire_key.in_(("boss_360", "boss_360_en", "icare"))
+            )
+            .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
+        )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+
+        result = await self.session.execute(
+            stmt.order_by(
+                QuestionnaireResponse.submitted_at,
+                QuestionnaireAssignment.created_at,
+                respondent.full_name,
+            )
+        )
+        return [
+            (assignment, response, respondent_profile, target_profile)
+            for assignment, response, respondent_profile, target_profile in result.all()
+        ]
 
     async def delete_by_assignment(self, assignment_id: UUID) -> None:
         stmt = delete(ScoringResult).where(ScoringResult.assignment_id == assignment_id)
