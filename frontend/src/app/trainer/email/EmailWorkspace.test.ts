@@ -600,6 +600,93 @@ describe("EmailWorkspace campaign contacts", () => {
     }
   });
 
+  it("marks campaign recipients already sent as checked and disabled without resending them", async () => {
+    const recipients = [
+      makeCampaignRecipient({
+        id: "recipient-sent",
+        company: "Alpha Co",
+        firstName: "Ana",
+        lastName: "Sent",
+        email: "ana.sent@example.com",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+      makeCampaignRecipient({
+        id: "recipient-unsent",
+        company: "Alpha Co",
+        firstName: "Mara",
+        lastName: "Unsent",
+        email: "mara.unsent@example.com",
+        clientType: "tip_2",
+        status: "ready",
+      }),
+    ];
+    const campaign = makeCampaign({
+      id: "campaign-markers",
+      name: "Campanie cu marker",
+      segment: "potential_customer",
+    });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    emailApiMocks.listCampaignsOnServer.mockResolvedValue([campaign]);
+    emailApiMocks.listCampaignRecipientMembershipOnServer.mockResolvedValue([
+      { ...recipients[0], membershipSource: "manual", campaignDelivery: "sent" },
+      { ...recipients[1], membershipSource: "manual", campaignDelivery: "not_sent" },
+    ]);
+    emailApiMocks.replaceCampaignRecipientMembershipOnServer.mockResolvedValue([
+      { ...recipients[0], membershipSource: "manual", campaignDelivery: "sent" },
+      { ...recipients[1], membershipSource: "manual", campaignDelivery: "not_sent" },
+    ]);
+    emailApiMocks.sendCampaignOnServer.mockResolvedValue({
+      campaign_id: "campaign-markers",
+      total: 1,
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      dry_run: false,
+      results: [],
+    });
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
+
+    try {
+      render(React.createElement(EmailWorkspace, {
+        initialSummary: makeEmailSummary("ready", recipients),
+      }));
+
+      const campaignCard = (await screen.findByText("Campanie cu marker")).closest("article");
+      expect(campaignCard).not.toBeNull();
+      expect(within(campaignCard as HTMLElement).getByText("Recipienti campanie (2/2, 1 netrimiși)")).toBeTruthy();
+
+      const sentCheckbox = within(campaignCard as HTMLElement).getByLabelText(
+        "Include ana.sent@example.com în Campanie cu marker",
+      ) as HTMLInputElement;
+      const unsentCheckbox = within(campaignCard as HTMLElement).getByLabelText(
+        "Include mara.unsent@example.com în Campanie cu marker",
+      ) as HTMLInputElement;
+      expect(sentCheckbox.checked).toBe(true);
+      expect(sentCheckbox.disabled).toBe(true);
+      expect(unsentCheckbox.checked).toBe(true);
+      expect(unsentCheckbox.disabled).toBe(false);
+      expect(within(campaignCard as HTMLElement).getByText("Trimis")).toBeTruthy();
+      expect(within(campaignCard as HTMLElement).getByText("Netrimis")).toBeTruthy();
+
+      fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Trimite lista (1)" }));
+
+      await waitFor(() => {
+        expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledWith(
+          "campaign-markers",
+          ["recipient-sent", "recipient-unsent"],
+        );
+        expect(emailApiMocks.sendCampaignOnServer).toHaveBeenCalledWith("campaign-markers", {
+          mode: "selected",
+          recipientIds: ["recipient-unsent"],
+        });
+      });
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
   it("lets typed campaigns add recipients from other segments", async () => {
     const recipients = [
       makeCampaignRecipient({
@@ -641,7 +728,7 @@ describe("EmailWorkspace campaign contacts", () => {
 
     const campaignCard = (await screen.findByText("Campanie clienți existenți")).closest("article");
     expect(campaignCard).not.toBeNull();
-    expect(within(campaignCard as HTMLElement).getByText("Recipienti campanie (1/2)")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).getByText("Recipienti campanie (1/2, 1 netrimiși)")).toBeTruthy();
 
     const existingCheckbox = within(campaignCard as HTMLElement).getByLabelText(
       "Include ana@client.example în Campanie clienți existenți",

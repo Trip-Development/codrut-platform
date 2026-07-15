@@ -214,6 +214,43 @@ class CommunicationsRepository:
         )
         return {recipient_id for recipient_id in result.scalars().all() if recipient_id is not None}
 
+    async def list_campaign_delivery_status_by_recipient_ids(
+        self,
+        campaign_id: UUID,
+        recipient_ids: list[UUID],
+    ) -> dict[UUID, str]:
+        if not recipient_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(EmailSend.campaign_recipient_id, EmailSend.status)
+            .where(EmailSend.campaign_id == campaign_id)
+            .where(EmailSend.campaign_recipient_id.in_(recipient_ids))
+        )
+        delivery_statuses: dict[UUID, str] = {}
+        status_priority = {
+            "failed": 1,
+            "queued": 2,
+            "sent": 3,
+        }
+        status_labels = {
+            EmailSendStatus.failed: "failed",
+            EmailSendStatus.queued: "queued",
+            EmailSendStatus.accepted: "sent",
+        }
+        for recipient_id, status in result.all():
+            if recipient_id is None:
+                continue
+            next_label = status_labels.get(status, "not_sent")
+            next_priority = status_priority.get(next_label, 0)
+            current_priority = status_priority.get(
+                delivery_statuses.get(recipient_id, "not_sent"),
+                0,
+            )
+            if next_priority > current_priority:
+                delivery_statuses[recipient_id] = next_label
+        return delivery_statuses
+
     async def list_campaign_member_recipient_ids(
         self,
         campaign_id: UUID,
