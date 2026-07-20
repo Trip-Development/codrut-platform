@@ -57,6 +57,14 @@ function scaleSignature(scale: QuestionnaireScaleOption[]): string {
   );
 }
 
+function hasStatementSpecificScales(question: QuestionnaireQuestion): boolean {
+  return (
+    question.type === "statement_score_set" &&
+    (question.statements?.length ?? 0) > 0 &&
+    question.statements?.every((statement) => (statement.scale?.length ?? 0) > 0) === true
+  );
+}
+
 type ScaleGroup = {
   key: string;
   renderKey: string;
@@ -707,6 +715,36 @@ export function QuestionnairesWorkspace() {
     });
   };
 
+  const handleUpdateStatementScale = (
+    sectionIndex: number,
+    questionIndex: number,
+    statementIndex: number,
+    scale: QuestionnaireScaleOption[],
+  ) => {
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const section = sections[sectionIndex];
+      const questions = [...section.questions];
+      const question = questions[questionIndex];
+      const statements = [...(question.statements || [])];
+
+      statements[statementIndex] = {
+        ...statements[statementIndex],
+        scale,
+      };
+      questions[questionIndex] = { ...question, statements };
+      sections[sectionIndex] = { ...section, questions };
+
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
+    });
+  };
+
   const handleDeleteStatement = (sectionIndex: number, questionIndex: number, statementIndex: number) => {
     const definition = currentDefinitionRef.current;
     if (!definition) return;
@@ -725,7 +763,7 @@ export function QuestionnairesWorkspace() {
     const groups = new Map<string, ScaleGroup>();
     currentDefinition.schema.sections.forEach((section) => {
       section.questions.forEach((question) => {
-        if (!question.scale?.length) return;
+        if (!question.scale?.length || hasStatementSpecificScales(question)) return;
         const key = `${question.type}:${scaleSignature(question.scale)}`;
         const existing = groups.get(key);
         if (existing) {
@@ -1295,7 +1333,8 @@ export function QuestionnairesWorkspace() {
                             />
                           </div>
 
-                          {/* Likert Scale configuration */}
+                          {/* Statement sets may define their own participant-facing scale per behaviour. */}
+                          {!hasStatementSpecificScales(question) ? (
                           <div className="border-t border-[var(--border)] pt-3">
                             {(() => {
                               const scalePanelId = `${section.id}:${question.id}`;
@@ -1386,6 +1425,7 @@ export function QuestionnairesWorkspace() {
                               );
                             })()}
                           </div>
+                          ) : null}
 
                           {/* Statement list for statement_score_set */}
                           {question.type === "statement_score_set" && (
@@ -1406,26 +1446,76 @@ export function QuestionnairesWorkspace() {
 
                               <div className="space-y-2">
                                 {(question.statements || []).map((statement, stmtIndex) => (
-                                  <div key={statement.id} className="flex gap-2 items-center">
-                                    <span className="text-xs font-bold text-foreground/50 w-8 text-right">
-                                      {statement.code}
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={statement.label}
-                                      onChange={(e) =>
-                                        handleUpdateStatementLabel(sIndex, qIndex, stmtIndex, e.target.value)
-                                      }
-                                      placeholder="Ex. Îmi place să organizez planuri clare..."
-                                      className="control-input flex-1 px-3 py-1 text-xs"
-                                    />
-                                    <button
-                                      onClick={() => handleDeleteStatement(sIndex, qIndex, stmtIndex)}
-                                      className={`${destructiveButtonClass} px-2`}
-                                      title="Șterge afirmația"
-                                    >
-                                      Șterge
-                                    </button>
+                                  <div key={statement.id} className="rounded-xl border border-[var(--border)] bg-background p-3">
+                                    <div className="flex gap-2 items-center">
+                                      <span className="text-xs font-bold text-foreground/50 w-8 text-right">
+                                        {statement.code}
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={statement.label}
+                                        onChange={(e) =>
+                                          handleUpdateStatementLabel(sIndex, qIndex, stmtIndex, e.target.value)
+                                        }
+                                        placeholder="Ex. Îmi place să organizez planuri clare..."
+                                        className="control-input flex-1 px-3 py-1 text-xs"
+                                        aria-label={`Comportament specific ${statement.code}`}
+                                      />
+                                      <button
+                                        onClick={() => handleDeleteStatement(sIndex, qIndex, stmtIndex)}
+                                        className={`${destructiveButtonClass} px-2`}
+                                        title="Șterge afirmația"
+                                      >
+                                        Șterge
+                                      </button>
+                                    </div>
+
+                                    {statement.scale?.length ? (
+                                      <div className="mt-3 border-t border-[var(--border)] pt-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">
+                                          Răspunsuri văzute de participant
+                                        </p>
+                                        <p className="mt-1 text-xs text-foreground/58">
+                                          Participantul vede cele patru opțiuni de mai jos pentru acest comportament.
+                                        </p>
+                                        <div className="mt-2 grid gap-2">
+                                          {statement.scale.map((option, optionIndex) => (
+                                            <div
+                                              key={String(option.value)}
+                                              className="grid gap-2 rounded-lg border border-[var(--border)] bg-surface px-2.5 py-2 text-xs md:grid-cols-[2.25rem_9rem_minmax(0,1fr)] md:items-center"
+                                            >
+                                              <span className="font-bold text-burgundy">{option.value}</span>
+                                              <input
+                                                type="text"
+                                                value={option.label}
+                                                onChange={(event) => {
+                                                  const scale = cloneScale(statement.scale || []);
+                                                  scale[optionIndex] = { ...scale[optionIndex], label: event.target.value };
+                                                  handleUpdateStatementScale(sIndex, qIndex, stmtIndex, scale);
+                                                }}
+                                                className="control-input control-input-square w-full px-2 py-1 text-xs"
+                                                aria-label={`Etichetă participant ${statement.code} ${option.value}`}
+                                              />
+                                              <input
+                                                type="text"
+                                                value={option.description ?? ""}
+                                                onChange={(event) => {
+                                                  const scale = cloneScale(statement.scale || []);
+                                                  scale[optionIndex] = {
+                                                    ...scale[optionIndex],
+                                                    description: event.target.value || undefined,
+                                                  };
+                                                  handleUpdateStatementScale(sIndex, qIndex, stmtIndex, scale);
+                                                }}
+                                                className="control-input control-input-square w-full px-2 py-1 text-xs"
+                                                aria-label={`Descriere participant ${statement.code} ${option.value}`}
+                                                placeholder="Descrierea pe care o vede participantul"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : null}
                                   </div>
                                 ))}
                               </div>

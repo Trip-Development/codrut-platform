@@ -417,6 +417,108 @@ describe("QuestionnairesWorkspace", () => {
     expect(addStatementButton.textContent).not.toContain("Adaugă");
   });
 
+  it("shows statement-specific participant answers instead of an empty fallback scale", async () => {
+    const icareDefinition: QuestionnaireDefinition = {
+      ...fixtures.definition,
+      key: "boss_360",
+      title: "Feedback 360 iCARE pentru manager",
+      schema: {
+        ...fixtures.definition.schema,
+        audience: "participant",
+        sections: [
+          {
+            id: "inspiring",
+            title: "Inspiră",
+            questions: [
+              {
+                id: "icare_feedback",
+                code: "ICARE-1",
+                type: "statement_score_set",
+                label: "Dezvoltă oamenii",
+                required: true,
+                scale: [
+                  { value: 1, label: "1" },
+                  { value: 2, label: "2" },
+                  { value: 3, label: "3" },
+                  { value: 4, label: "4" },
+                ],
+                statements: [
+                  {
+                    id: "icare_s1",
+                    code: "S1",
+                    label: "Oferă feedback constructiv",
+                    scale: [
+                      { value: 1, label: "1", description: "Nu oferă feedback sau îl evită complet." },
+                      { value: 2, label: "2", description: "Oferă feedback rar, doar când i se cere." },
+                      { value: 3, label: "3", description: "Oferă feedback destul de des." },
+                      { value: 4, label: "4", description: "Oferă feedback regulat și constructiv." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([
+      {
+        id: "boss_360",
+        name: icareDefinition.title,
+        description: "Feedback comportamental iCARE",
+        status: "active",
+        version: 1,
+        audience: "participant",
+        estimatedItems: 1,
+      },
+    ]);
+    vi.mocked(getQuestionnaireDefinition).mockResolvedValue(icareDefinition);
+
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Feedback 360 iCARE pentru manager"));
+
+    const questionCard = await screen.findByTestId("question-editor-icare_feedback");
+    const questionScope = within(questionCard);
+    expect(screen.queryByText("Scări globale de răspuns")).toBeNull();
+    expect(questionScope.queryByRole("button", { name: "Editează scara locală" })).toBeNull();
+    expect(questionScope.getByText("Răspunsuri văzute de participant")).toBeTruthy();
+    expect(questionScope.getByLabelText("Descriere participant S1 1")).toHaveProperty(
+      "value",
+      "Nu oferă feedback sau îl evită complet.",
+    );
+
+    fireEvent.change(questionScope.getByLabelText("Descriere participant S1 2"), {
+      target: { value: "Oferă feedback rar." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
+
+    await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
+    expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+      "boss_360",
+      expect.objectContaining({
+        schema: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              questions: [
+                expect.objectContaining({
+                  statements: [
+                    expect.objectContaining({
+                      scale: expect.arrayContaining([
+                        expect.objectContaining({ value: 2, description: "Oferă feedback rar." }),
+                      ]),
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      }),
+      1,
+    );
+  });
+
   it("keeps local scale editing collapsed by default and stable while typing", async () => {
     render(<QuestionnairesWorkspace />);
 
