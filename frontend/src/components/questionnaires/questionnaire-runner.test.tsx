@@ -123,6 +123,67 @@ describe("QuestionnaireRunner", () => {
     expect(screen.queryByText("S1.")).toBeNull();
   });
 
+  it("shows ICARE participants only the evaluated person and descriptive answers", () => {
+    const icareDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "boss_360",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [
+          {
+            id: "inspiring",
+            title: "Inspiră (Inspiring)",
+            questions: [
+              {
+                id: "icare_01_dezvolta_oamenii",
+                code: "ICARE-1",
+                type: "statement_score_set",
+                label: "Dezvoltă oamenii",
+                required: true,
+                instructions: "Metadata for trainer review only.",
+                scale: [
+                  { value: 1, label: "1" },
+                  { value: 2, label: "2" },
+                  { value: 3, label: "3" },
+                  { value: 4, label: "4" },
+                ],
+                statements: [
+                  {
+                    id: "icare_01",
+                    code: "S1",
+                    label: "Oferă feedback constructiv",
+                    scale: [
+                      { value: 1, label: "1", description: "Nu oferă feedback sau îl evită complet." },
+                      { value: 2, label: "2", description: "Oferă feedback rar, doar când i se cere." },
+                      { value: 3, label: "3", description: "Oferă feedback destul de des, dar vag." },
+                      { value: 4, label: "4", description: "Oferă feedback regulat, cu exemple concrete." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    render(
+      <QuestionnaireRunner
+        definition={icareDefinition}
+        assignmentId="icare-assignment"
+        targetLabel="Bianca Pavel"
+      />,
+    );
+
+    expect(screen.getByText("Completezi pentru Bianca Pavel")).toBeTruthy();
+    expect(screen.getByText("Nu oferă feedback sau îl evită complet.")).toBeTruthy();
+    expect(screen.getByText("Oferă feedback regulat, cu exemple concrete.")).toBeTruthy();
+    expect(screen.queryByText("Inspiră (Inspiring)")).toBeNull();
+    expect(screen.queryByText("Dezvoltă oamenii")).toBeNull();
+    expect(screen.queryByText("Oferă feedback constructiv")).toBeNull();
+    expect(screen.queryByText("S1.")).toBeNull();
+  });
+
   it("shows the 360 target prompt as a single Romanian line using only the safe display name", () => {
     render(
       <QuestionnaireRunner

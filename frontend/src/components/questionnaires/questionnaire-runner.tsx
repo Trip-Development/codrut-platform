@@ -178,6 +178,7 @@ export function QuestionnaireRunner({
   const canSubmit = answeredCount === requiredAnswerKeys.length && Boolean(assignmentId);
   const isComplete = saveState === "submitted";
   const targetCopy = evaluationTargetCopy(targetLabel, definition.key);
+  const hideIcareMeasurementContext = isReview360Questionnaire(definition.key);
   const hasQuestionnaireDetails = Boolean(definition.description || definition.schema.instructions);
 
   async function handleAnswerChange(key: string, value: QuestionnaireAnswerValue) {
@@ -386,18 +387,26 @@ export function QuestionnaireRunner({
         ) : (
           definition.schema.sections.map((section) => (
             <section key={section.id} className="border-b border-[var(--border)] last:border-b-0">
-              <div className="bg-surface-muted px-5 py-3 md:px-6">
-                <h3 className="text-sm font-bold text-foreground/72">{section.title}</h3>
-              </div>
+              {!hideIcareMeasurementContext ? (
+                <div className="bg-surface-muted px-5 py-3 md:px-6">
+                  <h3 className="text-sm font-bold text-foreground/72">{section.title}</h3>
+                </div>
+              ) : null}
               <div className="divide-y divide-[var(--border)]">
                 {section.questions.map((question, index) => (
                   <article key={question.id} className="px-5 py-5 md:px-6">
-                    <div className="grid gap-3 md:grid-cols-[1.5rem_1fr]">
-                      <span className="pt-0.5 text-sm font-bold tabular-nums text-burgundy/72">{index + 1}</span>
+                    <div className={hideIcareMeasurementContext ? "min-w-0" : "grid gap-3 md:grid-cols-[1.5rem_1fr]"}>
+                      {!hideIcareMeasurementContext ? (
+                        <span className="pt-0.5 text-sm font-bold tabular-nums text-burgundy/72">{index + 1}</span>
+                      ) : null}
                       <div className="min-w-0">
-                        <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
-                        {question.instructions ? (
-                          <p className="mt-2 text-sm leading-6 text-foreground/58">{question.instructions}</p>
+                        {!hideIcareMeasurementContext ? (
+                          <>
+                            <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
+                            {question.instructions ? (
+                              <p className="mt-2 text-sm leading-6 text-foreground/58">{question.instructions}</p>
+                            ) : null}
+                          </>
                         ) : null}
                         {question.type === "likert" ? (
                           <LikertQuestion
@@ -416,6 +425,7 @@ export function QuestionnaireRunner({
                             question={question}
                             answers={answers}
                             onAnswerChange={handleAnswerChange}
+                            hideStatementLabels={hideIcareMeasurementContext}
                           />
                         )}
                       </div>
@@ -567,6 +577,7 @@ type QuestionInputProps = {
   question: QuestionnaireQuestion;
   answers: AnswerState;
   onAnswerChange: (key: string, value: QuestionnaireAnswerValue) => void;
+  hideStatementLabels?: boolean;
 };
 
 function LikertQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
@@ -639,7 +650,7 @@ function SingleChoiceQuestion({ question, answers, onAnswerChange }: QuestionInp
   );
 }
 
-function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInputProps) {
+function StatementSetQuestion({ question, answers, onAnswerChange, hideStatementLabels = false }: QuestionInputProps) {
   return (
     <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)]">
       {(question.statements ?? []).map((statement) => {
@@ -651,7 +662,9 @@ function StatementSetQuestion({ question, answers, onAnswerChange }: QuestionInp
             key={statement.id}
             className="border-b border-[var(--border)] bg-surface px-4 py-4 last:border-b-0"
           >
-            <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
+            {!hideStatementLabels ? (
+              <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
+            ) : null}
             {isTenPointScale(scale) ? (
               <DiscreteScaleSlider
                 label={statement.label}
