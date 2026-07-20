@@ -56,8 +56,7 @@ def test_distress_driver_statement_mapping_matches_source_table() -> None:
     definition = get_approved_questionnaire_definition(QuestionnaireKey.distress_drivers)
     first_set = definition.schema["sections"][0]["questions"][0]
     driver_by_code = {
-        statement["code"]: statement["scoring"]["driver"]
-        for statement in first_set["statements"]
+        statement["code"]: statement["scoring"]["driver"] for statement in first_set["statements"]
     }
 
     assert driver_by_code == {
@@ -142,6 +141,18 @@ def test_boss_360_definition_is_icare_form_complete_with_section_scoring() -> No
     assert [option["value"] for option in questions[0]["scale"]] == [1, 2, 3, 4]
     assert [option["value"] for option in statements[0]["scale"]] == [1, 2, 3, 4]
     assert statements[0]["scale"][0]["description"] == "Nu oferă feedback sau îl evită complet."
+    statement = statements[7]
+    assert statement["label"] == (
+        "Stimulează inițiativa și încurajează eroarea ca pe oportunitate de învățare"
+    )
+    assert [option["value"] for option in statement["scale"]] == [1, 2, 3, 4]
+    assert statement["scale"][0]["description"].startswith("Nu tolerează eroarea și sancționează")
+    assert statement["scale"][3]["description"].startswith("Explorează împreună cu echipa")
+    assert all(
+        "Nu am avut ocazia" not in option["description"]
+        for statement in statements
+        for option in statement["scale"]
+    )
     question_types = {
         question["type"]
         for section in definition.schema["sections"]
@@ -171,16 +182,8 @@ def test_boss_360_english_definition_uses_english_icare_copy() -> None:
 def test_legacy_icare_key_resolves_to_360_alias_without_listing_separately() -> None:
     definition = get_approved_questionnaire_definition(QuestionnaireKey.icare)
     sections = definition.schema["sections"]
-    questions = [
-        question
-        for section in sections
-        for question in section["questions"]
-    ]
-    statements = [
-        statement
-        for question in questions
-        for statement in question["statements"]
-    ]
+    questions = [question for section in sections for question in section["questions"]]
+    statements = [statement for question in questions for statement in question["statements"]]
 
     assert definition.title == "Feedback 360 iCARE pentru manager"
     assert [section["title"] for section in sections] == [
