@@ -53,15 +53,18 @@ export class ParticipantPage {
 
     const confirmButton = this.page.getByRole("button", { name: "Trimite", exact: true });
     await expect(confirmButton).toBeVisible();
-    await Promise.all([
+    const [submitResponse] = await Promise.all([
       this.page.waitForResponse(
         (response) =>
           response.url().includes("/response/submit") &&
-          response.request().method() === "POST" &&
-          response.ok(),
+          response.request().method() === "POST",
       ),
       confirmButton.click(),
     ]);
+    expect(
+      submitResponse.ok(),
+      `Questionnaire submission failed with ${submitResponse.status()}: ${await submitResponse.text()}`,
+    ).toBe(true);
 
     await expect(this.page.getByRole("heading", { name: "Chestionarele tale" })).toBeVisible();
   }
