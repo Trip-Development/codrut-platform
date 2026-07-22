@@ -18,6 +18,34 @@ describe("ResetPasswordPage", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps reset available and submits a browser-autofilled address", async () => {
+    render(<ResetPasswordPage />);
+
+    const emailInput = screen.getByLabelText("Email") as HTMLInputElement;
+    const submitButton = screen.getByRole("button", { name: "Trimite link securizat" });
+    expect(submitButton).toHaveProperty("disabled", false);
+
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    nativeValueSetter?.call(emailInput, "existing@example.com");
+    fireEvent.submit(submitButton.closest("form")!);
+
+    await screen.findByText("Verifică emailul.");
+    expect(requestPasswordReset).toHaveBeenCalledWith("existing@example.com");
+  });
+
+  it("shows a recoverable error for an empty programmatic submission", async () => {
+    render(<ResetPasswordPage />);
+
+    const submitButton = screen.getByRole("button", { name: "Trimite link securizat" });
+    fireEvent.submit(submitButton.closest("form")!);
+
+    expect(await screen.findByText("Introdu adresa de email asociată contului.")).toBeTruthy();
+    expect(requestPasswordReset).not.toHaveBeenCalled();
+  });
+
   it("shows boxed pending feedback and locks the email field while sending", async () => {
     let resolveReset!: () => void;
     const resetPromise = new Promise<void>((resolve) => {

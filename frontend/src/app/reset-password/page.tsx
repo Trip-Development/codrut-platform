@@ -21,16 +21,23 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submittingRef.current) return;
 
+    const submittedEmail = String(new FormData(e.currentTarget).get("email") ?? "").trim();
+    if (!submittedEmail) {
+      setError("Introdu adresa de email asociată contului.");
+      return;
+    }
+
     submittingRef.current = true;
+    setEmail(submittedEmail);
     setError(null);
     setSubmitting(true);
 
     try {
-      await requestPasswordReset(email);
+      await requestPasswordReset(submittedEmail);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "A apărut o eroare la trimiterea emailului. Te rugăm să încerci din nou.");
@@ -82,6 +89,7 @@ export default function ResetPasswordPage() {
                     <FieldLabel htmlFor="reset-email">Email</FieldLabel>
                     <Input
                       id="reset-email"
+                      name="email"
                       type="email"
                       placeholder="nume@companie.ro"
                       value={email}
@@ -109,7 +117,7 @@ export default function ResetPasswordPage() {
                   />
                 ) : null}
 
-                <Button type="submit" size="lg" disabled={submitting || !email} className="w-full">
+                <Button type="submit" size="lg" disabled={submitting} className="w-full">
                   {submitting ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
                   {submitting ? "Trimitem linkul" : "Trimite link securizat"}
                 </Button>

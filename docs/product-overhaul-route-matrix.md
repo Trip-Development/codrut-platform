@@ -20,7 +20,7 @@ Status keys:
 | `/trainer/login` | Trainer authentication | Same contract and shared auth behavior | Trainer entry remains distinct | preserved | auth integration suite |
 | `/register` | Invite-aware registration | Same flow with current password policy and field recovery | Preserve registration semantics | preserved | invite registration journey |
 | `/reset-password` | Reset request | Same flow with explicit pending, failure, and success states | Preserve | preserved | identity tests |
-| `/update-password` | Reset-token password update | Same flow with 12 to 128 character policy and common-password rejection | Preserve | preserved | identity tests |
+| `/update-password` | Reset-token password update | Same flow with 8 to 128 character policy and common-password rejection | Preserve | preserved | identity tests |
 | `/onboarding` | Authentication-aware redirect | Same compatibility route | Keep redirect for old links | preserved | route smoke |
 | `/confidentialitate` | Not present | Romanian privacy policy | Owner-approved for the controlled pilot | expanded | route smoke and owner approval confirmed |
 | `/termeni` | Not present | Romanian terms | Owner-approved for the controlled pilot | expanded | route smoke and owner approval confirmed |

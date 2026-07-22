@@ -69,7 +69,7 @@ The re-versioned package imports questionnaires as immutable active version `3` 
 - Added protected-content and consent audit boundaries.
 - Anonymous and authenticated consent records persist legal-document version, timestamp, invite/session identity, profile identity, and source.
 - Result policy is questionnaire-specific. iCARE uses `max(2, min(3, eligible non-self reviewers))` and never publishes one-person aggregates.
-- Updated password policy to 12 through 128 characters, no composition rules, local common-password rejection, and bounded k-anonymous breach checking.
+- Updated password policy to 8 through 128 characters, no composition rules, local common-password rejection, and bounded k-anonymous breach checking.
 - Campaign assets are decoded, dimension and pixel checked, metadata-normalized, ownership-scoped, uploaded during save, and cleaned up after failed persistence.
 - Production Compose requires public URL, separate signing secrets, verified sender identity, authenticated Brevo callbacks, and trusted proxy configuration. It hard-disables auth bypass and demo fallback.
 - Encrypted Restic backup, retention, integrity-check, and isolated restore tooling is implemented for PostgreSQL dumps and campaign assets with 14 daily, 8 weekly, and 6 monthly restore points.

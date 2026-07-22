@@ -1,4 +1,28 @@
 services:
+  development-cache-init:
+    image: codrut-platform-backend:dev
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+      target: dev
+    user: root
+    command:
+      - sh
+      - -lc
+      - >-
+        chown -R 1000:1000 /volumes
+    volumes:
+      - backend_uv_cache:/volumes/backend-uv-cache
+      - backend_pip_cache:/volumes/backend-pip-cache
+      - backend_venv:/volumes/backend-venv
+      - worker_uv_cache:/volumes/worker-uv-cache
+      - worker_venv:/volumes/worker-venv
+      - frontend_node_modules:/volumes/frontend-node-modules
+      - frontend_next_cache:/volumes/frontend-next-cache
+      - pnpm_store:/volumes/pnpm-store
+      - campaign_assets:/volumes/campaign-assets
+    restart: "no"
+
   traefik:
     command:
       - --providers.file.filename=/etc/traefik/dev-dynamic.yaml
@@ -19,8 +43,8 @@ services:
     image: codrut-platform-frontend:dev
     build:
       target: dev
-    user: root
-    command: ["sh", "-lc", "mkdir -p /workspace/frontend/.next && chown -R node:node /workspace/frontend/.next && exec su node -c 'pnpm dev --hostname 0.0.0.0 --port 3000'"]
+    user: node
+    command: ["pnpm", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_BASE_URL: /api
@@ -33,6 +57,9 @@ services:
       - frontend_node_modules:/workspace/frontend/node_modules
       - frontend_next_cache:/workspace/frontend/.next
       - pnpm_store:/home/node/.local/share/pnpm/store
+    depends_on:
+      development-cache-init:
+        condition: service_completed_successfully
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     init: true
@@ -43,14 +70,8 @@ services:
     image: codrut-platform-backend:dev
     build:
       target: dev
-    user: root
-    command:
-      - sh
-      - -lc
-      - >-
-        mkdir -p /home/vscode/.local/share/codrut/campaign-assets &&
-        chown -R vscode:vscode /home/vscode/.local/share/codrut/campaign-assets &&
-        exec su vscode -c 'uv run uvicorn codrut.main:create_app --factory --host 0.0.0.0 --port 8000 --reload --reload-dir src --reload-dir migrations'
+    user: vscode
+    command: ["uv", "run", "uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "src", "--reload-dir", "migrations"]
     environment:
       CODRUT_ENV: development
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
@@ -82,6 +103,9 @@ services:
       - campaign_assets:/home/vscode/.local/share/codrut/campaign-assets
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      development-cache-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "uv run python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=5).read()\""]
       interval: 10s
@@ -95,14 +119,8 @@ services:
     image: codrut-platform-backend:dev
     build:
       target: dev
-    user: root
-    command:
-      - sh
-      - -lc
-      - >-
-        mkdir -p /home/vscode/.local/share/codrut/campaign-assets &&
-        chown -R vscode:vscode /home/vscode/.local/share/codrut/campaign-assets &&
-        exec su vscode -c 'uv run python -m codrut.workers.main'
+    user: vscode
+    command: ["uv", "run", "python", "-m", "codrut.workers.main"]
     environment:
       CODRUT_ENV: development
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
@@ -126,6 +144,9 @@ services:
       - backend_pip_cache:/home/vscode/.cache/pip
       - worker_venv:/workspace/backend/.venv
       - campaign_assets:/home/vscode/.local/share/codrut/campaign-assets
+    depends_on:
+      development-cache-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "uv run python -m codrut.tools.check_worker_health"]
       interval: 10s

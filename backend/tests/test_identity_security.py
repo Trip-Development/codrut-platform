@@ -24,7 +24,8 @@ def test_password_hash_round_trip() -> None:
 @pytest.mark.parametrize(
     "password",
     [
-        "prea-scurta",
+        "scurt",
+        "password",
         "password1234",
         "qwerty123456",
     ],
@@ -60,6 +61,19 @@ def test_new_password_policy_accepts_long_passphrases_without_composition_rules(
     assert register.password == password
     assert reset.password == password
     assert change.new_password == password
+
+
+def test_new_password_policy_accepts_eight_character_boundary() -> None:
+    password = "Abcd123!"  # noqa: S105
+
+    register = RegisterRequest(
+        email="participant@example.com",
+        password=password,
+        token="invite-token",  # noqa: S106
+        terms_accepted=True,
+    )
+
+    assert register.password == password
 
 
 def test_new_password_policy_accepts_unicode_passphrases() -> None:

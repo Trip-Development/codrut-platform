@@ -52,7 +52,7 @@ describe("AccountSettingsPanel", () => {
     expect(newPassword.required).toBe(true);
     expect(confirmPassword.minLength).toBe(PASSWORD_MIN_LENGTH);
     expect(confirmPassword.maxLength).toBe(PASSWORD_MAX_LENGTH);
-    expect(screen.getByText(/Minim 12 și maximum 128 de caractere/)).toBeDefined();
+    expect(screen.getByText(/Minim 8 și maximum 128 de caractere/)).toBeDefined();
     expect(screen.getByText(/Parolele comune sau compromise sunt respinse/)).toBeDefined();
   });
 
