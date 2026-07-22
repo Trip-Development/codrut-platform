@@ -2,13 +2,18 @@ import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
+import { ParticipantCompletionState } from "../ParticipantCompletionState";
 import { ParticipantTaskList } from "../ParticipantTaskList";
+import { countAvailableParticipantResults } from "../result-state";
 import { groupParticipantTasks } from "../task-display";
 
 export default async function ParticipantQuestionnairesPage() {
   const requestOptions = await getServerApiRequestOptions();
   const summary = await getParticipantWorkspaceSummary(requestOptions);
   const taskGroups = groupParticipantTasks(summary.tasks);
+  const hasTasks = summary.tasks.length > 0;
+  const allTasksComplete = hasTasks && summary.tasks.every((task) => task.status === "completed");
+  const resultCount = countAvailableParticipantResults(summary);
 
   return (
     <AppShell
@@ -20,6 +25,11 @@ export default async function ParticipantQuestionnairesPage() {
       activeHref="/participant/questionnaires"
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
     >
+      {allTasksComplete ? (
+        <div className="mb-8">
+          <ParticipantCompletionState resultCount={resultCount} />
+        </div>
+      ) : null}
       {taskGroups.length > 0 ? (
         <ParticipantTaskList
           groups={taskGroups}
