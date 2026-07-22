@@ -1,6 +1,7 @@
 import { type APIRequestContext, expect, test } from "@playwright/test";
 import { execSync } from "child_process";
 import { LoginPage } from "./pom/LoginPage";
+import { ParticipantPage } from "./pom/ParticipantPage";
 
 type SeededPilot = {
   companyId: string;
@@ -34,21 +35,40 @@ function seedPilotUiState(): SeededPilot {
   return { companyId, companyName, projectId, projectName };
 }
 
-async function mailpitSubjectsForCompany(request: APIRequestContext, companyName: string) {
+type MailpitMessage = {
+  ID: string;
+  Subject?: string;
+};
+
+async function mailpitMessagesForCompany(request: APIRequestContext, companyName: string) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const response = await request.get("http://localhost:8025/api/v1/messages");
     expect(response.ok()).toBeTruthy();
     const payload = await response.json();
-    const subjects: string[] = (payload.messages ?? [])
-      .map((message: { Subject?: string }) => message.Subject ?? "")
-      .filter((subject: string) => subject.includes(companyName));
-    if (subjects.length >= 6) {
-      return subjects;
+    const messages: MailpitMessage[] = (payload.messages ?? []).filter((message: MailpitMessage) =>
+      message.Subject?.includes(companyName),
+    );
+    if (messages.length >= 6) {
+      return messages;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   return [];
+}
+
+async function secureInvitePath(request: APIRequestContext, messages: MailpitMessage[]) {
+  const taskMessage = messages.find((message) => message.Subject?.includes("chestionare"));
+  expect(taskMessage).toBeDefined();
+
+  const response = await request.get(`http://localhost:8025/api/v1/message/${taskMessage?.ID}`);
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  const body = `${payload.Text ?? ""}\n${payload.HTML ?? ""}`.replaceAll("&amp;", "&");
+  const inviteUrl = body.match(/https?:\/\/[^\s"'<>]+\/invite\/[^\s"'<>]+/)?.[0];
+  expect(inviteUrl).toBeDefined();
+  const parsed = new URL(inviteUrl ?? "http://localhost/");
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 test.describe("Pilot trainer UI smoke", () => {
@@ -122,9 +142,18 @@ test.describe("Pilot trainer UI smoke", () => {
     ]);
     await expect(page.getByText("6/6 emailuri trimise.")).toBeVisible();
 
-    const subjects = await mailpitSubjectsForCompany(request, seeded.companyName);
+    const messages = await mailpitMessagesForCompany(request, seeded.companyName);
+    const subjects = messages.map((message) => message.Subject ?? "");
     expect(subjects).toHaveLength(6);
     expect(subjects.filter((subject: string) => subject.includes("activează contul"))).toHaveLength(3);
     expect(subjects.filter((subject: string) => subject.includes("chestionare"))).toHaveLength(3);
+
+    const invitePath = await secureInvitePath(request, messages);
+    await page.context().clearCookies();
+    await page.goto(invitePath);
+    const participantPage = new ParticipantPage(page);
+    await participantPage.startFirstTask();
+    await participantPage.answerCurrentQuestionnaire();
+    await participantPage.submit();
   });
 });
