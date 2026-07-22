@@ -155,42 +155,34 @@ describe("ProjectParticipantsWorkspace", () => {
     });
   });
 
-  it("shows the internal access tab with account type counts", () => {
-    render(
-      <ProjectParticipantsWorkspace
-        companyId="company-1"
-        projectId="project-1"
-        companyName="Michelin"
-        project={project}
-        participants={participants}
-        invitationStatuses={invitationStatuses}
-      />,
-    );
+  it("shows one compact summary and short access statuses", () => {
+    renderWorkspace();
 
-    expect(screen.getByText("cont permanent")).toBeTruthy();
-    expect(screen.getByText("invitație temporară activă")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Acces intern" }));
-
-    expect(screen.getAllByText("Cont permanent")).toHaveLength(2);
-    expect(screen.getAllByText("Acces temporar")).toHaveLength(2);
-    expect(screen.getByText("Ana Manager")).toBeTruthy();
-    expect(screen.getByText("Dan Membru")).toBeTruthy();
-    expect(screen.getByText("Link securizat activ")).toBeTruthy();
+    const summary = screen.getByLabelText("Rezumat participanți");
+    expect(summary.textContent).toContain("2 participanți");
+    expect(summary.textContent).toContain("1 permanent");
+    expect(summary.textContent).toContain("1 temporar");
+    expect(summary.textContent).toContain("1 link activ");
+    expect(screen.getByText("Permanent")).toBeTruthy();
+    expect(screen.getByText("Temporar")).toBeTruthy();
+    expect(screen.getByText("Cont de creat")).toBeTruthy();
+    expect(screen.getByText("Link activ")).toBeTruthy();
   });
 
-  it("renders the narrow roster as a contained labeled list without a forced table width", () => {
+  it("uses a semantic table with a stable width inside its own horizontal scroller", () => {
     renderWorkspace();
 
     const roster = screen.getByRole("table", { name: "Roster participanți" });
-    expect(roster.className).not.toContain("min-w-[920px]");
-    expect(roster.parentElement?.className).not.toContain("overflow-x-auto");
-    expect(within(roster).getAllByText("Nume").length).toBeGreaterThan(0);
-    expect(within(roster).getAllByText("Email").length).toBeGreaterThan(0);
-    expect(within(roster).getAllByText("Tip acces").length).toBeGreaterThan(0);
+    expect(roster.tagName).toBe("TABLE");
+    expect(roster.className).toContain("min-w-[960px]");
+    expect(roster.parentElement?.className).toContain("overflow-x-auto");
+    expect(within(roster).getByRole("columnheader", { name: "Participant" })).toBeTruthy();
+    expect(within(roster).getByRole("columnheader", { name: "Email" })).toBeTruthy();
+    expect(within(roster).getByRole("columnheader", { name: "Acces" })).toBeTruthy();
+    expect(within(roster).getByRole("columnheader", { name: "Stare" })).toBeTruthy();
   });
 
-  it("searches the project roster and access view without diacritics", () => {
+  it("combines diacritic-insensitive search with the access filter", () => {
     renderWorkspace();
 
     fireEvent.change(screen.getByLabelText("Caută participant"), {
@@ -199,18 +191,47 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Dan Membru")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Ana Manager" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Acces intern" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Filtrează după acces" }), {
+      target: { value: "permanent" },
+    });
+    expect(screen.getByText("Niciun participant pentru filtrele curente.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Caută participant"), {
+      target: { value: "" },
+    });
+    expect(screen.getByRole("link", { name: "Ana Manager" })).toBeTruthy();
+    expect(screen.queryByText("Dan Membru")).toBeNull();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filtrează după acces" }), {
+      target: { value: "temporary" },
+    });
     expect(screen.getByText("Dan Membru")).toBeTruthy();
-    expect(screen.queryByText("Ana Manager")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Ana Manager" })).toBeNull();
   });
 
   it("opens the roster import modal from the project header", () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Importă participanți" }));
+    fireEvent.click(screen.getByRole("button", { name: "Importă" }));
 
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Închide" })).toBeTruthy();
+  });
+
+  it("closes the participant edit Sheet with Escape and restores focus", async () => {
+    renderWorkspace();
+
+    const editButton = screen.getByRole("button", { name: "Editează Dan Membru" });
+    editButton.focus();
+    fireEvent.click(editButton);
+
+    expect(await screen.findByRole("dialog", { name: "Editează participantul" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Editează participantul" })).toBeNull();
+      expect(document.activeElement).toBe(editButton);
+    });
   });
 
   it("keeps the roster read-only until a row is explicitly edited", async () => {
@@ -231,7 +252,13 @@ describe("ProjectParticipantsWorkspace", () => {
 
     const row = screen.getByText("Dan Membru").closest("[data-participant-row]");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează" }));
+    const editButton = within(row as HTMLElement).getByRole("button", { name: "Editează Dan Membru" });
+    expect(editButton.textContent).toBe("");
+    expect(editButton.getAttribute("title")).toBe("Editează Dan Membru");
+    fireEvent.click(editButton);
+
+    const editSheet = await screen.findByRole("dialog", { name: "Editează participantul" });
+    expect(editSheet.className).toContain("!max-w-[32rem]");
 
     fireEvent.change(screen.getByDisplayValue("Dan Membru"), {
       target: { value: "Dan Actualizat" },
@@ -253,6 +280,7 @@ describe("ProjectParticipantsWorkspace", () => {
       }),
     );
     expect(await screen.findByText("Dan Actualizat")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Editează participantul" })).toBeNull();
   });
 
   it("persists a manual project leadership override from the edit row", async () => {
@@ -265,8 +293,8 @@ describe("ProjectParticipantsWorkspace", () => {
 
     const row = screen.getByText("Dan Membru").closest("[data-participant-row]");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează" }));
-    fireEvent.click(screen.getByRole("button", { name: "Membru" }));
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează Dan Membru" }));
+    fireEvent.click(screen.getByRole("button", { name: "Leadership" }));
     fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
 
     await waitFor(() =>
@@ -285,7 +313,7 @@ describe("ProjectParticipantsWorkspace", () => {
 
     const row = screen.getByText("Dan Membru").closest("[data-participant-row]");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează" }));
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează Dan Membru" }));
     const saveButton = screen.getByRole("button", { name: "Salvează" });
     fireEvent.click(saveButton);
     fireEvent.click(saveButton);
@@ -293,9 +321,9 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(await screen.findByText("Salvăm Dan Membru")).toBeTruthy();
     expect(screen.getByText("Actualizăm datele participantului și refacem contextul proiectului.")).toBeTruthy();
     expect(updateCompanyParticipant).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole("button", { name: "Importă participanți" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Adaugă manual" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("tab", { name: "Acces intern" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Importă" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Adaugă" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("combobox", { name: "Filtrează după acces" }) as HTMLSelectElement).disabled).toBe(true);
 
     updateRequest.resolve({
       ...participants[1],
@@ -384,7 +412,7 @@ describe("ProjectParticipantsWorkspace", () => {
     expect((await screen.findAllByText("Salvăm participanții")).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Actualizăm rosterul proiectului.")).toBeTruthy();
     expect(importCompanyRoster).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole("button", { name: "Importă participanți" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Importă" }) as HTMLButtonElement).disabled).toBe(true);
 
     importRequest.resolve({
       participants: [
@@ -426,7 +454,7 @@ describe("ProjectParticipantsWorkspace", () => {
 
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Adaugă manual" }));
+    fireEvent.click(screen.getByRole("button", { name: "Adaugă" }));
     fireEvent.change(screen.getByPlaceholderText(/Ana Popescu/), {
       target: { value: "Ioana Nouă, ioana@example.test, Designer, -" },
     });

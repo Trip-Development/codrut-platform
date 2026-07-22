@@ -7,6 +7,7 @@ import pytest
 
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
+    AssessmentCycleStatus,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -97,30 +98,41 @@ class CatalogRepository:
             if definition.key == key and definition.version != except_version:
                 definition.active = False
 
-    async def get_assignment_for_user_by_key(
+    async def list_assignments_for_user_by_key(
         self,
         _user_id: UUID,
         questionnaire_key: str,
         *,
         version: int | None = None,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
-    ) -> QuestionnaireAssignment | None:
+    ) -> list[QuestionnaireAssignment]:
         assignment = self.assignment
         if assignment is None or assignment.questionnaire_key != questionnaire_key:
-            return None
+            return []
+        if (
+            participant_profile_id is not None
+            and assignment.respondent_profile_id != participant_profile_id
+        ):
+            return []
+        if project_id is not None and assignment.project_id != project_id:
+            return []
+        if cycle_id is not None and assignment.assessment_cycle_id != cycle_id:
+            return []
         if allowed_assignment_ids is not None and assignment.id not in allowed_assignment_ids:
-            return None
+            return []
         definition = await self.get_definition_by_id(assignment.questionnaire_definition_id)
         if version is not None and (definition is None or definition.version != version):
-            return None
-        return assignment
+            return []
+        return [assignment]
 
     async def get_project_for_assignment(
         self,
         _assignment: QuestionnaireAssignment,
     ) -> None:
         return None
-
 
 class ScalarResult:
     def __init__(self, value: object | None) -> None:
@@ -322,6 +334,65 @@ async def test_assignment_response_window_rejects_due_and_project_boundaries() -
     )
 
 
+async def test_assignment_response_window_rejects_inactive_and_out_of_window_cycles() -> None:
+    now = datetime.now(UTC)
+
+    class CycleRepository:
+        def __init__(self, cycle: object) -> None:
+            self.cycle = cycle
+
+        async def get_assessment_cycle_for_assignment(self, _assignment: object) -> object:
+            return self.cycle
+
+        async def get_project_for_assignment(self, _assignment: object) -> None:
+            return None
+
+    assignment = SimpleNamespace(
+        status=AssignmentStatus.assigned,
+        assessment_cycle_id=uuid4(),
+        due_at=None,
+    )
+    cases = (
+        (
+            AssessmentCycleStatus.draft,
+            now - timedelta(minutes=1),
+            None,
+            "assessment_cycle_not_open",
+        ),
+        (
+            AssessmentCycleStatus.closed,
+            now - timedelta(minutes=1),
+            None,
+            "assessment_cycle_closed",
+        ),
+        (
+            AssessmentCycleStatus.active,
+            now + timedelta(minutes=1),
+            None,
+            "assessment_cycle_not_open",
+        ),
+        (
+            AssessmentCycleStatus.active,
+            now - timedelta(minutes=1),
+            now - timedelta(seconds=1),
+            "assessment_cycle_closed",
+        ),
+    )
+
+    for status, starts_at, due_at, expected_code in cases:
+        with pytest.raises(DomainError) as exc_info:
+            await _validate_assignment_response_window(
+                cast(
+                    Any,
+                    CycleRepository(
+                        SimpleNamespace(status=status, starts_at=starts_at, due_at=due_at)
+                    ),
+                ),
+                assignment,
+            )
+        assert exc_info.value.code == expected_code
+
+
 async def test_list_persisted_definitions_does_not_seed_content_from_code() -> None:
     repository = CatalogRepository()
 
@@ -448,6 +519,32 @@ async def test_participant_can_read_only_an_assigned_definition_by_key() -> None
         "Public prompt"
     )
     assert "scoring" not in participant.definition_schema
+
+
+async def test_onboarding_requires_profile_context_for_multi_profile_participants() -> None:
+    profiles = [
+        SimpleNamespace(id=uuid4(), pcm_base="base", pcm_phase="phase"),
+        SimpleNamespace(id=uuid4(), pcm_base="base", pcm_phase="phase"),
+    ]
+
+    class OnboardingRepository:
+        async def list_permanent_participants_for_user(
+            self,
+            _user_id: UUID,
+        ) -> list[SimpleNamespace]:
+            return profiles
+
+    service = _service_with_repository(OnboardingRepository())
+
+    with pytest.raises(DomainError) as ambiguous:
+        await service.get_participant_onboarding(uuid4())
+    assert ambiguous.value.code == "participant_context_required"
+
+    selected = await service.get_participant_onboarding(
+        uuid4(),
+        participant_profile_id=profiles[1].id,
+    )
+    assert selected.required is False
 
 
 async def test_participant_definition_by_key_rejects_unassigned_catalog_entry() -> None:

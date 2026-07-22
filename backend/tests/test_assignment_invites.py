@@ -624,6 +624,7 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
         FakeScalarResult(company),
         FakeScalarResult(False),
         FakeScalarsResult([assignment]),
+        FakeScalarResult(None),
         FakeScalarResult(profile),
         FakeScalarResult(None),
     ]
@@ -698,6 +699,7 @@ async def test_verify_invite_for_project_uses_project_close_as_effective_expiry(
         FakeScalarResult(False),
         FakeScalarsResult([assignment]),
         FakeScalarResult(project),
+        FakeScalarResult(None),
         FakeScalarResult(profile),
         FakeScalarResult(None),
     ]
@@ -774,7 +776,7 @@ async def test_verify_invite_rejects_closed_project_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_verify_invite_for_non_leadership_rejects_unlinked_existing_email_user() -> None:
+async def test_verify_invite_for_non_leadership_links_unlinked_existing_email_user() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
     assignment_id = uuid.uuid4()
@@ -827,17 +829,17 @@ async def test_verify_invite_for_non_leadership_rejects_unlinked_existing_email_
         FakeScalarResult(Company(id=company_id, name="Michelin")),
         FakeScalarResult(False),
         FakeScalarsResult([assignment]),
+        FakeScalarResult(existing_user),
         FakeScalarResult(profile),
         FakeScalarResult(existing_user),
     ]
 
-    with pytest.raises(DomainError) as exc_info:
-        await IdentityService(session).verify_invite_token_and_create_session(token)
+    result = await IdentityService(session).verify_invite_token_and_create_session(token)
 
-    assert exc_info.value.code == "invite_email_account_conflict"
-    assert profile.user_id is None
+    assert result.session_token is not None
+    assert profile.user_id == existing_user.id
     assert not any(isinstance(model, User) for model in session.added_models)
-    assert not any(isinstance(model, Session) for model in session.added_models)
+    assert any(isinstance(model, Session) for model in session.added_models)
 
 
 @pytest.mark.asyncio

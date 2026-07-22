@@ -98,7 +98,7 @@ def test_participant_profile_is_company_scoped() -> None:
     }
 
     assert ("company_id", "email") in unique_columns
-    assert ("user_id",) in unique_columns
+    assert ("user_id",) not in unique_columns
 
 
 def test_reporting_relationship_supports_org_chart_without_self_reports() -> None:

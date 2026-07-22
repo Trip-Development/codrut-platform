@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  closeAssessmentCycle,
   createCompanyAssignment,
+  createAssessmentCycle,
   createCompanyProject,
+  deleteAssessmentCycle,
   deleteCompany,
   deleteCompanyProject,
+  getAssessmentCycles,
+  getCompanyDefaultAssignmentPlan,
   importCompanyRoster,
   resendParticipantInvitation,
   saveCompanyDefaultAssignmentPlan,
@@ -12,6 +17,7 @@ import {
   type CompanyAssignmentPlanItem,
   updateCompanyParticipant,
   updateCompanyProject,
+  updateAssessmentCycle,
 } from "./companies";
 import {
   getScoringResult,
@@ -226,6 +232,173 @@ describe("company mutation contracts", () => {
         visibility_policy: "reviewed_anonymized",
       }],
     });
+  });
+
+  it("requests a follow-up preview from the pinned source cycle", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({
+      ok: true,
+      payload: {
+        project_id: "project-1",
+        assessment_cycle_id: null,
+        source_cycle_id: "cycle-1",
+        scopes: [],
+        assignments: [],
+        suggested_count: 0,
+        existing_count: 0,
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getCompanyDefaultAssignmentPlan("company-synthetic", {}, {
+      projectId: "project-1",
+      sourceCycleId: "cycle-1",
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(
+      /default-plan\?project_id=project-1&source_cycle_id=cycle-1$/,
+    );
+  });
+
+  it("persists the complete assessment-cycle lifecycle contract", async () => {
+    const draft = {
+      id: "cycle-2",
+      project_id: "project-1",
+      sequence: 2,
+      name: "Reevaluare 1",
+      status: "draft",
+      source_cycle_id: "cycle-1",
+      starts_at: null,
+      due_at: "2026-08-15T00:00:00Z",
+      closed_at: null,
+      created_by_user_id: "trainer-1",
+      created_at: "2026-07-22T00:00:00Z",
+      updated_at: "2026-07-22T00:00:00Z",
+      questionnaires: [],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ ok: true, payload: [draft] }))
+      .mockResolvedValueOnce(response({ ok: true, payload: draft }))
+      .mockResolvedValueOnce(response({ ok: true, payload: { ...draft, name: "Reevaluare august" } }))
+      .mockResolvedValueOnce(response({ ok: true, payload: { ...draft, status: "closed" } }))
+      .mockResolvedValueOnce(response({ ok: true, status: 204, payload: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getAssessmentCycles("company-synthetic", "project-1", {
+      headers: { "x-request": "test" },
+    })).resolves.toEqual([draft]);
+    await createAssessmentCycle("company-synthetic", "project-1", {
+      name: "Reevaluare 1",
+      sourceCycleId: "cycle-1",
+      startsAt: null,
+      dueAt: "2026-08-15T00:00:00Z",
+    });
+    await updateAssessmentCycle("company-synthetic", "project-1", "cycle-2", {
+      name: "Reevaluare august",
+      startsAt: undefined,
+      dueAt: null,
+    });
+    await closeAssessmentCycle("company-synthetic", "project-1", "cycle-2", true);
+    await deleteAssessmentCycle("company-synthetic", "project-1", "cycle-2");
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      name: "Reevaluare 1",
+      source_cycle_id: "cycle-1",
+      starts_at: null,
+      due_at: "2026-08-15T00:00:00Z",
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+      name: "Reevaluare august",
+      due_at: null,
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+      cancel_unfinished: true,
+    });
+    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: "DELETE" });
+  });
+
+  it("surfaces stable errors for every assessment-cycle mutation boundary", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ ok: false, status: 503, jsonError: new Error("invalid json") }))
+      .mockResolvedValueOnce(response({ ok: false, status: 409, payload: { error: { message: "Există deja o reevaluare deschisă." } } }))
+      .mockResolvedValueOnce(response({ ok: false, status: 422, payload: { error: { code: "cycle_invalid", message: "Data limită este invalidă.", details: { field: "due_at" } } } }))
+      .mockResolvedValueOnce(response({ ok: false, status: 409, payload: { error: { message: "Ciclul are asignări." } } }))
+      .mockResolvedValueOnce(response({ ok: false, status: 409, payload: { error: { code: "unfinished", message: "Există asignări nefinalizate." } } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getAssessmentCycles("company-synthetic", "project-1")).rejects.toThrow("Backend refuzat (503)");
+    await expect(createAssessmentCycle("company-synthetic", "project-1", {
+      name: "Duplicat",
+      sourceCycleId: undefined,
+    })).rejects.toThrow("Există deja o reevaluare deschisă.");
+    await expect(updateAssessmentCycle("company-synthetic", "project-1", "cycle-2", {
+      dueAt: "invalid",
+    })).rejects.toMatchObject({ message: "Data limită este invalidă.", code: "cycle_invalid" });
+    await expect(deleteAssessmentCycle("company-synthetic", "project-1", "cycle-2")).rejects.toThrow("Ciclul are asignări.");
+    await expect(closeAssessmentCycle("company-synthetic", "project-1", "cycle-2")).rejects.toMatchObject({
+      message: "Există asignări nefinalizate.",
+      code: "unfinished",
+    });
+  });
+
+  it("serializes cycle scope only when an assessment cycle is defined", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ ok: true, payload: { id: "assignment-1" } }))
+      .mockResolvedValueOnce(response({ ok: true, payload: { assignments: [], created_count: 0, existing_count: 0 } }))
+      .mockResolvedValueOnce(response({ ok: true, payload: { results: [], total: 0, emails_sent: 0, emails_failed: 0, links_generated: 0 } }))
+      .mockResolvedValueOnce(response({ ok: true, payload: { email_results: [] } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const item: CompanyAssignmentPlanItem = {
+      key: "assignment-1",
+      scope_id: "team-1",
+      scope_name: "Echipă sintetică",
+      scope_type: "functional",
+      respondent_profile_id: "participant-1",
+      respondent_name: "Participant sintetic",
+      questionnaire_key: "synthetic_pulse",
+      target_type: "team",
+      target_person_id: null,
+      target_person_name: null,
+      target_team_id: "team-1",
+      target_team_name: "Echipă sintetică",
+      target_team_type: "functional",
+      target_team_member_ids: ["participant-1"],
+      target_team_leader_id: null,
+      visibility_policy: "reviewed_anonymized",
+      selected: true,
+      existing_assignment_id: null,
+    };
+
+    await createCompanyAssignment("company-synthetic", {
+      projectId: "project-1",
+      assessmentCycleId: "cycle-2",
+      respondentProfileId: "participant-1",
+      questionnaireKey: "synthetic_pulse",
+      targetType: "team",
+      targetTeamId: "team-1",
+    });
+    await saveCompanyDefaultAssignmentPlan("company-synthetic", [item], "project-1", "cycle-2");
+    await sendParticipantInvitations("company-synthetic", {
+      participantIds: ["participant-1"],
+      projectId: "project-1",
+      assessmentCycleId: "cycle-2",
+      mode: "email",
+    });
+    await resendParticipantInvitation("company-synthetic", "participant-1", "project-1", {
+      assessmentCycleId: "cycle-2",
+      idempotencyKey: "cycle-resend-test",
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      assessment_cycle_id: "cycle-2",
+    });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("assessment_cycle_id=cycle-2");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
+      assessment_cycle_id: "cycle-2",
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      assessment_cycle_id: "cycle-2",
+    });
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("assessment_cycle_id=cycle-2");
   });
 
   it("derives invitation targeting defaults and carries idempotency through retries", async () => {

@@ -1,19 +1,32 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import select
 
 from codrut.core.database import SessionLocal, engine
+from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleStatus,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
     Team,
     TeamType,
 )
-from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
-from codrut.modules.forms.models import QuestionnaireDefinition
+from codrut.modules.companies.models import (
+    Company,
+    CompanyProject,
+    ParticipantProfile,
+    ProjectMembership,
+)
+from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
+    QuestionnaireResponse,
+    QuestionnaireResponseStatus,
+)
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.participants.service import (
     ParticipantWorkspaceService,
@@ -147,6 +160,439 @@ def test_result_labels_prefer_participant_schema_copy() -> None:
         )
         == 3
     )
+
+
+async def test_workspace_requires_context_for_multi_profile_account_and_scopes_cycle() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"multi-profile-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company_a = Company(id=uuid.uuid4(), name=f"Company A {uuid.uuid4()}")
+            company_b = Company(id=uuid.uuid4(), name=f"Company B {uuid.uuid4()}")
+            definition = QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key=f"synthetic-{uuid.uuid4().hex[:8]}",
+                version=1,
+                title="Synthetic questionnaire",
+                schema={"schema_version": "questionnaire.v1", "sections": []},
+                private_config={},
+                feedback_policy={},
+                active=True,
+            )
+            session.add_all([user, company_a, company_b, definition])
+            await session.flush()
+
+            profile_a = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company_a.id,
+                user_id=user.id,
+                full_name="Participant A",
+                email=user.email,
+            )
+            profile_b = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company_b.id,
+                user_id=user.id,
+                full_name="Participant B",
+                email=user.email,
+            )
+            project_a = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company_a.id,
+                name="Program A",
+            )
+            project_b = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company_b.id,
+                name="Program B",
+            )
+            session.add_all([profile_a, profile_b, project_a, project_b])
+            await session.flush()
+            cycle_a = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company_a.id,
+                project_id=project_a.id,
+                sequence=1,
+                name="Evaluare inițială",
+                status=AssessmentCycleStatus.active,
+            )
+            cycle_b = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company_b.id,
+                project_id=project_b.id,
+                sequence=2,
+                name="Reevaluare 1",
+                status=AssessmentCycleStatus.active,
+            )
+            previous_cycle_b = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company_b.id,
+                project_id=project_b.id,
+                sequence=1,
+                name="Evaluare inițială",
+                status=AssessmentCycleStatus.closed,
+                closed_at=datetime.now(UTC) - timedelta(days=1),
+            )
+            session.add_all(
+                [
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company_a.id,
+                        project_id=project_a.id,
+                        participant_profile_id=profile_a.id,
+                        active=True,
+                    ),
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company_b.id,
+                        project_id=project_b.id,
+                        participant_profile_id=profile_b.id,
+                        active=True,
+                    ),
+                    cycle_a,
+                    previous_cycle_b,
+                    cycle_b,
+                ]
+            )
+            await session.flush()
+            assignment_a = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company_a.id,
+                project_id=project_a.id,
+                assessment_cycle_id=cycle_a.id,
+                respondent_profile_id=profile_a.id,
+                questionnaire_key=definition.key,
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.invited,
+            )
+            assignment_b = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company_b.id,
+                project_id=project_b.id,
+                assessment_cycle_id=cycle_b.id,
+                respondent_profile_id=profile_b.id,
+                questionnaire_key=definition.key,
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.invited,
+            )
+            previous_assignment_b = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company_b.id,
+                project_id=project_b.id,
+                assessment_cycle_id=previous_cycle_b.id,
+                respondent_profile_id=profile_b.id,
+                questionnaire_key=definition.key,
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.submitted,
+            )
+            session.add_all([assignment_a, previous_assignment_b, assignment_b])
+            await session.flush()
+            session.add(
+                ResultPublication(
+                    id=uuid.uuid4(),
+                    publication_key=f"published-cycle-{uuid.uuid4().hex}",
+                    participant_profile_id=profile_b.id,
+                    company_id=company_b.id,
+                    project_id=project_b.id,
+                    assignment_round_id=previous_assignment_b.assignment_round_id,
+                    assessment_cycle_id=previous_cycle_b.id,
+                    questionnaire_definition_id=definition.id,
+                    questionnaire_key=definition.key,
+                    source_assignment_id=previous_assignment_b.id,
+                    kind=ResultPublicationKind.individual,
+                    source_count=1,
+                    policy_snapshot={},
+                    published_at=datetime.now(UTC),
+                )
+            )
+            await session.flush()
+
+            service = ParticipantWorkspaceService(session)
+            selection = await service.get_workspace_summary(user.id)
+            selected = await service.get_workspace_summary(
+                user.id,
+                participant_profile_id=profile_b.id,
+                project_id=project_b.id,
+            )
+
+            assert selection.context_selection_required is True
+            assert selection.participant_profile_id is None
+            assert {context.participant_profile_id for context in selection.contexts} == {
+                profile_a.id,
+                profile_b.id,
+            }
+            assert selected.context_selection_required is False
+            assert selected.participant_profile_id == profile_b.id
+            assert selected.project_id == project_b.id
+            assert selected.assessment_cycle_id == cycle_b.id
+            assert [task.assignmentId for task in selected.tasks] == [str(assignment_b.id)]
+            assert selected.tasks[0].assessmentCycleId == cycle_b.id
+            assert {cycle.id for cycle in selected.cycles} == {
+                previous_cycle_b.id,
+                cycle_b.id,
+            }
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_workspace_rejects_draft_cycles_and_hides_cancelled_tasks() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"cycle-visibility-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = Company(id=uuid.uuid4(), name=f"Cycle visibility {uuid.uuid4()}")
+            profile = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="Participant visibility",
+                email=user.email,
+            )
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Program visibility",
+            )
+            definition = QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key=f"visibility-{uuid.uuid4().hex[:8]}",
+                version=1,
+                title="Visibility questionnaire",
+                schema={"schema_version": "questionnaire.v1", "sections": []},
+                private_config={},
+                feedback_policy={},
+                active=True,
+            )
+            draft_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Reevaluare draft",
+                status=AssessmentCycleStatus.draft,
+            )
+            visible_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key=definition.key,
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.invited,
+            )
+            cancelled_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key=definition.key,
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.cancelled,
+            )
+            session.add_all([user, company])
+            await session.flush()
+            session.add_all([profile, project, definition])
+            await session.flush()
+            session.add_all(
+                [
+                    draft_cycle,
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=profile.id,
+                        active=True,
+                    ),
+                    visible_assignment,
+                    cancelled_assignment,
+                ]
+            )
+            await session.flush()
+
+            service = ParticipantWorkspaceService(session)
+            workspace = await service.get_workspace_summary(
+                user.id,
+                participant_profile_id=profile.id,
+                project_id=project.id,
+            )
+
+            assert workspace.assessment_cycle_id is None
+            assert workspace.cycles == []
+            assert [task.assignmentId for task in workspace.tasks] == [str(visible_assignment.id)]
+
+            with pytest.raises(DomainError) as exc_info:
+                await service.get_workspace_summary(
+                    user.id,
+                    participant_profile_id=profile.id,
+                    project_id=project.id,
+                    cycle_id=draft_cycle.id,
+                )
+
+            assert exc_info.value.code == "participant_cycle_forbidden"
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_workspace_pcm_values_are_scoped_to_selected_cycle() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"cycle-pcm-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = Company(id=uuid.uuid4(), name=f"PCM Company {uuid.uuid4()}")
+            profile = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="Participant PCM",
+                email=user.email,
+                pcm_base="thinker",
+                pcm_phase="promoter",
+            )
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Program PCM",
+            )
+            definition = QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key="pcm_base",
+                version=1_000_000 + int(uuid.uuid4().hex[:6], 16),
+                title="Profil PCM sintetic",
+                schema={"schema_version": "questionnaire.v1", "sections": []},
+                private_config={},
+                feedback_policy={},
+                active=True,
+            )
+            session.add_all([user, company, profile, project, definition])
+            await session.flush()
+            baseline_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Evaluare inițială",
+                status=AssessmentCycleStatus.closed,
+                closed_at=datetime.now(UTC) - timedelta(days=1),
+            )
+            current_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=2,
+                name="Reevaluare 1",
+                status=AssessmentCycleStatus.active,
+            )
+            session.add_all([baseline_cycle, current_cycle])
+            await session.flush()
+            baseline_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=baseline_cycle.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key="pcm_base",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.submitted,
+            )
+            current_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=current_cycle.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key="pcm_base",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.submitted,
+            )
+            session.add_all([baseline_assignment, current_assignment])
+            await session.flush()
+            session.add(
+                ResultPublication(
+                    id=uuid.uuid4(),
+                    publication_key=f"pcm-history-{uuid.uuid4().hex}",
+                    participant_profile_id=profile.id,
+                    company_id=company.id,
+                    project_id=project.id,
+                    assignment_round_id=baseline_assignment.assignment_round_id,
+                    assessment_cycle_id=baseline_cycle.id,
+                    questionnaire_definition_id=definition.id,
+                    questionnaire_key=definition.key,
+                    source_assignment_id=baseline_assignment.id,
+                    kind=ResultPublicationKind.individual,
+                    source_count=1,
+                    policy_snapshot={},
+                    published_at=datetime.now(UTC),
+                )
+            )
+            session.add_all(
+                [
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=baseline_assignment.id,
+                        questionnaire_key="pcm_base",
+                        questionnaire_version=definition.version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={"pcm_base": "harmonizer", "pcm_phase": "rebel"},
+                        submitted_at=datetime.now(UTC) - timedelta(days=2),
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=current_assignment.id,
+                        questionnaire_key="pcm_base",
+                        questionnaire_version=definition.version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={"pcm_base": "thinker", "pcm_phase": "promoter"},
+                        submitted_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            await session.flush()
+
+            service = ParticipantWorkspaceService(session)
+            baseline = await service.get_workspace_summary(
+                user.id,
+                participant_profile_id=profile.id,
+                project_id=project.id,
+                cycle_id=baseline_cycle.id,
+            )
+            current = await service.get_workspace_summary(
+                user.id,
+                participant_profile_id=profile.id,
+                project_id=project.id,
+                cycle_id=current_cycle.id,
+            )
+
+            assert (baseline.pcm_base, baseline.pcm_phase) == ("harmonizer", "rebel")
+            assert (current.pcm_base, current.pcm_phase) == ("thinker", "promoter")
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
 
 
 async def test_participant_results_require_active_matching_publication_snapshot() -> None:

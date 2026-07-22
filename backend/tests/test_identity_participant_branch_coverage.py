@@ -22,6 +22,11 @@ from codrut.modules.identity.service import (
     _validate_project_access_window,
 )
 from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
+from codrut.modules.participants.schemas import (
+    ParticipantWorkspaceContext,
+    ParticipantWorkspaceCycle,
+    ParticipantWorkspaceProject,
+)
 from codrut.modules.participants.service import (
     ParticipantWorkspaceService,
     _definition_scale_max,
@@ -490,6 +495,286 @@ def test_workspace_context_handles_no_project_and_multiple_projects() -> None:
         projects,
     ) == (None, "Toate proiectele active")
     assert service._workspace_deadline([], projects) is None
+
+
+@pytest.mark.asyncio
+async def test_multi_profile_workspace_requires_explicit_context() -> None:
+    service = ParticipantWorkspaceService(AsyncMock())
+    profile_a = SimpleNamespace(id=uuid.uuid4())
+    profile_b = SimpleNamespace(id=uuid.uuid4())
+    company_a = SimpleNamespace(id=uuid.uuid4())
+    company_b = SimpleNamespace(id=uuid.uuid4())
+    project_a = uuid.uuid4()
+    project_b = uuid.uuid4()
+    cycle_b = uuid.uuid4()
+    contexts = [
+        ParticipantWorkspaceContext(
+            participant_profile_id=profile_a.id,
+            participant_full_name="Participant A",
+            participant_email="same@example.com",
+            company_id=company_a.id,
+            company_name="Company A",
+            projects=[
+                ParticipantWorkspaceProject(
+                    id=project_a,
+                    name="Program A",
+                    deadline_label="finalul evaluării",
+                )
+            ],
+        ),
+        ParticipantWorkspaceContext(
+            participant_profile_id=profile_b.id,
+            participant_full_name="Participant B",
+            participant_email="same@example.com",
+            company_id=company_b.id,
+            company_name="Company B",
+            projects=[
+                ParticipantWorkspaceProject(
+                    id=project_b,
+                    name="Program B",
+                    deadline_label="finalul evaluării",
+                    cycles=[
+                        ParticipantWorkspaceCycle(
+                            id=cycle_b,
+                            project_id=project_b,
+                            sequence=2,
+                            name="Reevaluare 1",
+                            status="active",
+                        )
+                    ],
+                )
+            ],
+        ),
+    ]
+    rows = [(profile_a, company_a), (profile_b, company_b)]
+
+    unresolved = await service._resolve_workspace_context(
+        rows,
+        contexts,
+        participant_profile_id=None,
+        project_id=None,
+        cycle_id=None,
+        allowed_assignment_ids=None,
+        scoped_project_id=None,
+    )
+    selected_by_project = await service._resolve_workspace_context(
+        rows,
+        contexts,
+        participant_profile_id=None,
+        project_id=project_b,
+        cycle_id=None,
+        allowed_assignment_ids=None,
+        scoped_project_id=None,
+    )
+    selected_by_cycle = await service._resolve_workspace_context(
+        rows,
+        contexts,
+        participant_profile_id=profile_b.id,
+        project_id=project_b,
+        cycle_id=cycle_b,
+        allowed_assignment_ids=None,
+        scoped_project_id=None,
+    )
+
+    assert unresolved == (None, None, None, None)
+    assert selected_by_project == (profile_b, company_b, project_b, cycle_b)
+    assert selected_by_cycle == (profile_b, company_b, project_b, cycle_b)
+
+
+@pytest.mark.asyncio
+async def test_single_profile_with_multiple_projects_requires_program_selection() -> None:
+    service = ParticipantWorkspaceService(AsyncMock())
+    profile = SimpleNamespace(id=uuid.uuid4())
+    company = SimpleNamespace(id=uuid.uuid4())
+    project_a = uuid.uuid4()
+    project_b = uuid.uuid4()
+    context = ParticipantWorkspaceContext(
+        participant_profile_id=profile.id,
+        participant_full_name="Participant",
+        company_id=company.id,
+        company_name="Company",
+        projects=[
+            ParticipantWorkspaceProject(
+                id=project_a,
+                name="Program A",
+                deadline_label="finalul evaluării",
+            ),
+            ParticipantWorkspaceProject(
+                id=project_b,
+                name="Program B",
+                deadline_label="finalul evaluării",
+            ),
+        ],
+    )
+
+    selected = await service._resolve_workspace_context(
+        [(profile, company)],
+        [context],
+        participant_profile_id=None,
+        project_id=None,
+        cycle_id=None,
+        allowed_assignment_ids=None,
+        scoped_project_id=None,
+    )
+
+    assert selected == (None, None, None, None)
+    assert {project.id for project in context.projects} == {project_a, project_b}
+
+
+@pytest.mark.asyncio
+async def test_multi_project_selection_response_preserves_program_contexts() -> None:
+    session = AsyncMock()
+    service = ParticipantWorkspaceService(session)
+    profile = SimpleNamespace(id=uuid.uuid4())
+    company = SimpleNamespace(id=uuid.uuid4())
+    projects = [
+        ParticipantWorkspaceProject(
+            id=uuid.uuid4(),
+            name="Program A",
+            deadline_label="finalul evaluării",
+        ),
+        ParticipantWorkspaceProject(
+            id=uuid.uuid4(),
+            name="Program B",
+            deadline_label="finalul evaluării",
+        ),
+    ]
+    context = ParticipantWorkspaceContext(
+        participant_profile_id=profile.id,
+        participant_full_name="Participant",
+        company_id=company.id,
+        company_name="Company",
+        projects=projects,
+    )
+    service._list_profiles_and_companies = AsyncMock(  # type: ignore[method-assign]
+        return_value=[(profile, company)]
+    )
+    service._get_authorized_contexts = AsyncMock(  # type: ignore[method-assign]
+        return_value=[context]
+    )
+
+    summary = await service.get_workspace_summary(uuid.uuid4())
+
+    assert summary.context_selection_required is True
+    assert summary.tasks == []
+    assert summary.contexts == [context]
+    assert [project.name for project in summary.contexts[0].projects] == [
+        "Program A",
+        "Program B",
+    ]
+    session.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_single_project_defaults_to_its_active_cycle() -> None:
+    service = ParticipantWorkspaceService(AsyncMock())
+    profile = SimpleNamespace(id=uuid.uuid4())
+    company = SimpleNamespace(id=uuid.uuid4())
+    project_id = uuid.uuid4()
+    closed_cycle_id = uuid.uuid4()
+    active_cycle_id = uuid.uuid4()
+    context = ParticipantWorkspaceContext(
+        participant_profile_id=profile.id,
+        participant_full_name="Participant",
+        company_id=company.id,
+        company_name="Company",
+        projects=[
+            ParticipantWorkspaceProject(
+                id=project_id,
+                name="Program",
+                deadline_label="finalul evaluării",
+                cycles=[
+                    ParticipantWorkspaceCycle(
+                        id=closed_cycle_id,
+                        project_id=project_id,
+                        sequence=1,
+                        name="Evaluare inițială",
+                        status="closed",
+                    ),
+                    ParticipantWorkspaceCycle(
+                        id=active_cycle_id,
+                        project_id=project_id,
+                        sequence=2,
+                        name="Reevaluare 1",
+                        status="active",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    selected = await service._resolve_workspace_context(
+        [(profile, company)],
+        [context],
+        participant_profile_id=None,
+        project_id=None,
+        cycle_id=None,
+        allowed_assignment_ids=None,
+        scoped_project_id=None,
+    )
+
+    assert selected == (profile, company, project_id, active_cycle_id)
+
+
+@pytest.mark.asyncio
+async def test_workspace_rejects_cross_profile_cycle_selection() -> None:
+    service = ParticipantWorkspaceService(AsyncMock())
+    profile_a = SimpleNamespace(id=uuid.uuid4())
+    profile_b = SimpleNamespace(id=uuid.uuid4())
+    company = SimpleNamespace(id=uuid.uuid4())
+    project_a = uuid.uuid4()
+    project_b = uuid.uuid4()
+    cycle_b = uuid.uuid4()
+    contexts = [
+        ParticipantWorkspaceContext(
+            participant_profile_id=profile_a.id,
+            participant_full_name="Participant A",
+            company_id=company.id,
+            company_name="Company",
+            projects=[
+                ParticipantWorkspaceProject(
+                    id=project_a,
+                    name="Program A",
+                    deadline_label="finalul evaluării",
+                )
+            ],
+        ),
+        ParticipantWorkspaceContext(
+            participant_profile_id=profile_b.id,
+            participant_full_name="Participant B",
+            company_id=company.id,
+            company_name="Company",
+            projects=[
+                ParticipantWorkspaceProject(
+                    id=project_b,
+                    name="Program B",
+                    deadline_label="finalul evaluării",
+                    cycles=[
+                        ParticipantWorkspaceCycle(
+                            id=cycle_b,
+                            project_id=project_b,
+                            sequence=2,
+                            name="Reevaluare 1",
+                            status="active",
+                        )
+                    ],
+                )
+            ],
+        ),
+    ]
+
+    with pytest.raises(DomainError) as exc_info:
+        await service._resolve_workspace_context(
+            [(profile_a, company), (profile_b, company)],
+            contexts,
+            participant_profile_id=profile_a.id,
+            project_id=project_a,
+            cycle_id=cycle_b,
+            allowed_assignment_ids=None,
+            scoped_project_id=None,
+        )
+
+    assert exc_info.value.code == "participant_cycle_forbidden"
 
 
 def test_assignment_tasks_use_neutral_labels_when_targets_are_missing() -> None:

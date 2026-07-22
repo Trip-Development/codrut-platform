@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  AssessmentCycle,
   CompanyAssignment,
   CompanyAssignmentPlan,
   CompanyParticipant,
@@ -11,14 +12,21 @@ import type {
   RosterInviteResult,
 } from "@/api/companies";
 import {
+  closeAssessmentCycle,
+  CompanyMutationError,
+  createAssessmentCycle,
   createCompanyAssignment,
+  deleteAssessmentCycle,
+  getAssessmentCycles,
+  getCompanyAssignments,
   getCompanyDefaultAssignmentPlan,
+  getCompanyInvitationStatuses,
   resendParticipantInvitation,
   saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
 } from "@/api/companies";
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
-import { AssignmentWorkspace } from "./AssignmentWorkspace";
+import { AssignmentWorkspace, buildCyclePreviewPlan } from "./AssignmentWorkspace";
 import {
   buildInvitationRows,
   InvitationDeliveryWorkspace,
@@ -28,8 +36,14 @@ vi.mock("@/api/companies", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/companies")>();
   return {
     ...original,
+    closeAssessmentCycle: vi.fn(),
+    createAssessmentCycle: vi.fn(),
     createCompanyAssignment: vi.fn(),
+    deleteAssessmentCycle: vi.fn(),
+    getAssessmentCycles: vi.fn(),
+    getCompanyAssignments: vi.fn(),
     getCompanyDefaultAssignmentPlan: vi.fn(),
+    getCompanyInvitationStatuses: vi.fn(),
     saveCompanyDefaultAssignmentPlan: vi.fn(),
     sendParticipantInvitations: vi.fn(),
     resendParticipantInvitation: vi.fn(),
@@ -91,6 +105,7 @@ const assignments: CompanyAssignment[] = [
     id: "assignment-1",
     company_id: "company-1",
     project_id: "project-1",
+    assessment_cycle_id: "cycle-1",
     respondent_profile_id: "andrei",
     questionnaire_key: "lencioni",
     target_type: "self",
@@ -104,6 +119,7 @@ const assignments: CompanyAssignment[] = [
     id: "assignment-2",
     company_id: "company-1",
     project_id: "project-1",
+    assessment_cycle_id: "cycle-1",
     respondent_profile_id: "ana",
     questionnaire_key: "lencioni",
     target_type: "self",
@@ -138,7 +154,37 @@ const invitationStatuses: ParticipantInvitationStatus[] = [
   },
 ];
 
+const initialCycle: AssessmentCycle = {
+  id: "cycle-1",
+  company_id: "company-1",
+  project_id: "project-1",
+  sequence: 1,
+  name: "Evaluare inițială",
+  status: "active",
+  source_cycle_id: null,
+  starts_at: "2026-06-11T09:00:00Z",
+  due_at: null,
+  closed_at: null,
+  created_by_user_id: "trainer-1",
+  created_at: "2026-06-11T09:00:00Z",
+  updated_at: "2026-06-11T09:00:00Z",
+  questionnaires: [
+    {
+      id: "cycle-questionnaire-1",
+      questionnaire_definition_id: "definition-1",
+      questionnaire_key: "lencioni",
+      display_order: 0,
+    },
+  ],
+};
+
 describe("buildInvitationRows", () => {
+  beforeEach(() => {
+    vi.mocked(getAssessmentCycles).mockResolvedValue([initialCycle]);
+    vi.mocked(getCompanyAssignments).mockResolvedValue(assignments);
+    vi.mocked(getCompanyInvitationStatuses).mockResolvedValue(invitationStatuses);
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -308,6 +354,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -379,6 +427,8 @@ describe("buildInvitationRows", () => {
         selectedProjectId="project-1"
         participants={participants}
         assignments={[]}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -399,6 +449,7 @@ describe("buildInvitationRows", () => {
     await waitFor(() => {
       expect(createCompanyAssignment).toHaveBeenCalledWith("company-1", {
         projectId: "project-1",
+        assessmentCycleId: "cycle-1",
         respondentProfileId: "ana",
         questionnaireKey: "boss_360",
         targetType: "person",
@@ -423,6 +474,8 @@ describe("buildInvitationRows", () => {
         selectedProjectId="project-1"
         participants={[]}
         assignments={[]}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={[]}
       />,
     );
@@ -444,6 +497,8 @@ describe("buildInvitationRows", () => {
         selectedProjectId="project-1"
         participants={participants}
         assignments={assignments}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -538,6 +593,8 @@ describe("buildInvitationRows", () => {
         selectedProjectId="project-1"
         participants={participants}
         assignments={[]}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -552,7 +609,10 @@ describe("buildInvitationRows", () => {
     });
     expect(within(leadershipTarget).getByText("Andrei Manager")).toBeTruthy();
     expect(within(leadershipTarget).getByText("Ana Pop")).toBeTruthy();
-    expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, { projectId: "project-1" });
+    expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, {
+      projectId: "project-1",
+      assessmentCycleId: "cycle-1",
+    });
     expect(screen.getByText("Andrei Manager")).toBeTruthy();
     expect(screen.getByText("Ana Pop")).toBeTruthy();
     expect(screen.getAllByText("Lencioni - evaluare echipă")).toHaveLength(2);
@@ -568,7 +628,7 @@ describe("buildInvitationRows", () => {
           questionnaire_key: "lencioni",
           target_type: "team",
         }),
-      ], "project-1");
+      ], "project-1", "cycle-1");
     });
     expect(await screen.findByText("1 create, 0 deja existente.")).toBeTruthy();
     expect(screen.getAllByText("Salvată").length).toBeGreaterThanOrEqual(1);
@@ -666,6 +726,8 @@ describe("buildInvitationRows", () => {
         selectedProjectId="project-1"
         participants={participants}
         assignments={assignments.slice(0, 1)}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -689,6 +751,242 @@ describe("buildInvitationRows", () => {
 
     fireEvent.click(within(personTarget).getByLabelText("Selectează asignarea pentru Ana Pop"));
     expect(screen.getByRole("button", { name: "Salvează 1 asignare" })).toBeTruthy();
+  });
+
+  it("scopes assignment loading and plan generation to the selected assessment cycle", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(getAssessmentCycles).mockResolvedValue([initialCycle]);
+    vi.mocked(getCompanyAssignments).mockResolvedValue(
+      assignments.map((assignment) => ({ ...assignment, assessment_cycle_id: initialCycle.id })),
+    );
+    vi.mocked(getCompanyDefaultAssignmentPlan).mockResolvedValue({
+      project_id: "project-1",
+      assessment_cycle_id: initialCycle.id,
+      scopes: [],
+      assignments: [],
+      suggested_count: 0,
+      existing_count: 0,
+    });
+
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        teams={teams}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getCompanyAssignments).toHaveBeenCalledWith("company-1", {}, {
+        projectId: "project-1",
+        assessmentCycleId: "cycle-1",
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Regenerează planul" }));
+    await waitFor(() => {
+      expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, {
+        projectId: "project-1",
+        assessmentCycleId: "cycle-1",
+      });
+    });
+  });
+
+  it("reviews the pinned questionnaire set before creating a follow-up draft", async () => {
+    const closedCycle = { ...initialCycle, status: "closed" as const, closed_at: "2026-06-30T12:00:00Z" };
+    const createdCycle: AssessmentCycle = {
+      ...initialCycle,
+      id: "cycle-2",
+      sequence: 2,
+      name: "Reevaluare 1",
+      status: "draft",
+      source_cycle_id: initialCycle.id,
+      starts_at: null,
+      closed_at: null,
+    };
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(getAssessmentCycles).mockResolvedValue([closedCycle]);
+    vi.mocked(getCompanyAssignments).mockResolvedValue(
+      assignments.map((assignment) => ({ ...assignment, assessment_cycle_id: closedCycle.id })),
+    );
+    const followupPreviewPlan = buildCyclePreviewPlan(
+      assignments,
+      new Map(participants.map((participant) => [participant.id, participant])),
+      new Map(teams.map((team) => [team.id, team])),
+    );
+    expect(followupPreviewPlan.assignments).toHaveLength(2);
+    vi.mocked(getCompanyDefaultAssignmentPlan).mockResolvedValue({
+      ...followupPreviewPlan,
+      assessment_cycle_id: null,
+      source_cycle_id: closedCycle.id,
+    });
+    vi.mocked(createAssessmentCycle).mockResolvedValue(createdCycle);
+
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        initialAssessmentCycles={[closedCycle]}
+        initialSelectedCycleId={closedCycle.id}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reevaluare nouă" }));
+    const previewContinue = screen.getByRole("button", { name: "Continuă" });
+    await waitFor(() => expect(previewContinue.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(previewContinue);
+    expect(await screen.findByText("Chestionare repetate")).toBeTruthy();
+    await waitFor(() => {
+      expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, {
+        projectId: "project-1",
+        sourceCycleId: "cycle-1",
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText("Lencioni - evaluare echipă").length).toBeGreaterThanOrEqual(3);
+    });
+    const confirmationContinue = screen.getByRole("button", { name: "Continuă" });
+    await waitFor(() => expect(confirmationContinue.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(confirmationContinue);
+    const assignmentSummary = screen.getByText("Asignări propuse").parentElement;
+    expect(assignmentSummary && within(assignmentSummary).getByText("2")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Creează draftul" }));
+
+    await waitFor(() => {
+      expect(createAssessmentCycle).toHaveBeenCalledWith("company-1", "project-1", {
+        name: "Reevaluare 1",
+        sourceCycleId: "cycle-1",
+        dueAt: null,
+      });
+    });
+    expect(await screen.findByText("Reevaluare 1 a fost creată ca draft.")).toBeTruthy();
+  });
+
+  it("closes an active cycle and makes its assignment plan read-only", async () => {
+    const closedCycle = {
+      ...initialCycle,
+      status: "closed" as const,
+      closed_at: "2026-07-22T12:00:00Z",
+    };
+    vi.mocked(closeAssessmentCycle).mockResolvedValue(closedCycle);
+
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Închide evaluarea" }));
+
+    await waitFor(() => {
+      expect(closeAssessmentCycle).toHaveBeenCalledWith("company-1", "project-1", "cycle-1");
+    });
+    expect(await screen.findByText("Evaluare inițială a fost închisă.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Asignare individuală" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("confirms cancellation of unfinished assignments before forcing cycle close", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const closedCycle = {
+      ...initialCycle,
+      status: "closed" as const,
+      closed_at: "2026-07-22T12:00:00Z",
+    };
+    vi.mocked(closeAssessmentCycle)
+      .mockRejectedValueOnce(new CompanyMutationError(
+        "Există asignări nefinalizate.",
+        "assessment_cycle_has_unfinished_assignments",
+      ))
+      .mockResolvedValueOnce(closedCycle);
+
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Închide evaluarea" }));
+
+    await waitFor(() => expect(closeAssessmentCycle).toHaveBeenCalledTimes(2));
+    expect(closeAssessmentCycle).toHaveBeenLastCalledWith("company-1", "project-1", "cycle-1", true);
+    expect(confirm).toHaveBeenCalledWith(
+      "Evaluarea are asignări nefinalizate. Le anulezi și închizi evaluarea?",
+    );
+    expect(await screen.findByText("Evaluare inițială a fost închisă.")).toBeTruthy();
+  });
+
+  it("keeps a failed forced close recoverable and deletes only a confirmed draft", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(closeAssessmentCycle)
+      .mockRejectedValueOnce(new CompanyMutationError(
+        "Există asignări nefinalizate.",
+        "assessment_cycle_has_unfinished_assignments",
+      ))
+      .mockRejectedValueOnce(new Error("Închiderea nu a putut fi salvată."));
+
+    const { unmount } = render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
+        teams={teams}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Închide evaluarea" }));
+    expect(await screen.findByText("Închiderea nu a putut fi salvată.")).toBeTruthy();
+    unmount();
+
+    const draftCycle = { ...initialCycle, status: "draft" as const, starts_at: null };
+    vi.mocked(deleteAssessmentCycle).mockResolvedValue(undefined);
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        initialAssessmentCycles={[draftCycle]}
+        initialSelectedCycleId={draftCycle.id}
+        teams={teams}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Șterge draftul" }));
+
+    await waitFor(() => {
+      expect(deleteAssessmentCycle).toHaveBeenCalledWith("company-1", "project-1", "cycle-1");
+    });
+    expect(confirm).toHaveBeenLastCalledWith("Ștergi draftul „Evaluare inițială”?");
+    expect(await screen.findByText("Draftul a fost șters.")).toBeTruthy();
   });
 
   it("generates secure links, updates participant rows, and copies the active link", async () => {
@@ -726,6 +1024,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -738,6 +1038,7 @@ describe("buildInvitationRows", () => {
         mode: "secure_links",
         participantIds: ["ana"],
         projectId: "project-1",
+        assessmentCycleId: "cycle-1",
         targetMode: "selected",
       });
     });
@@ -750,6 +1051,61 @@ describe("buildInvitationRows", () => {
       expect(writeText).toHaveBeenCalledWith("http://localhost:3000/invite/ana-token");
     });
     expect(await screen.findByText("Link securizat copiat pentru Ana Pop.")).toBeTruthy();
+  });
+
+  it("keeps invitation delivery scoped to the selected assessment cycle", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(getAssessmentCycles).mockResolvedValue([initialCycle]);
+    vi.mocked(getCompanyAssignments).mockResolvedValue(
+      assignments.map((assignment) => ({ ...assignment, assessment_cycle_id: initialCycle.id })),
+    );
+    vi.mocked(getCompanyInvitationStatuses).mockResolvedValue(invitationStatuses);
+    vi.mocked(sendParticipantInvitations).mockResolvedValue({
+      total: 1,
+      emails_sent: 1,
+      emails_failed: 0,
+      links_generated: 0,
+      results: [{
+        participant_id: "ana",
+        email: "ana@example.com",
+        full_name: "Ana Pop",
+        delivery_mode: "email",
+        email_sent: true,
+        error: null,
+        invite_url: null,
+      }],
+    });
+
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getCompanyInvitationStatuses).toHaveBeenCalledWith("company-1", {}, {
+        projectId: "project-1",
+        assessmentCycleId: "cycle-1",
+      });
+    });
+    fireEvent.click(screen.getByLabelText("Selectează Ana Pop"));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite email invitații" }));
+    await waitFor(() => {
+      expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", {
+        mode: "email",
+        participantIds: ["ana"],
+        projectId: "project-1",
+        assessmentCycleId: "cycle-1",
+        targetMode: "selected",
+      });
+    });
   });
 
   it("shows operation feedback while selected email invitations are pending", async () => {
@@ -770,6 +1126,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -841,6 +1199,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -871,6 +1231,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -954,6 +1316,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -965,6 +1329,7 @@ describe("buildInvitationRows", () => {
         mode: "email",
         participantIds: ["andrei", "ana"],
         projectId: "project-1",
+        assessmentCycleId: "cycle-1",
         targetMode: "all",
       });
     });
@@ -992,6 +1357,8 @@ describe("buildInvitationRows", () => {
         participants={participants}
         assignments={assignments}
         invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
         teams={teams}
       />,
     );
@@ -1001,7 +1368,12 @@ describe("buildInvitationRows", () => {
     fireEvent.click(resendButton);
 
     await waitFor(() => {
-      expect(resendParticipantInvitation).toHaveBeenCalledWith("company-1", "ana", "project-1");
+      expect(resendParticipantInvitation).toHaveBeenCalledWith(
+        "company-1",
+        "ana",
+        "project-1",
+        { assessmentCycleId: "cycle-1" },
+      );
     });
     expect(resendParticipantInvitation).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Emailul nu a fost retrimis către ana@example.com: provider unavailable")).toBeTruthy();

@@ -496,18 +496,28 @@ async def test_verify_invite_token_success() -> None:
         id=claims.assignment_ids[0],
         company_id=claims.company_id,
         respondent_profile_id=claims.respondent_profile_id,
+        assessment_cycle_id=uuid.uuid4(),
         questionnaire_key="lencioni",
         target_type=AssignmentTargetType.self_assessment,
         status=AssignmentStatus.invited,
     )
     mock_result_assignments = MagicMock()
     mock_result_assignments.scalars.return_value.all.return_value = [mock_assignment]
+    existing_user = User(
+        id=uuid.uuid4(),
+        email=mock_profile.email,
+        password_hash="registered-password-hash",  # noqa: S106
+        role=UserRole.participant,
+    )
+    mock_result_existing_user = MagicMock()
+    mock_result_existing_user.scalar_one_or_none.return_value = existing_user
 
     mock_session.execute.side_effect = [
         mock_result_profile,
         _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
+        mock_result_existing_user,
     ]
 
     service = IdentityService(mock_session)
@@ -516,13 +526,14 @@ async def test_verify_invite_token_success() -> None:
     assert result.email == "test@example.com"
     assert result.full_name == "Test User"
     assert result.is_leadership is True
-    assert result.already_registered is False
+    assert result.already_registered is True
     assert result.project_id is None
     assert result.project_name == "Intake Iunie"
     assert result.expires_at.timestamp() == int(claims.expires_at.timestamp())
     assert result.token_status == "active"  # noqa: S105
     assert len(result.tasks) == 1
     assert result.tasks[0].id == str(mock_assignment.id)
+    assert result.tasks[0].assessmentCycleId == mock_assignment.assessment_cycle_id
     assert result.tasks[0].targetLabel == "Echipa ta"
     assert result.tasks[0].href.endswith(
         f"/participant/tasks/{mock_assignment.id}?access=secure&returnTo=%2Finvite%2F{token}"
@@ -881,6 +892,8 @@ async def test_verify_invite_token_uses_assignment_project_context() -> None:
     )
     mock_result_project = MagicMock()
     mock_result_project.scalar_one_or_none.return_value = mock_project
+    mock_result_existing_user = MagicMock()
+    mock_result_existing_user.scalar_one_or_none.return_value = None
 
     mock_session.execute.side_effect = [
         mock_result_profile,
@@ -888,6 +901,7 @@ async def test_verify_invite_token_uses_assignment_project_context() -> None:
         mock_result_leadership,
         mock_result_assignments,
         mock_result_project,
+        mock_result_existing_user,
     ]
 
     service = IdentityService(mock_session)
@@ -1238,12 +1252,15 @@ async def test_register_forbidden_for_non_leadership() -> None:
     )
     mock_result_assignments = MagicMock()
     mock_result_assignments.scalars.return_value.all.return_value = [mock_assignment]
+    mock_result_existing_user = MagicMock()
+    mock_result_existing_user.scalar_one_or_none.return_value = None
 
     mock_session.execute.side_effect = [
         mock_result_profile,
         _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
+        mock_result_existing_user,
     ]
 
     service = IdentityService(mock_session)
@@ -1296,12 +1313,15 @@ async def test_register_mismatched_email() -> None:
     )
     mock_result_assignments = MagicMock()
     mock_result_assignments.scalars.return_value.all.return_value = [mock_assignment]
+    mock_result_existing_user = MagicMock()
+    mock_result_existing_user.scalar_one_or_none.return_value = None
 
     mock_session.execute.side_effect = [
         mock_result_profile,
         _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
+        mock_result_existing_user,
     ]
 
     service = IdentityService(mock_session)
@@ -1361,6 +1381,8 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
     # 4. verify_invite_token_and_create_session - load profile again
     mock_result_profile_again = MagicMock()
     mock_result_profile_again.scalar_one_or_none.return_value = mock_profile
+    mock_result_verify_user = MagicMock()
+    mock_result_verify_user.scalar_one_or_none.return_value = None
     mock_result_existing_user = MagicMock()
     mock_result_existing_user.scalar_one_or_none.return_value = None
 
@@ -1369,6 +1391,7 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
         _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
+        mock_result_verify_user,
         mock_result_profile_again,
         mock_result_existing_user,
     ]
@@ -1505,6 +1528,179 @@ async def test_invite_exchange_preserves_same_user_authenticated_session() -> No
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("is_leadership", [False, True])
+async def test_invite_exchange_links_same_email_profile_to_existing_participant(
+    is_leadership: bool,
+) -> None:
+    expires_at = datetime.now(UTC) + timedelta(days=5)
+    profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=None,
+        email="existing@example.com",
+        full_name="Existing Participant",
+    )
+    user = User(
+        id=uuid.uuid4(),
+        email=profile.email,
+        password_hash="registered-password-hash",  # noqa: S106
+        role=UserRole.participant,
+    )
+    invite = AssignmentInvite(
+        id=uuid.uuid4(),
+        company_id=profile.company_id,
+        respondent_profile_id=profile.id,
+        token="signed-invite",
+        status="active",
+        expires_at=expires_at,
+    )
+    service = IdentityService(AsyncMock())
+    service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
+        return_value=(
+            InviteVerifyResponse(
+                email=profile.email,
+                full_name=profile.full_name,
+                is_leadership=is_leadership,
+                already_registered=False,
+                project_name="Another project",
+                expires_at=expires_at,
+                token_status="active",
+                tasks=[],
+            ),
+            invite,
+        )
+    )
+    service._load_invited_profile = AsyncMock(return_value=profile)  # type: ignore[method-assign]
+    service.repository.get_user_by_email = AsyncMock(return_value=user)
+    service.repository.get_session_by_token = AsyncMock(return_value=None)
+    service._create_session = AsyncMock(return_value="linked-session")  # type: ignore[method-assign]
+
+    result = await service.verify_invite_token_and_create_session("signed-invite")
+
+    assert profile.user_id == user.id
+    assert result.session_token == "linked-session"  # noqa: S105
+    service._create_session.assert_awaited_once_with(
+        user,
+        expires_at=expires_at,
+        assignment_invite_id=invite.id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_invite_exchange_never_merges_a_different_authenticated_email() -> None:
+    profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=None,
+        email="invited@example.com",
+        full_name="Invited Participant",
+    )
+    existing_session = Session(
+        user_id=uuid.uuid4(),
+        token_hash="different-email-session",  # noqa: S106
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    service = IdentityService(AsyncMock())
+    service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
+        return_value=(
+            _invite_verify_response(
+                profile.email,
+                datetime.now(UTC) + timedelta(hours=1),
+            ),
+            None,
+        )
+    )
+    service._load_invited_profile = AsyncMock(return_value=profile)  # type: ignore[method-assign]
+    service.repository.get_session_by_token = AsyncMock(return_value=existing_session)
+    service.repository.get_user_by_email = AsyncMock(return_value=None)
+    service.repository.add_user = AsyncMock()
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.verify_invite_token_and_create_session(
+            "signed-invite",
+            existing_session_token="different-email-session",
+        )
+
+    assert exc_info.value.code == "invite_session_conflict"
+    assert profile.user_id is None
+    service.repository.add_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_register_links_existing_participant_without_replacing_password() -> None:
+    claims = TaskLinkClaims(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        assignment_ids=(uuid.uuid4(),),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    token = create_task_token(claims, get_settings())
+    profile = ParticipantProfile(
+        id=claims.respondent_profile_id,
+        company_id=claims.company_id,
+        user_id=None,
+        email="existing@example.com",
+        full_name="Existing Leader",
+    )
+    user = User(
+        id=uuid.uuid4(),
+        email=profile.email,
+        password_hash="existing-password-hash",  # noqa: S106
+        role=UserRole.participant,
+    )
+    invite = AssignmentInvite(
+        id=uuid.uuid4(),
+        company_id=profile.company_id,
+        respondent_profile_id=profile.id,
+        token=token,
+        status="active",
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    service = IdentityService(AsyncMock())
+    service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
+        return_value=(
+            InviteVerifyResponse(
+                email=profile.email,
+                full_name=profile.full_name,
+                is_leadership=True,
+                already_registered=False,
+                project_name="Another project",
+                expires_at=invite.expires_at,
+                token_status="active",
+                tasks=[],
+            ),
+            invite,
+        )
+    )
+    service._load_invited_profile = AsyncMock(return_value=profile)  # type: ignore[method-assign]
+    service._resolve_invited_participant_user = AsyncMock(return_value=user)  # type: ignore[method-assign]
+    service._create_session = AsyncMock(return_value="linked-session")  # type: ignore[method-assign]
+    service.repository.get_session_by_token = AsyncMock(
+        return_value=Session(
+            id=uuid.uuid4(),
+            user_id=user.id,
+            token_hash="linked-session-hash",  # noqa: S106
+            expires_at=invite.expires_at,
+            assignment_invite_id=invite.id,
+        )
+    )
+    service.repository.add_consent_acceptance = AsyncMock()
+
+    result = await service.register(
+        RegisterRequest(
+            email=profile.email,
+            password="Different-valid-password-123",  # noqa: S106
+            token=token,
+            terms_accepted=True,
+        )
+    )
+
+    assert user.password_hash == "existing-password-hash"  # noqa: S105
+    assert profile.user_id == user.id
+    assert result.session_token == "linked-session"  # noqa: S105
+
+
+@pytest.mark.asyncio
 async def test_verify_invite_token_and_create_session_for_leadership() -> None:
     settings = get_settings()
     claims = TaskLinkClaims(
@@ -1547,13 +1743,19 @@ async def test_verify_invite_token_and_create_session_for_leadership() -> None:
     # 4. verify_invite_token_and_create_session - load profile again
     mock_result_profile_again = MagicMock()
     mock_result_profile_again.scalar_one_or_none.return_value = mock_profile
+    mock_result_verify_user = MagicMock()
+    mock_result_verify_user.scalar_one_or_none.return_value = None
+    mock_result_existing_user = MagicMock()
+    mock_result_existing_user.scalar_one_or_none.return_value = None
 
     mock_session.execute.side_effect = [
         mock_result_profile,
         _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
+        mock_result_verify_user,
         mock_result_profile_again,
+        mock_result_existing_user,
     ]
 
     service = IdentityService(mock_session)
