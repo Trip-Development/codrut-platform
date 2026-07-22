@@ -6,10 +6,10 @@ import { usePathname } from "next/navigation";
 const projectTabs = [
   { key: "", label: "Sumar" },
   { key: "/participants", label: "Participanți" },
-  { key: "/teams", label: "Echipe" },
   { key: "/assignments", label: "Asignări" },
   { key: "/invitations", label: "Invitații" },
   { key: "/org-chart", label: "Organigramă" },
+  { key: "/teams", label: "Echipe" },
   { key: "/reports", label: "Rezultate" },
   { key: "/settings", label: "Setări" },
 ];
