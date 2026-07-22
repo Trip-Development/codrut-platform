@@ -80,10 +80,16 @@ def test_participant_can_read_an_assignment_authorized_definition_by_key(
         key,
         *,
         version=None,
+        participant_profile_id=None,
+        project_id=None,
+        cycle_id=None,
         allowed_assignment_ids=None,
     ) -> QuestionnaireDefinitionResponse:
         assert key == "lencioni"
         assert version is None
+        assert participant_profile_id is None
+        assert project_id is None
+        assert cycle_id is None
         assert allowed_assignment_ids is None
         return QuestionnaireDefinitionResponse(
             key="lencioni",

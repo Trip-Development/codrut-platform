@@ -1,11 +1,15 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.modules.assignments.schemas import (
+    AssessmentCycleCloseRequest,
+    AssessmentCycleCreateRequest,
+    AssessmentCycleResponse,
+    AssessmentCycleUpdateRequest,
     AssignmentCreateRequest,
     AssignmentPlanResponse,
     AssignmentPlanSaveRequest,
@@ -22,10 +26,125 @@ from codrut.modules.assignments.schemas import (
 from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.companies.policies import require_trainer_principal
 from codrut.modules.identity.schemas import SessionPrincipal
-from codrut.modules.scoring.schemas import CompanyReportAggregateResponse, IcareAnswerReviewResponse
+from codrut.modules.scoring.schemas import (
+    CompanyReportAggregateResponse,
+    CompanyReportComparisonResponse,
+    IcareAnswerReviewResponse,
+)
 from codrut.modules.scoring.service import ScoringService
 
 router = APIRouter()
+
+
+@router.get(
+    "/companies/{company_id}/projects/{project_id}/assessment-cycles",
+    response_model=list[AssessmentCycleResponse],
+)
+async def list_project_assessment_cycles(
+    company_id: UUID,
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[AssessmentCycleResponse]:
+    require_trainer_principal(principal)
+    return await AssignmentService(session).list_assessment_cycles(
+        principal.user_id,
+        company_id,
+        project_id,
+    )
+
+
+@router.post(
+    "/companies/{company_id}/projects/{project_id}/assessment-cycles",
+    response_model=AssessmentCycleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project_assessment_cycle(
+    company_id: UUID,
+    project_id: UUID,
+    payload: AssessmentCycleCreateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AssessmentCycleResponse:
+    require_trainer_principal(principal)
+    cycle = await AssignmentService(session).create_assessment_cycle(
+        principal.user_id,
+        company_id,
+        project_id,
+        payload,
+    )
+    await session.commit()
+    return cycle
+
+
+@router.patch(
+    "/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}",
+    response_model=AssessmentCycleResponse,
+)
+async def update_project_assessment_cycle(
+    company_id: UUID,
+    project_id: UUID,
+    assessment_cycle_id: UUID,
+    payload: AssessmentCycleUpdateRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AssessmentCycleResponse:
+    require_trainer_principal(principal)
+    cycle = await AssignmentService(session).update_assessment_cycle(
+        principal.user_id,
+        company_id,
+        project_id,
+        assessment_cycle_id,
+        payload,
+    )
+    await session.commit()
+    return cycle
+
+
+@router.delete(
+    "/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_project_assessment_cycle(
+    company_id: UUID,
+    project_id: UUID,
+    assessment_cycle_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await AssignmentService(session).delete_assessment_cycle(
+        principal.user_id,
+        company_id,
+        project_id,
+        assessment_cycle_id,
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}/close",
+    response_model=AssessmentCycleResponse,
+)
+async def close_project_assessment_cycle(
+    company_id: UUID,
+    project_id: UUID,
+    assessment_cycle_id: UUID,
+    payload: AssessmentCycleCloseRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> AssessmentCycleResponse:
+    require_trainer_principal(principal)
+    cycle = await AssignmentService(session).close_assessment_cycle(
+        principal.user_id,
+        company_id,
+        project_id,
+        assessment_cycle_id,
+        payload,
+    )
+    await session.commit()
+    return cycle
 
 
 @router.get("/companies/{company_id}/teams", response_model=list[TeamResponse])
@@ -102,12 +221,14 @@ async def list_company_assignments(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
 ) -> list[AssignmentResponse]:
     require_trainer_principal(principal)
     return await AssignmentService(session).list_assignments(
         principal.user_id,
         company_id,
         project_id,
+        assessment_cycle_id,
     )
 
 
@@ -120,12 +241,16 @@ async def get_company_default_assignment_plan(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
+    source_cycle_id: Annotated[UUID | None, Query()] = None,
 ) -> AssignmentPlanResponse:
     require_trainer_principal(principal)
     return await AssignmentService(session).build_default_assignment_plan(
         principal.user_id,
         company_id,
         project_id,
+        assessment_cycle_id,
+        source_cycle_id,
     )
 
 
@@ -139,10 +264,13 @@ async def save_company_assignment_plan(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
 ) -> AssignmentPlanSaveResponse:
     require_trainer_principal(principal)
     if project_id is not None:
         payload.project_id = project_id
+    if assessment_cycle_id is not None:
+        payload.assessment_cycle_id = assessment_cycle_id
     result = await AssignmentService(session).save_assignment_plan(
         principal.user_id,
         company_id,
@@ -161,10 +289,37 @@ async def get_company_report_aggregate(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
 ) -> CompanyReportAggregateResponse:
     require_trainer_principal(principal)
     await AssignmentService(session).require_company_manager(principal.user_id, company_id)
-    return await ScoringService(session).get_company_report_aggregate(company_id, project_id)
+    return await ScoringService(session).get_company_report_aggregate(
+        company_id,
+        project_id,
+        assessment_cycle_id,
+    )
+
+
+@router.get(
+    "/companies/{company_id}/reports/comparison",
+    response_model=CompanyReportComparisonResponse,
+)
+async def get_company_report_comparison(
+    company_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    project_id: Annotated[UUID, Query()],
+    baseline_cycle_id: Annotated[UUID, Query()],
+    comparison_cycle_id: Annotated[UUID, Query()],
+) -> CompanyReportComparisonResponse:
+    require_trainer_principal(principal)
+    await AssignmentService(session).require_company_manager(principal.user_id, company_id)
+    return await ScoringService(session).get_company_report_comparison(
+        company_id,
+        project_id,
+        baseline_cycle_id,
+        comparison_cycle_id,
+    )
 
 
 @router.get(
@@ -176,10 +331,15 @@ async def get_company_icare_answer_review(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
 ) -> IcareAnswerReviewResponse:
     require_trainer_principal(principal)
     await AssignmentService(session).require_company_manager(principal.user_id, company_id)
-    return await ScoringService(session).get_icare_answer_review(company_id, project_id)
+    return await ScoringService(session).get_icare_answer_review(
+        company_id,
+        project_id,
+        assessment_cycle_id,
+    )
 
 
 @router.post(

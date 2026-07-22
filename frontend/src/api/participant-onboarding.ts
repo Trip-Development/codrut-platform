@@ -10,21 +10,21 @@ export type ParticipantOnboardingState = {
   href: string | null;
 };
 
-export async function getParticipantOnboardingState(): Promise<ParticipantOnboardingState> {
+export async function getParticipantOnboardingState(
+  participantProfileId?: string | null,
+): Promise<ParticipantOnboardingState> {
+  if (!participantProfileId) return emptyOnboarding();
   const requestOptions = await getServerApiRequestOptions();
 
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/forms/participant/onboarding`, {
+  const params = new URLSearchParams({ participant_profile_id: participantProfileId });
+  const response = await fetch(`${getApiBaseUrl()}/forms/participant/onboarding?${params}`, {
       cache: "no-store",
       ...requestOptions,
-    });
-    if (!response.ok) {
-      return emptyOnboarding();
-    }
-    return (await response.json()) as ParticipantOnboardingState;
-  } catch {
-    return emptyOnboarding();
+  });
+  if (!response.ok) {
+    throw new Error(`Participant onboarding request failed (${response.status}).`);
   }
+  return (await response.json()) as ParticipantOnboardingState;
 }
 
 function emptyOnboarding(): ParticipantOnboardingState {

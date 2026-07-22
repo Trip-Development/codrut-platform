@@ -3,7 +3,14 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2Icon } from "lucide-react";
+import {
+  FilterIcon,
+  Loader2Icon,
+  PencilIcon,
+  PlusIcon,
+  UploadIcon,
+  XIcon,
+} from "lucide-react";
 
 import {
   hasPermanentParticipantAccount,
@@ -21,11 +28,12 @@ import {
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { RosterImporter } from "@/components/roster-importer";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ModalLayer } from "@/components/ui/modal-layer";
+import { SelectControl } from "@/components/ui/select-control";
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/utils/cn";
 import { useUrlState } from "@/hooks/use-url-state";
@@ -68,15 +76,11 @@ type AccessRow = {
   hasSecureLink: boolean;
 };
 
-type TabKey = "roster" | "access";
+type AccessFilter = "all" | "permanent" | "temporary";
+type StatusTone = "success" | "info" | "warning" | "danger" | "neutral";
 
-const tabs: Array<{ key: TabKey; label: string }> = [
-  { key: "roster", label: "Roster" },
-  { key: "access", label: "Acces intern" },
-];
-
-function normalizeParticipantsTab(value: string | null): TabKey {
-  return value === "access" ? "access" : "roster";
+function normalizeAccessFilter(value: string | null): AccessFilter {
+  return value === "permanent" || value === "temporary" ? value : "all";
 }
 
 const emptyManualForm: ManualAddForm = {
@@ -85,9 +89,6 @@ const emptyManualForm: ManualAddForm = {
   reportsToName: "",
   position: "",
 };
-const workspaceShellClass =
-  "overflow-hidden border-y border-border bg-surface text-foreground";
-const workspaceHeaderClass = "border-b border-border px-5 py-5";
 const secondaryButtonClass =
   "border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy";
 
@@ -159,11 +160,13 @@ export function ProjectParticipantsWorkspace({
   invitationStatuses,
 }: ProjectParticipantsWorkspaceProps) {
   const router = useRouter();
-  const { get, searchKey, setParam, setParams } = useUrlState();
+  const { get, searchKey, setParam } = useUrlState();
   const [participants, setParticipants] = useState(initialParticipants);
   const [query, setQuery] = useState(() => get("q") ?? "");
   const deferredQuery = useDeferredValue(query);
-  const [activeTab, setActiveTabState] = useState<TabKey>(normalizeParticipantsTab(get("view")));
+  const [accessFilter, setAccessFilterState] = useState<AccessFilter>(() =>
+    normalizeAccessFilter(get("access")),
+  );
   const [showAddPanel, setShowAddPanel] = useState(get("panel") === "add" || initialParticipants.length === 0);
   const [showImportModal, setShowImportModal] = useState(get("modal") === "import");
   const [manualForm, setManualForm] = useState<ManualAddForm>(emptyManualForm);
@@ -176,37 +179,36 @@ export function ProjectParticipantsWorkspace({
   const addingRef = useRef(false);
   const savingParticipantRef = useRef<string | null>(null);
 
-  const statusByParticipantId = useMemo(
-    () => new Map(invitationStatuses.map((status) => [status.participant_id, status])),
-    [invitationStatuses],
-  );
-  const managerNameKeys = useMemo(() => buildManagerNameKeys(participants), [participants]);
   const accessRows = useMemo(
     () => buildProjectParticipantAccessRows(participants, invitationStatuses),
     [participants, invitationStatuses],
   );
-  const visibleParticipants = useMemo(() => {
+  const visibleRows = useMemo(() => {
     const normalizedQuery = normalizeWorkspaceSearch(deferredQuery);
-    if (!normalizedQuery) return participants;
-    return participants.filter((participant) =>
-      normalizeWorkspaceSearch([
-        participant.full_name,
-        participant.email,
-        participant.reports_to_name,
-        participant.position,
-        participant.location,
-        participant.role_group,
-      ].filter(Boolean).join(" ")).includes(normalizedQuery),
-    );
-  }, [deferredQuery, participants]);
-  const visibleAccessRows = useMemo(() => {
-    const visibleIds = new Set(visibleParticipants.map((participant) => participant.id));
-    return accessRows.filter((row) => visibleIds.has(row.participant.id));
-  }, [accessRows, visibleParticipants]);
+    return accessRows.filter((row) => {
+      if (accessFilter === "permanent" && row.accountTypeLabel !== "Cont permanent") return false;
+      if (accessFilter === "temporary" && row.accountTypeLabel !== "Acces temporar") return false;
+      if (!normalizedQuery) return true;
+      return normalizeWorkspaceSearch([
+        row.participant.full_name,
+        row.participant.email,
+        row.participant.reports_to_name,
+        row.participant.position,
+        row.participant.location,
+        row.participant.role_group,
+        row.internalRoleLabel,
+        row.accountTypeLabel,
+        row.accountStateLabel,
+        row.deliveryLabel,
+      ].filter(Boolean).join(" ")).includes(normalizedQuery);
+    });
+  }, [accessFilter, accessRows, deferredQuery]);
   const permanentCount = accessRows.filter((row) => row.accountTypeLabel === "Cont permanent").length;
   const temporaryCount = accessRows.length - permanentCount;
   const activeAccountCount = accessRows.filter((row) => row.hasAccount).length;
   const activeSecureLinkCount = accessRows.filter((row) => row.hasSecureLink).length;
+  const editingParticipant = participants.find((participant) => participant.id === editingId) ?? null;
+  const editingAccessRow = accessRows.find((row) => row.participant.id === editingId) ?? null;
   const mutationLocked = adding || Boolean(savingId);
 
   useEffect(() => {
@@ -214,20 +216,20 @@ export function ProjectParticipantsWorkspace({
   }, [initialParticipants]);
 
   useEffect(() => {
-    setActiveTabState(normalizeParticipantsTab(get("view")));
+    setAccessFilterState(normalizeAccessFilter(get("access")));
     setQuery(get("q") ?? "");
     setShowImportModal(get("modal") === "import");
     setShowAddPanel(get("panel") === "add" || (participants.length === 0 && get("panel") !== "closed"));
   }, [get, participants.length, searchKey]);
 
-  const selectTab = (tab: TabKey) => {
-    setActiveTabState(tab);
-    setParams({ view: tab === "roster" ? null : tab }, "push");
-  };
-
   const updateQuery = (nextQuery: string) => {
     setQuery(nextQuery);
     setParam("q", nextQuery || null, "replace");
+  };
+
+  const setAccessFilter = (nextFilter: AccessFilter) => {
+    setAccessFilterState(nextFilter);
+    setParam("access", nextFilter === "all" ? null : nextFilter, "replace");
   };
 
   const setAddPanelOpen = (open: boolean) => {
@@ -354,129 +356,252 @@ export function ProjectParticipantsWorkspace({
   };
 
   return (
-    <section className={workspaceShellClass} aria-busy={query !== deferredQuery}>
-      <div className={workspaceHeaderClass}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Participanți</h2>
-            <div className="mt-4 flex flex-wrap gap-x-7 gap-y-3">
-              <ParticipantMetric label="Roster" value={participants.length} />
-              <ParticipantMetric label="Permanente" value={permanentCount} />
-              <ParticipantMetric label="Linkuri active" value={activeSecureLinkCount} />
-              <ParticipantMetric label="Conturi create" value={activeAccountCount} />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={() => setImportModalOpen(true)}
-              disabled={mutationLocked}
-              size="sm"
-            >
-              Importă participanți
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setAddPanelOpen(!showAddPanel)}
-              disabled={mutationLocked}
-              variant="outline"
-              size="sm"
-              className={secondaryButtonClass}
-            >
-              {showAddPanel ? "Ascunde adăugarea" : "Adaugă manual"}
-            </Button>
-          </div>
-        </div>
-        <div className="mt-5 inline-flex h-10 w-fit items-center gap-1 rounded-md bg-muted p-1" role="tablist" aria-label="Vizualizări participanți">
-          {tabs.map((tab) => (
-            <Button
-              key={tab.key}
-              type="button"
-              role="tab"
-              variant="ghost"
-              size="sm"
-              aria-selected={activeTab === tab.key}
-              onClick={() => selectTab(tab.key)}
-              disabled={mutationLocked && activeTab !== tab.key}
-              className={cn(
-                "h-8 min-w-28 justify-center rounded-sm border-0 px-3 shadow-none",
-                activeTab === tab.key
-                  ? "bg-surface text-foreground shadow-sm hover:bg-surface"
-                  : "text-muted-foreground hover:bg-background/70",
-              )}
-            >
-              {tab.label}
-            </Button>
-          ))}
-        </div>
-        {participants.length > 0 ? (
-          <WorkspaceSearchInput
-            id="project-participants-search"
-            label="Caută participant"
-            value={query}
-            onValueChange={updateQuery}
-            placeholder="Caută după nume, email, rol sau manager"
-            className="mt-4 max-w-2xl"
-          />
-        ) : null}
-        <span className="sr-only" role="status" aria-live="polite">
-          {query !== deferredQuery ? "Se actualizează lista" : ""}
-        </span>
-      </div>
+    <section className="min-w-0 max-w-full text-foreground" aria-busy={query !== deferredQuery}>
+      <header className="mb-3">
+        <h2 className="text-lg font-semibold text-foreground">Participanți</h2>
+        <p
+          aria-label="Rezumat participanți"
+          className="mt-1 text-sm leading-6 text-muted-foreground"
+        >
+          <span className="font-semibold tabular-nums text-foreground">{participants.length}</span>{" "}
+          {participants.length === 1 ? "participant" : "participanți"}
+          <span aria-hidden="true"> · </span>
+          <span className="tabular-nums">{permanentCount}</span>{" "}
+          {permanentCount === 1 ? "permanent" : "permanente"}
+          <span aria-hidden="true"> · </span>
+          <span className="tabular-nums">{temporaryCount}</span>{" "}
+          {temporaryCount === 1 ? "temporar" : "temporare"}
+          <span aria-hidden="true"> · </span>
+          <span className="tabular-nums">{activeSecureLinkCount}</span>{" "}
+          {activeSecureLinkCount === 1 ? "link activ" : "linkuri active"}
+          <span aria-hidden="true"> · </span>
+          <span className="tabular-nums">{activeAccountCount}</span>{" "}
+          {activeAccountCount === 1 ? "cont creat" : "conturi create"}
+        </p>
+      </header>
 
-      {error ? (
+      <div
+        role="group"
+        aria-label="Instrumente participanți"
+        className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+      >
+        <WorkspaceSearchInput
+          id="project-participants-search"
+          label="Caută participant"
+          value={query}
+          onValueChange={updateQuery}
+          placeholder="Caută după nume, email, rol sau manager"
+          className="min-w-[min(100%,16rem)] flex-1 basis-64"
+        />
+        <SelectControl
+          label="Filtrează după acces"
+          icon={FilterIcon}
+          value={accessFilter}
+          onChange={(event) => setAccessFilter(normalizeAccessFilter(event.target.value))}
+          disabled={mutationLocked}
+          wrapperClassName="w-full sm:w-48"
+          className="h-11 bg-background"
+        >
+          <option value="all">Toate tipurile</option>
+          <option value="permanent">Acces permanent</option>
+          <option value="temporary">Acces temporar</option>
+        </SelectControl>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+          <Button
+            type="button"
+            onClick={() => setImportModalOpen(true)}
+            disabled={mutationLocked}
+            variant="outline"
+            className={secondaryButtonClass}
+          >
+            <UploadIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Importă
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setAddPanelOpen(!showAddPanel)}
+            disabled={mutationLocked}
+          >
+            {showAddPanel ? <XIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} /> : <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
+            {showAddPanel ? "Ascunde" : "Adaugă"}
+          </Button>
+        </div>
+      </div>
+      <span className="sr-only" role="status" aria-live="polite">
+        {query !== deferredQuery ? "Se actualizează lista" : ""}
+      </span>
+
+      {error && !editingId ? (
         <InlineFeedback
           tone="danger"
-          className="rounded-none border-x-0 border-t-0 px-5 py-3"
+          className="mb-3 px-4 py-3"
           descriptionClassName="text-sm leading-6"
         >
           {error}
         </InlineFeedback>
       ) : null}
 
-      {activeTab === "roster" ? (
-        <>
-          {showAddPanel ? (
-            <ManualAddPanel
-              form={manualForm}
-              pasteText={pasteText}
-              adding={adding}
-              operationLocked={mutationLocked}
-              onUpdateForm={(field, value) => setManualForm((current) => ({ ...current, [field]: value }))}
-              onPasteText={setPasteText}
-              onAdd={() => void addManualRows()}
-            />
-          ) : null}
-          <RosterTable
-            participants={visibleParticipants}
-            projectId={projectId}
-            statusByParticipantId={statusByParticipantId}
-            managerNameKeys={managerNameKeys}
-            editingId={editingId}
-            form={form}
-            savingId={savingId}
-            operationLocked={mutationLocked}
-            onCancel={cancelEdit}
-            onEdit={startEdit}
-            onSave={(participant) => void saveEdit(participant)}
-            onUpdateField={updateField}
-            emptyMessage={participants.length === 0
-              ? "Nu există participanți. Adaugă manual sau importă rosterul."
-              : "Niciun participant pentru căutarea curentă."}
-          />
-        </>
-      ) : (
-        <AccessTable
-          rows={visibleAccessRows}
-          permanentCount={permanentCount}
-          temporaryCount={temporaryCount}
-          activeAccountCount={activeAccountCount}
-          activeSecureLinkCount={activeSecureLinkCount}
-          emptyMessage={participants.length === 0
-            ? "Niciun participant în acest proiect încă."
-            : "Niciun participant pentru căutarea curentă."}
+      {showAddPanel ? (
+        <ManualAddPanel
+          form={manualForm}
+          pasteText={pasteText}
+          adding={adding}
+          operationLocked={mutationLocked}
+          onUpdateForm={(field, value) => setManualForm((current) => ({ ...current, [field]: value }))}
+          onPasteText={setPasteText}
+          onAdd={() => void addManualRows()}
         />
-      )}
+      ) : null}
+      <RosterTable
+        rows={visibleRows}
+        projectId={projectId}
+        operationLocked={mutationLocked}
+        onEdit={startEdit}
+        emptyMessage={participants.length === 0
+          ? "Nu există participanți. Adaugă manual sau importă rosterul."
+          : "Niciun participant pentru filtrele curente."}
+      />
+
+      <Sheet
+        open={Boolean(editingParticipant && editingAccessRow && form)}
+        onOpenChange={(open) => {
+          if (!open && !savingId) cancelEdit();
+        }}
+        labelledBy="participant-edit-title"
+        describedBy="participant-edit-description"
+        closeOnBackdrop={!savingId}
+      >
+        {editingParticipant && editingAccessRow && form ? (
+          <div className="flex h-full min-w-0 flex-col">
+            <SheetHeader className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 id="participant-edit-title" className="text-lg font-semibold text-foreground">
+                  Editează participantul
+                </h2>
+                <p id="participant-edit-description" className="mt-1 break-words text-sm text-muted-foreground">
+                  {editingParticipant.full_name}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Închide editarea"
+                title="Închide"
+                disabled={Boolean(savingId)}
+                onClick={cancelEdit}
+                className="-mr-2 shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <XIcon aria-hidden="true" strokeWidth={1.8} />
+              </Button>
+            </SheetHeader>
+            <SheetBody aria-busy={Boolean(savingId)}>
+              {error ? (
+                <InlineFeedback tone="danger" className="mb-5 px-4 py-3">
+                  {error}
+                </InlineFeedback>
+              ) : null}
+              <FieldGroup className="gap-4">
+                <EditField
+                  label="Nume"
+                  value={form.fullName}
+                  required
+                  disabled={Boolean(savingId)}
+                  onChange={(value) => updateField("fullName", value)}
+                />
+                <EditField
+                  label="Email"
+                  value={form.email}
+                  required
+                  type="email"
+                  disabled={Boolean(savingId)}
+                  onChange={(value) => updateField("email", value)}
+                />
+                <EditField
+                  label="Manager"
+                  value={form.reportsToName}
+                  disabled={Boolean(savingId)}
+                  onChange={(value) => updateField("reportsToName", value)}
+                />
+                <EditField
+                  label="Poziție"
+                  value={form.position}
+                  disabled={Boolean(savingId)}
+                  onChange={(value) => updateField("position", value)}
+                />
+                <EditField
+                  label="Locație"
+                  value={form.location}
+                  disabled={Boolean(savingId)}
+                  onChange={(value) => updateField("location", value)}
+                />
+              </FieldGroup>
+
+              <fieldset className="mt-5">
+                <legend className="text-sm font-semibold text-foreground">Rol în proiect</legend>
+                <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                  {(["member", "leadership"] as const).map((role) => (
+                    <Button
+                      key={role}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-pressed={form.roleGroup === role}
+                      disabled={Boolean(savingId)}
+                      onClick={() => updateField("roleGroup", role)}
+                      className={cn(
+                        "rounded-md border-0 shadow-none",
+                        form.roleGroup === role
+                          ? "bg-surface text-foreground shadow-sm hover:bg-surface"
+                          : "text-muted-foreground hover:bg-background/70",
+                      )}
+                    >
+                      {role === "member" ? "Membru" : "Leadership"}
+                    </Button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="mt-5 border-y border-border py-4">
+                <p className="text-xs font-semibold text-muted-foreground">Acces curent</p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <DotStatus {...accessTypeStatus(editingAccessRow)} />
+                  <DotStatus {...participantStateStatus(editingAccessRow)} />
+                </div>
+              </div>
+
+              {savingId ? (
+                <OperationFeedback
+                  title={`Salvăm ${editingParticipant.full_name}`}
+                  detail="Actualizăm datele participantului și refacem contextul proiectului."
+                  className="mt-5"
+                />
+              ) : null}
+            </SheetBody>
+            <SheetFooter className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                onClick={cancelEdit}
+                disabled={Boolean(savingId)}
+                variant="outline"
+                size="sm"
+                className={secondaryButtonClass}
+              >
+                Anulează
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void saveEdit(editingParticipant)}
+                disabled={Boolean(savingId) || !form.fullName.trim() || !form.email.trim()}
+                size="sm"
+              >
+                {savingId ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
+                {savingId ? "Salvăm participantul" : "Salvează"}
+              </Button>
+            </SheetFooter>
+          </div>
+        ) : null}
+      </Sheet>
 
       {showImportModal ? (
         <ModalLayer
@@ -520,249 +645,125 @@ export function ProjectParticipantsWorkspace({
 }
 
 function RosterTable({
-  participants,
+  rows,
   projectId,
-  statusByParticipantId,
-  managerNameKeys,
-  editingId,
-  form,
-  savingId,
   operationLocked,
-  onCancel,
   onEdit,
-  onSave,
-  onUpdateField,
   emptyMessage,
 }: {
-  participants: CompanyParticipant[];
+  rows: AccessRow[];
   projectId: string;
-  statusByParticipantId: Map<string, ParticipantInvitationStatus>;
-  managerNameKeys: Set<string>;
-  editingId: string | null;
-  form: ParticipantEditForm | null;
-  savingId: string | null;
   operationLocked: boolean;
-  onCancel: () => void;
   onEdit: (participant: CompanyParticipant) => void;
-  onSave: (participant: CompanyParticipant) => void;
-  onUpdateField: (field: keyof ParticipantEditForm, value: string) => void;
   emptyMessage: string;
 }) {
   return (
-    <div className="min-w-0 max-w-full px-4 pb-5 sm:px-5">
-      <div
-        role="table"
+    <div
+      data-slot="participants-table-scroll"
+      className="min-w-0 max-w-full overflow-x-auto border-y border-border bg-surface"
+    >
+      <table
         aria-label="Roster participanți"
-        className="w-full min-w-0 overflow-hidden rounded-lg border border-border bg-surface text-sm shadow-sm"
+        className="w-full min-w-[960px] table-fixed border-collapse text-left text-sm"
       >
-        <div role="rowgroup">
-          <div
-            role="row"
-            className="hidden grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] bg-muted text-xs font-semibold text-muted-foreground lg:grid"
-          >
-            <span role="columnheader" className="px-5 py-3">Nume</span>
-            <span role="columnheader" className="px-5 py-3">Email</span>
-            <span role="columnheader" className="px-5 py-3">Manager</span>
-            <span role="columnheader" className="px-5 py-3">Poziție</span>
-            <span role="columnheader" className="px-5 py-3">Tip acces</span>
-            <span role="columnheader" className="px-5 py-3 text-right">Acțiuni</span>
-          </div>
-        </div>
-        {participants.length === 0 ? (
-          <div role="rowgroup">
-            <div role="row">
-              <div role="cell" aria-colspan={6} className="px-5 py-8 text-center text-foreground/62">
+        <colgroup>
+          <col className="w-[17%]" />
+          <col className="w-[22%]" />
+          <col className="w-[15%]" />
+          <col className="w-[17%]" />
+          <col className="w-[11%]" />
+          <col className="w-[12%]" />
+          <col className="w-[6%]" />
+        </colgroup>
+        <thead className="bg-muted/70 text-xs font-semibold text-muted-foreground">
+          <tr>
+            <th scope="col" className="px-4 py-2.5">Participant</th>
+            <th scope="col" className="px-4 py-2.5">Email</th>
+            <th scope="col" className="px-4 py-2.5">Manager</th>
+            <th scope="col" className="px-4 py-2.5">Poziție</th>
+            <th scope="col" className="px-4 py-2.5">Acces</th>
+            <th scope="col" className="px-4 py-2.5">Stare</th>
+            <th scope="col" className="relative px-3 py-2.5 text-right">
+              <span className="sr-only">Acțiuni</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                 {emptyMessage}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div role="rowgroup" className="divide-y divide-border">
-            {participants.map((member) => (
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
               <ParticipantRow
-                key={member.id}
-                participant={member}
+                key={row.participant.id}
+                row={row}
                 projectId={projectId}
-                invitationStatus={statusByParticipantId.get(member.id) ?? null}
-                managerNameKeys={managerNameKeys}
-                form={editingId === member.id ? form : null}
-                saving={savingId === member.id}
                 operationLocked={operationLocked}
-                onCancel={onCancel}
-                onEdit={() => onEdit(member)}
-                onSave={() => onSave(member)}
-                onUpdateField={onUpdateField}
+                onEdit={() => onEdit(row.participant)}
               />
-            ))}
-          </div>
-        )}
-      </div>
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function ParticipantRow({
-  participant,
+  row,
   projectId,
-  invitationStatus,
-  managerNameKeys,
-  form,
-  saving,
   operationLocked,
-  onCancel,
   onEdit,
-  onSave,
-  onUpdateField,
 }: {
-  participant: CompanyParticipant;
+  row: AccessRow;
   projectId: string;
-  invitationStatus: ParticipantInvitationStatus | null;
-  managerNameKeys: Set<string>;
-  form: ParticipantEditForm | null;
-  saving: boolean;
   operationLocked: boolean;
-  onCancel: () => void;
   onEdit: () => void;
-  onSave: () => void;
-  onUpdateField: (field: keyof ParticipantEditForm, value: string) => void;
 }) {
-  if (!form) {
-    return (
-      <div
-        role="row"
-        data-participant-row={participant.id}
-        className="grid min-w-0 gap-4 px-4 py-4 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] lg:items-center lg:gap-0 lg:px-0"
-      >
-        <div role="cell" className="min-w-0 lg:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Nume</span>
-          <Link
-            href={`/trainer/projects/${projectId}/participants/${participant.id}`}
-            className="font-semibold text-foreground underline-offset-4 hover:text-burgundy hover:underline"
-          >
-            {participant.full_name}
-          </Link>
-        </div>
-        <div role="cell" className="min-w-0 text-foreground/62 lg:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Email</span>
-          <span className="break-all lg:block lg:truncate">{participant.email ?? "email lipsă"}</span>
-        </div>
-        <div role="cell" className="min-w-0 text-foreground/62 lg:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Manager</span>
-          <span className="break-words">{formatManagerName(participant.reports_to_name)}</span>
-        </div>
-        <div role="cell" className="min-w-0 text-foreground/62 lg:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Poziție</span>
-          <span className="break-words">{participant.position ?? "-"}</span>
-        </div>
-        <div role="cell" className="min-w-0 lg:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Tip acces</span>
-          <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
-        </div>
-        <div role="cell" className="min-w-0 self-end sm:text-right lg:px-3">
-          <Button
-            type="button"
-            onClick={onEdit}
-            disabled={operationLocked}
-            variant="outline"
-            size="xs"
-            className={secondaryButtonClass}
-          >
-            Editează
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
+  const participant = row.participant;
   return (
-    <div role="row" data-participant-row={participant.id} className="bg-muted">
-      <div role="cell" aria-colspan={6} className="px-4 py-4 sm:px-5">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <EditField
-            label="Nume"
-            value={form.fullName}
-            required
-            disabled={saving}
-            onChange={(value) => onUpdateField("fullName", value)}
-          />
-          <EditField
-            label="Email"
-            value={form.email}
-            required
-            type="email"
-            disabled={saving}
-            onChange={(value) => onUpdateField("email", value)}
-          />
-          <EditField
-            label="Manager"
-            value={form.reportsToName}
-            disabled={saving}
-            onChange={(value) => onUpdateField("reportsToName", value)}
-          />
-          <EditField
-            label="Poziție"
-            value={form.position}
-            disabled={saving}
-            onChange={(value) => onUpdateField("position", value)}
-          />
-          <EditField
-            label="Locație"
-            value={form.location}
-            disabled={saving}
-            onChange={(value) => onUpdateField("location", value)}
-          />
-          <div className="border-l border-border pl-3 py-1">
-            <span className="text-xs font-bold text-foreground/58">Rol proiect</span>
-            <button
-              type="button"
-              onClick={() => onUpdateField("roleGroup", form.roleGroup === "leadership" ? "member" : "leadership")}
-              className={`tap-soft mt-2 rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
-                form.roleGroup === "leadership"
-                  ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-700"
-                  : "border-[var(--border)] bg-background text-foreground/55 hover:border-burgundy/35 hover:text-burgundy"
-              }`}
-              aria-pressed={form.roleGroup === "leadership"}
-            >
-              {form.roleGroup === "leadership" ? "Leadership" : "Membru"}
-            </button>
-          </div>
-          <div className="border-l border-border pl-3 py-1">
-            <span className="text-xs font-bold text-foreground/58">Tip acces</span>
-            <div className="mt-2">
-              <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            type="button"
-            onClick={onCancel}
-            disabled={saving}
-            variant="outline"
-            size="sm"
-            className={secondaryButtonClass}
-          >
-            Anulează
-          </Button>
-          <Button
-            type="button"
-            onClick={onSave}
-            disabled={saving || !form.fullName.trim() || !form.email.trim()}
-            size="sm"
-          >
-            {saving ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
-            {saving ? "Salvăm participantul" : "Salvează"}
-          </Button>
-        </div>
-        {saving ? (
-          <OperationFeedback
-            title={`Salvăm ${participant.full_name}`}
-            detail="Actualizăm datele participantului și refacem contextul proiectului."
-            className="mt-4"
-          />
-        ) : null}
-      </div>
-    </div>
+    <tr data-participant-row={participant.id} className="transition-colors hover:bg-muted/35">
+      <th scope="row" className="px-4 py-3 text-left align-middle font-semibold text-foreground">
+        <Link
+          href={`/trainer/projects/${projectId}/participants/${participant.id}`}
+          className="whitespace-normal break-words underline-offset-4 hover:text-burgundy hover:underline"
+        >
+          {participant.full_name}
+        </Link>
+      </th>
+      <td className="break-all px-4 py-3 align-middle text-foreground/65">
+        {participant.email ?? "email lipsă"}
+      </td>
+      <td className="whitespace-normal break-words px-4 py-3 align-middle text-foreground/65">
+        {formatManagerName(participant.reports_to_name)}
+      </td>
+      <td className="whitespace-normal break-words px-4 py-3 align-middle text-foreground/65">
+        {participant.position ?? "-"}
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <DotStatus {...accessTypeStatus(row)} />
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <DotStatus {...participantStateStatus(row)} />
+      </td>
+      <td className="px-3 py-3 text-right align-middle">
+        <Button
+          type="button"
+          onClick={onEdit}
+          disabled={operationLocked}
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Editează ${participant.full_name}`}
+          title={`Editează ${participant.full_name}`}
+          className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
+        >
+          <PencilIcon aria-hidden="true" strokeWidth={1.8} />
+        </Button>
+      </td>
+    </tr>
   );
 }
 
@@ -833,148 +834,42 @@ function ManualAddPanel({
   );
 }
 
-function AccountTypeBadge({
-  participant,
-  invitationStatus,
-  managerNameKeys,
-}: {
-  participant: CompanyParticipant;
-  invitationStatus: ParticipantInvitationStatus | null;
-  managerNameKeys: Set<string>;
-}) {
-  if (isPermanentAccountParticipant(participant, managerNameKeys)) {
-    return (
-      <Badge variant="secondary" className="status-success-soft">
-        cont permanent
-      </Badge>
-    );
-  }
-
-  if (invitationStatus?.has_active_secure_link || invitationStatus?.latest_delivery_mode === "secure_links") {
-    return (
-      <Badge variant="secondary" className="status-info-soft">
-        invitație temporară activă
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge variant="outline">
-      membru temporar
-    </Badge>
-  );
+function accessTypeStatus(row: AccessRow): { label: string; tone: StatusTone } {
+  return row.accountTypeLabel === "Cont permanent"
+    ? { label: "Permanent", tone: "success" }
+    : { label: "Temporar", tone: "neutral" };
 }
 
-function AccessTable({
-  rows,
-  permanentCount,
-  temporaryCount,
-  activeAccountCount,
-  activeSecureLinkCount,
-  emptyMessage,
-}: {
-  rows: AccessRow[];
-  permanentCount: number;
-  temporaryCount: number;
-  activeAccountCount: number;
-  activeSecureLinkCount: number;
-  emptyMessage: string;
-}) {
-  return (
-    <div>
-      <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-border bg-muted/35 px-5 py-4 text-sm">
-        <AccessMetric label="Cont permanent" value={permanentCount} />
-        <AccessMetric label="Acces temporar" value={temporaryCount} />
-        <AccessMetric label="Conturi create" value={activeAccountCount} />
-        <AccessMetric label="Linkuri active" value={activeSecureLinkCount} />
-      </div>
-      <div className="min-w-0 max-w-full overflow-x-auto px-5 pb-5">
-        <div
-          role="table"
-          aria-label="Acces participanți"
-          className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface text-sm shadow-sm sm:min-w-[860px]"
-        >
-          <div role="rowgroup">
-            <div
-              role="row"
-              className="hidden grid-cols-[1.35fr_1fr_0.9fr_0.9fr_1fr] bg-muted text-xs font-semibold text-muted-foreground sm:grid"
-            >
-              <span role="columnheader" className="px-5 py-3">Participant</span>
-              <span role="columnheader" className="px-5 py-3">Rol intern</span>
-              <span role="columnheader" className="px-5 py-3">Tip acces</span>
-              <span role="columnheader" className="px-5 py-3">Stare cont</span>
-              <span role="columnheader" className="px-5 py-3">Livrare</span>
-            </div>
-          </div>
-          {rows.length === 0 ? (
-            <div role="rowgroup">
-              <div role="row">
-                <div role="cell" aria-colspan={5} className="px-5 py-8 text-center text-foreground/62">
-                  {emptyMessage}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div role="rowgroup" className="divide-y divide-border">
-              {rows.map((row) => (
-                <div
-                  key={row.participant.id}
-                  role="row"
-                  className="grid min-w-0 gap-4 px-4 py-4 sm:grid-cols-[1.35fr_1fr_0.9fr_0.9fr_1fr] sm:items-center sm:gap-0 sm:px-0"
-                >
-                  <div role="cell" className="min-w-0 sm:px-5">
-                    <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Participant</span>
-                    <p className="font-semibold text-foreground">{row.participant.full_name}</p>
-                    <p className="mt-1 break-all text-xs text-foreground/52 sm:truncate">
-                      {row.participant.email ?? "email lipsă"}
-                    </p>
-                  </div>
-                  <AccessRowValue label="Rol intern">{row.internalRoleLabel}</AccessRowValue>
-                  <div role="cell" className="min-w-0 sm:px-5">
-                    <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Tip acces</span>
-                    <Badge variant="outline">{row.accountTypeLabel}</Badge>
-                  </div>
-                  <AccessRowValue label="Stare cont">{row.accountStateLabel}</AccessRowValue>
-                  <AccessRowValue label="Livrare">{row.deliveryLabel}</AccessRowValue>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function participantStateStatus(row: AccessRow): { label: string; tone: StatusTone } {
+  if (row.hasAccount) return { label: "Cont creat", tone: "success" };
+  if (row.deliveryLabel === "Email cu eroare") return { label: "Email cu eroare", tone: "danger" };
+  if (row.hasSecureLink) return { label: "Link activ", tone: "info" };
+  if (row.deliveryLabel === "Email trimis") return { label: "Email trimis", tone: "info" };
+  if (row.accountTypeLabel === "Cont permanent") return { label: "Cont de creat", tone: "warning" };
+  return { label: "Nepregătit", tone: "neutral" };
 }
 
-function AccessRowValue({ label, children }: { label: string; children: React.ReactNode }) {
+function DotStatus({ label, tone }: { label: string; tone: StatusTone }) {
   return (
-    <div role="cell" className="min-w-0 text-foreground/70 sm:px-5">
-      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">{label}</span>
-      <span className="break-words">{children}</span>
-    </div>
-  );
-}
-
-function AccessMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="min-w-28">
-      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-foreground/70">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          tone === "success" && "bg-success-ink",
+          tone === "info" && "bg-info",
+          tone === "warning" && "bg-warning",
+          tone === "danger" && "bg-destructive",
+          tone === "neutral" && "bg-muted-foreground",
+        )}
+      />
+      {label}
+    </span>
   );
 }
 
 function formatManagerName(value: string | null | undefined): string {
   return normalizeReportsToName(value) || "Fără manager";
-}
-
-function ParticipantMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="min-w-20">
-      <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
-  );
 }
 
 function EditField({

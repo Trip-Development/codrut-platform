@@ -131,7 +131,6 @@ class ParticipantProfile(TimestampMixin, Base):
             "id",
             name="uq_participant_profiles_company_id_id",
         ),
-        UniqueConstraint("user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -157,7 +156,7 @@ class ParticipantProfile(TimestampMixin, Base):
 
     company: Mapped[Company] = relationship(back_populates="participants")
     user: Mapped[User | None] = relationship(
-        back_populates="participant_profile",
+        back_populates="participant_profiles",
         lazy="selectin",
     )
     direct_reports: Mapped[list[ParticipantReportingRelationship]] = relationship(

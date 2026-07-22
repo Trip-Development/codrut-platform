@@ -5,9 +5,13 @@ import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 
 type ParticipantCompletionStateProps = {
   resultCount: number;
+  resultsHref?: string;
 };
 
-export function ParticipantCompletionState({ resultCount }: ParticipantCompletionStateProps) {
+export function ParticipantCompletionState({
+  resultCount,
+  resultsHref = "/participant/results",
+}: ParticipantCompletionStateProps) {
   const resultsReady = resultCount > 0;
 
   return (
@@ -59,7 +63,7 @@ export function ParticipantCompletionState({ resultCount }: ParticipantCompletio
 
         {resultsReady ? (
           <Link
-            href="/participant/results"
+            href={resultsHref}
             className={serverLinkButtonClassName({
               size: "lg",
               className: "w-fit border-white bg-white text-burgundy shadow-sm hover:bg-zinc-100 hover:text-burgundy focus-visible:ring-white/70 focus-visible:ring-offset-burgundy",

@@ -34,6 +34,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script
           id="codrut-theme-prepaint"
           nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: THEME_PREPAINT_SCRIPT,
           }}

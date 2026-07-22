@@ -1,6 +1,7 @@
 import uuid
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -10,6 +11,7 @@ from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssessmentCycleStatus,
     AssignmentAccessMode,
     AssignmentStatus,
     AssignmentTargetType,
@@ -42,9 +44,11 @@ class FakeFormsRepository:
         self,
         assignment: QuestionnaireAssignment | None,
         project: CompanyProject | None = None,
+        cycle: object | None = None,
     ) -> None:
         self.assignment = assignment
         self.project = project
+        self.cycle = cycle
         self.response: QuestionnaireResponse | None = None
         preview = PREVIEW_DEFINITIONS["lencioni"]
         self.definition = QuestionnaireDefinition(
@@ -62,11 +66,23 @@ class FakeFormsRepository:
         assignment_id: uuid.UUID,
         user_id: uuid.UUID,
         *,
+        participant_profile_id: uuid.UUID | None = None,
+        project_id: uuid.UUID | None = None,
+        cycle_id: uuid.UUID | None = None,
         allowed_assignment_ids: tuple[uuid.UUID, ...] | None = None,
     ) -> QuestionnaireAssignment | None:
         if allowed_assignment_ids is not None and assignment_id not in allowed_assignment_ids:
             return None
-        if self.assignment and self.assignment.id == assignment_id:
+        if (
+            self.assignment
+            and self.assignment.id == assignment_id
+            and (
+                participant_profile_id is None
+                or self.assignment.respondent_profile_id == participant_profile_id
+            )
+            and (project_id is None or self.assignment.project_id == project_id)
+            and (cycle_id is None or self.assignment.assessment_cycle_id == cycle_id)
+        ):
             return self.assignment
         return None
 
@@ -108,6 +124,12 @@ class FakeFormsRepository:
         if self.project is None or assignment.project_id != self.project.id:
             return None
         return self.project
+
+    async def get_assessment_cycle_for_assignment(
+        self,
+        _assignment: QuestionnaireAssignment,
+    ) -> object | None:
+        return self.cycle
 
 
 def make_service(repository: FakeFormsRepository) -> FormsService:
@@ -261,6 +283,133 @@ async def test_save_assignment_response_rejects_project_closed_window() -> None:
         )
 
     assert exc_info.value.code == "project_closed"
+
+
+async def test_cancelled_assignment_rejects_definition_read_save_and_submit() -> None:
+    assignment = make_assignment()
+    assignment.status = AssignmentStatus.cancelled
+    service = make_service(FakeFormsRepository(assignment))
+    user_id = uuid.uuid4()
+    payload = QuestionnaireResponseSaveRequest(answers={"team_sample_1": 3})
+
+    actions = (
+        lambda: service.get_assignment_definition(user_id, assignment.id),
+        lambda: service.get_assignment_response(user_id, assignment.id),
+        lambda: service.save_assignment_response(user_id, assignment.id, payload),
+        lambda: service.save_assignment_response(user_id, assignment.id, payload, submit=True),
+    )
+    for action in actions:
+        with pytest.raises(DomainError) as exc_info:
+            await action()
+        assert exc_info.value.code == "assignment_cancelled"
+
+
+async def test_closed_cycle_rejects_definition_read_save_and_submit() -> None:
+    assignment = make_assignment()
+    assignment.project_id = uuid.uuid4()
+    assignment.assessment_cycle_id = uuid.uuid4()
+    cycle = SimpleNamespace(
+        status=AssessmentCycleStatus.closed,
+        starts_at=datetime.now(UTC) - timedelta(minutes=1),
+        due_at=None,
+    )
+    service = make_service(FakeFormsRepository(assignment, cycle=cycle))
+    user_id = uuid.uuid4()
+    payload = QuestionnaireResponseSaveRequest(answers={"team_sample_1": 3})
+
+    actions = (
+        lambda: service.get_assignment_definition(user_id, assignment.id),
+        lambda: service.get_assignment_response(user_id, assignment.id),
+        lambda: service.save_assignment_response(user_id, assignment.id, payload),
+        lambda: service.save_assignment_response(user_id, assignment.id, payload, submit=True),
+    )
+    for action in actions:
+        with pytest.raises(DomainError) as exc_info:
+            await action()
+        assert exc_info.value.code == "assessment_cycle_closed"
+
+
+async def test_participant_definition_requires_profile_context_for_multiple_profiles() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"multi-profile-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            first_company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"First profile {uuid.uuid4().hex[:8]}",
+            )
+            second_company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"Second profile {uuid.uuid4().hex[:8]}",
+            )
+            first_definition = persisted_preview_definition("lencioni")
+            second_definition = persisted_preview_definition("lencioni")
+            session.add_all(
+                [user, first_company, second_company, first_definition, second_definition]
+            )
+            await session.flush()
+
+            first_profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=first_company.id,
+                user_id=user.id,
+                full_name="First profile",
+                email=user.email,
+            )
+            second_profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=second_company.id,
+                user_id=user.id,
+                full_name="Second profile",
+                email=user.email,
+            )
+            session.add_all([first_profile, second_profile])
+            await session.flush()
+
+            session.add_all(
+                [
+                    QuestionnaireAssignment(
+                        id=uuid.uuid4(),
+                        company_id=first_company.id,
+                        respondent_profile_id=first_profile.id,
+                        questionnaire_key="lencioni",
+                        questionnaire_definition_id=first_definition.id,
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.assigned,
+                    ),
+                    QuestionnaireAssignment(
+                        id=uuid.uuid4(),
+                        company_id=second_company.id,
+                        respondent_profile_id=second_profile.id,
+                        questionnaire_key="lencioni",
+                        questionnaire_definition_id=second_definition.id,
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.assigned,
+                    ),
+                ]
+            )
+            await session.flush()
+
+            service = FormsService(session)
+            with pytest.raises(DomainError) as ambiguous:
+                await service.get_participant_definition_by_key(user.id, "lencioni")
+            assert ambiguous.value.code == "participant_context_required"
+
+            selected = await service.get_participant_definition_by_key(
+                user.id,
+                "lencioni",
+                participant_profile_id=second_profile.id,
+            )
+            assert selected.version == second_definition.version
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
 
 
 async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> None:

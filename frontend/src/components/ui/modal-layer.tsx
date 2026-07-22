@@ -12,6 +12,7 @@ type ModalLayerProps = {
   className?: string;
   panelClassName?: string;
   closeOnBackdrop?: boolean;
+  closeOnEscape?: boolean;
 };
 
 const focusableSelector = [
@@ -32,6 +33,7 @@ export function ModalLayer({
   className = "",
   panelClassName = "",
   closeOnBackdrop = true,
+  closeOnEscape = true,
 }: ModalLayerProps) {
   const generatedTitleId = useId();
   const resolvedLabelledBy = labelledBy ?? titleId ?? generatedTitleId;
@@ -64,7 +66,7 @@ export function ModalLayer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCloseRef.current();
+        if (closeOnEscape) onCloseRef.current();
         return;
       }
 
@@ -99,7 +101,7 @@ export function ModalLayer({
         previousFocusRef.current.focus({ preventScroll: true });
       }
     };
-  }, [mounted]);
+  }, [closeOnEscape, mounted]);
 
   if (!mounted) return null;
 

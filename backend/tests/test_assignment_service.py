@@ -7,6 +7,10 @@ import pytest
 
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleQuestionnaire,
+    AssessmentCycleStatus,
+    AssessmentCycleTeamMembership,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -16,6 +20,9 @@ from codrut.modules.assignments.models import (
     TeamType,
 )
 from codrut.modules.assignments.schemas import (
+    AssessmentCycleCloseRequest,
+    AssessmentCycleCreateRequest,
+    AssessmentCycleUpdateRequest,
     AssignmentCreateRequest,
     AssignmentPlanSaveItem,
     AssignmentPlanSaveRequest,
@@ -45,6 +52,181 @@ class FakeAssignmentRepository:
         self.teams: dict[uuid.UUID, Team] = {}
         self.memberships: list[TeamMembership] = []
         self.assignments: list[QuestionnaireAssignment] = []
+        self.assessment_cycles: dict[uuid.UUID, AssessmentCycle] = {}
+        self.cycle_questionnaires: list[AssessmentCycleQuestionnaire] = []
+        self.cycle_team_memberships: list[AssessmentCycleTeamMembership] = []
+        self.deleted_cycle_ids: list[uuid.UUID] = []
+
+    async def add_assessment_cycle(self, cycle: AssessmentCycle) -> AssessmentCycle:
+        now = datetime.now(UTC)
+        cycle.id = cycle.id or uuid.uuid4()
+        cycle.created_at = getattr(cycle, "created_at", None) or now
+        cycle.updated_at = getattr(cycle, "updated_at", None) or now
+        self.assessment_cycles[cycle.id] = cycle
+        return cycle
+
+    async def add_assessment_cycle_questionnaires(
+        self,
+        questionnaires: list[AssessmentCycleQuestionnaire],
+    ) -> list[AssessmentCycleQuestionnaire]:
+        now = datetime.now(UTC)
+        for questionnaire in questionnaires:
+            questionnaire.id = questionnaire.id or uuid.uuid4()
+            questionnaire.created_at = getattr(questionnaire, "created_at", None) or now
+            questionnaire.updated_at = getattr(questionnaire, "updated_at", None) or now
+            self.cycle_questionnaires.append(questionnaire)
+        return questionnaires
+
+    async def list_assessment_cycles(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> list[AssessmentCycle]:
+        return sorted(
+            [
+                cycle
+                for cycle in self.assessment_cycles.values()
+                if cycle.company_id == company_id and cycle.project_id == project_id
+            ],
+            key=lambda cycle: cycle.sequence,
+            reverse=True,
+        )
+
+    async def get_assessment_cycle(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+        assessment_cycle_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> AssessmentCycle | None:
+        del for_update
+        cycle = self.assessment_cycles.get(assessment_cycle_id)
+        if cycle is None or cycle.company_id != company_id or cycle.project_id != project_id:
+            return None
+        return cycle
+
+    async def get_open_assessment_cycle(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> AssessmentCycle | None:
+        return next(
+            (
+                cycle
+                for cycle in self.assessment_cycles.values()
+                if cycle.company_id == company_id
+                and cycle.project_id == project_id
+                and cycle.status in {AssessmentCycleStatus.draft, AssessmentCycleStatus.active}
+            ),
+            None,
+        )
+
+    async def get_latest_assessment_cycle(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> AssessmentCycle | None:
+        cycles = await self.list_assessment_cycles(company_id, project_id)
+        return cycles[0] if cycles else None
+
+    async def next_assessment_cycle_sequence(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> int:
+        cycles = await self.list_assessment_cycles(company_id, project_id)
+        return (cycles[0].sequence if cycles else 0) + 1
+
+    async def list_assessment_cycle_questionnaires(
+        self,
+        assessment_cycle_id: uuid.UUID,
+    ) -> list[AssessmentCycleQuestionnaire]:
+        return sorted(
+            [
+                item
+                for item in self.cycle_questionnaires
+                if item.assessment_cycle_id == assessment_cycle_id
+            ],
+            key=lambda item: (item.display_order, item.questionnaire_key),
+        )
+
+    async def delete_assessment_cycle(self, cycle: AssessmentCycle) -> None:
+        self.deleted_cycle_ids.append(cycle.id)
+        self.assessment_cycles.pop(cycle.id, None)
+        self.assignments = [
+            assignment
+            for assignment in self.assignments
+            if assignment.assessment_cycle_id != cycle.id
+        ]
+        self.cycle_questionnaires = [
+            item for item in self.cycle_questionnaires if item.assessment_cycle_id != cycle.id
+        ]
+
+    async def count_unfinished_cycle_assignments(
+        self,
+        assessment_cycle_id: uuid.UUID,
+    ) -> int:
+        return sum(
+            assignment.assessment_cycle_id == assessment_cycle_id
+            and assignment.status
+            not in {
+                AssignmentStatus.submitted,
+                AssignmentStatus.validated,
+                AssignmentStatus.scored,
+                AssignmentStatus.cancelled,
+            }
+            for assignment in self.assignments
+        )
+
+    async def cancel_unfinished_cycle_assignments(
+        self,
+        assessment_cycle_id: uuid.UUID,
+    ) -> list[QuestionnaireAssignment]:
+        cancelled: list[QuestionnaireAssignment] = []
+        for assignment in self.assignments:
+            if assignment.assessment_cycle_id != assessment_cycle_id:
+                continue
+            if assignment.status in {
+                AssignmentStatus.submitted,
+                AssignmentStatus.validated,
+                AssignmentStatus.scored,
+                AssignmentStatus.cancelled,
+            }:
+                continue
+            assignment.status = AssignmentStatus.cancelled
+            cancelled.append(assignment)
+        return cancelled
+
+    async def synchronize_cycle_assignment_deadlines(
+        self,
+        assessment_cycle_id: uuid.UUID,
+        due_at: datetime | None,
+    ) -> None:
+        for assignment in self.assignments:
+            if assignment.assessment_cycle_id == assessment_cycle_id:
+                assignment.due_at = due_at
+
+    async def list_cycle_team_memberships(
+        self,
+        assessment_cycle_id: uuid.UUID,
+        team_id: uuid.UUID,
+    ) -> list[AssessmentCycleTeamMembership]:
+        return [
+            membership
+            for membership in self.cycle_team_memberships
+            if membership.assessment_cycle_id == assessment_cycle_id
+            and membership.team_id == team_id
+        ]
+
+    async def add_cycle_team_memberships(
+        self,
+        memberships: list[AssessmentCycleTeamMembership],
+    ) -> list[AssessmentCycleTeamMembership]:
+        for membership in memberships:
+            membership.id = membership.id or uuid.uuid4()
+            self.cycle_team_memberships.append(membership)
+        return memberships
 
     async def add_team(self, team: Team) -> Team:
         team.id = team.id or uuid.uuid4()
@@ -92,6 +274,8 @@ class FakeAssignmentRepository:
 
     async def add_assignment(self, assignment: QuestionnaireAssignment) -> QuestionnaireAssignment:
         assignment.id = uuid.uuid4()
+        if assignment.reminder_count is None:
+            assignment.reminder_count = 0
         self.assignments.append(assignment)
         return assignment
 
@@ -115,6 +299,7 @@ class FakeAssignmentRepository:
         target_type: AssignmentTargetType,
         target_person_id: uuid.UUID | None,
         target_team_id: uuid.UUID | None,
+        assessment_cycle_id: uuid.UUID | None = None,
     ) -> QuestionnaireAssignment | None:
         for assignment in self.assignments:
             if (
@@ -125,6 +310,10 @@ class FakeAssignmentRepository:
                 and assignment.target_type == target_type
                 and assignment.target_person_id == target_person_id
                 and assignment.target_team_id == target_team_id
+                and (
+                    assessment_cycle_id is None
+                    or assignment.assessment_cycle_id == assessment_cycle_id
+                )
             ):
                 return assignment
         return None
@@ -133,12 +322,16 @@ class FakeAssignmentRepository:
         self,
         company_id: uuid.UUID,
         project_id: uuid.UUID | None = None,
+        assessment_cycle_id: uuid.UUID | None = None,
     ) -> list[QuestionnaireAssignment]:
         assignments = [
             assignment
             for assignment in self.assignments
             if assignment.company_id == company_id
             and (project_id is None or assignment.project_id == project_id)
+            and (
+                assessment_cycle_id is None or assignment.assessment_cycle_id == assessment_cycle_id
+            )
         ]
         return assignments
 
@@ -239,6 +432,7 @@ class FakeFormsRepository:
         self.active_keys: set[str] = set()
         self.persisted_keys: set[str] = set()
         self.responses_by_assignment: dict[uuid.UUID, QuestionnaireResponse] = {}
+        self.definitions_by_id: dict[uuid.UUID, object] = {}
 
     async def get_definition(self, key: str) -> object | None:
         if key in self.active_keys:
@@ -249,6 +443,9 @@ class FakeFormsRepository:
 
     async def get_latest_version(self, key: str) -> int:
         return 1 if key in self.persisted_keys or key in self.active_keys else 0
+
+    async def get_definition_by_id(self, definition_id: uuid.UUID) -> object | None:
+        return self.definitions_by_id.get(definition_id)
 
     async def unlock_response_for_assignment(
         self,
@@ -278,6 +475,19 @@ class FakeResultPublicationService:
         self.reconciled_assignment_ids.append(assignment_id)
 
 
+class FakeNestedTransaction:
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+
+class FakeSession:
+    def begin_nested(self) -> FakeNestedTransaction:
+        return FakeNestedTransaction()
+
+
 def make_assignment_service(
     *,
     assignment_repository: FakeAssignmentRepository,
@@ -287,7 +497,7 @@ def make_assignment_service(
     scoring_repository: FakeScoringRepository | None = None,
     result_publication_service: FakeResultPublicationService | None = None,
 ) -> AssignmentService:
-    service = AssignmentService(cast(Any, None))
+    service = AssignmentService(cast(Any, FakeSession()))
     service.assignment_repository = cast(Any, assignment_repository)
     service.company_repository = cast(Any, company_repository)
     service.forms_repository = cast(Any, forms_repository or FakeFormsRepository())
@@ -560,8 +770,63 @@ async def test_create_assignment_persists_project_scope() -> None:
     assert assignment.project_id == project_id
 
 
-async def test_project_assignment_requires_active_respondent_and_person_target_memberships(
-) -> None:
+async def test_initial_cycle_pins_questionnaire_when_first_assignment_is_saved() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Initial cycle",
+    )
+    company_repository.project_memberships.append(
+        ProjectMembership(
+            company_id=company_id,
+            project_id=project_id,
+            participant_profile_id=respondent_id,
+            active=True,
+        )
+    )
+    cycle = await assignment_repository.add_assessment_cycle(
+        AssessmentCycle(
+            company_id=company_id,
+            project_id=project_id,
+            sequence=1,
+            name="Evaluare inițială",
+            status=AssessmentCycleStatus.draft,
+            created_by_user_id=user_id,
+        )
+    )
+
+    assignment = await service.create_assignment(
+        user_id,
+        company_id,
+        AssignmentCreateRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            respondent_profile_id=respondent_id,
+            questionnaire_key="lencioni",
+            target_type=AssignmentTargetType.self_assessment,
+        ),
+    )
+
+    pinned = await assignment_repository.list_assessment_cycle_questionnaires(cycle.id)
+    assert assignment.assessment_cycle_id == cycle.id
+    assert [item.questionnaire_key for item in pinned] == ["lencioni"]
+    assert pinned[0].questionnaire_definition_id == assignment.questionnaire_definition_id
+
+
+async def test_project_assignment_requires_active_respondent_and_person_target_memberships() -> (
+    None
+):
     (
         service,
         _assignment_repository,
@@ -1376,6 +1641,423 @@ def test_stamp_status_time_sets_first_matching_timestamp_once() -> None:
 
     assert first_started_at is not None
     assert assignment.started_at == first_started_at
+
+
+async def _seed_assessment_cycle_scope() -> tuple[
+    AssignmentService,
+    FakeAssignmentRepository,
+    FakeCompanyRepository,
+    FakeFormsRepository,
+    uuid.UUID,
+    uuid.UUID,
+    uuid.UUID,
+    uuid.UUID,
+    AssessmentCycle,
+    uuid.UUID,
+]:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        _target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    forms_repository = cast(FakeFormsRepository, service.forms_repository)
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Leadership program",
+    )
+    company_repository.project_memberships.append(
+        ProjectMembership(
+            company_id=company_id,
+            project_id=project_id,
+            participant_profile_id=respondent_id,
+            reports_to_name=None,
+            position="Director",
+            location=None,
+            role_group="leadership",
+            active=True,
+        )
+    )
+    company_repository.participants[respondent_id].role_group = "leadership"
+    definition_id = uuid.uuid4()
+    forms_repository.definitions_by_id[definition_id] = SimpleNamespace(
+        id=definition_id,
+        key="pcm_base",
+        version=7,
+        active=False,
+    )
+    baseline = await assignment_repository.add_assessment_cycle(
+        AssessmentCycle(
+            company_id=company_id,
+            project_id=project_id,
+            sequence=1,
+            name="Evaluare inițială",
+            status=AssessmentCycleStatus.closed,
+            closed_at=datetime.now(UTC),
+            created_by_user_id=user_id,
+        )
+    )
+    await assignment_repository.add_assessment_cycle_questionnaires(
+        [
+            AssessmentCycleQuestionnaire(
+                assessment_cycle_id=baseline.id,
+                questionnaire_definition_id=definition_id,
+                questionnaire_key="pcm_base",
+                display_order=0,
+            )
+        ]
+    )
+    return (
+        service,
+        assignment_repository,
+        company_repository,
+        forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        respondent_id,
+        baseline,
+        definition_id,
+    )
+
+
+async def test_cycle_creation_copies_pins_and_rejects_two_open_cycles() -> None:
+    (
+        service,
+        _assignment_repository,
+        _company_repository,
+        _forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        _respondent_id,
+        baseline,
+        definition_id,
+    ) = await _seed_assessment_cycle_scope()
+
+    created = await service.create_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        AssessmentCycleCreateRequest(source_cycle_id=baseline.id),
+    )
+
+    assert created.sequence == 2
+    assert created.name == "Reevaluare 1"
+    assert created.status == AssessmentCycleStatus.draft
+    assert created.source_cycle_id == baseline.id
+    assert [item.questionnaire_definition_id for item in created.questionnaires] == [definition_id]
+    assert [
+        cycle.id
+        for cycle in await service.list_assessment_cycles(
+            user_id,
+            company_id,
+            project_id,
+        )
+    ] == [created.id, baseline.id]
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assessment_cycle(
+            user_id,
+            company_id,
+            project_id,
+            AssessmentCycleCreateRequest(source_cycle_id=baseline.id),
+        )
+    assert exc_info.value.code == "assessment_cycle_open_exists"
+
+
+async def test_assessment_cycle_draft_lifecycle_and_explicit_unfinished_cancellation() -> None:
+    (
+        service,
+        assignment_repository,
+        _company_repository,
+        _forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        respondent_id,
+        baseline,
+        definition_id,
+    ) = await _seed_assessment_cycle_scope()
+    created = await service.create_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        AssessmentCycleCreateRequest(source_cycle_id=baseline.id),
+    )
+    starts_at = datetime(2027, 1, 10, tzinfo=UTC)
+    due_at = datetime(2027, 2, 10, tzinfo=UTC)
+
+    updated = await service.update_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        created.id,
+        AssessmentCycleUpdateRequest(
+            name="Reevaluare după atelier",
+            starts_at=starts_at,
+            due_at=due_at,
+        ),
+    )
+    assert updated.name == "Reevaluare după atelier"
+    assert updated.starts_at == starts_at
+    assert updated.due_at == due_at
+
+    cycle = await service.activate_assessment_cycle_for_invitation(
+        company_id,
+        project_id,
+        created.id,
+    )
+    assignment = await assignment_repository.add_assignment(
+        QuestionnaireAssignment(
+            company_id=company_id,
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            assignment_round_id=uuid.uuid4(),
+            respondent_profile_id=respondent_id,
+            questionnaire_key="pcm_base",
+            questionnaire_definition_id=definition_id,
+            target_type=AssignmentTargetType.self_assessment,
+            status=AssignmentStatus.assigned,
+        )
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.close_assessment_cycle(
+            user_id,
+            company_id,
+            project_id,
+            cycle.id,
+            AssessmentCycleCloseRequest(),
+        )
+    assert exc_info.value.code == "assessment_cycle_has_unfinished_assignments"
+    assert exc_info.value.details == {"unfinished_count": 1}
+
+    closed = await service.close_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        cycle.id,
+        AssessmentCycleCloseRequest(cancel_unfinished=True),
+    )
+    assert closed.status == AssessmentCycleStatus.closed
+    assert closed.closed_at is not None
+    assert assignment.status == AssignmentStatus.cancelled
+
+
+async def test_assessment_cycle_plan_is_cycle_scoped_and_uses_pinned_definition() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        _forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        respondent_id,
+        baseline,
+        definition_id,
+    ) = await _seed_assessment_cycle_scope()
+    company_repository.participants[respondent_id].pcm_base = "Gânditor"
+    company_repository.participants[respondent_id].pcm_phase = "Perseverent"
+    cycle_due_at = datetime(2027, 3, 15, tzinfo=UTC)
+    cycle_response = await service.create_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        AssessmentCycleCreateRequest(source_cycle_id=baseline.id, due_at=cycle_due_at),
+    )
+    cycle = assignment_repository.assessment_cycles[cycle_response.id]
+    previous_assignment = await assignment_repository.add_assignment(
+        QuestionnaireAssignment(
+            company_id=company_id,
+            project_id=project_id,
+            assessment_cycle_id=baseline.id,
+            assignment_round_id=uuid.uuid4(),
+            respondent_profile_id=respondent_id,
+            questionnaire_key="pcm_base",
+            questionnaire_definition_id=definition_id,
+            target_type=AssignmentTargetType.self_assessment,
+            status=AssignmentStatus.scored,
+        )
+    )
+
+    plan = await service.build_default_assignment_plan(
+        user_id,
+        company_id,
+        project_id,
+        cycle.id,
+    )
+    pcm_item = next(item for item in plan.assignments if item.questionnaire_key == "pcm_base")
+    assert plan.assessment_cycle_id == cycle.id
+    assert pcm_item.existing_assignment_id is None
+    assert pcm_item.selected is True
+
+    first_save = await service.save_assignment_plan(
+        user_id,
+        company_id,
+        AssignmentPlanSaveRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            assignments=[AssignmentPlanSaveItem.model_validate(pcm_item.model_dump())],
+        ),
+    )
+    assert first_save.created_count == 1
+    saved = first_save.assignments[0]
+    assert saved.id != previous_assignment.id
+    assert saved.assessment_cycle_id == cycle.id
+    persisted = next(item for item in assignment_repository.assignments if item.id == saved.id)
+    assert persisted.questionnaire_definition_id == definition_id
+    assert persisted.due_at == cycle_due_at
+
+    second_save = await service.save_assignment_plan(
+        user_id,
+        company_id,
+        AssignmentPlanSaveRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            assignments=[AssignmentPlanSaveItem.model_validate(pcm_item.model_dump())],
+        ),
+    )
+    assert second_save.created_count == 0
+    assert second_save.existing_count == 1
+    assert second_save.assignments[0].id == saved.id
+
+
+async def test_followup_plan_preview_uses_current_roster_without_source_assignments() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        _forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        respondent_id,
+        baseline,
+        definition_id,
+    ) = await _seed_assessment_cycle_scope()
+    company_repository.participants[respondent_id].pcm_base = "Gânditor"
+    company_repository.participants[respondent_id].pcm_phase = "Perseverent"
+    source_assignment = await assignment_repository.add_assignment(
+        QuestionnaireAssignment(
+            company_id=company_id,
+            project_id=project_id,
+            assessment_cycle_id=baseline.id,
+            assignment_round_id=uuid.uuid4(),
+            respondent_profile_id=respondent_id,
+            questionnaire_key="pcm_base",
+            questionnaire_definition_id=definition_id,
+            target_type=AssignmentTargetType.self_assessment,
+            status=AssignmentStatus.scored,
+        )
+    )
+
+    preview = await service.build_default_assignment_plan(
+        user_id,
+        company_id,
+        project_id,
+        source_cycle_id=baseline.id,
+    )
+
+    assert preview.assessment_cycle_id is None
+    assert preview.source_cycle_id == baseline.id
+    assert preview.existing_count == 0
+    pcm_item = next(item for item in preview.assignments if item.questionnaire_key == "pcm_base")
+    assert pcm_item.existing_assignment_id is None
+    assert pcm_item.selected is True
+    assert source_assignment.id not in {item.existing_assignment_id for item in preview.assignments}
+
+
+async def test_manual_assignment_rejects_duplicate_within_cycle() -> None:
+    (
+        service,
+        _assignment_repository,
+        _company_repository,
+        _forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        respondent_id,
+        baseline,
+        definition_id,
+    ) = await _seed_assessment_cycle_scope()
+    cycle = await service.create_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        AssessmentCycleCreateRequest(source_cycle_id=baseline.id),
+    )
+    payload = AssignmentCreateRequest(
+        project_id=project_id,
+        assessment_cycle_id=cycle.id,
+        respondent_profile_id=respondent_id,
+        questionnaire_key="pcm_base",
+        target_type=AssignmentTargetType.self_assessment,
+    )
+
+    created = await service.create_assignment(user_id, company_id, payload)
+
+    assert created.assessment_cycle_id == cycle.id
+    assert created.questionnaire_definition_id == definition_id
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(user_id, company_id, payload)
+    assert exc_info.value.code == "assessment_cycle_assignment_exists"
+
+
+async def test_delete_assessment_cycle_requires_draft() -> None:
+    (
+        service,
+        assignment_repository,
+        _company_repository,
+        _forms_repository,
+        user_id,
+        company_id,
+        project_id,
+        _respondent_id,
+        baseline,
+        _definition_id,
+    ) = await _seed_assessment_cycle_scope()
+    created = await service.create_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        AssessmentCycleCreateRequest(source_cycle_id=baseline.id),
+    )
+    assignment_repository.assignments.append(
+        QuestionnaireAssignment(
+            id=uuid.uuid4(),
+            company_id=company_id,
+            project_id=project_id,
+            assessment_cycle_id=created.id,
+            assignment_round_id=uuid.uuid4(),
+            respondent_profile_id=uuid.uuid4(),
+            questionnaire_key="pcm_base",
+            target_type=AssignmentTargetType.self_assessment,
+            status=AssignmentStatus.assigned,
+        )
+    )
+
+    await service.delete_assessment_cycle(
+        user_id,
+        company_id,
+        project_id,
+        created.id,
+    )
+
+    assert created.id in assignment_repository.deleted_cycle_ids
+    assert created.id not in assignment_repository.assessment_cycles
+    assert not [
+        assignment
+        for assignment in assignment_repository.assignments
+        if assignment.assessment_cycle_id == created.id
+    ]
 
 
 @pytest.mark.parametrize(

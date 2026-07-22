@@ -113,31 +113,24 @@ class IdentityService:
                 code="registration_forbidden",
             )
 
-        # 3. Check if already registered
-        if verify_result.already_registered:
-            raise DomainError(
-                "An account has already been registered with this invitation.",
-                code="already_registered",
-            )
-
-        # 4. Check if the email matches the invitation
+        # The signed invitation proves ownership of this exact participant context.
         if payload.email.lower() != verify_result.email.lower():
             raise DomainError("Email address does not match invitation.", code="email_mismatch")
 
-        # 5. Promote a secure-link shadow user or create a new permanent account.
-        existing = await self.repository.get_user_by_email(payload.email)
-        if existing is not None and existing.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH:
-            raise DomainError("An account with this email already exists.", code="email_taken")
+        profile = await self._load_invited_profile(payload.token)
+        existing = await self._resolve_invited_participant_user(profile)
 
-        await ensure_password_not_breached(payload.password)
         accepted_at = datetime.now(UTC)
-        if existing is not None:
+        if existing is not None and existing.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH:
+            await ensure_password_not_breached(payload.password)
             existing.password_hash = hash_password(payload.password)
             existing.role = UserRole.participant
-            existing.terms_accepted_at = accepted_at
-            existing.terms_version = payload.terms_version
+            user = existing
+        elif existing is not None:
+            # Never replace an existing account password during invite linking.
             user = existing
         else:
+            await ensure_password_not_breached(payload.password)
             user = await self.repository.add_user(
                 User(
                     id=uuid.uuid4(),
@@ -148,23 +141,8 @@ class IdentityService:
                     terms_version=payload.terms_version,
                 )
             )
-
-        from sqlalchemy import select
-
-        from codrut.core.config import get_settings
-        from codrut.modules.communications.task_links import parse_task_token
-        from codrut.modules.companies.models import ParticipantProfile
-
-        claims = parse_task_token(payload.token, get_settings())
-        result = await self.repository.session.execute(
-            select(ParticipantProfile).where(
-                ParticipantProfile.id == claims.respondent_profile_id,
-                ParticipantProfile.company_id == claims.company_id,
-            )
-        )
-        profile = result.scalar_one_or_none()
-        if profile is None:
-            raise DomainError("Invitation respondent profile not found.", code="profile_not_found")
+        user.terms_accepted_at = accepted_at
+        user.terms_version = payload.terms_version
         profile.user_id = user.id
 
         if invite is None:
@@ -204,10 +182,17 @@ class IdentityService:
         *,
         lock_invite: bool,
     ) -> tuple[InviteVerifyResponse, AssignmentInvite | None]:
-        from sqlalchemy import exists, select
+        from sqlalchemy import exists, or_, select
 
         from codrut.core.config import get_settings
-        from codrut.modules.assignments.models import Team, TeamMembership, TeamType
+        from codrut.modules.assignments.models import (
+            AssessmentCycle,
+            AssessmentCycleStatus,
+            AssignmentStatus,
+            Team,
+            TeamMembership,
+            TeamType,
+        )
         from codrut.modules.communications.task_links import parse_task_token
         from codrut.modules.companies.models import Company, ParticipantProfile
 
@@ -268,15 +253,14 @@ class IdentityService:
             raise DomainError("Invitation project not found.", code="project_not_found")
 
         # Shadow users back secure links but are not permanent registrations.
+        # An unbound profile may still belong to an existing participant account
+        # with the same verified email, so expose that state before the exchange.
         user: User | None = None
         if profile.user_id is not None:
             user_result = await self.repository.session.execute(
                 select(User).where(User.id == profile.user_id)
             )
             user = user_result.scalar_one_or_none()
-        already_registered = bool(
-            user is not None and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
-        )
 
         # Check if the participant is leadership
         stmt = select(
@@ -295,9 +279,19 @@ class IdentityService:
 
         assignments_result = await self.repository.session.execute(
             select(QuestionnaireAssignment)
+            .outerjoin(
+                AssessmentCycle,
+                AssessmentCycle.id == QuestionnaireAssignment.assessment_cycle_id,
+            )
             .where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
             .where(QuestionnaireAssignment.company_id == claims.company_id)
             .where(QuestionnaireAssignment.respondent_profile_id == claims.respondent_profile_id)
+            .where(
+                or_(
+                    QuestionnaireAssignment.assessment_cycle_id.is_(None),
+                    AssessmentCycle.status != AssessmentCycleStatus.draft,
+                )
+            )
         )
         assignments = assignments_result.scalars().all()
         assignments_by_id = {assignment.id: assignment for assignment in assignments}
@@ -326,6 +320,8 @@ class IdentityService:
         return_to = quote(f"/invite/{token}", safe="")
         for assignment_id in claims.assignment_ids:
             ass = assignments_by_id[assignment_id]
+            if ass.status == AssignmentStatus.cancelled:
+                continue
             target_label = "Autoevaluare"
             if ass.questionnaire_key in {"lencioni", "lencioni_en"}:
                 target_label = "Echipa ta"
@@ -373,8 +369,17 @@ class IdentityService:
                     projectId=ass.project_id,
                     projectName=project_names.get(ass.project_id),
                     assignmentRoundId=ass.assignment_round_id,
+                    assessmentCycleId=ass.assessment_cycle_id,
                 )
             )
+
+        if user is None:
+            matching_user = await self.repository.get_user_by_email(profile.email)
+            if matching_user is not None and matching_user.role == UserRole.participant:
+                user = matching_user
+        already_registered = bool(
+            user is not None and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
+        )
 
         return (
             InviteVerifyResponse(
@@ -456,27 +461,13 @@ class IdentityService:
         )
         return {project.id: project.name for project in result.scalars().all()}
 
-    async def verify_invite_token_and_create_session(
-        self,
-        token: str,
-        *,
-        existing_session_token: str | None = None,
-    ) -> InviteVerifyResult:
-        verify_result, invite = await self._verify_invite_token(token, lock_invite=True)
-
-        import uuid
-
+    async def _load_invited_profile(self, token: str):
         from sqlalchemy import select
 
-        from codrut.core.config import get_settings
         from codrut.modules.communications.task_links import parse_task_token
         from codrut.modules.companies.models import ParticipantProfile
-        from codrut.modules.identity.models import User, UserRole
 
         claims = parse_task_token(token, get_settings())
-        session_token = None
-
-        # Load the exact participant profile covered by the verified task link.
         result = await self.repository.session.execute(
             select(ParticipantProfile).where(
                 ParticipantProfile.id == claims.respondent_profile_id,
@@ -485,44 +476,82 @@ class IdentityService:
         )
         profile = result.scalar_one_or_none()
         if profile is None:
-            raise DomainError("Profile not found.", code="profile_not_found")
+            raise DomainError("Invitation respondent profile not found.", code="profile_not_found")
+        if profile.email is None:
+            raise DomainError(
+                "Invitation respondent profile has no email address.",
+                code="invite_email_missing",
+            )
+        return profile
 
-        # If it is a low member (NOT leadership), we can automatically log them in
+    async def _resolve_invited_participant_user(self, profile):
+        email = profile.email.lower()
+        email_user = await self.repository.get_user_by_email(email)
+        bound_user = None
+        if profile.user_id is not None:
+            if email_user is not None and email_user.id == profile.user_id:
+                bound_user = email_user
+            else:
+                bound_user = await self.repository.get_user_by_id(profile.user_id)
+            if bound_user is None:
+                raise DomainError(
+                    "Invite profile is linked to a missing account.",
+                    code="invite_profile_account_conflict",
+                )
+            if email_user is not None and email_user.id != bound_user.id:
+                raise DomainError(
+                    "Invite email belongs to a different account.",
+                    code="invite_profile_account_conflict",
+                )
+
+        user = bound_user or email_user
+        if user is None:
+            return None
+        if user.role != UserRole.participant or user.email.lower() != email:
+            raise DomainError(
+                "Invite profile is linked to an incompatible account.",
+                code="invite_profile_account_conflict",
+            )
+        if profile.user_id is None:
+            profile.user_id = user.id
+        return user
+
+    async def verify_invite_token_and_create_session(
+        self,
+        token: str,
+        *,
+        existing_session_token: str | None = None,
+    ) -> InviteVerifyResult:
+        verify_result, invite = await self._verify_invite_token(token, lock_invite=True)
+
+        session_token = None
+        profile = await self._load_invited_profile(token)
+        existing_session = (
+            await self.repository.get_session_by_token(existing_session_token)
+            if existing_session_token
+            else None
+        )
+        if (
+            existing_session is not None
+            and profile.user_id is not None
+            and existing_session.user_id != profile.user_id
+        ):
+            raise DomainError(
+                "The invitation belongs to a different authenticated user.",
+                code="invite_session_conflict",
+            )
+        user = await self._resolve_invited_participant_user(profile)
+        if existing_session is not None and user is None:
+            raise DomainError(
+                "The invitation belongs to a different authenticated user.",
+                code="invite_session_conflict",
+            )
+
         if not verify_result.is_leadership:
             if not profile.anonymous_name:
                 profile.anonymous_name = new_anonymous_name()
                 verify_result.anonymous_name = profile.anonymous_name
-
-            existing_session = None
-            if existing_session_token:
-                existing_session = await self.repository.get_session_by_token(
-                    existing_session_token
-                )
-                if existing_session is not None and (
-                    profile.user_id is None or existing_session.user_id != profile.user_id
-                ):
-                    raise DomainError(
-                        "The invitation belongs to a different authenticated user.",
-                        code="invite_session_conflict",
-                    )
-
-            # Get or create the user
-            user = None
-            if profile.user_id is not None:
-                # User already exists
-                user_result = await self.repository.session.execute(
-                    select(User).where(User.id == profile.user_id)
-                )
-                user = user_result.scalar_one_or_none()
-
             if user is None:
-                existing_user = await self.repository.get_user_by_email(profile.email)
-                if existing_user is not None:
-                    raise DomainError(
-                        "Invite email already belongs to another account. "
-                        "Ask the trainer to link it explicitly.",
-                        code="invite_email_account_conflict",
-                    )
                 user = User(
                     id=uuid.uuid4(),
                     email=profile.email.lower(),
@@ -531,12 +560,10 @@ class IdentityService:
                 )
                 await self.repository.add_user(user)
                 profile.user_id = user.id
-            elif user.role != UserRole.participant or user.email.lower() != profile.email.lower():
-                raise DomainError(
-                    "Invite profile is linked to an incompatible account.",
-                    code="invite_profile_account_conflict",
-                )
 
+        # Existing participant accounts use the signed invitation as passwordless
+        # proof for the newly linked profile, including leadership accounts.
+        if user is not None:
             if existing_session is not None and existing_session.user_id != user.id:
                 raise DomainError(
                     "The invitation belongs to a different authenticated user.",

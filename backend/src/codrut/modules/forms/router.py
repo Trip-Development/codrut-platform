@@ -30,13 +30,17 @@ router = APIRouter()
 async def get_participant_onboarding(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    participant_profile_id: UUID | None = None,
 ) -> ParticipantOnboardingResponse:
     if principal.role != UserRole.participant:
         return ParticipantOnboardingResponse(required=False)
     require_current_terms(principal)
     if principal.assignment_ids is not None:
         return ParticipantOnboardingResponse(required=False)
-    response = await FormsService(session).get_participant_onboarding(principal.user_id)
+    response = await FormsService(session).get_participant_onboarding(
+        principal.user_id,
+        participant_profile_id=participant_profile_id,
+    )
     await session.commit()
     return response
 
@@ -62,6 +66,9 @@ async def get_questionnaire_definition(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     version: int | None = None,
+    participant_profile_id: UUID | None = None,
+    project_id: UUID | None = None,
+    cycle_id: UUID | None = None,
 ) -> QuestionnaireDefinitionResponse:
     if principal.role == UserRole.participant:
         require_current_terms(principal)
@@ -69,6 +76,9 @@ async def get_questionnaire_definition(
             principal.user_id,
             key,
             version=version,
+            participant_profile_id=participant_profile_id,
+            project_id=project_id,
+            cycle_id=cycle_id,
             allowed_assignment_ids=principal.assignment_ids,
         )
     else:
@@ -90,12 +100,18 @@ async def get_assignment_definition(
     assignment_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    participant_profile_id: UUID | None = None,
+    project_id: UUID | None = None,
+    cycle_id: UUID | None = None,
 ) -> QuestionnaireDefinitionResponse:
     _require_participant(principal)
     require_current_terms(principal)
     return await FormsService(session).get_assignment_definition(
         principal.user_id,
         assignment_id,
+        participant_profile_id=participant_profile_id,
+        project_id=project_id,
+        cycle_id=cycle_id,
         allowed_assignment_ids=principal.assignment_ids,
     )
 
@@ -163,12 +179,18 @@ async def get_assignment_response(
     assignment_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    participant_profile_id: UUID | None = None,
+    project_id: UUID | None = None,
+    cycle_id: UUID | None = None,
 ) -> QuestionnaireResponseResponse:
     _require_participant(principal)
     require_current_terms(principal)
     return await FormsService(session).get_assignment_response(
         principal.user_id,
         assignment_id,
+        participant_profile_id=participant_profile_id,
+        project_id=project_id,
+        cycle_id=cycle_id,
         allowed_assignment_ids=principal.assignment_ids,
     )
 
@@ -208,6 +230,9 @@ async def save_assignment_response(
     payload: QuestionnaireResponseSaveRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    participant_profile_id: UUID | None = None,
+    project_id: UUID | None = None,
+    cycle_id: UUID | None = None,
 ) -> QuestionnaireResponseResponse:
     _require_participant(principal)
     require_current_terms(principal)
@@ -215,6 +240,9 @@ async def save_assignment_response(
         principal.user_id,
         assignment_id,
         payload,
+        participant_profile_id=participant_profile_id,
+        project_id=project_id,
+        cycle_id=cycle_id,
         allowed_assignment_ids=principal.assignment_ids,
     )
     await session.commit()
@@ -250,6 +278,9 @@ async def submit_assignment_response(
     payload: QuestionnaireResponseSaveRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    participant_profile_id: UUID | None = None,
+    project_id: UUID | None = None,
+    cycle_id: UUID | None = None,
 ) -> QuestionnaireResponseResponse:
     _require_participant(principal)
     require_current_terms(principal)
@@ -258,6 +289,9 @@ async def submit_assignment_response(
         assignment_id,
         payload,
         submit=True,
+        participant_profile_id=participant_profile_id,
+        project_id=project_id,
+        cycle_id=cycle_id,
         allowed_assignment_ids=principal.assignment_ids,
     )
     await session.commit()

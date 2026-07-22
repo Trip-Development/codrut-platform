@@ -1,6 +1,295 @@
 {
   "components": {
     "schemas": {
+      "AssessmentCycleCloseRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cancel_unfinished": {
+            "default": false,
+            "title": "Cancel Unfinished",
+            "type": "boolean"
+          }
+        },
+        "title": "AssessmentCycleCloseRequest",
+        "type": "object"
+      },
+      "AssessmentCycleCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "questionnaire_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questionnaire Keys"
+          },
+          "source_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Cycle Id"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "AssessmentCycleCreateRequest",
+        "type": "object"
+      },
+      "AssessmentCycleQuestionnaireResponse": {
+        "properties": {
+          "display_order": {
+            "title": "Display Order",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "questionnaire_definition_id": {
+            "format": "uuid",
+            "title": "Questionnaire Definition Id",
+            "type": "string"
+          },
+          "questionnaire_key": {
+            "title": "Questionnaire Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "questionnaire_definition_id",
+          "questionnaire_key",
+          "display_order"
+        ],
+        "title": "AssessmentCycleQuestionnaireResponse",
+        "type": "object"
+      },
+      "AssessmentCycleResponse": {
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "company_id": {
+            "format": "uuid",
+            "title": "Company Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "questionnaires": {
+            "items": {
+              "$ref": "#/components/schemas/AssessmentCycleQuestionnaireResponse"
+            },
+            "title": "Questionnaires",
+            "type": "array"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Cycle Id"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssessmentCycleStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "company_id",
+          "project_id",
+          "sequence",
+          "name",
+          "status",
+          "source_cycle_id",
+          "starts_at",
+          "due_at",
+          "closed_at",
+          "created_by_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AssessmentCycleResponse",
+        "type": "object"
+      },
+      "AssessmentCycleStatus": {
+        "enum": [
+          "draft",
+          "active",
+          "closed"
+        ],
+        "title": "AssessmentCycleStatus",
+        "type": "string"
+      },
+      "AssessmentCycleUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "AssessmentCycleUpdateRequest",
+        "type": "object"
+      },
       "AssessmentDeliveryRowResponse": {
         "properties": {
           "audience": {
@@ -74,6 +363,18 @@
       "AssignmentCreateRequest": {
         "additionalProperties": false,
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "project_id": {
             "anyOf": [
               {
@@ -284,6 +585,18 @@
       },
       "AssignmentPlanResponse": {
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "assignments": {
             "items": {
               "$ref": "#/components/schemas/AssignmentPlanItemResponse"
@@ -313,6 +626,18 @@
             },
             "title": "Scopes",
             "type": "array"
+          },
+          "source_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Cycle Id"
           },
           "suggested_count": {
             "title": "Suggested Count",
@@ -427,6 +752,18 @@
       "AssignmentPlanSaveRequest": {
         "additionalProperties": false,
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "assignments": {
             "items": {
               "$ref": "#/components/schemas/AssignmentPlanSaveItem"
@@ -512,6 +849,18 @@
         "properties": {
           "access_mode": {
             "$ref": "#/components/schemas/AssignmentAccessMode"
+          },
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
           },
           "assignment_round_id": {
             "format": "uuid",
@@ -687,6 +1036,7 @@
           "id",
           "company_id",
           "project_id",
+          "assessment_cycle_id",
           "assignment_round_id",
           "respondent_profile_id",
           "questionnaire_key",
@@ -716,7 +1066,8 @@
           "started",
           "submitted",
           "validated",
-          "scored"
+          "scored",
+          "cancelled"
         ],
         "title": "AssignmentStatus",
         "type": "string"
@@ -2430,6 +2781,18 @@
       },
       "CompanyReportAggregateResponse": {
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "boss_360_averages": {
             "items": {
               "$ref": "#/components/schemas/ReportAverageResponse"
@@ -2556,6 +2919,42 @@
         "title": "CompanyReportAggregateResponse",
         "type": "object"
       },
+      "CompanyReportComparisonResponse": {
+        "properties": {
+          "baseline": {
+            "$ref": "#/components/schemas/CompanyReportAggregateResponse"
+          },
+          "baseline_cycle_id": {
+            "format": "uuid",
+            "title": "Baseline Cycle Id",
+            "type": "string"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/CompanyReportAggregateResponse"
+          },
+          "comparison_cycle_id": {
+            "format": "uuid",
+            "title": "Comparison Cycle Id",
+            "type": "string"
+          },
+          "definition_compatibility": {
+            "items": {
+              "$ref": "#/components/schemas/CycleQuestionnaireCompatibilityResponse"
+            },
+            "title": "Definition Compatibility",
+            "type": "array"
+          }
+        },
+        "required": [
+          "baseline_cycle_id",
+          "comparison_cycle_id",
+          "definition_compatibility",
+          "baseline",
+          "comparison"
+        ],
+        "title": "CompanyReportComparisonResponse",
+        "type": "object"
+      },
       "CompanyResponse": {
         "properties": {
           "id": {
@@ -2659,6 +3058,50 @@
           "csrf_token"
         ],
         "title": "CsrfTokenResponse",
+        "type": "object"
+      },
+      "CycleQuestionnaireCompatibilityResponse": {
+        "properties": {
+          "baseline_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Definition Id"
+          },
+          "comparison_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Definition Id"
+          },
+          "compatible": {
+            "title": "Compatible",
+            "type": "boolean"
+          },
+          "questionnaire_key": {
+            "title": "Questionnaire Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionnaire_key",
+          "baseline_definition_id",
+          "comparison_definition_id",
+          "compatible"
+        ],
+        "title": "CycleQuestionnaireCompatibilityResponse",
         "type": "object"
       },
       "EmailDeliveryMetricResponse": {
@@ -3414,6 +3857,18 @@
       },
       "InviteTask": {
         "properties": {
+          "assessmentCycleId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessmentcycleid"
+          },
           "assignmentId": {
             "title": "Assignmentid",
             "type": "string"
@@ -3827,6 +4282,18 @@
       "ParticipantInviteBatchRequest": {
         "additionalProperties": false,
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "force_rotate": {
             "default": false,
             "title": "Force Rotate",
@@ -4002,6 +4469,18 @@
       },
       "ParticipantReceivedFeedbackSummary": {
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "assignment_round_id": {
             "format": "uuid",
             "title": "Assignment Round Id",
@@ -4355,8 +4834,134 @@
         "title": "ParticipantWorkspaceCard",
         "type": "object"
       },
+      "ParticipantWorkspaceContext": {
+        "properties": {
+          "company_id": {
+            "format": "uuid",
+            "title": "Company Id",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "participant_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Email"
+          },
+          "participant_full_name": {
+            "title": "Participant Full Name",
+            "type": "string"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantWorkspaceProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "participant_profile_id",
+          "participant_full_name",
+          "company_id",
+          "company_name"
+        ],
+        "title": "ParticipantWorkspaceContext",
+        "type": "object"
+      },
+      "ParticipantWorkspaceCycle": {
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "sequence",
+          "name",
+          "status"
+        ],
+        "title": "ParticipantWorkspaceCycle",
+        "type": "object"
+      },
       "ParticipantWorkspaceProject": {
         "properties": {
+          "cycles": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantWorkspaceCycle"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
           "deadline_at": {
             "anyOf": [
               {
@@ -4393,6 +4998,18 @@
       },
       "ParticipantWorkspaceResult": {
         "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "assignment_id": {
             "format": "uuid",
             "title": "Assignment Id",
@@ -4473,6 +5090,18 @@
             ],
             "title": "Anonymous Name"
           },
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
           "cards": {
             "items": {
               "$ref": "#/components/schemas/ParticipantWorkspaceCard"
@@ -4481,13 +5110,46 @@
             "type": "array"
           },
           "company_id": {
-            "format": "uuid",
-            "title": "Company Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
           },
           "company_name": {
-            "title": "Company Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "context_selection_required": {
+            "default": false,
+            "title": "Context Selection Required",
+            "type": "boolean"
+          },
+          "contexts": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantWorkspaceContext"
+            },
+            "title": "Contexts",
+            "type": "array"
+          },
+          "cycles": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantWorkspaceCycle"
+            },
+            "title": "Cycles",
+            "type": "array"
           },
           "deadline_at": {
             "anyOf": [
@@ -4502,6 +5164,7 @@
             "title": "Deadline At"
           },
           "deadline_label": {
+            "default": "finalul evalu\u0103rii",
             "title": "Deadline Label",
             "type": "string"
           },
@@ -4509,17 +5172,38 @@
             "$ref": "#/components/schemas/ParticipantWorkspaceCard"
           },
           "participant_email": {
-            "title": "Participant Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Email"
           },
           "participant_full_name": {
-            "title": "Participant Full Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Full Name"
           },
           "participant_profile_id": {
-            "format": "uuid",
-            "title": "Participant Profile Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Profile Id"
           },
           "pcm_base": {
             "anyOf": [
@@ -4556,8 +5240,15 @@
             "title": "Project Id"
           },
           "project_name": {
-            "title": "Project Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
           },
           "projects": {
             "items": {
@@ -4598,19 +5289,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "participant_profile_id",
-          "participant_full_name",
-          "participant_email",
-          "company_id",
-          "company_name",
-          "project_id",
-          "project_name",
-          "deadline_label",
-          "tasks",
-          "cards",
-          "empty_state"
-        ],
         "title": "ParticipantWorkspaceSummary",
         "type": "object"
       },
@@ -10317,6 +10995,23 @@
               ],
               "title": "Project Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -10532,6 +11227,40 @@
               ],
               "title": "Project Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -10639,6 +11368,23 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
             }
           }
         ],
@@ -11391,6 +12137,23 @@
               ],
               "title": "Project Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -11841,6 +12604,23 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
             }
           },
           {
@@ -12345,6 +13125,574 @@
         ]
       }
     },
+    "/api/companies/{company_id}/projects/{project_id}/assessment-cycles": {
+      "get": {
+        "operationId": "list_project_assessment_cycles_api_companies__company_id__projects__project_id__assessment_cycles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssessmentCycleResponse"
+                  },
+                  "title": "Response List Project Assessment Cycles Api Companies  Company Id  Projects  Project Id  Assessment Cycles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "List Project Assessment Cycles",
+        "tags": [
+          "assignments"
+        ]
+      },
+      "post": {
+        "operationId": "create_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentCycleCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentCycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Create Project Assessment Cycle",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}": {
+      "delete": {
+        "operationId": "delete_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assessment_cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Delete Project Assessment Cycle",
+        "tags": [
+          "assignments"
+        ]
+      },
+      "patch": {
+        "operationId": "update_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assessment_cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentCycleUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentCycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Update Project Assessment Cycle",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}/close": {
+      "post": {
+        "operationId": "close_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assessment_cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentCycleCloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentCycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Close Project Assessment Cycle",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
     "/api/companies/{company_id}/projects/{project_id}/participants": {
       "get": {
         "operationId": "list_project_participants_api_companies__company_id__projects__project_id__participants_get",
@@ -12482,6 +13830,23 @@
               ],
               "title": "Project Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -12562,6 +13927,129 @@
         ]
       }
     },
+    "/api/companies/{company_id}/reports/comparison": {
+      "get": {
+        "operationId": "get_company_report_comparison_api_companies__company_id__reports_comparison_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "baseline_cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Baseline Cycle Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "comparison_cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Comparison Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyReportComparisonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Company Report Comparison",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
     "/api/companies/{company_id}/reports/icare-answers": {
       "get": {
         "operationId": "get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get",
@@ -12591,6 +14079,23 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
             }
           }
         ],
@@ -13101,6 +14606,57 @@
               "title": "Assignment Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -13194,6 +14750,57 @@
               "title": "Assignment Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -13284,6 +14891,57 @@
               "format": "uuid",
               "title": "Assignment Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
             }
           }
         ],
@@ -13387,6 +15045,57 @@
               "format": "uuid",
               "title": "Assignment Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
             }
           }
         ],
@@ -13804,6 +15513,57 @@
               ],
               "title": "Version"
             }
+          },
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
+            }
           }
         ],
         "responses": {
@@ -14110,6 +15870,25 @@
     "/api/forms/participant/onboarding": {
       "get": {
         "operationId": "get_participant_onboarding_api_forms_participant_onboarding_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -14786,6 +16565,59 @@
     "/api/participants/me/workspace": {
       "get": {
         "operationId": "get_my_workspace_api_participants_me_workspace_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "participant_profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Participant Profile Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cycle Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

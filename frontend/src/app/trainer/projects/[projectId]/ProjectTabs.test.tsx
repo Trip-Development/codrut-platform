@@ -5,16 +5,19 @@ import { ProjectTabs } from "./ProjectTabs";
 
 const navigationState = vi.hoisted(() => ({
   pathname: "/trainer/projects/project-1/participants",
+  search: "",
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigationState.pathname,
+  useSearchParams: () => new URLSearchParams(navigationState.search),
 }));
 
 describe("ProjectTabs", () => {
   afterEach(() => {
     cleanup();
     navigationState.pathname = "/trainer/projects/project-1/participants";
+    navigationState.search = "";
   });
 
   it("derives the selected tab from the live client pathname", () => {
@@ -44,5 +47,26 @@ describe("ProjectTabs", () => {
 
     const labels = screen.getAllByRole("link").map((link) => link.textContent);
     expect(labels.indexOf("Echipe")).toBe(labels.indexOf("Organigramă") + 1);
+  });
+
+  it("preserves the selected assessment cycle across project tools", () => {
+    navigationState.search = "cycle=cycle-2";
+    render(<ProjectTabs basePath="/trainer/projects/project-1" />);
+
+    expect(screen.getByRole("link", { name: "Rezultate" }).getAttribute("href")).toBe(
+      "/trainer/projects/project-1/reports?cycle=cycle-2",
+    );
+  });
+
+  it("preserves comparison parameters only for the results workspace", () => {
+    navigationState.search = "cycle=cycle-2&baseline=cycle-1&compare=dimensions";
+    render(<ProjectTabs basePath="/trainer/projects/project-1" />);
+
+    expect(screen.getByRole("link", { name: "Rezultate" }).getAttribute("href")).toBe(
+      "/trainer/projects/project-1/reports?cycle=cycle-2&baseline=cycle-1&compare=dimensions",
+    );
+    expect(screen.getByRole("link", { name: "Participanți" }).getAttribute("href")).toBe(
+      "/trainer/projects/project-1/participants?cycle=cycle-2",
+    );
   });
 });

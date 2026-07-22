@@ -3,18 +3,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDaysIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   LinkIcon,
   Loader2Icon,
   MailIcon,
+  RefreshCwIcon,
   SendIcon,
 } from "lucide-react";
 
 import {
+  getAssessmentCycles,
+  getCompanyAssignments,
+  getCompanyInvitationStatuses,
   hasPermanentParticipantAccount,
   resendParticipantInvitation,
   sendParticipantInvitations,
+  type AssessmentCycle,
   type CompanyAssignment,
   type CompanyParticipant,
   type CompanyProject,
@@ -27,6 +33,7 @@ import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SelectControl } from "@/components/ui/select-control";
 import { useUrlState } from "@/hooks/use-url-state";
 import { cn } from "@/utils/cn";
@@ -41,6 +48,8 @@ export type InvitationDeliveryWorkspaceProps = {
   assignments: CompanyAssignment[];
   invitationStatuses: ParticipantInvitationStatus[];
   teams: CompanyTeam[];
+  initialAssessmentCycles?: AssessmentCycle[];
+  initialSelectedCycleId?: string | null;
   showProjectSelector?: boolean;
 };
 
@@ -153,6 +162,7 @@ export function buildInvitationRows(
   assignments: CompanyAssignment[],
   invitationStatuses: ParticipantInvitationStatus[],
   resultsByParticipant: Map<string, RosterInviteResult>,
+  assessmentCycleId?: string | null,
 ): ParticipantInviteRow[] {
   const assignmentsByParticipant = new Map<string, CompanyAssignment[]>();
   const statusByParticipant = new Map(
@@ -169,7 +179,16 @@ export function buildInvitationRows(
   return participants.map((participant) => {
     const participantAssignments = assignmentsByParticipant.get(participant.id) ?? [];
     const persistedStatus = statusByParticipant.get(participant.id);
-    const result = resultsByParticipant.get(participant.id);
+    const immediateResult = resultsByParticipant.get(invitationIdentity(assessmentCycleId, participant.id))
+      ?? resultsByParticipant.get(participant.id);
+    const persistedEmailState = persistedStatus?.latest_email_status
+      ? persistedEmailStates[persistedStatus.latest_email_status]
+      : undefined;
+    const result = immediateResult?.email_queued && persistedEmailState
+      && persistedStatus?.latest_email_status !== "queued"
+      && persistedStatus?.latest_email_status !== "dispatching"
+      ? undefined
+      : immediateResult;
     const completedTasks = participantAssignments.filter((assignment) =>
       completedStatuses.has(assignment.status),
     ).length;
@@ -206,7 +225,6 @@ export function buildInvitationRows(
       deliveryState = "danger";
       deliveryError = "Verifică starea livrării înainte de retrimitere.";
     } else if (persistedStatus?.latest_email_status) {
-      const persistedEmailState = persistedEmailStates[persistedStatus.latest_email_status];
       if (persistedEmailState) {
         ({ deliveryLabel, deliveryTone, deliveryState } = persistedEmailState);
         if (deliveryState !== "danger") {
@@ -266,6 +284,10 @@ export function buildInvitationRows(
   });
 }
 
+function invitationIdentity(assessmentCycleId: string | null | undefined, participantId: string): string {
+  return `${assessmentCycleId ?? "legacy"}:${participantId}`;
+}
+
 export function InvitationDeliveryWorkspace({
   companyId,
   companyName,
@@ -275,10 +297,31 @@ export function InvitationDeliveryWorkspace({
   assignments,
   invitationStatuses,
   teams,
+  initialAssessmentCycles = [],
+  initialSelectedCycleId = null,
   showProjectSelector = true,
 }: InvitationDeliveryWorkspaceProps) {
   const { get, searchKey, setParam } = useUrlState();
   const invitationSendingRef = useRef(false);
+  const initialCycleId = initialSelectedCycleId ?? assignments[0]?.assessment_cycle_id ?? null;
+  const [assessmentCycles, setAssessmentCycles] = useState<AssessmentCycle[]>(initialAssessmentCycles);
+  const [loadedCyclesProjectId, setLoadedCyclesProjectId] = useState<string | null>(
+    selectedProjectId && initialAssessmentCycles.every((cycle) => cycle.project_id === selectedProjectId)
+      ? selectedProjectId
+      : null,
+  );
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(
+    initialCycleId ?? get("cycle"),
+  );
+  const [cyclesLoading, setCyclesLoading] = useState(false);
+  const [cycleDataLoading, setCycleDataLoading] = useState(false);
+  const [loadedCycleScope, setLoadedCycleScope] = useState<string | null>(
+    selectedProjectId && initialCycleId && initialAssessmentCycles.some((cycle) => cycle.id === initialCycleId)
+      ? `${selectedProjectId}:${initialCycleId}`
+      : null,
+  );
+  const [assignmentState, setAssignmentState] = useState(assignments);
+  const [invitationStatusState, setInvitationStatusState] = useState(invitationStatuses);
   const [resultsByParticipant, setResultsByParticipant] = useState(
     new Map<string, RosterInviteResult>(),
   );
@@ -292,6 +335,116 @@ export function InvitationDeliveryWorkspace({
   const [invitationFilter, setInvitationFilterState] = useState<InvitationFilter>(
     normalizeInvitationFilter(get("filter")),
   );
+  const cycleScopeKey = `${selectedProjectId ?? "company"}:${selectedCycleId ?? "legacy"}`;
+  const cycleScopeReady = !selectedProjectId
+    || Boolean(selectedCycleId && loadedCycleScope === cycleScopeKey && !cycleDataLoading);
+  const selectedCycle = assessmentCycles.find((cycle) => cycle.id === selectedCycleId) ?? null;
+  const deliveryEnabled = !selectedProjectId || selectedCycle?.status !== "closed";
+
+  useEffect(() => {
+    setAssignmentState(assignments);
+  }, [assignments]);
+
+  useEffect(() => {
+    setInvitationStatusState(invitationStatuses);
+  }, [invitationStatuses]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedProjectId) {
+      setAssessmentCycles([]);
+      setSelectedCycleId(null);
+      setLoadedCyclesProjectId(null);
+      setLoadedCycleScope(null);
+      return;
+    }
+    if (loadedCyclesProjectId === selectedProjectId) return;
+
+    setCyclesLoading(true);
+    getAssessmentCycles(companyId, selectedProjectId)
+      .then((cycles) => {
+        if (cancelled) return;
+        const sorted = [...cycles].sort((left, right) => left.sequence - right.sequence);
+        setAssessmentCycles(sorted);
+        setLoadedCyclesProjectId(selectedProjectId);
+        const requestedId = get("cycle");
+        const requested = sorted.find((cycle) => cycle.id === requestedId);
+        const preferred = requested
+          ?? [...sorted].reverse().find((cycle) => cycle.status !== "closed")
+          ?? sorted.at(-1)
+          ?? null;
+        setSelectedCycleId(preferred?.id ?? null);
+        if (preferred && requestedId !== preferred.id) {
+          setParam("cycle", preferred.id, "replace");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setAssessmentCycles([]);
+          setSelectedCycleId(null);
+          setLoadedCycleScope(null);
+          setMessage(error instanceof Error ? error.message : "Evaluările nu au putut fi încărcate.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCyclesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, get, loadedCyclesProjectId, selectedProjectId, setParam]);
+
+  useEffect(() => {
+    const requestedId = get("cycle");
+    if (!requestedId || !assessmentCycles.some((cycle) => cycle.id === requestedId)) return;
+    setSelectedCycleId(requestedId);
+  }, [assessmentCycles, get, searchKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedProjectId || !selectedCycleId) {
+      setLoadedCycleScope(null);
+      return;
+    }
+
+    const requestedScope = `${selectedProjectId}:${selectedCycleId}`;
+    if (loadedCycleScope === requestedScope) return;
+
+    setCycleDataLoading(true);
+    setLoadedCycleScope(null);
+    setAssignmentState([]);
+    setInvitationStatusState([]);
+    Promise.all([
+      getCompanyAssignments(companyId, {}, {
+        projectId: selectedProjectId,
+        assessmentCycleId: selectedCycleId,
+      }),
+      getCompanyInvitationStatuses(companyId, {}, {
+        projectId: selectedProjectId,
+        assessmentCycleId: selectedCycleId,
+      }),
+    ])
+      .then(([nextAssignments, nextStatuses]) => {
+        if (cancelled) return;
+        setAssignmentState(nextAssignments);
+        setInvitationStatusState(nextStatuses);
+        setLoadedCycleScope(requestedScope);
+        setMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : "Evaluarea nu a putut fi încărcată.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCycleDataLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, loadedCycleScope, selectedCycleId, selectedProjectId]);
 
   useEffect(() => {
     setInvitationFilterState(normalizeInvitationFilter(get("filter")));
@@ -303,11 +456,17 @@ export function InvitationDeliveryWorkspace({
     setCopiedParticipantId(null);
     setExpandedTaskParticipantIds(new Set());
     setMessage(null);
-  }, [selectedProjectId]);
+  }, [cycleScopeKey]);
 
   const rows = useMemo(
-    () => buildInvitationRows(participants, assignments, invitationStatuses, resultsByParticipant),
-    [assignments, invitationStatuses, participants, resultsByParticipant],
+    () => buildInvitationRows(
+      participants,
+      assignmentState,
+      invitationStatusState,
+      resultsByParticipant,
+      selectedCycleId,
+    ),
+    [assignmentState, invitationStatusState, participants, resultsByParticipant, selectedCycleId],
   );
   const filteredRows = useMemo(
     () => rows.filter((row) => matchesInvitationFilter(row, invitationFilter)),
@@ -342,6 +501,39 @@ export function InvitationDeliveryWorkspace({
       ? participantsById.get(resendingParticipantId)?.full_name ?? null
       : null,
   );
+
+  function selectAssessmentCycle(assessmentCycleId: string) {
+    if (assessmentCycleId === selectedCycleId) return;
+    setAssignmentState([]);
+    setInvitationStatusState([]);
+    setLoadedCycleScope(null);
+    setSelectedCycleId(assessmentCycleId);
+    setParam("cycle", assessmentCycleId, "push");
+  }
+
+  async function refreshAssessmentCycles() {
+    if (!selectedProjectId) return;
+    try {
+      const cycles = await getAssessmentCycles(companyId, selectedProjectId);
+      setAssessmentCycles([...cycles].sort((left, right) => left.sequence - right.sequence));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Starea evaluării nu a putut fi actualizată.");
+    }
+  }
+
+  async function refreshInvitationStatuses() {
+    if (!selectedProjectId || !selectedCycleId) return;
+    try {
+      const statuses = await getCompanyInvitationStatuses(companyId, {}, {
+        projectId: selectedProjectId,
+        assessmentCycleId: selectedCycleId,
+      });
+      setInvitationStatusState(statuses);
+      setMessage("Starea livrării a fost actualizată.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Starea livrării nu a putut fi actualizată.");
+    }
+  }
 
   function setInvitationFilter(filter: InvitationFilter) {
     setInvitationFilterState(filter);
@@ -404,6 +596,14 @@ export function InvitationDeliveryWorkspace({
       setMessage("Alege un proiect înainte de trimitere.");
       return;
     }
+    if (selectedProjectId && (!selectedCycleId || !cycleScopeReady)) {
+      setMessage("Așteaptă încărcarea evaluării selectate înainte de trimitere.");
+      return;
+    }
+    if (!deliveryEnabled) {
+      setMessage("Evaluările închise sunt disponibile doar pentru consultare.");
+      return;
+    }
 
     invitationSendingRef.current = true;
     setSendingMode(mode);
@@ -415,11 +615,14 @@ export function InvitationDeliveryWorkspace({
         mode,
         participantIds,
         projectId: selectedProjectId,
+        ...(selectedProjectId && selectedCycleId ? { assessmentCycleId: selectedCycleId } : {}),
         targetMode,
       });
       setResultsByParticipant((current) => {
         const next = new Map(current);
-        for (const item of result.results) next.set(item.participant_id, item);
+        for (const item of result.results) {
+          next.set(invitationIdentity(selectedCycleId, item.participant_id), item);
+        }
         return next;
       });
       setSelectedParticipantIds(new Set());
@@ -428,6 +631,7 @@ export function InvitationDeliveryWorkspace({
           ? formatEmailBatchMessage(result)
           : `${result.links_generated}/${result.total} linkuri securizate generate.`,
       );
+      await refreshAssessmentCycles();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invitațiile nu au putut fi trimise.");
     } finally {
@@ -474,6 +678,14 @@ export function InvitationDeliveryWorkspace({
       setMessage("Alege un proiect înainte de retrimitere.");
       return;
     }
+    if (selectedProjectId && (!selectedCycleId || !cycleScopeReady)) {
+      setMessage("Așteaptă încărcarea evaluării selectate înainte de retrimitere.");
+      return;
+    }
+    if (!deliveryEnabled) {
+      setMessage("Evaluările închise sunt disponibile doar pentru consultare.");
+      return;
+    }
     invitationSendingRef.current = true;
     setSendingMode("resend");
     setPendingInviteAction("resend");
@@ -481,9 +693,19 @@ export function InvitationDeliveryWorkspace({
     setMessage(null);
     setCopiedParticipantId(null);
     try {
-      const result = await resendParticipantInvitation(companyId, participantId, selectedProjectId);
+      const result = selectedProjectId && selectedCycleId
+        ? await resendParticipantInvitation(
+            companyId,
+            participantId,
+            selectedProjectId,
+            { assessmentCycleId: selectedCycleId },
+          )
+        : await resendParticipantInvitation(companyId, participantId, selectedProjectId);
       if (result) {
-        setResultsByParticipant((current) => new Map(current).set(result.participant_id, result));
+        setResultsByParticipant((current) => new Map(current).set(
+          invitationIdentity(selectedCycleId, result.participant_id),
+          result,
+        ));
         setMessage(formatResendMessage(result));
       }
     } catch (error) {
@@ -514,6 +736,15 @@ export function InvitationDeliveryWorkspace({
       ) : null}
       {message ? <InlineFeedback>{message}</InlineFeedback> : null}
 
+      {assessmentCycles.length > 0 ? (
+        <InvitationCycleToolbar
+          cycles={assessmentCycles}
+          selectedCycleId={selectedCycleId}
+          loading={cyclesLoading}
+          onSelect={selectAssessmentCycle}
+        />
+      ) : null}
+
       <section className="overflow-hidden rounded-lg border border-border bg-surface">
         {showProjectSelector ? (
           <ProjectScopeSelector projects={projects} selectedProjectId={selectedProjectId} />
@@ -530,7 +761,7 @@ export function InvitationDeliveryWorkspace({
                 type="button"
                 size="sm"
                 onClick={() => void handleSendAll("email")}
-                disabled={!canUseProjectActions || sendingMode !== null || readyCount === 0}
+                disabled={!deliveryEnabled || !canUseProjectActions || !cycleScopeReady || sendingMode !== null || readyCount === 0}
               >
                 {pendingInviteAction === "unsent-email" ? (
                   <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" />
@@ -557,7 +788,7 @@ export function InvitationDeliveryWorkspace({
                     "all-email",
                   );
                 }}
-                disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
+                disabled={!deliveryEnabled || !canUseProjectActions || !cycleScopeReady || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
               >
                 <SendIcon data-icon="inline-start" aria-hidden="true" />
                 {pendingInviteAction === "all-email" ? "Trimitem tuturor" : "Trimite tuturor"}
@@ -567,7 +798,7 @@ export function InvitationDeliveryWorkspace({
                 variant="outline"
                 size="sm"
                 onClick={() => void handleSendAll("secure_links")}
-                disabled={!canUseProjectActions || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
+                disabled={!deliveryEnabled || !canUseProjectActions || !cycleScopeReady || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
               >
                 <LinkIcon data-icon="inline-start" aria-hidden="true" />
                 {pendingInviteAction === "all-links" ? "Generăm linkurile" : "Generează linkuri"}
@@ -576,6 +807,16 @@ export function InvitationDeliveryWorkspace({
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => void refreshInvitationStatuses()}
+              disabled={!selectedProjectId || !selectedCycleId || !cycleScopeReady || sendingMode !== null}
+            >
+              <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
+              Actualizează livrarea
+            </Button>
             <FilterButton active={invitationFilter === "all"} onClick={() => setInvitationFilter("all")}>
               Toți {rows.length}
             </FilterButton>
@@ -597,7 +838,13 @@ export function InvitationDeliveryWorkspace({
             >
               Fără cont {rows.filter((row) => !row.signedUp).length}
             </FilterButton>
-            <Button type="button" variant="ghost" size="xs" onClick={selectReadyUnsentParticipants}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={selectReadyUnsentParticipants}
+              disabled={!deliveryEnabled || !cycleScopeReady}
+            >
               <CheckCircle2Icon data-icon="inline-start" aria-hidden="true" />
               Selectează netrimiși
             </Button>
@@ -616,7 +863,7 @@ export function InvitationDeliveryWorkspace({
                 type="button"
                 size="sm"
                 onClick={() => void handleSendSelected("email")}
-                disabled={sendingMode !== null || selectedReadyCount === 0}
+                disabled={!deliveryEnabled || !cycleScopeReady || sendingMode !== null || selectedReadyCount === 0}
               >
                 <MailIcon data-icon="inline-start" aria-hidden="true" />
                 {pendingInviteAction === "selected-email" ? "Trimitem emailurile" : "Trimite email invitații"}
@@ -626,7 +873,7 @@ export function InvitationDeliveryWorkspace({
                 variant="outline"
                 size="sm"
                 onClick={() => void handleSendSelected("secure_links")}
-                disabled={sendingMode !== null || selectedReadyCount === 0}
+                disabled={!deliveryEnabled || !cycleScopeReady || sendingMode !== null || selectedReadyCount === 0}
               >
                 <LinkIcon data-icon="inline-start" aria-hidden="true" />
                 {pendingInviteAction === "selected-links" ? "Generăm linkurile" : "Generează linkuri securizate"}
@@ -651,7 +898,7 @@ export function InvitationDeliveryWorkspace({
                   <Checkbox
                     aria-label="Selectează persoanele vizibile"
                     checked={allVisibleSelected}
-                    disabled={selectableRows.length === 0}
+                    disabled={!deliveryEnabled || !cycleScopeReady || selectableRows.length === 0}
                     onCheckedChange={(checked) => setVisibleParticipantSelection(checked === true)}
                   />
                 </th>
@@ -671,7 +918,7 @@ export function InvitationDeliveryWorkspace({
               ) : (
                 filteredRows.map((row) => (
                   <tr
-                    key={row.participant.id}
+                    key={invitationIdentity(selectedCycleId, row.participant.id)}
                     className={cn(
                       "align-top transition-colors hover:bg-muted/60",
                       row.deliveryTone === "danger" && "bg-burgundy/5",
@@ -681,7 +928,7 @@ export function InvitationDeliveryWorkspace({
                       <Checkbox
                         aria-label={`Selectează ${row.participant.full_name}`}
                         checked={selectedParticipantIds.has(row.participant.id)}
-                        disabled={row.totalTasks === 0 || sendingMode !== null}
+                        disabled={!deliveryEnabled || !cycleScopeReady || row.totalTasks === 0 || sendingMode !== null}
                         onCheckedChange={() => toggleParticipantSelection(row.participant.id)}
                       />
                     </td>
@@ -709,7 +956,7 @@ export function InvitationDeliveryWorkspace({
                       <button
                         type="button"
                         aria-expanded={expandedTaskParticipantIds.has(row.participant.id)}
-                        aria-controls={`invitation-tasks-${row.participant.id}`}
+                        aria-controls={`invitation-tasks-${selectedCycleId ?? "legacy"}-${row.participant.id}`}
                         onClick={() => toggleTaskDetails(row.participant.id)}
                         disabled={row.totalTasks === 0}
                         className="inline-flex items-center gap-2 whitespace-nowrap font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/45 disabled:cursor-default disabled:text-muted-foreground"
@@ -724,7 +971,7 @@ export function InvitationDeliveryWorkspace({
                         ) : null}
                       </button>
                       {expandedTaskParticipantIds.has(row.participant.id) ? (
-                        <p id={`invitation-tasks-${row.participant.id}`} className="mt-2 max-w-72 text-xs leading-5 text-muted-foreground">
+                        <p id={`invitation-tasks-${selectedCycleId ?? "legacy"}-${row.participant.id}`} className="mt-2 max-w-72 text-xs leading-5 text-muted-foreground">
                           {row.assignments
                             .map((assignment) => formatAssignmentLabel(assignment, participantsById, teamsById))
                             .join(", ")}
@@ -739,7 +986,7 @@ export function InvitationDeliveryWorkspace({
                           variant="outline"
                           size="sm"
                           onClick={() => void handleCopyLink(row)}
-                          disabled={sendingMode !== null}
+                          disabled={!deliveryEnabled || !cycleScopeReady || sendingMode !== null}
                         >
                           {copiedParticipantId === row.participant.id ? "Copiat" : "Copiază link"}
                         </Button>
@@ -749,7 +996,7 @@ export function InvitationDeliveryWorkspace({
                           variant="outline"
                           size="sm"
                           onClick={() => void handleResend(row.participant.id)}
-                          disabled={sendingMode !== null || row.totalTasks === 0}
+                          disabled={!deliveryEnabled || !cycleScopeReady || sendingMode !== null || row.totalTasks === 0}
                         >
                           {pendingInviteAction === "resend" &&
                           resendingParticipantId === row.participant.id ? (
@@ -826,6 +1073,42 @@ function ProjectScopeSelector({
         ))}
       </SelectControl>
     </div>
+  );
+}
+
+function InvitationCycleToolbar({
+  cycles,
+  selectedCycleId,
+  loading,
+  onSelect,
+}: {
+  cycles: AssessmentCycle[];
+  selectedCycleId: string | null;
+  loading: boolean;
+  onSelect: (assessmentCycleId: string) => void;
+}) {
+  const selected = cycles.find((cycle) => cycle.id === selectedCycleId) ?? null;
+  return (
+    <section className="flex items-center gap-3 border-b border-border pb-4" aria-label="Evaluare selectată">
+      <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <Select value={selectedCycleId ?? undefined} onValueChange={onSelect} disabled={loading}>
+        <SelectTrigger className="h-9 w-full max-w-72 bg-surface" aria-label="Evaluare">
+          <SelectValue placeholder={loading ? "Încărcăm evaluările" : "Alege evaluarea"} />
+        </SelectTrigger>
+        <SelectContent>
+          {cycles.map((cycle) => (
+            <SelectItem key={cycle.id} value={cycle.id}>
+              {cycle.name} · {cycle.status === "draft" ? "Draft" : cycle.status === "active" ? "Activă" : "Închisă"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selected ? (
+        <span className="hidden text-xs font-semibold text-muted-foreground md:inline">
+          {selected.status === "draft" ? "Draft" : selected.status === "active" ? "Activă" : "Închisă"}
+        </span>
+      ) : null}
+    </section>
   );
 }
 

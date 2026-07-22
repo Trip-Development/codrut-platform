@@ -45,6 +45,7 @@ class InviteTask(BaseModel):
     projectId: UUID | None = None
     projectName: str | None = None
     assignmentRoundId: UUID | None = None
+    assessmentCycleId: UUID | None = None
 
 
 class InviteVerifyResponse(BaseModel):

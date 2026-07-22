@@ -213,17 +213,19 @@ describe("InvitePage", () => {
     expect(screen.getByRole("link", { name: /Mergi la Cody/ }).getAttribute("href")).toBe("/");
   });
 
-  it("routes an already registered leadership participant to authentication", async () => {
+  it("uses the signed invite as passwordless proof for an existing leadership account", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       isLeadership: true,
       alreadyRegistered: true,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
     });
     await renderInvitePage();
 
-    expect(await screen.findByRole("heading", { name: "Cont deja existent" })).toBeTruthy();
-    expect(screen.getByText("participant.demo@example.com")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Autentifică-te aici" }).getAttribute("href")).toBe("/login");
+    expect(await screen.findByRole("heading", { name: "Chestionarele tale" })).toBeTruthy();
+    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+    expect(screen.queryByRole("link", { name: /Înregistrează cont Leadership/ })).toBeNull();
   });
 
   it("renders the empty secure queue after current server consent", async () => {

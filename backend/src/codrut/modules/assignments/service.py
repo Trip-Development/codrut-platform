@@ -1,10 +1,15 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleQuestionnaire,
+    AssessmentCycleStatus,
+    AssessmentCycleTeamMembership,
     AssignmentAccessMode,
     AssignmentStatus,
     AssignmentTargetType,
@@ -17,6 +22,11 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.assignments.repository import AssignmentRepository
 from codrut.modules.assignments.schemas import (
+    AssessmentCycleCloseRequest,
+    AssessmentCycleCreateRequest,
+    AssessmentCycleQuestionnaireResponse,
+    AssessmentCycleResponse,
+    AssessmentCycleUpdateRequest,
     AssignmentCreateRequest,
     AssignmentPlanItemResponse,
     AssignmentPlanResponse,
@@ -58,6 +68,21 @@ EDITABLE_ASSIGNMENT_STATUSES = frozenset(
     }
 )
 
+SUPPORTED_CYCLE_PLAN_QUESTIONNAIRES = frozenset(
+    {
+        "lencioni",
+        "lencioni_en",
+        "distress_drivers",
+        "distress_drivers_en",
+        "pcm_base",
+        "phase",
+        "pcm_phase",
+        "boss_360",
+        "boss_360_en",
+        "icare",
+    }
+)
+
 
 class AssignmentService:
     def __init__(self, session: AsyncSession) -> None:
@@ -67,6 +92,249 @@ class AssignmentService:
         self.forms_repository = FormsRepository(session)
         self.scoring_repository = ScoringRepository(session)
         self.result_publication_service = ResultPublicationService(session)
+
+    async def list_assessment_cycles(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> list[AssessmentCycleResponse]:
+        await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id)
+        cycles = await self.assignment_repository.list_assessment_cycles(company_id, project_id)
+        return [await self._assessment_cycle_response(cycle) for cycle in cycles]
+
+    async def create_assessment_cycle(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        payload: AssessmentCycleCreateRequest,
+    ) -> AssessmentCycleResponse:
+        await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id)
+        if await self.assignment_repository.get_open_assessment_cycle(company_id, project_id):
+            raise DomainError(
+                "Close the current assessment cycle before creating another one.",
+                code="assessment_cycle_open_exists",
+            )
+
+        source_cycle = (
+            await self.assignment_repository.get_assessment_cycle(
+                company_id,
+                project_id,
+                payload.source_cycle_id,
+            )
+            if payload.source_cycle_id is not None
+            else await self.assignment_repository.get_latest_assessment_cycle(
+                company_id,
+                project_id,
+            )
+        )
+        if source_cycle is None:
+            raise DomainError(
+                "A source assessment cycle is required.",
+                code="assessment_cycle_source_not_found",
+            )
+        source_questionnaires = (
+            await self.assignment_repository.list_assessment_cycle_questionnaires(source_cycle.id)
+        )
+        if not source_questionnaires:
+            raise DomainError(
+                "The source assessment cycle has no pinned questionnaires.",
+                code="assessment_cycle_source_empty",
+            )
+        requested_keys = (
+            list(dict.fromkeys(key.strip() for key in payload.questionnaire_keys))
+            if payload.questionnaire_keys is not None
+            else None
+        )
+        if requested_keys is not None:
+            if not requested_keys or any(not key for key in requested_keys):
+                raise DomainError(
+                    "Select at least one questionnaire.",
+                    code="assessment_cycle_questionnaires_required",
+                    details={"field": "questionnaire_keys"},
+                )
+            source_by_key = {item.questionnaire_key: item for item in source_questionnaires}
+            missing_keys = [key for key in requested_keys if key not in source_by_key]
+            if missing_keys:
+                raise DomainError(
+                    "One or more questionnaires are not part of the source cycle.",
+                    code="assessment_cycle_questionnaire_not_found",
+                    details={"questionnaire_keys": missing_keys},
+                )
+            source_questionnaires = [source_by_key[key] for key in requested_keys]
+
+        unsupported_keys = sorted(
+            item.questionnaire_key
+            for item in source_questionnaires
+            if item.questionnaire_key not in SUPPORTED_CYCLE_PLAN_QUESTIONNAIRES
+        )
+        if unsupported_keys:
+            raise DomainError(
+                "One or more questionnaires do not define a repeat-assignment strategy.",
+                code="assessment_cycle_questionnaire_unsupported",
+                details={"questionnaire_keys": unsupported_keys},
+            )
+
+        sequence = await self.assignment_repository.next_assessment_cycle_sequence(
+            company_id,
+            project_id,
+        )
+        starts_at = payload.starts_at
+        due_at = payload.due_at
+        _validate_cycle_dates(starts_at, due_at)
+        name = (
+            _normalize_cycle_name(payload.name)
+            if payload.name is not None
+            else f"Reevaluare {sequence - 1}"
+        )
+        try:
+            cycle = await self.assignment_repository.add_assessment_cycle(
+                AssessmentCycle(
+                    company_id=company_id,
+                    project_id=project_id,
+                    sequence=sequence,
+                    name=name,
+                    status=AssessmentCycleStatus.draft,
+                    source_cycle_id=source_cycle.id,
+                    starts_at=starts_at,
+                    due_at=due_at,
+                    created_by_user_id=user_id,
+                )
+            )
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise DomainError(
+                "Another assessment cycle is already open for this project.",
+                code="assessment_cycle_open_exists",
+            ) from exc
+        questionnaires = [
+            AssessmentCycleQuestionnaire(
+                assessment_cycle_id=cycle.id,
+                questionnaire_definition_id=item.questionnaire_definition_id,
+                questionnaire_key=item.questionnaire_key,
+                display_order=item.display_order,
+            )
+            for item in source_questionnaires
+        ]
+        await self.assignment_repository.add_assessment_cycle_questionnaires(questionnaires)
+        return await self._assessment_cycle_response(cycle, questionnaires=questionnaires)
+
+    async def update_assessment_cycle(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        assessment_cycle_id: UUID,
+        payload: AssessmentCycleUpdateRequest,
+    ) -> AssessmentCycleResponse:
+        await self._require_company_manager(user_id, company_id)
+        cycle = await self._require_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=True,
+        )
+        self._require_draft_cycle(cycle)
+        if "name" in payload.model_fields_set:
+            if payload.name is None:
+                raise DomainError(
+                    "Assessment cycle name is required.",
+                    code="assessment_cycle_name_required",
+                    details={"field": "name"},
+                )
+            cycle.name = _normalize_cycle_name(payload.name)
+        if "starts_at" in payload.model_fields_set:
+            cycle.starts_at = payload.starts_at
+        if "due_at" in payload.model_fields_set:
+            cycle.due_at = payload.due_at
+        _validate_cycle_dates(cycle.starts_at, cycle.due_at)
+        if "due_at" in payload.model_fields_set:
+            await self.assignment_repository.synchronize_cycle_assignment_deadlines(
+                cycle.id,
+                cycle.due_at,
+            )
+        return await self._assessment_cycle_response(cycle)
+
+    async def delete_assessment_cycle(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        assessment_cycle_id: UUID,
+    ) -> None:
+        await self._require_company_manager(user_id, company_id)
+        cycle = await self._require_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=True,
+        )
+        self._require_draft_cycle(cycle)
+        await self.assignment_repository.delete_assessment_cycle(cycle)
+
+    async def close_assessment_cycle(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        assessment_cycle_id: UUID,
+        payload: AssessmentCycleCloseRequest,
+    ) -> AssessmentCycleResponse:
+        await self._require_company_manager(user_id, company_id)
+        cycle = await self._require_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=True,
+        )
+        if cycle.status != AssessmentCycleStatus.active:
+            raise DomainError(
+                "Only an active assessment cycle can be closed.",
+                code="assessment_cycle_not_active",
+            )
+        unfinished_count = await self.assignment_repository.count_unfinished_cycle_assignments(
+            cycle.id
+        )
+        if unfinished_count and not payload.cancel_unfinished:
+            raise DomainError(
+                "The assessment cycle still has unfinished assignments.",
+                code="assessment_cycle_has_unfinished_assignments",
+                details={"unfinished_count": unfinished_count},
+            )
+        if unfinished_count:
+            cancelled = await self.assignment_repository.cancel_unfinished_cycle_assignments(
+                cycle.id
+            )
+            for assignment in cancelled:
+                await self.result_publication_service.reconcile_assignment(assignment.id)
+        cycle.status = AssessmentCycleStatus.closed
+        cycle.closed_at = datetime.now(UTC)
+        return await self._assessment_cycle_response(cycle)
+
+    async def activate_assessment_cycle_for_invitation(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+        assessment_cycle_id: UUID,
+    ) -> AssessmentCycle:
+        cycle = await self._require_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=True,
+        )
+        if cycle.status == AssessmentCycleStatus.closed:
+            raise DomainError(
+                "The assessment cycle is closed.",
+                code="assessment_cycle_closed",
+            )
+        if cycle.status == AssessmentCycleStatus.draft:
+            cycle.status = AssessmentCycleStatus.active
+            cycle.starts_at = cycle.starts_at or datetime.now(UTC)
+        return cycle
 
     async def create_team(
         self,
@@ -129,6 +397,11 @@ class AssignmentService:
     ) -> QuestionnaireAssignment:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, payload.project_id)
+        cycle = await self._cycle_for_assignment_write(
+            company_id,
+            payload.project_id,
+            payload.assessment_cycle_id,
+        )
         _validate_target_shape(payload)
         questionnaire_key = payload.questionnaire_key.strip()
         await self._require_company_participant(company_id, payload.respondent_profile_id)
@@ -153,33 +426,85 @@ class AssignmentService:
                 payload.project_id,
                 team.id,
             )
-        definition = await self._require_active_questionnaire_definition(questionnaire_key)
-        return await self.assignment_repository.add_assignment(
-            QuestionnaireAssignment(
+            if cycle is not None:
+                await self._snapshot_existing_team_for_cycle(cycle, team.id)
+        definition = await self._definition_for_cycle(cycle, questionnaire_key)
+        if cycle is not None:
+            existing = await self.assignment_repository.get_matching_assignment(
                 company_id=company_id,
                 project_id=payload.project_id,
-                assignment_round_id=uuid4(),
                 respondent_profile_id=payload.respondent_profile_id,
                 questionnaire_key=questionnaire_key,
-                questionnaire_definition_id=definition.id,
                 target_type=payload.target_type,
                 target_person_id=payload.target_person_id,
                 target_team_id=payload.target_team_id,
-                access_mode=AssignmentAccessMode.account_link,
-                status=AssignmentStatus.assigned,
-                visibility_policy=payload.visibility_policy,
+                assessment_cycle_id=cycle.id,
             )
+            if existing is not None:
+                raise DomainError(
+                    "This assignment already exists in the assessment cycle.",
+                    code="assessment_cycle_assignment_exists",
+                )
+        cycle_assignments = (
+            await self.assignment_repository.list_assignments(
+                company_id,
+                payload.project_id,
+                cycle.id,
+            )
+            if cycle is not None
+            else []
         )
+        assignment = QuestionnaireAssignment(
+            company_id=company_id,
+            project_id=payload.project_id,
+            assignment_round_id=(
+                cycle_assignments[0].assignment_round_id if cycle_assignments else uuid4()
+            ),
+            assessment_cycle_id=cycle.id if cycle is not None else None,
+            cycle_shape_guard=cycle.id if cycle is not None else None,
+            respondent_profile_id=payload.respondent_profile_id,
+            questionnaire_key=questionnaire_key,
+            questionnaire_definition_id=definition.id,
+            target_type=payload.target_type,
+            target_person_id=payload.target_person_id,
+            target_team_id=payload.target_team_id,
+            access_mode=AssignmentAccessMode.account_link,
+            status=AssignmentStatus.assigned,
+            visibility_policy=payload.visibility_policy,
+            due_at=cycle.due_at if cycle is not None else None,
+        )
+        if cycle is None:
+            return await self.assignment_repository.add_assignment(assignment)
+        try:
+            async with self.session.begin_nested():
+                return await self.assignment_repository.add_assignment(assignment)
+        except IntegrityError as exc:
+            raise DomainError(
+                "This assignment already exists in the assessment cycle.",
+                code="assessment_cycle_assignment_exists",
+            ) from exc
 
     async def list_assignments(
         self,
         user_id: UUID,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list[QuestionnaireAssignment]:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, project_id)
-        return await self.assignment_repository.list_assignments(company_id, project_id)
+        if assessment_cycle_id is not None:
+            if project_id is None:
+                raise DomainError(
+                    "A project is required when filtering by assessment cycle.",
+                    code="assessment_cycle_project_required",
+                )
+            await self._require_assessment_cycle(company_id, project_id, assessment_cycle_id)
+        return await self.assignment_repository.list_assignments(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
 
     async def require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
         await self._require_company_manager(user_id, company_id)
@@ -189,9 +514,62 @@ class AssignmentService:
         user_id: UUID,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
+        source_cycle_id: UUID | None = None,
     ) -> AssignmentPlanResponse:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, project_id)
+        if assessment_cycle_id is not None and source_cycle_id is not None:
+            raise DomainError(
+                "Choose either an assessment cycle or a source cycle preview.",
+                code="assessment_cycle_scope_conflict",
+            )
+        cycle = await self._optional_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
+        source_cycle = await self._optional_assessment_cycle(
+            company_id,
+            project_id,
+            source_cycle_id,
+        )
+        cycle_questionnaire_keys: set[str] | None = None
+        questionnaire_cycle = source_cycle or cycle
+        if questionnaire_cycle is not None and (
+            source_cycle is not None or not self._is_initial_draft_cycle(questionnaire_cycle)
+        ):
+            cycle_questionnaire_keys = {
+                item.questionnaire_key
+                for item in await self.assignment_repository.list_assessment_cycle_questionnaires(
+                    questionnaire_cycle.id
+                )
+            }
+            if source_cycle is not None and not cycle_questionnaire_keys:
+                raise DomainError(
+                    "The source assessment cycle has no questionnaire definitions.",
+                    code="assessment_cycle_source_empty",
+                )
+        lencioni_key = _cycle_questionnaire_key(
+            cycle_questionnaire_keys,
+            ("lencioni", "lencioni_en"),
+            "lencioni",
+        )
+        distress_key = _cycle_questionnaire_key(
+            cycle_questionnaire_keys,
+            ("distress_drivers", "distress_drivers_en"),
+            "distress_drivers",
+        )
+        pcm_key = _cycle_questionnaire_key(
+            cycle_questionnaire_keys,
+            ("pcm_base", "phase", "pcm_phase"),
+            "pcm_base",
+        )
+        icare_key = _cycle_questionnaire_key(
+            cycle_questionnaire_keys,
+            ("boss_360", "boss_360_en", "icare"),
+            "boss_360",
+        )
         participants = await self.company_repository.list_participants(company_id)
         project_memberships = (
             await self.company_repository.list_project_memberships(company_id, project_id)
@@ -201,9 +579,14 @@ class AssignmentService:
         if project_id is not None:
             participants = [participant for _membership, participant in project_memberships]
         teams = await self.assignment_repository.list_teams(company_id)
-        existing_assignments = await self.assignment_repository.list_assignments(
-            company_id,
-            project_id,
+        existing_assignments = (
+            []
+            if source_cycle is not None
+            else await self.assignment_repository.list_assignments(
+                company_id,
+                project_id,
+                assessment_cycle_id,
+            )
         )
 
         participant_by_id = {participant.id: participant for participant in participants}
@@ -253,7 +636,7 @@ class AssignmentService:
                         scope_name="Leadership",
                         scope_type="leadership_team",
                         respondent=participant_by_id[respondent_id],
-                        questionnaire_key="lencioni",
+                        questionnaire_key=lencioni_key,
                         team_id=leadership_team.id if leadership_team is not None else None,
                         team_name="Leadership",
                         team_type=TeamType.leadership,
@@ -293,7 +676,7 @@ class AssignmentService:
                             scope_name=manager_team_name,
                             scope_type="manager_team",
                             respondent=participant_by_id[respondent_id],
-                            questionnaire_key="lencioni",
+                            questionnaire_key=lencioni_key,
                             team_id=persisted_team.id if persisted_team is not None else None,
                             team_name=manager_team_name,
                             team_type=TeamType.functional,
@@ -316,17 +699,21 @@ class AssignmentService:
                     scope_name=manager.full_name,
                     scope_type="manager",
                     respondent=manager,
-                    questionnaire_key="distress_drivers",
+                    questionnaire_key=distress_key,
                 )
             )
-            if not manager.pcm_base or not manager.pcm_phase:
+            if (
+                (cycle_questionnaire_keys is not None and pcm_key in cycle_questionnaire_keys)
+                or not manager.pcm_base
+                or not manager.pcm_phase
+            ):
                 plan_items.append(
                     _plan_self_assignment(
                         scope_id=f"manager:{manager_id}",
                         scope_name=manager.full_name,
                         scope_type="manager",
                         respondent=manager,
-                        questionnaire_key="pcm_base",
+                        questionnaire_key=pcm_key,
                     )
                 )
             leadership_peer_ids = [
@@ -341,7 +728,7 @@ class AssignmentService:
                         scope_type="manager",
                         respondent=participant_by_id[respondent_id],
                         target=manager,
-                        questionnaire_key="boss_360",
+                        questionnaire_key=icare_key,
                         visibility_policy=ResponseVisibilityPolicy.reviewed_anonymized,
                     )
                 )
@@ -357,6 +744,13 @@ class AssignmentService:
                     participant_ids=[participant.id],
                 )
             )
+
+        if cycle_questionnaire_keys is not None:
+            plan_items = [
+                item for item in plan_items if item.questionnaire_key in cycle_questionnaire_keys
+            ]
+            populated_scope_ids = {item.scope_id for item in plan_items}
+            scopes = [scope for scope in scopes if scope.id in populated_scope_ids]
 
         existing_lookup = {
             _assignment_match_key(
@@ -384,6 +778,8 @@ class AssignmentService:
         existing_count = sum(1 for item in plan_items if item.existing_assignment_id is not None)
         return AssignmentPlanResponse(
             project_id=project_id,
+            assessment_cycle_id=assessment_cycle_id,
+            source_cycle_id=source_cycle_id,
             scopes=scopes,
             assignments=plan_items,
             suggested_count=len(plan_items),
@@ -398,6 +794,11 @@ class AssignmentService:
     ) -> AssignmentPlanSaveResponse:
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, payload.project_id)
+        cycle = await self._cycle_for_assignment_write(
+            company_id,
+            payload.project_id,
+            payload.assessment_cycle_id,
+        )
         saved: list[QuestionnaireAssignment] = []
         seen_assignment_ids: set[UUID] = set()
         created_count = 0
@@ -405,6 +806,7 @@ class AssignmentService:
         existing_assignments = await self.assignment_repository.list_assignments(
             company_id,
             payload.project_id,
+            payload.assessment_cycle_id,
         )
         assignment_round_id = (
             min(
@@ -421,6 +823,7 @@ class AssignmentService:
                 payload.project_id,
                 item,
                 assignment_round_id=assignment_round_id,
+                cycle=cycle,
             )
             if assignment.id in seen_assignment_ids:
                 continue
@@ -470,8 +873,9 @@ class AssignmentService:
         item: AssignmentPlanSaveItem,
         *,
         assignment_round_id: UUID,
+        cycle: AssessmentCycle | None,
     ) -> tuple[QuestionnaireAssignment, bool]:
-        definition = await self._require_active_questionnaire_definition(item.questionnaire_key)
+        definition = await self._definition_for_cycle(cycle, item.questionnaire_key)
         await self._require_company_participant(company_id, item.respondent_profile_id)
         await self._require_project_participant(
             company_id,
@@ -487,7 +891,12 @@ class AssignmentService:
                 item.target_person_id,
             )
         if item.target_type == AssignmentTargetType.team:
-            target_team_id = await self._resolve_plan_team(company_id, project_id, item)
+            target_team_id = await self._resolve_plan_team(
+                company_id,
+                project_id,
+                item,
+                cycle=cycle,
+            )
 
         existing = await self.assignment_repository.get_matching_assignment(
             company_id=company_id,
@@ -501,12 +910,14 @@ class AssignmentService:
             target_team_id=(
                 target_team_id if item.target_type == AssignmentTargetType.team else None
             ),
+            assessment_cycle_id=cycle.id if cycle is not None else None,
         )
         if existing is not None:
             return existing, False
 
         payload = AssignmentCreateRequest(
             project_id=project_id,
+            assessment_cycle_id=cycle.id if cycle is not None else None,
             respondent_profile_id=item.respondent_profile_id,
             questionnaire_key=item.questionnaire_key,
             target_type=item.target_type,
@@ -519,54 +930,92 @@ class AssignmentService:
             visibility_policy=item.visibility_policy,
         )
         _validate_target_shape(payload)
-        assignment = await self.assignment_repository.add_assignment(
-            QuestionnaireAssignment(
-                company_id=company_id,
-                project_id=payload.project_id,
-                assignment_round_id=assignment_round_id,
-                respondent_profile_id=payload.respondent_profile_id,
-                questionnaire_key=payload.questionnaire_key.strip(),
-                questionnaire_definition_id=definition.id,
-                target_type=payload.target_type,
-                target_person_id=payload.target_person_id,
-                target_team_id=payload.target_team_id,
-                access_mode=AssignmentAccessMode.account_link,
-                status=AssignmentStatus.assigned,
-                visibility_policy=payload.visibility_policy,
-            )
+        assignment = QuestionnaireAssignment(
+            company_id=company_id,
+            project_id=payload.project_id,
+            assignment_round_id=assignment_round_id,
+            assessment_cycle_id=payload.assessment_cycle_id,
+            cycle_shape_guard=payload.assessment_cycle_id,
+            respondent_profile_id=payload.respondent_profile_id,
+            questionnaire_key=payload.questionnaire_key.strip(),
+            questionnaire_definition_id=definition.id,
+            target_type=payload.target_type,
+            target_person_id=payload.target_person_id,
+            target_team_id=payload.target_team_id,
+            access_mode=AssignmentAccessMode.account_link,
+            status=AssignmentStatus.assigned,
+            visibility_policy=payload.visibility_policy,
+            due_at=cycle.due_at if cycle is not None else None,
         )
-        return assignment, True
+        if cycle is None:
+            return await self.assignment_repository.add_assignment(assignment), True
+        try:
+            async with self.session.begin_nested():
+                return await self.assignment_repository.add_assignment(assignment), True
+        except IntegrityError:
+            existing = await self.assignment_repository.get_matching_assignment(
+                company_id=company_id,
+                project_id=project_id,
+                respondent_profile_id=item.respondent_profile_id,
+                questionnaire_key=item.questionnaire_key.strip(),
+                target_type=item.target_type,
+                target_person_id=(
+                    item.target_person_id
+                    if item.target_type == AssignmentTargetType.person
+                    else None
+                ),
+                target_team_id=(
+                    target_team_id if item.target_type == AssignmentTargetType.team else None
+                ),
+                assessment_cycle_id=cycle.id,
+            )
+            if existing is None:
+                raise DomainError(
+                    "The assignment plan changed while it was being saved. Try again.",
+                    code="assessment_cycle_assignment_conflict",
+                ) from None
+            return existing, False
 
     async def _resolve_plan_team(
         self,
         company_id: UUID,
         project_id: UUID | None,
         item: AssignmentPlanSaveItem,
+        *,
+        cycle: AssessmentCycle | None,
     ) -> UUID:
         if item.target_team_id is not None:
             team = await self.assignment_repository.get_team(company_id, item.target_team_id)
             if team is None:
                 raise DomainError("Target team not found in this company.", code="team_not_found")
-            await self._require_project_team_members(company_id, project_id, team.id)
-            return team.id
-
-        team_name = (item.target_team_name or "").strip()
-        if not team_name:
-            raise DomainError("Team target is missing.", code="team_target_missing")
-        team = await self.assignment_repository.get_team_by_name(company_id, team_name)
-        if team is None:
-            team = await self.assignment_repository.add_team(
-                Team(
-                    company_id=company_id,
-                    name=team_name,
-                    type=item.target_team_type or TeamType.functional,
+            if cycle is None:
+                await self._require_project_team_members(company_id, project_id, team.id)
+            target_team_id = team.id
+        else:
+            team_name = (item.target_team_name or "").strip()
+            if not team_name:
+                raise DomainError("Team target is missing.", code="team_target_missing")
+            team = await self.assignment_repository.get_team_by_name(company_id, team_name)
+            if team is None:
+                team = await self.assignment_repository.add_team(
+                    Team(
+                        company_id=company_id,
+                        name=team_name,
+                        type=item.target_team_type or TeamType.functional,
+                    )
                 )
-            )
+            target_team_id = team.id
+
+        if cycle is not None:
+            await self._snapshot_cycle_team_membership(cycle, target_team_id, item)
+            return target_team_id
 
         for member_id in dict.fromkeys(item.target_team_member_ids):
             await self._require_company_participant(company_id, member_id)
             await self._require_project_participant(company_id, project_id, member_id)
-            existing = await self.assignment_repository.get_team_membership(team.id, member_id)
+            existing = await self.assignment_repository.get_team_membership(
+                target_team_id, member_id
+            )
             if existing is not None:
                 continue
             await self.assignment_repository.add_team_membership(
@@ -578,7 +1027,93 @@ class AssignmentService:
                     else TeamMembershipRole.member,
                 )
             )
-        return team.id
+        return target_team_id
+
+    async def _snapshot_cycle_team_membership(
+        self,
+        cycle: AssessmentCycle,
+        team_id: UUID,
+        item: AssignmentPlanSaveItem,
+    ) -> None:
+        member_ids = list(dict.fromkeys(item.target_team_member_ids))
+        if not member_ids:
+            raise DomainError(
+                "The cycle team must include at least one participant.",
+                code="assessment_cycle_team_members_required",
+            )
+        expected = {
+            member_id: (
+                TeamMembershipRole.leader
+                if member_id == item.target_team_leader_id
+                else TeamMembershipRole.member
+            )
+            for member_id in member_ids
+        }
+        existing = await self.assignment_repository.list_cycle_team_memberships(
+            cycle.id,
+            team_id,
+        )
+        if existing:
+            actual = {membership.participant_profile_id: membership.role for membership in existing}
+            if actual != expected:
+                raise DomainError(
+                    "The team snapshot for this cycle no longer matches the assignment plan.",
+                    code="assessment_cycle_team_snapshot_conflict",
+                )
+            return
+        for member_id in member_ids:
+            await self._require_company_participant(cycle.company_id, member_id)
+            await self._require_project_participant(
+                cycle.company_id,
+                cycle.project_id,
+                member_id,
+            )
+        await self.assignment_repository.add_cycle_team_memberships(
+            [
+                AssessmentCycleTeamMembership(
+                    assessment_cycle_id=cycle.id,
+                    team_id=team_id,
+                    participant_profile_id=member_id,
+                    role=role,
+                )
+                for member_id, role in expected.items()
+            ]
+        )
+
+    async def _snapshot_existing_team_for_cycle(
+        self,
+        cycle: AssessmentCycle,
+        team_id: UUID,
+    ) -> None:
+        existing_snapshot = await self.assignment_repository.list_cycle_team_memberships(
+            cycle.id,
+            team_id,
+        )
+        if existing_snapshot:
+            return
+        memberships = await self.assignment_repository.list_team_memberships(team_id)
+        if not memberships:
+            raise DomainError(
+                "The team must include at least one participant.",
+                code="assessment_cycle_team_members_required",
+            )
+        for membership in memberships:
+            await self._require_project_participant(
+                cycle.company_id,
+                cycle.project_id,
+                membership.participant_profile_id,
+            )
+        await self.assignment_repository.add_cycle_team_memberships(
+            [
+                AssessmentCycleTeamMembership(
+                    assessment_cycle_id=cycle.id,
+                    team_id=team_id,
+                    participant_profile_id=membership.participant_profile_id,
+                    role=membership.role,
+                )
+                for membership in memberships
+            ]
+        )
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
         if await self.company_repository.get_company(company_id) is None:
@@ -669,6 +1204,164 @@ class AssignmentService:
             code="definition_not_found",
         )
 
+    async def _definition_for_cycle(
+        self,
+        cycle: AssessmentCycle | None,
+        questionnaire_key: str,
+    ) -> QuestionnaireDefinition:
+        normalized_key = questionnaire_key.strip()
+        if cycle is None:
+            return await self._require_active_questionnaire_definition(normalized_key)
+        questionnaires = await self.assignment_repository.list_assessment_cycle_questionnaires(
+            cycle.id
+        )
+        pinned = next(
+            (item for item in questionnaires if item.questionnaire_key == normalized_key),
+            None,
+        )
+        if pinned is None:
+            if self._is_initial_draft_cycle(cycle):
+                definition = await self._require_active_questionnaire_definition(normalized_key)
+                await self.assignment_repository.add_assessment_cycle_questionnaires(
+                    [
+                        AssessmentCycleQuestionnaire(
+                            assessment_cycle_id=cycle.id,
+                            questionnaire_definition_id=definition.id,
+                            questionnaire_key=normalized_key,
+                            display_order=len(questionnaires),
+                        )
+                    ]
+                )
+                return definition
+            raise DomainError(
+                "Questionnaire is not part of this assessment cycle.",
+                code="assessment_cycle_questionnaire_not_found",
+            )
+        definition = await self.forms_repository.get_definition_by_id(
+            pinned.questionnaire_definition_id
+        )
+        if definition is None:
+            raise DomainError(
+                "Pinned questionnaire definition not found.",
+                code="definition_not_found",
+            )
+        return definition
+
+    @staticmethod
+    def _is_initial_draft_cycle(cycle: AssessmentCycle) -> bool:
+        return (
+            cycle.sequence == 1
+            and cycle.source_cycle_id is None
+            and cycle.status == AssessmentCycleStatus.draft
+        )
+
+    async def _optional_assessment_cycle(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+        assessment_cycle_id: UUID | None,
+        *,
+        for_update: bool = False,
+    ) -> AssessmentCycle | None:
+        if assessment_cycle_id is None:
+            return None
+        if project_id is None:
+            raise DomainError(
+                "A project is required for an assessment cycle.",
+                code="assessment_cycle_project_required",
+            )
+        return await self._require_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=for_update,
+        )
+
+    async def _cycle_for_assignment_write(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+        assessment_cycle_id: UUID | None,
+    ) -> AssessmentCycle | None:
+        cycle = await self._optional_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=True,
+        )
+        if cycle is not None:
+            self._require_draft_cycle(cycle)
+        return cycle
+
+    async def _require_assessment_cycle(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+        assessment_cycle_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> AssessmentCycle:
+        cycle = await self.assignment_repository.get_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            for_update=for_update,
+        )
+        if cycle is None:
+            raise DomainError(
+                "Assessment cycle not found in this project.",
+                code="assessment_cycle_not_found",
+            )
+        return cycle
+
+    @staticmethod
+    def _require_draft_cycle(cycle: AssessmentCycle) -> None:
+        if cycle.status != AssessmentCycleStatus.draft:
+            raise DomainError(
+                "Only a draft assessment cycle can be changed.",
+                code="assessment_cycle_not_draft",
+            )
+
+    async def _assessment_cycle_response(
+        self,
+        cycle: AssessmentCycle,
+        *,
+        questionnaires: list[AssessmentCycleQuestionnaire] | None = None,
+    ) -> AssessmentCycleResponse:
+        pinned = questionnaires
+        if pinned is None:
+            pinned = await self.assignment_repository.list_assessment_cycle_questionnaires(cycle.id)
+        return AssessmentCycleResponse(
+            id=cycle.id,
+            company_id=cycle.company_id,
+            project_id=cycle.project_id,
+            sequence=cycle.sequence,
+            name=cycle.name,
+            status=cycle.status,
+            source_cycle_id=cycle.source_cycle_id,
+            starts_at=cycle.starts_at,
+            due_at=cycle.due_at,
+            closed_at=cycle.closed_at,
+            created_by_user_id=cycle.created_by_user_id,
+            created_at=cycle.created_at,
+            updated_at=cycle.updated_at,
+            questionnaires=[
+                AssessmentCycleQuestionnaireResponse.model_validate(item) for item in pinned
+            ],
+        )
+
+
+def _cycle_questionnaire_key(
+    cycle_keys: set[str] | None,
+    candidates: tuple[str, ...],
+    fallback: str,
+) -> str:
+    if cycle_keys is not None:
+        for candidate in candidates:
+            if candidate in cycle_keys:
+                return candidate
+    return fallback
+
 
 def _validate_target_shape(payload: AssignmentCreateRequest) -> None:
     if payload.target_type == AssignmentTargetType.self_assessment:
@@ -679,6 +1372,29 @@ def _validate_target_shape(payload: AssignmentCreateRequest) -> None:
         valid = payload.target_team_id is not None and payload.target_person_id is None
     if not valid:
         raise DomainError("Assignment target does not match target type.", code="invalid_target")
+
+
+def _validate_cycle_dates(
+    starts_at: datetime | None,
+    due_at: datetime | None,
+) -> None:
+    if starts_at is not None and due_at is not None and due_at < starts_at:
+        raise DomainError(
+            "The due date must be after the start date.",
+            code="assessment_cycle_invalid_dates",
+            details={"field": "due_at"},
+        )
+
+
+def _normalize_cycle_name(value: str) -> str:
+    name = value.strip()
+    if not name:
+        raise DomainError(
+            "Assessment cycle name is required.",
+            code="assessment_cycle_name_required",
+            details={"field": "name"},
+        )
+    return name
 
 
 def _stamp_status_time(assignment: QuestionnaireAssignment) -> None:

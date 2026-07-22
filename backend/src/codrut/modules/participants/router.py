@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,9 @@ router = APIRouter()
 async def get_my_workspace(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    participant_profile_id: UUID | None = None,
+    project_id: UUID | None = None,
+    cycle_id: UUID | None = None,
 ) -> ParticipantWorkspaceSummary:
     if principal.role != UserRole.participant:
         from codrut.core.errors import DomainError
@@ -24,6 +28,9 @@ async def get_my_workspace(
     require_current_terms(principal)
     return await ParticipantWorkspaceService(session).get_workspace_summary(
         principal.user_id,
+        participant_profile_id=participant_profile_id,
+        project_id=project_id,
+        cycle_id=cycle_id,
         allowed_assignment_ids=principal.assignment_ids,
         scoped_project_id=principal.project_id,
     )

@@ -4,14 +4,19 @@ import { getProjectInvitationWorkspaceData } from "../project-data";
 
 export default async function ProjectInvitationsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ cycle?: string }>;
 }) {
-  const [{ projectId }, requestOptions] = await Promise.all([
+  const [{ projectId }, query, requestOptions] = await Promise.all([
     params,
+    searchParams,
     getServerApiRequestOptions(),
   ]);
-  const data = await getProjectInvitationWorkspaceData(projectId, requestOptions);
+  const data = await getProjectInvitationWorkspaceData(projectId, requestOptions, {
+    assessmentCycleId: query.cycle,
+  });
 
   return (
     <LazyInvitationDeliveryWorkspace
@@ -23,6 +28,8 @@ export default async function ProjectInvitationsPage({
       assignments={data.assignments}
       invitationStatuses={data.invitationStatuses}
       teams={data.teams}
+      initialAssessmentCycles={data.assessmentCycles}
+      initialSelectedCycleId={data.selectedAssessmentCycleId}
       showProjectSelector={false}
     />
   );

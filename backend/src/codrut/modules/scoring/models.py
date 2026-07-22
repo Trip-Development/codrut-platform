@@ -61,6 +61,9 @@ class ResultPublication(TimestampMixin, Base):
         index=True,
     )
     assignment_round_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    assessment_cycle_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assessment_cycles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     questionnaire_definition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("questionnaire_definitions.id", ondelete="SET NULL"),
         nullable=True,

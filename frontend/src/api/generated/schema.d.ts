@@ -902,6 +902,59 @@ export interface paths {
         patch: operations["update_company_project_api_companies__company_id__projects__project_id__patch"];
         trace?: never;
     };
+    "/api/companies/{company_id}/projects/{project_id}/assessment-cycles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Project Assessment Cycles */
+        get: operations["list_project_assessment_cycles_api_companies__company_id__projects__project_id__assessment_cycles_get"];
+        put?: never;
+        /** Create Project Assessment Cycle */
+        post: operations["create_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Project Assessment Cycle */
+        delete: operations["delete_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Project Assessment Cycle */
+        patch: operations["update_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__patch"];
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/assessment-cycles/{assessment_cycle_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Project Assessment Cycle */
+        post: operations["close_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{company_id}/projects/{project_id}/participants": {
         parameters: {
             query?: never;
@@ -928,6 +981,23 @@ export interface paths {
         };
         /** Get Company Report Aggregate */
         get: operations["get_company_report_aggregate_api_companies__company_id__reports_aggregate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/reports/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company Report Comparison */
+        get: operations["get_company_report_comparison_api_companies__company_id__reports_comparison_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1236,6 +1306,103 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssessmentCycleCloseRequest */
+        AssessmentCycleCloseRequest: {
+            /**
+             * Cancel Unfinished
+             * @default false
+             */
+            cancel_unfinished: boolean;
+        };
+        /** AssessmentCycleCreateRequest */
+        AssessmentCycleCreateRequest: {
+            /** Due At */
+            due_at?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Questionnaire Keys */
+            questionnaire_keys?: string[] | null;
+            /** Source Cycle Id */
+            source_cycle_id?: string | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
+        /** AssessmentCycleQuestionnaireResponse */
+        AssessmentCycleQuestionnaireResponse: {
+            /** Display Order */
+            display_order: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Questionnaire Definition Id
+             * Format: uuid
+             */
+            questionnaire_definition_id: string;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+        };
+        /** AssessmentCycleResponse */
+        AssessmentCycleResponse: {
+            /** Closed At */
+            closed_at: string | null;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /** Due At */
+            due_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Questionnaires */
+            questionnaires?: components["schemas"]["AssessmentCycleQuestionnaireResponse"][];
+            /** Sequence */
+            sequence: number;
+            /** Source Cycle Id */
+            source_cycle_id: string | null;
+            /** Starts At */
+            starts_at: string | null;
+            status: components["schemas"]["AssessmentCycleStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * AssessmentCycleStatus
+         * @enum {string}
+         */
+        AssessmentCycleStatus: "draft" | "active" | "closed";
+        /** AssessmentCycleUpdateRequest */
+        AssessmentCycleUpdateRequest: {
+            /** Due At */
+            due_at?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
         /** AssessmentDeliveryRowResponse */
         AssessmentDeliveryRowResponse: {
             /** Audience */
@@ -1268,6 +1435,8 @@ export interface components {
         AssignmentAccessMode: "account_link";
         /** AssignmentCreateRequest */
         AssignmentCreateRequest: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Project Id */
             project_id?: string | null;
             /** Questionnaire Key */
@@ -1330,6 +1499,8 @@ export interface components {
         };
         /** AssignmentPlanResponse */
         AssignmentPlanResponse: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Assignments */
             assignments: components["schemas"]["AssignmentPlanItemResponse"][];
             /** Existing Count */
@@ -1338,6 +1509,8 @@ export interface components {
             project_id?: string | null;
             /** Scopes */
             scopes: components["schemas"]["AssignmentPlanScopeResponse"][];
+            /** Source Cycle Id */
+            source_cycle_id?: string | null;
             /** Suggested Count */
             suggested_count: number;
         };
@@ -1367,6 +1540,8 @@ export interface components {
         };
         /** AssignmentPlanSaveRequest */
         AssignmentPlanSaveRequest: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Assignments */
             assignments?: components["schemas"]["AssignmentPlanSaveItem"][];
             /** Project Id */
@@ -1395,6 +1570,8 @@ export interface components {
         /** AssignmentResponse */
         AssignmentResponse: {
             access_mode: components["schemas"]["AssignmentAccessMode"];
+            /** Assessment Cycle Id */
+            assessment_cycle_id: string | null;
             /**
              * Assignment Round Id
              * Format: uuid
@@ -1449,7 +1626,7 @@ export interface components {
          * AssignmentStatus
          * @enum {string}
          */
-        AssignmentStatus: "assigned" | "invited" | "started" | "submitted" | "validated" | "scored";
+        AssignmentStatus: "assigned" | "invited" | "started" | "submitted" | "validated" | "scored" | "cancelled";
         /** AssignmentStatusUpdateRequest */
         AssignmentStatusUpdateRequest: {
             status: components["schemas"]["AssignmentStatus"];
@@ -1995,6 +2172,8 @@ export interface components {
         };
         /** CompanyReportAggregateResponse */
         CompanyReportAggregateResponse: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Boss 360 Averages */
             boss_360_averages: components["schemas"]["ReportAverageResponse"][];
             /** Boss 360 Count */
@@ -2034,6 +2213,23 @@ export interface components {
             total_assigned: number;
             /** Total Completed */
             total_completed: number;
+        };
+        /** CompanyReportComparisonResponse */
+        CompanyReportComparisonResponse: {
+            baseline: components["schemas"]["CompanyReportAggregateResponse"];
+            /**
+             * Baseline Cycle Id
+             * Format: uuid
+             */
+            baseline_cycle_id: string;
+            comparison: components["schemas"]["CompanyReportAggregateResponse"];
+            /**
+             * Comparison Cycle Id
+             * Format: uuid
+             */
+            comparison_cycle_id: string;
+            /** Definition Compatibility */
+            definition_compatibility: components["schemas"]["CycleQuestionnaireCompatibilityResponse"][];
         };
         /** CompanyResponse */
         CompanyResponse: {
@@ -2103,6 +2299,17 @@ export interface components {
         CsrfTokenResponse: {
             /** Csrf Token */
             csrf_token: string;
+        };
+        /** CycleQuestionnaireCompatibilityResponse */
+        CycleQuestionnaireCompatibilityResponse: {
+            /** Baseline Definition Id */
+            baseline_definition_id: string | null;
+            /** Comparison Definition Id */
+            comparison_definition_id: string | null;
+            /** Compatible */
+            compatible: boolean;
+            /** Questionnaire Key */
+            questionnaire_key: string;
         };
         /** EmailDeliveryMetricResponse */
         EmailDeliveryMetricResponse: {
@@ -2374,6 +2581,8 @@ export interface components {
         };
         /** InviteTask */
         InviteTask: {
+            /** Assessmentcycleid */
+            assessmentCycleId?: string | null;
             /** Assignmentid */
             assignmentId: string;
             /** Assignmentroundid */
@@ -2501,6 +2710,8 @@ export interface components {
         };
         /** ParticipantInviteBatchRequest */
         ParticipantInviteBatchRequest: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /**
              * Force Rotate
              * @default false
@@ -2565,6 +2776,8 @@ export interface components {
         };
         /** ParticipantReceivedFeedbackSummary */
         ParticipantReceivedFeedbackSummary: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /**
              * Assignment Round Id
              * Format: uuid
@@ -2657,8 +2870,56 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** ParticipantWorkspaceContext */
+        ParticipantWorkspaceContext: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Company Name */
+            company_name: string;
+            /** Participant Email */
+            participant_email?: string | null;
+            /** Participant Full Name */
+            participant_full_name: string;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /** Projects */
+            projects?: components["schemas"]["ParticipantWorkspaceProject"][];
+        };
+        /** ParticipantWorkspaceCycle */
+        ParticipantWorkspaceCycle: {
+            /** Closed At */
+            closed_at?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Sequence */
+            sequence: number;
+            /** Starts At */
+            starts_at?: string | null;
+            /** Status */
+            status: string;
+        };
         /** ParticipantWorkspaceProject */
         ParticipantWorkspaceProject: {
+            /** Cycles */
+            cycles?: components["schemas"]["ParticipantWorkspaceCycle"][];
             /** Deadline At */
             deadline_at?: string | null;
             /** Deadline Label */
@@ -2673,6 +2934,8 @@ export interface components {
         };
         /** ParticipantWorkspaceResult */
         ParticipantWorkspaceResult: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /**
              * Assignment Id
              * Format: uuid
@@ -2699,37 +2962,45 @@ export interface components {
         ParticipantWorkspaceSummary: {
             /** Anonymous Name */
             anonymous_name?: string | null;
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Cards */
-            cards: components["schemas"]["ParticipantWorkspaceCard"][];
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
+            cards?: components["schemas"]["ParticipantWorkspaceCard"][];
+            /** Company Id */
+            company_id?: string | null;
             /** Company Name */
-            company_name: string;
+            company_name?: string | null;
+            /**
+             * Context Selection Required
+             * @default false
+             */
+            context_selection_required: boolean;
+            /** Contexts */
+            contexts?: components["schemas"]["ParticipantWorkspaceContext"][];
+            /** Cycles */
+            cycles?: components["schemas"]["ParticipantWorkspaceCycle"][];
             /** Deadline At */
             deadline_at?: string | null;
-            /** Deadline Label */
-            deadline_label: string;
-            empty_state: components["schemas"]["ParticipantWorkspaceCard"];
-            /** Participant Email */
-            participant_email: string;
-            /** Participant Full Name */
-            participant_full_name: string;
             /**
-             * Participant Profile Id
-             * Format: uuid
+             * Deadline Label
+             * @default finalul evaluării
              */
-            participant_profile_id: string;
+            deadline_label: string;
+            empty_state?: components["schemas"]["ParticipantWorkspaceCard"];
+            /** Participant Email */
+            participant_email?: string | null;
+            /** Participant Full Name */
+            participant_full_name?: string | null;
+            /** Participant Profile Id */
+            participant_profile_id?: string | null;
             /** Pcm Base */
             pcm_base?: string | null;
             /** Pcm Phase */
             pcm_phase?: string | null;
             /** Project Id */
-            project_id: string | null;
+            project_id?: string | null;
             /** Project Name */
-            project_name: string;
+            project_name?: string | null;
             /** Projects */
             projects?: components["schemas"]["ParticipantWorkspaceProject"][];
             received_feedback?: components["schemas"]["ParticipantReceivedFeedbackSummary"] | null;
@@ -2738,7 +3009,7 @@ export interface components {
             /** Results */
             results?: components["schemas"]["ParticipantWorkspaceResult"][];
             /** Tasks */
-            tasks: components["schemas"]["InviteTask"][];
+            tasks?: components["schemas"]["InviteTask"][];
         };
         /** PasswordChangeRequest */
         PasswordChangeRequest: {
@@ -6854,6 +7125,7 @@ export interface operations {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -7012,6 +7284,8 @@ export interface operations {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
+                source_cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -7090,6 +7364,7 @@ export interface operations {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -7646,6 +7921,7 @@ export interface operations {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -7963,6 +8239,7 @@ export interface operations {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: {
                 "Idempotency-Key"?: string | null;
@@ -8352,6 +8629,404 @@ export interface operations {
             };
         };
     };
+    list_project_assessment_cycles_api_companies__company_id__projects__project_id__assessment_cycles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentCycleResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentCycleCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentCycleResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+                assessment_cycle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+                assessment_cycle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentCycleUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentCycleResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    close_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+                assessment_cycle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentCycleCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentCycleResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_project_participants_api_companies__company_id__projects__project_id__participants_get: {
         parameters: {
             query?: never;
@@ -8433,6 +9108,7 @@ export interface operations {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -8507,10 +9183,91 @@ export interface operations {
             };
         };
     };
+    get_company_report_comparison_api_companies__company_id__reports_comparison_get: {
+        parameters: {
+            query: {
+                project_id: string;
+                baseline_cycle_id: string;
+                comparison_cycle_id: string;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyReportComparisonResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get: {
         parameters: {
             query?: {
                 project_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -8901,7 +9658,11 @@ export interface operations {
     };
     get_assignment_definition_api_forms_assignments__assignment_id__definition_get: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
             header?: never;
             path: {
                 assignment_id: string;
@@ -8977,7 +9738,11 @@ export interface operations {
     };
     get_assignment_response_api_forms_assignments__assignment_id__response_get: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
             header?: never;
             path: {
                 assignment_id: string;
@@ -9053,7 +9818,11 @@ export interface operations {
     };
     save_assignment_response_api_forms_assignments__assignment_id__response_put: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
             header?: never;
             path: {
                 assignment_id: string;
@@ -9133,7 +9902,11 @@ export interface operations {
     };
     submit_assignment_response_api_forms_assignments__assignment_id__response_submit_post: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
             header?: never;
             path: {
                 assignment_id: string;
@@ -9369,6 +10142,9 @@ export interface operations {
         parameters: {
             query?: {
                 version?: number | null;
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
             };
             header?: never;
             path: {
@@ -9682,7 +10458,9 @@ export interface operations {
     };
     get_participant_onboarding_api_forms_participant_onboarding_get: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -10229,7 +11007,11 @@ export interface operations {
     };
     get_my_workspace_api_participants_me_workspace_get: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -16,6 +16,10 @@ export type ParticipantWorkspaceSummary = {
   pcmPhase?: string | null;
   projectName: string;
   projectId?: string | null;
+  assessmentCycleId?: string | null;
+  contextSelectionRequired: boolean;
+  contexts: ParticipantWorkspaceContext[];
+  cycles: ParticipantWorkspaceCycle[];
   projects: ParticipantWorkspaceProject[];
   companyName: string;
   participantEmail: string;
@@ -36,10 +40,32 @@ export type ParticipantWorkspaceProject = {
   name: string;
   deadlineLabel: string;
   deadlineAt?: string | null;
+  cycles?: ParticipantWorkspaceCycle[];
+};
+
+export type ParticipantWorkspaceCycle = {
+  id: string;
+  projectId: string;
+  sequence: number;
+  name: string;
+  status: "draft" | "active" | "closed";
+  startsAt?: string | null;
+  dueAt?: string | null;
+  closedAt?: string | null;
+};
+
+export type ParticipantWorkspaceContext = {
+  participantProfileId: string;
+  participantFullName: string;
+  participantEmail?: string | null;
+  companyId: string;
+  companyName: string;
+  projects: ParticipantWorkspaceProject[];
 };
 
 export type ParticipantWorkspaceResult = {
   assignmentId: string;
+  assessmentCycleId?: string | null;
   projectId?: string | null;
   projectName?: string | null;
   questionnaireKey: string;
@@ -60,6 +86,7 @@ export type ParticipantReceivedFeedbackSummary = {
   projectId?: string | null;
   projectName?: string | null;
   assignmentRoundId?: string;
+  assessmentCycleId?: string | null;
   questionnaireKey?: string;
   questionnaireTitle?: string;
   completedCount: number;
@@ -71,16 +98,20 @@ export type ParticipantReceivedFeedbackSummary = {
 };
 
 type BackendParticipantWorkspaceSummary = {
-  participant_profile_id: string;
-  participant_full_name: string;
-  participant_email: string;
+  participant_profile_id?: string | null;
+  participant_full_name?: string | null;
+  participant_email?: string | null;
   anonymous_name?: string | null;
   pcm_base?: string | null;
   pcm_phase?: string | null;
-  company_id: string;
-  company_name: string;
+  company_id?: string | null;
+  company_name?: string | null;
   project_id: string | null;
-  project_name: string;
+  project_name?: string | null;
+  assessment_cycle_id?: string | null;
+  context_selection_required?: boolean;
+  contexts?: BackendParticipantWorkspaceContext[];
+  cycles?: BackendParticipantWorkspaceCycle[];
   projects?: BackendParticipantWorkspaceProject[];
   deadline_label: string;
   deadline_at?: string | null;
@@ -97,10 +128,32 @@ type BackendParticipantWorkspaceProject = {
   name: string;
   deadline_label: string;
   deadline_at?: string | null;
+  cycles?: BackendParticipantWorkspaceCycle[];
+};
+
+type BackendParticipantWorkspaceCycle = {
+  id: string;
+  project_id: string;
+  sequence: number;
+  name: string;
+  status: "draft" | "active" | "closed";
+  starts_at?: string | null;
+  due_at?: string | null;
+  closed_at?: string | null;
+};
+
+type BackendParticipantWorkspaceContext = {
+  participant_profile_id: string;
+  participant_full_name: string;
+  participant_email?: string | null;
+  company_id: string;
+  company_name: string;
+  projects?: BackendParticipantWorkspaceProject[];
 };
 
 type BackendParticipantWorkspaceResult = {
   assignment_id: string;
+  assessment_cycle_id?: string | null;
   project_id?: string | null;
   project_name?: string | null;
   questionnaire_key: string;
@@ -121,6 +174,7 @@ type BackendParticipantReceivedFeedbackSummary = {
   project_id?: string | null;
   project_name?: string | null;
   assignment_round_id?: string;
+  assessment_cycle_id?: string | null;
   questionnaire_key?: string;
   questionnaire_title?: string;
   completed_count: number;
@@ -144,14 +198,24 @@ export class ParticipantWorkspaceError extends Error {
 }
 
 export async function getParticipantWorkspaceSummary(
-  options: Pick<RequestInit, "headers"> = {},
+  options: Pick<RequestInit, "headers"> & {
+    participantProfileId?: string | null;
+    projectId?: string | null;
+    cycleId?: string | null;
+  } = {},
 ): Promise<ParticipantWorkspaceSummary> {
+  const params = new URLSearchParams();
+  if (options.participantProfileId) params.set("participant_profile_id", options.participantProfileId);
+  if (options.projectId) params.set("project_id", options.projectId);
+  if (options.cycleId) params.set("cycle_id", options.cycleId);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  const requestOptions: Pick<RequestInit, "headers"> = { headers: options.headers };
   let response: Response;
   try {
-    response = await apiFetch(`${getApiBaseUrl()}/participants/me/workspace`, {
+    response = await apiFetch(`${getApiBaseUrl()}/participants/me/workspace${query}`, {
       cache: "no-store",
       credentials: "include",
-      ...options,
+      ...requestOptions,
     });
   } catch {
     if (!isSeededDemoFallbackEnabled()) {
@@ -182,21 +246,20 @@ function mapParticipantWorkspaceSummary(
   data: BackendParticipantWorkspaceSummary,
 ): ParticipantWorkspaceSummary {
   return {
-    participantProfileId: data.participant_profile_id,
-    participantFullName: data.participant_full_name,
+    participantProfileId: data.participant_profile_id ?? undefined,
+    participantFullName: data.participant_full_name ?? "Participant",
     anonymousName: data.anonymous_name,
     pcmBase: data.pcm_base,
     pcmPhase: data.pcm_phase,
-    projectName: data.project_name,
+    projectName: data.project_name ?? "Selectează programul",
     projectId: data.project_id,
-    projects: (data.projects ?? []).map((project) => ({
-      id: project.id,
-      name: project.name,
-      deadlineLabel: project.deadline_label,
-      deadlineAt: project.deadline_at,
-    })),
-    companyName: data.company_name,
-    participantEmail: data.participant_email,
+    assessmentCycleId: data.assessment_cycle_id,
+    contextSelectionRequired: data.context_selection_required ?? false,
+    contexts: (data.contexts ?? []).map(mapParticipantWorkspaceContext),
+    cycles: (data.cycles ?? []).map(mapParticipantWorkspaceCycle),
+    projects: (data.projects ?? []).map(mapParticipantWorkspaceProject),
+    companyName: data.company_name ?? "",
+    participantEmail: data.participant_email ?? "",
     deadlineLabel: data.deadline_label,
     tasks: data.tasks,
     results: (data.results ?? []).map(mapParticipantWorkspaceResult),
@@ -207,11 +270,54 @@ function mapParticipantWorkspaceSummary(
   };
 }
 
+function mapParticipantWorkspaceProject(
+  project: BackendParticipantWorkspaceProject,
+): ParticipantWorkspaceProject {
+  return {
+    id: project.id,
+    name: project.name,
+    deadlineLabel: project.deadline_label,
+    deadlineAt: project.deadline_at,
+    ...(project.cycles
+      ? { cycles: project.cycles.map(mapParticipantWorkspaceCycle) }
+      : {}),
+  };
+}
+
+function mapParticipantWorkspaceCycle(
+  cycle: BackendParticipantWorkspaceCycle,
+): ParticipantWorkspaceCycle {
+  return {
+    id: cycle.id,
+    projectId: cycle.project_id,
+    sequence: cycle.sequence,
+    name: cycle.name,
+    status: cycle.status,
+    startsAt: cycle.starts_at,
+    dueAt: cycle.due_at,
+    closedAt: cycle.closed_at,
+  };
+}
+
+function mapParticipantWorkspaceContext(
+  context: BackendParticipantWorkspaceContext,
+): ParticipantWorkspaceContext {
+  return {
+    participantProfileId: context.participant_profile_id,
+    participantFullName: context.participant_full_name,
+    participantEmail: context.participant_email,
+    companyId: context.company_id,
+    companyName: context.company_name,
+    projects: (context.projects ?? []).map(mapParticipantWorkspaceProject),
+  };
+}
+
 function mapParticipantWorkspaceResult(
   result: BackendParticipantWorkspaceResult,
 ): ParticipantWorkspaceResult {
   return {
     assignmentId: result.assignment_id,
+    assessmentCycleId: result.assessment_cycle_id,
     projectId: result.project_id,
     projectName: result.project_name,
     questionnaireKey: result.questionnaire_key,
@@ -229,6 +335,7 @@ function mapParticipantReceivedFeedback(
     projectId: feedback.project_id,
     projectName: feedback.project_name,
     assignmentRoundId: feedback.assignment_round_id,
+    assessmentCycleId: feedback.assessment_cycle_id,
     questionnaireKey: feedback.questionnaire_key,
     questionnaireTitle: feedback.questionnaire_title,
     completedCount: feedback.completed_count,
@@ -265,11 +372,46 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
     pcmPhase: "persister",
     projectName: demoProjectName,
     projectId: null,
+    assessmentCycleId: "synthetic-cycle-current",
+    contextSelectionRequired: false,
+    contexts: [],
+    cycles: [
+      {
+        id: "synthetic-cycle-baseline",
+        projectId: "synthetic-leadership-project",
+        sequence: 1,
+        name: "Evaluare inițială",
+        status: "closed",
+      },
+      {
+        id: "synthetic-cycle-current",
+        projectId: "synthetic-leadership-project",
+        sequence: 2,
+        name: "Reevaluare 1",
+        status: "active",
+      },
+    ],
     projects: [
       {
         id: "synthetic-leadership-project",
         name: demoProjectName,
         deadlineLabel: bundle.state === "valid" ? bundle.deadlineLabel : "deadline-ul proiectului",
+        cycles: [
+          {
+            id: "synthetic-cycle-baseline",
+            projectId: "synthetic-leadership-project",
+            sequence: 1,
+            name: "Evaluare inițială",
+            status: "closed",
+          },
+          {
+            id: "synthetic-cycle-current",
+            projectId: "synthetic-leadership-project",
+            sequence: 2,
+            name: "Reevaluare 1",
+            status: "active",
+          },
+        ],
       },
     ],
     companyName: "Atlas Mobility",
@@ -279,6 +421,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
     receivedFeedback: {
       projectId: "synthetic-leadership-project",
       projectName: "Leadership operațional Q3",
+      assessmentCycleId: "synthetic-cycle-current",
       completedCount: 3,
       minimumCompleted: 2,
       visible: true,
@@ -293,6 +436,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
       {
         projectId: "synthetic-leadership-project",
         projectName: "Leadership operațional Q3",
+        assessmentCycleId: "synthetic-cycle-current",
         completedCount: 3,
         minimumCompleted: 2,
         visible: true,
@@ -307,6 +451,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
     results: [
       {
         assignmentId: "synthetic-personal-result",
+        assessmentCycleId: "synthetic-cycle-current",
         projectId: "synthetic-leadership-project",
         projectName: "Leadership operațional Q3",
         questionnaireKey: "synthetic_personal_checkin",
@@ -321,6 +466,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
       },
       {
         assignmentId: "synthetic-team-result",
+        assessmentCycleId: "synthetic-cycle-current",
         projectId: "synthetic-leadership-project",
         projectName: "Leadership operațional Q3",
         questionnaireKey: "synthetic_team_checkin",
@@ -392,6 +538,10 @@ function getUnavailableParticipantWorkspaceSummary(reason?: string): Participant
     anonymousName: null,
     projectName: "Niciun proiect activ",
     projectId: null,
+    assessmentCycleId: null,
+    contextSelectionRequired: false,
+    contexts: [],
+    cycles: [],
     projects: [],
     companyName: "Neasociată",
     participantEmail: "",
