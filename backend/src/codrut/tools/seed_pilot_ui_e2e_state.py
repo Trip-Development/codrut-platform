@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
+from codrut.modules.assignments.models import AssessmentCycle, AssessmentCycleStatus
 from codrut.modules.companies.models import (
     Company,
     CompanyMembership,
@@ -76,6 +77,19 @@ async def seed_pilot_ui_e2e_state() -> None:
         )
         session.add(project)
         await session.flush()
+
+        session.add(
+            AssessmentCycle(
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Evaluare inițială",
+                status=AssessmentCycleStatus.draft,
+                starts_at=project.starts_at,
+                due_at=project.due_at,
+                created_by_user_id=trainer.id,
+            )
+        )
 
         session.add(
             CompanyMembership(
