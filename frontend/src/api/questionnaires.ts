@@ -383,6 +383,7 @@ export async function getQuestionnaireDefinition(
 export async function getSecureQuestionnaireDefinition(
   token: string,
   assignmentId: string,
+  options: RequestInit = {},
 ): Promise<ParticipantQuestionnaireDefinition | null> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     const key = seededAssignmentQuestionnaires[assignmentId];
@@ -394,7 +395,9 @@ export async function getSecureQuestionnaireDefinition(
     const response = await apiFetch(
       `${getApiBaseUrl()}/forms/secure-links/${encodeURIComponent(token)}/assignments/${encodeURIComponent(assignmentId)}/definition`,
       {
+        ...options,
         cache: "no-store",
+        headers: new Headers(options.headers),
       },
     );
     if (response.status === 404 || response.status === 410) return null;
@@ -561,6 +564,7 @@ export async function getQuestionnaireResponse(
 export async function getSecureQuestionnaireResponse(
   token: string,
   assignmentId: string,
+  options: RequestInit = {},
 ): Promise<QuestionnaireResponseRecord | null> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return {
@@ -577,7 +581,9 @@ export async function getSecureQuestionnaireResponse(
     const response = await apiFetch(
       `${getApiBaseUrl()}/forms/secure-links/${encodeURIComponent(token)}/assignments/${encodeURIComponent(assignmentId)}/response`,
       {
+        ...options,
         cache: "no-store",
+        headers: new Headers(options.headers),
       },
     );
     if (response.status === 404 || response.status === 410) return null;

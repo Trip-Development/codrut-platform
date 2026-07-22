@@ -6,11 +6,16 @@ import {
   getSecureQuestionnaireResponse,
   type QuestionnaireDefinition,
 } from "@/api/questionnaires";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import SecureTaskRunnerPage from "./page";
 
 vi.mock("@/api/questionnaires", () => ({
   getSecureQuestionnaireDefinition: vi.fn(),
   getSecureQuestionnaireResponse: vi.fn(),
+}));
+
+vi.mock("@/api/server-request", () => ({
+  getServerApiRequestOptions: vi.fn(),
 }));
 
 vi.mock("@/components/questionnaires/lazy-questionnaire-runner", () => ({
@@ -53,6 +58,9 @@ const definition = {
 
 describe("SecureTaskRunnerPage", () => {
   beforeEach(() => {
+    vi.mocked(getServerApiRequestOptions).mockResolvedValue({
+      headers: new Headers({ Cookie: "codrut_session=secure-session" }),
+    });
     vi.mocked(getSecureQuestionnaireDefinition).mockResolvedValue(definition);
     vi.mocked(getSecureQuestionnaireResponse).mockResolvedValue({
       id: "response-1",
@@ -87,6 +95,17 @@ describe("SecureTaskRunnerPage", () => {
     expect(screen.getByText("Înapoi la invitație")).toBeDefined();
     expect(screen.getByText("Bianca Pavel")).toBeDefined();
     expect(screen.queryByText("Chestionar securizat")).toBeNull();
+    expect(getServerApiRequestOptions).toHaveBeenCalledWith("participant");
+    expect(getSecureQuestionnaireResponse).toHaveBeenCalledWith(
+      "invite-token",
+      "assignment-1",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    expect(getSecureQuestionnaireDefinition).toHaveBeenCalledWith(
+      "invite-token",
+      "assignment-1",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
   });
 
   it("rejects an external return path", async () => {

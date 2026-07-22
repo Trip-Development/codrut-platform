@@ -212,21 +212,26 @@ describe("questionnaire response contracts", () => {
     delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
   });
 
-  it("loads secure definitions and drafts without session cookies", async () => {
+  it("forwards server session headers when loading secure definitions and drafts", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(response({ ok: true, payload: definition }))
       .mockResolvedValueOnce(response({ ok: true, payload: savedResponse }));
     vi.stubGlobal("fetch", fetchMock);
+    const requestOptions = {
+      headers: new Headers({ Cookie: "codrut_session=server-session" }),
+    };
 
-    await expect(getSecureQuestionnaireDefinition("invite/token", "assignment/1")).resolves.toMatchObject({
+    await expect(getSecureQuestionnaireDefinition("invite/token", "assignment/1", requestOptions)).resolves.toMatchObject({
       key: "synthetic_pulse",
     });
-    await expect(getSecureQuestionnaireResponse("invite/token", "assignment/1")).resolves.toMatchObject({
+    await expect(getSecureQuestionnaireResponse("invite/token", "assignment/1", requestOptions)).resolves.toMatchObject({
       status: "draft",
     });
     expect(fetchMock.mock.calls[0]?.[0]).toContain("secure-links/invite%2Ftoken/assignments/assignment%2F1/definition");
-    expect(fetchMock.mock.calls[1]?.[1]).toEqual({ cache: "no-store" });
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ cache: "no-store" });
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Cookie")).toBe("codrut_session=server-session");
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("Cookie")).toBe("codrut_session=server-session");
   });
 
   it("loads participant definitions through the assigned resource", async () => {
