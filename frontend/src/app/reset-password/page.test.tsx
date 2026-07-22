@@ -32,7 +32,8 @@ describe("ResetPasswordPage", () => {
     nativeValueSetter?.call(emailInput, "existing@example.com");
     fireEvent.submit(submitButton.closest("form")!);
 
-    await screen.findByText("Verifică emailul.");
+    await screen.findByText("Solicitarea a fost primită.");
+    expect(screen.getByText(/Dacă există un cont permanent/).textContent).toContain("existing@example.com");
     expect(requestPasswordReset).toHaveBeenCalledWith("existing@example.com");
   });
 
@@ -42,7 +43,7 @@ describe("ResetPasswordPage", () => {
     const submitButton = screen.getByRole("button", { name: "Trimite link securizat" });
     fireEvent.submit(submitButton.closest("form")!);
 
-    expect(await screen.findByText("Introdu adresa de email asociată contului.")).toBeTruthy();
+    expect(await screen.findByText(/Introdu adresa de email asociată contului\./)).toBeTruthy();
     expect(requestPasswordReset).not.toHaveBeenCalled();
   });
 
@@ -74,6 +75,20 @@ describe("ResetPasswordPage", () => {
       await resetPromise;
     });
 
-    await screen.findByText("Verifică emailul.");
+    await screen.findByText("Solicitarea a fost primită.");
+  });
+
+  it("retains the email and explains retry after a request failure", async () => {
+    vi.mocked(requestPasswordReset).mockRejectedValue(new Error("Serviciul nu răspunde momentan."));
+    render(<ResetPasswordPage />);
+
+    const emailInput = screen.getByLabelText("Email") as HTMLInputElement;
+    fireEvent.change(emailInput, { target: { value: "participant@example.com" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Trimite link securizat" }).closest("form")!);
+
+    expect(await screen.findByText("Solicitarea nu a putut fi trimisă")).toBeTruthy();
+    expect(screen.getByText(/Adresa introdusă a fost păstrată/)).toBeTruthy();
+    expect(emailInput.value).toBe("participant@example.com");
+    expect(screen.getByRole("button", { name: "Trimite link securizat" })).toHaveProperty("disabled", false);
   });
 });

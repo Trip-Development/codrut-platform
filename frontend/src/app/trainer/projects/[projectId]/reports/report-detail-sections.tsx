@@ -10,7 +10,6 @@ import type {
 } from "@/app/trainer/companies/[companyId]/reports/report-aggregation";
 import { ScaledBar } from "@/components/reports/native-charts";
 import { formatRomanianDate } from "@/utils/date-format";
-import { MIN_REPORT_COHORT_SIZE } from "./report-constants";
 
 const distressDriverKeys = new Set(["distress_drivers", "distress_drivers_en"]);
 const completedStatusesForReports = new Set(["submitted", "validated", "scored"]);
@@ -30,10 +29,7 @@ export function LencioniTeamBreakdown({ teams, overviewHref }: { teams: TeamLens
   return (
     <section id="lencioni-pe-echipe" className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">Lencioni pe echipe</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Prag de confidențialitate: {MIN_REPORT_COHORT_SIZE} răspunsuri.</p>
-        </div>
+        <h2 className="text-xl font-semibold text-foreground">Lencioni pe echipe</h2>
         <BackLink href={overviewHref} />
       </div>
 
@@ -50,17 +46,13 @@ export function LencioniTeamBreakdown({ teams, overviewHref }: { teams: TeamLens
                 </ReportDescription>
               </ReportHeader>
               <ReportContent>
-                {team.lencioniCount >= MIN_REPORT_COHORT_SIZE ? (
-                  <TeamAverages
-                    title="Lencioni"
-                    count={team.lencioniCount}
-                    items={team.lencioniAverages}
-                    max={10}
-                    valueLabel="0-10"
-                  />
-                ) : (
-                  <SuppressedTeamSection title="Lencioni" count={team.lencioniCount} />
-                )}
+                <TeamAverages
+                  title="Lencioni"
+                  count={team.lencioniCount}
+                  items={team.lencioniAverages}
+                  max={10}
+                  valueLabel="0-10"
+                />
               </ReportContent>
             </ReportSurface>
           ))}
@@ -84,12 +76,7 @@ export function DriverDetailBreakdown({
   return (
     <section id="driveri-detaliu" className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">Driveri de distres</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Agregatele cer {MIN_REPORT_COHORT_SIZE} răspunsuri. Detaliul individual conține scoruri calculate, nu răspunsuri brute.
-          </p>
-        </div>
+        <h2 className="text-xl font-semibold text-foreground">Driveri de distres</h2>
         <BackLink href={overviewHref} />
       </div>
 
@@ -113,17 +100,13 @@ export function DriverDetailBreakdown({
                     </ReportDescription>
                   </ReportHeader>
                   <ReportContent>
-                    {team.driverCount >= MIN_REPORT_COHORT_SIZE ? (
-                      <TeamAverages
-                        title="Driveri de distres"
-                        count={team.driverCount}
-                        items={team.driverAverages}
-                        max={100}
-                        suffix="%"
-                      />
-                    ) : (
-                      <SuppressedTeamSection title="Driveri de distres" count={team.driverCount} />
-                    )}
+                    <TeamAverages
+                      title="Driveri de distres"
+                      count={team.driverCount}
+                      items={team.driverAverages}
+                      max={100}
+                      suffix="%"
+                    />
                   </ReportContent>
                 </ReportSurface>
               ))}
@@ -287,20 +270,6 @@ function TeamAverages({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function SuppressedTeamSection({ title, count }: { title: string; count: number }) {
-  return (
-    <div className="border-l-2 border-border bg-muted/35 px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{title}</p>
-        <span className="text-xs font-semibold text-muted-foreground">{formatResponseCount(count)}</span>
-      </div>
-      <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-        Ascuns până există cel puțin {MIN_REPORT_COHORT_SIZE} răspunsuri.
-      </p>
     </div>
   );
 }

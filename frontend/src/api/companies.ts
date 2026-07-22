@@ -98,7 +98,12 @@ export type CompanyParticipant = {
   pcm_phase?: string | null;
   anonymous_name?: string | null;
   user_id: string | null;
+  is_shadow_account?: boolean;
 };
+
+export function hasPermanentParticipantAccount(participant: CompanyParticipant): boolean {
+  return Boolean(participant.user_id) && participant.is_shadow_account !== true;
+}
 
 export type UpdateCompanyParticipantPayload = {
   projectId?: string | null;

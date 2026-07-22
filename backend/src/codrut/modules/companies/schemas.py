@@ -182,6 +182,7 @@ class ParticipantResponse(BaseModel):
     id: UUID
     company_id: UUID
     user_id: UUID | None
+    is_shadow_account: bool = False
     full_name: str
     email: EmailStr | None
     reports_to_name: str | None

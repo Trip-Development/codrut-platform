@@ -124,24 +124,30 @@ class IdentityService:
         if payload.email.lower() != verify_result.email.lower():
             raise DomainError("Email address does not match invitation.", code="email_mismatch")
 
-        # 5. Check if a user with this email already exists in users table
+        # 5. Promote a secure-link shadow user or create a new permanent account.
         existing = await self.repository.get_user_by_email(payload.email)
-        if existing is not None:
+        if existing is not None and existing.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH:
             raise DomainError("An account with this email already exists.", code="email_taken")
 
-        # 6. Create the user
         await ensure_password_not_breached(payload.password)
         accepted_at = datetime.now(UTC)
-        user = await self.repository.add_user(
-            User(
-                id=uuid.uuid4(),
-                email=payload.email.lower(),
-                password_hash=hash_password(payload.password),
-                role=UserRole.participant,
-                terms_accepted_at=accepted_at,
-                terms_version=payload.terms_version,
+        if existing is not None:
+            existing.password_hash = hash_password(payload.password)
+            existing.role = UserRole.participant
+            existing.terms_accepted_at = accepted_at
+            existing.terms_version = payload.terms_version
+            user = existing
+        else:
+            user = await self.repository.add_user(
+                User(
+                    id=uuid.uuid4(),
+                    email=payload.email.lower(),
+                    password_hash=hash_password(payload.password),
+                    role=UserRole.participant,
+                    terms_accepted_at=accepted_at,
+                    terms_version=payload.terms_version,
+                )
             )
-        )
 
         from sqlalchemy import select
 
@@ -261,14 +267,16 @@ class IdentityService:
         if company is None:
             raise DomainError("Invitation project not found.", code="project_not_found")
 
-        # Check if already registered
-        already_registered = profile.user_id is not None
+        # Shadow users back secure links but are not permanent registrations.
         user: User | None = None
         if profile.user_id is not None:
             user_result = await self.repository.session.execute(
                 select(User).where(User.id == profile.user_id)
             )
             user = user_result.scalar_one_or_none()
+        already_registered = bool(
+            user is not None and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
+        )
 
         # Check if the participant is leadership
         stmt = select(
@@ -319,7 +327,9 @@ class IdentityService:
         for assignment_id in claims.assignment_ids:
             ass = assignments_by_id[assignment_id]
             target_label = "Autoevaluare"
-            if ass.target_type == AssignmentTargetType.team and ass.target_team_id:
+            if ass.questionnaire_key in {"lencioni", "lencioni_en"}:
+                target_label = "Echipa ta"
+            elif ass.target_type == AssignmentTargetType.team and ass.target_team_id:
                 team_result = await self.repository.session.execute(
                     select(Team)
                     .where(Team.id == ass.target_team_id)
@@ -327,7 +337,7 @@ class IdentityService:
                 )
                 team = team_result.scalar_one_or_none()
                 if team:
-                    target_label = f"Echipa {team.name}"
+                    target_label = team.name
             elif ass.target_type == AssignmentTargetType.person and ass.target_person_id:
                 person_result = await self.repository.session.execute(
                     select(ParticipantProfile)

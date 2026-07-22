@@ -4124,6 +4124,11 @@
             "title": "Id",
             "type": "string"
           },
+          "is_shadow_account": {
+            "default": false,
+            "title": "Is Shadow Account",
+            "type": "boolean"
+          },
           "location": {
             "anyOf": [
               {
@@ -4719,6 +4724,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_shadow_account": {
+            "default": false,
+            "title": "Is Shadow Account",
+            "type": "boolean"
           },
           "location": {
             "anyOf": [

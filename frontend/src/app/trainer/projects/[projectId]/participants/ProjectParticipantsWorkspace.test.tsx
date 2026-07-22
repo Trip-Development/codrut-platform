@@ -100,6 +100,39 @@ describe("ProjectParticipantsWorkspace", () => {
     });
   });
 
+  it("keeps a linked shadow account temporary while accepting a real linked account", () => {
+    const rows = buildProjectParticipantAccessRows(
+      [
+        {
+          ...participants[1],
+          id: "shadow-member",
+          role_group: "leadership",
+          user_id: "shadow-user",
+          is_shadow_account: true,
+        },
+        {
+          ...participants[1],
+          id: "permanent-member",
+          full_name: "Mara Permanentă",
+          user_id: "permanent-user",
+          is_shadow_account: false,
+        },
+      ],
+      [],
+    );
+
+    expect(rows[0]).toMatchObject({
+      accountTypeLabel: "Acces temporar",
+      accountStateLabel: "Fără cont permanent",
+      hasAccount: false,
+    });
+    expect(rows[1]).toMatchObject({
+      accountTypeLabel: "Cont permanent",
+      accountStateLabel: "Cont creat",
+      hasAccount: true,
+    });
+  });
+
   it("derives permanent manager access from compact reports-to keys", () => {
     const rows = buildProjectParticipantAccessRows(
       [
@@ -144,6 +177,17 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Ana Manager")).toBeTruthy();
     expect(screen.getByText("Dan Membru")).toBeTruthy();
     expect(screen.getByText("Link securizat activ")).toBeTruthy();
+  });
+
+  it("renders the narrow roster as a contained labeled list without a forced table width", () => {
+    renderWorkspace();
+
+    const roster = screen.getByRole("table", { name: "Roster participanți" });
+    expect(roster.className).not.toContain("min-w-[920px]");
+    expect(roster.parentElement?.className).not.toContain("overflow-x-auto");
+    expect(within(roster).getAllByText("Nume").length).toBeGreaterThan(0);
+    expect(within(roster).getAllByText("Email").length).toBeGreaterThan(0);
+    expect(within(roster).getAllByText("Tip acces").length).toBeGreaterThan(0);
   });
 
   it("searches the project roster and access view without diacritics", () => {

@@ -22,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/utils/cn";
 import { formatRomanianDate } from "@/utils/date-format";
 import { getProjectReportWorkspaceData } from "../project-data";
-import { MIN_REPORT_COHORT_SIZE } from "./report-constants";
 import { ReportPrintButton } from "./ReportPrintButton";
 
 const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
@@ -105,7 +104,6 @@ export default async function ProjectReportsPage({
           max={10}
           valueLabel="0-10"
           legend={lencioniLegend}
-          suppressed={isSmallCohort(lencioniCount)}
           actionHref={`${reportsPath}/lencioni`}
           actionLabel="Detalii"
         />
@@ -115,7 +113,6 @@ export default async function ProjectReportsPage({
           items={boss360Averages}
           suffix="%"
           max={100}
-          suppressed={isSmallCohort(boss360Count)}
         />
         <ReportPanel
           title="Driveri de distres"
@@ -123,7 +120,6 @@ export default async function ProjectReportsPage({
           items={driverAverages}
           suffix="%"
           max={100}
-          suppressed={isSmallCohort(driverCount)}
           actionHref={`${reportsPath}/drivers`}
           actionLabel="Detalii"
         />
@@ -131,21 +127,21 @@ export default async function ProjectReportsPage({
 
       <IcareAnswerReviewPanel rows={icareReview.rows} />
 
-      {((pcmBaseDistribution.length > 0 && aggregate.pcm_base_count >= MIN_REPORT_COHORT_SIZE) ||
-        (pcmPhaseDistribution.length > 0 && aggregate.pcm_phase_count >= MIN_REPORT_COHORT_SIZE) ||
-        (commonDriverResults.length > 0 && driverCount >= MIN_REPORT_COHORT_SIZE)) ? (
+      {(pcmBaseDistribution.length > 0 ||
+        pcmPhaseDistribution.length > 0 ||
+        commonDriverResults.length > 0) ? (
         <section className="grid gap-5 lg:grid-cols-3">
-          {aggregate.pcm_base_count >= MIN_REPORT_COHORT_SIZE ? (
+          {pcmBaseDistribution.length > 0 ? (
             <ChartPanel title="PCM bază">
               <DonutChart title="Distribuție PCM bază" data={pcmBaseDistribution} />
             </ChartPanel>
           ) : null}
-          {aggregate.pcm_phase_count >= MIN_REPORT_COHORT_SIZE ? (
+          {pcmPhaseDistribution.length > 0 ? (
             <ChartPanel title="PCM fază">
               <DonutChart title="Distribuție PCM fază" data={pcmPhaseDistribution} />
             </ChartPanel>
           ) : null}
-          {driverCount >= MIN_REPORT_COHORT_SIZE ? (
+          {commonDriverResults.length > 0 ? (
             <ChartPanel title="Driveri comuni">
               <DonutChart
                 title="Driveri de distres peste prag"
@@ -254,7 +250,6 @@ function ReportPanel({
   valueLabel,
   legend,
   description,
-  suppressed,
   actionHref,
   actionLabel,
 }: {
@@ -266,7 +261,6 @@ function ReportPanel({
   valueLabel?: string;
   legend?: Array<{ range: string; label: string }>;
   description?: string;
-  suppressed?: boolean;
   actionHref?: string;
   actionLabel?: string;
 }) {
@@ -289,11 +283,7 @@ function ReportPanel({
       <Separator />
       <div className={cn(reportContentClassName(), "py-4")}>
         {description ? <p className="text-xs leading-5 text-muted-foreground">{description}</p> : null}
-        {suppressed ? (
-          <p className="mt-4 rounded-md border bg-muted/45 px-4 py-3 text-xs font-semibold leading-5 text-muted-foreground">
-            Rezultatele sunt ascunse până există cel puțin {MIN_REPORT_COHORT_SIZE} răspunsuri pentru acest instrument.
-          </p>
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Rezultatele apar după completare și scorare.</p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -423,10 +413,6 @@ function formatDate(value: string | null | undefined): string {
 
 function formatResponseCount(count: number): string {
   return count === 1 ? "1 răspuns" : `${count} răspunsuri`;
-}
-
-function isSmallCohort(count: number): boolean {
-  return count > 0 && count < MIN_REPORT_COHORT_SIZE;
 }
 
 function buildIcareReviewCsvHref(rows: IcareAnswerReviewRow[]): string {

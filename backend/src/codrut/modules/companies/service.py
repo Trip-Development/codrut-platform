@@ -1317,6 +1317,7 @@ def _project_participant_response(
         id=participant.id,
         company_id=participant.company_id,
         user_id=participant.user_id,
+        is_shadow_account=participant.is_shadow_account,
         full_name=participant.full_name,
         email=participant.email,
         reports_to_name=membership.reports_to_name,

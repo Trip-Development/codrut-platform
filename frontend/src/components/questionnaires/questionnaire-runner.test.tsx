@@ -212,6 +212,20 @@ describe("QuestionnaireRunner", () => {
     expect(screen.queryByText(/You are reviewing/i)).toBeNull();
   });
 
+  it("uses participant-safe Lencioni team copy without exposing the internal team name", () => {
+    render(
+      <QuestionnaireRunner
+        definition={{ ...mockDefinition, key: "lencioni" }}
+        assignmentId="team-assignment"
+        targetLabel="Echipa Echipa Vlad doi"
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Răspunzi despre echipa ta" })).toBeTruthy();
+    expect(screen.getByText("Feedback pentru echipă")).toBeTruthy();
+    expect(screen.queryByText(/Vlad doi/i)).toBeNull();
+  });
+
   it("triggers background auto-save and updates progress when answer is clicked", async () => {
     vi.useFakeTimers();
     render(<QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />);
