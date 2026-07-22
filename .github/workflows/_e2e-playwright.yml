@@ -18,7 +18,7 @@ jobs:
           CODRUT_FRONTEND_DEMO_FALLBACK: "false"
           CODRUT_LOCAL_AUTH_BYPASS: "false"
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml up -d --build db redis
+          docker compose -f compose.yaml -f compose.dev.yaml up -d --build db redis mailpit
           docker compose -f compose.yaml -f compose.dev.yaml run --rm --user vscode backend uv run alembic upgrade head
           docker compose -f compose.yaml -f compose.dev.yaml up -d --build backend worker frontend
           docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest tests/test_health.py
