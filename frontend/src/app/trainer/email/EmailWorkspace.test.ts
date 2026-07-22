@@ -55,6 +55,8 @@ const navigationMocks = vi.hoisted(() => ({
   back: vi.fn(),
   refresh: vi.fn(),
 }));
+const nativePushState = window.history.pushState.bind(window.history);
+const nativeReplaceState = window.history.replaceState.bind(window.history);
 
 const spreadsheetMocks = vi.hoisted(() => ({
   readSpreadsheetFile: vi.fn(),
@@ -125,6 +127,15 @@ beforeEach(() => {
   navigationMocks.prefetch.mockReset();
   navigationMocks.back.mockReset();
   navigationMocks.refresh.mockReset();
+  nativeReplaceState(null, "", "/trainer/email");
+  vi.spyOn(window.history, "pushState").mockImplementation((data, unused, url) => {
+    nativePushState(data, unused, url);
+    if (url) applyNavigationHref(String(url));
+  });
+  vi.spyOn(window.history, "replaceState").mockImplementation((data, unused, url) => {
+    nativeReplaceState(data, unused, url);
+    if (url) applyNavigationHref(String(url));
+  });
   navigationMocks.push.mockImplementation((href: string) => {
     applyNavigationHref(href);
   });
@@ -142,6 +153,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   document.body.style.overflow = "";
+  vi.restoreAllMocks();
 });
 
 type CampaignRecipient = EmailOpsSummary["campaign"]["recipients"][number];
@@ -407,7 +419,7 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(screen.getByRole("button", { name: "Șabloane" })).toBeTruthy();
 
     await waitFor(() => {
-      expect(navigationMocks.replace).toHaveBeenCalledWith("/trainer/email", { scroll: false });
+      expect(`${window.location.pathname}${window.location.search}`).toBe("/trainer/email");
     });
   });
 
@@ -422,11 +434,15 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(within(navigation).getByRole("button", { name: "Campanii" }).getAttribute("aria-current")).toBe("page");
 
     fireEvent.click(within(navigation).getByRole("button", { name: "Campanii" }));
-    expect(navigationMocks.push).not.toHaveBeenCalled();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/trainer/email");
     fireEvent.click(within(navigation).getByRole("button", { name: "Contacte" }));
-    expect(navigationMocks.push).toHaveBeenLastCalledWith("/trainer/email?view=contacts", { scroll: false });
+    expect(`${window.location.pathname}${window.location.search}`).toBe(
+      "/trainer/email?view=contacts",
+    );
     fireEvent.click(within(navigation).getByRole("button", { name: "Șabloane" }));
-    expect(navigationMocks.push).toHaveBeenLastCalledWith("/trainer/email?tab=templates", { scroll: false });
+    expect(`${window.location.pathname}${window.location.search}`).toBe(
+      "/trainer/email?tab=templates",
+    );
   });
 
   it("shows a customer-facing contact source instead of the local preview sentinel", async () => {
@@ -518,7 +534,9 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(await screen.findByText("Campanie vizibilă")).toBeTruthy();
     expect(screen.getByText(/Subiect vizibil/)).toBeTruthy();
     expect(screen.getByText("Campania „Campanie vizibilă” a fost creată.")).toBeTruthy();
-    expect(navigationMocks.replace).toHaveBeenCalledWith("/trainer/email?tab=campaigns&view=campaigns", { scroll: false });
+    expect(`${window.location.pathname}${window.location.search}`).toBe(
+      "/trainer/email?tab=campaigns&view=campaigns",
+    );
   });
 
   it("shows field-specific campaign errors and focuses the first invalid field", async () => {

@@ -1,16 +1,20 @@
 "use client";
 
-import { useCallback, useMemo, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type UrlStateMode = "push" | "replace";
 
 export function useUrlState() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
   const [isPending, startTransition] = useTransition();
+  const desiredLocationRef = useRef({ pathname, searchKey });
+
+  useEffect(() => {
+    desiredLocationRef.current = { pathname, searchKey };
+  }, [pathname, searchKey]);
 
   const params = useMemo(() => new URLSearchParams(searchKey), [searchKey]);
 
@@ -19,7 +23,10 @@ export function useUrlState() {
       updates: Record<string, string | number | null | undefined>,
       mode: UrlStateMode = "push",
     ) => {
-      const nextParams = new URLSearchParams(searchKey);
+      const desiredLocation = desiredLocationRef.current;
+      const baseSearchKey =
+        desiredLocation.pathname === pathname ? desiredLocation.searchKey : searchKey;
+      const nextParams = new URLSearchParams(baseSearchKey);
       Object.entries(updates).forEach(([key, value]) => {
         const normalized = value === null || value === undefined ? "" : String(value);
         if (normalized) {
@@ -31,18 +38,20 @@ export function useUrlState() {
 
       const query = nextParams.toString();
       const href = query ? `${pathname}?${query}` : pathname;
-      const currentHref = searchKey ? `${pathname}?${searchKey}` : pathname;
+      const currentHref = baseSearchKey ? `${pathname}?${baseSearchKey}` : pathname;
       if (href === currentHref) return;
+
+      desiredLocationRef.current = { pathname, searchKey: query };
 
       startTransition(() => {
         if (mode === "replace") {
-          router.replace(href, { scroll: false });
+          window.history.replaceState(null, "", href);
         } else {
-          router.push(href, { scroll: false });
+          window.history.pushState(null, "", href);
         }
       });
     },
-    [pathname, router, searchKey, startTransition],
+    [pathname, searchKey, startTransition],
   );
   const get = useCallback((key: string) => params.get(key), [params]);
   const setParam = useCallback(
