@@ -39,6 +39,8 @@ def test_protected_content_migration_pins_only_unambiguous_definitions(monkeypat
     assert assignment_column.name == "questionnaire_definition_id"
     assert assignment_column.nullable is True
     assert "definition.version = response.questionnaire_version" in sql
+    assert "with unique_active_definitions" in sql
+    assert "where active is true" in sql
     assert "having count(*) = 1" in sql
     assert "cannot safely pin % legacy questionnaire assignments" in sql
     assert "create trigger trg_pin_questionnaire_assignment_definition" in sql
