@@ -50,6 +50,19 @@ export class ParticipantPage {
     const submitButton = this.page.getByRole("button", { name: "Trimite răspunsurile" });
     await expect(submitButton).toBeEnabled();
     await submitButton.click();
-    await expect(this.page.getByRole("heading", { name: "Răspunsurile au fost trimise" })).toBeVisible();
+
+    const confirmButton = this.page.getByRole("button", { name: "Trimite", exact: true });
+    await expect(confirmButton).toBeVisible();
+    await Promise.all([
+      this.page.waitForResponse(
+        (response) =>
+          response.url().includes("/response/submit") &&
+          response.request().method() === "POST" &&
+          response.ok(),
+      ),
+      confirmButton.click(),
+    ]);
+
+    await expect(this.page.getByRole("heading", { name: "Chestionarele tale" })).toBeVisible();
   }
 }
