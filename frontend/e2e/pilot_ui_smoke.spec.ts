@@ -132,7 +132,7 @@ test.describe("Pilot trainer UI smoke", () => {
 
     await page.getByRole("link", { exact: true, name: "Invitații" }).click();
     await expect(page).toHaveURL(new RegExp(`/trainer/projects/${seeded.projectId}/invitations$`));
-    await expect(page.getByRole("heading", { name: "Persoane invitate" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Livrare invitații" })).toBeVisible();
     await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -140,9 +140,9 @@ test.describe("Pilot trainer UI smoke", () => {
           response.request().method() === "POST" &&
           response.ok(),
       ),
-      page.getByRole("button", { name: "Trimite email tuturor" }).click(),
+      page.getByRole("button", { name: "Trimite tuturor" }).click(),
     ]);
-    await expect(page.getByText("6/6 emailuri trimise.")).toBeVisible();
+    await expect(page.getByText("0 acceptate de furnizor, 6 în coadă, 0 eșuate.")).toBeVisible();
 
     const messages = await mailpitMessagesForCompany(request, seeded.companyName);
     const subjects = messages.map((message) => message.Subject ?? "");
