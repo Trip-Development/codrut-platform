@@ -29,18 +29,28 @@ def test_email_delivery_tables_are_registered() -> None:
 def test_email_delivery_enums_support_current_workflow() -> None:
     assert {item.value for item in EmailSendStatus} == {
         "queued",
+        "dispatching",
         "accepted",
         "failed",
         "delivered",
         "bounced",
+        "cancelled",
+        "indeterminate",
     }
     assert {item.value for item in EmailEventType} == {
+        "queued",
+        "claimed",
+        "retry_scheduled",
+        "cancelled",
         "accepted",
         "failed",
         "delivered",
         "bounced",
         "opened",
         "clicked",
+        "unsubscribed",
+        "complained",
+        "indeterminate",
     }
 
 
@@ -70,7 +80,18 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
         for constraint in Base.metadata.tables["campaign_recipients"].constraints
         if isinstance(constraint, UniqueConstraint)
     }
-    assert ("email",) in unique_columns
+    unique_indexes = {
+        index.name: index
+        for index in Base.metadata.tables["campaign_recipients"].indexes
+        if index.unique
+    }
+    owner_email_index = unique_indexes["uq_campaign_recipients_owner_normalized_email"]
+
+    assert ("email",) not in unique_columns
+    assert [str(expression) for expression in owner_email_index.expressions] == [
+        "campaign_recipients.owner_id",
+        "lower(campaign_recipients.email)",
+    ]
     assert Base.metadata.tables["campaign_recipients"].columns["email"].nullable
     assert "owner_id" in Base.metadata.tables["campaign_recipients"].columns
 
@@ -113,9 +134,7 @@ def test_campaign_recipient_membership_model_is_campaign_scoped() -> None:
         == "CASCADE"
     )
     assert (
-        foreign_keys[
-            "fk_campaign_recipient_memberships_recipient_id_campaign_recipients"
-        ].ondelete
+        foreign_keys["fk_campaign_recipient_memberships_recipient_id_campaign_recipients"].ondelete
         == "CASCADE"
     )
 
@@ -150,20 +169,32 @@ def test_campaign_create_allows_vimeo_with_thumbnail_without_landing_page() -> N
     assert request.landing_page_url is None
 
 
-def test_campaign_create_rejects_missing_thumbnail_for_video_campaign() -> None:
-    try:
-        CampaignCreateRequest(
-            name="Video campaign",
-            segment="potential_customer",
-            subject="Subject",
-            html_body="<p>Body</p>",
-            text_body="Body",
-            video_url="https://video.codrut.ro/watch/demo",
-        )
-    except ValueError as exc:
-        assert "Video campaigns require" in str(exc)
-    else:
-        raise AssertionError("Video campaigns without thumbnail should be rejected.")
+def test_campaign_create_allows_incomplete_video_draft() -> None:
+    request = CampaignCreateRequest(
+        name="Video campaign",
+        segment="potential_customer",
+        subject="Subject",
+        html_body="<p>Body</p>",
+        text_body="Body",
+        video_url="https://video.codrut.ro/watch/demo",
+    )
+
+    assert request.video_url == "https://video.codrut.ro/watch/demo"
+    assert request.thumbnail_url is None
+
+
+def test_campaign_create_allows_image_without_video() -> None:
+    request = CampaignCreateRequest(
+        name="Image campaign",
+        segment="potential_customer",
+        subject="Subject",
+        html_body="<p>Body</p>",
+        text_body="Body",
+        thumbnail_url="https://cdn.codrut.ro/image.jpg",
+    )
+
+    assert request.video_url is None
+    assert request.thumbnail_url == "https://cdn.codrut.ro/image.jpg"
 
 
 def test_campaign_create_rejects_non_http_asset_urls() -> None:

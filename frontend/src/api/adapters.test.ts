@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AuthRoleMismatchError,
   AuthSessionUnavailableError,
-  audienceAccessNote,
   changePassword,
   getAuthenticatedSession,
   getCurrentParticipant,
@@ -14,8 +13,10 @@ import {
 import {
   bulkCreateCampaignRecipientsOnServer,
   buildVideoCampaignCreatePayload,
+  campaignAssetFileNameFromUrl,
   createCampaignOnServer,
   createEmailTemplateOnServer,
+  deleteCampaignAssetOnServer,
   deleteCampaignOnServer,
   deleteCampaignRecipientOnServer,
   deleteEmailTemplateOnServer,
@@ -32,7 +33,13 @@ import {
   updateEmailTemplateOnServer,
   uploadCampaignAssetOnServer,
 } from "./email";
-import { inviteQuestionnaireLabel, inviteTaskHref, participantTaskTypeLabel, resolveInviteBundle } from "./invites";
+import {
+  exchangeInviteSession,
+  inviteQuestionnaireLabel,
+  inviteTaskHref,
+  participantTaskTypeLabel,
+  resolveInviteBundle,
+} from "./invites";
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
   addCompanyTeamMembership,
@@ -43,6 +50,7 @@ import {
   getAllCompanyProjects,
   getCompanyAssignments,
   getCompanyDefaultAssignmentPlan,
+  getCompanyDetail,
   getIcareAnswerReview,
   getCompanyList,
   getCompanyParticipants,
@@ -63,6 +71,7 @@ import {
   groupQuestionnaireStubsByKey,
   isQuestionnaireSessionError,
   listQuestionnaireDefinitionStubs,
+  type QuestionnaireDefinition,
   QuestionnaireRequestError,
   saveQuestionnaireResponse,
   submitQuestionnaireResponse,
@@ -93,7 +102,6 @@ describe("frontend API adapter stubs", () => {
     await expect(getCurrentParticipant()).resolves.toMatchObject({ role: "participant" });
     await expect(getTrainerSession()).resolves.toMatchObject({ state: "fallback" });
     await expect(getParticipantSession()).resolves.toMatchObject({ state: "fallback" });
-    expect(audienceAccessNote("invitee")).toContain("linkul securizat");
   });
 
   it("never falls back to slug-like questionnaire labels in participant UI", () => {
@@ -125,7 +133,7 @@ describe("frontend API adapter stubs", () => {
         { returnTo: "/invite/abc" },
       ),
     ).toBe(
-      "/participant/tasks/a1?access=secure&returnTo=%2Finvite%2Fabc&target=Leadership",
+      "/invite/abc/tasks/a1?returnTo=%2Finvite%2Fabc&target=Leadership",
     );
   });
 
@@ -150,7 +158,7 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
-  it("enables demo fallback on localhost unless explicitly disabled", () => {
+  it("uses the test fallback only when no explicit setting is present", () => {
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
     delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
 
@@ -169,7 +177,7 @@ describe("frontend API adapter stubs", () => {
     expect(isDemoFallbackEnabled()).toBe(false);
   });
 
-  it("fails closed for seeded demo data in production-like server runtimes", async () => {
+  it("fails closed for all demo data on non-local server runtimes", async () => {
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
     delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
 
@@ -183,18 +191,21 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
 
     try {
-      expect(isDemoFallbackEnabled()).toBe(true);
+      expect(isDemoFallbackEnabled()).toBe(false);
       expect(isSeededDemoFallbackEnabled()).toBe(false);
       await expect(getTrainerSession()).rejects.toThrow("Trainer authentication required");
       await expect(getParticipantSession()).rejects.toThrow("Participant authentication required");
-      await expect(getQuestionnaireDefinition("boss_360")).resolves.toBeNull();
-      await expect(listQuestionnaireDefinitionStubs()).resolves.toEqual([]);
-
-      const workspace = await getParticipantWorkspaceSummary();
-      expect(workspace).toMatchObject({
-        participantFullName: "Participant",
-        projectName: "Spațiul tău de lucru",
-        tasks: [],
+      await expect(getQuestionnaireDefinition("boss_360")).rejects.toMatchObject({
+        name: "QuestionnaireRequestError",
+        status: 401,
+      });
+      await expect(listQuestionnaireDefinitionStubs()).rejects.toMatchObject({
+        name: "QuestionnaireRequestError",
+        status: 401,
+      });
+      await expect(getParticipantWorkspaceSummary()).rejects.toMatchObject({
+        name: "ParticipantWorkspaceError",
+        status: 401,
       });
     } finally {
       if (originalInternalApiBaseUrl === undefined) {
@@ -245,6 +256,9 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({
         method: "POST",
         credentials: "include",
+        headers: expect.objectContaining({
+          "Idempotency-Key": expect.stringMatching(/^campaign-send-/),
+        }),
         body: JSON.stringify({
           dry_run: false,
           recipient_ids: ["recipient-1"],
@@ -660,8 +674,8 @@ describe("frontend API adapter stubs", () => {
             questionnaire_key: "distress_drivers",
             title: "Driveri de stres TA",
             target_label: "Autoevaluare",
-            scores: { be_strong: 72 },
-            primary_result: "be_strong",
+            scores: { work_signal_a: { score: 72, label: "Semnal de lucru A" } },
+            primary_result: "work_signal_a",
           },
         ],
         received_feedback: {
@@ -671,7 +685,8 @@ describe("frontend API adapter stubs", () => {
           overall_average: 82,
           dimensions: [
             {
-              id: "icare_01_dezvolta_oamenii",
+              id: "feedback_signal_a",
+              label: "Claritate",
               average_score: 90,
               completed_count: 2,
             },
@@ -702,7 +717,8 @@ describe("frontend API adapter stubs", () => {
         overallAverage: 82,
         dimensions: [
           {
-            id: "icare_01_dezvolta_oamenii",
+            id: "feedback_signal_a",
+            label: "Claritate",
             averageScore: 90,
             completedCount: 2,
           },
@@ -737,13 +753,129 @@ describe("frontend API adapter stubs", () => {
 
     expect(summary).toMatchObject({
       participantFullName: "Participant",
-      projectName: "Spațiul tău de lucru",
+      projectName: "Niciun proiect activ",
       tasks: [],
       emptyState: {
-        title: "Spațiul de participant nu este încă disponibil",
-        description: "Participant profile not found for this account.",
+        title: "Spațiul nu este disponibil",
+        description: "Profilul nu este încă legat de acest cont. Verifică adresa de email cu trainerul.",
       },
     });
+  });
+
+  it("maps multi-project participant results and grouped feedback without optional payload fields", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        participant_profile_id: "profile-1",
+        participant_full_name: "Ana Participant",
+        participant_email: "ana@example.com",
+        company_id: "company-1",
+        company_name: "Michelin",
+        project_id: "project-2",
+        project_name: "Leadership avansat",
+        projects: [
+          { id: "project-1", name: "Leadership de bază", deadline_label: "1 august" },
+          { id: "project-2", name: "Leadership avansat", deadline_label: "15 august", deadline_at: "2026-08-15" },
+        ],
+        deadline_label: "15 august",
+        tasks: [],
+        results: [{
+          assignment_id: "assignment-1",
+          project_id: "project-1",
+          project_name: "Leadership de bază",
+          questionnaire_key: "lencioni",
+          title: "Evaluare echipă",
+          target_label: "Echipa Nord",
+          scores: {},
+        }],
+        received_feedback_groups: [{
+          project_id: "project-2",
+          project_name: "Leadership avansat",
+          completed_count: 1,
+          minimum_completed: 2,
+          visible: false,
+        }],
+        cards: [],
+        empty_state: { title: "Fără sarcini", description: "Nu există activitate." },
+      }),
+    } as Response));
+
+    const summary = await getParticipantWorkspaceSummary({ headers: { "X-Test": "true" } });
+
+    expect(summary.projects).toEqual([
+      { id: "project-1", name: "Leadership de bază", deadlineLabel: "1 august" },
+      { id: "project-2", name: "Leadership avansat", deadlineLabel: "15 august", deadlineAt: "2026-08-15" },
+    ]);
+    expect(summary.results[0]).toMatchObject({
+      assignmentId: "assignment-1",
+      projectId: "project-1",
+      primaryResult: undefined,
+    });
+    expect(summary.receivedFeedback).toBeNull();
+    expect(summary.receivedFeedbackGroups[0]).toMatchObject({
+      visible: false,
+      overallAverage: undefined,
+      dimensions: [],
+    });
+  });
+
+  it("reports participant workspace network failures when demo fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+
+    await expect(getParticipantWorkspaceSummary()).rejects.toMatchObject({
+      name: "ParticipantWorkspaceError",
+      status: 0,
+      code: "network_error",
+    });
+  });
+
+  it("preserves structured participant API errors and request references", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: { code: "permission_denied", message: "Acces refuzat.", request_id: "request-123" },
+      }),
+    } as Response));
+
+    await expect(getParticipantWorkspaceSummary()).rejects.toMatchObject({
+      status: 403,
+      code: "permission_denied",
+      message: "Acces refuzat.",
+      requestId: "request-123",
+    });
+  });
+
+  it("creates a stable HTTP error when the participant response is not JSON", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      headers: new Headers({ "X-Request-ID": "proxy-456" }),
+      json: async () => { throw new SyntaxError("invalid json"); },
+    } as unknown as Response));
+
+    await expect(getParticipantWorkspaceSummary()).rejects.toMatchObject({
+      status: 502,
+      code: "http_502",
+      requestId: "proxy-456",
+    });
+  });
+
+  it("uses synthetic participant data only when the local fallback is explicit", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+
+    const summary = await getParticipantWorkspaceSummary();
+
+    expect(summary.participantFullName).toBeTruthy();
+    expect(summary.projects[0]?.id).toBe("synthetic-leadership-project");
+    expect(summary.receivedFeedback?.visible).toBe(true);
+    expect(summary.results).toHaveLength(2);
   });
 
   it("keeps questionnaire and email surfaces explicit", async () => {
@@ -761,7 +893,7 @@ describe("frontend API adapter stubs", () => {
     expect(questionnaires.map((definition) => definition.id)).not.toContain("icare");
     expect(questionnaires.find((definition) => definition.id === "boss_360")).toMatchObject({
       status: "active",
-      estimatedItems: 48,
+      estimatedItems: 2,
     });
     await expect(listEmailSurfaceStubs()).resolves.toEqual([
       { id: "assessment-invites", name: "Invitații assessment", lane: "transactional" },
@@ -832,7 +964,7 @@ describe("frontend API adapter stubs", () => {
     expect(payload?.html_body).not.toContain("<img");
   });
 
-  it("allows thumbnail-only campaign drafts without rendering a video block", () => {
+  it("builds image-only campaign drafts without a video destination", () => {
     const payload = buildVideoCampaignCreatePayload({
       name: " Campanie cu thumbnail ",
       segment: "past_customer",
@@ -850,7 +982,8 @@ describe("frontend API adapter stubs", () => {
     });
     expect(payload?.video_url).toBeUndefined();
     expect(payload?.landing_page_url).toBeUndefined();
-    expect(payload?.html_body).not.toContain("<img");
+    expect(payload?.html_body).toContain('<img src="${thumbnail_url}"');
+    expect(payload?.html_body).not.toContain('href="${landing_page_url}"');
   });
 
   it("uploads campaign thumbnail assets as raw image bodies", async () => {
@@ -888,6 +1021,24 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("cleans up owned campaign assets through the communications API", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deleteCampaignAssetOnServer("campaign-image-owner-token.png");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/communications/campaign-assets/campaign-image-owner-token.png"),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(campaignAssetFileNameFromUrl(
+      "https://codrut.example/api/campaign-assets/campaign-image-owner-token.png",
+    )).toBe("campaign-image-owner-token.png");
+    expect(campaignAssetFileNameFromUrl("https://cdn.example/image.png")).toBeNull();
+  });
+
   it("rejects incomplete or non-http video campaign URLs", () => {
     expect(buildVideoCampaignCreatePayload({
       name: "Campanie video",
@@ -919,7 +1070,7 @@ describe("frontend API adapter stubs", () => {
     await expect(resolveInviteBundle("demo-token")).resolves.toMatchObject({
       state: "valid",
       projectName: "Leadership operațional Q3",
-      participantEmail: "mihai.matei@atlas-mobility.ro",
+      participantEmail: "participant.demo@example.com",
       tasks: [
         expect.objectContaining({
           title: "Driveri de stres TA",
@@ -994,6 +1145,43 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("exchanges real invite tokens through an explicit unsafe request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await exchangeInviteSession("real-token");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/invite/exchange"),
+      expect.objectContaining({
+        method: "POST",
+        cache: "no-store",
+        credentials: "include",
+        body: JSON.stringify({ token: "real-token" }),
+      }),
+    );
+  });
+
+  it("surfaces invite-session conflicts instead of reporting false success", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "invite_session_conflict",
+            message: "Invitația aparține unui alt participant autentificat.",
+          },
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(exchangeInviteSession("real-token")).rejects.toThrow(
+      "Invitația aparține unui alt participant autentificat.",
+    );
+  });
+
   it("resolves real secure invite links through the backend when access is marked secure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
@@ -1012,7 +1200,7 @@ describe("frontend API adapter stubs", () => {
             title: "Feedback pentru echipă",
             status: "not_started",
             detail: "Răspunde pentru echipa indicată în această sarcină.",
-            href: "/participant/questionnaires/lencioni?assignmentId=assignment-1&access=secure",
+            href: "/participant/questionnaires/lencioni?assignmentId=assignment-1&access=secure&returnTo=%2Finvite%2Freal-secure-token",
             assignmentId: "assignment-1",
             targetLabel: "Leadership",
             estimatedMinutes: 12,
@@ -1025,7 +1213,7 @@ describe("frontend API adapter stubs", () => {
     const bundle = await resolveInviteBundle("real-secure-token");
 
     expect(bundle.state === "valid" ? bundle.tasks[0].href : "").toBe(
-      "/participant/tasks/assignment-1?access=secure&target=Leadership",
+      "/invite/real-secure-token/tasks/assignment-1?returnTo=%2Finvite%2Freal-secure-token&target=Leadership",
     );
   });
 
@@ -1109,13 +1297,15 @@ describe("frontend API adapter stubs", () => {
       answers: { q1: 2 },
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock.mock.calls[0]?.[0]).toEqual(
       expect.stringContaining("/forms/assignments/assignment-1/response"),
-      expect.objectContaining({
-        cache: "no-store",
-        credentials: "include",
-        headers: { Cookie: "codrut_session=session-token" },
-      }),
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      cache: "no-store",
+      credentials: "include",
+    });
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Cookie")).toBe(
+      "codrut_session=session-token",
     );
   });
 
@@ -1157,18 +1347,38 @@ describe("frontend API adapter stubs", () => {
     expect(isQuestionnaireSessionError(error)).toBe(true);
   });
 
-  it("resolves the seeded boss 360 questionnaire as a runnable fallback", async () => {
+  it("resolves a synthetic boss 360 sample without bundling protected content", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
     const definition = await getQuestionnaireDefinition("boss_360");
 
     expect(definition).toMatchObject({
       key: "boss_360",
-      title: "Feedback 360 iCARE pentru manager",
+      title: "Mostră sintetică: feedback 360",
     });
     expect(definition?.schema.sections[0]?.questions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "icare_inspiring_developing_people" }),
+        expect.objectContaining({ id: "sample_feedback_q1" }),
+      ]),
+    );
+  });
+
+  it("resolves a synthetic profile sample advertised in the trainer catalog", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+
+    const definition = await getQuestionnaireDefinition("pcm_base@1");
+
+    expect(definition).toMatchObject({
+      key: "pcm_base",
+      title: "Mostră sintetică: profil participant",
+    });
+    expect(definition?.schema.sections[0]?.questions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "sample_profile_q1",
+          type: "single_choice",
+          scale: expect.arrayContaining([expect.objectContaining({ value: "sample_a", label: "Varianta A" })]),
+        }),
       ]),
     );
   });
@@ -1191,7 +1401,39 @@ describe("frontend API adapter stubs", () => {
     await expect(getParticipantSession()).rejects.toThrow("Nu am putut verifica sesiunea");
   });
 
-  it("does not replace an authenticated role mismatch with demo fallback", async () => {
+  it("uses local fallback instead of trapping on an opposite-role cookie during demo fallback", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          user_id: "participant-1",
+          email: "participant@example.com",
+          role: "participant",
+        }),
+      } as Response),
+    );
+
+    await expect(getTrainerSession()).resolves.toMatchObject({
+      state: "fallback",
+      user: {
+        id: "trainer-local",
+        role: "trainer",
+      },
+    });
+    await expect(getParticipantSession()).resolves.toMatchObject({
+      state: "authenticated",
+      user: {
+        id: "participant-1",
+        role: "participant",
+      },
+    });
+  });
+
+  it("does not replace an authenticated role mismatch with demo fallback when fallback is disabled", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -1206,13 +1448,45 @@ describe("frontend API adapter stubs", () => {
     );
 
     await expect(getTrainerSession()).rejects.toBeInstanceOf(AuthRoleMismatchError);
-    await expect(getParticipantSession()).resolves.toMatchObject({
-      state: "authenticated",
-      user: {
-        id: "participant-1",
-        role: "participant",
-      },
-    });
+  });
+
+  it("does not replace an authenticated role mismatch with demo fallback on production-like API hosts", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
+    const originalInternalApiBaseUrl = process.env.INTERNAL_API_BASE_URL;
+    const originalVitest = process.env.VITEST;
+
+    delete process.env.VITEST;
+    vi.stubGlobal("window", undefined);
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.INTERNAL_API_BASE_URL = "https://api.codrut.ro/api";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          user_id: "participant-1",
+          email: "participant@example.com",
+          role: "participant",
+        }),
+      } as Response),
+    );
+
+    try {
+      await expect(getTrainerSession()).rejects.toBeInstanceOf(AuthRoleMismatchError);
+    } finally {
+      if (originalInternalApiBaseUrl === undefined) {
+        delete process.env.INTERNAL_API_BASE_URL;
+      } else {
+        process.env.INTERNAL_API_BASE_URL = originalInternalApiBaseUrl;
+      }
+      if (originalVitest === undefined) {
+        delete process.env.VITEST;
+      } else {
+        process.env.VITEST = originalVitest;
+      }
+    }
   });
 
   it("loads the active authenticated session without demo fallback", async () => {
@@ -1274,7 +1548,7 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(changePassword("old-password-123", "weakpass")).rejects.toThrow(
-      "Parola trebuie să aibă cel puțin 8 caractere",
+      "Parola trebuie să aibă cel puțin 12 caractere.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -1531,12 +1805,12 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({ id: "leadership-pilot", company_id: "leadership-pilot" }),
     ]);
     await expect(getCompanyParticipants("leadership-pilot")).resolves.toEqual([
-      expect.objectContaining({ id: "andrei-vacaru", role_group: "manager", user_id: "user-andrei-vacaru" }),
-      expect.objectContaining({ id: "ilinca-corbu", reports_to_name: "Andrei Vacaru", role_group: "manager" }),
-      expect.objectContaining({ id: "vlad-soimu", reports_to_name: "Andrei Vacaru", role_group: "manager" }),
-      expect.objectContaining({ id: "alexandra-giurca", reports_to_name: "Ilinca Corbu", role_group: "member" }),
-      expect.objectContaining({ id: "member-vlad", reports_to_name: "Ilinca Corbu", role_group: "member" }),
-      expect.objectContaining({ id: "member-ilinca", reports_to_name: "Vlad Soimu", role_group: "member" }),
+      expect.objectContaining({ id: "alex-dima", role_group: "manager", user_id: "user-alex-dima" }),
+      expect.objectContaining({ id: "mara-ionescu", reports_to_name: "Alex Dima", role_group: "manager" }),
+      expect.objectContaining({ id: "sorin-pavel", reports_to_name: "Alex Dima", role_group: "manager" }),
+      expect.objectContaining({ id: "diana-luca", reports_to_name: "Mara Ionescu", role_group: "member" }),
+      expect.objectContaining({ id: "tudor-stan", reports_to_name: "Mara Ionescu", role_group: "member" }),
+      expect.objectContaining({ id: "ioana-rusu", reports_to_name: "Sorin Pavel", role_group: "member" }),
     ]);
     await expect(getProjectParticipants("leadership-pilot", "leadership-pilot")).resolves.toHaveLength(6);
 
@@ -1545,19 +1819,19 @@ describe("frontend API adapter stubs", () => {
     expect(leadershipAssignments).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "leadership-lencioni-andrei",
+          id: "leadership-lencioni-alex",
           target_type: "team",
           target_team_id: "leadership",
         }),
         expect.objectContaining({
-          id: "icare-ilinca-on-andrei",
+          id: "icare-mara-on-alex",
           questionnaire_key: "boss_360",
-          target_person_id: "andrei-vacaru",
+          target_person_id: "alex-dima",
         }),
         expect.objectContaining({
-          id: "icare-member-ilinca-on-vlad",
+          id: "icare-ioana-on-sorin",
           questionnaire_key: "boss_360",
-          target_person_id: "vlad-soimu",
+          target_person_id: "sorin-pavel",
         }),
       ]),
     );
@@ -1592,8 +1866,8 @@ describe("frontend API adapter stubs", () => {
         }),
       ],
       results: expect.arrayContaining([
-        expect.objectContaining({ assignment_id: "leadership-lencioni-andrei" }),
-        expect.objectContaining({ assignment_id: "icare-ilinca-on-andrei" }),
+        expect.objectContaining({ assignment_id: "leadership-lencioni-alex" }),
+        expect.objectContaining({ assignment_id: "icare-mara-on-alex" }),
       ]),
     });
   });
@@ -1613,15 +1887,15 @@ describe("frontend API adapter stubs", () => {
             target_profile_id: "target-1",
             target_name: "Target Leader",
             target_type: "person",
-            section_id: "inspiring",
-            section_label: "Inspiră (Inspiring)",
-            measurement_id: "icare_01_dezvolta_oamenii",
-            measurement_label: "Dezvoltă oamenii",
-            statement_id: "icare_01",
-            statement_label: "Oferă feedback constructiv",
+            section_id: "sample_section",
+            section_label: "Secțiune sintetică",
+            measurement_id: "feedback_signal_a",
+            measurement_label: "Claritate",
+            statement_id: "sample_statement_a",
+            statement_label: "Clarifică rezultatul așteptat",
             answer_value: 1,
             answer_label: "1",
-            answer_description: "Nu oferă feedback sau îl evită complet.",
+            answer_description: "Comportamentul nu a fost observat.",
           },
         ],
         row_count: 1,
@@ -1637,8 +1911,8 @@ describe("frontend API adapter stubs", () => {
         expect.objectContaining({
           respondent_name: "Reviewer One",
           target_name: "Target Leader",
-          statement_label: "Oferă feedback constructiv",
-          answer_description: "Nu oferă feedback sau îl evită complet.",
+          statement_label: "Clarifică rezultatul așteptat",
+          answer_description: "Comportamentul nu a fost observat.",
         }),
       ],
     });
@@ -1647,6 +1921,21 @@ describe("frontend API adapter stubs", () => {
       expect.stringContaining("/companies/company-1/reports/icare-answers?project_id=project-1"),
       expect.objectContaining({ credentials: "include" }),
     );
+  });
+
+  it("keeps seeded company detail routes local instead of calling UUID-only backend endpoints", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getCompanyDetail("leadership-pilot")).resolves.toMatchObject({
+      id: "leadership-pilot",
+      name: "Echipa direcție",
+      projects: [expect.objectContaining({ id: "leadership-pilot" })],
+      participants: expect.arrayContaining([
+        expect.objectContaining({ id: "alex-dima" }),
+      ]),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("imports roster first and sends participant access through an explicit batch action", async () => {
@@ -1765,6 +2054,49 @@ describe("frontend API adapter stubs", () => {
         },
       ]),
     ).rejects.toThrow("rows.0.email: value is not a valid email address");
+  });
+
+  it("submits blank and malformed roster emails for backend inactive-row classification", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        participants: [],
+        email_results: [],
+        total_imported: 2,
+        emails_sent: 0,
+        emails_failed: 0,
+      }),
+    } as Response);
+
+    await importCompanyRoster("company-1", [
+      {
+        Name: "Fără Email",
+        "Reports To": "",
+        Position: "Member",
+        Location: "Bucharest",
+        email: "",
+        "Profil PCM": "",
+      },
+      {
+        Name: "Email Invalid",
+        "Reports To": "",
+        Position: "Member",
+        Location: "Bucharest",
+        email: "not-an-email",
+        "Profil PCM": "",
+      },
+    ]);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      rows: [
+        expect.objectContaining({ Name: "Fără Email", email: "" }),
+        expect.objectContaining({ Name: "Email Invalid", email: "not-an-email" }),
+      ],
+      send_invites: false,
+    });
   });
 
   it("resends participant invitations through the backend", async () => {
@@ -2221,7 +2553,7 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("caches questionnaire definitions and clears the cache after trainer edits", async () => {
-    const definition = {
+    const definition: QuestionnaireDefinition = {
       key: "boss_360",
       version: 2,
       title: "Boss / manager 360",
@@ -2320,38 +2652,30 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
-  it("falls back to the editable campaign and evaluation catalog, not transactional placeholders", async () => {
+  it("falls back only to synthetic editable campaign and evaluation samples", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 
     const templates = await listEmailTemplatesOnServer();
     const keys = templates.map((template) => template.baseKey);
-    const report = templates.find((template) => template.baseKey === "promo_past_report_2022_2025");
-    const leadershipInvite = templates.find((template) => template.baseKey === "evaluation_leadership_invite");
+    const update = templates.find((template) => template.baseKey === "preview_campaign_update");
+    const leadershipInvite = templates.find((template) => template.baseKey === "preview_evaluation_invite");
 
-    expect(keys).toContain("promo_past_report_2022_2025");
-    expect(keys).toContain("promo_potential_intro");
-    expect(keys).toContain("evaluation_leadership_invite");
+    expect(keys).toContain("preview_campaign_update");
+    expect(keys).toContain("preview_campaign_intro");
+    expect(keys).toContain("preview_evaluation_invite");
     expect(keys).not.toContain("account_setup");
     expect(keys).not.toContain("assignment_bundle");
-    expect(report).toMatchObject({
-      version: 9,
+    expect(update).toMatchObject({
+      version: 1,
       lane: "campaign",
       audience: "campaign:past_customer",
     });
-    expect(report?.body).toContain('data-codrut-cta="calendly"');
-    expect(report?.body).toContain("A supraviețuit tranziției la freelancing");
-    expect(report?.body).toContain("A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală");
-    expect(report?.body).toContain("A neglijat să se reconecteze cu oameni cu care a lucrat bine");
-    expect(report?.body).toContain("Aici ai calendarul meu");
-    expect(report?.body).not.toContain("Link calendar");
-    expect(report?.textBody).toContain("✓ A supraviețuit tranziției la freelancing");
-    expect(report?.textBody).toContain("✗ A neglijat să se reconecteze");
-    expect(report?.textBody).toContain("Alege un slot în Calendly: {calendly_url}");
-    expect(report?.placeholders).toContain("{calendly_url}");
-    expect(report?.placeholders).toContain("{thumbnail_url}");
-    expect(leadershipInvite).toMatchObject({ version: 7, audience: "transactional:leadership" });
-    expect(leadershipInvite?.body).toContain("Link platformă");
-    expect(leadershipInvite?.textBody).toContain("Link platformă: {action_url}");
+    expect(update?.body).toContain("conținut sintetic");
+    expect(update?.textBody).toContain("conținut sintetic");
+    expect(update?.placeholders).toContain("{thumbnail_url}");
+    expect(leadershipInvite).toMatchObject({ version: 1, audience: "transactional:leadership" });
+    expect(leadershipInvite?.body).toContain("Activitate demonstrativă");
+    expect(leadershipInvite?.textBody).toContain("{action_url}");
   });
 
   it("preserves server text bodies when saving existing HTML email templates", async () => {
@@ -2382,7 +2706,7 @@ describe("frontend API adapter stubs", () => {
       audience: "campaign:past_customer",
       placeholders: ["{first_name}", "{calendly_url}"],
       body:
-        '<table><tr><td style="color:#890505;">✓</td><td>A supraviețuit tranziției la freelancing.</td></tr><tr><td>✗</td><td>A neglijat reconectarea.</td></tr></table><p><a href="{calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>',
+        '<table><tr><td style="color:#890505;">✓</td><td>Exemplul sintetic a fost verificat.</td></tr><tr><td>✗</td><td>Exemplul sintetic necesită revizuire.</td></tr></table><p><a href="{calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>',
       textBody:
         "Salut, {first_name}.\nVideo: {landing_page_url}\nAlege un slot: {calendly_url}",
     });
@@ -2423,12 +2747,12 @@ describe("frontend API adapter stubs", () => {
       audience: "campaign:past_customer",
       placeholders: ["{first_name}", "{calendly_url}"],
       body:
-        '<table><tr><td style="color:#890505;">✓</td><td>A supraviețuit tranziției la freelancing.</td></tr><tr><td>✗</td><td>A neglijat reconectarea.</td></tr></table><p><a href="{calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>',
+        '<table><tr><td style="color:#890505;">✓</td><td>Exemplul sintetic a fost verificat.</td></tr><tr><td>✗</td><td>Exemplul sintetic necesită revizuire.</td></tr></table><p><a href="{calendly_url}" data-codrut-cta="calendly">Alege un slot</a></p>',
     });
 
     const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(payload.text_body).toContain("✓ A supraviețuit tranziției la freelancing.");
-    expect(payload.text_body).toContain("✗ A neglijat reconectarea.");
+    expect(payload.text_body).toContain("✓ Exemplul sintetic a fost verificat.");
+    expect(payload.text_body).toContain("✗ Exemplul sintetic necesită revizuire.");
     expect(payload.text_body).toContain("Alege un slot");
     expect(payload.text_body).toContain("${calendly_url}");
     expect(payload.text_body).not.toContain("<td>");

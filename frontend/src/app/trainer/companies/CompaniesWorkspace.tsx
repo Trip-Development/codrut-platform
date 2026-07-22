@@ -1,13 +1,40 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangleIcon,
+  ArrowRightIcon,
+  BriefcaseBusinessIcon,
+  Building2Icon,
+  DownloadIcon,
+  FilterIcon,
+  XIcon,
+  type LucideIcon,
+} from "lucide-react";
 
-import { createCompany, type CompanyListItem } from "@/api/companies";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { type CompanyListItem } from "@/api/companies";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { SelectControl } from "@/components/ui/select-control";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { useUrlState } from "@/hooks/use-url-state";
+import { cn } from "@/utils/cn";
+import {
+  WorkspaceSearchInput,
+} from "../projects/project-workspace-controls";
+import type { CreateCompanyModalProps } from "./CreateCompanyModal";
 
-type CompaniesWorkspaceProps = {
+export type CompaniesWorkspaceProps = {
   initialCompanies: CompanyListItem[];
 };
 
@@ -16,261 +43,638 @@ type CompanyIdentity = {
   name: string;
 };
 
+const DynamicCreateCompanyModal = dynamic<CreateCompanyModalProps>(
+  () => import("./CreateCompanyModal").then((mod) => mod.CreateCompanyModal),
+  { ssr: false },
+);
+
 export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps) {
-  const { get, searchKey, setParam, setParams } = useUrlState();
+  const { get, searchKey, isPending: isUrlPending, setParam, setParams } = useUrlState();
   const [companies, setCompanies] = useState<CompanyListItem[]>(initialCompanies);
-  const [name, setName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [createOpen, setCreateOpen] = useState(get("modal") === "create-company");
   const [searchQuery, setSearchQuery] = useState(get("q") ?? "");
+  const [statusFilter, setStatusFilter] = useState(get("status") ?? "");
+  const [stageFilter, setStageFilter] = useState(get("stage") ?? "");
+  const [extraFilter, setExtraFilter] = useState(get("filter") ?? "");
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const isFilterPending = isUrlPending || searchQuery !== deferredSearchQuery;
 
   useEffect(() => {
     setSearchQuery(get("q") ?? "");
+    setStatusFilter(get("status") ?? "");
+    setStageFilter(get("stage") ?? "");
+    setExtraFilter(get("filter") ?? "");
     setCreateOpen(get("modal") === "create-company");
   }, [get, searchKey]);
 
-  const sortedCompanies = useMemo(() => {
-    const query = normalizeSearchText(searchQuery);
+  const filteredCompanies = useMemo(() => {
+    const query = normalizeSearchText(deferredSearchQuery);
+
     return companies
       .filter((company) => {
         if (!query) return true;
-        return normalizeSearchText(`${company.name} ${company.stage}`).includes(query);
+        return normalizeSearchText(
+          `${company.name} ${company.id} ${formatCompanyCode(company)} ${stageLabel(company.stage)} ${companyStatusLabel(company)}`,
+        ).includes(query);
       })
-      .sort((a, b) => a.name.localeCompare(b.name, "ro"));
-  }, [companies, searchQuery]);
-  const totalParticipants = companies.reduce((total, company) => total + company.participantCount, 0);
-  const totalProjects = companies.reduce((total, company) => total + company.projectCount, 0);
-  const activeCompanies = companies.filter((company) => !company.dataUnavailable).length;
+      .filter((company) => !statusFilter || companyStatusKey(company) === statusFilter)
+      .filter((company) => !stageFilter || company.stage === stageFilter)
+      .filter((company) => matchExtraFilter(company, extraFilter))
+      .sort((first, second) => {
+        const statusDifference = companyStatusRank(first) - companyStatusRank(second);
+        if (statusDifference !== 0) return statusDifference;
+        return first.name.localeCompare(second.name, "ro");
+      });
+  }, [companies, deferredSearchQuery, extraFilter, stageFilter, statusFilter]);
+
+  const activeCompanies = filteredCompanies.filter((company) => companyStatusKey(company) === "active").length;
+  const companiesNeedingAttention = filteredCompanies.filter(
+    (company) => companyStatusKey(company) === "attention",
+  ).length;
+  const pendingAssignments = filteredCompanies.reduce(
+    (total, company) => total + Math.max(0, company.assignmentCount - company.completedCount),
+    0,
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredCompanies.length / pageSize));
+  const safePageIndex = Math.min(pageIndex, pageCount - 1);
+  const pageStart = safePageIndex * pageSize;
+  const pageEnd = Math.min(pageStart + pageSize, filteredCompanies.length);
+  const pagedCompanies = filteredCompanies.slice(pageStart, pageEnd);
+  const paginationItems = paginationWindow(pageCount, safePageIndex);
+  const pageIds = pagedCompanies.map((company) => company.id);
+  const selectedCount = selectedCompanyIds.length;
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedCompanyIds.includes(id));
+  const somePageSelected = pageIds.some((id) => selectedCompanyIds.includes(id));
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [extraFilter, pageSize, searchQuery, stageFilter, statusFilter]);
+
+  useEffect(() => {
+    setSelectedCompanyIds((current) =>
+      current.filter((id) => companies.some((company) => company.id === id)),
+    );
+  }, [companies]);
 
   function closeCreateModal() {
     setCreateOpen(false);
     setParams({ modal: null }, "replace");
   }
 
-  async function handleCreateCompany(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
+  function updateFilter(key: "status" | "stage" | "filter", value: string) {
+    if (key === "status") setStatusFilter(value);
+    if (key === "stage") setStageFilter(value);
+    if (key === "filter") setExtraFilter(value);
+    setParam(key, value, "replace");
+  }
 
-    setIsSubmitting(true);
-    setMessage(null);
-    try {
-      const created = await createCompany(trimmedName);
-      setCompanies((current) => mergeCompanies(current, [companyToListItem(created)]));
-      setName("");
-      closeCreateModal();
-      setMessage("Compania a fost creată și salvată.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Compania nu a putut fi creată.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  function resetFilters() {
+    setSearchQuery("");
+    setStatusFilter("");
+    setStageFilter("");
+    setExtraFilter("");
+    setParams({ q: null, status: null, stage: null, filter: null }, "replace");
+  }
+
+  function toggleCompanySelection(companyId: string) {
+    setSelectedCompanyIds((current) =>
+      current.includes(companyId)
+        ? current.filter((id) => id !== companyId)
+        : [...current, companyId],
+    );
+  }
+
+  function togglePageSelection() {
+    setSelectedCompanyIds((current) => {
+      if (allPageSelected) return current.filter((id) => !pageIds.includes(id));
+      return Array.from(new Set([...current, ...pageIds]));
+    });
+  }
+
+  function exportCompanies(companyRows = filteredCompanies, fileName = "companii-codrut.csv") {
+    const rows = companyRows.map((company) => [
+      company.name,
+      formatCompanyCode(company),
+      companyStatusLabel(company),
+      stageLabel(company.stage),
+      company.projectCount,
+      company.participantCount,
+      company.completedCount,
+      company.assignmentCount,
+      Math.max(0, company.assignmentCount - company.completedCount),
+    ]);
+    const header = [
+      "Companie",
+      "Cod",
+      "Status",
+      "Etapă",
+      "Proiecte",
+      "Participanți",
+      "Completări",
+      "Asignări",
+      "De urmărit",
+    ];
+    const csv = [header, ...rows]
+      .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportSelectedCompanies() {
+    const selectedCompanies = companies.filter((company) => selectedCompanyIds.includes(company.id));
+    if (selectedCompanies.length === 0) return;
+    exportCompanies(selectedCompanies, "companii-selectate-codrut.csv");
   }
 
   return (
-    <div className="space-y-6">
-      <section className="filter-toolbar">
-        <div className="relative w-full md:flex-1">
-          <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
-          </svg>
-          <input
-            value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setParam("q", event.target.value, "replace");
-            }}
-            placeholder="Caută companie..."
-            className="control-input control-search w-full py-3 pl-12 pr-4"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setCreateOpen(true);
-            setParam("modal", "create-company");
+    <div className="flex min-w-0 flex-col gap-5">
+      <section
+        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
+        aria-label="Filtre companii"
+      >
+        <WorkspaceSearchInput
+          id="companies-search"
+          label="Caută companie"
+          value={searchQuery}
+          onValueChange={(value) => {
+            setSearchQuery(value);
+            setParam("q", value || null, "replace");
           }}
-          className="btn-primary shrink-0"
-        >
-          Adaugă companie
-        </button>
+          placeholder="Caută după denumire, cod, status sau etapă"
+          className="lg:col-span-2 xl:col-span-1"
+        />
+
+        <FilterSelect
+          icon={FilterIcon}
+          label="Status"
+          value={statusFilter}
+          onChange={(value) => updateFilter("status", value)}
+          options={[
+            ["", "Toate statusurile"],
+            ["attention", "Necesită acțiune"],
+            ["active", "Active"],
+            ["inactive", "De configurat"],
+          ]}
+        />
+        <FilterSelect
+          icon={BriefcaseBusinessIcon}
+          label="Etapă"
+          value={stageFilter}
+          onChange={(value) => updateFilter("stage", value)}
+          options={[
+            ["", "Toate etapele"],
+            ["setup", "Configurare"],
+            ["invites", "Invitații"],
+            ["completion", "În lucru"],
+            ["reporting", "Raportare"],
+          ]}
+        />
+        <FilterSelect
+          icon={FilterIcon}
+          label="Activitate"
+          value={extraFilter}
+          onChange={(value) => updateFilter("filter", value)}
+          options={[
+            ["", "Toată activitatea"],
+            ["with-pending", "Completări de urmărit"],
+            ["without-projects", "Fără proiect"],
+            ["reporting", "Pregătite de raportare"],
+          ]}
+        />
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <CompanySummary label="Companii" value={activeCompanies} />
-        <CompanySummary label="Proiecte" value={totalProjects} />
-        <CompanySummary label="Participanți" value={totalParticipants} />
-      </section>
+      <div className="min-h-5 px-1 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
+        {isFilterPending ? "Se actualizează lista" : null}
+      </div>
 
-      {message && (
-        <p aria-live="polite" className="surface-panel px-4 py-3 text-center text-sm font-semibold text-foreground/70">
-          {message}
-        </p>
-      )}
+      {message ? <InlineFeedback>{message}</InlineFeedback> : null}
 
       {createOpen ? (
-        <ModalLayer
-          labelledBy="create-company-title"
-          onClose={() => {
-            if (!isSubmitting) closeCreateModal();
+        <DynamicCreateCompanyModal
+          onClose={closeCreateModal}
+          onCreated={(created) => {
+            setCompanies((current) => mergeCompanies(current, [companyToListItem(created)]));
           }}
-          closeOnBackdrop={!isSubmitting}
-        >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Companie nouă</p>
-                <h3 id="create-company-title" className="mt-1 text-xl font-bold text-foreground">Adaugă companie</h3>
-                <p className="mt-2 text-sm leading-6 text-foreground/60">
-                  Creează spațiul companiei, apoi configurezi proiectele și rosterul în pagina ei.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeCreateModal}
-                disabled={isSubmitting}
-                className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy disabled:opacity-50"
-              >
-                Închide
-              </button>
-            </div>
-            <form onSubmit={handleCreateCompany} className="mt-6 flex flex-col gap-4">
-              <label className="text-xs font-bold uppercase tracking-wider text-foreground/60">
-                Nume companie
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Ex. Michelin România"
-                  className="control-input mt-2 min-h-[3rem] w-full py-3"
-                  autoFocus
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={isSubmitting || !name.trim()}
-                className="btn-primary mt-2 w-full"
-              >
-                {isSubmitting ? "Se salvează..." : "Salvează compania"}
-              </button>
-            </form>
-        </ModalLayer>
+          onMessage={(nextMessage) => setMessage(nextMessage || null)}
+        />
       ) : null}
 
       {companies.length === 0 ? (
-        <section className="surface-panel-muted flex min-h-[30vh] flex-col items-center justify-center p-12 text-center">
-          <p className="text-xl font-bold text-foreground">Nu există companii încă.</p>
-          <p className="mt-3 text-sm leading-relaxed text-foreground/60">Adaugă prima companie ca să activezi spațiul de lucru.</p>
-        </section>
-      ) : sortedCompanies.length === 0 ? (
-        <section className="surface-panel flex min-h-[18rem] flex-col items-center justify-center p-10 text-center">
-          <p className="font-display text-lg font-bold text-foreground">Nu am găsit companii pentru căutarea curentă.</p>
-          <p className="mt-2 max-w-sm text-sm text-foreground/55">Șterge o parte din căutare sau încearcă alt nume.</p>
-        </section>
+        <CompaniesEmptyState
+          title="Nu există companii încă"
+          description="Adaugă prima companie pentru a crea proiectul și rosterul."
+          actionLabel="Companie nouă"
+          onAction={() => {
+            setCreateOpen(true);
+            setParam("modal", "create-company");
+          }}
+        />
+      ) : filteredCompanies.length === 0 ? (
+        <CompaniesEmptyState
+          title="Nicio companie găsită"
+          description="Schimbă căutarea sau filtrele active."
+          actionLabel="Resetează filtrele"
+          onAction={resetFilters}
+        />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {sortedCompanies.map((company) => (
-            <CompanyCard
-              key={company.id}
-              company={company}
-            />
-          ))}
-        </div>
+        <section
+          aria-label="Lista companiilor"
+          aria-busy={isFilterPending}
+          className={cn(
+            "min-w-0 overflow-hidden rounded-lg border bg-surface shadow-sm transition-opacity",
+            isFilterPending && "opacity-70",
+          )}
+        >
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+            {selectedCount > 0 ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm font-semibold text-foreground">
+                  {selectedCount} {selectedCount === 1 ? "selectată" : "selectate"}
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={exportSelectedCompanies}>
+                  <DownloadIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                  Exportă selecția
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedCompanyIds([])}>
+                  Renunță
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">{filteredCompanies.length}</span>{" "}
+                {filteredCompanies.length === 1 ? "companie" : "companii"}
+                <span aria-hidden="true"> · </span>{activeCompanies} {activeCompanies === 1 ? "activă" : "active"}
+                <span aria-hidden="true"> · </span>{companiesNeedingAttention} necesită acțiune
+                <span aria-hidden="true"> · </span>{pendingAssignments}{" "}
+                {pendingAssignments === 1 ? "completare" : "completări"} de urmărit
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              {(searchQuery || statusFilter || stageFilter || extraFilter) ? (
+                <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+                  <XIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                  Resetează
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" size="sm" onClick={() => exportCompanies()}>
+                <DownloadIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                Exportă
+              </Button>
+            </div>
+          </div>
+
+          <div className="w-full max-w-full overflow-x-auto [scrollbar-width:thin]">
+            <table className="w-full min-w-[74rem] border-collapse text-left text-sm">
+              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+                <tr>
+                  <th className="w-12 px-4 py-3">
+                    <Checkbox
+                      aria-label="Selectează companiile de pe pagina curentă"
+                      checked={somePageSelected && !allPageSelected ? "indeterminate" : allPageSelected}
+                      onCheckedChange={togglePageSelection}
+                    />
+                  </th>
+                  <th scope="col" className="min-w-56 px-4 py-3">Companie</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Etapă</th>
+                  <th scope="col" className="px-4 py-3 text-right">Proiecte</th>
+                  <th scope="col" className="px-4 py-3 text-right">Participanți</th>
+                  <th scope="col" className="min-w-36 px-4 py-3">Completare</th>
+                  <th scope="col" className="px-4 py-3 text-right">De urmărit</th>
+                  <th scope="col" className="min-w-52 px-4 py-3">Următorul pas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {pagedCompanies.map((company) => (
+                  <CompanyTableRow
+                    key={company.id}
+                    company={company}
+                    selected={selectedCompanyIds.includes(company.id)}
+                    onToggleSelected={() => toggleCompanySelection(company.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+            <p className="font-medium text-muted-foreground">
+              {pageStart + 1}-{pageEnd} din {filteredCompanies.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label="Pagina anterioară"
+                disabled={safePageIndex === 0}
+                onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+              >
+                <ArrowRightIcon aria-hidden="true" className="rotate-180" strokeWidth={1.8} />
+              </Button>
+              {paginationItems.map((item, index) =>
+                typeof item === "number" ? (
+                  <Button
+                    key={item}
+                    type="button"
+                    variant={item === safePageIndex ? "default" : "ghost"}
+                    size="icon-sm"
+                    aria-label={`Pagina ${item + 1}`}
+                    aria-current={item === safePageIndex ? "page" : undefined}
+                    onClick={() => setPageIndex(item)}
+                  >
+                    {item + 1}
+                  </Button>
+                ) : (
+                  <span
+                    key={`${item}-${index}`}
+                    className="inline-flex size-8 items-center justify-center text-muted-foreground"
+                    aria-label="Pagini intermediare"
+                  >
+                    …
+                  </span>
+                ),
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label="Pagina următoare"
+                disabled={safePageIndex >= pageCount - 1}
+                onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
+              >
+                <ArrowRightIcon aria-hidden="true" strokeWidth={1.8} />
+              </Button>
+              <SelectControl
+                label="Companii pe pagină"
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                wrapperClassName="w-auto"
+                className="h-9 bg-background py-1.5 text-sm"
+              >
+                <option value={10}>10 / pagină</option>
+                <option value={25}>25 / pagină</option>
+                <option value={50}>50 / pagină</option>
+              </SelectControl>
+            </div>
+          </div>
+        </section>
       )}
     </div>
   );
 }
 
-function CompanyCard({
-  company,
+function CompaniesEmptyState({
+  title,
+  description,
+  actionLabel,
+  onAction,
 }: {
-  company: CompanyListItem;
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
 }) {
   return (
-    <Link href={`/trainer/companies/${company.id}`} className="group flex min-h-64 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm transition-colors hover:border-burgundy/25">
-      <div className="visual-band h-24 border-b border-[var(--border)] p-5" style={entityVisualStyle(company.name)}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="band-mark h-12 w-12 text-xl font-bold">
-            {company.name.trim().charAt(0).toLocaleUpperCase("ro")}
-          </div>
-          <span className="band-chip">
-            {company.dataUnavailable ? "Date indisponibile" : stageLabel(company.stage)}
+    <Empty className="min-h-[22rem] border bg-surface shadow-sm">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Building2Icon aria-hidden="true" strokeWidth={1.8} />
+        </EmptyMedia>
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{description}</EmptyDescription>
+        <Button type="button" onClick={onAction} className="mt-4">
+          {actionLabel}
+        </Button>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function CompanyTableRow({
+  company,
+  selected,
+  onToggleSelected,
+}: {
+  company: CompanyListItem;
+  selected: boolean;
+  onToggleSelected: () => void;
+}) {
+  const pending = Math.max(0, company.assignmentCount - company.completedCount);
+  const completion = company.assignmentCount > 0
+    ? Math.round((company.completedCount / company.assignmentCount) * 100)
+    : 0;
+
+  return (
+    <tr className={cn("transition-colors hover:bg-muted/35", selected && "bg-primary/5")} aria-selected={selected}>
+      <td className="px-4 py-3 align-middle">
+        <Checkbox
+          aria-label={`Selectează ${company.name}`}
+          checked={selected}
+          onCheckedChange={onToggleSelected}
+        />
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <Link
+          href={`/trainer/companies/${company.id}`}
+          className="group inline-flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+        >
+          <EntityMark name={company.name} />
+          <span className="min-w-0">
+            <span className="block truncate font-semibold text-foreground group-hover:text-primary">{company.name}</span>
+            <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{formatCompanyCode(company)}</span>
           </span>
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-bold text-foreground transition-colors group-hover:text-burgundy">{company.name}</h2>
-            <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-foreground/50">
-              Spațiu companie
-            </p>
+        </Link>
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <CompanyStatusBadge company={company} />
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <CompanyStageInline stage={company.stage} unavailable={company.dataUnavailable} />
+      </td>
+      <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-foreground">{company.projectCount}</td>
+      <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-foreground">{company.participantCount}</td>
+      <td className="px-4 py-3 align-middle">
+        {company.assignmentCount > 0 ? (
+          <div className="min-w-28">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-semibold tabular-nums text-foreground">{company.completedCount}/{company.assignmentCount}</span>
+              <span className="tabular-nums text-muted-foreground">{completion}%</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="mt-6 mb-4 flex-1">
-        {company.dataUnavailable ? (
-          <p className="status-panel-warning px-4 py-3 text-xs leading-relaxed">
-            Datele operaționale nu au putut fi citite momentan. Deschide compania pentru verificare.
-          </p>
         ) : (
-          <dl className="grid grid-cols-3 divide-x divide-[var(--border)] rounded-xl border border-[var(--border)] bg-surface-muted py-4 text-center">
-            <CompanyStat label="Proiecte" value={company.projectCount} />
-            <CompanyStat label="Participanți" value={company.participantCount} />
-            <CompanyStat label="Finalizate" value={company.completedCount} />
-          </dl>
+          <span className="text-xs font-medium text-muted-foreground">Nicio asignare</span>
         )}
-      </div>
-
-      <p className="mt-auto border-t border-[var(--border)] pt-4 text-xs font-semibold leading-5 text-foreground/52">
-        Deschide pentru proiecte, roster și echipe.
-      </p>
-      </div>
-    </Link>
+      </td>
+      <td className={cn("px-4 py-3 text-right align-middle font-semibold tabular-nums", pending > 0 ? "text-primary" : "text-muted-foreground")}>
+        {pending}
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <Link
+          href={`/trainer/companies/${company.id}`}
+          className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+        >
+          {companyNextAction(company)}
+          <ArrowRightIcon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
+        </Link>
+        {company.dataError ? <span className="mt-1 block text-xs text-destructive">{company.dataError}</span> : null}
+      </td>
+    </tr>
   );
 }
 
-function CompanySummary({ label, value }: { label: string; value: string | number }) {
+function FilterSelect({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  const [allOption, ...filterOptions] = options;
+
   return (
-    <div className="surface-panel px-4 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1">{label}</p>
-      <p className="font-display text-2xl font-bold text-foreground tracking-tight">{value}</p>
-    </div>
+    <SearchableCombobox
+      icon={Icon}
+      label={label}
+      value={value}
+      allLabel={allOption?.[1] ?? "Toate"}
+      options={filterOptions.map(([optionValue, optionLabel]) => ({
+        value: optionValue,
+        label: optionLabel,
+      }))}
+      onValueChange={onChange}
+    />
   );
 }
 
-function entityVisualStyle(seed: string): CSSProperties {
-  const palettes = [
-    ["#890505", "#b8860b"],
-    ["#650303", "#71717a"],
-    ["#8f1d1d", "#a3a3a3"],
-    ["#7f1d1d", "#84cc52"],
-    ["#9f1239", "#b8860b"],
-  ];
-  const index = Math.abs(hashString(seed)) % palettes.length;
-  const [first, second] = palettes[index];
-  return {
-    "--band-a": first,
-    "--band-b": second,
-  } as CSSProperties;
+function CompanyStatusBadge({ company }: { company: CompanyListItem }) {
+  const status = companyStatusKey(company);
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
+        status === "inactive" && "bg-muted text-muted-foreground",
+        status === "attention" && "status-warning-soft",
+        status === "active" && "status-success-soft",
+      )}
+    >
+      {status === "attention" ? <AlertTriangleIcon aria-hidden="true" className="size-3.5" strokeWidth={1.8} /> : <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />}
+      {companyStatusLabel(company)}
+    </span>
+  );
 }
 
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+function CompanyStageInline({
+  stage,
+  unavailable,
+}: {
+  stage: CompanyListItem["stage"];
+  unavailable?: boolean;
+}) {
+  if (unavailable) return <span className="text-xs font-semibold text-destructive">Date indisponibile</span>;
+
+  return (
+    <span className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+      <span className={cn("size-1.5 rounded-full", stageDotClass(stage))} aria-hidden="true" />
+      {stageLabel(stage)}
+    </span>
+  );
+}
+
+function EntityMark({ name }: { name: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white",
+        entityMarkClass(name),
+      )}
+      aria-hidden="true"
+    >
+      {companyInitials(name)}
+    </span>
+  );
+}
+
+function companyStatusKey(company: CompanyListItem): "active" | "attention" | "inactive" {
+  if (company.dataUnavailable) return "inactive";
+  if (company.projectCount === 0 && company.participantCount === 0) return "inactive";
+  if (company.projectCount === 0 || company.participantCount === 0) return "attention";
+  if (company.assignmentCount === 0 || company.assignmentCount > company.completedCount) return "attention";
+  return "active";
+}
+
+function companyStatusRank(company: CompanyListItem): number {
+  const status = companyStatusKey(company);
+  if (status === "attention") return 0;
+  if (status === "inactive") return 1;
+  return 2;
+}
+
+function companyStatusLabel(company: CompanyListItem): string {
+  switch (companyStatusKey(company)) {
+    case "inactive":
+      return company.dataUnavailable ? "Date lipsă" : "De configurat";
+    case "attention":
+      return "Necesită acțiune";
+    case "active":
+      return "Activă";
   }
-  return hash;
 }
 
-function CompanyStat({ label, value }: { label: string | number; value: string | number }) {
-  return (
-    <div className="px-3">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50 mb-1.5">{label}</p>
-      <p className="text-base font-bold text-foreground">{value}</p>
-    </div>
-  );
+function companyNextAction(company: CompanyListItem): string {
+  if (company.dataUnavailable) return "Verifică datele";
+  if (company.projectCount === 0) return "Creează proiect";
+  if (company.participantCount === 0) return "Adaugă participanți";
+  if (company.assignmentCount === 0) return "Configurează asignări";
+  const pending = Math.max(0, company.assignmentCount - company.completedCount);
+  if (pending > 0) return `Urmărește ${pending} ${pending === 1 ? "completare" : "completări"}`;
+  return company.stage === "reporting" ? "Deschide rapoartele" : "Deschide compania";
+}
+
+function matchExtraFilter(company: CompanyListItem, filter: string): boolean {
+  switch (filter) {
+    case "with-pending":
+      return company.assignmentCount > company.completedCount;
+    case "without-projects":
+      return company.projectCount === 0;
+    case "reporting":
+      return company.stage === "reporting";
+    default:
+      return true;
+  }
+}
+
+function stageDotClass(stage: CompanyListItem["stage"]): string {
+  switch (stage) {
+    case "setup":
+      return "bg-muted-foreground";
+    case "invites":
+      return "bg-ochre";
+    case "completion":
+      return "bg-success";
+    case "reporting":
+      return "bg-primary";
+  }
 }
 
 function stageLabel(stage: CompanyListItem["stage"]): string {
@@ -283,9 +687,48 @@ function stageLabel(stage: CompanyListItem["stage"]): string {
       return "În lucru";
     case "reporting":
       return "Raportare";
-    default:
-      return stage;
   }
+}
+
+function formatCompanyCode(company: CompanyListItem): string {
+  const compact = company.id.replace(/[^a-z0-9]/gi, "").toLocaleUpperCase("ro");
+  return compact ? `ID ${compact.slice(0, 8)}` : "ID local";
+}
+
+function companyInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "CO";
+  if (words.length === 1) return words[0].slice(0, 2).toLocaleUpperCase("ro");
+  return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toLocaleUpperCase("ro");
+}
+
+function entityMarkClass(seed: string): string {
+  const classes = ["bg-primary", "bg-foreground", "bg-muted-foreground", "bg-success-ink", "bg-burgundy-800"];
+  return classes[Math.abs(hashString(seed)) % classes.length];
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return hash;
+}
+
+function paginationWindow(pageCount: number, currentIndex: number): Array<number | "ellipsis"> {
+  if (pageCount <= 5) return Array.from({ length: pageCount }, (_, index) => index);
+
+  const middleStart = Math.max(1, Math.min(currentIndex - 1, pageCount - 4));
+  const middle = [middleStart, middleStart + 1, middleStart + 2].filter(
+    (index) => index > 0 && index < pageCount - 1,
+  );
+  const items: Array<number | "ellipsis"> = [0];
+
+  if (middle[0] > 1) items.push("ellipsis");
+  items.push(...middle);
+  if (middle[middle.length - 1] < pageCount - 2) items.push("ellipsis");
+  items.push(pageCount - 1);
+  return items;
 }
 
 function companyToListItem(company: CompanyIdentity): CompanyListItem {
@@ -308,10 +751,7 @@ function normalizeSearchText(value: string): string {
     .toLocaleLowerCase("ro");
 }
 
-function mergeCompanies(
-  current: CompanyListItem[],
-  incoming: CompanyListItem[],
-): CompanyListItem[] {
+function mergeCompanies(current: CompanyListItem[], incoming: CompanyListItem[]): CompanyListItem[] {
   const map = new Map(current.map((company) => [company.id, company]));
   incoming.forEach((company) => map.set(company.id, company));
   return Array.from(map.values());

@@ -9,14 +9,24 @@ Codrut Platform starts as a modular monolith: one FastAPI backend with strict in
 - Traefik owns edge routing and TLS, not application authentication.
 - Modules communicate through services or explicit contracts, not through arbitrary cross-module database queries.
 
-## Initial Backend Modules
+## Backend Modules
 
 - `identity`: users, sessions, roles, and auth policies.
-- `companies`: company and participant membership model.
-- `forms`: questionnaire definitions, assignments, and submissions.
-- `scoring`: scoring definitions and calculated results.
-- `communications`: email templates, delivery state, reminders, and later campaign messaging.
+- `companies`: companies, projects, participants, memberships, and hierarchy.
+- `assignments`: questionnaire assignments, teams, planning, and assignment links.
+- `forms`: questionnaire definitions, responses, save, and submit behavior.
+- `participants`: participant workspace aggregation and participant-facing tasks.
+- `scoring`: scoring results, aggregate reports, and reporting policies.
+- `communications`: campaigns, contacts, templates, delivery, reminders, and tracking.
+
+The standard module shape, documented dependency exceptions, and architecture test command live in
+`backend/src/codrut/modules/README.md` and `docs/contracts/module-boundaries.md`.
 
 ## Extraction Path
 
 The service boundary is in-process now. If a module needs to become a separate service later, its service interface and contracts become the transport boundary without rewriting product behavior.
+
+The future training-assistant assessment is recorded in
+`docs/architecture/future-training-assistant-readiness.md`. It deliberately keeps questionnaire
+and roleplay persistence separate while defining the small activity contract needed to compose
+both for participants.

@@ -1,13 +1,9 @@
 import uuid
-from copy import deepcopy
 from typing import Any, cast
 
 import pytest
-from sqlalchemy import select
 
-from codrut.core.database import SessionLocal
 from codrut.core.errors import DomainError
-from codrut.modules.forms.definitions import APPROVED_QUESTIONNAIRE_DEFINITIONS
 from codrut.modules.forms.models import QuestionnaireDefinition, QuestionnaireKey
 from codrut.modules.forms.schemas import (
     QuestionnaireDefinitionCreateRequest,
@@ -20,6 +16,7 @@ class FakeDefinitionRepository:
     def __init__(self, definitions: list[QuestionnaireDefinition] | None = None) -> None:
         self.definitions = definitions or []
         self.submitted_versions: set[tuple[QuestionnaireKey, int]] = set()
+        self.assigned_definition_ids: set[uuid.UUID] = set()
         self.lookup_keys: list[str] = []
         self.list_calls = 0
 
@@ -64,6 +61,9 @@ class FakeDefinitionRepository:
 
     async def has_submitted_responses(self, key: str, version: int) -> bool:
         return (key, version) in self.submitted_versions
+
+    async def has_assignments_for_definition(self, definition_id: uuid.UUID) -> bool:
+        return definition_id in self.assigned_definition_ids
 
     async def deactivate_definitions_for_key(
         self,
@@ -207,8 +207,7 @@ async def test_update_definition_mutates_unused_version() -> None:
     assert result.version == 1
     assert result.title == "ICARE updated"
     assert (
-        repository.definitions[0].schema["sections"][0]["questions"][0]["label"]
-        == "Updated item"
+        repository.definitions[0].schema["sections"][0]["questions"][0]["label"] == "Updated item"
     )
 
 
@@ -299,60 +298,37 @@ async def test_active_definition_schema_requires_items() -> None:
 
 
 @pytest.mark.asyncio
-async def test_seed_catalog_definitions_keeps_string_keys() -> None:
-    catalog = APPROVED_QUESTIONNAIRE_DEFINITIONS[0]
-    repository = FakeDefinitionRepository(
-        [
-            QuestionnaireDefinition(
-                id=uuid.uuid4(),
-                key=str(catalog.key),
-                version=catalog.version,
-                title=catalog.title,
-                description=catalog.description,
-                schema=catalog.schema,
-                active=True,
-            )
-        ]
-    )
+async def test_update_definition_versions_system_managed_definition() -> None:
+    definition = persisted_definition(label="Protected item")
+    definition.system_managed = True
+    repository = FakeDefinitionRepository([definition])
     service = make_service(repository)
 
-    await service.list_persisted_definitions()
+    result = await service.update_definition(
+        QuestionnaireKey.icare,
+        QuestionnaireDefinitionUpdateRequest(schema=minimal_schema("Trainer clone")),
+    )
 
-    assert repository.definitions
-    assert all(type(definition.key) is str for definition in repository.definitions)
+    assert result.version == 2
+    assert definition.active is False
+    assert definition.system_managed is True
+    assert repository.definitions[1].system_managed is False
+    assert repository.definitions[1].schema["sections"][0]["questions"][0]["label"] == (
+        "Trainer clone"
+    )
 
 
 @pytest.mark.asyncio
-async def test_seed_catalog_definitions_is_idempotent_with_existing_database_row() -> None:
-    catalog = APPROVED_QUESTIONNAIRE_DEFINITIONS[0]
+async def test_retire_definition_rejects_system_managed_definition() -> None:
+    definition = persisted_definition()
+    definition.system_managed = True
+    service = make_service(FakeDefinitionRepository([definition]))
 
-    async with SessionLocal() as session:
-        existing = await session.scalar(
-            select(QuestionnaireDefinition)
-            .where(QuestionnaireDefinition.key == str(catalog.key))
-            .where(QuestionnaireDefinition.version == catalog.version)
-        )
-        if existing is None:
-            session.add(
-                QuestionnaireDefinition(
-                    id=uuid.uuid4(),
-                    key=str(catalog.key),
-                    version=catalog.version,
-                    title=catalog.title,
-                    description=catalog.description,
-                    schema=deepcopy(catalog.schema),
-                    active=True,
-                )
-            )
-            await session.flush()
+    with pytest.raises(DomainError) as exc_info:
+        await service.retire_definition(QuestionnaireKey.icare)
 
-        result = await FormsService(session).list_persisted_definitions()
-
-        assert any(
-            definition.key == str(catalog.key) and definition.version == catalog.version
-            for definition in result
-        )
-        await session.rollback()
+    assert exc_info.value.code == "definition_system_managed"
+    assert definition.active is True
 
 
 @pytest.mark.asyncio

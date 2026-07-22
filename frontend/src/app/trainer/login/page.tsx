@@ -2,53 +2,59 @@
 
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrandMark } from "@/components/brand/brand-mark";
-import { dashboardHrefForRole, getAuthenticatedSession, loginWithPassword } from "@/api/auth";
+import { Loader2Icon } from "lucide-react";
 
-const quotes = [
-  "„Performanța unei echipe crește atunci când feedback-ul devine obicei.”",
-  "„Rolul unui trainer este de a facilita auto-descoperirea.”",
-  "„Fiecare echipă are o dinamică unică; identifică tiparele pentru a debloca potențialul.”",
-  "„Evaluarea este doar începutul procesului de transformare.”",
-];
+import { dashboardHrefForRole, getAuthenticatedSession, loginWithPassword, type CurrentUser } from "@/api/auth";
+import {
+  AuthQuotePanel,
+  AuthTextLink,
+  REMEMBERED_SESSION_DELAY_MS,
+  RememberedSessionSplash,
+} from "@/components/auth/auth-shell";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export default function TrainerLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [quoteIdx, setQuoteIdx] = useState(0);
-  const [fade, setFade] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [rememberedUser, setRememberedUser] = useState<CurrentUser | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    let redirectTimer: number | undefined;
     void getAuthenticatedSession().then((session) => {
       if (cancelled || !session) return;
-      router.replace(dashboardHrefForRole(session.user.role));
-      router.refresh();
+      setRememberedUser(session.user);
+      redirectTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        router.replace(dashboardHrefForRole(session.user.role));
+        router.refresh();
+      }, REMEMBERED_SESSION_DELAY_MS);
     });
     return () => {
       cancelled = true;
+      if (redirectTimer !== undefined) {
+        window.clearTimeout(redirectTimer);
+      }
     };
   }, [router]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFade(false);
-      setTimeout(() => {
-        setQuoteIdx((prev) => (prev + 1) % quotes.length);
-        setFade(true);
-      }, 150);
-    }, 2500);
-
-    return () => clearInterval(interval);
-  }, []);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
     setError(null);
     setSubmitting(true);
 
@@ -61,93 +67,93 @@ export default function TrainerLoginPage() {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
+  if (rememberedUser) {
+    return <RememberedSessionSplash user={rememberedUser} />;
+  }
+
   return (
-    <main className="app-min-height relative flex items-center justify-center overflow-hidden bg-[#260707] bg-vines-pattern px-4 py-10">
-      
-      <section className="surface-panel relative w-full max-w-md p-8 transition-all duration-150 md:p-10">
-        <div className="mb-8 flex flex-col items-center">
-          <BrandMark size="lg" showText={false} />
+    <main className="grid min-h-[100dvh] bg-background text-foreground lg:grid-cols-[1.05fr_0.95fr]">
+      <AuthQuotePanel variant="trainer" />
 
-          <span className="mt-4 flex items-center gap-1 rounded-full border border-[rgb(230,92,92)] bg-burgundy/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-burgundy shadow-sm">
-            Portal Trainer & Admin
-          </span>
-
-          <h1 className="font-display mt-4 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            Bine ai venit
-          </h1>
-
-          <div className="mt-3 w-full min-h-[3rem] flex items-center justify-center px-2">
-            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-150 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
-              {quotes[quoteIdx]}
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="trainer-login-email" className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Email Trainer
-            </label>
-            <input
-              id="trainer-login-email"
-              className="control-input w-full py-3.5 text-base"
-              placeholder="example@email.com"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label htmlFor="trainer-login-password" className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
-                Parolă
-              </label>
-              <Link
-                href="/reset-password"
-                className="text-xs font-semibold text-burgundy hover:text-burgundy-dark transition-colors"
-              >
-                Ai uitat parola?
-              </Link>
-            </div>
-            <input
-              id="trainer-login-password"
-              className="control-input w-full py-3.5 text-base"
-              placeholder="Introdu parola"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="btn-primary mt-2 w-full px-4 py-4"
-          >
-            {submitting ? "Se verifică..." : "Intră în portal"}
-          </button>
-          {error ? (
-            <p className="status-panel-danger px-4 py-3">
-              {error}
-            </p>
-          ) : null}
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-[var(--border)] flex justify-center text-sm">
-          <span className="text-foreground/50">Ești participant?</span>
-          <Link
-            href="/login"
-            className="ml-2 font-bold text-burgundy hover:text-burgundy-dark transition-colors"
-          >
-            Intră în workspace-ul tău
+      <section className="flex items-center justify-center px-4 py-10 md:px-8">
+        <div className="w-full max-w-md">
+          <Link href="/" className="mb-10 inline-flex rounded-lg px-2 py-1 transition-colors hover:bg-muted lg:hidden">
+            <BrandMark subtitle="Portal trainer" />
           </Link>
+
+          <div>
+            <Badge variant="outline">Autentificare trainer</Badge>
+            <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-normal">
+              Intră în portal.
+            </h1>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <FieldGroup>
+              <Field data-invalid={Boolean(error) || undefined}>
+                <FieldLabel htmlFor="trainer-login-email">Email trainer</FieldLabel>
+                <Input
+                  id="trainer-login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  disabled={submitting}
+                  required
+                  aria-invalid={Boolean(error) || undefined}
+                />
+              </Field>
+
+              <Field data-invalid={Boolean(error) || undefined}>
+                <div className="flex items-center justify-between gap-3">
+                  <FieldLabel htmlFor="trainer-login-password">Parolă</FieldLabel>
+                  <Link href="/reset-password" className="text-sm font-semibold text-primary hover:underline">
+                    Ai uitat parola?
+                  </Link>
+                </div>
+                <Input
+                  id="trainer-login-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  disabled={submitting}
+                  required
+                  aria-invalid={Boolean(error) || undefined}
+                />
+              </Field>
+            </FieldGroup>
+
+            {error ? (
+              <Alert variant="destructive">
+                <AlertTitle>Acces refuzat</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {submitting ? (
+              <OperationFeedback
+                title="Verificăm accesul trainer"
+                detail="Confirmăm rolul contului înainte de deschiderea portalului."
+                meta="în verificare"
+              />
+            ) : null}
+
+            <Button type="submit" size="lg" disabled={submitting} className="w-full">
+              {submitting ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+              {submitting ? "Verificăm accesul" : "Intră în portal"}
+            </Button>
+          </form>
+
+          <div className="mt-8 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <span className="font-medium text-muted-foreground">Ești participant?</span>
+            <AuthTextLink href="/login">Autentificare participant</AuthTextLink>
+          </div>
         </div>
       </section>
     </main>

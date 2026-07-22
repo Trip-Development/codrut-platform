@@ -58,6 +58,7 @@ class AssignmentResponse(BaseModel):
     id: UUID
     company_id: UUID
     project_id: UUID | None
+    assignment_round_id: UUID
     respondent_profile_id: UUID
     questionnaire_key: str
     target_type: AssignmentTargetType
@@ -74,6 +75,7 @@ class AssignmentResponse(BaseModel):
     scored_at: datetime | None
     reminder_due_at: datetime | None
     last_reminder_sent_at: datetime | None
+    reminder_count: int
 
 
 class AssignmentStatusUpdateRequest(StrictRequestModel):
@@ -93,6 +95,7 @@ class InvitationResponse(BaseModel):
 
     id: UUID
     company_id: UUID
+    project_id: UUID | None
     respondent_profile_id: UUID
     token: str
     invite_url: str

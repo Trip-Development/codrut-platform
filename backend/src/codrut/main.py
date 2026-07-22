@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
     install_csrf_middleware(app, session_cookie_name=SESSION_COOKIE_NAME)
     install_security_headers_middleware(app)
     install_request_id_middleware(app)
-    install_exception_handlers(app)
+    install_exception_handlers(app, settings=settings)
     Path(settings.campaign_asset_dir).mkdir(parents=True, exist_ok=True)
     app.mount(
         settings.campaign_asset_public_path,

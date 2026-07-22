@@ -25,12 +25,12 @@ describe("trainer project org chart", () => {
 
   it("treats placeholder manager labels as root nodes", () => {
     const model = buildOrgChartModel([
-      participant("top", "Andrei Vacaru", { reports_to_name: "Manager", position: "Director General" }),
-      participant("lead", "Alexandra Giurca", { reports_to_name: "Andrei Vacaru" }),
+      participant("top", "Alex Dima", { reports_to_name: "Manager", position: "Director General" }),
+      participant("lead", "Diana Luca", { reports_to_name: "Alex Dima" }),
     ]);
 
-    expect(model.roots.map((root) => root.fullName)).toEqual(["Andrei Vacaru"]);
-    expect(model.roots[0].children.map((child) => child.fullName)).toEqual(["Alexandra Giurca"]);
+    expect(model.roots.map((root) => root.fullName)).toEqual(["Alex Dima"]);
+    expect(model.roots[0].children.map((child) => child.fullName)).toEqual(["Diana Luca"]);
     expect(model.warnings).toEqual([]);
   });
 

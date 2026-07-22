@@ -74,14 +74,17 @@ jobs:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
+          CODRUT_RATE_LIMIT_TRUSTED_PROXIES: ${{ secrets.CODRUT_RATE_LIMIT_TRUSTED_PROXIES }}
           CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
-          CODRUT_TASK_LINK_SECRET: ${{ secrets.CODRUT_TASK_LINK_SECRET || secrets.CODRUT_SESSION_SECRET }}
+          CODRUT_TASK_LINK_SECRET: ${{ secrets.CODRUT_TASK_LINK_SECRET }}
+          CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${{ secrets.CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET }}
           CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
           CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
           CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
           CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
           CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
           CODRUT_EMAIL_BREVO_API_KEY: ${{ secrets.CODRUT_EMAIL_BREVO_API_KEY }}
+          CODRUT_EMAIL_WEBHOOK_TOKEN: ${{ secrets.CODRUT_EMAIL_WEBHOOK_TOKEN }}
           CODRUT_HOST: ${{ secrets.CODRUT_HOST }}
           TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
           CODRUT_DB_VOLUME_PATH: ${{ secrets.CODRUT_DB_VOLUME_PATH }}
@@ -101,14 +104,17 @@ jobs:
             POSTGRES_USER
             POSTGRES_PASSWORD
             CODRUT_REDIS_URL
+            CODRUT_RATE_LIMIT_TRUSTED_PROXIES
             CODRUT_SESSION_SECRET
             CODRUT_TASK_LINK_SECRET
+            CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET
             CODRUT_CORS_ORIGINS
             CODRUT_PUBLIC_APP_URL
             CODRUT_EMAIL_PROVIDER
             CODRUT_EMAIL_FROM_ADDRESS
             CODRUT_EMAIL_FROM_NAME
             CODRUT_EMAIL_BREVO_API_KEY
+            CODRUT_EMAIL_WEBHOOK_TOKEN
             CODRUT_HOST
             TRAEFIK_ACME_EMAIL
             CODRUT_DB_VOLUME_PATH
@@ -122,6 +128,7 @@ jobs:
           done
 
           python3 - <<'PY'
+          import ipaddress
           import json
           import os
           import sys
@@ -135,6 +142,25 @@ jobs:
           if not isinstance(origins, list) or not origins or not all(isinstance(origin, str) and origin for origin in origins):
               print("CODRUT_CORS_ORIGINS must be a non-empty JSON array of origin strings.", file=sys.stderr)
               raise SystemExit(1)
+
+          try:
+              trusted_proxies = json.loads(os.environ["CODRUT_RATE_LIMIT_TRUSTED_PROXIES"])
+          except json.JSONDecodeError as exc:
+              print(f"CODRUT_RATE_LIMIT_TRUSTED_PROXIES must be a JSON array: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
+
+          if not isinstance(trusted_proxies, list) or not trusted_proxies:
+              print("CODRUT_RATE_LIMIT_TRUSTED_PROXIES must be a non-empty JSON array.", file=sys.stderr)
+              raise SystemExit(1)
+
+          try:
+              for proxy in trusted_proxies:
+                  if not isinstance(proxy, str) or not proxy:
+                      raise ValueError("entries must be non-empty strings")
+                  ipaddress.ip_network(proxy, strict=False)
+          except ValueError as exc:
+              print(f"CODRUT_RATE_LIMIT_TRUSTED_PROXIES contains an invalid IP or CIDR: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
           PY
 
           mkdir -p ~/.ssh
@@ -165,14 +191,17 @@ jobs:
           CODRUT_ENV=$APP_ENVIRONMENT
           CODRUT_DATABASE_URL=$DERIVED_DATABASE_URL
           CODRUT_REDIS_URL=$CODRUT_REDIS_URL
+          CODRUT_RATE_LIMIT_TRUSTED_PROXIES=$CODRUT_RATE_LIMIT_TRUSTED_PROXIES
           CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
           CODRUT_TASK_LINK_SECRET=$CODRUT_TASK_LINK_SECRET
+          CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET=$CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET
           CODRUT_CORS_ORIGINS=$CODRUT_CORS_ORIGINS
           CODRUT_PUBLIC_APP_URL=$CODRUT_PUBLIC_APP_URL
           CODRUT_EMAIL_PROVIDER=$CODRUT_EMAIL_PROVIDER
           CODRUT_EMAIL_FROM_ADDRESS=$CODRUT_EMAIL_FROM_ADDRESS
           CODRUT_EMAIL_FROM_NAME=$CODRUT_EMAIL_FROM_NAME
           CODRUT_EMAIL_BREVO_API_KEY=$CODRUT_EMAIL_BREVO_API_KEY
+          CODRUT_EMAIL_WEBHOOK_TOKEN=$CODRUT_EMAIL_WEBHOOK_TOKEN
           CODRUT_HOST=$CODRUT_HOST
           TRAEFIK_ACME_EMAIL=$TRAEFIK_ACME_EMAIL
           CODRUT_DB_VOLUME_PATH=$DERIVED_DB_VOLUME_PATH
@@ -216,9 +245,35 @@ jobs:
             echo "Service ${service} is running ${running_image}."
           }
 
+          assert_service_healthy() {
+            local service="$1"
+            local container_id
+            local health_status
+
+            container_id="$("${compose[@]}" ps -q "$service")"
+            for attempt in {1..30}; do
+              health_status="$(docker inspect "$container_id" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}')"
+              if [[ "$health_status" == "healthy" ]]; then
+                echo "Service ${service} health check passed on attempt ${attempt}."
+                return 0
+              fi
+              if [[ "$health_status" == "unhealthy" || "$health_status" == "missing" ]]; then
+                echo "Service ${service} health status is ${health_status}."
+                "${compose[@]}" logs --tail=100 "$service"
+                return 1
+              fi
+              sleep 5
+            done
+
+            echo "Service ${service} did not become healthy before the deployment timeout."
+            "${compose[@]}" logs --tail=100 "$service"
+            return 1
+          }
+
           "${compose[@]}" config >/dev/null
           "${compose[@]}" pull
           "${compose[@]}" run --rm -T backend alembic upgrade head </dev/null
+          "${compose[@]}" run --rm -T backend python -m codrut.tools.reconcile_result_publications </dev/null
 
           if docker compose up --help | grep -q -- '--wait'; then
             "${compose[@]}" up -d --force-recreate --no-build --pull never --remove-orphans --wait backend worker frontend
@@ -230,11 +285,13 @@ jobs:
           assert_service_image backend "$expected_backend_image"
           assert_service_image worker "$expected_backend_image"
           assert_service_image frontend "$expected_frontend_image"
-          "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
+          assert_service_healthy backend
+          assert_service_healthy worker
+          "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=10).read()"
           docker image prune -f
           REMOTE
 
-          HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
+          HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/ready"
           for attempt in {1..30}; do
             if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then
               echo "Public health check passed on attempt ${attempt}."

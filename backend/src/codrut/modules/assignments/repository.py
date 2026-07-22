@@ -108,7 +108,5 @@ class AssignmentRepository:
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
-        result = await self.session.execute(
-            stmt.order_by(QuestionnaireAssignment.created_at)
-        )
+        result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
         return list(result.scalars().all())

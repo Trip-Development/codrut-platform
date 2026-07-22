@@ -1,9 +1,12 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from pytest import LogCaptureFixture
 from sqlalchemy.exc import SQLAlchemyError
 
+from codrut.core.config import Settings
 from codrut.core.errors import DomainError, install_exception_handlers
 from codrut.core.request_id import REQUEST_ID_HEADER, install_request_id_middleware
 
@@ -13,10 +16,10 @@ class ExamplePayload(BaseModel):
     password: str
 
 
-def create_test_app() -> FastAPI:
+def create_test_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     install_request_id_middleware(app)
-    install_exception_handlers(app)
+    install_exception_handlers(app, settings=settings or Settings(env="development"))
     return app
 
 
@@ -133,6 +136,7 @@ def test_database_errors_are_logged_and_return_structured_response(
     assert response.status_code == 500
     assert response.headers[REQUEST_ID_HEADER] == "req-db"
     assert "Database error while handling GET /boom" in caplog.text
+    assert "connection failed" in caplog.text
     assert response.json() == {
         "error": {
             "code": "database_error",
@@ -140,3 +144,78 @@ def test_database_errors_are_logged_and_return_structured_response(
             "request_id": "req-db",
         }
     }
+
+
+def test_production_database_error_logs_exclude_exception_details(
+    caplog: LogCaptureFixture,
+) -> None:
+    app = create_test_app(Settings.model_construct(env="production"))
+    sensitive_parameter = "participant-secret@example.com"
+
+    @app.get("/boom")
+    async def boom() -> None:
+        raise SQLAlchemyError(f"Database parameter was {sensitive_parameter}")
+
+    client = TestClient(app, raise_server_exceptions=False)
+
+    with caplog.at_level(logging.ERROR, logger="codrut.core.errors"):
+        response = client.get("/boom", headers={REQUEST_ID_HEADER: "req-db-production"})
+
+    assert response.status_code == 500
+    assert "request_id=req-db-production" in caplog.text
+    assert "category=SQLAlchemyError" in caplog.text
+    assert sensitive_parameter not in caplog.text
+    database_record = next(
+        record for record in caplog.records if record.name == "codrut.core.errors"
+    )
+    assert database_record.request_id == "req-db-production"
+    assert database_record.error_category == "SQLAlchemyError"
+
+
+def test_unexpected_errors_include_safe_correlation_id(
+    caplog: LogCaptureFixture,
+) -> None:
+    app = create_test_app()
+
+    @app.get("/unexpected")
+    async def unexpected() -> None:
+        raise RuntimeError("internal participant state")
+
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/unexpected", headers={REQUEST_ID_HEADER: "req-unexpected"})
+
+    assert response.status_code == 500
+    assert response.headers[REQUEST_ID_HEADER] == "req-unexpected"
+    assert response.json() == {
+        "error": {
+            "code": "unexpected_error",
+            "message": "The request could not be completed because of an unexpected error.",
+            "request_id": "req-unexpected",
+        }
+    }
+    assert "RuntimeError" in caplog.text
+
+
+def test_production_unexpected_error_logs_exclude_exception_details(
+    caplog: LogCaptureFixture,
+) -> None:
+    app = create_test_app(Settings.model_construct(env="production"))
+    sensitive_value = "participant-secret@example.com"
+
+    @app.get("/unexpected")
+    async def unexpected() -> None:
+        raise RuntimeError(f"Internal state included {sensitive_value}")
+
+    client = TestClient(app, raise_server_exceptions=False)
+
+    with caplog.at_level(logging.ERROR, logger="codrut.core.errors"):
+        response = client.get(
+            "/unexpected",
+            headers={REQUEST_ID_HEADER: "req-unexpected-production"},
+        )
+
+    assert response.status_code == 500
+    assert "request_id=req-unexpected-production" in caplog.text
+    assert "category=RuntimeError" in caplog.text
+    assert sensitive_value not in caplog.text

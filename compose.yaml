@@ -43,10 +43,17 @@ services:
     environment:
       CODRUT_ENV: ${CODRUT_ENV:-production}
       CODRUT_DATABASE_URL: ${CODRUT_DATABASE_URL:-postgresql+asyncpg://codrut:codrut@db:5432/codrut}
+      CODRUT_MIGRATION_LOCK_TIMEOUT_MS: ${CODRUT_MIGRATION_LOCK_TIMEOUT_MS:-5000}
+      CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS: ${CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS:-900000}
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
       CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:-["http://localhost","http://localhost:3000","http://localhost:8000"]}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-750}
+      CODRUT_READINESS_TIMEOUT_SECONDS: ${CODRUT_READINESS_TIMEOUT_SECONDS:-3}
+      CODRUT_WORKER_HEARTBEAT_TTL_SECONDS: ${CODRUT_WORKER_HEARTBEAT_TTL_SECONDS:-30}
+      CODRUT_OUTBOX_BACKLOG_MAX_PENDING: ${CODRUT_OUTBOX_BACKLOG_MAX_PENDING:-5000}
+      CODRUT_OUTBOX_BACKLOG_MAX_AGE_SECONDS: ${CODRUT_OUTBOX_BACKLOG_MAX_AGE_SECONDS:-1800}
       CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
       CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
     volumes:
@@ -57,10 +64,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live').read()"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=5).read()"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
     labels:
       traefik.enable: "true"
       traefik.http.routers.codrut-api.rule: PathPrefix(`/api`)
@@ -80,6 +88,11 @@ services:
       CODRUT_REDIS_URL: ${CODRUT_REDIS_URL:-redis://redis:6379/0}
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:-change-me-in-env}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:-http://localhost:3000}
+      CODRUT_EMAIL_DAILY_SEND_CAP: ${CODRUT_EMAIL_DAILY_SEND_CAP:-750}
+      CODRUT_READINESS_TIMEOUT_SECONDS: ${CODRUT_READINESS_TIMEOUT_SECONDS:-3}
+      CODRUT_WORKER_HEARTBEAT_TTL_SECONDS: ${CODRUT_WORKER_HEARTBEAT_TTL_SECONDS:-30}
+      CODRUT_OUTBOX_BACKLOG_MAX_PENDING: ${CODRUT_OUTBOX_BACKLOG_MAX_PENDING:-5000}
+      CODRUT_OUTBOX_BACKLOG_MAX_AGE_SECONDS: ${CODRUT_OUTBOX_BACKLOG_MAX_AGE_SECONDS:-1800}
       CODRUT_CAMPAIGN_ASSET_DIR: ${CODRUT_CAMPAIGN_ASSET_DIR:-/app/var/campaign-assets}
       CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH: ${CODRUT_CAMPAIGN_ASSET_PUBLIC_PATH:-/api/campaign-assets}
     volumes:
@@ -89,6 +102,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-m", "codrut.tools.check_worker_health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   db:
     image: postgres:17-bookworm

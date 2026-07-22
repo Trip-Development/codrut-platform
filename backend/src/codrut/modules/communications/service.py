@@ -1,6 +1,8 @@
+import hashlib
+import json
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from html import escape as html_escape
 from html import unescape as html_unescape
@@ -8,12 +10,20 @@ from string import Template
 from urllib.parse import urlparse
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.contracts.emails import EmailAddress, EmailDeliveryStatus, EmailMessage, EmailSendResult
+from codrut.contracts.emails import (
+    EmailAddress,
+    EmailDeliveryStatus,
+    EmailMessage,
+    EmailProviderKey,
+    EmailSendResult,
+)
 from codrut.core.config import Settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+from codrut.modules.communications.assets import delete_campaign_asset, store_campaign_asset
 from codrut.modules.communications.campaign_policy import require_campaign_send_allowed
 from codrut.modules.communications.campaign_tracking import (
     CampaignRecipientActionClaims,
@@ -26,19 +36,24 @@ from codrut.modules.communications.campaign_tracking import (
     parse_campaign_tracking_token,
 )
 from codrut.modules.communications.email_provider import EmailProvider
+from codrut.modules.communications.html_sanitizer import sanitize_email_html
 from codrut.modules.communications.models import (
     Campaign,
+    CampaignAsset,
     CampaignRecipient,
     CampaignRecipientEvent,
     CampaignRecipientSegment,
     CampaignRecipientStatus,
     CampaignStatus,
+    EmailEventType,
     EmailSend,
     EmailSendStatus,
     EmailTemplate,
 )
+from codrut.modules.communications.reminders import DEFAULT_REMINDER_POLICY
 from codrut.modules.communications.repository import CommunicationsRepository
 from codrut.modules.communications.schemas import (
+    CampaignAssetUploadResponse,
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
@@ -56,22 +71,102 @@ from codrut.modules.communications.schemas import (
 )
 from codrut.modules.communications.templates import (
     EMAIL_SHELL_OPEN,
-    EVALUATION_TEMPLATES,
     PROMOTIONAL_SHELL_CLOSE,
-    PROMOTIONAL_TEMPLATES,
     TransactionalTemplateKey,
     get_transactional_template,
 )
 from codrut.modules.companies.models import ParticipantProfile
 
-# Regex to find placeholders in python string.Template format, e.g. ${variable}
-PLACEHOLDER_PATTERN = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+TEMPLATE_VARIABLE_PATTERN = re.compile(r"(?a:[_a-z][_a-z0-9]*)", re.IGNORECASE)
 
 SYSTEM_TEMPLATE_REQUIRED_VARS = {
     "account_setup": {"participant_name", "trainer_name", "company_name", "action_url"},
     "assignment_bundle": {"participant_name", "company_name", "task_count", "action_url"},
+    "assignment_reminder": {"participant_name", "company_name", "action_url"},
 }
+CAMPAIGN_TEMPLATE_VARIABLES = frozenset(
+    {
+        "calendly_url",
+        "company_name",
+        "contact_name",
+        "email",
+        "first_name",
+        "landing_page_url",
+        "last_name",
+        "legal_address",
+        "organization_name",
+        "thumbnail_url",
+        "unsubscribe_url",
+        "video_url",
+    }
+)
+
+
+def _require_delivery_owner_id(owner_id: UUID | None) -> UUID:
+    if owner_id is None:
+        raise DomainError(
+            "Delivery owner is required.",
+            code="email_delivery_owner_required",
+        )
+    return owner_id
+
+
+def _is_managed_campaign_asset_url(value: str | None, settings: Settings | None) -> bool:
+    if not value:
+        return False
+    configured_path = settings.campaign_asset_public_path if settings else "/api/campaign-assets"
+    public_path = configured_path.rstrip("/")
+    return urlparse(value).path.startswith(f"{public_path}/")
+
+
+async def _bind_campaign_asset(
+    repository: CommunicationsRepository,
+    campaign: Campaign,
+    *,
+    previous_url: str | None,
+    next_url: str | None,
+    owner_id: UUID,
+    settings: Settings | None,
+) -> None:
+    if previous_url == next_url:
+        return
+
+    if _is_managed_campaign_asset_url(previous_url, settings):
+        previous_asset = await repository.get_campaign_asset_by_url(
+            previous_url or "",
+            owner_id=owner_id,
+            for_update=True,
+        )
+        if previous_asset is not None and previous_asset.campaign_id == campaign.id:
+            previous_asset.campaign_id = None
+            previous_asset.status = "staged"
+
+    if not _is_managed_campaign_asset_url(next_url, settings):
+        return
+    asset: CampaignAsset | None = await repository.get_campaign_asset_by_url(
+        next_url or "",
+        owner_id=owner_id,
+        for_update=True,
+    )
+    if asset is None:
+        raise DomainError(
+            "Campaign asset does not belong to this trainer.",
+            code="campaign_asset_not_owned",
+        )
+    if asset.campaign_id not in {None, campaign.id}:
+        raise DomainError(
+            "Campaign asset is already attached to another campaign.",
+            code="campaign_asset_already_attached",
+        )
+    asset.campaign_id = campaign.id
+    asset.status = "attached"
+
+
 CAMPAIGN_CALENDLY_URL = "https://calendly.com/andreivacaru/intalnire-de-apropiere"
+EMAIL_OUTBOX_LEASE_DURATION = timedelta(minutes=5)
+EMAIL_OUTBOX_MAX_ATTEMPTS = 5
+EMAIL_OUTBOX_RETRY_BASE_SECONDS = 30
+EMAIL_OUTBOX_RETRY_MAX_SECONDS = 15 * 60
 
 
 @dataclass(frozen=True)
@@ -82,7 +177,17 @@ class CampaignRecipientBulkCreateResult:
 
 
 def extract_placeholders(text: str) -> set[str]:
-    return set(PLACEHOLDER_PATTERN.findall(text))
+    placeholders: set[str] = set()
+    for match in Template.pattern.finditer(text):
+        if match.group("invalid") is not None:
+            raise DomainError(
+                "Template contains malformed placeholder syntax.",
+                code="email_template_malformed_placeholder",
+            )
+        identifier = match.group("named") or match.group("braced")
+        if identifier is not None:
+            placeholders.add(identifier)
+    return placeholders
 
 
 def validate_template_placeholders(
@@ -92,32 +197,76 @@ def validate_template_placeholders(
     declared_variables: list[str],
     key: str,
 ) -> None:
-    # 1. Check required variables for system templates
-    required = SYSTEM_TEMPLATE_REQUIRED_VARS.get(key, set())
-    declared_set = set(declared_variables)
-    missing_declared = required - declared_set
-    if missing_declared:
-        msg = (
-            "Missing required variables for system template: "
-            f"{', '.join(sorted(missing_declared))}"
-        )
+    invalid_variables = sorted(
+        {
+            variable
+            for variable in declared_variables
+            if TEMPLATE_VARIABLE_PATTERN.fullmatch(variable) is None
+        }
+    )
+    if invalid_variables:
         raise DomainError(
-            msg,
-            code="email_template_missing_required_variables",
+            f"Invalid template variable names: {', '.join(invalid_variables)}",
+            code="email_template_invalid_variables",
         )
 
-    # 2. Check that all declared variables are actually used in the templates
+    seen_variables: set[str] = set()
+    duplicate_variables: set[str] = set()
+    for variable in declared_variables:
+        if variable in seen_variables:
+            duplicate_variables.add(variable)
+        seen_variables.add(variable)
+    if duplicate_variables:
+        raise DomainError(
+            f"Duplicate template variables: {', '.join(sorted(duplicate_variables))}",
+            code="email_template_duplicate_variables",
+        )
+
     all_placeholders = (
         extract_placeholders(subject)
         | extract_placeholders(html_body)
         | extract_placeholders(text_body)
     )
 
+    required = SYSTEM_TEMPLATE_REQUIRED_VARS.get(key, set())
+    declared_set = set(declared_variables)
+    missing_declared = required - declared_set
+    if missing_declared:
+        msg = (
+            f"Missing required variables for system template: {', '.join(sorted(missing_declared))}"
+        )
+        raise DomainError(
+            msg,
+            code="email_template_missing_required_variables",
+        )
+
     undeclared = all_placeholders - declared_set
     if undeclared:
         raise DomainError(
             f"Template contains undeclared variables: {', '.join(sorted(undeclared))}",
             code="email_template_undeclared_variables",
+        )
+
+    missing_required_placeholders = required - all_placeholders
+    if missing_required_placeholders:
+        raise DomainError(
+            "Required system variables are absent from template content: "
+            f"{', '.join(sorted(missing_required_placeholders))}",
+            code="email_template_missing_required_placeholders",
+        )
+
+
+def validate_campaign_placeholders(subject: str, html_body: str, text_body: str) -> None:
+    placeholders = (
+        extract_placeholders(subject)
+        | extract_placeholders(html_body)
+        | extract_placeholders(text_body)
+    )
+    unsupported = placeholders - CAMPAIGN_TEMPLATE_VARIABLES
+    if unsupported:
+        raise DomainError(
+            f"Campaign contains unsupported variables: {', '.join(sorted(unsupported))}",
+            code="campaign_template_unsupported_variables",
         )
 
 
@@ -136,17 +285,94 @@ def render_template_content(
             code="email_template_context_incomplete",
         )
     from string import Template
+
+    rendered_html = Template(html_body).substitute(context)
     return EmailMessage(
         to=to,
         subject=Template(subject).substitute(context),
-        html_body=Template(html_body).substitute(context),
+        html_body=sanitize_email_html(rendered_html),
         text_body=Template(text_body).substitute(context),
     )
 
 
 class CommunicationsService:
     def __init__(self, session: AsyncSession | None = None) -> None:
+        self.session = session
         self.repository = CommunicationsRepository(session) if session is not None else None
+
+    async def upload_campaign_asset(
+        self,
+        *,
+        settings: Settings,
+        content: bytes,
+        content_type: str | None,
+        original_file_name: str | None,
+        owner_id: UUID,
+    ) -> CampaignAssetUploadResponse:
+        repository = self._require_repository()
+        session = self._require_session()
+        stored_asset = store_campaign_asset(
+            settings=settings,
+            content=content,
+            content_type=content_type,
+            original_file_name=original_file_name,
+            owner_id=owner_id,
+        )
+        try:
+            await repository.add_campaign_asset(
+                CampaignAsset(
+                    owner_id=owner_id,
+                    file_name=stored_asset.file_name,
+                    public_url=stored_asset.url,
+                    content_type=stored_asset.content_type,
+                    size_bytes=stored_asset.size_bytes,
+                    status="staged",
+                )
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            delete_campaign_asset(
+                settings=settings,
+                file_name=stored_asset.file_name,
+                owner_id=owner_id,
+            )
+            raise
+        return CampaignAssetUploadResponse(
+            url=stored_asset.url,
+            file_name=stored_asset.file_name,
+            content_type=stored_asset.content_type,
+            size_bytes=stored_asset.size_bytes,
+        )
+
+    async def remove_campaign_asset(
+        self,
+        *,
+        settings: Settings,
+        file_name: str,
+        owner_id: UUID,
+    ) -> bool:
+        repository = self._require_repository()
+        session = self._require_session()
+        asset = await repository.get_campaign_asset_by_file_name(
+            file_name,
+            owner_id=owner_id,
+            for_update=True,
+        )
+        if asset is not None and asset.campaign_id is not None:
+            raise DomainError(
+                "Campaign asset is still attached to a campaign.",
+                code="campaign_asset_attached",
+            )
+        deleted = delete_campaign_asset(
+            settings=settings,
+            file_name=file_name,
+            owner_id=owner_id,
+        )
+        if asset is not None:
+            await repository.delete_campaign_asset_record(asset)
+            await session.commit()
+        return deleted or asset is not None
 
     async def list_templates(
         self,
@@ -155,7 +381,6 @@ class CommunicationsService:
         owner_id: UUID | None = None,
     ) -> list[EmailTemplateResponse]:
         repository = self._require_repository()
-        await self._seed_catalog_templates(repository)
         templates = await repository.list_templates(active_only=active_only, owner_id=owner_id)
         return [EmailTemplateResponse.model_validate(t) for t in templates]
 
@@ -168,9 +393,6 @@ class CommunicationsService:
     ) -> EmailTemplateResponse:
         repository = self._require_repository()
         template = await repository.get_template(key, version=version, owner_id=owner_id)
-        if template is None:
-            await self._seed_catalog_templates(repository)
-            template = await repository.get_template(key, version=version, owner_id=owner_id)
         if template is None:
             raise DomainError("Email template not found.", code="email_template_not_found")
         return EmailTemplateResponse.model_validate(template)
@@ -189,7 +411,7 @@ class CommunicationsService:
             payload.variables,
             payload.key,
         )
-        version = await repository.get_latest_version(payload.key) + 1
+        version = await repository.get_latest_version(payload.key, owner_id=owner_id) + 1
         if payload.active:
             await repository.deactivate_templates_for_key(payload.key, owner_id=owner_id)
         template = await repository.add_template(
@@ -235,9 +457,17 @@ class CommunicationsService:
             key,
         )
 
-        has_sends = await repository.has_sent_emails(key, template.version)
+        has_sends = await repository.has_sent_emails(
+            key,
+            template.version,
+            owner_id=owner_id,
+        )
         if has_sends or (owner_id is not None and template.owner_id is None):
-            next_version = await repository.get_latest_version(key) + 1
+            owner_latest_version = await repository.get_latest_version(
+                key,
+                owner_id=owner_id,
+            )
+            next_version = max(template.version, owner_latest_version) + 1
             await repository.deactivate_templates_for_key(key, owner_id=owner_id)
             template = await repository.add_template(
                 EmailTemplate(
@@ -248,9 +478,7 @@ class CommunicationsService:
                     text_body=updated_text,
                     variables=updated_variables,
                     audience=(
-                        payload.audience
-                        if payload.audience is not None
-                        else template.audience
+                        payload.audience if payload.audience is not None else template.audience
                     ),
                     active=payload.active if payload.active is not None else True,
                     owner_id=owner_id if owner_id is not None else template.owner_id,
@@ -290,7 +518,7 @@ class CommunicationsService:
             template = await repository.add_template(
                 EmailTemplate(
                     key=key,
-                    version=await repository.get_latest_version(key) + 1,
+                    version=await repository.get_latest_version(key, owner_id=owner_id) + 1,
                     subject=template.subject,
                     html_body=template.html_body,
                     text_body=template.text_body,
@@ -336,31 +564,10 @@ class CommunicationsService:
             raise RuntimeError("CommunicationsService requires a database session")
         return self.repository
 
-    async def _seed_catalog_templates(self, repository: CommunicationsRepository) -> None:
-        existing_templates = {
-            (template.key, template.version): template
-            for template in await repository.list_templates(active_only=False)
-        }
-        for catalog_template in (*PROMOTIONAL_TEMPLATES, *EVALUATION_TEMPLATES):
-            existing = existing_templates.get((catalog_template.key, catalog_template.version))
-            if existing is None:
-                existing = await repository.add_template(
-                    EmailTemplate(
-                        key=catalog_template.key,
-                        version=catalog_template.version,
-                        subject=catalog_template.subject,
-                        html_body=catalog_template.html_body,
-                        text_body=catalog_template.text_body,
-                        variables=list(catalog_template.required_context),
-                        audience=catalog_template.audience,
-                        active=True,
-                    )
-                )
-                existing_templates[(catalog_template.key, catalog_template.version)] = existing
-                await repository.deactivate_templates_for_key(
-                    catalog_template.key,
-                    except_version=catalog_template.version,
-                )
+    def _require_session(self) -> AsyncSession:
+        if self.session is None:
+            raise RuntimeError("CommunicationsService requires a database session")
+        return self.session
 
     async def bulk_create_campaign_recipients(
         self,
@@ -410,7 +617,7 @@ class CommunicationsService:
                         email=None,
                         contact_name=req.contact_name,
                         organization_name=req.organization_name,
-                        segment=req.segment,
+                        segment=CampaignRecipientSegment(req.segment),
                         source=req.source,
                         status=recipient_status,
                     )
@@ -422,7 +629,7 @@ class CommunicationsService:
                 email=normalized_email,
                 contact_name=req.contact_name,
                 organization_name=req.organization_name,
-                segment=req.segment,
+                segment=CampaignRecipientSegment(req.segment),
                 source=req.source,
                 status=recipient_status,
             )
@@ -456,7 +663,10 @@ class CommunicationsService:
                 existing_recipient.status = recipient.status
         recipients_to_create.extend(recipients_without_email)
         if recipients_to_create:
-            await repository.add_campaign_recipients(recipients_to_create)
+            await repository.add_campaign_recipients(
+                recipients_to_create,
+                owner_id=owner_id,
+            )
         return CampaignRecipientBulkCreateResult(
             recipients=[*existing, *recipients_to_create],
             created=len(recipients_to_create),
@@ -481,10 +691,7 @@ class CommunicationsService:
                 normalized_email,
                 owner_id=owner_id,
             )
-            if (
-                existing_email_recipient is not None
-                and existing_email_recipient.id != recipient.id
-            ):
+            if existing_email_recipient is not None and existing_email_recipient.id != recipient.id:
                 raise DomainError(
                     "Campaign recipient email already exists.",
                     code="campaign_recipient_email_exists",
@@ -549,18 +756,26 @@ class CommunicationsService:
         payload: CampaignCreateRequest,
         *,
         owner_id: UUID | None = None,
+        settings: Settings | None = None,
     ) -> Campaign:
         repository = self._require_repository()
+        validate_campaign_placeholders(
+            payload.subject,
+            payload.html_body,
+            payload.text_body,
+        )
 
         campaign = Campaign(
             owner_id=owner_id,
             name=payload.name,
             segment=(
-                CampaignRecipientSegment(payload.segment)
-                if payload.segment is not None
-                else None
+                CampaignRecipientSegment(payload.segment) if payload.segment is not None else None
             ),
-            status=CampaignStatus.ready,
+            status=(
+                CampaignStatus.draft
+                if payload.video_url and not payload.thumbnail_url
+                else CampaignStatus.ready
+            ),
             subject=payload.subject,
             html_body=payload.html_body,
             text_body=payload.text_body,
@@ -568,7 +783,17 @@ class CommunicationsService:
             thumbnail_url=payload.thumbnail_url,
             landing_page_url=payload.landing_page_url,
         )
-        return await repository.add_campaign(campaign)
+        campaign = await repository.add_campaign(campaign)
+        if _is_managed_campaign_asset_url(campaign.thumbnail_url, settings):
+            await _bind_campaign_asset(
+                repository,
+                campaign,
+                previous_url=None,
+                next_url=campaign.thumbnail_url,
+                owner_id=_require_delivery_owner_id(owner_id),
+                settings=settings,
+            )
+        return campaign
 
     async def update_campaign(
         self,
@@ -576,6 +801,7 @@ class CommunicationsService:
         payload: CampaignUpdateRequest,
         *,
         owner_id: UUID | None = None,
+        settings: Settings | None = None,
     ) -> Campaign:
         repository = self._require_repository()
         campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
@@ -583,13 +809,33 @@ class CommunicationsService:
             raise DomainError("Campaign not found.", code="campaign_not_found")
 
         provided_fields = payload.model_fields_set
+        previous_thumbnail_url = campaign.thumbnail_url
+        updated_subject = (
+            payload.subject
+            if "subject" in provided_fields and payload.subject is not None
+            else campaign.subject
+        )
+        updated_html_body = (
+            payload.html_body
+            if "html_body" in provided_fields and payload.html_body is not None
+            else campaign.html_body
+        )
+        updated_text_body = (
+            payload.text_body
+            if "text_body" in provided_fields and payload.text_body is not None
+            else campaign.text_body
+        )
+        validate_campaign_placeholders(
+            updated_subject,
+            updated_html_body,
+            updated_text_body,
+        )
+
         if "name" in provided_fields and payload.name is not None:
             campaign.name = payload.name.strip()
         if "segment" in provided_fields:
             campaign.segment = (
-                CampaignRecipientSegment(payload.segment)
-                if payload.segment is not None
-                else None
+                CampaignRecipientSegment(payload.segment) if payload.segment is not None else None
             )
         if "status" in provided_fields and payload.status is not None:
             try:
@@ -612,10 +858,18 @@ class CommunicationsService:
         if "landing_page_url" in provided_fields:
             campaign.landing_page_url = payload.landing_page_url
 
-        if bool(campaign.video_url) != bool(campaign.thumbnail_url):
-            raise DomainError(
-                "Video campaigns require video_url and thumbnail_url.",
-                code="campaign_video_assets_incomplete",
+        asset_reference_changed = previous_thumbnail_url != campaign.thumbnail_url and (
+            _is_managed_campaign_asset_url(previous_thumbnail_url, settings)
+            or _is_managed_campaign_asset_url(campaign.thumbnail_url, settings)
+        )
+        if asset_reference_changed:
+            await _bind_campaign_asset(
+                repository,
+                campaign,
+                previous_url=previous_thumbnail_url,
+                next_url=campaign.thumbnail_url,
+                owner_id=_require_delivery_owner_id(owner_id or campaign.owner_id),
+                settings=settings,
             )
 
         await repository.flush()
@@ -635,7 +889,31 @@ class CommunicationsService:
         campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
+        if hasattr(repository, "cancel_queued_campaign_sends"):
+            await repository.cancel_queued_campaign_sends(campaign.id, now=datetime.now(UTC))
+        if owner_id is not None and hasattr(repository, "list_campaign_assets_for_campaign"):
+            for asset in await repository.list_campaign_assets_for_campaign(
+                campaign.id,
+                owner_id=owner_id,
+            ):
+                asset.campaign_id = None
+                asset.status = "staged"
         await repository.delete_campaign(campaign)
+
+    async def cancel_campaign_delivery(
+        self,
+        campaign_id: UUID,
+        *,
+        owner_id: UUID | None = None,
+    ) -> int:
+        repository = self._require_repository()
+        campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
+        if campaign is None:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
+        return await repository.cancel_queued_campaign_sends(
+            campaign.id,
+            now=datetime.now(UTC),
+        )
 
     async def list_campaign_recipient_memberships(
         self,
@@ -657,6 +935,7 @@ class CommunicationsService:
             repository,
             campaign.id,
             recipients,
+            owner_id=owner_id,
         )
         return [
             _campaign_recipient_membership_row(
@@ -685,9 +964,7 @@ class CommunicationsService:
         )
         recipients_by_id = {recipient.id: recipient for recipient in recipients}
         missing_ids = [
-            recipient_id
-            for recipient_id in recipient_ids
-            if recipient_id not in recipients_by_id
+            recipient_id for recipient_id in recipient_ids if recipient_id not in recipients_by_id
         ]
         if missing_ids:
             raise DomainError(
@@ -706,6 +983,7 @@ class CommunicationsService:
             repository,
             campaign.id,
             ordered_recipients,
+            owner_id=owner_id,
         )
         return [
             _campaign_recipient_membership_row(
@@ -720,14 +998,21 @@ class CommunicationsService:
         campaign_id: UUID,
         payload: CampaignSendRequest,
         *,
-        provider: EmailProvider,
+        provider: EmailProvider | None = None,
         settings: Settings,
         owner_id: UUID | None = None,
+        idempotency_key: str | None = None,
     ) -> CampaignSendResponse:
         repository = self._require_repository()
         campaign = await repository.get_campaign(campaign_id, owner_id=owner_id)
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
+        delivery_owner_id = _require_delivery_owner_id(owner_id or campaign.owner_id)
+        if campaign.video_url and not campaign.thumbnail_url:
+            raise DomainError(
+                "Add a thumbnail before sending this video campaign.",
+                code="campaign_video_assets_incomplete",
+            )
         if campaign.status not in {CampaignStatus.ready, CampaignStatus.completed}:
             raise DomainError(
                 "Campaign must be ready before sending.",
@@ -762,17 +1047,6 @@ class CommunicationsService:
                 )
                 continue
 
-            if not payload.dry_run and remaining_sends <= 0:
-                results.append(
-                    CampaignSendRecipientResult(
-                        recipient_id=recipient.id,
-                        email=recipient.email or "",
-                        status="skipped",
-                        error="Daily email send cap reached.",
-                    )
-                )
-                continue
-
             unsubscribe_url = _campaign_unsubscribe_url(recipient, settings)
             require_campaign_send_allowed(
                 recipient,
@@ -791,52 +1065,81 @@ class CommunicationsService:
                 )
                 continue
 
-            email_send = await repository.add_email_send(
-                EmailSend(
-                    assignment_id=None,
-                    campaign_id=campaign.id,
-                    campaign_recipient_id=recipient.id,
-                    recipient_email=recipient.email,
-                    template_key="campaign",
-                    template_version=1,
-                    provider=str(getattr(provider, "key", "unknown")),
-                    provider_message_id=None,
-                    status=EmailSendStatus.queued,
-                    last_event_at=datetime.now(UTC),
+            message_payload = _email_outbox_payload(
+                message,
+                default_from_address=settings.email_from_address,
+            )
+            payload_fingerprint = _campaign_delivery_payload_fingerprint(
+                campaign,
+                recipient,
+                settings,
+            )
+            delivery_key = _email_send_idempotency_key(
+                idempotency_key or payload_fingerprint,
+                f"campaign:{campaign.id}:{recipient.id}",
+            )
+            existing_send = await repository.get_email_send_by_idempotency_key(delivery_key)
+            if existing_send is not None:
+                _require_matching_email_send_payload(existing_send, payload_fingerprint)
+                results.append(_campaign_result_from_existing_send(existing_send, recipient))
+                continue
+
+            if remaining_sends <= 0:
+                results.append(
+                    CampaignSendRecipientResult(
+                        recipient_id=recipient.id,
+                        email=recipient.email or "",
+                        status="skipped",
+                        error="Daily email send cap reached.",
+                    )
                 )
+                continue
+
+            now = datetime.now(UTC)
+            candidate = EmailSend(
+                owner_id=delivery_owner_id,
+                assignment_id=None,
+                campaign_id=campaign.id,
+                campaign_recipient_id=recipient.id,
+                recipient_email=recipient.email,
+                template_key="campaign",
+                template_version=1,
+                provider=str(getattr(provider, "key", settings.email_provider)),
+                provider_message_id=None,
+                idempotency_key=delivery_key,
+                payload_fingerprint=payload_fingerprint,
+                message_payload=message_payload,
+                attempt_count=0,
+                max_attempts=EMAIL_OUTBOX_MAX_ATTEMPTS,
+                next_attempt_at=now,
+                lease_token=None,
+                lease_expires_at=None,
+                status=EmailSendStatus.queued,
+                last_event_at=now,
             )
-            result = await provider.send(message)
-            send_status = (
-                EmailSendStatus.accepted
-                if result.status == EmailDeliveryStatus.accepted
-                else EmailSendStatus.failed
-            )
-            email_send.provider = result.provider.value
-            email_send.provider_message_id = result.message_id
-            email_send.status = send_status
-            email_send.error_details = result.error_details
-            email_send.last_event_at = datetime.now(UTC)
+            email_send, created = await _enqueue_email_send(repository, candidate)
+            _require_matching_email_send_payload(email_send, payload_fingerprint)
+            if not created:
+                results.append(_campaign_result_from_existing_send(email_send, recipient))
+                continue
             results.append(
                 CampaignSendRecipientResult(
                     recipient_id=recipient.id,
                     email=recipient.email,
-                    status=result.status.value,
-                    message_id=result.message_id,
-                    error=result.error_details,
+                    status="queued",
                 )
             )
-            if result.status == EmailDeliveryStatus.accepted:
-                remaining_sends -= 1
-
-        if not payload.dry_run and any(result.status == "accepted" for result in results):
-            campaign.status = CampaignStatus.completed
+            remaining_sends -= 1
 
         return CampaignSendResponse(
             campaign_id=campaign.id,
             total=len(results),
+            queued=sum(1 for result in results if result.status == "queued"),
             sent=sum(1 for result in results if result.status == "accepted"),
             failed=sum(1 for result in results if result.status == "failed"),
-            skipped=sum(1 for result in results if result.status in {"skipped", "dry_run"}),
+            skipped=sum(
+                1 for result in results if result.status in {"skipped", "dry_run", "cancelled"}
+            ),
             dry_run=payload.dry_run,
             results=results,
         )
@@ -900,7 +1203,10 @@ class CommunicationsService:
                 "Invalid campaign recipient action link.",
                 code="campaign_recipient_action_invalid",
             )
-        recipient = await repository.get_campaign_recipient(claims.recipient_id)
+        recipient = await repository.get_campaign_recipient(
+            claims.recipient_id,
+            owner_id=claims.owner_id,
+        )
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
         return recipient
@@ -934,7 +1240,10 @@ class CommunicationsService:
             return matching
         if not hasattr(repository, "list_accepted_campaign_recipient_ids"):
             return matching
-        sent_recipient_ids = await repository.list_accepted_campaign_recipient_ids(campaign.id)
+        sent_recipient_ids = await repository.list_accepted_campaign_recipient_ids(
+            campaign.id,
+            owner_id=owner_id,
+        )
         return [recipient for recipient in matching if recipient.id not in sent_recipient_ids]
 
     async def record_campaign_recipient_event(
@@ -956,7 +1265,8 @@ class CommunicationsService:
                 event_type=payload.event_type,
                 variant_key=payload.variant_key,
                 occurred_at=payload.occurred_at or datetime.now(UTC),
-            )
+            ),
+            owner_id=owner_id,
         )
         return CampaignRecipientEventResponse(
             id=event.id,
@@ -994,6 +1304,7 @@ class CommunicationsService:
                 event_type=claims.event_type,  # type: ignore[arg-type]
                 variant_key=claims.variant_key,
             ),
+            owner_id=claims.owner_id,
         )
         return claims.target_url
 
@@ -1018,9 +1329,8 @@ class CommunicationsService:
         )
 
         # 1. Fetch all participants and their company details
-        profiles_stmt = (
-            select(ParticipantProfile, Company.name)
-            .join(Company, ParticipantProfile.company_id == Company.id)
+        profiles_stmt = select(ParticipantProfile, Company.name).join(
+            Company, ParticipantProfile.company_id == Company.id
         )
         if owner_id is not None:
             profiles_stmt = profiles_stmt.join(
@@ -1052,20 +1362,21 @@ class CommunicationsService:
             profile_assignments[a.respondent_profile_id].append(a)
 
         # 3. Fetch latest delivery state per email without loading historical sends.
-        ranked_sends = (
-            select(
-                EmailSend.recipient_email.label("recipient_email"),
-                EmailSend.status.label("status"),
-                func.row_number()
-                .over(
-                    partition_by=EmailSend.recipient_email,
-                    order_by=EmailSend.created_at.desc(),
-                )
-                .label("row_number"),
+        ranked_sends_statement = select(
+            EmailSend.recipient_email.label("recipient_email"),
+            EmailSend.status.label("status"),
+            func.row_number()
+            .over(
+                partition_by=(EmailSend.owner_id, func.lower(EmailSend.recipient_email)),
+                order_by=EmailSend.created_at.desc(),
             )
-            .where(EmailSend.assignment_id.is_not(None))
-            .subquery()
-        )
+            .label("row_number"),
+        ).where(EmailSend.assignment_id.is_not(None))
+        if owner_id is not None:
+            ranked_sends_statement = ranked_sends_statement.where(
+                EmailSend.owner_id == owner_id
+            )
+        ranked_sends = ranked_sends_statement.subquery()
         latest_sends_result = await session.execute(
             select(ranked_sends.c.recipient_email, ranked_sends.c.status).where(
                 ranked_sends.c.row_number == 1
@@ -1120,11 +1431,16 @@ class CommunicationsService:
                 continue
 
             total_tasks = len(p_assignments)
-            completed_tasks = sum(1 for a in p_assignments if a.status in {
-                AssignmentStatus.submitted,
-                AssignmentStatus.validated,
-                AssignmentStatus.scored,
-            })
+            completed_tasks = sum(
+                1
+                for a in p_assignments
+                if a.status
+                in {
+                    AssignmentStatus.submitted,
+                    AssignmentStatus.validated,
+                    AssignmentStatus.scored,
+                }
+            )
             started_tasks = sum(1 for a in p_assignments if a.status == AssignmentStatus.started)
 
             tasks_str = f"{completed_tasks}/{total_tasks}"
@@ -1149,12 +1465,16 @@ class CommunicationsService:
                 else:
                     delivery_state = latest_send_status.value
 
-            has_entered = profile.user_id is not None or any(a.status in {
-                AssignmentStatus.started,
-                AssignmentStatus.submitted,
-                AssignmentStatus.validated,
-                AssignmentStatus.scored,
-            } for a in p_assignments)
+            has_entered = profile.user_id is not None or any(
+                a.status
+                in {
+                    AssignmentStatus.started,
+                    AssignmentStatus.submitted,
+                    AssignmentStatus.validated,
+                    AssignmentStatus.scored,
+                }
+                for a in p_assignments
+            )
             if has_entered:
                 total_entered += 1
 
@@ -1180,19 +1500,21 @@ class CommunicationsService:
 
             audience_type = "leadership_account" if profile.user_id is not None else "secure_link"
 
-            rows.append({
-                "id": str(profile.id),
-                "company_id": str(profile.company_id),
-                "participant": profile.full_name,
-                "email": profile.email,
-                "audience": audience_type,
-                "project": company_names.get(profile.id, "Pilot"),
-                "tasks": tasks_str,
-                "delivery": delivery_state,
-                "reminder": reminder_state,
-                "completion": completion_state,
-                "nextAction": next_action,
-            })
+            rows.append(
+                {
+                    "id": str(profile.id),
+                    "company_id": str(profile.company_id),
+                    "participant": profile.full_name,
+                    "email": profile.email,
+                    "audience": audience_type,
+                    "project": company_names.get(profile.id, "Pilot"),
+                    "tasks": tasks_str,
+                    "delivery": delivery_state,
+                    "reminder": reminder_state,
+                    "completion": completion_state,
+                    "nextAction": next_action,
+                }
+            )
 
         metrics = [
             {
@@ -1219,18 +1541,12 @@ class CommunicationsService:
 
         rules = [
             "Liderii primesc email de cont si pot reveni la sarcinile lor.",
-            (
-                "Membrii fara cont primesc link securizat per proiect, "
-                "valabil pana la deadline."
-            ),
+            ("Membrii fara cont primesc link securizat per proiect, valabil pana la deadline."),
             (
                 "Reminderul se trimite pentru status invitat sau inceput, "
                 "nu pentru sarcini finalizate."
             ),
-            (
-                "Emailurile nu includ raspunsuri confidentiale, "
-                "doar linkuri si status operational."
-            ),
+            ("Emailurile nu includ raspunsuri confidentiale, doar linkuri si status operational."),
         ]
 
         campaign_rows = [
@@ -1250,7 +1566,8 @@ class CommunicationsService:
                 "viewCount": campaign_event_counts[recipient.id]["video_viewed"],
                 "replyCount": campaign_event_counts[recipient.id]["replied"],
                 "calendlyClickCount": campaign_event_counts[recipient.id]["calendly_clicked"],
-                "emailVariant": campaign_variant_by_recipient.get(recipient.id) or recipient.source,
+                "source": recipient.source,
+                "emailVariant": campaign_variant_by_recipient.get(recipient.id),
                 "outcome": None,
             }
             for recipient in campaign_recipients
@@ -1258,11 +1575,11 @@ class CommunicationsService:
 
         campaign = {
             "videoHost": {
-                "provider": "Vimeo sau pagină Codruț",
+                "provider": "Vimeo sau pagină Cody",
                 "status": "ready",
                 "note": (
                     "Emailul trimite thumbnail și CTA către linkul video. "
-                    "Pagina Codruț este opțională când vrei tracking sau CTA-uri dedicate."
+                    "Pagina Cody este opțională când vrei tracking sau CTA-uri dedicate."
                 ),
             },
             "template": {
@@ -1333,7 +1650,8 @@ def _campaign_recipient_membership_row(
         viewCount=0,
         replyCount=0,
         calendlyClickCount=0,
-        emailVariant=recipient.source,
+        source=recipient.source,
+        emailVariant=None,
         outcome=None,
         membershipSource=None,
         campaignDelivery=campaign_delivery,
@@ -1344,6 +1662,8 @@ async def _campaign_delivery_by_recipient_id(
     repository: object,
     campaign_id: UUID,
     recipients: list[CampaignRecipient],
+    *,
+    owner_id: UUID | None,
 ) -> dict[UUID, str]:
     if not recipients or not hasattr(repository, "list_campaign_delivery_status_by_recipient_ids"):
         return {}
@@ -1351,6 +1671,7 @@ async def _campaign_delivery_by_recipient_id(
     return await repository.list_campaign_delivery_status_by_recipient_ids(
         campaign_id,
         recipient_ids,
+        owner_id=owner_id,
     )
 
 
@@ -1365,9 +1686,11 @@ def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
 
 
 def _campaign_unsubscribe_url(recipient: CampaignRecipient, settings: Settings) -> str:
+    owner_id = _campaign_recipient_owner_id(recipient)
     token = create_campaign_recipient_action_token(
         CampaignRecipientActionClaims(
             recipient_id=recipient.id,
+            owner_id=owner_id,
             action="unsubscribe",
         ),
         settings,
@@ -1395,6 +1718,7 @@ def _render_campaign_message(
         "landing_page_url": campaign.landing_page_url or campaign.video_url or "",
         "calendly_url": calendly_tracking_url,
         "unsubscribe_url": unsubscribe_url,
+        "legal_address": settings.email_legal_address,
     }
 
     subject = _render_campaign_template(campaign.subject, context)
@@ -1418,6 +1742,8 @@ def _render_campaign_message(
             + html_body
             + _render_campaign_template(PROMOTIONAL_SHELL_CLOSE, context)
         )
+    html_body = _ensure_campaign_html_unsubscribe(html_body, unsubscribe_url)
+    html_body = sanitize_email_html(html_body)
     html_body = _append_campaign_open_pixel(html_body, campaign, recipient, settings)
     if not _campaign_message_has_calendly_link(text_body, calendly_tracking_url):
         text_body = f"{text_body}\n\nAlege un slot în Calendly: {calendly_tracking_url}"
@@ -1437,6 +1763,7 @@ _EMPTY_CAMPAIGN_VIDEO_BLOCK_RE = re.compile(
 )
 _EMPTY_CAMPAIGN_VIDEO_LINE_RE = re.compile(r"(?m)^[^\n]*(?:Video|video)[^\n]*:\s*$\n?")
 _CAMPAIGN_HREF_RE = re.compile(r'href=(["\'])([^"\']+)\1', re.IGNORECASE)
+_CAMPAIGN_BODY_CLOSE_RE = re.compile(r"</body\s*>", re.IGNORECASE)
 
 
 def _remove_empty_campaign_video_blocks(html_body: str) -> str:
@@ -1474,6 +1801,25 @@ def _append_campaign_calendly_cta(html_body: str, calendly_url: str) -> str:
     if stripped.endswith(shell_close):
         return stripped[: -len(shell_close)] + cta + shell_close
     return html_body + cta
+
+
+def _ensure_campaign_html_unsubscribe(html_body: str, unsubscribe_url: str) -> str:
+    escaped_url = html_escape(unsubscribe_url, quote=True)
+    standard_footer_present = "Ai primit acest email deoarece" in html_body and (
+        f'href="{escaped_url}"' in html_body or f"href='{escaped_url}'" in html_body
+    )
+    if standard_footer_present:
+        return html_body
+
+    footer = (
+        '<p style="margin:24px 0 0;font-size:12px;line-height:1.5;text-align:center;">'
+        f'<a href="{escaped_url}" data-codrut-cta="unsubscribe" '
+        'style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a></p>'
+    )
+    body_close = _CAMPAIGN_BODY_CLOSE_RE.search(html_body)
+    if body_close is None:
+        return html_body + footer
+    return html_body[: body_close.start()] + footer + html_body[body_close.start() :]
 
 
 def _append_campaign_open_pixel(
@@ -1582,9 +1928,11 @@ def _campaign_tracking_url(
     target_url: str,
     event_type: str,
 ) -> str:
+    owner_id = _campaign_recipient_owner_id(recipient)
     token = create_campaign_tracking_token(
         CampaignTrackingClaims(
             recipient_id=recipient.id,
+            owner_id=owner_id,
             target_url=target_url,
             event_type=event_type,
             variant_key=str(campaign.id),
@@ -1593,6 +1941,15 @@ def _campaign_tracking_url(
         settings,
     )
     return build_campaign_tracking_url(token, settings, event_type=event_type)
+
+
+def _campaign_recipient_owner_id(recipient: CampaignRecipient) -> UUID:
+    if recipient.owner_id is None:
+        raise DomainError(
+            "Campaign recipient owner is required.",
+            code="campaign_recipient_owner_required",
+        )
+    return recipient.owner_id
 
 
 def _render_campaign_template(template: str, context: dict[str, str]) -> str:
@@ -1634,28 +1991,45 @@ class AssignmentInvitationContext:
 
 
 class TransactionalEmailService:
-    def __init__(self, provider: EmailProvider, session: AsyncSession | None = None) -> None:
+    def __init__(
+        self,
+        provider: EmailProvider,
+        session: AsyncSession | None = None,
+        *,
+        owner_id: UUID | None = None,
+    ) -> None:
         self.provider = provider
         self.session = session
-        self._template_cache: dict[str, EmailTemplate | None] = {}
+        self.owner_id = owner_id
+        self._template_cache: dict[tuple[UUID, str], EmailTemplate | None] = {}
 
     async def send_assignment_invitation(
         self,
         assignment: QuestionnaireAssignment,
         respondent: ParticipantProfile,
         context: AssignmentInvitationContext,
+        *,
+        idempotency_key: str | None = None,
+        assignment_ids: list[UUID] | None = None,
+        reminder_assignment_ids: list[UUID] | None = None,
     ) -> EmailSendResult:
-        template_key = _select_invitation_template(respondent)
+        if self.session is None:
+            raise RuntimeError("Durable invitation delivery requires a database session")
+        owner_id = _require_delivery_owner_id(self.owner_id)
+        is_reminder = bool(reminder_assignment_ids)
+        template_key = _select_invitation_template(respondent, reminder=is_reminder)
 
         version = 1
         db_template = None
         if self.session is not None:
-            if template_key.value not in self._template_cache:
+            cache_key = (owner_id, template_key.value)
+            if cache_key not in self._template_cache:
                 repository = CommunicationsRepository(self.session)
-                self._template_cache[template_key.value] = await repository.get_template(
-                    template_key.value
+                self._template_cache[cache_key] = await repository.get_template(
+                    template_key.value,
+                    owner_id=owner_id,
                 )
-            db_template = self._template_cache[template_key.value]
+            db_template = self._template_cache[cache_key]
         if db_template is not None:
             subject = db_template.subject
             html_body = db_template.html_body
@@ -1685,47 +2059,628 @@ class TransactionalEmailService:
             },
         )
 
-        email_send: EmailSend | None = None
-        if self.session is not None:
-            email_send = EmailSend(
+        related_assignment_ids = assignment_ids or [assignment.id]
+        message_payload = _email_outbox_payload(
+            message,
+            assignment_ids=related_assignment_ids,
+            reminder_assignment_ids=reminder_assignment_ids,
+            delivery_kind="reminder" if is_reminder else "invitation",
+            default_from_address=getattr(
+                getattr(self.provider, "from_address", None),
+                "value",
+                None,
+            ),
+        )
+        payload_fingerprint = _email_outbox_payload_fingerprint(message_payload)
+        automatic_key = (
+            f"{payload_fingerprint}:reminder:{datetime.now(UTC).date().isoformat()}"
+            if is_reminder
+            else payload_fingerprint
+        )
+        stable_key = _email_send_idempotency_key(
+            idempotency_key or automatic_key,
+            f"assignment:{assignment.id}:{respondent.id}",
+        )
+        now = datetime.now(UTC)
+        repository = CommunicationsRepository(self.session)
+        email_send, _created = await _enqueue_email_send(
+            repository,
+            EmailSend(
+                owner_id=owner_id,
                 assignment_id=assignment.id,
                 recipient_email=respondent.email,
                 template_key=template_key.value,
                 template_version=version,
                 provider=str(getattr(self.provider, "key", "unknown")),
                 provider_message_id=None,
+                idempotency_key=stable_key,
+                payload_fingerprint=payload_fingerprint,
+                message_payload=message_payload,
+                attempt_count=0,
+                max_attempts=EMAIL_OUTBOX_MAX_ATTEMPTS,
+                next_attempt_at=now,
+                lease_token=None,
+                lease_expires_at=None,
                 status=EmailSendStatus.queued,
-                last_event_at=datetime.now(UTC),
-            )
-            self.session.add(email_send)
-            await self.session.flush()
+                last_event_at=now,
+            ),
+        )
+        _require_matching_email_send_payload(email_send, payload_fingerprint)
+        return _email_result_from_existing_send(email_send, respondent.email)
 
-        result = await self.provider.send(message)
+    async def enqueue_transactional_message(
+        self,
+        message: EmailMessage,
+        *,
+        template_key: str,
+        template_version: int,
+        idempotency_key: str,
+        delivery_kind: str,
+    ) -> EmailSendResult:
+        if self.session is None:
+            raise RuntimeError("Durable transactional delivery requires a database session")
+        owner_id = _require_delivery_owner_id(self.owner_id)
+        message_payload = _email_outbox_payload(
+            message,
+            delivery_kind=delivery_kind,
+            default_from_address=getattr(
+                getattr(self.provider, "from_address", None),
+                "value",
+                None,
+            ),
+        )
+        payload_fingerprint = _email_outbox_payload_fingerprint(message_payload)
+        stable_key = _email_send_idempotency_key(idempotency_key, f"owner:{owner_id}")
+        now = datetime.now(UTC)
+        email_send, _created = await _enqueue_email_send(
+            CommunicationsRepository(self.session),
+            EmailSend(
+                owner_id=owner_id,
+                recipient_email=message.to.value,
+                template_key=template_key,
+                template_version=template_version,
+                provider=str(getattr(self.provider, "key", "unknown")),
+                idempotency_key=stable_key,
+                payload_fingerprint=payload_fingerprint,
+                message_payload=message_payload,
+                attempt_count=0,
+                max_attempts=EMAIL_OUTBOX_MAX_ATTEMPTS,
+                next_attempt_at=now,
+                status=EmailSendStatus.queued,
+                last_event_at=now,
+            ),
+        )
+        _require_matching_email_send_payload(email_send, payload_fingerprint)
+        return _email_result_from_existing_send(email_send, message.to.value)
 
-        if email_send is not None:
-            send_status = EmailSendStatus.queued
-            if result.status == EmailDeliveryStatus.accepted:
-                send_status = EmailSendStatus.accepted
-            elif result.status == EmailDeliveryStatus.failed:
-                send_status = EmailSendStatus.failed
 
-            email_send.provider = result.provider.value
-            email_send.provider_message_id = result.message_id
-            email_send.status = send_status
-            email_send.error_details = result.error_details
-            email_send.last_event_at = datetime.now(UTC)
-            await self.session.flush()
+@dataclass(frozen=True)
+class EmailOutboxBatchResult:
+    claimed: int = 0
+    accepted: int = 0
+    retried: int = 0
+    failed: int = 0
+    cancelled: int = 0
+    indeterminate: int = 0
+
+
+class EmailOutboxProcessor:
+    def __init__(self, session: AsyncSession, provider: EmailProvider) -> None:
+        self.session = session
+        self.provider = provider
+        self.repository = CommunicationsRepository(session)
+
+    async def process_due(self, *, limit: int = 10) -> EmailOutboxBatchResult:
+        now = datetime.now(UTC)
+        indeterminate_sends = await self.repository.mark_stale_provider_requests_indeterminate(
+            now=now
+        )
+        exhausted = await self.repository.fail_exhausted_stale_email_sends(now=now)
+        for campaign_id in {send.campaign_id for send in exhausted if send.campaign_id is not None}:
+            await self._complete_campaign_if_idle(campaign_id)
+        claimed = await self.repository.claim_due_email_sends(
+            now=now,
+            lease_duration=EMAIL_OUTBOX_LEASE_DURATION,
+            limit=limit,
+        )
+        await self.session.commit()
+
+        accepted = 0
+        retried = 0
+        failed = len(exhausted)
+        cancelled = 0
+        indeterminate = len(indeterminate_sends)
+        for send in claimed:
+            outcome = await self._process_claimed(send)
+            accepted += outcome == "accepted"
+            retried += outcome == "retried"
+            failed += outcome == "failed"
+            cancelled += outcome == "cancelled"
+            indeterminate += outcome == "indeterminate"
+        return EmailOutboxBatchResult(
+            claimed=len(claimed),
+            accepted=accepted,
+            retried=retried,
+            failed=failed,
+            cancelled=cancelled,
+            indeterminate=indeterminate,
+        )
+
+    async def _process_claimed(self, send: EmailSend) -> str:
+        send_id = send.id
+        lease_token = send.lease_token
+        if lease_token is None:
+            return "failed"
 
         if (
-            result.status == EmailDeliveryStatus.accepted
-            and assignment.status == AssignmentStatus.assigned
+            send.campaign_recipient_id is not None
+            and not await self.repository.campaign_recipient_is_active(send.campaign_recipient_id)
         ):
-            assignment.status = AssignmentStatus.invited
-            assignment.invited_at = datetime.now(UTC)
-        return result
+            current = await self.repository.get_claimed_email_send(send.id, lease_token)
+            if current is None:
+                await self.session.rollback()
+                return "cancelled"
+            await self.repository.mark_email_send_cancelled(current, now=datetime.now(UTC))
+            await self.session.commit()
+            return "cancelled"
+
+        if send.owner_id is not None and await self.repository.get_email_suppression(
+            owner_id=send.owner_id,
+            email=send.recipient_email,
+        ):
+            current = await self.repository.get_claimed_email_send(send.id, lease_token)
+            if current is None:
+                await self.session.rollback()
+                return "cancelled"
+            current.error_details = "Recipient is suppressed after a permanent delivery failure."
+            await self.repository.mark_email_send_cancelled(current, now=datetime.now(UTC))
+            await self.session.commit()
+            return "cancelled"
+
+        try:
+            message = _email_message_from_outbox_payload(send.message_payload)
+        except (DomainError, TypeError, ValueError) as exc:
+            return await self._record_failure(
+                send.id,
+                lease_token,
+                f"Invalid immutable outbox payload: {type(exc).__name__}",
+                retryable=False,
+            )
+
+        provider_idempotency_key = _provider_idempotency_key(send)
+        started = await self.repository.begin_email_provider_request(
+            send.id,
+            lease_token,
+            provider_idempotency_key=provider_idempotency_key,
+            now=datetime.now(UTC),
+        )
+        if started is None:
+            await self.session.rollback()
+            return "failed"
+        await self.session.commit()
+        message = replace(message, provider_idempotency_key=provider_idempotency_key)
+
+        try:
+            result = await self.provider.send(message)
+        except Exception as exc:  # noqa: BLE001
+            return await self._record_indeterminate(
+                send_id,
+                lease_token,
+                f"Provider request failed: {type(exc).__name__}",
+            )
+
+        if result.status != EmailDeliveryStatus.accepted:
+            if result.delivery_uncertain:
+                return await self._record_indeterminate(
+                    send_id,
+                    lease_token,
+                    result.error_details or "Provider request outcome is uncertain.",
+                    provider=result.provider,
+                    provider_message_id=result.message_id,
+                )
+            return await self._record_failure(
+                send_id,
+                lease_token,
+                result.error_details or "Email provider rejected the message.",
+                retryable=result.retryable,
+                retry_after_seconds=result.retry_after_seconds,
+                provider=result.provider,
+                provider_message_id=result.message_id,
+            )
+
+        current = await self.repository.get_claimed_email_send(send_id, lease_token)
+        if current is None:
+            await self.session.rollback()
+            return "failed"
+        now = datetime.now(UTC)
+        current.provider = result.provider.value
+        current.provider_message_id = result.message_id
+        current.status = EmailSendStatus.accepted
+        current.error_details = None
+        current.lease_token = None
+        current.lease_expires_at = None
+        current.next_attempt_at = None
+        current.last_event_at = now
+        await self.repository.add_email_event(
+            current.id,
+            EmailEventType.accepted,
+            occurred_at=now,
+        )
+        await self._mark_invitation_assignments_accepted(current, now=now)
+        await self.session.flush()
+        await self._complete_campaign_if_idle(current.campaign_id)
+        try:
+            await self.session.commit()
+        except Exception:  # noqa: BLE001
+            await self.session.rollback()
+            return await self._record_indeterminate(
+                send_id,
+                lease_token,
+                "Provider accepted the message, but local persistence failed.",
+                provider=result.provider,
+                provider_message_id=result.message_id,
+            )
+        return "accepted"
+
+    async def _record_failure(
+        self,
+        send_id: UUID,
+        lease_token: str,
+        error_details: str,
+        *,
+        retryable: bool,
+        provider: EmailProviderKey | None = None,
+        provider_message_id: str | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> str:
+        current = await self.repository.get_claimed_email_send(send_id, lease_token)
+        if current is None:
+            await self.session.rollback()
+            return "failed"
+        now = datetime.now(UTC)
+        if provider is not None:
+            current.provider = provider.value
+        if provider_message_id:
+            current.provider_message_id = provider_message_id
+        current.error_details = error_details[:2000]
+        current.lease_token = None
+        current.lease_expires_at = None
+        current.last_event_at = now
+
+        if retryable and current.attempt_count < current.max_attempts:
+            current.status = EmailSendStatus.queued
+            retry_delay = _email_outbox_retry_delay(current.attempt_count)
+            if retry_after_seconds is not None:
+                retry_delay = max(retry_delay, timedelta(seconds=retry_after_seconds))
+            current.next_attempt_at = now + retry_delay
+            current.provider_request_started_at = None
+            await self.repository.add_email_event(
+                current.id,
+                EmailEventType.retry_scheduled,
+                occurred_at=now,
+            )
+            await self.session.commit()
+            return "retried"
+
+        current.status = EmailSendStatus.failed
+        current.next_attempt_at = None
+        if not retryable:
+            current.attempt_count = current.max_attempts
+        await self.repository.add_email_event(
+            current.id,
+            EmailEventType.failed,
+            occurred_at=now,
+        )
+        await self._complete_campaign_if_idle(current.campaign_id)
+        await self.session.commit()
+        return "failed"
+
+    async def _record_indeterminate(
+        self,
+        send_id: UUID,
+        lease_token: str,
+        error_details: str,
+        *,
+        provider: EmailProviderKey | None = None,
+        provider_message_id: str | None = None,
+    ) -> str:
+        current = await self.repository.get_claimed_email_send(send_id, lease_token)
+        if current is None:
+            await self.session.rollback()
+            current = await self.session.get(EmailSend, send_id, with_for_update=True)
+        if current is None:
+            return "indeterminate"
+        now = datetime.now(UTC)
+        if provider is not None:
+            current.provider = provider.value
+        if provider_message_id:
+            current.provider_message_id = provider_message_id
+        current.status = EmailSendStatus.indeterminate
+        current.error_details = error_details[:2000]
+        current.lease_token = None
+        current.lease_expires_at = None
+        current.next_attempt_at = None
+        current.last_event_at = now
+        await self.repository.add_email_event(
+            current.id,
+            EmailEventType.indeterminate,
+            occurred_at=now,
+        )
+        await self.session.commit()
+        return "indeterminate"
+
+    async def _mark_invitation_assignments_accepted(
+        self,
+        send: EmailSend,
+        *,
+        now: datetime,
+    ) -> None:
+        assignment_ids = _email_outbox_assignment_ids(send.message_payload)
+        if not assignment_ids and send.assignment_id is not None:
+            assignment_ids = [send.assignment_id]
+        if not assignment_ids:
+            return
+        reminder_ids = _email_outbox_reminder_assignment_ids(send.message_payload)
+        assignments_result = await self.session.execute(
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.id.in_(assignment_ids))
+            .with_for_update()
+        )
+        for assignment in assignments_result.scalars().all():
+            if assignment.id in reminder_ids:
+                assignment.reminder_count = min(2, (assignment.reminder_count or 0) + 1)
+                assignment.last_reminder_sent_at = now
+                assignment.reminder_due_at = now + DEFAULT_REMINDER_POLICY.minimum_interval
+            elif assignment.status == AssignmentStatus.assigned:
+                assignment.status = AssignmentStatus.invited
+                assignment.invited_at = now
+
+    async def _complete_campaign_if_idle(self, campaign_id: UUID | None) -> None:
+        if campaign_id is None:
+            return
+        outstanding = await self.session.execute(
+            select(func.count(EmailSend.id)).where(
+                EmailSend.campaign_id == campaign_id,
+                EmailSend.status.in_(
+                    (
+                        EmailSendStatus.queued,
+                        EmailSendStatus.dispatching,
+                        EmailSendStatus.indeterminate,
+                    )
+                ),
+            )
+        )
+        if int(outstanding.scalar_one() or 0) != 0:
+            return
+        accepted = await self.session.execute(
+            select(func.count(EmailSend.id)).where(
+                EmailSend.campaign_id == campaign_id,
+                EmailSend.status.in_((EmailSendStatus.accepted, EmailSendStatus.delivered)),
+            )
+        )
+        if int(accepted.scalar_one() or 0) == 0:
+            return
+        campaign = await self.repository.get_campaign(campaign_id)
+        if campaign is not None:
+            campaign.status = CampaignStatus.completed
 
 
-def _select_invitation_template(respondent: ParticipantProfile) -> TransactionalTemplateKey:
+def _email_outbox_payload(
+    message: EmailMessage,
+    *,
+    assignment_ids: list[UUID] | None = None,
+    reminder_assignment_ids: list[UUID] | None = None,
+    delivery_kind: str | None = None,
+    default_from_address: str | None = None,
+) -> dict[str, object]:
+    from_address = (
+        message.from_address.value if message.from_address is not None else default_from_address
+    )
+    return {
+        "version": 1,
+        "to": message.to.value,
+        "subject": message.subject,
+        "html_body": message.html_body,
+        "text_body": message.text_body,
+        "from_address": from_address,
+        "reply_to": message.reply_to.value if message.reply_to is not None else None,
+        "assignment_ids": [str(value) for value in (assignment_ids or [])],
+        "reminder_assignment_ids": [str(value) for value in (reminder_assignment_ids or [])],
+        "delivery_kind": delivery_kind,
+    }
+
+
+def _email_message_from_outbox_payload(payload: dict[str, object] | None) -> EmailMessage:
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise DomainError("Unsupported outbox payload.", code="email_outbox_payload_invalid")
+    required = ("to", "subject", "html_body", "text_body")
+    if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
+        raise DomainError("Incomplete outbox payload.", code="email_outbox_payload_invalid")
+    from_address = payload.get("from_address")
+    reply_to = payload.get("reply_to")
+    if from_address is not None and not isinstance(from_address, str):
+        raise DomainError("Invalid outbox sender.", code="email_outbox_payload_invalid")
+    if reply_to is not None and not isinstance(reply_to, str):
+        raise DomainError("Invalid outbox reply-to.", code="email_outbox_payload_invalid")
+    return EmailMessage(
+        to=EmailAddress(str(payload["to"])),
+        subject=str(payload["subject"]),
+        html_body=str(payload["html_body"]),
+        text_body=str(payload["text_body"]),
+        from_address=EmailAddress(from_address) if from_address else None,
+        reply_to=EmailAddress(reply_to) if reply_to else None,
+    )
+
+
+def _email_outbox_assignment_ids(payload: dict[str, object] | None) -> list[UUID]:
+    if not isinstance(payload, dict):
+        return []
+    raw_ids = payload.get("assignment_ids")
+    if not isinstance(raw_ids, list):
+        return []
+    assignment_ids: list[UUID] = []
+    for raw_id in raw_ids:
+        try:
+            assignment_ids.append(UUID(str(raw_id)))
+        except ValueError:
+            continue
+    return assignment_ids
+
+
+def _email_outbox_reminder_assignment_ids(
+    payload: dict[str, object] | None,
+) -> set[UUID]:
+    if not isinstance(payload, dict):
+        return set()
+    raw_ids = payload.get("reminder_assignment_ids")
+    if not isinstance(raw_ids, list):
+        return set()
+    assignment_ids: set[UUID] = set()
+    for raw_id in raw_ids:
+        try:
+            assignment_ids.add(UUID(str(raw_id)))
+        except ValueError:
+            continue
+    return assignment_ids
+
+
+def _email_outbox_payload_fingerprint(payload: dict[str, object]) -> str:
+    serialized = json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _email_outbox_retry_delay(attempt_count: int) -> timedelta:
+    exponent = max(attempt_count - 1, 0)
+    seconds = min(
+        EMAIL_OUTBOX_RETRY_BASE_SECONDS * (2**exponent),
+        EMAIL_OUTBOX_RETRY_MAX_SECONDS,
+    )
+    return timedelta(seconds=seconds)
+
+
+async def _enqueue_email_send(
+    repository: object,
+    candidate: EmailSend,
+) -> tuple[EmailSend, bool]:
+    if hasattr(repository, "enqueue_email_send"):
+        return await repository.enqueue_email_send(candidate)
+    existing = await repository.get_email_send_by_idempotency_key(candidate.idempotency_key)
+    if existing is not None:
+        return existing, False
+    return await repository.add_email_send(candidate), True
+
+
+def _email_send_idempotency_key(request_key: str, scope: str) -> str:
+    return hashlib.sha256(f"{request_key}:{scope}".encode()).hexdigest()
+
+
+def _provider_idempotency_key(send: EmailSend) -> str:
+    source = send.idempotency_key or str(send.id)
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"codrut:email-send:{source}"))
+
+
+def _campaign_delivery_payload_fingerprint(
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    settings: Settings,
+) -> str:
+    payload = {
+        "campaign": {
+            "html_body": campaign.html_body,
+            "id": str(campaign.id),
+            "landing_page_url": campaign.landing_page_url,
+            "name": campaign.name,
+            "segment": campaign.segment.value if campaign.segment is not None else None,
+            "subject": campaign.subject,
+            "text_body": campaign.text_body,
+            "thumbnail_url": campaign.thumbnail_url,
+            "video_url": campaign.video_url,
+        },
+        "recipient": {
+            "contact_name": recipient.contact_name,
+            "email": recipient.email,
+            "id": str(recipient.id),
+            "organization_name": recipient.organization_name,
+            "owner_id": str(recipient.owner_id) if recipient.owner_id is not None else None,
+            "segment": recipient.segment.value,
+        },
+        "render_context": {
+            "calendly_url": CAMPAIGN_CALENDLY_URL,
+            "legal_address": settings.email_legal_address,
+            "public_app_url": str(settings.public_app_url),
+        },
+        "version": 1,
+    }
+    serialized = json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _require_matching_email_send_payload(send: EmailSend, payload_fingerprint: str) -> None:
+    if send.payload_fingerprint != payload_fingerprint:
+        raise DomainError(
+            "Idempotency key was already used for a different email payload.",
+            code="email_send_idempotency_payload_conflict",
+        )
+
+
+def _email_provider_key(value: object) -> EmailProviderKey:
+    try:
+        return EmailProviderKey(str(value))
+    except ValueError:
+        return EmailProviderKey.test
+
+
+def _email_result_from_existing_send(
+    send: EmailSend,
+    recipient_email: str,
+) -> EmailSendResult:
+    if send.status in {EmailSendStatus.queued, EmailSendStatus.dispatching}:
+        status = EmailDeliveryStatus.queued
+    elif send.status in {EmailSendStatus.accepted, EmailSendStatus.delivered}:
+        status = EmailDeliveryStatus.accepted
+    else:
+        status = EmailDeliveryStatus.failed
+    return EmailSendResult(
+        provider=_email_provider_key(send.provider),
+        status=status,
+        message_id=send.provider_message_id or "",
+        recipient=EmailAddress(recipient_email),
+        error_details=send.error_details,
+    )
+
+
+def _campaign_result_from_existing_send(
+    send: EmailSend,
+    recipient: CampaignRecipient,
+) -> CampaignSendRecipientResult:
+    if send.status in {EmailSendStatus.queued, EmailSendStatus.dispatching}:
+        return CampaignSendRecipientResult(
+            recipient_id=recipient.id,
+            email=recipient.email or "",
+            status="queued",
+        )
+    if send.status in {EmailSendStatus.accepted, EmailSendStatus.delivered}:
+        status = "accepted"
+    elif send.status == EmailSendStatus.cancelled:
+        status = "cancelled"
+    else:
+        status = "failed"
+    return CampaignSendRecipientResult(
+        recipient_id=recipient.id,
+        email=recipient.email or "",
+        status=status,
+        message_id=send.provider_message_id,
+        error=send.error_details,
+    )
+
+
+def _select_invitation_template(
+    respondent: ParticipantProfile,
+    *,
+    reminder: bool = False,
+) -> TransactionalTemplateKey:
+    if reminder:
+        return TransactionalTemplateKey.assignment_reminder
     if (respondent.role_group or "").strip().casefold() == "leadership":
         return TransactionalTemplateKey.account_setup
     return TransactionalTemplateKey.assignment_bundle

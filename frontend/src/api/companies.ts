@@ -1,6 +1,6 @@
 import { apiFetch } from "./http";
 import { formatPcmLabel, getPcmColor } from "./pcm";
-import { getApiBaseUrl, isDemoFallbackEnabled } from "./runtime";
+import { getApiBaseUrl, isDemoFallbackEnabled, isLocalSeededDemoFallbackEnabled } from "./runtime";
 
 type ApiErrorPayload = {
   error?: {
@@ -88,7 +88,7 @@ export type CompanyParticipant = {
   id: string;
   project_membership_id?: string;
   full_name: string;
-  email: string;
+  email: string | null;
   reports_to_name: string | null;
   position: string | null;
   location: string | null;
@@ -215,7 +215,7 @@ export type CompanyAssignmentPlanSaveResponse = {
 
 export type RosterInviteResult = {
   participant_id: string;
-  email: string;
+  email: string | null;
   full_name: string;
   delivery_mode: "email" | "secure_links";
   email_sent: boolean;
@@ -474,6 +474,45 @@ function fallbackCompanyRecords(): Array<{ id: string; name: string }> {
   ];
 }
 
+function fallbackCompanyRecord(companyId: string): { id: string; name: string } | null {
+  return fallbackCompanyRecords().find((company) => company.id === companyId) ?? null;
+}
+
+function shouldUseSeededCompanyFallback(companyId: string): boolean {
+  return isLocalSeededDemoFallbackEnabled() && fallbackCompanyRecord(companyId) !== null;
+}
+
+function fallbackCompanyDetail(company: { id: string; name: string }): CompanyDetail {
+  const projects = fallbackCompanyProjects(company.id);
+  const participants = fallbackCompanyParticipants(company.id);
+  const assignments = fallbackCompanyAssignments(company.id);
+  const completedAssignments = assignments.filter(isCompletedAssignment).length;
+  const scoredCount = assignments.filter((assignment) => assignment.status === "scored").length;
+  const pendingCount = assignments.filter(
+    (assignment) => assignment.status === "assigned" || assignment.status === "invited" || assignment.status === "started",
+  ).length;
+
+  return {
+    id: company.id,
+    name: company.name,
+    projects,
+    participants,
+    assignments,
+    invitationStatuses: [],
+    teams: [],
+    stats: {
+      totalParticipants: participants.length,
+      totalAssignments: assignments.length,
+      completedAssignments,
+      completionRate: assignments.length > 0
+        ? Math.round((completedAssignments / assignments.length) * 100)
+        : 0,
+      scoredCount,
+      pendingCount,
+    },
+  };
+}
+
 function fallbackCompanyProjects(companyId?: string): CompanyProject[] {
   const projects: CompanyProject[] = [
     {
@@ -558,12 +597,12 @@ function fallbackCompanyProjects(companyId?: string): CompanyProject[] {
 function fallbackCompanyParticipants(companyId: string): CompanyParticipant[] {
   if (companyId === "leadership-pilot") {
     return [
-      fallbackParticipant("andrei-vacaru", "Andrei Vacaru", null, "CEO", "thinker", "persister", "leadership-pilot"),
-      fallbackParticipant("ilinca-corbu", "Ilinca Corbu", "Andrei Vacaru", "Manager Operațiuni", "harmonizer", "harmonizer", "leadership-pilot"),
-      fallbackParticipant("vlad-soimu", "Vlad Soimu", "Andrei Vacaru", "Manager Comercial", "persister", "thinker", "leadership-pilot"),
-      fallbackParticipant("alexandra-giurca", "Alexandra Giurca", "Ilinca Corbu", "Specialist HR", "harmonizer", "imaginer", "leadership-pilot"),
-      fallbackParticipant("member-vlad", "Member Vlad", "Ilinca Corbu", "Coordonator proiect", "promoter", "rebel", "leadership-pilot"),
-      fallbackParticipant("member-ilinca", "Member Ilinca", "Vlad Soimu", "Consultant vânzări", "rebel", "promoter", "leadership-pilot"),
+      fallbackParticipant("alex-dima", "Alex Dima", null, "CEO", "thinker", "persister", "leadership-pilot"),
+      fallbackParticipant("mara-ionescu", "Mara Ionescu", "Alex Dima", "Manager Operațiuni", "harmonizer", "harmonizer", "leadership-pilot"),
+      fallbackParticipant("sorin-pavel", "Sorin Pavel", "Alex Dima", "Manager Comercial", "persister", "thinker", "leadership-pilot"),
+      fallbackParticipant("diana-luca", "Diana Luca", "Mara Ionescu", "Specialist HR", "harmonizer", "imaginer", "leadership-pilot"),
+      fallbackParticipant("tudor-stan", "Tudor Stan", "Mara Ionescu", "Coordonator proiect", "promoter", "rebel", "leadership-pilot"),
+      fallbackParticipant("ioana-rusu", "Ioana Rusu", "Sorin Pavel", "Consultant vânzări", "rebel", "promoter", "leadership-pilot"),
     ];
   }
   if (companyId === "demo-project") {
@@ -622,29 +661,29 @@ function fallbackCompanyAssignments(companyId: string, projectId?: string | null
   const assignments =
     companyId === "leadership-pilot"
       ? [
-          fallbackAssignment("leadership-lencioni-andrei", companyId, "andrei-vacaru", "lencioni", "team", null, "leadership"),
-          fallbackAssignment("leadership-lencioni-ilinca", companyId, "ilinca-corbu", "lencioni", "team", null, "leadership"),
-          fallbackAssignment("leadership-lencioni-vlad", companyId, "vlad-soimu", "lencioni", "team", null, "leadership"),
-          fallbackAssignment("ilinca-team-lencioni-alexandra", companyId, "alexandra-giurca", "lencioni", "team", null, "team-ilinca-corbu"),
-          fallbackAssignment("ilinca-team-lencioni-member-vlad", companyId, "member-vlad", "lencioni", "team", null, "team-ilinca-corbu"),
-          fallbackAssignment("vlad-team-lencioni-member-ilinca", companyId, "member-ilinca", "lencioni", "team", null, "team-vlad-soimu"),
-          fallbackAssignment("andrei-driver", companyId, "andrei-vacaru", "distress_drivers", "self"),
-          fallbackAssignment("andrei-pcm", companyId, "andrei-vacaru", "pcm_base", "self"),
-          fallbackAssignment("ilinca-driver", companyId, "ilinca-corbu", "distress_drivers", "self"),
-          fallbackAssignment("ilinca-pcm", companyId, "ilinca-corbu", "pcm_base", "self"),
-          fallbackAssignment("vlad-driver", companyId, "vlad-soimu", "distress_drivers", "self"),
-          fallbackAssignment("vlad-pcm", companyId, "vlad-soimu", "pcm_base", "self"),
-          fallbackAssignment("icare-andrei-self", companyId, "andrei-vacaru", "boss_360", "person", "andrei-vacaru"),
-          fallbackAssignment("icare-ilinca-on-andrei", companyId, "ilinca-corbu", "boss_360", "person", "andrei-vacaru"),
-          fallbackAssignment("icare-vlad-on-andrei", companyId, "vlad-soimu", "boss_360", "person", "andrei-vacaru"),
-          fallbackAssignment("icare-ilinca-self", companyId, "ilinca-corbu", "boss_360", "person", "ilinca-corbu"),
-          fallbackAssignment("icare-andrei-on-ilinca", companyId, "andrei-vacaru", "boss_360", "person", "ilinca-corbu"),
-          fallbackAssignment("icare-vlad-on-ilinca", companyId, "vlad-soimu", "boss_360", "person", "ilinca-corbu"),
-          fallbackAssignment("icare-alexandra-on-ilinca", companyId, "alexandra-giurca", "boss_360", "person", "ilinca-corbu"),
-          fallbackAssignment("icare-member-vlad-on-ilinca", companyId, "member-vlad", "boss_360", "person", "ilinca-corbu"),
-          fallbackAssignment("icare-vlad-self", companyId, "vlad-soimu", "boss_360", "person", "vlad-soimu"),
-          fallbackAssignment("icare-andrei-on-vlad", companyId, "andrei-vacaru", "boss_360", "person", "vlad-soimu"),
-          fallbackAssignment("icare-member-ilinca-on-vlad", companyId, "member-ilinca", "boss_360", "person", "vlad-soimu"),
+          fallbackAssignment("leadership-lencioni-alex", companyId, "alex-dima", "lencioni", "team", null, "leadership"),
+          fallbackAssignment("leadership-lencioni-mara", companyId, "mara-ionescu", "lencioni", "team", null, "leadership"),
+          fallbackAssignment("leadership-lencioni-sorin", companyId, "sorin-pavel", "lencioni", "team", null, "leadership"),
+          fallbackAssignment("mara-team-lencioni-diana", companyId, "diana-luca", "lencioni", "team", null, "team-mara-ionescu"),
+          fallbackAssignment("mara-team-lencioni-tudor", companyId, "tudor-stan", "lencioni", "team", null, "team-mara-ionescu"),
+          fallbackAssignment("sorin-team-lencioni-ioana", companyId, "ioana-rusu", "lencioni", "team", null, "team-sorin-pavel"),
+          fallbackAssignment("alex-driver", companyId, "alex-dima", "distress_drivers", "self"),
+          fallbackAssignment("alex-pcm", companyId, "alex-dima", "pcm_base", "self"),
+          fallbackAssignment("mara-driver", companyId, "mara-ionescu", "distress_drivers", "self"),
+          fallbackAssignment("mara-pcm", companyId, "mara-ionescu", "pcm_base", "self"),
+          fallbackAssignment("sorin-driver", companyId, "sorin-pavel", "distress_drivers", "self"),
+          fallbackAssignment("sorin-pcm", companyId, "sorin-pavel", "pcm_base", "self"),
+          fallbackAssignment("icare-alex-self", companyId, "alex-dima", "boss_360", "person", "alex-dima"),
+          fallbackAssignment("icare-mara-on-alex", companyId, "mara-ionescu", "boss_360", "person", "alex-dima"),
+          fallbackAssignment("icare-sorin-on-alex", companyId, "sorin-pavel", "boss_360", "person", "alex-dima"),
+          fallbackAssignment("icare-mara-self", companyId, "mara-ionescu", "boss_360", "person", "mara-ionescu"),
+          fallbackAssignment("icare-alex-on-mara", companyId, "alex-dima", "boss_360", "person", "mara-ionescu"),
+          fallbackAssignment("icare-sorin-on-mara", companyId, "sorin-pavel", "boss_360", "person", "mara-ionescu"),
+          fallbackAssignment("icare-diana-on-mara", companyId, "diana-luca", "boss_360", "person", "mara-ionescu"),
+          fallbackAssignment("icare-tudor-on-mara", companyId, "tudor-stan", "boss_360", "person", "mara-ionescu"),
+          fallbackAssignment("icare-sorin-self", companyId, "sorin-pavel", "boss_360", "person", "sorin-pavel"),
+          fallbackAssignment("icare-alex-on-sorin", companyId, "alex-dima", "boss_360", "person", "sorin-pavel"),
+          fallbackAssignment("icare-ioana-on-sorin", companyId, "ioana-rusu", "boss_360", "person", "sorin-pavel"),
         ]
       : companyId === "demo-project"
         ? [
@@ -720,9 +759,9 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
   }));
   const pcmBaseDistribution = fallbackPcmDistribution(participants, assignments, "pcm_base");
   const pcmPhaseDistribution = fallbackPcmDistribution(participants, assignments, "pcm_phase");
-  const lencioniAverages = fallbackAverages(assignments, results, "lencioni", fallbackLencioniLabels, fallbackLencioniInterpretation);
-  const driverAverages = fallbackAverages(assignments, results, "distress_drivers", fallbackDriverLabels, fallbackDriverInterpretation);
-  const boss360Averages = fallbackAverages(assignments, results, "boss_360", fallbackBoss360Labels);
+  const lencioniAverages = fallbackAverages(assignments, results, "lencioni");
+  const driverAverages = fallbackAverages(assignments, results, "distress_drivers");
+  const boss360Averages = fallbackAverages(assignments, results, "boss_360");
   const lencioniCount = fallbackReportCount(assignments, results, "lencioni");
   const driverCount = fallbackReportCount(assignments, results, "distress_drivers");
   const boss360Count = fallbackReportCount(assignments, results, "boss_360");
@@ -760,68 +799,34 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
   };
 }
 
-const fallbackLencioniLabels: Record<string, string> = {
-  absence_of_trust: "Absența încrederii (Trust)",
-  fear_of_conflict: "Teama de conflict (Conflict)",
-  lack_of_commitment: "Lipsa angajamentului (Commitment)",
-  avoidance_of_accountability: "Evitarea responsabilității (Accountability)",
-  inattention_to_results: "Neatenția la rezultate (Results)",
-};
-
-const fallbackDriverLabels: Record<string, string> = {
-  be_strong: "Fii Puternic (Be Strong)",
-  be_perfect: "Fii Perfect (Be Perfect)",
-  try_hard: "Străduiește-te (Try Hard)",
-  hurry_up: "Grăbește-te (Hurry Up)",
-  please_people: "Mulțumește-i pe alții (Please People)",
-};
-
-const fallbackBoss360Labels: Record<string, string> = {
-  icare_01_dezvolta_oamenii: "Dezvoltă oamenii",
-  icare_02_conduce_prin_puterea_exemplului: "Conduce prin puterea exemplului",
-  icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: "Creează un mediu care stimulează implicarea",
-  icare_04_promotor_al_colaborarii: "Promotor al colaborării",
-  icare_05_ancorat_in_realitate: "Ancorat în realitate",
-  icare_06_aduce_claritate: "Aduce claritate",
-  icare_07_modestie: "Modestie",
-  icare_08_inteligenta_emotionala_si_situationala: "Inteligență emoțională și situațională",
-  icare_09_deschis_catre_lume: "Deschis către lume",
-  icare_10_ambitios_pentru_companie: "Ambițios pentru companie",
-  icare_11_grija_egala_pentru_angajati_si_clienti: "Grijă egală pentru angajați și clienți",
-  icare_12_agilitate_antreprenoriala: "Agilitate antreprenorială",
-  icare_13_decizii_cat_mai_aproape_de_teren: "Decizii cât mai aproape de teren",
-  icare_14_cultiva_inteligenta_colectiva: "Cultivă inteligența colectivă",
-  icare_15_ajuta_echipa: "Ajută echipa",
-};
-
 function fallbackAverages(
   assignments: CompanyAssignment[],
   results: CompanyScoringResult[],
   questionnaireKey: string,
-  labels: Record<string, string>,
-  interpretation?: (score: number) => { label: string; range: string } | undefined,
 ): ReportAverage[] {
   const resultByAssignmentId = new Map(results.map((result) => [result.assignment_id, result]));
   const matchingAssignments = assignments.filter(
     (assignment) => assignment.questionnaire_key === questionnaireKey && resultByAssignmentId.has(assignment.id),
   );
-  const count = matchingAssignments.length;
+  const values = new Map<string, number[]>();
+  for (const assignment of matchingAssignments) {
+    const scores = resultByAssignmentId.get(assignment.id)?.scores ?? {};
+    for (const [id, value] of Object.entries(scores)) {
+      const score = coerceFallbackScore(value);
+      if (score === null) continue;
+      const existing = values.get(id) ?? [];
+      existing.push(score);
+      values.set(id, existing);
+    }
+  }
 
-  return Object.entries(labels).map(([id, label]) => {
-    const total = matchingAssignments.reduce((sum, assignment) => {
-      const value = resultByAssignmentId.get(assignment.id)?.scores[id];
-      return sum + coerceFallbackScore(value);
-    }, 0);
-    const avg = Number((count > 0 ? total / count : 0).toFixed(1));
-    const scoreInterpretation = interpretation?.(avg);
-    return {
-      id,
-      label,
-      avg,
-      interpretation: scoreInterpretation?.label ?? null,
-      range_label: scoreInterpretation?.range ?? null,
-    };
-  });
+  return [...values.entries()].map(([id, scores]) => ({
+    id,
+    label: fallbackScoreLabel(id),
+    avg: Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(1)),
+    interpretation: null,
+    range_label: null,
+  }));
 }
 
 function fallbackReportCount(
@@ -909,62 +914,39 @@ function fallbackReportTeamLenses({
   ];
 }
 
-function coerceFallbackScore(value: unknown): number {
+function coerceFallbackScore(value: unknown): number | null {
   const raw = typeof value === "object" && value !== null && "score" in value ? (value as { score?: unknown }).score : value;
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
 }
 
-function fallbackLencioniInterpretation(score: number): { label: string; range: string } {
-  if (score >= 8 && score <= 9) return { label: "Disfuncția probabil nu este o problemă.", range: "8-9" };
-  if (score >= 6 && score < 8) return { label: "Disfuncția poate fi o problemă.", range: "6-7" };
-  if (score >= 3 && score < 6) return { label: "Disfuncția trebuie probabil abordată.", range: "3-5" };
-  if (score < 3) return { label: "Scor sub intervalul de referință Lencioni.", range: "<3" };
-  return { label: "Scor peste intervalul de referință Lencioni.", range: ">9" };
-}
-
-function fallbackDriverInterpretation(score: number): { label: string; range: string } | undefined {
-  if (score <= 50) return undefined;
-  return {
-    label: "Driver prezent peste pragul de atenție; merită explorat în debrief.",
-    range: ">50",
-  };
+function fallbackScoreLabel(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase("ro-RO") + part.slice(1))
+    .join(" ");
 }
 
 function fallbackScoresForAssignment(assignment: CompanyAssignment): Record<string, unknown> {
   if (assignment.questionnaire_key === "distress_drivers") {
     return {
-      be_strong: ["mihai-matei", "teodor-marin"].includes(assignment.respondent_profile_id) ? 72 : 38,
-      be_perfect: ["ana-stan", "claudia-neagu"].includes(assignment.respondent_profile_id) ? 66 : 44,
-      try_hard: assignment.respondent_profile_id === "teodor-marin" ? 61 : 54,
-      hurry_up: assignment.respondent_profile_id === "claudia-neagu" ? 57 : 48,
-      please_people: assignment.respondent_profile_id === "teodor-marin" ? 52 : 35,
+      personal_signal_a: ["mihai-matei", "teodor-marin"].includes(assignment.respondent_profile_id) ? 72 : 38,
+      personal_signal_b: ["ana-stan", "claudia-neagu"].includes(assignment.respondent_profile_id) ? 66 : 44,
+      personal_signal_c: assignment.respondent_profile_id === "teodor-marin" ? 61 : 54,
     };
   }
   if (assignment.questionnaire_key === "boss_360") {
     return {
-      icare_01_dezvolta_oamenii: { score: 86 },
-      icare_02_conduce_prin_puterea_exemplului: { score: 90 },
-      icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 82 },
-      icare_04_promotor_al_colaborarii: { score: 88 },
-      icare_05_ancorat_in_realitate: { score: 84 },
-      icare_06_aduce_claritate: { score: 92 },
-      icare_07_modestie: { score: 76 },
-      icare_08_inteligenta_emotionala_si_situationala: { score: 82 },
-      icare_09_deschis_catre_lume: { score: 72 },
-      icare_10_ambitios_pentru_companie: { score: 90 },
-      icare_11_grija_egala_pentru_angajati_si_clienti: { score: 86 },
-      icare_12_agilitate_antreprenoriala: { score: 84 },
-      icare_13_decizii_cat_mai_aproape_de_teren: { score: 88 },
-      icare_14_cultiva_inteligenta_colectiva: { score: 78 },
-      icare_15_ajuta_echipa: { score: 92 },
+      leadership_signal_a: { score: 86 },
+      leadership_signal_b: { score: 78 },
+      leadership_signal_c: { score: 91 },
     };
   }
   return {
-    absence_of_trust: { score: 8 },
-    fear_of_conflict: { score: assignment.respondent_profile_id === "radu-munteanu" ? 7 : 6 },
-    lack_of_commitment: { score: 6 },
-    avoidance_of_accountability: { score: 5 },
-    inattention_to_results: { score: 7 },
+    team_signal_a: { score: 8 },
+    team_signal_b: { score: assignment.respondent_profile_id === "radu-munteanu" ? 7 : 6 },
+    team_signal_c: { score: 6 },
   };
 }
 
@@ -976,6 +958,10 @@ export async function getCompanyParticipants(
   companyId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyParticipant[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return fallbackCompanyParticipants(companyId);
+  }
+
   try {
     const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/participants`,
@@ -1001,6 +987,10 @@ export async function getProjectParticipants(
   projectId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyParticipant[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return fallbackCompanyParticipants(companyId);
+  }
+
   try {
     const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/participants`,
@@ -1026,6 +1016,10 @@ export async function getCompanyAssignments(
   options: ApiRequestOptions = {},
   scope: ProjectScopeOptions = {},
 ): Promise<CompanyAssignment[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return fallbackCompanyAssignments(companyId, scope.projectId);
+  }
+
   try {
     const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/assignments${projectQuery(scope)}`,
@@ -1051,6 +1045,10 @@ export async function getCompanyReportAggregate(
   options: ApiRequestOptions = {},
   scope: ProjectScopeOptions = {},
 ): Promise<CompanyReportAggregate> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return fallbackCompanyReportAggregate(companyId, scope.projectId);
+  }
+
   try {
     const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/reports/aggregate${projectQuery(scope)}`,
@@ -1180,6 +1178,10 @@ export async function getCompanyTeams(
   companyId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyTeam[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return [];
+  }
+
   try {
     const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/teams`,
@@ -1204,6 +1206,10 @@ export async function getCompanyProjects(
   companyId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyProject[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return fallbackCompanyProjects(companyId);
+  }
+
   try {
     const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
       cache: "no-store",
@@ -1473,11 +1479,19 @@ export async function importCompanyRoster(
     "PCM Bază"?: string;
     "PCM Fază"?: string;
   }>,
-  options: { sendInvites?: boolean; projectId?: string | null } = {},
+  options: {
+    sendInvites?: boolean;
+    projectId?: string | null;
+    idempotencyKey?: string;
+  } = {},
 ): Promise<RosterImportResponse> {
+  const idempotencyKey = options.idempotencyKey ?? createIdempotencyKey("roster");
   const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/participants/roster`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
     credentials: "include",
     body: JSON.stringify({
       rows,
@@ -1530,11 +1544,15 @@ export async function sendParticipantInvitations(
     mode: ParticipantInvitationMode;
     targetMode?: "unsent" | "selected" | "all";
     forceRotate?: boolean;
+    idempotencyKey?: string;
   },
 ): Promise<ParticipantInviteBatchResponse> {
   const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/participants/invitations`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": payload.idempotencyKey ?? createIdempotencyKey("invite-batch"),
+    },
     credentials: "include",
     body: JSON.stringify({
       participant_ids: payload.participantIds,
@@ -1557,11 +1575,13 @@ export async function resendParticipantInvitation(
   companyId: string,
   participantId: string,
   projectId?: string | null,
+  idempotencyKey = createIdempotencyKey("invite-resend"),
 ): Promise<RosterInviteResult | null> {
   const response = await apiFetch(
     `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite${projectQuery({ projectId })}`,
     {
       method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
       credentials: "include",
     },
   );
@@ -1575,11 +1595,21 @@ export async function resendParticipantInvitation(
   return data.email_results[0] ?? null;
 }
 
+function createIdempotencyKey(scope: string): string {
+  const suffix = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${scope}-${suffix}`;
+}
+
 export async function getCompanyInvitationStatuses(
   companyId: string,
   options: ApiRequestOptions = {},
   scope: ProjectScopeOptions = {},
 ): Promise<ParticipantInvitationStatus[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return [];
+  }
+
   try {
     const response = await apiFetch(
       `${getApiBaseUrl()}/companies/${companyId}/participants/invitations/status${projectQuery(scope)}`,
@@ -1661,6 +1691,11 @@ export async function getCompanyDetail(
   companyId: string,
   options: ApiRequestOptions = {},
 ): Promise<CompanyDetail | null> {
+  const localFallbackCompany = fallbackCompanyRecord(companyId);
+  if (localFallbackCompany && isLocalSeededDemoFallbackEnabled()) {
+    return fallbackCompanyDetail(localFallbackCompany);
+  }
+
   let serverCompanies: Array<{ id: string; name: string }> = [];
   try {
     const response = await apiFetch(`${getApiBaseUrl()}/companies`, {
@@ -1683,11 +1718,10 @@ export async function getCompanyDetail(
 
   const map = new Map<string, { id: string; name: string }>();
 
-  if (serverCompanies.length === 0 && isDemoFallbackEnabled()) {
+  if (isLocalSeededDemoFallbackEnabled() || (serverCompanies.length === 0 && isDemoFallbackEnabled())) {
     fallbackCompanyRecords().forEach((company) => map.set(company.id, company));
-  } else {
-    serverCompanies.forEach((c) => map.set(c.id, c));
   }
+  serverCompanies.forEach((c) => map.set(c.id, c));
 
   const company = map.get(companyId);
   if (!company) return null;

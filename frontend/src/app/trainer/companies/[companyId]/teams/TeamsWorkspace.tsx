@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { Loader2Icon, PlusIcon } from "lucide-react";
 
 import {
   addCompanyTeamMembership,
@@ -9,8 +10,21 @@ import {
   type CompanyTeam,
   type CompanyTeamMembership,
 } from "@/api/companies";
+import { managerReferenceKey, normalizeReportsToName } from "@/api/roster-format";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { SelectControl } from "@/components/ui/select-control";
 
-type TeamsWorkspaceProps = {
+export type TeamsWorkspaceProps = {
   companyId: string;
   initialTeams: CompanyTeam[];
   participants: CompanyParticipant[];
@@ -30,16 +44,6 @@ type DerivedTeam = {
   members: TeamMemberEntry[];
 };
 
-const rootManagerNames = new Set(["", "-", "—", "---", "root", "radacina", "rădăcină", "fara manager", "fără manager"]);
-
-function normalizedName(value: string | null | undefined) {
-  return (value ?? "").trim().toLocaleLowerCase("ro-RO");
-}
-
-function isRootManagerName(value: string | null | undefined) {
-  return rootManagerNames.has(normalizedName(value));
-}
-
 export function deriveOrganizationTeams(
   participants: CompanyParticipant[],
   teams: CompanyTeam[],
@@ -47,7 +51,7 @@ export function deriveOrganizationTeams(
   const derivedTeams: DerivedTeam[] = [];
   const hasPersistedLeadership = teams.some((team) => team.type === "leadership");
   const participantByName = new Map(
-    participants.map((participant) => [normalizedName(participant.full_name), participant]),
+    participants.map((participant) => [managerReferenceKey(participant.full_name), participant]),
   );
 
   if (!hasPersistedLeadership) {
@@ -71,9 +75,8 @@ export function deriveOrganizationTeams(
 
   const directReportsByManager = new Map<string, CompanyParticipant[]>();
   for (const participant of participants) {
-    if (isRootManagerName(participant.reports_to_name)) continue;
-
-    const managerKey = normalizedName(participant.reports_to_name);
+    const managerName = normalizeReportsToName(participant.reports_to_name);
+    const managerKey = managerReferenceKey(managerName);
     if (!managerKey) continue;
 
     directReportsByManager.set(managerKey, [
@@ -126,7 +129,11 @@ export function TeamsWorkspace({
   const [teamName, setTeamName] = useState("");
   const [teamType, setTeamType] = useState<CompanyTeam["type"]>("functional");
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<"neutral" | "danger">("neutral");
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const creatingTeamRef = useRef(false);
+  const teamNameInputId = useId();
+  const teamTypeSelectId = useId();
 
   const participantById = useMemo(
     () => new Map(participants.map((participant) => [participant.id, participant])),
@@ -140,12 +147,19 @@ export function TeamsWorkspace({
     () => deriveOrganizationTeams(participants, teams),
     [participants, teams],
   );
+  const derivedMemberCount = useMemo(
+    () => derivedTeams.reduce((total, team) => total + team.members.length, 0),
+    [derivedTeams],
+  );
 
   async function handleCreateTeam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (creatingTeamRef.current) return;
+
     const name = teamName.trim();
     if (!name) return;
 
+    creatingTeamRef.current = true;
     setIsCreatingTeam(true);
     setMessage(null);
     try {
@@ -155,9 +169,12 @@ export function TeamsWorkspace({
       setTeamName("");
       setTeamType("functional");
       setMessage(`Echipa "${team.name}" a fost creată.`);
+      setMessageTone("neutral");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Echipa nu a putut fi creată.");
+      setMessageTone("danger");
     } finally {
+      creatingTeamRef.current = false;
       setIsCreatingTeam(false);
     }
   }
@@ -180,83 +197,98 @@ export function TeamsWorkspace({
         [teamId]: [...(current[teamId] ?? []), membership],
       }));
       setMessage("Membrul a fost adăugat în echipă.");
+      setMessageTone("neutral");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Membrul nu a putut fi adăugat.");
+      setMessageTone("danger");
     }
   }
 
   return (
-    <div className="space-y-5">
-      <section className="surface-panel overflow-hidden">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="p-5 md:p-6">
-            <p className="text-sm font-semibold text-burgundy/75">Structură echipe</p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Grupează participanții în echipe clare</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Creează echipe de leadership sau funcționale, iar structura din manager direct este recunoscută automat din lista de participanți.
-            </p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <TeamSummary label="Echipe" value={teams.length + derivedTeams.length} />
-              <TeamSummary label="Membri în echipe" value={assignedMemberCount} />
-              <TeamSummary label="Automate" value={derivedTeams.length} />
-            </div>
-          </div>
-          <form onSubmit={handleCreateTeam} className="space-y-3 border-t border-[var(--border)] bg-surface-muted p-5 md:p-6 lg:border-l lg:border-t-0">
-            <label className="block text-sm font-semibold text-foreground">
-              Nume echipă
-              <input
+    <div className="flex flex-col gap-7">
+      <section className="grid gap-6 border-b border-border pb-6 lg:grid-cols-[minmax(0,1fr)_34rem] lg:items-end">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-semibold text-foreground">Echipe</h2>
+          <dl className="mt-5 flex flex-wrap gap-x-8 gap-y-3">
+            <TeamSummary label="Salvate" value={teams.length} />
+            <TeamSummary label="Membri salvați" value={assignedMemberCount} />
+            <TeamSummary label="Automate" value={derivedTeams.length} detail={`${derivedMemberCount} membri`} />
+          </dl>
+        </div>
+
+        <form onSubmit={handleCreateTeam} aria-busy={isCreatingTeam}>
+          <h3 className="text-sm font-semibold text-foreground">Echipă nouă</h3>
+          <FieldGroup className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
+            <Field data-disabled={isCreatingTeam ? true : undefined}>
+              <FieldLabel htmlFor={teamNameInputId}>Nume echipă</FieldLabel>
+              <Input
+                id={teamNameInputId}
                 value={teamName}
                 onChange={(event) => setTeamName(event.target.value)}
                 placeholder="Ex. Leadership septembrie"
-                className="control-input mt-2 min-h-11 w-full py-2.5"
+                disabled={isCreatingTeam}
               />
-            </label>
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-              <select
+            </Field>
+            <Field data-disabled={isCreatingTeam ? true : undefined}>
+              <FieldLabel htmlFor={teamTypeSelectId}>Tip echipă</FieldLabel>
+              <SelectControl
+                id={teamTypeSelectId}
+                label="Tip echipă"
                 value={teamType}
                 onChange={(event) => setTeamType(event.target.value as CompanyTeam["type"])}
-                aria-label="Tip echipă"
-                className="control-input min-h-11 px-3 py-2.5"
+                disabled={isCreatingTeam}
               >
                 <option value="functional">Funcțională</option>
                 <option value="leadership">Leadership</option>
-              </select>
-              <button
-                type="submit"
-                disabled={isCreatingTeam || !teamName.trim()}
-                className="tap-soft rounded-full bg-burgundy px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-burgundy/10 hover:bg-burgundy-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {isCreatingTeam ? "Se salvează..." : "Adaugă"}
-              </button>
-            </div>
-          </form>
-        </div>
-        {message ? (
-          <p aria-live="polite" className="border-t border-[var(--border)] bg-surface-muted px-5 py-3 text-sm font-semibold text-foreground/62">
-            {message}
-          </p>
-        ) : null}
+              </SelectControl>
+            </Field>
+            <Button
+              type="submit"
+              disabled={isCreatingTeam || !teamName.trim()}
+              className="h-11 gap-2"
+            >
+              {isCreatingTeam ? (
+                <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+              ) : (
+                <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+              )}
+              {isCreatingTeam ? "Creăm echipa" : "Adaugă"}
+            </Button>
+          </FieldGroup>
+          <div className="mt-3">
+            {isCreatingTeam ? (
+              <OperationFeedback
+                title="Creăm echipa"
+                detail="Salvăm echipa."
+              />
+            ) : null}
+          </div>
+        </form>
       </section>
 
+      {message ? (
+        <InlineFeedback tone={messageTone}>{message}</InlineFeedback>
+      ) : null}
+
       {participants.length === 0 ? (
-        <section className="surface-panel border-dashed p-8 text-center">
-          <p className="text-base font-semibold text-foreground">Lista de participanți este goală.</p>
-          <p className="mt-2 text-sm text-foreground/58">Importă participanții înainte de a construi echipe.</p>
-        </section>
+        <EmptyState
+          title="Lista de participanți este goală."
+          description="Importă participanții înainte de a construi echipe."
+        />
       ) : teams.length === 0 && derivedTeams.length === 0 ? (
-        <section className="surface-panel border-dashed p-8 text-center">
-          <p className="text-base font-semibold text-foreground">Nu există echipe încă.</p>
-          <p className="mt-2 text-sm text-foreground/58">Creează prima echipă, apoi adaugă membrii din lista de participanți.</p>
-        </section>
+        <EmptyState
+          title="Nu există echipe încă."
+          description="Creează prima echipă, apoi adaugă membrii din lista de participanți."
+        />
       ) : (
-        <div className="space-y-5">
+        <div className="flex flex-col gap-7">
           {teams.length > 0 ? (
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-foreground/48">Echipe salvate</h3>
-                <p className="mt-1 text-sm text-foreground/58">Echipe create explicit și folosite pentru asignări.</p>
-              </div>
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <section className="flex flex-col gap-4">
+              <SectionHeading
+                title="Echipe salvate"
+                detail={`${teams.length} ${teams.length === 1 ? "echipă" : "echipe"}`}
+              />
+              <div className="grid gap-4 xl:grid-cols-2">
                 {teams.map((team) => (
                   <TeamCard
                     key={team.id}
@@ -279,14 +311,12 @@ export function TeamsWorkspace({
           ) : null}
 
           {derivedTeams.length > 0 ? (
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-foreground/48">Structură recunoscută din participanți</h3>
-                <p className="mt-1 text-sm text-foreground/58">
-                  Carduri generate din leadership și din câmpul Manager direct. Nu modifică echipele salvate.
-                </p>
-              </div>
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <section className="flex flex-col gap-4">
+              <SectionHeading
+                title="Structură din roster"
+                detail={`${derivedTeams.length} ${derivedTeams.length === 1 ? "echipă" : "echipe"}`}
+              />
+              <div className="grid gap-4 xl:grid-cols-2">
                 {derivedTeams.map((team) => (
                   <DerivedTeamCard key={team.id} team={team} />
                 ))}
@@ -299,45 +329,68 @@ export function TeamsWorkspace({
   );
 }
 
-function TeamSummary({ label, value }: { label: string; value: string | number }) {
+function TeamSummary({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2.5">
-      <p className="text-xs font-semibold text-foreground/48">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+    <div className="min-w-24">
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</dd>
+      {detail ? (
+        <dd className="mt-1 text-xs font-semibold text-muted-foreground">{detail}</dd>
+      ) : null}
     </div>
+  );
+}
+
+function SectionHeading({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-border pb-3">
+      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      <p className="text-sm text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <section className="border-y border-border py-10 text-center">
+      <h3 className="text-base font-semibold text-foreground">{title}</h3>
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    </section>
   );
 }
 
 function DerivedTeamCard({ team }: { team: DerivedTeam }) {
   return (
-    <article className="flex min-h-[20rem] flex-col rounded-xl border border-dashed border-burgundy/24 bg-surface p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+    <article className="flex flex-col rounded-lg border border-border bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-foreground">{team.name}</h2>
-          <p className="mt-1 text-xs font-semibold text-foreground/50">
-            {team.members.length} membri recunoscuți automat
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{team.members.length} membri recunoscuți</p>
         </div>
-        <span className="rounded-full border border-burgundy/20 bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
+        <Badge variant="secondary" className="rounded-lg">
           {team.source === "leadership" ? "Leadership" : "Manager direct"}
-        </span>
+        </Badge>
       </div>
 
-      <div className="mt-4 flex-1">
-        <div className="max-h-64 divide-y divide-[var(--border)] overflow-y-auto pr-1">
-          {team.members.map(({ membership, participant }) => (
-            <div key={membership.id} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">{participant.full_name}</p>
-                <p className="truncate text-xs text-foreground/50">{participant.position ?? "Membru"}</p>
-              </div>
-              <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-foreground/50">
-                {membership.role === "leader" ? "Lider" : "Membru"}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ol className="mt-4 flex max-h-64 flex-col divide-y divide-border overflow-y-auto">
+        {team.members.map(({ membership, participant }) => (
+          <li key={membership.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 py-2.5 hover:bg-muted/50">
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
+              <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
+            </span>
+            <RoleBadge role={membership.role} />
+          </li>
+        ))}
+      </ol>
     </article>
   );
 }
@@ -364,10 +417,15 @@ function TeamCard({
   const [selectedParticipantId, setSelectedParticipantId] = useState(availableParticipants[0]?.id ?? "");
   const [selectedRole, setSelectedRole] = useState<CompanyTeamMembership["role"]>("member");
   const [isAdding, setIsAdding] = useState(false);
+  const addingRef = useRef(false);
+  const participantSelectId = useId();
+  const roleSelectId = useId();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedParticipantId) return;
+    if (!selectedParticipantId || addingRef.current) return;
+
+    addingRef.current = true;
     setIsAdding(true);
     try {
       await onAddMember(team.id, selectedParticipantId, selectedRole);
@@ -377,80 +435,106 @@ function TeamCard({
       setSelectedParticipantId(nextParticipant?.id ?? "");
       setSelectedRole("member");
     } finally {
+      addingRef.current = false;
       setIsAdding(false);
     }
   }
 
   return (
-    <article className="flex min-h-[28rem] flex-col rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm transition-colors hover:border-burgundy/25">
-      <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+    <article className="flex flex-col rounded-lg border border-border bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-foreground">{team.name}</h2>
-          <p className="mt-1 text-xs font-semibold text-foreground/50">
-            {members.length} membri
+          <p className="mt-1 text-sm text-muted-foreground">
+            {members.length} {members.length === 1 ? "membru" : "membri"}
           </p>
         </div>
-        <span className="rounded-full border border-burgundy/20 bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
+        <Badge variant={team.type === "leadership" ? "default" : "outline"} className="rounded-lg">
           {team.type === "leadership" ? "Leadership" : "Funcțională"}
-        </span>
+        </Badge>
       </div>
 
-      <div className="mt-4 flex-1">
+      <div className="mt-4 min-h-0 flex-1 border-y border-border">
         {members.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--border)] bg-surface-muted px-3 py-4 text-sm leading-6 text-foreground/55">
-            Niciun membru adăugat încă.
-          </p>
+          <Empty className="min-h-24 px-3 py-4">
+            <EmptyHeader>
+              <EmptyTitle>Niciun membru adăugat încă.</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="max-h-64 divide-y divide-[var(--border)] overflow-y-auto pr-1">
+          <ol className="flex max-h-56 flex-col divide-y divide-border overflow-y-auto">
             {members.map(({ membership, participant }) => (
-              <div key={membership.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{participant.full_name}</p>
-                  <p className="truncate text-xs text-foreground/50">{participant.position ?? "Membru"}</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-foreground/50">
-                  {membership.role === "leader" ? "Lider" : "Membru"}
+              <li key={membership.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 py-2.5">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
                 </span>
-              </div>
+                <RoleBadge role={membership.role} />
+              </li>
             ))}
-          </div>
+          </ol>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-4 space-y-2 border-t border-[var(--border)] pt-4">
-        <p className="text-xs font-semibold text-foreground/48">Adaugă membru</p>
-        <select
-          value={selectedParticipantId}
-          onChange={(event) => setSelectedParticipantId(event.target.value)}
-          aria-label={`Participant pentru ${team.name}`}
-          className="control-input min-h-10 w-full px-3 py-2"
-        >
-          <option value="">Selectează participant</option>
-          {availableParticipants.map((participant) => (
-            <option key={participant.id} value={participant.id}>
-              {participant.full_name}
-            </option>
-          ))}
-        </select>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-          <select
-            value={selectedRole}
-            onChange={(event) => setSelectedRole(event.target.value as CompanyTeamMembership["role"])}
-            aria-label={`Rol în ${team.name}`}
-            className="control-input min-h-10 px-3 py-2"
-          >
-            <option value="member">Membru</option>
-            <option value="leader">Lider</option>
-          </select>
-          <button
+      <form onSubmit={handleSubmit} className="mt-4" aria-busy={isAdding}>
+        <p className="text-sm font-semibold text-foreground">Adaugă membru</p>
+        <FieldGroup className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
+          <Field data-disabled={isAdding ? true : undefined}>
+            <FieldLabel htmlFor={participantSelectId}>Participant</FieldLabel>
+            <SelectControl
+              id={participantSelectId}
+              label={`Participant pentru ${team.name}`}
+              value={selectedParticipantId}
+              onChange={(event) => setSelectedParticipantId(event.target.value)}
+              disabled={isAdding}
+            >
+              <option value="">Selectează participant</option>
+              {availableParticipants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.full_name}
+                </option>
+              ))}
+            </SelectControl>
+          </Field>
+          <Field data-disabled={isAdding ? true : undefined}>
+            <FieldLabel htmlFor={roleSelectId}>Rol</FieldLabel>
+            <SelectControl
+              id={roleSelectId}
+              label={`Rol în ${team.name}`}
+              value={selectedRole}
+              onChange={(event) => setSelectedRole(event.target.value as CompanyTeamMembership["role"])}
+              disabled={isAdding}
+            >
+              <option value="member">Membru</option>
+              <option value="leader">Lider</option>
+            </SelectControl>
+          </Field>
+          <Button
             type="submit"
             disabled={isAdding || !selectedParticipantId}
-            className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2 text-sm font-bold text-foreground hover:border-burgundy/45 hover:bg-surface-muted hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+            variant="outline"
+            className="h-11"
           >
-            {isAdding ? "..." : "Adaugă"}
-          </button>
-        </div>
+            {isAdding ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : null}
+            {isAdding ? "Adăugăm membrul" : "Adaugă"}
+          </Button>
+          {isAdding ? (
+            <OperationFeedback
+              title="Adăugăm membrul"
+              detail="Actualizăm echipa."
+              className="sm:col-span-3"
+            />
+          ) : null}
+        </FieldGroup>
       </form>
     </article>
+  );
+}
+
+function RoleBadge({ role }: { role: CompanyTeamMembership["role"] }) {
+  return (
+    <Badge variant={role === "leader" ? "secondary" : "outline"} className="shrink-0 rounded-md">
+      {role === "leader" ? "Lider" : "Membru"}
+    </Badge>
   );
 }

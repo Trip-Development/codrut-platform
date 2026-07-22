@@ -2,7 +2,15 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+)
 
 from codrut.api.schemas import StrictRequestModel
 from codrut.modules.companies.models import CompanyProjectStatus
@@ -11,6 +19,8 @@ from codrut.modules.identity.password_policy import (
     PASSWORD_MIN_LENGTH,
     validate_new_password,
 )
+
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
 
 class CompanyCreateRequest(StrictRequestModel):
@@ -127,11 +137,24 @@ class RosterImportRow(BaseModel):
     reports_to_name: str | None = Field(default=None, alias="Reports To", max_length=255)
     position: str | None = Field(default=None, alias="Position", max_length=255)
     location: str | None = Field(default=None, alias="Location", max_length=255)
-    email: EmailStr = Field(alias="email")
+    email: str | None = Field(default=None, alias="email", max_length=320)
     role_group: str | None = Field(default=None, alias="Role Group", max_length=255)
     pcm_profile: str | None = Field(default=None, alias="Profil PCM", max_length=255)
     pcm_base: str | None = Field(default=None, alias="PCM Bază", max_length=80)
     pcm_phase: str | None = Field(default=None, alias="PCM Fază", max_length=80)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_roster_email(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip().lower()
+        if not cleaned:
+            return None
+        try:
+            return str(_EMAIL_ADAPTER.validate_python(cleaned)).lower()
+        except ValidationError:
+            return None
 
 
 class RosterImportRequest(StrictRequestModel):
@@ -160,7 +183,7 @@ class ParticipantResponse(BaseModel):
     company_id: UUID
     user_id: UUID | None
     full_name: str
-    email: EmailStr
+    email: EmailStr | None
     reports_to_name: str | None
     position: str | None
     location: str | None
@@ -192,10 +215,12 @@ class ProjectParticipantResponse(ParticipantResponse):
 
 class RosterImportEmailResult(BaseModel):
     participant_id: UUID
-    email: EmailStr
+    email: EmailStr | None
     full_name: str
     delivery_mode: Literal["email", "secure_links"] = "email"
     email_sent: bool
+    email_queued: bool = False
+    error_code: str | None = None
     error: str | None = None
     invite_url: str | None = None
 
@@ -205,6 +230,7 @@ class RosterImportResponse(BaseModel):
     email_results: list[RosterImportEmailResult]
     total_imported: int
     emails_sent: int
+    emails_queued: int = 0
     emails_failed: int
 
 
@@ -220,6 +246,7 @@ class ParticipantInviteBatchResponse(BaseModel):
     results: list[RosterImportEmailResult]
     total: int
     emails_sent: int
+    emails_queued: int = 0
     emails_failed: int
     links_generated: int
 

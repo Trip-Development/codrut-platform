@@ -101,9 +101,7 @@ class CompanyProject(TimestampMixin, Base):
 
 class CompanyMembership(TimestampMixin, Base):
     __tablename__ = "company_memberships"
-    __table_args__ = (
-        UniqueConstraint("company_id", "user_id"),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "user_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(
@@ -128,7 +126,11 @@ class ParticipantProfile(TimestampMixin, Base):
     __tablename__ = "participant_profiles"
     __table_args__ = (
         UniqueConstraint("company_id", "email"),
-        UniqueConstraint("company_id", "id"),
+        UniqueConstraint(
+            "company_id",
+            "id",
+            name="uq_participant_profiles_company_id_id",
+        ),
         UniqueConstraint("user_id"),
     )
 
@@ -143,7 +145,7 @@ class ParticipantProfile(TimestampMixin, Base):
         index=True,
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     reports_to_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     position: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)

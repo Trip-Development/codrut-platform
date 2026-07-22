@@ -20,16 +20,17 @@ export default async function ParticipantResultsPage() {
   return (
     <AppShell
       audience="participant"
-      eyebrow={summary.projectName}
-      title="Rezultatele tale"
-      description="Scoruri sumarizate pentru chestionarele finalizate. Răspunsurile brute rămân private."
+      eyebrow=""
+      title="Rezultate"
+      description=""
       navItems={participantNavItems}
       activeHref="/participant/results"
-      userLabel={summary.anonymousName ?? "Profil anonim"}
+      userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
     >
       <ParticipantResultsPanel
         results={summary.results}
         receivedFeedback={summary.receivedFeedback}
+        receivedFeedbackGroups={summary.receivedFeedbackGroups}
         pcmBase={summary.pcmBase}
         pcmPhase={summary.pcmPhase}
       />

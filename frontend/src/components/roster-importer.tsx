@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createCompany,
@@ -12,7 +12,14 @@ import {
   type RosterInviteResult,
 } from "@/api/companies";
 import { buildManagerReferenceKeySet, managerReferenceKey, normalizeReportsToName } from "@/api/roster-format";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { ModalLayer } from "@/components/ui/modal-layer";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { SelectControl } from "@/components/ui/select-control";
+import { cn } from "@/utils/cn";
 import { readSpreadsheetFile, type SpreadsheetCell } from "@/utils/spreadsheet-import";
 
 type CompanyOption = {
@@ -51,7 +58,7 @@ const MANUAL_MAPPINGS: Record<DbField, string> = {
 
 const FIELD_LABELS: Record<DbField, string> = {
   full_name: "Nume Complet (Obligatoriu)",
-  email: "Adresă Email (Obligatoriu)",
+  email: "Adresă Email (opțională)",
   reports_to_name: "Raportează Către / Manager (Opțional)",
   position: "Poziție / Rol (Opțional)",
   location: "Locație (Opțional)",
@@ -92,6 +99,12 @@ const PCM_DISPLAY_BY_VALUE: Record<string, string> = {
 };
 
 const LEGEND_ROW_LABELS = new Set(["legend", "base", "base & phase", "base si phase", "base and phase", "phase", "stage"]);
+const importerShellClass =
+  "overflow-hidden rounded-lg border border-border bg-surface text-foreground shadow-[0_1px_0_rgba(24,24,27,0.04)]";
+const importerMutedClass = "border-border bg-muted/75";
+const compactInputClass =
+  "h-9 rounded-lg border-border bg-surface px-3 text-xs font-semibold";
+const warningPanelClass = "rounded-lg status-warning";
 
 function normalizeHeader(value: string): string {
   return value
@@ -215,6 +228,15 @@ export function RosterImporter({
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
+  const companyCreatingRef = useRef(false);
+  const fileProcessingRef = useRef(false);
+  const rosterImportingRef = useRef(false);
+  const accessSendingRef = useRef(false);
+  const copyingAccessLinkIdsRef = useRef<Set<string>>(new Set());
+  const companySelectId = useId();
+  const projectSelectId = useId();
+  const rosterFileInputId = useId();
+  const newCompanyNameInputId = useId();
 
   useEffect(() => {
     if (defaultCompanyId) {
@@ -232,8 +254,10 @@ export function RosterImporter({
 
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (companyCreatingRef.current) return;
     if (!newCompanyName.trim()) return;
 
+    companyCreatingRef.current = true;
     setIsCreatingCompany(true);
     try {
       const created = await createCompany(newCompanyName.trim());
@@ -253,6 +277,7 @@ export function RosterImporter({
         message: error instanceof Error ? error.message : "Compania nu a putut fi creată în sistem.",
       });
     } finally {
+      companyCreatingRef.current = false;
       setIsCreatingCompany(false);
     }
   };
@@ -283,6 +308,7 @@ export function RosterImporter({
     results: [],
   });
   const [copiedParticipantId, setCopiedParticipantId] = useState<string | null>(null);
+  const [copyingParticipantId, setCopyingParticipantId] = useState<string | null>(null);
 
   const [importState, setImportState] = useState<{
     status: "idle" | "ready" | "importing" | "success" | "error";
@@ -291,6 +317,7 @@ export function RosterImporter({
     status: "idle",
     message: "Alegeți un fișier CSV sau Excel pentru a începe importul.",
   });
+  const [importOperationMode, setImportOperationMode] = useState<"file" | "save" | null>(null);
 
   // State for manual edits made in the preview
   const [editedCells, setEditedCells] = useState<Record<string, Record<string, string>>>({});
@@ -299,8 +326,14 @@ export function RosterImporter({
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (fileProcessingRef.current || rosterImportingRef.current) {
+      event.target.value = "";
+      return;
+    }
 
-    setImportState({ status: "importing", message: "Se citește fișierul..." });
+    fileProcessingRef.current = true;
+    setImportOperationMode("file");
+    setImportState({ status: "importing", message: "Citim fișierul" });
     setLastImportedParticipantIds([]);
     resetAccessState();
     setEditedCells({});
@@ -415,6 +448,8 @@ export function RosterImporter({
       console.error(err);
       setImportState({ status: "error", message: "Eroare la procesarea fișierului. Verificați formatul." });
     } finally {
+      fileProcessingRef.current = false;
+      setImportOperationMode(null);
       event.target.value = "";
     }
   }
@@ -425,6 +460,8 @@ export function RosterImporter({
   };
 
   const handleAddManualParticipant = () => {
+    if (fileProcessingRef.current || rosterImportingRef.current) return;
+
     const nextIndex = rawRows.length;
     const emptyRow = Object.fromEntries(MANUAL_HEADERS.map((header) => [header, ""])) as Record<string, string>;
 
@@ -485,7 +522,11 @@ export function RosterImporter({
     
     const emailsInFile = new Map<string, number[]>();
     const namesInFile = buildManagerReferenceKeySet(processedRows.map((row) => row.full_name));
-    const existingEmails = new Set(existingParticipants.map((participant) => participant.email.trim().toLowerCase()));
+    const existingEmails = new Set(
+      existingParticipants
+        .map((participant) => participant.email?.trim().toLowerCase())
+        .filter((email): email is string => Boolean(email)),
+    );
     const existingNames = new Set(existingParticipants.map((participant) => participant.full_name.trim().toLowerCase()));
 
     processedRows.forEach((row, idx) => {
@@ -504,10 +545,22 @@ export function RosterImporter({
         errors.push({ rowIndex: idx, name, field: "full_name", error: "Numele este obligatoriu.", type: "critical" });
       }
       if (!row.email) {
-        errors.push({ rowIndex: idx, name, field: "email", error: "Emailul este obligatoriu.", type: "critical" });
+        errors.push({
+          rowIndex: idx,
+          name,
+          field: "email",
+          error: "Email lipsă. Rândul va fi salvat fără invitații email până completezi adresa.",
+          type: "warning",
+        });
       } else {
         if (!row.email.includes("@")) {
-          errors.push({ rowIndex: idx, name, field: "email", error: "Formatul emailului este invalid.", type: "critical" });
+          errors.push({
+            rowIndex: idx,
+            name,
+            field: "email",
+            error: "Format email invalid. Rândul va fi salvat, dar invitațiile email vor rămâne blocate.",
+            type: "warning",
+          });
         }
         if (existingEmails.has(row.email.trim().toLowerCase())) {
           errors.push({
@@ -568,6 +621,10 @@ export function RosterImporter({
   const selectedProject = projects.find((project) => project.id === projectId) ?? null;
   const isProjectFixed = Boolean(defaultProjectId) && projects.length === 1 && projects[0]?.id === defaultProjectId;
   const canImportRows = !hasCriticalErrors && (!projectRequired || Boolean(selectedProject));
+  const isRosterBusy = importState.status === "importing";
+  const isFileProcessing = isRosterBusy && importOperationMode === "file";
+  const isSavingRoster = isRosterBusy && importOperationMode === "save";
+  const isAccessSending = accessState.status === "sending";
   const activeStep: FlowStepKey =
     importState.status === "success"
       ? "access"
@@ -640,9 +697,12 @@ export function RosterImporter({
   };
 
   const handleImport = async () => {
+    if (rosterImportingRef.current) return;
     if (!companyId || processedRows.length === 0 || !canImportRows) return;
 
-    setImportState({ status: "importing", message: "Se importă participanții..." });
+    rosterImportingRef.current = true;
+    setImportOperationMode("save");
+    setImportState({ status: "importing", message: "Importăm participanții" });
     setLastImportedParticipantIds([]);
     resetAccessState();
 
@@ -673,6 +733,9 @@ export function RosterImporter({
         status: "error",
         message: error instanceof Error ? error.message : "Importul listei de participanți a eșuat în sistem.",
       });
+    } finally {
+      rosterImportingRef.current = false;
+      setImportOperationMode(null);
     }
   };
 
@@ -684,15 +747,19 @@ export function RosterImporter({
       results: [],
     });
     setCopiedParticipantId(null);
+    setCopyingParticipantId(null);
+    copyingAccessLinkIdsRef.current.clear();
   };
 
   const handleSendAccess = async (mode: ParticipantInvitationMode) => {
+    if (accessSendingRef.current) return;
     if (!companyId || lastImportedParticipantIds.length === 0) return;
 
+    accessSendingRef.current = true;
     setAccessState({
       status: "sending",
       mode,
-      message: mode === "email" ? "Se trimit invitațiile email..." : "Se generează linkurile securizate...",
+      message: mode === "email" ? "Trimitem invitațiile email" : "Generăm linkurile securizate",
       results: [],
     });
     setCopiedParticipantId(null);
@@ -720,11 +787,17 @@ export function RosterImporter({
         message: error instanceof Error ? error.message : "Accesul participanților nu a putut fi pregătit.",
         results: [],
       });
+    } finally {
+      accessSendingRef.current = false;
     }
   };
 
   const handleCopyAccessLink = async (result: RosterInviteResult) => {
     if (!result.invite_url || typeof navigator === "undefined") return;
+    if (copyingAccessLinkIdsRef.current.has(result.participant_id)) return;
+
+    copyingAccessLinkIdsRef.current.add(result.participant_id);
+    setCopyingParticipantId(result.participant_id);
     try {
       await navigator.clipboard.writeText(result.invite_url);
       setCopiedParticipantId(result.participant_id);
@@ -737,85 +810,116 @@ export function RosterImporter({
         ...current,
         message: "Linkul nu a putut fi copiat automat. Copiază-l din tabul Invitații.",
       }));
+    } finally {
+      copyingAccessLinkIdsRef.current.delete(result.participant_id);
+      setCopyingParticipantId((current) => (current === result.participant_id ? null : current));
     }
   };
 
+  const activeImportFeedback =
+    importState.status === "importing"
+      ? importOperationMode === "file"
+        ? {
+            title: "Citim fișierul",
+            detail: "Extragem coloanele, rândurile și marcajele PCM înainte de validarea listei.",
+          }
+        : {
+            title: "Salvăm participanții",
+            detail: "Trimitem lista validată către companie și legăm participanții de proiectul selectat.",
+          }
+      : null;
+
+  const activeAccessFeedback =
+    accessState.status === "sending"
+      ? accessState.mode === "email"
+        ? {
+            title: "Trimitem invitațiile",
+            detail: "Pregătim emailurile doar pentru participanții salvați în acest import.",
+          }
+        : {
+            title: "Generăm linkurile",
+            detail: "Creăm acces securizat pentru participanții importați acum.",
+          }
+      : null;
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-5">
       {!compact ? <ImportFlowStepper steps={flowSteps} /> : null}
 
-      <section className="surface-panel overflow-hidden">
+      <section className={importerShellClass}>
         {compact ? (
-          <div className="border-b border-[var(--border)] bg-surface-muted px-5 py-4">
-            <p className="text-sm font-semibold text-burgundy/75">Import participanți</p>
-            <p className="mt-1 text-sm leading-6 text-foreground/62">
-              Încarcă fișierul, revizuiește maparea și adaugă manual doar dacă ai nevoie.
-            </p>
+          <div className={cn("border-b px-5 py-4", importerMutedClass)}>
+            <p className="text-sm font-semibold text-foreground">Import participanți</p>
           </div>
         ) : null}
 
         <div className={compact ? "" : "grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"}>
           {!compact ? (
-            <div className="border-b border-[var(--border)] bg-surface-muted p-5 lg:border-b-0 lg:border-r">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
-              <h3 className="mt-1 text-lg font-semibold text-foreground">Salvează oamenii înainte de invitații</h3>
-              <p className="mt-2 max-w-md text-sm leading-6 text-foreground/62">
-                Importul creează lista de participanți în companie. După confirmare, tabul Invitații este singurul loc pentru emailuri, retrimiteri și linkuri securizate.
-              </p>
-              <p className="mt-4 inline-flex rounded-xl border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-semibold text-foreground/58">
+            <div className={cn("border-b p-5 lg:border-b-0 lg:border-r", importerMutedClass)}>
+              <h3 className="text-lg font-semibold text-foreground">Import roster</h3>
+              <p className="mt-2 inline-flex rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground">
                 Fără trimitere automată la import
               </p>
             </div>
           ) : null}
 
           <div className="grid gap-4 p-5 md:grid-cols-2">
-            <div className="block">
+            <Field data-disabled={isRosterBusy ? true : undefined}>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-foreground">Companie destinație</span>
+                <FieldLabel htmlFor={lockCompany ? undefined : companySelectId}>
+                  Companie destinație
+                </FieldLabel>
                 {!lockCompany && (
-                  <button
+                  <Button
                     type="button"
                     onClick={() => setShowAddCompanyModal(true)}
-                    className="tap-soft rounded-full px-2.5 py-1 text-xs font-semibold text-burgundy hover:bg-burgundy/10"
+                    variant="ghost"
+                    size="xs"
+                    disabled={isRosterBusy}
+                    className="text-burgundy hover:bg-burgundy/10 hover:text-burgundy"
                   >
-                    + Companie nouă
-                  </button>
+                    Companie nouă
+                  </Button>
                 )}
               </div>
               {lockCompany ? (
-                <div className="mt-2 rounded-xl border border-[var(--border)] bg-surface px-3.5 py-3 text-sm font-semibold text-foreground">
+                <div className="mt-2 rounded-lg border border-border bg-surface px-3.5 py-3 text-sm font-semibold text-foreground">
                   {selectedCompanyName}
                 </div>
               ) : (
-                <select
+                <SelectControl
+                  id={companySelectId}
+                  label="Companie destinație"
                   value={companyId}
+                  disabled={isRosterBusy}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="control-input mt-2 w-full py-3"
                 >
                   {allCompanies.map((company) => (
                     <option key={company.id} value={company.id}>
                       {company.name}
                     </option>
                   ))}
-                </select>
+                </SelectControl>
               )}
-            </div>
+            </Field>
 
             {isProjectFixed && selectedProject ? (
-              <div className="rounded-xl border border-[var(--border)] bg-surface px-3.5 py-3">
-                <span className="text-sm font-semibold text-foreground">Proiect</span>
+              <div className="rounded-lg border border-border bg-surface px-3.5 py-3">
+                <FieldTitle>Proiect</FieldTitle>
                 <p className="mt-2 text-sm font-bold text-foreground">{selectedProject.name}</p>
-                <p className="mt-1 text-xs leading-5 text-foreground/52">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Participanții importați sunt legați automat de acest proiect. Invitațiile se trimit separat din tabul Invitații.
                 </p>
               </div>
             ) : projects.length > 0 ? (
-              <label className="block">
-                <span className="text-sm font-semibold text-foreground">Proiect destinație</span>
-                <select
+              <Field data-disabled={isRosterBusy ? true : undefined}>
+                <FieldLabel htmlFor={projectSelectId}>Proiect destinație</FieldLabel>
+                <SelectControl
+                  id={projectSelectId}
+                  label="Proiect destinație"
                   value={projectId}
+                  disabled={isRosterBusy}
                   onChange={(event) => setProjectId(event.target.value)}
-                  className="control-input mt-2 min-h-11 w-full py-2"
                 >
                   <option value="" disabled>
                     Alege proiectul pentru import
@@ -825,52 +929,64 @@ export function RosterImporter({
                       {project.name}
                     </option>
                   ))}
-                </select>
-                <span className="mt-2 block text-xs leading-5 text-foreground/52">
+                </SelectControl>
+                <FieldDescription>
                   Invitațiile, linkurile și asignările se lucrează pe proiectul ales.
-                </span>
-              </label>
+                </FieldDescription>
+              </Field>
             ) : requireProject ? (
-              <div className="status-panel-warning px-3.5 py-3 leading-6">
+              <div className={cn(warningPanelClass, "px-3.5 py-3 text-sm font-semibold leading-6")}>
                 Creează un proiect înainte de import ca invitațiile și rapoartele să fie corect încapsulate.
               </div>
             ) : null}
 
-            <div className="block">
-              <span className="text-sm font-semibold text-foreground">Participanți</span>
+            <Field data-disabled={isRosterBusy ? true : undefined}>
+              <FieldLabel htmlFor={rosterFileInputId}>Participanți</FieldLabel>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                <label className="min-w-0 flex-1">
-                  <input
-                    type="file"
-                    accept=".csv,.xlsx"
-                    onChange={handleFileChange}
-                    className="w-full rounded-xl border border-dashed border-burgundy/35 bg-surface px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
-                  />
-                </label>
-                <button
+                <Input
+                  id={rosterFileInputId}
+                  type="file"
+                  accept=".csv,.xlsx"
+                  onChange={handleFileChange}
+                  disabled={isRosterBusy}
+                  className="min-w-0 flex-1 rounded-lg border border-burgundy/35 bg-surface px-3 py-2 text-sm font-semibold text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-burgundy file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-white hover:border-burgundy/60"
+                />
+                <Button
                   type="button"
                   onClick={handleAddManualParticipant}
-                  className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3.5 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                  variant="outline"
+                  size="sm"
+                  disabled={isRosterBusy}
+                  className="border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy"
                 >
-                  + Participant manual
-                </button>
+                  {isFileProcessing ? "Se citește fișierul" : "Participant manual"}
+                </Button>
               </div>
-              <span className="mt-2 block text-xs text-foreground/50">Excel (.xlsx), CSV (.csv) sau introducere manuală</span>
-            </div>
+              <FieldDescription>Excel (.xlsx), CSV (.csv) sau introducere manuală</FieldDescription>
+            </Field>
           </div>
         </div>
 
         {importState.status === "idle" && (
-          <div className="border-t border-[var(--border)] bg-surface-muted px-5 py-5 text-center text-foreground/55">
+          <div className="border-t border-border bg-muted/75 px-5 py-5 text-center text-muted-foreground">
             <p className="text-sm font-semibold">Aștept fișierul de import.</p>
             <p className="mt-1 text-xs">Acceptă Excel (.xlsx) și CSV (.csv).</p>
           </div>
         )}
 
-        {importState.status !== "idle" && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] bg-surface-muted px-5 py-3">
+        {activeImportFeedback ? (
+          <div className="border-t border-border bg-muted/75 px-5 py-4">
+            <OperationFeedback
+              title={activeImportFeedback.title}
+              detail={activeImportFeedback.detail}
+            />
+          </div>
+        ) : null}
+
+        {importState.status !== "idle" && !activeImportFeedback && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-border bg-muted/75 px-5 py-3">
             <StatusDot tone={importState.status} />
-            <p className="text-sm font-semibold text-foreground/68">
+            <p className="text-sm font-semibold text-muted-foreground">
               {importState.message}
             </p>
           </div>
@@ -878,119 +994,129 @@ export function RosterImporter({
       </section>
 
       {processedRows.length > 0 && importState.status === "ready" && (
-        <section className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm">
+        <section className="rounded-lg border border-border bg-surface p-5 shadow-[0_1px_0_rgba(24,24,27,0.04)]">
           <div className="grid gap-3 sm:grid-cols-4">
             <RosterMetric label="Rânduri citite" value={processedRows.length} />
             <RosterMetric label="Valide pentru import" value={validRowCount} tone={criticalErrorCount > 0 ? "warning" : "success"} />
             <RosterMetric label="Erori critice" value={criticalErrorCount} tone={criticalErrorCount > 0 ? "danger" : "neutral"} />
             <RosterMetric label="Atenționări" value={warningCount} tone={warningCount > 0 ? "warning" : "neutral"} />
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
-            <p className="max-w-2xl text-sm leading-6 text-foreground/62">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               Importul salvează doar participanții. Trimiterea emailurilor sau generarea linkurilor se face separat după confirmare.
             </p>
             <div className="flex flex-wrap gap-2">
-              <button
+              <Button
                 type="button"
                 onClick={handleAddManualParticipant}
-                className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                variant="outline"
+                size="sm"
+                disabled={isRosterBusy}
+                className="border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy"
               >
-                + Participant manual
-              </button>
-              <button
+                Participant manual
+              </Button>
+              <Button
                 type="button"
-                disabled={!canImportRows}
+                disabled={!canImportRows || isSavingRoster}
                 onClick={handleImport}
-                className="tap-soft rounded-full bg-burgundy px-5 py-2.5 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-40"
+                size="sm"
               >
-                Salvează participanții
-              </button>
+                {isSavingRoster ? "Salvăm participanții" : "Salvează participanții"}
+              </Button>
             </div>
           </div>
         </section>
       )}
 
       {importState.status === "success" && lastImportedParticipantIds.length > 0 && (
-        <section className="rounded-xl border border-burgundy/20 bg-surface p-5 shadow-sm">
+        <section className="rounded-lg border border-burgundy/20 bg-surface p-5 shadow-[0_1px_0_rgba(24,24,27,0.04)]">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)]">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Acces participanți</p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">Participanți salvați. Alege cum le dai acces.</h3>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-foreground/62">
+              <h3 className="text-base font-semibold text-foreground">Participanți salvați</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                 Am importat {lastImportedParticipantIds.length} participanți fără trimitere automată. Poți genera linkuri securizate pentru verificare manuală sau poți trimite invitații email doar către această listă importată acum.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button
+                <Button
                   type="button"
-                  disabled={accessState.status === "sending"}
+                  disabled={isAccessSending}
                   onClick={() => handleSendAccess("secure_links")}
-                  className="tap-soft rounded-full bg-burgundy px-4 py-2.5 text-sm font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {accessState.status === "sending" && accessState.mode === "secure_links"
-                    ? "Se generează..."
+                  {isAccessSending && accessState.mode === "secure_links"
+                    ? "Generăm linkurile"
                     : "Generează linkuri securizate"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  disabled={accessState.status === "sending"}
+                  disabled={isAccessSending}
                   onClick={() => handleSendAccess("email")}
-                  className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
+                  variant="outline"
+                  className="border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy"
                 >
-                  {accessState.status === "sending" && accessState.mode === "email"
-                    ? "Se trimit..."
+                  {isAccessSending && accessState.mode === "email"
+                    ? "Trimitem invitațiile"
                     : "Trimite invitații email"}
-                </button>
+                </Button>
               </div>
+              {activeAccessFeedback ? (
+                <OperationFeedback
+                  title={activeAccessFeedback.title}
+                  detail={activeAccessFeedback.detail}
+                  className="mt-4"
+                />
+              ) : null}
             </div>
 
-            <div className="rounded-xl border border-[var(--border)] bg-background p-4">
+            <div className="rounded-lg border border-border bg-muted/75 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Status acces</p>
-                  <p className="mt-1 text-xs leading-5 text-foreground/56">
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Statusul complet, retrimiterile și istoricul rămân în tabul Invitații.
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
-                  onClick={() => router.push(selectedProject ? `/trainer/projects/${selectedProject.id}/invitations` : `/trainer/companies/${companyId}`)}
-                  className="tap-soft shrink-0 rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                  onClick={() => router.push(selectedProject ? `/trainer/projects/${selectedProject.id}/invitations` : `/trainer/companies/${companyId}/invitations`)}
+                  variant="outline"
+                  size="xs"
+                  className="shrink-0 border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy"
                 >
                   Invitații
-                </button>
+                </Button>
               </div>
 
-              {accessState.message ? (
-                <p
-                  className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${
-                    accessState.status === "error"
-                      ? "border-red-200 bg-red-50 text-red-800"
-                      : "border-success/25 bg-success/10 text-success-ink"
-                  }`}
+              {accessState.message && !activeAccessFeedback ? (
+                <InlineFeedback
+                  tone={accessState.status === "error" ? "danger" : "neutral"}
+                  className={cn("mt-3 px-3 py-2", accessState.status === "success" ? "status-success" : "")}
+                  descriptionClassName="text-xs leading-5"
                 >
                   {accessState.message}
-                </p>
+                </InlineFeedback>
               ) : (
-                <p className="mt-3 rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-semibold text-foreground/56">
+                <p className="mt-3 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted-foreground">
                   Nicio livrare pornită încă.
                 </p>
               )}
 
               {accessState.results.length > 0 ? (
-                <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
+                <div className="mt-3 flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
                   {accessState.results.map((result) => (
                     <div
                       key={result.participant_id}
-                      className="rounded-xl border border-[var(--border)] bg-surface px-3 py-2"
+                      className="rounded-lg border border-border bg-surface px-3 py-2"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-foreground">{result.full_name}</p>
-                          <p className="truncate text-xs text-foreground/50">{result.email}</p>
+                          <p className="truncate text-xs text-muted-foreground">{result.email}</p>
                           <p
-                            className={`mt-1 text-xs font-semibold ${
-                              result.error ? "text-red-700" : "text-success-ink"
-                            }`}
+                            className={cn(
+                              "mt-1 text-xs font-semibold",
+                              result.error ? "text-destructive" : "text-success-ink",
+                            )}
                           >
                             {result.error
                               ? result.error
@@ -1000,13 +1126,20 @@ export function RosterImporter({
                           </p>
                         </div>
                         {result.invite_url ? (
-                          <button
+                          <Button
                             type="button"
                             onClick={() => handleCopyAccessLink(result)}
-                            className="tap-soft shrink-0 rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+                            variant="outline"
+                            size="xs"
+                            disabled={copyingParticipantId === result.participant_id}
+                            className="shrink-0 border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy"
                           >
-                            {copiedParticipantId === result.participant_id ? "Copiat" : "Copiază"}
-                          </button>
+                            {copyingParticipantId === result.participant_id
+                              ? "Copiem"
+                              : copiedParticipantId === result.participant_id
+                                ? "Copiat"
+                                : "Copiază"}
+                          </Button>
                         ) : null}
                       </div>
                     </div>
@@ -1020,31 +1153,33 @@ export function RosterImporter({
 
       {/* Participant column mapping */}
       {headers.length > 0 && importState.status === "ready" && (
-        <section className="rounded-xl border border-[var(--border)] bg-surface p-5 shadow-sm space-y-4">
+        <section className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 shadow-[0_1px_0_rgba(24,24,27,0.04)]">
           <div>
             <h3 className="text-base font-semibold text-foreground">Mapare coloane</h3>
-            <p className="mt-1 text-sm leading-6 text-foreground/60">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Asociază coloanele din fișier cu structura platformei. Detectarea automată poate fi ajustată manual.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {MAPPING_FIELDS.map((field) => (
-              <label key={field} className="block rounded-xl border border-[var(--border)] bg-background p-3 transition-colors hover:border-burgundy/25 hover:bg-surface-muted">
-                <span className="text-xs font-bold text-foreground/70">{FIELD_LABELS[field]}</span>
-                <select
+              <div key={field} className="block rounded-lg border border-border bg-muted/75 p-3 transition-colors hover:border-burgundy/25 hover:bg-surface">
+                <span className="text-xs font-bold text-muted-foreground">{FIELD_LABELS[field]}</span>
+                <SelectControl
+                  label={`Coloană pentru ${FIELD_LABELS[field]}`}
+                  wrapperClassName="mt-2"
                   value={mappings[field]}
+                  disabled={isRosterBusy}
                   onChange={(e) => handleMappingChange(field, e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-[var(--border)] bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground focus:border-burgundy"
                 >
-                  <option value="">-- Ignoră / Fără --</option>
+                  <option value="">Ignoră / Fără</option>
                   {headers.map((h) => (
                     <option key={h} value={h}>
                       {h}
                     </option>
                   ))}
-                </select>
-              </label>
+                </SelectControl>
+              </div>
             ))}
           </div>
         </section>
@@ -1052,16 +1187,16 @@ export function RosterImporter({
 
       {/* Warnings & Errors Panel */}
       {validationErrors.length > 0 && importState.status === "ready" && (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {validationErrors.some((e) => e.type === "critical") && (
-            <section className="status-panel-danger space-y-3 p-5">
+            <InlineFeedback tone="danger" className="p-5" descriptionClassName="flex flex-col gap-3 text-xs leading-5">
               <h3 className="text-base font-semibold">
                 Erori critice ({validationErrors.filter((e) => e.type === "critical").length})
               </h3>
-              <p className="text-xs">
+              <p>
                 Problemele de mai jos blochează importul. Corectează-le direct în tabel:
               </p>
-              <div className="max-h-28 overflow-y-auto space-y-1.5">
+              <div className="flex max-h-28 flex-col gap-1.5 overflow-y-auto">
                 {validationErrors
                   .filter((e) => e.type === "critical")
                   .map((err, i) => (
@@ -1070,22 +1205,22 @@ export function RosterImporter({
                     </p>
                   ))}
               </div>
-            </section>
+            </InlineFeedback>
           )}
 
           {validationErrors.some((e) => e.type === "warning") && (
-            <section className="status-panel-warning space-y-3 p-5">
+            <section className={cn(warningPanelClass, "flex flex-col gap-3 p-5")}>
               <h3 className="text-base font-semibold">
                 Atenționări ({validationErrors.filter((e) => e.type === "warning").length})
               </h3>
               <p className="text-xs">
                 Nu blochează importul, dar pot afecta generarea automată a evaluărilor:
               </p>
-              <div className="max-h-28 overflow-y-auto space-y-1.5">
+              <div className="flex max-h-28 flex-col gap-1.5 overflow-y-auto">
                 {validationErrors
                   .filter((e) => e.type === "warning")
                   .map((err, i) => (
-                    <p key={i} className="text-xs font-semibold text-amber-700">
+                    <p key={i} className="text-xs font-semibold text-warning-ink">
                       - <strong>{err.name}</strong>: {err.error} (Câmpul: <i>{FIELD_LABELS[err.field]}</i>)
                     </p>
                   ))}
@@ -1097,17 +1232,17 @@ export function RosterImporter({
 
       {/* Spreadsheet Live Preview & Inline Editing */}
       {processedRows.length > 0 && importState.status === "ready" && (
-        <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-surface shadow-sm">
-          <div className="px-5 py-4 border-b border-[var(--border)]">
+        <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-[0_1px_0_rgba(24,24,27,0.04)]">
+          <div className="border-b border-border px-5 py-4">
             <h3 className="text-base font-semibold text-foreground">Previzualizare participanți</h3>
-            <p className="mt-1 text-sm leading-6 text-foreground/60">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Dublu-click pe o celulă pentru corecții rapide înainte de salvare.
             </p>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
-              <thead className="bg-surface-muted text-[10px] font-bold uppercase tracking-wider text-foreground/50 border-b border-[var(--border)]">
+            <table className="min-w-[980px] text-left text-xs">
+              <thead className="border-b border-border bg-muted text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3 w-12 text-center">Nr.</th>
                   <th className="px-5 py-3">Nume complet</th>
@@ -1119,10 +1254,10 @@ export function RosterImporter({
                   <th className="px-5 py-3">PCM fază</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--border)]">
+              <tbody className="divide-y divide-border">
                 {processedRows.map((row, rIdx) => (
-                  <tr key={rIdx} className="hover:bg-surface-muted">
-                    <td className="px-5 py-3 font-semibold text-foreground/45 text-center">{rIdx + 1}</td>
+                  <tr key={rIdx} className="hover:bg-muted/70">
+                    <td className="px-5 py-3 text-center font-semibold text-muted-foreground">{rIdx + 1}</td>
 
                     {/* Render fields with double click inline editing support */}
                     {PREVIEW_FIELDS.map((field) => {
@@ -1157,13 +1292,16 @@ export function RosterImporter({
                       return (
                         <td
                           key={field}
-                          className={`px-5 py-3 font-medium transition-colors ${
-                            hasError ? "bg-red-50 text-red-900 border border-red-200" : "text-foreground"
-                          }`}
+                          className={cn(
+                            "px-5 py-3 font-medium transition-colors",
+                            hasError
+                              ? "border border-destructive/25 bg-destructive/10 text-destructive"
+                              : "text-foreground",
+                          )}
                           onDoubleClick={() => setEditingCellId({ rowIndex: rIdx, field })}
                         >
                           {isEditing ? (
-                            <input
+                            <Input
                               type="text"
                               defaultValue={row[field]}
                               autoFocus
@@ -1175,7 +1313,7 @@ export function RosterImporter({
                                   setEditingCellId(null);
                                 }
                               }}
-                              className="w-full bg-background border border-burgundy focus:ring-1 focus:ring-burgundy rounded px-2 py-1 text-xs text-foreground focus:outline-none"
+                              className={compactInputClass}
                             />
                           ) : (
                             <div className="flex items-center justify-between group cursor-pointer">
@@ -1183,8 +1321,8 @@ export function RosterImporter({
                                 {row[field] ? (
                                   row[field]
                                 ) : (
-                                  <span className="text-foreground/30 italic">
-                                    {isRequired ? "Lipsă obligatoriu" : "—"}
+                                  <span className="text-muted-foreground italic">
+                                    {isRequired ? "Lipsă obligatoriu" : "Fără date"}
                                   </span>
                                 )}
                               </span>
@@ -1219,41 +1357,54 @@ export function RosterImporter({
         >
           <form
             onSubmit={handleAddCompany}
-            className="space-y-4"
+            className="flex flex-col gap-4"
+            aria-busy={isCreatingCompany}
           >
             <h3 id="roster-add-company-title" className="text-lg font-semibold text-foreground">Adaugă companie nouă</h3>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground/60">Nume companie / organizație</label>
-              <input
-                type="text"
-                required
-                value={newCompanyName}
-                onChange={(e) => setNewCompanyName(e.target.value)}
-                placeholder="Ex. Acme Corporation SRL"
-                className="control-input w-full py-2.5"
-              />
-            </div>
+            <FieldGroup className="gap-3">
+              <Field data-disabled={isCreatingCompany ? true : undefined}>
+                <FieldLabel htmlFor={newCompanyNameInputId}>Nume companie / organizație</FieldLabel>
+                <Input
+                  id={newCompanyNameInputId}
+                  type="text"
+                  required
+                  value={newCompanyName}
+                  onChange={(event) => setNewCompanyName(event.target.value)}
+                  disabled={isCreatingCompany}
+                  placeholder="Ex. Atlas Mobility SRL"
+                />
+              </Field>
+            </FieldGroup>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
-              <button
+            <div className="flex justify-end gap-2 border-t border-border pt-2">
+              <Button
                 type="button"
                 onClick={() => {
                   setShowAddCompanyModal(false);
                   setNewCompanyName("");
                 }}
-                className="tap-soft rounded-full border border-[var(--border)] bg-surface px-4 py-2 text-xs font-bold text-foreground hover:bg-surface-muted"
+                variant="outline"
+                size="sm"
+                disabled={isCreatingCompany}
+                className="border-border bg-surface text-foreground hover:bg-muted/70"
               >
                 Anulează
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isCreatingCompany}
-                className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy/90 disabled:cursor-not-allowed disabled:opacity-50"
+                size="sm"
               >
-                {isCreatingCompany ? "Se creează..." : "Adaugă"}
-              </button>
+                {isCreatingCompany ? "Creăm compania" : "Adaugă"}
+              </Button>
             </div>
+            {isCreatingCompany ? (
+              <OperationFeedback
+                title="Creăm compania"
+                detail={`Pregătim spațiul pentru ${newCompanyName.trim() || "compania nouă"}.`}
+              />
+            ) : null}
           </form>
         </ModalLayer>
       )}
@@ -1267,32 +1418,32 @@ function ImportFlowStepper({
   steps: Array<{ key: FlowStepKey; label: string; detail: string; state: FlowStepState }>;
 }) {
   return (
-    <section className="surface-panel p-3">
+    <section className="rounded-lg border border-border bg-surface p-3 shadow-[0_1px_0_rgba(24,24,27,0.04)]">
       <div className="grid gap-1.5 md:grid-cols-4">
         {steps.map((step, index) => (
           <div
             key={step.key}
             className={[
-              "group flex items-start gap-3 rounded-xl px-3 py-3 transition-all",
+              "group flex items-start gap-3 rounded-lg px-3 py-3 transition-colors",
               step.state === "current"
-                ? "bg-burgundy/10 text-burgundy shadow-sm"
+                ? "bg-burgundy/10 text-burgundy"
                 : step.state === "complete"
-                  ? "text-green-700 hover:bg-green-50/70"
-                  : step.state === "error"
-                    ? "text-red-700 hover:bg-red-50"
-                    : "text-foreground/50 hover:bg-surface-muted",
+                  ? "text-success-ink hover:bg-success/10"
+                : step.state === "error"
+                  ? "text-destructive hover:bg-destructive/10"
+                    : "text-muted-foreground hover:bg-muted/70",
             ].join(" ")}
           >
             <span
               className={[
-                "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
+                "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-semibold transition-colors",
                 step.state === "current"
                   ? "border-burgundy bg-burgundy text-white"
                   : step.state === "complete"
-                    ? "border-green-200 bg-green-50 text-green-700"
+                    ? "status-success"
                     : step.state === "error"
-                      ? "border-red-200 bg-red-50 text-red-700"
-                      : "border-[var(--border)] bg-surface text-foreground/50 group-hover:border-burgundy/25",
+                      ? "border-destructive/25 bg-destructive/10 text-destructive"
+                      : "border-border bg-surface text-muted-foreground group-hover:border-burgundy/25",
               ].join(" ")}
             >
               {index + 1}
@@ -1304,15 +1455,15 @@ function ImportFlowStepper({
                   step.state === "current"
                     ? "text-burgundy"
                     : step.state === "complete"
-                      ? "text-green-700"
+                      ? "text-success-ink"
                       : step.state === "error"
-                        ? "text-red-700"
-                        : "text-foreground/58",
+                        ? "text-destructive"
+                        : "text-muted-foreground",
                 ].join(" ")}
               >
                 {step.label.replace(/^\d+\.\s*/, "")}
               </p>
-              <p className="mt-1 min-h-8 text-xs leading-4 text-foreground/58">{step.detail}</p>
+              <p className="mt-1 min-h-8 text-xs leading-4 text-muted-foreground">{step.detail}</p>
             </div>
           </div>
         ))}
@@ -1324,16 +1475,16 @@ function ImportFlowStepper({
 function StatusDot({ tone }: { tone: "idle" | "ready" | "importing" | "success" | "error" }) {
   const toneClass =
     tone === "error"
-      ? "bg-red-500"
+      ? "bg-destructive"
       : tone === "success"
-        ? "bg-green-500"
+        ? "bg-success-ink"
         : tone === "importing"
-          ? "animate-pulse bg-burgundy"
+          ? "bg-burgundy ring-2 ring-burgundy/20"
           : tone === "ready"
             ? "bg-burgundy"
             : "bg-foreground/35";
 
-  return <span className={["h-2.5 w-2.5 rounded-full", toneClass].join(" ")} aria-hidden="true" />;
+  return <span className={["size-2.5 rounded-full", toneClass].join(" ")} aria-hidden="true" />;
 }
 
 function RosterMetric({
@@ -1347,17 +1498,17 @@ function RosterMetric({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-green-700"
+      ? "text-success-ink"
       : tone === "warning"
-        ? "text-amber-700"
+        ? "text-warning-ink"
         : tone === "danger"
-          ? "text-red-700"
-          : "text-foreground";
+          ? "text-destructive"
+      : "text-foreground";
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-3 transition-all hover:border-burgundy/20 hover:bg-surface-muted hover:shadow-sm">
-      <p className="text-[11px] font-semibold text-foreground/50">{label}</p>
-      <p className={["mt-1 text-2xl font-semibold", toneClass].join(" ")}>{value}</p>
+    <div className="rounded-lg border border-border bg-muted/75 px-3 py-3 transition-colors hover:border-burgundy/20 hover:bg-surface">
+      <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
+      <p className={["mt-1 text-2xl font-semibold tabular-nums", toneClass].join(" ")}>{value}</p>
     </div>
   );
 }

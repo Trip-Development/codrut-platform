@@ -1,6 +1,11 @@
+import hmac
 from dataclasses import dataclass
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
+
+from PIL import Image, UnidentifiedImageError
 
 from codrut.core.config import Settings
 from codrut.core.errors import DomainError
@@ -29,6 +34,7 @@ def store_campaign_asset(
     content: bytes,
     content_type: str | None,
     original_file_name: str | None,
+    owner_id: UUID,
 ) -> CampaignAssetUpload:
     normalized_type = _normalize_content_type(content_type)
     extension = ALLOWED_CAMPAIGN_ASSET_TYPES.get(normalized_type)
@@ -46,13 +52,20 @@ def store_campaign_asset(
             code="campaign_asset_too_large",
         )
     _validate_image_signature(content, normalized_type)
+    normalized_content = _normalize_image(content, normalized_type, settings)
+    if len(normalized_content) > settings.campaign_asset_max_bytes:
+        raise DomainError(
+            "Imaginea procesată depășește limita permisă.",
+            code="campaign_asset_too_large",
+        )
 
     asset_dir = Path(settings.campaign_asset_dir)
     asset_dir.mkdir(parents=True, exist_ok=True)
     safe_stem = _safe_file_stem(original_file_name)
-    file_name = f"{safe_stem}-{uuid4().hex}{extension}"
+    owner_key = _asset_owner_key(settings, owner_id)
+    file_name = f"{safe_stem}-{owner_key}-{uuid4().hex}{extension}"
     destination = asset_dir / file_name
-    destination.write_bytes(content)
+    destination.write_bytes(normalized_content)
 
     public_path = settings.campaign_asset_public_path.rstrip("/")
     public_url = f"{settings.public_app_url.rstrip('/')}{public_path}/{file_name}"
@@ -60,8 +73,27 @@ def store_campaign_asset(
         url=public_url,
         file_name=file_name,
         content_type=normalized_type,
-        size_bytes=len(content),
+        size_bytes=len(normalized_content),
     )
+
+
+def delete_campaign_asset(
+    *,
+    settings: Settings,
+    file_name: str,
+    owner_id: UUID,
+) -> bool:
+    safe_name = Path(file_name).name
+    owner_marker = f"-{_asset_owner_key(settings, owner_id)}-"
+    if safe_name != file_name or owner_marker not in safe_name:
+        return False
+
+    destination = Path(settings.campaign_asset_dir) / safe_name
+    try:
+        destination.unlink()
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def _normalize_content_type(value: str | None) -> str:
@@ -75,6 +107,11 @@ def _safe_file_stem(value: str | None) -> str:
     cleaned = "".join(char if char.isalnum() else "-" for char in raw_name)
     compact = "-".join(part for part in cleaned.split("-") if part)
     return (compact or "thumbnail")[:MAX_FILENAME_LENGTH]
+
+
+def _asset_owner_key(settings: Settings, owner_id: UUID) -> str:
+    secret = settings.effective_campaign_asset_signing_secret.encode("utf-8")
+    return hmac.new(secret, str(owner_id).encode("ascii"), sha256).hexdigest()[:16]
 
 
 def _validate_image_signature(content: bytes, content_type: str) -> None:
@@ -95,3 +132,63 @@ def _validate_image_signature(content: bytes, content_type: str) -> None:
             "Conținutul fișierului nu corespunde formatului declarat.",
             code="campaign_asset_signature_invalid",
         )
+
+
+def _normalize_image(content: bytes, content_type: str, settings: Settings) -> bytes:
+    expected_format = {
+        "image/jpeg": "JPEG",
+        "image/png": "PNG",
+        "image/webp": "WEBP",
+        "image/gif": "GIF",
+    }[content_type]
+    try:
+        with Image.open(BytesIO(content)) as source:
+            if source.format != expected_format:
+                raise DomainError(
+                    "Conținutul fișierului nu corespunde formatului declarat.",
+                    code="campaign_asset_signature_invalid",
+                )
+            width, height = source.size
+            if (
+                width > settings.campaign_asset_max_width
+                or height > settings.campaign_asset_max_height
+                or width * height > settings.campaign_asset_max_pixels
+            ):
+                raise DomainError(
+                    "Imaginea depășește dimensiunile permise.",
+                    code="campaign_asset_dimensions_invalid",
+                )
+            source.seek(0)
+            source.load()
+            normalized = _image_for_storage(source, expected_format)
+    except DomainError:
+        raise
+    except (Image.DecompressionBombError, OSError, UnidentifiedImageError, ValueError) as exc:
+        raise DomainError(
+            "Imaginea nu a putut fi decodată.",
+            code="campaign_asset_decode_invalid",
+        ) from exc
+
+    output = BytesIO()
+    save_options: dict[str, object] = {"format": expected_format}
+    if expected_format == "JPEG":
+        save_options.update({"quality": 90, "optimize": True, "progressive": True})
+    elif expected_format == "PNG":
+        save_options.update({"optimize": True})
+    elif expected_format == "WEBP":
+        save_options.update({"quality": 90, "method": 4})
+    elif expected_format == "GIF":
+        save_options.update({"optimize": True})
+    normalized.save(output, **save_options)
+    return output.getvalue()
+
+
+def _image_for_storage(source: Image.Image, image_format: str) -> Image.Image:
+    # Rebuilding pixel data drops EXIF, comments, ICC profiles, and extra animation frames.
+    if image_format == "JPEG":
+        return source.convert("RGB")
+    if image_format == "GIF":
+        return source.convert("P", palette=Image.Palette.ADAPTIVE)
+    if source.mode in {"RGBA", "LA"} or "transparency" in source.info:
+        return source.convert("RGBA")
+    return source.convert("RGB")

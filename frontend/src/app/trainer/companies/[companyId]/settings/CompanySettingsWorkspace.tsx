@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2Icon, Trash2Icon } from "lucide-react";
 
 import { deleteCompany } from "@/api/companies";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
-type CompanySettingsWorkspaceProps = {
+export type CompanySettingsWorkspaceProps = {
   company: {
     id: string;
     name: string;
@@ -23,13 +34,16 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
   const [confirmation, setConfirmation] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const deletingRef = useRef(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const canDelete = confirmation.trim() === company.name;
+  const confirmationMatches = confirmation.trim() === company.name;
+  const canDelete = confirmationMatches && !isDeleting;
 
   async function handleDelete(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canDelete) return;
+    if (!canDelete || deletingRef.current) return;
 
+    deletingRef.current = true;
     setIsDeleting(true);
     setMessage(null);
     try {
@@ -38,105 +52,106 @@ export function CompanySettingsWorkspace({ company }: CompanySettingsWorkspacePr
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Compania nu a putut fi ștearsă.");
+      deletingRef.current = false;
       setIsDeleting(false);
     }
   }
 
   return (
-    <div className="space-y-5">
-      <section className="surface-panel p-5 md:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-surface-muted text-xl font-semibold text-burgundy shadow-sm">
-              {company.name.trim().charAt(0).toLocaleUpperCase("ro")}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-burgundy/75">Identitate companie</p>
-              <h2 className="mt-1 text-2xl font-semibold text-foreground">{company.name}</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-                Setările țin identitatea, sumarul operațional și acțiunile administrative ale companiei într-un singur loc.
-              </p>
-            </div>
-          </div>
-          <div className="rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground/62">
-            {company.stats.totalParticipants} participanți
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="flex flex-col gap-8">
+      <section className="border-b border-border pb-6">
+        <h2 className="text-2xl font-semibold text-foreground">{company.name}</h2>
+        <dl className="mt-5 flex flex-wrap gap-x-8 gap-y-3">
           <SettingStat label="Participanți" value={company.stats.totalParticipants} />
           <SettingStat label="Asignări" value={company.stats.totalAssignments} />
           <SettingStat label="Completate" value={company.stats.completedAssignments} />
           <SettingStat label="Rată completare" value={`${company.stats.completionRate}%`} />
-        </div>
+        </dl>
       </section>
 
-      <section className="surface-panel p-5 md:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <section className="max-w-3xl">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-foreground/52">Administrare</p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Acțiuni asupra companiei</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-              Acțiunile sensibile sunt separate de fluxul zilnic de participanți, organigramă și rezultate.
-            </p>
+            <h2 className="text-lg font-semibold text-foreground">Ștergere companie</h2>
           </div>
-          <button
+          <Button
             type="button"
+            variant={isDeleteOpen ? "outline" : "destructive"}
+            size="sm"
             onClick={() => setIsDeleteOpen((current) => !current)}
-            className="btn-danger-subtle min-h-10 px-4 py-2"
+            disabled={isDeleting}
           >
-            {isDeleteOpen ? "Închide ștergerea" : "Configurează ștergerea"}
-          </button>
+            <Trash2Icon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            {isDeleteOpen ? "Anulează" : "Șterge compania"}
+          </Button>
         </div>
 
         {isDeleteOpen ? (
-          <div className="status-panel-danger mt-5 p-4">
-            <p className="text-sm font-semibold">Șterge compania</p>
-            <p className="mt-2 text-sm leading-6 opacity-75">
-              Ștergerea elimină compania împreună cu participanții, organigrama, echipele, invitațiile și asignările legate de ea.
+          <div className="mt-5 border-l-2 border-destructive pl-4">
+            <p className="text-sm leading-6 text-muted-foreground">
+              Elimină compania, participanții, echipele, invitațiile și asignările legate de ea.
             </p>
 
-            <form onSubmit={handleDelete} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-end">
-              <label className="block text-sm font-semibold">
-                Scrie numele companiei pentru confirmare
-                <input
-                  value={confirmation}
-                  onChange={(event) => setConfirmation(event.target.value)}
-                  placeholder={company.name}
-                  className="status-input-danger mt-2 min-h-11 w-full px-4 py-2.5 placeholder:text-foreground/35"
-                />
-              </label>
-              <button
+            <form onSubmit={handleDelete} className="mt-4 flex flex-col gap-3" aria-busy={isDeleting}>
+              <FieldGroup className="gap-3">
+                <Field data-disabled={isDeleting ? true : undefined}>
+                  <FieldLabel htmlFor="company-delete-confirmation">
+                    Scrie numele companiei
+                  </FieldLabel>
+                  <Input
+                    id="company-delete-confirmation"
+                    value={confirmation}
+                    onChange={(event) => setConfirmation(event.target.value)}
+                    placeholder={company.name}
+                    disabled={isDeleting}
+                    aria-describedby="company-delete-confirmation-help"
+                    className="border-destructive/35 focus-visible:border-destructive focus-visible:ring-destructive/20"
+                  />
+                  <FieldDescription id="company-delete-confirmation-help">Acțiunea este definitivă.</FieldDescription>
+                </Field>
+              </FieldGroup>
+              <Button
                 type="submit"
                 disabled={!canDelete || isDeleting}
-                className={[
-                  "tap-soft inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2.5 text-sm font-bold shadow-sm disabled:cursor-not-allowed",
-                  canDelete
-                    ? "bg-red-700 text-white hover:bg-red-800"
-                    : "border border-[var(--border)] bg-surface text-foreground/35",
-                ].join(" ")}
+                variant="destructive"
+                className="w-full"
               >
-                {isDeleting ? "Se șterge..." : "Șterge compania"}
-              </button>
+                {isDeleting ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" strokeWidth={1.8} /> : null}
+                {isDeleting ? "Ștergem compania" : "Șterge definitiv"}
+              </Button>
             </form>
+            {isDeleting ? (
+              <OperationFeedback
+                className="mt-4"
+                tone="danger"
+                title="Ștergem compania"
+                detail="Eliminăm datele și revenim la lista de companii."
+              />
+            ) : null}
           </div>
         ) : null}
 
         {message ? (
-          <p aria-live="polite" className="status-panel-danger mt-3 px-3 py-2">
+          <InlineFeedback tone="danger" className="mt-3">
             {message}
-          </p>
+          </InlineFeedback>
         ) : null}
       </section>
     </div>
   );
 }
 
-function SettingStat({ label, value }: { label: string; value: string | number }) {
+function SettingStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3">
-      <p className="text-xs font-semibold text-foreground/48">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+    <div className="min-w-24">
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</dd>
     </div>
   );
 }

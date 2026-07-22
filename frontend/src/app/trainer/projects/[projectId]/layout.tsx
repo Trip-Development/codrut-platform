@@ -1,9 +1,13 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
-import { getCompanyProjectById } from "@/api/companies";
+import { getTrainerSession } from "@/api/auth-server";
+import { getCompanyProjectById, getProjectParticipants } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
+import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { ProjectTabs } from "./ProjectTabs";
 
 export default async function ProjectLayout({
@@ -13,8 +17,11 @@ export default async function ProjectLayout({
   children: React.ReactNode;
   params: Promise<{ projectId: string }>;
 }) {
-  const { projectId } = await params;
-  const requestOptions = await getServerApiRequestOptions();
+  const [{ projectId }, requestOptions, trainer] = await Promise.all([
+    params,
+    getServerApiRequestOptions(),
+    getTrainerSession(),
+  ]);
   const project = await getCompanyProjectById(projectId, requestOptions);
 
   if (!project) {
@@ -22,17 +29,33 @@ export default async function ProjectLayout({
   }
 
   const basePath = `/trainer/projects/${project.id}`;
+  const participants = await getProjectParticipants(
+    project.company_id,
+    project.id,
+    requestOptions,
+  );
 
   return (
     <AppShell
       audience="trainer"
-      eyebrow={project.company_name ?? "Proiect"}
+      eyebrow=""
       title={project.name}
-      description="Spațiu de lucru pentru roster, asignări, invitații, organigramă și rezultate în acest proiect."
+      description=""
       navItems={trainerNavItems}
       activeHref="/trainer/projects"
+      userLabel={trainer.user.name}
+      session={trainer}
+      headerActions={
+        <Link
+          href={`/trainer/companies/${project.company_id}`}
+          className={serverLinkButtonClassName({ variant: "outline" })}
+        >
+          <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+          Înapoi la companie
+        </Link>
+      }
     >
-      <ProjectTabs basePath={basePath} />
+      <ProjectTabs basePath={basePath} locked={participants.length === 0} />
       {children}
     </AppShell>
   );

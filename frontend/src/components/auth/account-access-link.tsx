@@ -12,6 +12,17 @@ type AccountAccessLinkProps = {
   authenticatedLabel?: ReactNode;
 };
 
+type AccountAccessSession = Awaited<ReturnType<typeof getAuthenticatedSession>>;
+
+let accountAccessSessionPromise: Promise<AccountAccessSession> | null = null;
+
+function getAccountAccessSession(): Promise<AccountAccessSession> {
+  accountAccessSessionPromise ??= getAuthenticatedSession().finally(() => {
+    accountAccessSessionPromise = null;
+  });
+  return accountAccessSessionPromise;
+}
+
 export function AccountAccessLink({
   className,
   children = "Intră în cont",
@@ -22,7 +33,7 @@ export function AccountAccessLink({
 
   useEffect(() => {
     let cancelled = false;
-    void getAuthenticatedSession().then((session) => {
+    void getAccountAccessSession().then((session) => {
       if (cancelled || !session) return;
       setHref(dashboardHrefForRole(session.user.role));
       setLabel(authenticatedLabel);

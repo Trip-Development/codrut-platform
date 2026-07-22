@@ -1,10 +1,11 @@
 import uuid
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from codrut.contracts.emails import (
     EmailDeliveryStatus,
@@ -27,6 +28,7 @@ from codrut.modules.assignments.schemas import AssignmentPlanSaveRequest
 from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.communications.email_provider import LocalEmailProvider
 from codrut.modules.communications.models import EmailSend, EmailSendStatus
+from codrut.modules.communications.service import TransactionalEmailService
 from codrut.modules.companies.hierarchy import HierarchyParticipant, build_organization_hierarchy
 from codrut.modules.companies.models import (
     Company,
@@ -69,12 +71,23 @@ class FailingEmailProvider(LocalEmailProvider):
         )
 
 
+def build_default_assignment_definitions(questionnaire_definition_factory):
+    return [
+        questionnaire_definition_factory(key)
+        for key in ("lencioni", "distress_drivers", "pcm_base", "boss_360")
+    ]
+
+
 class FakeSession:
     def add(self, _obj: Any) -> None:
         return None
 
     async def flush(self) -> None:
         return None
+
+    @asynccontextmanager
+    async def begin_nested(self):
+        yield
 
 
 class FakeCompanyRepository:
@@ -178,15 +191,18 @@ class FakeCompanyRepository:
         *,
         user_id: uuid.UUID | None = None,
     ) -> tuple[CompanyProject, str] | None:
-        company_ids = {
-            membership.company_id
-            for membership in self.memberships
-            if membership.user_id == user_id
-        } if user_id is not None else None
+        company_ids = (
+            {
+                membership.company_id
+                for membership in self.memberships
+                if membership.user_id == user_id
+            }
+            if user_id is not None
+            else None
+        )
         for project in self.projects:
-            if (
-                project.id == project_id
-                and (company_ids is None or project.company_id in company_ids)
+            if project.id == project_id and (
+                company_ids is None or project.company_id in company_ids
             ):
                 return project, self.companies_by_id[project.company_id].name
         return None
@@ -323,6 +339,27 @@ class FakeCompanyRepository:
     ) -> ParticipantProfile | None:
         for participant in self.participants:
             if participant.company_id == company_id and participant.email == email:
+                return participant
+        return None
+
+    async def get_unemailed_participant_by_roster_identity(
+        self,
+        company_id: uuid.UUID,
+        *,
+        full_name: str,
+        reports_to_name: str | None,
+        position: str | None,
+        location: str | None,
+    ) -> ParticipantProfile | None:
+        for participant in self.participants:
+            if (
+                participant.company_id == company_id
+                and participant.email is None
+                and participant.full_name == full_name
+                and participant.reports_to_name == reports_to_name
+                and participant.position == position
+                and participant.location == location
+            ):
                 return participant
         return None
 
@@ -489,7 +526,9 @@ async def test_get_project_by_id_can_still_filter_by_membership_for_future_tenan
 
 
 @pytest.mark.asyncio
-async def test_list_company_summaries_counts_roster_and_assignments_from_database() -> None:
+async def test_list_company_summaries_counts_roster_and_assignments_from_database(
+    questionnaire_definition_factory,
+) -> None:
     try:
         async with SessionLocal() as session:
             company = Company(id=uuid.uuid4(), name=f"Summary Company {uuid.uuid4().hex[:8]}")
@@ -514,7 +553,19 @@ async def test_list_company_summaries_counts_roster_and_assignments_from_databas
                 user_id=trainer.id,
                 role=CompanyMembershipRole.owner,
             )
-            session.add_all([company, trainer, membership, first_participant, second_participant])
+            lencioni_definition = questionnaire_definition_factory("lencioni")
+            distress_definition = questionnaire_definition_factory("distress_drivers")
+            session.add_all(
+                [
+                    company,
+                    trainer,
+                    membership,
+                    first_participant,
+                    second_participant,
+                    lencioni_definition,
+                    distress_definition,
+                ]
+            )
             await session.flush()
             session.add_all(
                 [
@@ -522,6 +573,7 @@ async def test_list_company_summaries_counts_roster_and_assignments_from_databas
                         company_id=company.id,
                         respondent_profile_id=first_participant.id,
                         questionnaire_key="lencioni",
+                        questionnaire_definition_id=lencioni_definition.id,
                         target_type=AssignmentTargetType.self_assessment,
                         status=AssignmentStatus.submitted,
                     ),
@@ -529,6 +581,7 @@ async def test_list_company_summaries_counts_roster_and_assignments_from_databas
                         company_id=company.id,
                         respondent_profile_id=second_participant.id,
                         questionnaire_key="distress_drivers",
+                        questionnaire_definition_id=distress_definition.id,
                         target_type=AssignmentTargetType.self_assessment,
                         status=AssignmentStatus.assigned,
                     ),
@@ -827,7 +880,7 @@ async def test_update_participant_changes_profile_and_project_membership_fields(
         owner_id,
         company.id,
         ParticipantCreateRequest(
-            full_name="Andrei Vacaru",
+            full_name="Alex Dima",
             email="andrei@example.com",
             reports_to_name="root",
             position="CEO",
@@ -1033,6 +1086,142 @@ async def test_import_roster_accepts_owner_spreadsheet_columns() -> None:
     assert participants[1].pcm_profile is None
 
 
+async def test_import_roster_preserves_rows_without_sendable_email() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    trainer = User(
+        id=uuid.uuid4(),
+        email="trainer@example.com",
+        password_hash=hash_password("trainer-password-123"),
+        role=UserRole.trainer,
+    )
+    company = await service.create_company(trainer.id, CompanyCreateRequest(name="Client"))
+    service.identity_repository.users_by_id[trainer.id] = trainer
+
+    rows = [
+        {
+            "Name": "Fără Email",
+            "Reports To": "",
+            "Position": "Manager",
+            "Location": "Bucharest",
+            "email": "",
+            "Profil PCM": "",
+        },
+        {
+            "Name": "Email Invalid",
+            "Reports To": "Fără Email",
+            "Position": "Member",
+            "Location": "Bucharest",
+            "email": "not-an-email",
+            "Profil PCM": "",
+        },
+        {
+            "Name": "Email Valid",
+            "Reports To": "Fără Email",
+            "Position": "Member",
+            "Location": "Bucharest",
+            "email": "valid@example.com",
+            "Profil PCM": "",
+        },
+    ]
+
+    result = await service.import_roster(
+        trainer.id,
+        company.id,
+        RosterImportRequest(rows=rows),
+    )
+
+    assert result.total_imported == 3
+    assert [participant.full_name for participant in result.participants] == [
+        "Fără Email",
+        "Email Invalid",
+        "Email Valid",
+    ]
+    assert [participant.email for participant in result.participants] == [
+        None,
+        None,
+        "valid@example.com",
+    ]
+    assert [participant.role_group for participant in result.participants] == [
+        "leadership",
+        "member",
+        "member",
+    ]
+
+    repeat_result = await service.import_roster(
+        trainer.id,
+        company.id,
+        RosterImportRequest(rows=rows),
+    )
+
+    assert repeat_result.total_imported == 3
+    assert [participant.id for participant in repeat_result.participants] == [
+        participant.id for participant in result.participants
+    ]
+    assert len(repository.participants) == 3
+
+
+async def test_send_participant_invites_skips_participants_without_sendable_email() -> None:
+    repository = FakeCompanyRepository()
+    identity_repository = FakeIdentityRepository()
+    service = make_service(repository, identity_repository)
+    trainer = User(
+        id=uuid.uuid4(),
+        email="trainer@example.com",
+        password_hash=hash_password("trainer-password-123"),
+        role=UserRole.trainer,
+    )
+    identity_repository.users_by_id[trainer.id] = trainer
+    company = await service.create_company(trainer.id, CompanyCreateRequest(name="Client"))
+    participant = await repository.add_participant(
+        ParticipantProfile(
+            company_id=company.id,
+            full_name="Fără Email",
+            email=None,
+            reports_to_name=None,
+            position="Manager",
+            location="Bucharest",
+            role_group="leadership",
+            anonymous_name="Participant 1",
+        )
+    )
+
+    result = await service.send_participant_invites(
+        trainer.id,
+        company.id,
+        ParticipantInviteBatchRequest(
+            participant_ids=[participant.id],
+            mode="email",
+            target_mode="selected",
+        ),
+    )
+
+    assert result.total == 1
+    assert result.emails_sent == 0
+    assert result.emails_failed == 1
+    assert result.results[0].participant_id == participant.id
+    assert result.results[0].email is None
+    assert result.results[0].email_sent is False
+    assert result.results[0].error == "Participantul nu are un email valid pentru invitații."
+
+    link_result = await service.send_participant_invites(
+        trainer.id,
+        company.id,
+        ParticipantInviteBatchRequest(
+            participant_ids=[participant.id],
+            mode="secure_links",
+            target_mode="selected",
+        ),
+    )
+
+    assert link_result.total == 1
+    assert link_result.links_generated == 0
+    assert link_result.emails_failed == 0
+    assert link_result.results[0].delivery_mode == "secure_links"
+    assert link_result.results[0].invite_url is None
+    assert link_result.results[0].error == "Participantul nu are un email valid pentru invitații."
+
+
 async def test_create_participant_cleans_top_level_reports_to_markers() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
@@ -1107,31 +1296,31 @@ async def test_import_roster_infers_managers_from_reports_to_names_without_posit
         RosterImportRequest(
             rows=[
                 {
-                    "Name": "Andrei Vacaru",
+                    "Name": "Alex Dima",
                     "Reports To": "",
                     "Location": "Bucharest",
-                    "email": "andrei.vacaru@tripdevelopment.ro",
+                    "email": "alex.dima@example.com",
                 },
                 {
-                    "Name": "Ilinca Corbu",
-                    "Reports To": "Andrei Vacaru",
+                    "Name": "Mara Ionescu",
+                    "Reports To": "Alex Dima",
                     "Location": "Bucharest",
-                    "email": "ilincacrb4825@gmail.com",
+                    "email": "mara.ionescu@example.com",
                 },
                 {
-                    "Name": "Member Vlad",
-                    "Reports To": "Ilinca Corbu",
+                    "Name": "Tudor Stan",
+                    "Reports To": "Mara Ionescu",
                     "Location": "Bucharest",
-                    "email": "vlad.soimu@yahoo.com",
+                    "email": "sorin.pavel@example.com",
                 },
             ]
         ),
     )
 
     participants_by_email = {participant.email: participant for participant in result.participants}
-    assert participants_by_email["andrei.vacaru@tripdevelopment.ro"].role_group == "leadership"
-    assert participants_by_email["ilincacrb4825@gmail.com"].role_group == "leadership"
-    assert participants_by_email["vlad.soimu@yahoo.com"].role_group == "member"
+    assert participants_by_email["alex.dima@example.com"].role_group == "leadership"
+    assert participants_by_email["mara.ionescu@example.com"].role_group == "leadership"
+    assert participants_by_email["sorin.pavel@example.com"].role_group == "member"
 
 
 async def test_import_roster_accepts_manual_project_leadership_overrides() -> None:
@@ -1184,15 +1373,18 @@ async def test_import_roster_accepts_manual_project_leadership_overrides() -> No
         for membership in repository.project_memberships
     }
     assert participants_by_email["titus@example.com"].reports_to_name is None
-    assert memberships_by_participant_id[
-        participants_by_email["mircea@example.com"].id
-    ].role_group == "leadership"
-    assert memberships_by_participant_id[
-        participants_by_email["veronica@example.com"].id
-    ].role_group == "leadership"
-    assert memberships_by_participant_id[
-        participants_by_email["consultant@example.com"].id
-    ].role_group == "member"
+    assert (
+        memberships_by_participant_id[participants_by_email["mircea@example.com"].id].role_group
+        == "leadership"
+    )
+    assert (
+        memberships_by_participant_id[participants_by_email["veronica@example.com"].id].role_group
+        == "leadership"
+    )
+    assert (
+        memberships_by_participant_id[participants_by_email["consultant@example.com"].id].role_group
+        == "member"
+    )
 
 
 async def test_update_project_participant_persists_leadership_override() -> None:
@@ -1420,7 +1612,9 @@ async def test_project_roster_reuses_company_participants_and_stores_project_con
 
 
 @pytest.mark.asyncio
-async def test_two_person_roster_generates_manager_member_default_plan() -> None:
+async def test_two_person_roster_generates_manager_member_default_plan(
+    questionnaire_definition_factory,
+) -> None:
     await engine.dispose()
     try:
         async with SessionLocal() as session:
@@ -1431,7 +1625,13 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
                 role=UserRole.trainer,
             )
             company = Company(id=uuid.uuid4(), name="Two Person Roster Company")
-            session.add_all([trainer, company])
+            session.add_all(
+                [
+                    trainer,
+                    company,
+                    *build_default_assignment_definitions(questionnaire_definition_factory),
+                ]
+            )
             await session.flush()
             session.add(
                 CompanyMembership(
@@ -1449,7 +1649,7 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
                 RosterImportRequest(
                     rows=[
                         {
-                            "Name": "Vlad Soimu Manager",
+                            "Name": "Sorin Pavel Manager",
                             "Reports To": "",
                             "Position": "Manager",
                             "Location": "Bucharest",
@@ -1457,8 +1657,8 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
                             "Profil PCM": "Gânditor",
                         },
                         {
-                            "Name": "Vlad Soimu Membru",
-                            "Reports To": "Vlad Soimu Manager",
+                            "Name": "Sorin Pavel Membru",
+                            "Reports To": "Sorin Pavel Manager",
                             "Position": "Membru echipă",
                             "Location": "Bucharest",
                             "email": "member@example.com",
@@ -1538,6 +1738,7 @@ async def test_two_person_roster_generates_manager_member_default_plan() -> None
 @pytest.mark.asyncio
 async def test_import_roster_creates_invites_and_rank_specific_email_flows(
     monkeypatch: pytest.MonkeyPatch,
+    questionnaire_definition_factory,
 ) -> None:
     provider = LocalEmailProvider()
 
@@ -1554,8 +1755,13 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
             role=UserRole.trainer,
         )
         company = Company(id=uuid.uuid4(), name="Roster Flow Company")
-        session.add(trainer)
-        session.add(company)
+        session.add_all(
+            [
+                trainer,
+                company,
+                *build_default_assignment_definitions(questionnaire_definition_factory),
+            ]
+        )
         await session.flush()
         session.add(
             CompanyMembership(
@@ -1577,7 +1783,7 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
                         "Reports To": "",
                         "Position": "Manager",
                         "Location": "Bucharest",
-                        "email": "andrei.vacaru@tripdevelopment.ro",
+                        "email": "alex.dima@example.com",
                         "Profil PCM": "",
                     },
                     {
@@ -1585,15 +1791,15 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
                         "Reports To": "",
                         "Position": "Manager",
                         "Location": "Bucharest",
-                        "email": "ilincacrb4825@gmail.com",
+                        "email": "mara.ionescu@example.com",
                         "Profil PCM": "",
                     },
                     {
-                        "Name": "Member Vlad",
+                        "Name": "Tudor Stan",
                         "Reports To": "Manager Andrei",
                         "Position": "Member",
                         "Location": "Bucharest",
-                        "email": "vlad.soimu@yahoo.com",
+                        "email": "sorin.pavel@example.com",
                         "Profil PCM": "",
                     },
                 ]
@@ -1622,13 +1828,17 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
         assert invite_result.scalars().all() == []
 
-        with pytest.raises(DomainError) as exc_info:
-            await service.send_participant_invites(
-                trainer.id,
-                company.id,
-                ParticipantInviteBatchRequest(mode="secure_links"),
-            )
-        assert exc_info.value.code == "no_assignments"
+        missing_assignment_result = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(mode="secure_links"),
+        )
+        assert missing_assignment_result.total == 3
+        assert missing_assignment_result.links_generated == 0
+        assert missing_assignment_result.emails_failed == 0
+        assert {result.error_code for result in missing_assignment_result.results} == {
+            "no_assignments"
+        }
 
         assignment_service = AssignmentService(session)
         plan = await assignment_service.build_default_assignment_plan(trainer.id, company.id)
@@ -1691,9 +1901,10 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
 
         assert email_result.total == 3
-        assert email_result.emails_sent == 3
+        assert email_result.emails_sent == 0
+        assert email_result.emails_queued == 3
         assert email_result.emails_failed == 0
-        assert len(provider.sent_messages) == 3
+        assert provider.sent_messages == []
         retry_email_result = await service.send_participant_invites(
             trainer.id,
             company.id,
@@ -1701,14 +1912,19 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
         assert retry_email_result.total == 0
         assert retry_email_result.emails_sent == 0
+        assert retry_email_result.emails_queued == 0
         assert retry_email_result.emails_failed == 0
-        assert len(provider.sent_messages) == 3
+        assert provider.sent_messages == []
         email_send_result = await session.execute(
-            select(EmailSend.template_key).where(EmailSend.recipient_email.in_([
-                "andrei.vacaru@tripdevelopment.ro",
-                "ilincacrb4825@gmail.com",
-                "vlad.soimu@yahoo.com",
-            ]))
+            select(EmailSend.template_key).where(
+                EmailSend.recipient_email.in_(
+                    [
+                        "alex.dima@example.com",
+                        "mara.ionescu@example.com",
+                        "sorin.pavel@example.com",
+                    ]
+                )
+            )
         )
         template_keys = email_send_result.scalars().all()
         assert template_keys.count("account_setup") == 2
@@ -1737,7 +1953,7 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
                         "Reports To": "",
                         "Position": "Manager",
                         "Location": "Bucharest",
-                        "email": "andrei.vacaru@tripdevelopment.ro",
+                        "email": "alex.dima@example.com",
                         "Profil PCM": "",
                     },
                     {
@@ -1745,15 +1961,15 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
                         "Reports To": "",
                         "Position": "Manager",
                         "Location": "Bucharest",
-                        "email": "ilincacrb4825@gmail.com",
+                        "email": "mara.ionescu@example.com",
                         "Profil PCM": "",
                     },
                     {
-                        "Name": "Member Vlad",
+                        "Name": "Tudor Stan",
                         "Reports To": "Manager Andrei",
                         "Position": "Member",
                         "Location": "Bucharest",
-                        "email": "vlad.soimu@yahoo.com",
+                        "email": "sorin.pavel@example.com",
                         "Profil PCM": "",
                     },
                 ]
@@ -1779,8 +1995,7 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         invites = invite_result.scalars().all()
         assert len(invites) == 3
         assert all(
-            invite.expires_at >= datetime.now(UTC) + timedelta(days=3600)
-            for invite in invites
+            invite.expires_at >= datetime.now(UTC) + timedelta(days=3600) for invite in invites
         )
 
         statuses = await service.list_participant_invitation_statuses(
@@ -1791,7 +2006,7 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         assert len(statuses_by_participant) == 3
         assert all(status.has_active_secure_link for status in statuses_by_participant.values())
         assert all(
-            status.latest_email_status == EmailSendStatus.accepted
+            status.latest_email_status == EmailSendStatus.queued
             for status in statuses_by_participant.values()
         )
         assert all(status.email_send_count == 1 for status in statuses_by_participant.values())
@@ -1884,10 +2099,108 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         )
 
         await session.rollback()
+    await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_send_project_invites_uses_earliest_project_close_or_due_date() -> None:
+async def test_invitation_batch_rolls_back_failed_recipient_and_continues(
+    monkeypatch: pytest.MonkeyPatch,
+    questionnaire_definition_factory,
+) -> None:
+    original_send = TransactionalEmailService.send_assignment_invitation
+    call_count = 0
+
+    async def fail_first_send(self, *args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            assert self.session is not None
+            await self.session.execute(text("SELECT * FROM codrut_missing_health_test_table"))
+        return await original_send(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        TransactionalEmailService,
+        "send_assignment_invitation",
+        fail_first_send,
+    )
+
+    async with SessionLocal() as session:
+        trainer = User(
+            id=uuid.uuid4(),
+            email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("trainer-password-123"),
+            role=UserRole.trainer,
+        )
+        company = Company(id=uuid.uuid4(), name=f"Invite savepoint {uuid.uuid4().hex[:8]}")
+        session.add_all(
+            [
+                trainer,
+                company,
+                *build_default_assignment_definitions(questionnaire_definition_factory),
+            ]
+        )
+        await session.flush()
+        session.add(
+            CompanyMembership(
+                company_id=company.id,
+                user_id=trainer.id,
+                role=CompanyMembershipRole.owner,
+            )
+        )
+        service = CompanyService(session)
+        roster = await service.import_roster(
+            trainer.id,
+            company.id,
+            RosterImportRequest(
+                rows=[
+                    {
+                        "Name": "Participant One",
+                        "email": "participant-one@example.com",
+                    },
+                    {
+                        "Name": "Participant Two",
+                        "email": "participant-two@example.com",
+                    },
+                ]
+            ),
+        )
+        assignment_service = AssignmentService(session)
+        plan = await assignment_service.build_default_assignment_plan(trainer.id, company.id)
+        await assignment_service.save_assignment_plan(
+            trainer.id,
+            company.id,
+            AssignmentPlanSaveRequest(
+                assignments=[item.model_dump() for item in plan.assignments],
+            ),
+        )
+
+        result = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(
+                participant_ids=[participant.id for participant in roster.participants],
+                mode="email",
+                target_mode="selected",
+            ),
+        )
+
+        assert result.total == 2
+        assert result.results[0].error_code == "invitation_persistence_error"
+        assert "missing_health_test_table" not in (result.results[0].error or "")
+        assert result.results[1].email_queued is True
+        await session.flush()
+        invite_result = await session.execute(
+            select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
+        )
+        assert len(invite_result.scalars().all()) == 1
+        await session.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_send_project_invites_uses_earliest_project_close_or_due_date(
+    questionnaire_definition_factory,
+) -> None:
     await engine.dispose()
     try:
         async with SessionLocal() as session:
@@ -1912,7 +2225,8 @@ async def test_send_project_invites_uses_earliest_project_close_or_due_date() ->
                 full_name="Ana Window",
                 anonymous_name="Participant 1",
             )
-            session.add_all([trainer, company, project, participant])
+            definition = questionnaire_definition_factory("lencioni")
+            session.add_all([trainer, company, project, participant, definition])
             await session.flush()
             session.add_all(
                 [
@@ -1932,6 +2246,7 @@ async def test_send_project_invites_uses_earliest_project_close_or_due_date() ->
                         project_id=project.id,
                         respondent_profile_id=participant.id,
                         questionnaire_key="lencioni",
+                        questionnaire_definition_id=definition.id,
                         target_type=AssignmentTargetType.self_assessment,
                         status=AssignmentStatus.assigned,
                         due_at=datetime.now(UTC) + timedelta(days=10),
@@ -1958,7 +2273,134 @@ async def test_send_project_invites_uses_earliest_project_close_or_due_date() ->
 
 
 @pytest.mark.asyncio
-async def test_send_project_invites_rejects_closed_project_window() -> None:
+async def test_prior_email_in_another_project_does_not_turn_first_delivery_into_reminder(
+    monkeypatch: pytest.MonkeyPatch,
+    questionnaire_definition_factory,
+) -> None:
+    provider = LocalEmailProvider()
+    monkeypatch.setattr(
+        "codrut.modules.communications.email_provider.build_email_provider",
+        lambda _settings: provider,
+    )
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name="Project Delivery Scope Company")
+            first_project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="First project",
+            )
+            second_project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Second project",
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                email=f"shared-{uuid.uuid4().hex[:8]}@example.com",
+                full_name="Shared Participant",
+                anonymous_name="Participant 1",
+                role_group="member",
+            )
+            definition = questionnaire_definition_factory("lencioni")
+            first_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=first_project.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.invited,
+            )
+            second_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=second_project.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.assigned,
+            )
+            session.add_all([trainer, company, definition])
+            await session.flush()
+            session.add_all([first_project, second_project, participant])
+            await session.flush()
+            session.add_all([first_assignment, second_assignment])
+            await session.flush()
+            session.add_all(
+                [
+                    CompanyMembership(
+                        company_id=company.id,
+                        user_id=trainer.id,
+                        role=CompanyMembershipRole.owner,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=first_project.id,
+                        participant_profile_id=participant.id,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=second_project.id,
+                        participant_profile_id=participant.id,
+                    ),
+                    EmailSend(
+                        assignment_id=first_assignment.id,
+                        recipient_email=participant.email,
+                        template_key="assignment_bundle",
+                        template_version=1,
+                        provider="test",
+                        provider_message_id="first-project-message",
+                        idempotency_key=f"first-project-{uuid.uuid4().hex}",
+                        payload_fingerprint=uuid.uuid4().hex,
+                        message_payload=None,
+                        attempt_count=1,
+                        max_attempts=5,
+                        next_attempt_at=None,
+                        status=EmailSendStatus.accepted,
+                        last_event_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            await session.flush()
+
+            result = await CompanyService(session).send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(
+                    participant_ids=[participant.id],
+                    project_id=second_project.id,
+                    mode="email",
+                    target_mode="selected",
+                ),
+            )
+
+            assert result.emails_queued == 1
+            send_result = await session.execute(
+                select(EmailSend).where(EmailSend.assignment_id == second_assignment.id)
+            )
+            second_project_send = send_result.scalar_one()
+            assert second_project_send.template_key == "assignment_bundle"
+            assert second_project_send.message_payload["delivery_kind"] == "invitation"
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_send_project_invites_rejects_closed_project_window(
+    questionnaire_definition_factory,
+) -> None:
     await engine.dispose()
     try:
         async with SessionLocal() as session:
@@ -1983,7 +2425,8 @@ async def test_send_project_invites_rejects_closed_project_window() -> None:
                 full_name="Ana Closed",
                 anonymous_name="Participant 1",
             )
-            session.add_all([trainer, company, project, participant])
+            definition = questionnaire_definition_factory("lencioni")
+            session.add_all([trainer, company, project, participant, definition])
             await session.flush()
             session.add_all(
                 [
@@ -2003,6 +2446,7 @@ async def test_send_project_invites_rejects_closed_project_window() -> None:
                         project_id=project.id,
                         respondent_profile_id=participant.id,
                         questionnaire_key="lencioni",
+                        questionnaire_definition_id=definition.id,
                         target_type=AssignmentTargetType.self_assessment,
                         status=AssignmentStatus.assigned,
                     ),
@@ -2028,8 +2472,9 @@ async def test_send_project_invites_rejects_closed_project_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resend_invite_failure_preserves_existing_active_link(
+async def test_resend_invite_enqueue_preserves_existing_active_link(
     monkeypatch: pytest.MonkeyPatch,
+    questionnaire_definition_factory,
 ) -> None:
     provider = FailingEmailProvider()
     monkeypatch.setattr(
@@ -2047,7 +2492,13 @@ async def test_resend_invite_failure_preserves_existing_active_link(
                 role=UserRole.trainer,
             )
             company = Company(id=uuid.uuid4(), name="Resend Failure Company")
-            session.add_all([trainer, company])
+            session.add_all(
+                [
+                    trainer,
+                    company,
+                    *build_default_assignment_definitions(questionnaire_definition_factory),
+                ]
+            )
             await session.flush()
             session.add(
                 CompanyMembership(
@@ -2102,8 +2553,18 @@ async def test_resend_invite_failure_preserves_existing_active_link(
             resend_result = await service.resend_invite(trainer.id, company.id, participant.id)
 
             assert resend_result.emails_sent == 0
-            assert resend_result.emails_failed == 1
-            assert provider.sent_messages
+            assert resend_result.emails_queued == 1
+            assert resend_result.emails_failed == 0
+            assert provider.sent_messages == []
+
+            send_result = await session.execute(
+                select(EmailSend).where(
+                    EmailSend.recipient_email == participant.email,
+                    EmailSend.assignment_id.is_not(None),
+                )
+            )
+            queued_send = send_result.scalar_one()
+            assert queued_send.status == EmailSendStatus.queued
 
             invite_result = await session.execute(
                 select(AssignmentInvite).where(AssignmentInvite.company_id == company.id)
@@ -2158,7 +2619,7 @@ async def test_access_code_registration_is_disabled_for_public_profile_claims() 
             CompanyAccessCodeRegistrationRequest(
                 email="ANA@example.com",
                 access_code=code.code.lower(),
-                **{"password": "Correct1!"},
+                **{"password": "Correct horse 1!"},
             )
         )
 
@@ -2183,7 +2644,7 @@ async def test_access_code_registration_uses_generic_error_for_invalid_match() -
             CompanyAccessCodeRegistrationRequest(
                 email="missing@example.com",
                 access_code=code.code,
-                **{"password": "Correct1!"},
+                **{"password": "Correct horse 1!"},
             )
         )
 
@@ -2196,7 +2657,7 @@ async def test_access_code_registration_rejects_invalid_code_generically() -> No
             CompanyAccessCodeRegistrationRequest(
                 email="missing@example.com",
                 access_code="WRONG-CODE",
-                **{"password": "Correct1!"},
+                **{"password": "Correct horse 1!"},
             )
         )
 
@@ -2223,7 +2684,7 @@ async def test_access_code_registration_rejects_claimed_profile_generically() ->
             CompanyAccessCodeRegistrationRequest(
                 email="ana@example.com",
                 access_code=code.code.replace("-", ""),
-                **{"password": "Correct1!"},
+                **{"password": "Correct horse 1!"},
             )
         )
 

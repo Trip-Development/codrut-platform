@@ -1,6 +1,7 @@
 import { apiFetch } from "./http";
 import { getApiBaseUrl, isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 import type { ApiRequestOptions } from "./companies";
+import type { components } from "./generated/schema";
 
 export type EmailSurfaceStub = {
   id: string;
@@ -21,342 +22,71 @@ export type EmailTemplate = {
   placeholders: string[];
 };
 
-const CATALOG_SHELL_OPEN =
-  '<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:0 auto;padding:28px;color:#2b211f;"><div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;background:#fffdfb;"><p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;letter-spacing:.08em;text-transform:uppercase;">Andrei Văcaru</p>';
-const CATALOG_SHELL_CLOSE = "</div></div>";
-const PROMO_SHELL_CLOSE =
-  '</div><div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;font-size:12px;line-height:1.5;color:#8c7e7b;text-align:center;"><p style="margin:0 0 8px;">Ai primit acest email deoarece ești abonat la actualizările noastre sau ești un client.</p><p style="margin:0 0 8px;"><a href="{unsubscribe_url}" style="color:#6d5f5b;text-decoration:underline;">Dezabonare</a></p><p style="margin:0;">Str. Exemplu Nr. 10, București, România</p></div></div>';
-const CAMPAIGN_PLACEHOLDERS = ["{first_name}", "{landing_page_url}", "{thumbnail_url}", "{calendly_url}", "{unsubscribe_url}"];
-const EVALUATION_PLACEHOLDERS = ["{participant_name}", "{company_name}", "{action_url}", "{due_date}", "{sender_name}"];
+type EmailTemplateResponse = components["schemas"]["EmailTemplateResponse"];
 
-function catalogParagraphs(...items: string[]) {
-  return items.map((item) => `<p style="margin:0 0 18px;font-size:15px;line-height:1.65;">${item}</p>`).join("");
-}
-
-function catalogBullets(...items: string[]) {
-  const rows = items
-    .map((item) => {
-      const hasMarker = item.startsWith("✓") || item.startsWith("✗");
-      const marker = hasMarker ? item.slice(0, 1) : "•";
-      const body = hasMarker ? item.slice(1).trim() : item;
-      return `<tr><td style="width:24px;padding:0 8px 8px 0;vertical-align:top;color:#890505;font-weight:700;">${marker}</td><td style="padding:0 0 8px;vertical-align:top;">${body}</td></tr>`;
-    })
-    .join("");
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 18px;font-size:15px;line-height:1.65;border-collapse:collapse;">${rows}</table>`;
-}
-
-function catalogButton(label: string, href: string = "{action_url}") {
-  return `<p style="margin:24px 0;"><a href="${href}" style="display:inline-block;background:#890505;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:700;">${label}</a></p><p style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;">Link platformă: <a href="${href}" style="color:#890505;text-decoration:underline;">${href}</a></p>`;
-}
-
-function calendlyButton(label: string) {
-  return `<p style="margin:24px 0;"><a href="{calendly_url}" data-codrut-cta="calendly" style="display:inline-block;background:#890505;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-weight:700;">${label}</a></p>`;
-}
-
-function videoCard(alt: string) {
-  return `<p style="margin:24px 0;"><a href="{landing_page_url}" style="display:block;text-decoration:none;color:inherit;"><span style="display:block;position:relative;max-width:420px;border-radius:14px;overflow:hidden;background:#2b211f;"><img src="{thumbnail_url}" alt="${alt}" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" /><span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span></span></a></p>`;
-}
+const SYNTHETIC_CAMPAIGN_PLACEHOLDERS = [
+  "{first_name}",
+  "{landing_page_url}",
+  "{thumbnail_url}",
+  "{unsubscribe_url}",
+  "{legal_address}",
+];
+const SYNTHETIC_EVALUATION_PLACEHOLDERS = [
+  "{participant_name}",
+  "{company_name}",
+  "{action_url}",
+  "{due_date}",
+  "{sender_name}",
+];
 
 const SEEDED_TEMPLATES: EmailTemplate[] = [
   {
-    id: "promo_past_report_2022_2025@9",
-    baseKey: "promo_past_report_2022_2025",
-    version: 9,
-    name: "Promo clienți vechi - raport 2022-2025",
-    subject: "Raportul de activitate pe care nu l-a cerut nimeni",
+    id: "preview_campaign_update@1",
+    baseKey: "preview_campaign_update",
+    version: 1,
+    name: "Mostră campanie: actualizare",
+    subject: "Actualizare demonstrativă pentru {first_name}",
     lane: "campaign",
     audience: "campaign:past_customer",
-    placeholders: CAMPAIGN_PLACEHOLDERS,
-    body:
-      CATALOG_SHELL_OPEN +
-      '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Raportul de activitate pe care nu l-a cerut nimeni</h1>' +
-      '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">{first_name},</p>' +
-      catalogParagraphs(
-        "Nu mi-ai cerut niciun update. Dar ți-l dau oricum, pentru că am 3 ani de freelancing și tu ești unul dintre oamenii pe care îmi doresc să îi revăd.",
-        "Andrei Văcaru. Raport 2022–2025. Nesolicitat dar sincer.",
-      ) +
-      catalogBullets(
-        "✓ A supraviețuit tranziției la freelancing fără episoade dramatice majore",
-        "✓ A obținut o certificare în Process Communication Model - pentru a duce comunicarea și înțelegerea personalității umane la următorul nivel",
-        "✓ A construit Influencing Skills for Trusted Stakeholder Partnerships - un program de 3 zile despre cum influențezi oameni fără să devii un personaj pe care nu ți-ar plăcea să îl întâlnești la o negociere",
-        "✓ A construit Născut pentru a Învinge - un program despre mintea subconștientă, starea de bine și de ce sabotăm exact ce ne dorim",
-        "✓ A adăugat în 2025 certificarea în Rapid Transformation Therapy by Marisa Peer - pentru ca rezultatele să fie cât mai rapide",
-        "✓ A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală (cel puțin nimeni pe care l-a văzut)",
-        "✗ A neglijat să se reconecteze cu oameni cu care a lucrat bine",
-      ) +
-      catalogParagraphs(
-        "Ultimul punct e motivul pentru care ești pe lista mea de primit emailul ăsta.",
-        "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.",
-      ) +
-      videoCard("Video — 2 minute, mai interesante decât raportul de mai sus") +
-      catalogParagraphs("Aici ai calendarul meu:") +
-      calendlyButton("Alege un slot în Calendly") +
-      catalogParagraphs("Sau dă reply acestui email și revin eu cu propuneri de întâlnire.", "Andrei") +
-      PROMO_SHELL_CLOSE,
-    textBody:
-      "{first_name},\n\n" +
-      "Nu mi-ai cerut niciun update. Dar ți-l dau oricum, pentru că am 3 ani de freelancing și tu ești unul dintre oamenii pe care îmi doresc să îi revăd.\n\n" +
-      "Andrei Văcaru. Raport 2022–2025. Nesolicitat dar sincer.\n" +
-      "✓ A supraviețuit tranziției la freelancing fără episoade dramatice majore\n" +
-      "✓ A obținut o certificare în Process Communication Model - pentru a duce comunicarea și înțelegerea personalității umane la următorul nivel\n" +
-      "✓ A construit Influencing Skills for Trusted Stakeholder Partnerships - un program de 3 zile despre cum influențezi oameni fără să devii un personaj pe care nu ți-ar plăcea să îl întâlnești la o negociere\n" +
-      "✓ A construit Născut pentru a Învinge - un program despre mintea subconștientă, starea de bine și de ce sabotăm exact ce ne dorim\n" +
-      "✓ A adăugat în 2025 certificarea în Rapid Transformation Therapy by Marisa Peer - pentru ca rezultatele să fie cât mai rapide\n" +
-      "✓ A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală (cel puțin nimeni pe care l-a văzut)\n" +
-      "✗ A neglijat să se reconecteze cu oameni cu care a lucrat bine\n\n" +
-      "Ultimul punct e motivul pentru care ești pe lista mea de primit emailul ăsta.\n" +
-      "Nu am nimic de vândut. Am chef de o conversație cu cineva care știe deja cum lucrez.\n" +
-      "Video: {landing_page_url}\n" +
-      "Alege un slot în Calendly: {calendly_url}\n" +
-      "Sau dă reply acestui email și revin eu cu propuneri de întâlnire.\n\n" +
-      "Andrei\n\n" +
-      "Dezabonare: {unsubscribe_url}",
+    placeholders: SYNTHETIC_CAMPAIGN_PLACEHOLDERS,
+    body: '<h1>Actualizare demonstrativă</h1><p>Salut, {first_name}. Acesta este conținut sintetic pentru verificarea editorului.</p><p><a href="{landing_page_url}">Deschide materialul demonstrativ</a></p><p><a href="{unsubscribe_url}">Dezabonare</a></p><p>{legal_address}</p>',
+    textBody: "Salut, {first_name}. Acesta este conținut sintetic pentru verificarea editorului. Material: {landing_page_url}. Dezabonare: {unsubscribe_url}. {legal_address}",
   },
   {
-    id: "promo_past_reactivation@9",
-    baseKey: "promo_past_reactivation",
-    version: 9,
-    name: "Promo clienți vechi - reactivare",
-    subject: "Departamentul de Reconectări Nesolicitate",
-    lane: "campaign",
-    audience: "campaign:past_customer",
-    placeholders: [...CAMPAIGN_PLACEHOLDERS, "{company_name}"],
-    body:
-      CATALOG_SHELL_OPEN +
-      '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Relația profesională poate fi reactivată</h1>' +
-      '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Salut, {first_name}.</p>' +
-      catalogParagraphs(
-        "Îți scriu pentru a te informa că relația profesională cu Andrei Văcaru a fost marcată ca inactivă în sistem.",
-        "Conform datelor disponibile, ultima interacțiune cu {company_name} a avut loc în urmă cu mai mult timp decât ar fi trebuit.",
-        "Motivul identificat: acel fenomen comun denumit viață ocupată, timp puțin.",
-        "Ai la dispoziție două opțiuni:",
-      ) +
-      catalogBullets(
-        "Opțiunea A: Ignoră emailul. Relația se arhivează automat. Andrei supraviețuiește. Tu la fel. Toată lumea merge mai departe.",
-        "Opțiunea B: Reactivează contul printr-o cafea, un apel sau 30 de minute de Zoom în care nimeni nu vinde nimic și toată lumea pleacă cu ceva util.",
-      ) +
-      catalogParagraphs(
-        "<strong>Datele cont:</strong>",
-        "Titular: Andrei Văcaru.",
-        "Status: freelancer din 2022, certificat PCM, certificat Rapid Transformation Therapy by Marisa Peer (2025), 1200+ sesiuni livrate, două programe noi super faine și perfecte pentru echipa ta, construite de la zero.",
-        "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.",
-      ) +
-      calendlyButton("Alege un slot în Calendly") +
-      catalogParagraphs("Dă reply sau alege un slot și revin eu cu un email pentru stabilirea unei întâlniri.") +
-      videoCard("Vezi ce s-a întâmplat cu contul în ultimii 3 ani — 2 minute") +
-      catalogParagraphs("Andrei Văcaru") +
-      PROMO_SHELL_CLOSE,
-    textBody:
-      "Salut, {first_name}.\n\n" +
-      "Îți scriu pentru a te informa că relația profesională cu Andrei Văcaru a fost marcată ca inactivă în sistem.\n" +
-      "Conform datelor disponibile, ultima interacțiune cu {company_name} a avut loc în urmă cu mai mult timp decât ar fi trebuit.\n" +
-      "Motivul identificat: acel fenomen comun denumit viață ocupată, timp puțin.\n\n" +
-      "Ai la dispoziție două opțiuni:\n" +
-      "• Opțiunea A: Ignoră emailul. Relația se arhivează automat. Andrei supraviețuiește. Tu la fel. Toată lumea merge mai departe.\n" +
-      "• Opțiunea B: Reactivează contul printr-o cafea, un apel sau 30 de minute de Zoom în care nimeni nu vinde nimic și toată lumea pleacă cu ceva util.\n\n" +
-      "Datele cont:\n" +
-      "Titular: Andrei Văcaru.\n" +
-      "Status: freelancer din 2022, certificat PCM, certificat Rapid Transformation Therapy by Marisa Peer (2025), 1200+ sesiuni livrate, două programe noi super faine și perfecte pentru echipa ta, construite de la zero.\n" +
-      "Motive de reactivare recomandate: curiozitate, chef de o discuție bună.\n\n" +
-      "Alege un slot în Calendly: {calendly_url}\n" +
-      "Dă reply sau alege un slot și revin eu cu un email pentru stabilirea unei întâlniri.\n" +
-      "Video: {landing_page_url}\n\n" +
-      "Andrei Văcaru\n\n" +
-      "Dezabonare: {unsubscribe_url}",
-  },
-  {
-    id: "promo_current_programs@9",
-    baseKey: "promo_current_programs",
-    version: 9,
-    name: "Promo clienți existenți - programe noi",
-    subject: "Acesta nu e un email de vânzare. (Dar dacă era, era bun.)",
-    lane: "campaign",
-    audience: "campaign:past_customer",
-    placeholders: CAMPAIGN_PLACEHOLDERS,
-    body:
-      CATALOG_SHELL_OPEN +
-      '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Am terminat ceva și vreau să îți arăt</h1>' +
-      '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Salut, {first_name}.</p>' +
-      catalogParagraphs(
-        'Știu ce crezi: "Andrei vrea ceva."',
-        "Nu. Andrei a terminat ceva și vrea să îți arate.",
-        "În ultimele luni am construit două programe noi care m-au ținut treaz noaptea — nu de stres, ci de entuziasm, ceea ce e mult mai periculos.",
-        "Programul 1: Influencing Skills — cum să convingi oameni fără să te simți că ești un politician în campanie electorală. Cu PCM, cu Cialdini, cu stakeholder maps și conversații dificile.",
-        "Programul 2: Născut pentru a Învinge — mind & well-being pentru oameni care nu vor corporate yoga. Scenarii de viață, subconștient, stări alterate, RTT (Rapid Transformation Therapy by Marisa Peer, proaspăt certificat în 2025). Genul de training după care oamenii sună acasă și zic că au înțeles ceva despre ei înșiși.",
-        "A, încă un lucru: am dezvoltat un companion digital dotat cu inteligență artificială care este de-a dreptul fabulos pentru că va ajuta la testarea cunoștințelor, va face role-play cu participanții și va măsura evoluția lor în timp.",
-        "Am făcut și un video scurt. E mai bun decât emailul ăsta.",
-      ) +
-      videoCard("Uită-te. 2 minute. Promit că nu cântă nimeni.") +
-      catalogParagraphs("Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu:") +
-      calendlyButton("Alege un slot în Calendly") +
-      catalogParagraphs("Sau dă reply și revin eu cu niște propuneri de întâlnire.", "Zi faină să ai!", "Andrei") +
-      PROMO_SHELL_CLOSE,
-    textBody:
-      "Salut, {first_name}.\n\n" +
-      'Știu ce crezi: "Andrei vrea ceva."\n' +
-      "Nu. Andrei a terminat ceva și vrea să îți arate.\n\n" +
-      "În ultimele luni am construit două programe noi care m-au ținut treaz noaptea — nu de stres, ci de entuziasm, ceea ce e mult mai periculos.\n" +
-      "Programul 1: Influencing Skills — cum să convingi oameni fără să te simți că ești un politician în campanie electorală. Cu PCM, cu Cialdini, cu stakeholder maps și conversații dificile.\n" +
-      "Programul 2: Născut pentru a Învinge — mind & well-being pentru oameni care nu vor corporate yoga. Scenarii de viață, subconștient, stări alterate, RTT (Rapid Transformation Therapy by Marisa Peer, proaspăt certificat în 2025). Genul de training după care oamenii sună acasă și zic că au înțeles ceva despre ei înșiși.\n" +
-      "A, încă un lucru: am dezvoltat un companion digital dotat cu inteligență artificială care este de-a dreptul fabulos pentru că va ajuta la testarea cunoștințelor, va face role-play cu participanții și va măsura evoluția lor în timp.\n\n" +
-      "Am făcut și un video scurt. E mai bun decât emailul ăsta.\n" +
-      "Video: {landing_page_url}\n" +
-      "Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu:\n" +
-      "Alege un slot în Calendly: {calendly_url}\n" +
-      "Sau dă reply și revin eu cu niște propuneri de întâlnire.\n\n" +
-      "Zi faină să ai!\nAndrei\n\n" +
-      "Dezabonare: {unsubscribe_url}",
-  },
-  {
-    id: "promo_potential_intro@9",
-    baseKey: "promo_potential_intro",
-    version: 9,
-    name: "Promo prospect - prima interacțiune",
-    subject: "Asta e un spam, dar e un spam bun. Nu am avut cum să fac altfel prima interacțiune.",
+    id: "preview_campaign_intro@1",
+    baseKey: "preview_campaign_intro",
+    version: 1,
+    name: "Mostră campanie: introducere",
+    subject: "Mesaj demonstrativ pentru {first_name}",
     lane: "campaign",
     audience: "campaign:potential_customer",
-    placeholders: CAMPAIGN_PLACEHOLDERS,
-    body:
-      CATALOG_SHELL_OPEN +
-      '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">O întrebare despre influență, comunicare și presiune</h1>' +
-      '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Salut, {first_name}.</p>' +
-      catalogParagraphs(
-        "Serios. Dacă totul merge perfect: stakeholderii sunt încântați, conversațiile dificile se rezolvă singure și toată lumea pleacă din ședințe motivată - închide acum. Nu am nimic pentru tine.",
-        "Dacă continui să citești, bun.",
-        "Înseamnă că recunoști acel moment specific: ședința în care ai știut exact ce trebuia spus și tot nu a ieșit cum trebuia. Prezentarea pregătită perfect care nu a convins pe nimeni. Colegul sau stakeholderul față de care simți că vorbești o limbă diferită deși amândoi vorbiți română.",
-        "Eu lucrez cu exact spațiul ăla.",
-        "Mă numesc Andrei Văcaru. 13 ani jurnalist TV. 10 ani trainer. 1200+ sesiuni. 15000+ oameni. Certificat PCM și din 2025 certificat în Rapid Transformation Therapy by Marisa Peer — care înseamnă că știu nu doar ce face un om, ci de ce continuă să o facă deși știe că nu îl ajută.",
-        "Nu am un pitch. Am o întrebare: dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea, ce ar fi?",
-        "Poți răspunde la emailul ăsta și stabilim o întâlnire de 30 sau 60 de minute. Sau, dacă preferi o conversație online:",
-      ) +
-      calendlyButton("Alege un slot în Calendly") +
-      catalogParagraphs("Fără obligații, fără vânzare. În cel mai rău caz, o discuție bună.") +
-      videoCard("Sau uită-te mai întâi la 2 minute de video - ca să știi cu cine vorbești") +
-      catalogParagraphs("Zi faină să ai!", "Andrei Văcaru") +
-      PROMO_SHELL_CLOSE,
-    textBody:
-      "Salut, {first_name}.\n\n" +
-      "Serios. Dacă totul merge perfect: stakeholderii sunt încântați, conversațiile dificile se rezolvă singure și toată lumea pleacă din ședințe motivată - închide acum. Nu am nimic pentru tine.\n" +
-      "Dacă continui să citești, bun.\n\n" +
-      "Înseamnă că recunoști acel moment specific: ședința în care ai știut exact ce trebuia spus și tot nu a ieșit cum trebuia. Prezentarea pregătită perfect care nu a convins pe nimeni. Colegul sau stakeholderul față de care simți că vorbești o limbă diferită deși amândoi vorbiți română.\n" +
-      "Eu lucrez cu exact spațiul ăla.\n\n" +
-      "Mă numesc Andrei Văcaru. 13 ani jurnalist TV. 10 ani trainer. 1200+ sesiuni. 15000+ oameni. Certificat PCM și din 2025 certificat în Rapid Transformation Therapy by Marisa Peer — care înseamnă că știu nu doar ce face un om, ci de ce continuă să o facă deși știe că nu îl ajută.\n\n" +
-      "Nu am un pitch. Am o întrebare:\n" +
-      "Dacă ai putea schimba un singur lucru în felul în care oamenii tăi influențează, comunică sau gestionează presiunea — ce ar fi?\n\n" +
-      "Poți răspunde la emailul ăsta și stabilim o întâlnire de 30 sau 60 de minute. Sau, dacă preferi o conversație online:\n" +
-      "Alege un slot în Calendly: {calendly_url}\n" +
-      "Fără obligații, fără vânzare. În cel mai rău caz, o discuție bună.\n" +
-      "Video: {landing_page_url}\n\n" +
-      "Zi faină să ai!\nAndrei Văcaru\n\n" +
-      "Dezabonare: {unsubscribe_url}",
+    placeholders: SYNTHETIC_CAMPAIGN_PLACEHOLDERS,
+    body: '<h1>Mesaj demonstrativ</h1><p>Salut, {first_name}. Folosește această mostră pentru a verifica previzualizarea și destinatarii.</p><p><a href="{landing_page_url}">Vezi exemplul</a></p><p><a href="{unsubscribe_url}">Dezabonare</a></p><p>{legal_address}</p>',
+    textBody: "Salut, {first_name}. Folosește această mostră pentru a verifica previzualizarea și destinatarii. Exemplu: {landing_page_url}. Dezabonare: {unsubscribe_url}. {legal_address}",
   },
   {
-    id: "evaluation_leadership_invite@7",
-    baseKey: "evaluation_leadership_invite",
-    version: 7,
-    name: "Evaluare leadership - invitație",
-    subject: "Primul pas pe drumul nostru: o radiografie sinceră a echipei de direcție",
+    id: "preview_evaluation_invite@1",
+    baseKey: "preview_evaluation_invite",
+    version: 1,
+    name: "Mostră invitație evaluare",
+    subject: "Ai o activitate demonstrativă de completat",
     lane: "transactional",
     audience: "transactional:leadership",
-    placeholders: EVALUATION_PLACEHOLDERS,
-    body:
-      CATALOG_SHELL_OPEN +
-      '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Primul pas pe drumul nostru: o radiografie sinceră a echipei de direcție</h1>' +
-      '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Dragi colegi,</p>' +
-      catalogParagraphs(
-        "Știți deja că pornim împreună la un drum care merită cu adevărat parcurs — unul care țintește dezvoltarea, creșterea și evoluția noastră ca echipă de direcție. Credem că o companie puternică se construiește, înainte de toate, prin oamenii care o conduc — adică prin noi.",
-        "Ca orice demers serios, și acesta începe logic: cu o radiografie onestă, o imagine cât mai clară a punctului din care plecăm. Fără un punct de plecare bine măsurat, nu vom putea aprecia, mai târziu, cât de departe am ajuns.",
-        "De aceea, vă invit să facem împreună primul pas. Vă rog să completați câteva chestionare scurte — ne vor da exact informațiile de care avem nevoie ca să:",
-      ) +
-      catalogBullets(
-        "înțelegem nivelul de la care pornim pe comportamentele și competențele importante pentru noi;",
-        "vedem cum ne percepem reciproc în interiorul echipei de direcție;",
-        "devenim mai conștienți de tiparele proprii, inclusiv de felul în care reacționăm sub presiune;",
-        "înțelegem mai bine cum funcționează echipele pe care le conducem.",
-      ) +
-      catalogParagraphs(
-        "Un lucru esențial: totul este confidențial. Rezultatele sunt analizate doar agregat, la nivel de concluzii — nu de răspunsuri individuale. Singura persoană cu acces la răspunsuri este coach-ul extern care ne însoțește în acest proces, iar acestea rămân strict între el și fiecare dintre noi. Scopul nu este să evaluăm pe cineva, ci să construim o bază sănătoasă, de la care plecăm cu toții.",
-        "Cu cât suntem mai sinceri acum, cu atât tot ce urmează va fi mai relevant și mai util pentru fiecare dintre noi. Onestitatea de azi e investiția cu cel mai bun randament din tot acest proces.",
-        "Cum completați: dați click pe linkul de mai jos și parcurgeți chestionarele. Durează fiecare aproximativ câteva minute bine investite. Vă rog să le finalizați până la {due_date}.",
-      ) +
-      catalogButton("Deschide chestionarele") +
-      catalogParagraphs("Mă bucur că pornim la drum împreună. Hai să-l începem așa cum ne dorim să-l și continuăm: cu curaj și cu sinceritate.", "Cu respect,", "{sender_name}") +
-      CATALOG_SHELL_CLOSE,
-    textBody:
-      "Dragi colegi,\n\n" +
-      "Știți deja că pornim împreună la un drum care merită cu adevărat parcurs — unul care țintește dezvoltarea, creșterea și evoluția noastră ca echipă de direcție. Credem că o companie puternică se construiește, înainte de toate, prin oamenii care o conduc — adică prin noi.\n\n" +
-      "Ca orice demers serios, și acesta începe logic: cu o radiografie onestă, o imagine cât mai clară a punctului din care plecăm. Fără un punct de plecare bine măsurat, nu vom putea aprecia, mai târziu, cât de departe am ajuns.\n\n" +
-      "De aceea, vă invit să facem împreună primul pas. Vă rog să completați câteva chestionare scurte — ne vor da exact informațiile de care avem nevoie ca să:\n" +
-      "• înțelegem nivelul de la care pornim pe comportamentele și competențele importante pentru noi;\n" +
-      "• vedem cum ne percepem reciproc în interiorul echipei de direcție;\n" +
-      "• devenim mai conștienți de tiparele proprii, inclusiv de felul în care reacționăm sub presiune;\n" +
-      "• înțelegem mai bine cum funcționează echipele pe care le conducem.\n\n" +
-      "Un lucru esențial: totul este confidențial. Rezultatele sunt analizate doar agregat, la nivel de concluzii — nu de răspunsuri individuale. Singura persoană cu acces la răspunsuri este coach-ul extern care ne însoțește în acest proces, iar acestea rămân strict între el și fiecare dintre noi. Scopul nu este să evaluăm pe cineva, ci să construim o bază sănătoasă, de la care plecăm cu toții.\n\n" +
-      "Cu cât suntem mai sinceri acum, cu atât tot ce urmează va fi mai relevant și mai util pentru fiecare dintre noi. Onestitatea de azi e investiția cu cel mai bun randament din tot acest proces.\n\n" +
-      "Cum completați: dați click pe linkul de mai jos și parcurgeți chestionarele. Durează fiecare aproximativ câteva minute bine investite. Vă rog să le finalizați până la {due_date}.\n" +
-      "Link platformă: {action_url}\n\n" +
-      "Mă bucur că pornim la drum împreună. Hai să-l începem așa cum ne dorim să-l și continuăm: cu curaj și cu sinceritate.\n\n" +
-      "Cu respect,\n{sender_name}",
+    placeholders: SYNTHETIC_EVALUATION_PLACEHOLDERS,
+    body: '<h1>Activitate demonstrativă</h1><p>Salut, {participant_name}. Deschide activitățile sintetice pentru {company_name} până la {due_date}.</p><p><a href="{action_url}">Deschide activitățile</a></p><p>{sender_name}</p>',
+    textBody: "Salut, {participant_name}. Deschide activitățile sintetice pentru {company_name} până la {due_date}: {action_url}. {sender_name}",
   },
   {
-    id: "evaluation_leadership_reminder@7",
-    baseKey: "evaluation_leadership_reminder",
-    version: 7,
-    name: "Evaluare leadership - reminder",
-    subject: "Reminder: mai sunt câteva zile pentru chestionare",
-    lane: "transactional",
-    audience: "transactional:leadership",
-    placeholders: EVALUATION_PLACEHOLDERS,
-    body: CATALOG_SHELL_OPEN + '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Reminder pentru chestionare</h1>' + '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Dragi colegi,</p>' + catalogParagraphs("O scurtă revenire — mai avem puțin până la {due_date}, termenul pentru completarea chestionarelor cu care pornim pe acest drum.", "Dacă le-ați completat deja, vă mulțumesc — ați făcut deja primul pas. Dacă nu încă, știu bine că timpul vostru e prețios și agendele, pline. Tocmai de aceea vă cer doar câteva minute: rămâne una dintre cele mai bune investiții pe care le putem face acum în noi și în echipele noastre.", "Iar practic, lucrurile sunt simple: radiografia noastră de început este completă și corectă doar dacă suntem toți în ea. Lipsa unui singur răspuns ne schimbă imaginea de ansamblu.") + catalogButton("Continuă chestionarele") + catalogParagraphs("Hai să închidem împreună acest prim pas.", "Cu respect, {sender_name}") + CATALOG_SHELL_CLOSE,
-    textBody:
-      "Dragi colegi,\n\n" +
-      "O scurtă revenire — mai avem puțin până la {due_date}, termenul pentru completarea chestionarelor cu care pornim pe acest drum.\n\n" +
-      "Dacă le-ați completat deja, vă mulțumesc — ați făcut deja primul pas. Dacă nu încă, știu bine că timpul vostru e prețios și agendele, pline. Tocmai de aceea vă cer doar câteva minute: rămâne una dintre cele mai bune investiții pe care le putem face acum în noi și în echipele noastre.\n\n" +
-      "Iar practic, lucrurile sunt simple: radiografia noastră de început este completă și corectă doar dacă suntem toți în ea. Lipsa unui singur răspuns ne schimbă imaginea de ansamblu.\n\n" +
-      "Link platformă: {action_url}\n\n" +
-      "Hai să închidem împreună acest prim pas.\n\n" +
-      "Cu respect,\n{sender_name}",
-  },
-  {
-    id: "evaluation_team_invite@7",
-    baseKey: "evaluation_team_invite",
-    version: 7,
-    name: "Evaluare echipe - invitație",
-    subject: "Avem nevoie de părerea ta",
+    id: "preview_evaluation_reminder@1",
+    baseKey: "preview_evaluation_reminder",
+    version: 1,
+    name: "Mostră reminder evaluare",
+    subject: "Reminder demonstrativ pentru activitățile tale",
     lane: "transactional",
     audience: "transactional:team",
-    placeholders: EVALUATION_PLACEHOLDERS,
-    body: CATALOG_SHELL_OPEN + '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Avem nevoie de părerea ta</h1>' + '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Bună ziua,</p>' + catalogParagraphs("Noi, echipa de direcție, am pornit un proces prin care ne dorim să menținem aceleași standarde înalte pe care le cerem fiecăruia dintre voi — și credem că asta trebuie să înceapă cu noi înșine. Ca să facem asta cu adevărat, avem nevoie și de părerea ta.", "Te invităm să completezi două chestionare scurte care ne ajută să înțelegem două lucruri:") + catalogBullets("cât de bine reușim noi, echipa de direcție, să fim cu adevărat alături de tine și de colegii tăi — să vă sprijinim creșterea, să vă ajutăm să rezolvați mai ușor și mai repede provocările de zi cu zi și să facem asta într-un climat de lucru sănătos;", "cum se vede, din interior, echipa din care faci parte.") + catalogParagraphs("Răspunsurile tale sunt 100% anonime și confidențiale. Nu vom putea ști niciodată cine ce a răspuns — vedem doar concluziile agregate, imaginea de ansamblu, nu răspunsul tău individual. Tocmai de aceea te rugăm să fii cât mai sincer: feedbackul tău onest este singurul care ne ajută cu adevărat.", "Schimbarea reală într-o companie nu vine doar de sus în jos. Vine atunci când cei care conduc înțeleg, din perspectiva ta, ce funcționează bine și ce avem de îmbunătățit. Părerea ta contează exact în acest punct.", "Cum completezi: dă click pe linkul de mai jos și parcurge chestionarele. Durează aproximativ câteva minute. Te rugăm să le finalizezi până la {due_date}.") + catalogButton("Deschide chestionarele") + catalogParagraphs("Îți mulțumim că ne ajuți să fim o echipă de conducere mai bună — pentru tine și pentru toți colegii tăi.", "Cu mulțumiri,", "{sender_name}") + CATALOG_SHELL_CLOSE,
-    textBody:
-      "Bună ziua,\n\n" +
-      "Noi, echipa de direcție, am pornit un proces prin care ne dorim să menținem aceleași standarde înalte pe care le cerem fiecăruia dintre voi — și credem că asta trebuie să înceapă cu noi înșine. Ca să facem asta cu adevărat, avem nevoie și de părerea ta.\n\n" +
-      "Te invităm să completezi două chestionare scurte care ne ajută să înțelegem două lucruri:\n" +
-      "• cât de bine reușim noi, echipa de direcție, să fim cu adevărat alături de tine și de colegii tăi — să vă sprijinim creșterea, să vă ajutăm să rezolvați mai ușor și mai repede provocările de zi cu zi și să facem asta într-un climat de lucru sănătos;\n" +
-      "• cum se vede, din interior, echipa din care faci parte.\n\n" +
-      "Răspunsurile tale sunt 100% anonime și confidențiale. Nu vom putea ști niciodată cine ce a răspuns — vedem doar concluziile agregate, imaginea de ansamblu, nu răspunsul tău individual. Tocmai de aceea te rugăm să fii cât mai sincer: feedbackul tău onest este singurul care ne ajută cu adevărat.\n\n" +
-      "Schimbarea reală într-o companie nu vine doar de sus în jos. Vine atunci când cei care conduc înțeleg, din perspectiva ta, ce funcționează bine și ce avem de îmbunătățit. Părerea ta contează exact în acest punct.\n\n" +
-      "Cum completezi: dă click pe linkul de mai jos și parcurge chestionarele. Durează aproximativ câteva minute. Te rugăm să le finalizezi până la {due_date}.\n" +
-      "Link platformă: {action_url}\n\n" +
-      "Îți mulțumim că ne ajuți să fim o echipă de conducere mai bună — pentru tine și pentru toți colegii tăi.\n\n" +
-      "Cu mulțumiri,\n{sender_name}",
-  },
-  {
-    id: "evaluation_team_reminder@7",
-    baseKey: "evaluation_team_reminder",
-    version: 7,
-    name: "Evaluare echipe - reminder",
-    subject: "Mai e puțin timp — părerea ta încă lipsește",
-    lane: "transactional",
-    audience: "transactional:team",
-    placeholders: EVALUATION_PLACEHOLDERS,
-    body: CATALOG_SHELL_OPEN + '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;">Mai e puțin timp</h1>' + '<p style="margin:0 0 14px;font-size:15px;line-height:1.65;">Bună ziua,</p>' + catalogParagraphs("Revin scurt: mai sunt câteva zile până la {due_date}, ultima zi în care poți completa cele două chestionare.", "Dacă le-ai completat deja, îți mulțumim din suflet. Dacă nu, te rugăm să-ți iei cele câteva minute necesare — fiecare răspuns în plus face imaginea mai corectă, iar a ta încă lipsește.", "Și, ca să fie clar din nou: totul rămâne 100% anonim. Nu vom ști niciodată cine ce a răspuns, vedem doar concluziile la nivel de ansamblu. Tocmai de asta poți fi complet sincer.") + catalogButton("Completează chestionarele") + catalogParagraphs("Mulțumim,", "{sender_name}") + CATALOG_SHELL_CLOSE,
-    textBody:
-      "Bună ziua,\n\n" +
-      "Revin scurt: mai sunt câteva zile până la {due_date}, ultima zi în care poți completa cele două chestionare.\n" +
-      "Dacă le-ai completat deja, îți mulțumim din suflet. Dacă nu, te rugăm să-ți iei cele câteva minute necesare — fiecare răspuns în plus face imaginea mai corectă, iar a ta încă lipsește.\n\n" +
-      "Și, ca să fie clar din nou: totul rămâne 100% anonim. Nu vom ști niciodată cine ce a răspuns, vedem doar concluziile la nivel de ansamblu. Tocmai de asta poți fi complet sincer.\n\n" +
-      "Link platformă: {action_url}\n\n" +
-      "Mulțumim,\n{sender_name}",
+    placeholders: SYNTHETIC_EVALUATION_PLACEHOLDERS,
+    body: '<h1>Reminder demonstrativ</h1><p>Salut, {participant_name}. Activitățile sintetice rămân disponibile până la {due_date}.</p><p><a href="{action_url}">Continuă activitățile</a></p><p>{sender_name}</p>',
+    textBody: "Salut, {participant_name}. Activitățile sintetice rămân disponibile până la {due_date}: {action_url}. {sender_name}",
   },
 ];
 
@@ -367,8 +97,7 @@ function getSeededTemplates(): EmailTemplate[] {
   }));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function backendToFrontendTemplate(b: any): EmailTemplate {
+function backendToFrontendTemplate(b: EmailTemplateResponse): EmailTemplate {
   const placeholders = (b.variables || []).map((v: string) => `{${v}}`);
   const subject = (b.subject || "").replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}");
   const body = (b.html_body || "").replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "{$1}");
@@ -400,6 +129,7 @@ function templateDisplayName(key: string): string {
     evaluation_leadership_reminder: "Evaluare leadership - reminder",
     evaluation_team_invite: "Evaluare echipe - invitație",
     evaluation_team_reminder: "Evaluare echipe - reminder",
+    local_preview_follow_up: "Urmărire evaluare",
   };
   return names[key] ?? key;
 }
@@ -666,6 +396,7 @@ export type CampaignRecipientRow = {
   viewCount?: number;
   replyCount?: number;
   calendlyClickCount?: number;
+  source?: string | null;
   emailVariant?: string | null;
   outcome?: "intalnire" | "ofertare" | "contract";
 };
@@ -701,7 +432,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     company: "Atlas Mobility",
     firstName: "Radu",
     lastName: "Munteanu",
-    email: "radu.munteanu@atlas-mobility.ro",
+    email: "radu.munteanu@atlas.example.com",
     clientType: "tip_1",
     status: "sent",
     openCount: 3,
@@ -717,7 +448,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     company: "Clinica Meridian",
     firstName: "Diana",
     lastName: "Ene",
-    email: "diana.ene@clinica-meridian.ro",
+    email: "diana.ene@meridian.example.com",
     clientType: "tip_1",
     status: "ready",
     openCount: 1,
@@ -732,7 +463,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     company: "Nova Retail Group",
     firstName: "Cristina",
     lastName: "Olaru",
-    email: "cristina.olaru@nova-retail.ro",
+    email: "cristina.olaru@nova.example.com",
     clientType: "tip_2",
     status: "needs_contact_name",
     openCount: 0,
@@ -745,7 +476,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
   {
     id: "campaign-suppressed",
     company: "Fabrica Nord",
-    email: "office@fabricanord.ro",
+    email: "office@fabrica.example.com",
     clientType: "tip_2",
     status: "suppressed",
     openCount: 0,
@@ -790,9 +521,9 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
       rules: [],
       campaign: {
         videoHost: {
-          provider: "Vimeo sau pagină Codruț",
+          provider: "Vimeo sau pagină Cody",
           status: "ready",
-          note: "Emailul trimite thumbnail și CTA către linkul video. Pagina Codruț este opțională pentru tracking sau CTA-uri dedicate.",
+          note: "Emailul trimite thumbnail și CTA către linkul video. Pagina Cody este opțională pentru tracking sau CTA-uri dedicate.",
         },
         template: {
           subject: "O idee practică pentru echipa ta, ${first_name}",
@@ -985,6 +716,59 @@ export type CampaignAssetUpload = {
   size_bytes: number;
 };
 
+export type CampaignValidationDetail = {
+  loc?: Array<string | number>;
+  message?: string;
+  type?: string;
+};
+
+export class CampaignPersistenceError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly code?: string,
+    readonly details: CampaignValidationDetail[] = [],
+    readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = "CampaignPersistenceError";
+  }
+}
+
+function campaignPersistenceError(
+  response: Response,
+  payload: unknown,
+  fallbackMessage: string,
+): CampaignPersistenceError {
+  const envelope = payload && typeof payload === "object" && "error" in payload
+    ? (payload as { error?: unknown }).error
+    : null;
+  const error = envelope && typeof envelope === "object"
+    ? envelope as Record<string, unknown>
+    : {};
+  const details = Array.isArray(error.details)
+    ? error.details.flatMap((detail): CampaignValidationDetail[] => {
+      if (!detail || typeof detail !== "object") return [];
+      const row = detail as Record<string, unknown>;
+      const location = Array.isArray(row.loc) ? row.loc : Array.isArray(row.path) ? row.path : undefined;
+      return [{
+        ...(location ? { loc: location.map((item) => typeof item === "number" ? item : String(item)) } : {}),
+        ...(typeof row.message === "string" ? { message: row.message } : {}),
+        ...(typeof row.type === "string" ? { type: row.type } : {}),
+      }];
+    })
+    : [];
+  return new CampaignPersistenceError(
+    typeof error.message === "string" ? error.message : fallbackMessage,
+    response.status,
+    typeof error.code === "string" ? error.code : undefined,
+    details,
+    typeof error.request_id === "string"
+      ? error.request_id
+      : response.headers.get("X-Request-ID") ?? undefined,
+  );
+}
+
 export async function uploadCampaignAssetOnServer(file: File): Promise<CampaignAssetUpload> {
   const response = await apiFetch(`${getApiBaseUrl()}/communications/campaign-assets`, {
     method: "POST",
@@ -1001,6 +785,35 @@ export async function uploadCampaignAssetOnServer(file: File): Promise<CampaignA
     throw new Error(errorBody?.error?.message ?? "Thumbnailul nu a putut fi încărcat.");
   }
   return await response.json();
+}
+
+export async function deleteCampaignAssetOnServer(fileName: string): Promise<void> {
+  if (isDemoFallbackEnabled()) return;
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/communications/campaign-assets/${encodeURIComponent(fileName)}`,
+    {
+      method: "DELETE",
+      cache: "no-store",
+      credentials: "include",
+    },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Nu am putut curăța imaginea campaniei (${response.status}).`);
+  }
+}
+
+export function campaignAssetFileNameFromUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value, "http://localhost");
+    const marker = "/campaign-assets/";
+    const markerIndex = url.pathname.lastIndexOf(marker);
+    if (markerIndex === -1) return null;
+    const fileName = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+    return /^[a-z0-9-]+\.(?:gif|jpe?g|png|webp)$/i.test(fileName) ? fileName : null;
+  } catch {
+    return null;
+  }
 }
 
 export type CampaignVideoDraft = {
@@ -1034,6 +847,7 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
   const thumbnailUrl = normalizeHttpUrl(draft.thumbnailUrl);
   const landingUrl = normalizeHttpUrl(draft.landingUrl) ?? videoUrl;
   const hasVideoBlock = Boolean(videoUrl && thumbnailUrl);
+  const hasImageBlock = Boolean(thumbnailUrl && !videoUrl);
 
   if (!trimmedName) return null;
   if (hasVideoInput && !videoUrl) return null;
@@ -1057,11 +871,18 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
           "</a></p>",
         ].join(""),
       ].join("")
+      : hasImageBlock
+        ? [
+          "<p>Bună, ${first_name}.</p>",
+          '<p><img src="${thumbnail_url}" alt="Imagine campanie" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" /></p>',
+        ].join("")
       : "<p>Bună, ${first_name}.</p><p>Dacă vrei, alege un slot în Calendly și stabilim o conversație.</p>";
   const textBody = draft.textBody?.trim()
     ? draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
     : hasVideoBlock
       ? "Bună, ${first_name}. Vezi video-ul aici: ${landing_page_url}"
+      : hasImageBlock
+        ? "Bună, ${first_name}. Am pregătit o actualizare pentru tine."
       : "Bună, ${first_name}. Dacă vrei, alege un slot în Calendly și stabilim o conversație.";
 
   return {
@@ -1079,37 +900,47 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
 export type EmailCampaign = CampaignCreate & {
   id: string;
   status: "draft" | "ready" | "paused" | "completed";
+  media_kind?: "none" | "image" | "video";
 };
 
 const SEEDED_CAMPAIGNS: EmailCampaign[] = [
   {
-    id: "demo-campaign-reconnectare",
-    name: "Reconectare clienți 2022-2025",
+    id: "demo-campaign-update",
+    name: "Actualizare demonstrativă",
     segment: "past_customer",
     status: "ready",
-    subject: "Raportul de activitate pe care nu l-a cerut nimeni",
-    html_body: SEEDED_TEMPLATES.find((template) => template.baseKey === "promo_past_report_2022_2025")?.body ?? "",
-    text_body: "Raportul de activitate pe care nu l-a cerut nimeni. Aici ai calendarul meu: ${calendly_url}",
-    video_url: "https://vimeo.com/123456789",
-    thumbnail_url: "https://codrut.andreivacaru.ro/api/campaign-assets/reconectare-demo.jpg",
-    landing_page_url: "https://codrut.andreivacaru.ro/campanii/reconectare",
+    subject: "Actualizare demonstrativă pentru ${first_name}",
+    html_body: SEEDED_TEMPLATES.find((template) => template.baseKey === "preview_campaign_update")?.body ?? "",
+    text_body: "Salut, ${first_name}. Acesta este un mesaj demonstrativ.",
+    thumbnail_url: "https://assets.example.com/campaign-update.png",
   },
   {
-    id: "demo-campaign-prospecti",
-    name: "Prospecți leadership operațional",
+    id: "demo-campaign-intro",
+    name: "Introducere demonstrativă",
     segment: "potential_customer",
     status: "draft",
-    subject: "Asta e un spam, dar e un spam bun.",
-    html_body: SEEDED_TEMPLATES.find((template) => template.baseKey === "promo_potential_intro")?.body ?? "",
-    text_body: "Salut, ${first_name}. Alege un slot: ${calendly_url}",
-    video_url: "https://vimeo.com/987654321",
-    thumbnail_url: "https://codrut.andreivacaru.ro/api/campaign-assets/prospect-demo.gif",
+    subject: "Mesaj demonstrativ pentru ${first_name}",
+    html_body: SEEDED_TEMPLATES.find((template) => template.baseKey === "preview_campaign_intro")?.body ?? "",
+    text_body: "Salut, ${first_name}. Folosește această mostră pentru verificarea editorului.",
   },
 ];
 
 const DEMO_CAMPAIGN_STORAGE_KEY = "codrut_demo_campaigns";
 const DEMO_CAMPAIGN_MEMBERSHIP_STORAGE_KEY = "codrut_demo_campaign_memberships";
 const DEMO_CAMPAIGN_RECIPIENT_STORAGE_KEY = "codrut_demo_campaign_recipients";
+
+function nextDemoId(prefix: string, existingIds: Iterable<string>): string {
+  const existing = new Set(existingIds);
+  let index = existing.size + 1;
+  let candidate = `${prefix}-${index}`;
+
+  while (existing.has(candidate)) {
+    index += 1;
+    candidate = `${prefix}-${index}`;
+  }
+
+  return candidate;
+}
 
 function getSeededCampaigns(): EmailCampaign[] {
   return SEEDED_CAMPAIGNS.map((campaign) => ({ ...campaign }));
@@ -1197,13 +1028,13 @@ function bulkCreateDemoCampaignRecipients(
   let created = 0;
   let updated = 0;
 
-  recipients.forEach((recipient, index) => {
+  recipients.forEach((recipient) => {
     const emailKey = recipient.email?.trim().toLowerCase() ?? "";
     const existingIndex = emailKey
       ? nextRecipients.findIndex((item) => item.email.trim().toLowerCase() === emailKey)
       : -1;
     const existing = existingIndex >= 0 ? nextRecipients[existingIndex] : undefined;
-    const id = existing?.id ?? `campaign-local-${Date.now()}-${index}`;
+    const id = existing?.id ?? nextDemoId("campaign-local", nextRecipients.map((item) => item.id));
     const nextRecipient = buildDemoCampaignRecipient(id, recipient, existing);
 
     if (existingIndex >= 0) {
@@ -1386,12 +1217,14 @@ function replaceDemoCampaignMembershipRows(
 }
 
 function createDemoCampaign(campaign: CampaignCreate): EmailCampaign {
+  const campaigns = readDemoCampaigns();
   const created: EmailCampaign = {
-    id: "campaign_" + Date.now(),
+    id: nextDemoId("campaign", campaigns.map((item) => item.id)),
     status: "ready",
     ...campaign,
+    media_kind: campaign.video_url ? "video" : campaign.thumbnail_url ? "image" : "none",
   };
-  writeDemoCampaigns([...readDemoCampaigns(), created]);
+  writeDemoCampaigns([...campaigns, created]);
   if (created.segment !== null) {
     replaceDemoCampaignMembershipRows(created.id, defaultDemoMembershipRecipientIds(created.segment));
   }
@@ -1418,6 +1251,7 @@ function updateDemoCampaign(campaignId: string, campaign: CampaignUpdate): Email
     thumbnail_url: campaign.thumbnail_url === null ? undefined : campaign.thumbnail_url ?? existing.thumbnail_url,
     landing_page_url: campaign.landing_page_url === null ? undefined : campaign.landing_page_url ?? existing.landing_page_url,
   };
+  updated.media_kind = updated.video_url ? "video" : updated.thumbnail_url ? "image" : "none";
   writeDemoCampaigns(campaigns.some((item) => item.id === campaignId)
     ? campaigns.map((item) => (item.id === campaignId ? updated : item))
     : [...campaigns, updated]);
@@ -1449,7 +1283,7 @@ export type CampaignSendResponse = {
   results: CampaignSendRecipientResult[];
 };
 
-export async function createCampaignOnServer(campaign: CampaignCreate) {
+export async function createCampaignOnServer(campaign: CampaignCreate): Promise<EmailCampaign> {
   try {
     const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns`, {
       method: "POST",
@@ -1462,7 +1296,12 @@ export async function createCampaignOnServer(campaign: CampaignCreate) {
       if (isDemoFallbackEnabled()) {
         return createDemoCampaign(campaign);
       }
-      throw new Error(`Failed to create campaign: ${response.status}`);
+      const errorBody = await response.json().catch(() => null);
+      throw campaignPersistenceError(
+        response,
+        errorBody,
+        `Nu am putut crea campania (${response.status}).`,
+      );
     }
     return await response.json();
   } catch (err) {
@@ -1487,7 +1326,11 @@ export async function updateCampaignOnServer(campaignId: string, campaign: Campa
         return updateDemoCampaign(campaignId, campaign);
       }
       const errorBody = await response.json().catch(() => null);
-      throw new Error(errorBody?.error?.message ?? `Nu am putut actualiza campania (${response.status}).`);
+      throw campaignPersistenceError(
+        response,
+        errorBody,
+        `Nu am putut actualiza campania (${response.status}).`,
+      );
     }
     return await response.json();
   } catch (err) {
@@ -1550,7 +1393,12 @@ export async function deleteCampaignOnServer(campaignId: string): Promise<void> 
 
 export async function sendCampaignOnServer(
   campaignId: string,
-  options: { dryRun?: boolean; recipientIds?: string[]; mode?: "new" | "selected" | "all" } = {},
+  options: {
+    dryRun?: boolean;
+    recipientIds?: string[];
+    mode?: "new" | "selected" | "all";
+    idempotencyKey?: string;
+  } = {},
 ): Promise<CampaignSendResponse> {
   if (typeof window !== "undefined" && isDemoFallbackEnabled()) {
     return {
@@ -1567,7 +1415,10 @@ export async function sendCampaignOnServer(
   try {
     const response = await apiFetch(`${getApiBaseUrl()}/communications/campaigns/${campaignId}/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": options.idempotencyKey ?? createEmailIdempotencyKey(),
+      },
       cache: "no-store",
       credentials: "include",
       body: JSON.stringify({
@@ -1606,4 +1457,10 @@ export async function sendCampaignOnServer(
     }
     throw err;
   }
+}
+
+function createEmailIdempotencyKey(): string {
+  const suffix = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `campaign-send-${suffix}`;
 }

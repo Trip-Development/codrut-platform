@@ -19,7 +19,7 @@ def test_campaign_recipient_bulk_request_normalizes_romanian_import_rows() -> No
                     "Nume de familie": "Popescu",
                     "Tip Client": "Nu e client",
                     "Organizație": "(Genpact) Vodaphone",
-                    "Email": "andreicristian.popescu@genpact.com",
+                    "Email": "andrei.popescu@example.com",
                     "Telefon": "0771 382 348",
                     "Funcția": "-",
                 },
@@ -52,7 +52,7 @@ def test_campaign_recipient_bulk_request_normalizes_romanian_import_rows() -> No
 
     assert len(payload.recipients) == 4
     recipient = payload.recipients[0]
-    assert recipient.email == "andreicristian.popescu@genpact.com"
+    assert recipient.email == "andrei.popescu@example.com"
     assert recipient.contact_name == "Andrei Cristian Popescu"
     assert recipient.organization_name == "(Genpact) Vodaphone"
     assert recipient.segment == "potential_customer"
@@ -82,7 +82,7 @@ def test_campaign_recipient_bulk_request_accepts_name_surname_aliases() -> None:
                     "Nume": "Luncan",
                     "Tip Client": "Nu e client",
                     "Organizatie": "Viarom",
-                    "Email": "cristina.luncan@viarom.ro",
+                    "Email": "cristina.luncan@example.com",
                 },
                 {
                     "Send": "yes",

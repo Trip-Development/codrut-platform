@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -18,8 +18,11 @@ from codrut.modules.companies.manager_matching import (
 )
 from codrut.modules.companies.models import ParticipantProfile, ProjectMembership
 from codrut.modules.companies.repository import CompanyRepository
-from codrut.modules.forms.definitions import get_approved_questionnaire_definition
-from codrut.modules.forms.models import QuestionnaireKey, QuestionnaireResponse
+from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
+    QuestionnaireKey,
+    QuestionnaireResponse,
+)
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
 from codrut.modules.scoring.schemas import (
@@ -31,52 +34,6 @@ from codrut.modules.scoring.schemas import (
     ReportHierarchyIssueResponse,
     ReportTeamLensResponse,
     ScoringResultResponse,
-)
-
-LENCIONI_LABELS = {
-    "absence_of_trust": "Absența încrederii (Trust)",
-    "fear_of_conflict": "Teama de conflict (Conflict)",
-    "lack_of_commitment": "Lipsa angajamentului (Commitment)",
-    "avoidance_of_accountability": "Evitarea responsabilității (Accountability)",
-    "inattention_to_results": "Neatenția la rezultate (Results)",
-}
-
-DISTRESS_DRIVER_LABELS = {
-    "be_strong": "Fii Puternic (Be Strong)",
-    "be_perfect": "Fii Perfect (Be Perfect)",
-    "try_hard": "Străduiește-te (Try Hard)",
-    "hurry_up": "Grăbește-te (Hurry Up)",
-    "please_people": "Mulțumește-i pe alții (Please People)",
-}
-
-ICARE_LABELS = {
-    "icare_01_dezvolta_oamenii": "Dezvoltă oamenii",
-    "icare_02_conduce_prin_puterea_exemplului": "Conduce prin puterea exemplului",
-    "icare_03_creeaza_un_mediu_care_stimuleaza_implicarea": (
-        "Creează un mediu care stimulează implicarea"
-    ),
-    "icare_04_promotor_al_colaborarii": "Promotor al colaborării",
-    "icare_05_ancorat_in_realitate": "Ancorat în realitate",
-    "icare_06_aduce_claritate": "Aduce claritate",
-    "icare_07_modestie": "Modestie",
-    "icare_08_inteligenta_emotionala_si_situationala": (
-        "Inteligență emoțională și situațională"
-    ),
-    "icare_09_deschis_catre_lume": "Deschis către lume",
-    "icare_10_ambitios_pentru_companie": "Ambițios pentru companie",
-    "icare_11_grija_egala_pentru_angajati_si_clienti": (
-        "Grijă egală pentru angajați și clienți"
-    ),
-    "icare_12_agilitate_antreprenoriala": "Agilitate antreprenorială",
-    "icare_13_decizii_cat_mai_aproape_de_teren": "Decizii cât mai aproape de teren",
-    "icare_14_cultiva_inteligenta_colectiva": "Cultivă inteligența colectivă",
-    "icare_15_ajuta_echipa": "Ajută echipa",
-}
-
-LENCIONI_INTERPRETATION_RANGES = (
-    (8.0, 9.0, "8-9", "Disfuncția probabil nu este o problemă."),
-    (6.0, 7.99, "6-7", "Disfuncția poate fi o problemă."),
-    (3.0, 5.99, "3-5", "Disfuncția trebuie probabil abordată."),
 )
 
 COMPLETED_STATUSES = {
@@ -160,6 +117,21 @@ class TeamLensBuildResult:
     hierarchy_issues: list[ReportHierarchyIssueResponse]
 
 
+AssignmentResultWithDefinition = tuple[
+    QuestionnaireAssignment,
+    ScoringResult | None,
+    QuestionnaireDefinition | None,
+]
+
+
+@dataclass
+class ReportDimensionAccumulator:
+    label: str
+    total: float = 0
+    count: int = 0
+    interpretation_rules: tuple[dict[str, Any], ...] = ()
+
+
 class ScoringService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -182,21 +154,21 @@ class ScoringService:
             if project is None:
                 raise DomainError("Project not found in this company.", code="project_not_found")
 
-        assignment_results = await self.repository.list_company_assignment_results(
+        assignment_results = await self.repository.list_company_assignment_results_with_definitions(
             company_id,
             project_id,
         )
         participants = await self._list_report_participants(company_id, project_id)
-        assignments = [assignment for assignment, _result in assignment_results]
+        assignments = [assignment for assignment, _result, _definition in assignment_results]
         total_assigned = len(assignment_results)
         total_completed = sum(
             1
-            for assignment, _result in assignment_results
+            for assignment, _result, _definition in assignment_results
             if assignment.status in COMPLETED_STATUSES
         )
         results: list[ScoringResultResponse] = []
 
-        for assignment, result in assignment_results:
+        for assignment, result, _definition in assignment_results:
             if assignment.status not in COMPLETED_STATUSES or result is None:
                 continue
 
@@ -250,24 +222,16 @@ class ScoringService:
             if project is None:
                 raise DomainError("Project not found in this company.", code="project_not_found")
 
-        definition_cache: dict[tuple[str, int], dict[str, Any]] = {}
         rows: list[IcareAnswerReviewRowResponse] = []
         answer_responses = await self.repository.list_company_icare_answer_responses(
             company_id,
             project_id,
         )
 
-        for assignment, response, respondent, target in answer_responses:
-            cache_key = (response.questionnaire_key, response.questionnaire_version)
-            schema = definition_cache.get(cache_key)
-            if schema is None:
-                schema = await self.repository.get_questionnaire_definition_schema(
-                    response.questionnaire_key,
-                    response.questionnaire_version,
-                )
-                if schema is None:
-                    schema = _approved_schema_for_key(response.questionnaire_key)
-                definition_cache[cache_key] = schema
+        for assignment, response, respondent, target, definition in answer_responses:
+            schema = definition.schema
+            if definition.private_config:
+                schema = definition.private_config.get("schema", schema)
 
             rows.extend(
                 _icare_answer_review_rows(
@@ -314,14 +278,10 @@ class ScoringService:
                 if isinstance(questionnaire_key, QuestionnaireKey)
                 else questionnaire_key
             )
-            try:
-                definition = get_approved_questionnaire_definition(questionnaire_key)
-            except KeyError as e:
-                raise DomainError(
-                    f"No scoring definition for key: {key_value}",
-                    code="scoring_not_supported",
-                ) from e
-            definition_schema = definition.schema
+            raise DomainError(
+                f"No persisted scoring definition for key: {key_value}",
+                code="scoring_not_supported",
+            )
 
         scoring_meta = definition_schema.get("scoring")
         if not scoring_meta:
@@ -366,8 +326,10 @@ class ScoringService:
 
         elif method == "sum_statement_scores_by_driver":
             drivers = scoring_meta.get("drivers", [])
+            raw_max_by_driver: dict[str, float] = {}
             for driver in drivers:
                 scores[driver["id"]] = 0
+                raw_max_by_driver[driver["id"]] = 0
 
             for section in definition_schema.get("sections", []):
                 for question in section.get("questions", []):
@@ -380,6 +342,24 @@ class ScoringService:
                                 answer_key = f"{q_id}:{s_id}"
                                 score_val = int(answers.get(answer_key, 0))
                                 scores[driver_id] = scores.get(driver_id, 0) + score_val
+                                scale = statement.get("scale") or question.get("scale", [])
+                                scale_values = [
+                                    value
+                                    for option in scale
+                                    if isinstance(option, dict)
+                                    and (value := _coerce_score(option.get("value"))) is not None
+                                ]
+                                raw_max_by_driver[driver_id] = raw_max_by_driver.get(
+                                    driver_id, 0
+                                ) + max(scale_values, default=0)
+
+            normalize_to = _coerce_score(scoring_meta.get("normalize_to"))
+            if normalize_to is not None and normalize_to > 0:
+                for driver_id, raw_score in scores.items():
+                    raw_max = raw_max_by_driver.get(driver_id, 0)
+                    scores[driver_id] = (
+                        round((float(raw_score) / raw_max) * normalize_to, 1) if raw_max > 0 else 0
+                    )
 
             if scores:
                 highest_driver = max(scores.keys(), key=lambda k: scores[k])
@@ -391,6 +371,7 @@ class ScoringService:
             score_unit = scoring_meta.get("score_unit", "percent")
             score_min = float(scoring_meta.get("score_min", scale_min))
             score_range = max(scale_max - score_min, 1.0)
+            dimension_ids: set[str] = set()
 
             def output_score(raw_avg: float) -> float:
                 if score_unit == "grade_1_to_5":
@@ -405,6 +386,7 @@ class ScoringService:
                     if question.get("type") != "statement_score_set":
                         continue
                     question_id = question["id"]
+                    dimension_ids.add(question_id)
                     for statement in question.get("statements", []):
                         answer_key = f"{question_id}:{statement['id']}"
                         value = _coerce_score(answers.get(answer_key))
@@ -455,9 +437,7 @@ class ScoringService:
             scored_dimensions = {
                 key: value
                 for key, value in scores.items()
-                if key in ICARE_LABELS
-                and isinstance(value, dict)
-                and value.get("answered", 0) > 0
+                if key in dimension_ids and isinstance(value, dict) and value.get("answered", 0) > 0
             }
             if scored_dimensions:
                 primary_result = min(
@@ -485,17 +465,6 @@ class ScoringService:
             await self.repository.add_scoring_result(result)
 
         return result
-
-
-def _approved_schema_for_key(key: str) -> dict[str, Any]:
-    try:
-        questionnaire_key = QuestionnaireKey(key)
-    except ValueError:
-        return {"sections": []}
-    try:
-        return get_approved_questionnaire_definition(questionnaire_key).schema
-    except KeyError:
-        return {"sections": []}
 
 
 def _icare_answer_review_rows(
@@ -594,10 +563,6 @@ def _enum_value(value: Any) -> str:
     return str(enum_value)
 
 
-def _zero_record(labels: dict[str, str]) -> dict[str, float]:
-    return dict.fromkeys(labels, 0.0)
-
-
 def _coerce_score(value: Any) -> float | None:
     raw_score = value.get("score") if isinstance(value, dict) else value
     if isinstance(raw_score, bool) or raw_score is None:
@@ -612,56 +577,152 @@ def _coerce_score(value: Any) -> float | None:
     return None
 
 
-def _add_scores(sums: dict[str, float], scores: dict[str, Any]) -> bool:
-    found_score = False
-    for key in sums:
-        score = _coerce_score(scores.get(key))
+def _private_definition_schema(
+    definition: QuestionnaireDefinition | None,
+) -> dict[str, Any]:
+    if definition is None or not definition.private_config:
+        return {}
+    schema = definition.private_config.get("schema")
+    return schema if isinstance(schema, dict) else {}
+
+
+def _report_dimensions(
+    definition: QuestionnaireDefinition | None,
+    scores: dict[str, Any],
+) -> dict[str, tuple[str, tuple[dict[str, Any], ...]]]:
+    schema = _private_definition_schema(definition)
+    scoring = schema.get("scoring") if isinstance(schema.get("scoring"), dict) else {}
+    method = scoring.get("method")
+    dimensions: dict[str, tuple[str, tuple[dict[str, Any], ...]]] = {}
+
+    if method == "sum_by_group":
+        global_rules = _valid_interpretation_rules(scoring.get("interpretation"))
+        for group in scoring.get("groups", []):
+            if not isinstance(group, dict):
+                continue
+            dimension_id = _non_empty_string(group.get("id"))
+            if dimension_id is None:
+                continue
+            label = _non_empty_string(group.get("label")) or _prettify_score_key(dimension_id)
+            rules = _valid_interpretation_rules(group.get("interpretation")) or global_rules
+            dimensions[dimension_id] = (label, rules)
+    elif method == "sum_statement_scores_by_driver":
+        global_rules = _valid_interpretation_rules(scoring.get("interpretation"))
+        for driver in scoring.get("drivers", []):
+            if not isinstance(driver, dict):
+                continue
+            dimension_id = _non_empty_string(driver.get("id"))
+            if dimension_id is None:
+                continue
+            label = _non_empty_string(driver.get("label")) or _prettify_score_key(dimension_id)
+            rules = _valid_interpretation_rules(driver.get("interpretation")) or global_rules
+            dimensions[dimension_id] = (label, rules)
+    elif method == "average_statement_scores_by_section":
+        for section in schema.get("sections", []):
+            if not isinstance(section, dict):
+                continue
+            for question in section.get("questions", []):
+                if not isinstance(question, dict) or question.get("type") != "statement_score_set":
+                    continue
+                dimension_id = _non_empty_string(question.get("id"))
+                if dimension_id is None:
+                    continue
+                label = _non_empty_string(question.get("label")) or _prettify_score_key(
+                    dimension_id
+                )
+                dimensions[dimension_id] = (
+                    label,
+                    _valid_interpretation_rules(question.get("interpretation")),
+                )
+
+    if dimensions:
+        return dimensions
+
+    return {
+        key: (_prettify_score_key(key), ())
+        for key, value in scores.items()
+        if _coerce_score(value) is not None
+    }
+
+
+def _valid_interpretation_rules(value: Any) -> tuple[dict[str, Any], ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(rule for rule in value if isinstance(rule, dict))
+
+
+def _non_empty_string(value: Any) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _prettify_score_key(value: str) -> str:
+    return " ".join(part.capitalize() for part in value.replace("_", " ").split()) or value
+
+
+def _accumulate_scores(
+    accumulators: dict[str, ReportDimensionAccumulator],
+    result: ScoringResult,
+    definition: QuestionnaireDefinition | None,
+) -> bool:
+    found = False
+    for dimension_id, (label, rules) in _report_dimensions(definition, result.scores).items():
+        score = _coerce_score(result.scores.get(dimension_id))
         if score is None:
             continue
-        sums[key] += score
-        found_score = True
-    return found_score
+        accumulator = accumulators.setdefault(
+            dimension_id,
+            ReportDimensionAccumulator(
+                label=label,
+                interpretation_rules=rules,
+            ),
+        )
+        accumulator.total += score
+        accumulator.count += 1
+        found = True
+    return found
 
 
-def _averages_from_sums(
-    sums: dict[str, float],
-    labels: dict[str, str],
-    count: int,
-    *,
-    minimum_avg: float | None = None,
-    interpretation_fn: Callable[[float], tuple[str, str]] | None = None,
+def _interpretation_from_rules(
+    score: float,
+    rules: tuple[dict[str, Any], ...],
+) -> tuple[str, str | None] | None:
+    for rule in rules:
+        minimum = _coerce_score(rule.get("min"))
+        maximum = _coerce_score(rule.get("max"))
+        label = _non_empty_string(rule.get("label"))
+        if minimum is None or maximum is None or label is None:
+            continue
+        if minimum <= score <= maximum:
+            explicit_range = _non_empty_string(rule.get("range_label"))
+            range_label = explicit_range or f"{minimum:g}-{maximum:g}"
+            return label, range_label
+    return None
+
+
+def _averages_from_accumulators(
+    accumulators: dict[str, ReportDimensionAccumulator],
 ) -> list[ReportAverageResponse]:
     averages: list[ReportAverageResponse] = []
-    for key, total in sums.items():
-        avg = round((total / count) if count > 0 else 0, 1)
-        if minimum_avg is not None and avg < minimum_avg:
+    for dimension_id, accumulator in sorted(accumulators.items()):
+        if accumulator.count <= 0:
             continue
-        interpretation = interpretation_fn(avg) if interpretation_fn is not None else None
+        average = round(accumulator.total / accumulator.count, 1)
+        interpretation = _interpretation_from_rules(
+            average,
+            accumulator.interpretation_rules,
+        )
         averages.append(
             ReportAverageResponse(
-                id=key,
-                label=labels.get(key, key),
-                avg=avg,
+                id=dimension_id,
+                label=accumulator.label,
+                avg=average,
                 interpretation=interpretation[0] if interpretation is not None else None,
                 range_label=interpretation[1] if interpretation is not None else None,
             )
         )
     return averages
-
-
-def _lencioni_interpretation(score: float) -> tuple[str, str]:
-    for minimum, maximum, range_label, label in LENCIONI_INTERPRETATION_RANGES:
-        if minimum <= score <= maximum:
-            return label, range_label
-    if score < 3:
-        return "Scor sub intervalul de referință Lencioni.", "<3"
-    return "Scor peste intervalul de referință Lencioni.", ">9"
-
-
-def _distress_driver_interpretation(score: float) -> tuple[str, str] | None:
-    if score <= 50:
-        return None
-    return "Driver prezent peste pragul de atenție; merită explorat în debrief.", ">50"
 
 
 def _report_participant_from_profile(participant: ParticipantProfile) -> ReportParticipant:
@@ -692,49 +753,35 @@ def _report_participant_from_membership(
 
 
 def _build_score_summary(
-    assignment_results: Iterable[tuple[QuestionnaireAssignment, ScoringResult | None]],
+    assignment_results: Iterable[AssignmentResultWithDefinition],
 ) -> ScoreSummary:
-    lencioni_sums = _zero_record(LENCIONI_LABELS)
-    driver_sums = _zero_record(DISTRESS_DRIVER_LABELS)
-    boss_360_sums = _zero_record(ICARE_LABELS)
+    lencioni_dimensions: dict[str, ReportDimensionAccumulator] = {}
+    driver_dimensions: dict[str, ReportDimensionAccumulator] = {}
+    boss_360_dimensions: dict[str, ReportDimensionAccumulator] = {}
     lencioni_count = 0
     driver_count = 0
     boss_360_count = 0
 
-    for assignment, result in assignment_results:
+    for assignment, result, definition in assignment_results:
         if assignment.status not in COMPLETED_STATUSES or result is None:
             continue
         if assignment.questionnaire_key in LENCIONI_REPORT_KEYS:
-            if _add_scores(lencioni_sums, result.scores):
+            if _accumulate_scores(lencioni_dimensions, result, definition):
                 lencioni_count += 1
         elif assignment.questionnaire_key in DISTRESS_DRIVER_REPORT_KEYS:
-            if _add_scores(driver_sums, result.scores):
+            if _accumulate_scores(driver_dimensions, result, definition):
                 driver_count += 1
         elif assignment.questionnaire_key in BOSS_360_REPORT_KEYS:
-            if _add_scores(boss_360_sums, result.scores):
+            if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
 
     return ScoreSummary(
         lencioni_count=lencioni_count,
         driver_count=driver_count,
         boss_360_count=boss_360_count,
-        lencioni_averages=_averages_from_sums(
-            lencioni_sums,
-            LENCIONI_LABELS,
-            lencioni_count,
-            interpretation_fn=_lencioni_interpretation,
-        ),
-        driver_averages=_averages_from_sums(
-            driver_sums,
-            DISTRESS_DRIVER_LABELS,
-            driver_count,
-            interpretation_fn=_distress_driver_interpretation,
-        ),
-        boss_360_averages=_averages_from_sums(
-            boss_360_sums,
-            ICARE_LABELS,
-            boss_360_count,
-        ),
+        lencioni_averages=_averages_from_accumulators(lencioni_dimensions),
+        driver_averages=_averages_from_accumulators(driver_dimensions),
+        boss_360_averages=_averages_from_accumulators(boss_360_dimensions),
     )
 
 
@@ -782,7 +829,7 @@ def _distribution_count(distribution: list[ReportDistributionResponse]) -> int:
 
 def _build_team_lenses(
     participants: list[ReportParticipant],
-    assignment_results: list[tuple[QuestionnaireAssignment, ScoringResult | None]],
+    assignment_results: list[AssignmentResultWithDefinition],
 ) -> TeamLensBuildResult:
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
@@ -864,14 +911,14 @@ def _build_team_lens(
     name: str,
     member_ids: set[UUID],
     participants: list[ReportParticipant],
-    assignment_results: list[tuple[QuestionnaireAssignment, ScoringResult | None]],
+    assignment_results: list[AssignmentResultWithDefinition],
 ) -> ReportTeamLensResponse:
     team_assignment_results = [
-        (assignment, result)
-        for assignment, result in assignment_results
+        (assignment, result, definition)
+        for assignment, result, definition in assignment_results
         if assignment.respondent_profile_id in member_ids
     ]
-    team_assignments = [assignment for assignment, _result in team_assignment_results]
+    team_assignments = [assignment for assignment, _result, _definition in team_assignment_results]
     assigned_count = len(team_assignments)
     completed_count = sum(
         1 for assignment in team_assignments if assignment.status in COMPLETED_STATUSES

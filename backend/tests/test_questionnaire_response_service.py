@@ -1,4 +1,5 @@
 import uuid
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -16,11 +17,24 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.companies.models import CompanyProject
-from codrut.modules.forms.models import QuestionnaireResponse, QuestionnaireResponseStatus
+from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
+    QuestionnaireResponse,
+    QuestionnaireResponseStatus,
+)
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User, UserRole
+from codrut.tools.local_preview import (
+    PREVIEW_DEFINITION_VERSION,
+    build_preview_questionnaire_definitions,
+    build_sample_answers,
+)
+
+PREVIEW_DEFINITIONS = {
+    definition.key: definition for definition in build_preview_questionnaire_definitions()
+}
 
 
 class FakeFormsRepository:
@@ -32,12 +46,26 @@ class FakeFormsRepository:
         self.assignment = assignment
         self.project = project
         self.response: QuestionnaireResponse | None = None
+        preview = PREVIEW_DEFINITIONS["lencioni"]
+        self.definition = QuestionnaireDefinition(
+            id=uuid.uuid4(),
+            key=preview.key,
+            version=PREVIEW_DEFINITION_VERSION,
+            title=preview.title,
+            description=preview.description,
+            schema=deepcopy(preview.schema),
+            active=True,
+        )
 
     async def get_assignment_for_user(
         self,
         assignment_id: uuid.UUID,
         user_id: uuid.UUID,
+        *,
+        allowed_assignment_ids: tuple[uuid.UUID, ...] | None = None,
     ) -> QuestionnaireAssignment | None:
+        if allowed_assignment_ids is not None and assignment_id not in allowed_assignment_ids:
+            return None
         if self.assignment and self.assignment.id == assignment_id:
             return self.assignment
         return None
@@ -49,6 +77,24 @@ class FakeFormsRepository:
         if self.response and self.response.assignment_id == assignment_id:
             return self.response
         return None
+
+    async def get_definition(
+        self,
+        key: str,
+        *,
+        version: int | None = None,
+    ) -> QuestionnaireDefinition | None:
+        if key != self.definition.key:
+            return None
+        if version is not None and version != self.definition.version:
+            return None
+        return self.definition
+
+    async def get_definition_by_id(
+        self,
+        definition_id: uuid.UUID,
+    ) -> QuestionnaireDefinition | None:
+        return self.definition if definition_id == self.definition.id else None
 
     async def add_response(self, response: QuestionnaireResponse) -> QuestionnaireResponse:
         response.id = uuid.uuid4()
@@ -83,20 +129,37 @@ def make_assignment() -> QuestionnaireAssignment:
 
 
 def complete_lencioni_answers() -> dict[str, int]:
-    return {f"lencioni_q{number:02d}": 3 for number in range(1, 16)}
+    return build_sample_answers(PREVIEW_DEFINITIONS["lencioni"].schema)
+
+
+def persisted_preview_definition(
+    key: str,
+    *,
+    active: bool = False,
+) -> QuestionnaireDefinition:
+    preview = PREVIEW_DEFINITIONS[key]
+    return QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key=key,
+        version=1_000_000 + uuid.uuid4().int % 1_000_000,
+        title=preview.title,
+        description=preview.description,
+        schema=deepcopy(preview.schema),
+        active=active,
+    )
 
 
 async def test_save_assignment_response_creates_draft_and_starts_assignment() -> None:
     assignment = make_assignment()
     service = make_service(FakeFormsRepository(assignment))
-    payload = QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3})
+    payload = QuestionnaireResponseSaveRequest(answers={"team_sample_1": 3})
 
     response = await service.save_assignment_response(uuid.uuid4(), assignment.id, payload)
 
     assert response.status == QuestionnaireResponseStatus.draft
     assert response.questionnaire_key == "lencioni"
-    assert response.questionnaire_version == 1
-    assert response.answers == {"lencioni_q01": 3}
+    assert response.questionnaire_version == PREVIEW_DEFINITION_VERSION
+    assert response.answers == {"team_sample_1": 3}
     assert assignment.status == AssignmentStatus.started
     assert assignment.started_at is not None
 
@@ -133,7 +196,7 @@ async def test_save_assignment_response_rejects_changes_after_submission() -> No
         await service.save_assignment_response(
             user_id,
             assignment.id,
-            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 1}),
+            QuestionnaireResponseSaveRequest(answers={"team_sample_1": 1}),
         )
 
     assert exc_info.value.code == "response_locked"
@@ -173,7 +236,7 @@ async def test_save_assignment_response_rejects_assignment_after_due_date() -> N
         await service.save_assignment_response(
             uuid.uuid4(),
             assignment.id,
-            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+            QuestionnaireResponseSaveRequest(answers={"team_sample_1": 3}),
         )
 
     assert exc_info.value.code == "assignment_closed"
@@ -194,7 +257,7 @@ async def test_save_assignment_response_rejects_project_closed_window() -> None:
         await service.save_assignment_response(
             uuid.uuid4(),
             assignment.id,
-            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+            QuestionnaireResponseSaveRequest(answers={"team_sample_1": 3}),
         )
 
     assert exc_info.value.code == "project_closed"
@@ -214,7 +277,8 @@ async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> N
                 id=uuid.uuid4(),
                 name=f"Scored {uuid.uuid4().hex[:8]}",
             )
-            session.add_all([user, company])
+            definition = persisted_preview_definition("lencioni")
+            session.add_all([user, company, definition])
             await session.flush()
 
             profile = company_models.ParticipantProfile(
@@ -232,6 +296,7 @@ async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> N
                 company_id=company.id,
                 respondent_profile_id=profile.id,
                 questionnaire_key="lencioni",
+                questionnaire_definition_id=definition.id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.assigned,
             )
@@ -270,7 +335,8 @@ async def test_submit_pcm_base_updates_participant_profile_without_scoring() -> 
                 id=uuid.uuid4(),
                 name=f"PCM {uuid.uuid4().hex[:8]}",
             )
-            session.add_all([user, company])
+            definition = persisted_preview_definition("pcm_base")
+            session.add_all([user, company, definition])
             await session.flush()
 
             profile = company_models.ParticipantProfile(
@@ -288,6 +354,7 @@ async def test_submit_pcm_base_updates_participant_profile_without_scoring() -> 
                 company_id=company.id,
                 respondent_profile_id=profile.id,
                 questionnaire_key="pcm_base",
+                questionnaire_definition_id=definition.id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.assigned,
             )
@@ -329,7 +396,8 @@ async def test_participant_onboarding_creates_single_pcm_profile_task_for_perman
                 id=uuid.uuid4(),
                 name=f"PCM Onboarding {uuid.uuid4().hex[:8]}",
             )
-            session.add_all([user, company])
+            definition = persisted_preview_definition("pcm_base", active=True)
+            session.add_all([user, company, definition])
             await session.flush()
 
             profile = company_models.ParticipantProfile(
@@ -359,6 +427,7 @@ async def test_participant_onboarding_creates_single_pcm_profile_task_for_perman
                 )
             ).scalar_one()
             assert assignment.questionnaire_key == "pcm_base"
+            assert assignment.questionnaire_definition_id == definition.id
             assert assignment.target_type == AssignmentTargetType.self_assessment
             assert assignment.access_mode == AssignmentAccessMode.account_link
 
@@ -399,12 +468,16 @@ async def test_participant_onboarding_skips_shadow_secure_link_users() -> None:
             assert onboarding.required is False
 
             assignment_count = (
-                await session.execute(
-                    select(QuestionnaireAssignment).where(
-                        QuestionnaireAssignment.respondent_profile_id == profile.id
+                (
+                    await session.execute(
+                        select(QuestionnaireAssignment).where(
+                            QuestionnaireAssignment.respondent_profile_id == profile.id
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             assert assignment_count == []
 
             await session.rollback()
@@ -432,6 +505,29 @@ async def test_get_assignment_response_does_not_create_draft() -> None:
     assert res.answers == {}
     assert res.questionnaire_key == assignment.questionnaire_key
     assert repository.response is None
+
+
+async def test_get_assignment_definition_requires_the_assignment_scope() -> None:
+    assignment = make_assignment()
+    service = make_service(FakeFormsRepository(assignment))
+
+    definition = await service.get_assignment_definition(
+        uuid.uuid4(),
+        assignment.id,
+        allowed_assignment_ids=(assignment.id,),
+    )
+
+    assert definition.key == assignment.questionnaire_key
+    assert definition.version == PREVIEW_DEFINITION_VERSION
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.get_assignment_definition(
+            uuid.uuid4(),
+            assignment.id,
+            allowed_assignment_ids=(uuid.uuid4(),),
+        )
+
+    assert exc_info.value.code == "assignment_not_found"
 
 
 async def test_get_assignment_response_rejects_assignment_after_due_date() -> None:
@@ -470,16 +566,34 @@ async def test_submit_rejects_incomplete_required_answers() -> None:
         await service.save_assignment_response(
             uuid.uuid4(),
             assignment.id,
-            QuestionnaireResponseSaveRequest(answers={"lencioni_q01": 3}),
+            QuestionnaireResponseSaveRequest(answers={"team_sample_1": 3}),
             submit=True,
         )
+
+
+async def test_submit_allows_unanswered_optional_questions() -> None:
+    assignment = make_assignment()
+    repository = FakeFormsRepository(assignment)
+    questions = repository.definition.schema["sections"][0]["questions"]
+    questions[1]["required"] = False
+    answers = complete_lencioni_answers()
+    answers.pop(questions[1]["id"])
+
+    response = await make_service(repository).save_assignment_response(
+        uuid.uuid4(),
+        assignment.id,
+        QuestionnaireResponseSaveRequest(answers=answers),
+        submit=True,
+    )
+
+    assert response.status == QuestionnaireResponseStatus.submitted
 
 
 async def test_submit_rejects_answers_outside_question_scale() -> None:
     assignment = make_assignment()
     service = make_service(FakeFormsRepository(assignment))
     answers = complete_lencioni_answers()
-    answers["lencioni_q01"] = 999
+    answers["team_sample_1"] = 999
 
     with pytest.raises(DomainError, match="outside the allowed scale"):
         await service.save_assignment_response(

@@ -513,6 +513,11 @@
           "access_mode": {
             "$ref": "#/components/schemas/AssignmentAccessMode"
           },
+          "assignment_round_id": {
+            "format": "uuid",
+            "title": "Assignment Round Id",
+            "type": "string"
+          },
           "company_id": {
             "format": "uuid",
             "title": "Company Id",
@@ -574,6 +579,10 @@
           "questionnaire_key": {
             "title": "Questionnaire Key",
             "type": "string"
+          },
+          "reminder_count": {
+            "title": "Reminder Count",
+            "type": "integer"
           },
           "reminder_due_at": {
             "anyOf": [
@@ -678,6 +687,7 @@
           "id",
           "company_id",
           "project_id",
+          "assignment_round_id",
           "respondent_profile_id",
           "questionnaire_key",
           "target_type",
@@ -693,7 +703,8 @@
           "validated_at",
           "scored_at",
           "reminder_due_at",
-          "last_reminder_sent_at"
+          "last_reminder_sent_at",
+          "reminder_count"
         ],
         "title": "AssignmentResponse",
         "type": "object"
@@ -779,6 +790,88 @@
         "title": "AuthResponse",
         "type": "object"
       },
+      "BrevoWebhookEvent": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "event": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Event",
+            "type": "string"
+          },
+          "message-id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Message-Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "ts": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ts"
+          },
+          "ts_event": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ts Event"
+          }
+        },
+        "required": [
+          "event",
+          "email",
+          "message-id"
+        ],
+        "title": "BrevoWebhookEvent",
+        "type": "object"
+      },
+      "BrevoWebhookResponse": {
+        "properties": {
+          "status": {
+            "enum": [
+              "applied",
+              "duplicate",
+              "ignored"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "BrevoWebhookResponse",
+        "type": "object"
+      },
       "CampaignAssetUploadResponse": {
         "properties": {
           "content_type": {
@@ -805,6 +898,25 @@
           "size_bytes"
         ],
         "title": "CampaignAssetUploadResponse",
+        "type": "object"
+      },
+      "CampaignCancelResponse": {
+        "properties": {
+          "campaign_id": {
+            "format": "uuid",
+            "title": "Campaign Id",
+            "type": "string"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "campaign_id",
+          "cancelled"
+        ],
+        "title": "CampaignCancelResponse",
         "type": "object"
       },
       "CampaignCreateRequest": {
@@ -834,12 +946,19 @@
             "type": "string"
           },
           "segment": {
-            "enum": [
-              "past_customer",
-              "potential_customer"
+            "anyOf": [
+              {
+                "enum": [
+                  "past_customer",
+                  "potential_customer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Segment",
-            "type": "string"
+            "title": "Segment"
           },
           "subject": {
             "maxLength": 255,
@@ -879,7 +998,6 @@
         },
         "required": [
           "name",
-          "segment",
           "subject",
           "html_body",
           "text_body"
@@ -1113,6 +1231,17 @@
             "title": "Calendlyclickcount",
             "type": "integer"
           },
+          "campaignDelivery": {
+            "default": "not_sent",
+            "enum": [
+              "not_sent",
+              "queued",
+              "sent",
+              "failed"
+            ],
+            "title": "Campaigndelivery",
+            "type": "string"
+          },
           "clickCount": {
             "default": 0,
             "title": "Clickcount",
@@ -1220,6 +1349,17 @@
             "default": 0,
             "title": "Replycount",
             "type": "integer"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "status": {
             "title": "Status",
@@ -1370,6 +1510,17 @@
             "default": 0,
             "title": "Replycount",
             "type": "integer"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "status": {
             "title": "Status",
@@ -1577,6 +1728,11 @@
             "title": "Failed",
             "type": "integer"
           },
+          "queued": {
+            "default": 0,
+            "title": "Queued",
+            "type": "integer"
+          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/CampaignSendRecipientResult"
@@ -1652,6 +1808,10 @@
           "segment": {
             "anyOf": [
               {
+                "enum": [
+                  "past_customer",
+                  "potential_customer"
+                ],
                 "type": "string"
               },
               {
@@ -1759,7 +1919,7 @@
           },
           "password": {
             "maxLength": 128,
-            "minLength": 8,
+            "minLength": 12,
             "title": "Password",
             "type": "string"
           }
@@ -2479,7 +2639,7 @@
             "type": "boolean"
           },
           "terms_version": {
-            "default": "privacy-2026-06-12",
+            "default": "privacy-2026-07-16",
             "maxLength": 80,
             "title": "Terms Version",
             "type": "string"
@@ -2526,6 +2686,7 @@
       },
       "EmailDeliveryStatus": {
         "enum": [
+          "queued",
           "accepted",
           "failed"
         ],
@@ -2797,20 +2958,20 @@
         "additionalProperties": false,
         "properties": {
           "html_body": {
-            "default": "<p>Test email din Codru\u021b.</p>",
+            "default": "<p>Test email din Cody.</p>",
             "minLength": 1,
             "title": "Html Body",
             "type": "string"
           },
           "subject": {
-            "default": "Test Codru\u021b email",
+            "default": "Test Cody email",
             "maxLength": 180,
             "minLength": 1,
             "title": "Subject",
             "type": "string"
           },
           "text_body": {
-            "default": "Test email din Codru\u021b.",
+            "default": "Test email din Cody.",
             "minLength": 1,
             "title": "Text Body",
             "type": "string"
@@ -2963,6 +3124,166 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "IcareAnswerReviewResponse": {
+        "properties": {
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/IcareAnswerReviewRowResponse"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count"
+        ],
+        "title": "IcareAnswerReviewResponse",
+        "type": "object"
+      },
+      "IcareAnswerReviewRowResponse": {
+        "properties": {
+          "answer_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Description"
+          },
+          "answer_label": {
+            "title": "Answer Label",
+            "type": "string"
+          },
+          "answer_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Answer Value"
+          },
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "measurement_id": {
+            "title": "Measurement Id",
+            "type": "string"
+          },
+          "measurement_label": {
+            "title": "Measurement Label",
+            "type": "string"
+          },
+          "respondent_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respondent Email"
+          },
+          "respondent_name": {
+            "title": "Respondent Name",
+            "type": "string"
+          },
+          "respondent_profile_id": {
+            "format": "uuid",
+            "title": "Respondent Profile Id",
+            "type": "string"
+          },
+          "response_id": {
+            "format": "uuid",
+            "title": "Response Id",
+            "type": "string"
+          },
+          "section_id": {
+            "title": "Section Id",
+            "type": "string"
+          },
+          "section_label": {
+            "title": "Section Label",
+            "type": "string"
+          },
+          "statement_id": {
+            "title": "Statement Id",
+            "type": "string"
+          },
+          "statement_label": {
+            "title": "Statement Label",
+            "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "target_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Name"
+          },
+          "target_profile_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Profile Id"
+          },
+          "target_type": {
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "response_id",
+          "respondent_profile_id",
+          "respondent_name",
+          "target_type",
+          "section_id",
+          "section_label",
+          "measurement_id",
+          "measurement_label",
+          "statement_id",
+          "statement_label",
+          "answer_value",
+          "answer_label"
+        ],
+        "title": "IcareAnswerReviewRowResponse",
+        "type": "object"
+      },
       "InvitationCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3036,6 +3357,18 @@
             "title": "Invite Url",
             "type": "string"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
           "respondent_profile_id": {
             "format": "uuid",
             "title": "Respondent Profile Id",
@@ -3053,6 +3386,7 @@
         "required": [
           "id",
           "company_id",
+          "project_id",
           "respondent_profile_id",
           "token",
           "invite_url",
@@ -3062,11 +3396,39 @@
         "title": "InvitationResponse",
         "type": "object"
       },
+      "InviteExchangeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "InviteExchangeRequest",
+        "type": "object"
+      },
       "InviteTask": {
         "properties": {
           "assignmentId": {
             "title": "Assignmentid",
             "type": "string"
+          },
+          "assignmentRoundId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignmentroundid"
           },
           "detail": {
             "title": "Detail",
@@ -3083,6 +3445,29 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectid"
+          },
+          "projectName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectname"
           },
           "questionnaireKey": {
             "title": "Questionnairekey",
@@ -3505,6 +3890,11 @@
             "title": "Emails Failed",
             "type": "integer"
           },
+          "emails_queued": {
+            "default": 0,
+            "title": "Emails Queued",
+            "type": "integer"
+          },
           "emails_sent": {
             "title": "Emails Sent",
             "type": "integer"
@@ -3595,10 +3985,15 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
           }
         },
         "required": [
           "id",
+          "label",
           "average_score",
           "completed_count"
         ],
@@ -3607,6 +4002,11 @@
       },
       "ParticipantReceivedFeedbackSummary": {
         "properties": {
+          "assignment_round_id": {
+            "format": "uuid",
+            "title": "Assignment Round Id",
+            "type": "string"
+          },
           "completed_count": {
             "title": "Completed Count",
             "type": "integer"
@@ -3633,14 +4033,53 @@
             ],
             "title": "Overall Average"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
+          },
+          "questionnaire_key": {
+            "title": "Questionnaire Key",
+            "type": "string"
+          },
+          "questionnaire_title": {
+            "title": "Questionnaire Title",
+            "type": "string"
+          },
+          "scale_max": {
+            "title": "Scale Max",
+            "type": "number"
+          },
           "visible": {
             "title": "Visible",
             "type": "boolean"
           }
         },
         "required": [
+          "assignment_round_id",
+          "questionnaire_key",
+          "questionnaire_title",
           "completed_count",
           "minimum_completed",
+          "scale_max",
           "visible"
         ],
         "title": "ParticipantReceivedFeedbackSummary",
@@ -3665,9 +4104,16 @@
             "type": "string"
           },
           "email": {
-            "format": "email",
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "full_name": {
             "title": "Full Name",
@@ -3904,6 +4350,42 @@
         "title": "ParticipantWorkspaceCard",
         "type": "object"
       },
+      "ParticipantWorkspaceProject": {
+        "properties": {
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "deadline_label": {
+            "title": "Deadline Label",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "deadline_label"
+        ],
+        "title": "ParticipantWorkspaceProject",
+        "type": "object"
+      },
       "ParticipantWorkspaceResult": {
         "properties": {
           "assignment_id": {
@@ -3921,6 +4403,29 @@
               }
             ],
             "title": "Primary Result"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
           },
           "questionnaire_key": {
             "title": "Questionnaire Key",
@@ -4049,6 +4554,13 @@
             "title": "Project Name",
             "type": "string"
           },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantWorkspaceProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
           "received_feedback": {
             "anyOf": [
               {
@@ -4058,6 +4570,13 @@
                 "type": "null"
               }
             ]
+          },
+          "received_feedback_groups": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantReceivedFeedbackSummary"
+            },
+            "title": "Received Feedback Groups",
+            "type": "array"
           },
           "results": {
             "items": {
@@ -4101,7 +4620,7 @@
           },
           "new_password": {
             "maxLength": 128,
-            "minLength": 8,
+            "minLength": 12,
             "title": "New Password",
             "type": "string"
           }
@@ -4118,7 +4637,7 @@
         "properties": {
           "password": {
             "maxLength": 128,
-            "minLength": 8,
+            "minLength": 12,
             "title": "Password",
             "type": "string"
           },
@@ -4181,9 +4700,16 @@
             "type": "string"
           },
           "email": {
-            "format": "email",
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           },
           "full_name": {
             "title": "Full Name",
@@ -4506,6 +5032,29 @@
         "title": "QuestionnaireResponseStatus",
         "type": "string"
       },
+      "ReadinessResponse": {
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "const": "ok",
+              "type": "string"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checks"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
       "RegisterRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4516,7 +5065,7 @@
           },
           "password": {
             "maxLength": 128,
-            "minLength": 8,
+            "minLength": 12,
             "title": "Password",
             "type": "string"
           },
@@ -4526,7 +5075,7 @@
             "type": "boolean"
           },
           "terms_version": {
-            "default": "privacy-2026-06-12",
+            "default": "privacy-2026-07-16",
             "maxLength": 80,
             "title": "Terms Version",
             "type": "string"
@@ -4853,9 +5402,21 @@
             "type": "string"
           },
           "email": {
-            "format": "email",
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_queued": {
+            "default": false,
+            "title": "Email Queued",
+            "type": "boolean"
           },
           "email_sent": {
             "title": "Email Sent",
@@ -4871,6 +5432,17 @@
               }
             ],
             "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
           },
           "full_name": {
             "title": "Full Name",
@@ -4949,6 +5521,11 @@
           },
           "emails_failed": {
             "title": "Emails Failed",
+            "type": "integer"
+          },
+          "emails_queued": {
+            "default": 0,
+            "title": "Emails Queued",
             "type": "integer"
           },
           "emails_sent": {
@@ -5057,15 +5634,33 @@
             ],
             "title": "Reports To"
           },
+          "Role Group": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Group"
+          },
           "email": {
-            "format": "email",
-            "title": "Email",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 320,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           }
         },
         "required": [
-          "Name",
-          "email"
+          "Name"
         ],
         "title": "RosterImportRow",
         "type": "object"
@@ -5277,10 +5872,16 @@
         "title": "UserRole",
         "type": "string"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
-    "title": "Codru\u021b Platform",
+    "title": "Cody Platform",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
@@ -5543,6 +6144,97 @@
           }
         },
         "summary": "Csrf Token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/invite/exchange": {
+      "post": {
+        "operationId": "exchange_invite_api_auth_invite_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteExchangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Exchange Invite",
         "tags": [
           "auth"
         ]
@@ -6269,6 +6961,91 @@
           }
         },
         "summary": "Upload Campaign Asset",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/communications/campaign-assets/{file_name}": {
+      "delete": {
+        "operationId": "remove_campaign_asset_api_communications_campaign_assets__file_name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_name",
+            "required": true,
+            "schema": {
+              "title": "File Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Remove Campaign Asset",
         "tags": [
           "communications"
         ]
@@ -7482,6 +8259,99 @@
         ]
       }
     },
+    "/api/communications/campaigns/{campaign_id}/cancel": {
+      "post": {
+        "operationId": "cancel_campaign_delivery_api_communications_campaigns__campaign_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignCancelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Cancel Campaign Delivery",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
     "/api/communications/campaigns/{campaign_id}/recipients": {
       "get": {
         "operationId": "list_campaign_recipient_memberships_api_communications_campaigns__campaign_id__recipients_get",
@@ -7696,6 +8566,24 @@
               "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],
@@ -8571,6 +9459,102 @@
           }
         },
         "summary": "Send Test Email",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/communications/webhooks/brevo": {
+      "post": {
+        "operationId": "receive_brevo_webhook_api_communications_webhooks_brevo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrevoWebhookEvent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrevoWebhookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Receive Brevo Webhook",
         "tags": [
           "communications"
         ]
@@ -10259,6 +11243,24 @@
               "title": "Company Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -10569,6 +11571,24 @@
               "title": "Company Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -10811,6 +11831,24 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],
@@ -11514,6 +12552,116 @@
         ]
       }
     },
+    "/api/companies/{company_id}/reports/icare-answers": {
+      "get": {
+        "operationId": "get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IcareAnswerReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Company Icare Answer Review",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
     "/api/companies/{company_id}/teams": {
       "get": {
         "operationId": "list_company_teams_api_companies__company_id__teams_get",
@@ -11927,6 +13075,99 @@
         "summary": "Create Team Membership",
         "tags": [
           "assignments"
+        ]
+      }
+    },
+    "/api/forms/assignments/{assignment_id}/definition": {
+      "get": {
+        "operationId": "get_assignment_definition_api_forms_assignments__assignment_id__definition_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionnaireDefinitionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Assignment Definition",
+        "tags": [
+          "forms"
         ]
       }
     },
@@ -12937,6 +14178,432 @@
         ]
       }
     },
+    "/api/forms/secure-links/{token}/assignments/{assignment_id}/definition": {
+      "get": {
+        "operationId": "get_secure_assignment_definition_api_forms_secure_links__token__assignments__assignment_id__definition_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionnaireDefinitionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Secure Assignment Definition",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
+    "/api/forms/secure-links/{token}/assignments/{assignment_id}/response": {
+      "get": {
+        "operationId": "get_secure_assignment_response_api_forms_secure_links__token__assignments__assignment_id__response_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionnaireResponseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Secure Assignment Response",
+        "tags": [
+          "forms"
+        ]
+      },
+      "put": {
+        "operationId": "save_secure_assignment_response_api_forms_secure_links__token__assignments__assignment_id__response_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionnaireResponseSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionnaireResponseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Save Secure Assignment Response",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
+    "/api/forms/secure-links/{token}/assignments/{assignment_id}/response/submit": {
+      "post": {
+        "operationId": "submit_secure_assignment_response_api_forms_secure_links__token__assignments__assignment_id__response_submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionnaireResponseSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionnaireResponseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Submit Secure Assignment Response",
+        "tags": [
+          "forms"
+        ]
+      }
+    },
     "/api/health/live": {
       "get": {
         "operationId": "live_api_health_live_get",
@@ -13030,11 +14697,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Ready Api Health Ready Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReadinessResponse"
                 }
               }
             },
@@ -13099,6 +14762,9 @@
               }
             },
             "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "Service not ready"
           }
         },
         "summary": "Ready",

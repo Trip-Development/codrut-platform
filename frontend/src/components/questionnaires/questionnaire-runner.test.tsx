@@ -11,7 +11,6 @@ import {
 import { QuestionnaireRunner } from "./questionnaire-runner";
 
 const routerPush = vi.fn();
-const originalConfirm = window.confirm;
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -64,7 +63,6 @@ describe("QuestionnaireRunner", () => {
     cleanup();
     vi.clearAllMocks();
     vi.useRealTimers();
-    window.confirm = originalConfirm;
   });
 
   it("keeps questionnaire details in a popup and renders questions/actions directly", () => {
@@ -72,6 +70,7 @@ describe("QuestionnaireRunner", () => {
 
     expect(screen.queryByText("This is a test description")).toBeNull();
     expect(screen.queryByText("Please answer all questions.")).toBeNull();
+    expect(screen.queryByText("Versiunea 1")).toBeNull();
     expect(screen.getByText("Question One Label")).toBeTruthy();
     expect(screen.getByText("Rar")).toBeTruthy();
     expect(screen.getByText("De obicei")).toBeTruthy();
@@ -90,14 +89,14 @@ describe("QuestionnaireRunner", () => {
         ...mockDefinition.schema,
         sections: [
           {
-            id: "icare",
-            title: "iCARE",
+            id: "sample_feedback",
+            title: "Feedback demonstrativ",
             questions: [
               {
-                id: "icare_01_dezvolta_oamenii",
-                code: "ICARE-1",
+                id: "feedback_signal_a",
+                code: "SYN-F1",
                 type: "statement_score_set",
-                label: "Dezvoltă oamenii",
+                label: "Claritate",
                 required: true,
                 scale: [
                   { value: 1, label: "1", description: "Niciodată." },
@@ -105,9 +104,9 @@ describe("QuestionnaireRunner", () => {
                 ],
                 statements: [
                   {
-                    id: "icare_01",
+                    id: "sample_statement_a",
                     code: "S1",
-                    label: "Oferă feedback constructiv",
+                    label: "Clarifică rezultatul așteptat",
                   },
                 ],
               },
@@ -119,7 +118,7 @@ describe("QuestionnaireRunner", () => {
 
     render(<QuestionnaireRunner definition={statementDefinition} assignmentId="icare-assignment" />);
 
-    expect(screen.getByText("Oferă feedback constructiv")).toBeTruthy();
+    expect(screen.getByText("Clarifică rezultatul așteptat")).toBeTruthy();
     expect(screen.queryByText("S1.")).toBeNull();
   });
 
@@ -175,7 +174,7 @@ describe("QuestionnaireRunner", () => {
       />,
     );
 
-    expect(screen.getByText("Completezi pentru Bianca Pavel")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Completezi feedback pentru Bianca Pavel/i })).toBeTruthy();
     expect(screen.getByText("Nu oferă feedback sau îl evită complet.")).toBeTruthy();
     expect(screen.getByText("Oferă feedback regulat, cu exemple concrete.")).toBeTruthy();
     expect(screen.queryByText("Inspiră (Inspiring)")).toBeNull();
@@ -184,7 +183,7 @@ describe("QuestionnaireRunner", () => {
     expect(screen.queryByText("S1.")).toBeNull();
   });
 
-  it("shows the 360 target prompt as a single Romanian line using only the safe display name", () => {
+  it("shows the 360 target prompt as an editorial Romanian heading using only the safe display name", () => {
     render(
       <QuestionnaireRunner
         definition={{ ...mockDefinition, key: "boss_360" }}
@@ -193,10 +192,11 @@ describe("QuestionnaireRunner", () => {
       />,
     );
 
-    expect(screen.getByText("Completezi pentru Bianca Pavel")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Completezi feedback pentru Bianca Pavel/i })).toBeTruthy();
+    expect(screen.getByText("Feedback iCARE")).toBeTruthy();
+    expect(screen.queryByText("Completezi pentru Bianca Pavel")).toBeNull();
     expect(screen.queryByText("Evaluezi")).toBeNull();
     expect(screen.queryByText(/You are reviewing/i)).toBeNull();
-    expect(screen.queryByText(/Completezi feedback/i)).toBeNull();
   });
 
   it("does not expose account-like 360 target labels", () => {
@@ -220,17 +220,82 @@ describe("QuestionnaireRunner", () => {
     expect(screen.getByText("0% completat")).toBeTruthy();
 
     // Click on option "De obicei"
-    const optionButton = screen.getByText("De obicei");
+    const optionButton = screen.getByRole("radio", { name: "De obicei" });
     fireEvent.click(optionButton);
 
     // Progress updates to 100%
     expect(screen.getByText("100% completat")).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Question One Label" })).toBeTruthy();
+    expect(optionButton.getAttribute("aria-checked")).toBe("true");
     expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
     });
+  });
+
+  it("allows submission when only optional questions are unanswered", () => {
+    const definition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          ...mockDefinition.schema.sections[0],
+          questions: [
+            mockDefinition.schema.sections[0].questions[0],
+            {
+              id: "q2",
+              code: "Q2",
+              type: "likert",
+              label: "Optional question",
+              required: false,
+              scale: [{ value: 1, label: "Da" }],
+            },
+          ],
+        }],
+      },
+    };
+
+    render(
+      <QuestionnaireRunner
+        definition={definition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+      />,
+    );
+
+    expect(screen.getByText("100% completat")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Trimite răspunsurile" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("communicates autosave through the submit control without locking answers", async () => {
+    vi.useFakeTimers();
+    let resolveSave!: () => void;
+    const savePromise = new Promise<Awaited<ReturnType<typeof saveQuestionnaireResponse>>>((resolve) => {
+      resolveSave = () => resolve({ status: "draft" } as Awaited<ReturnType<typeof saveQuestionnaireResponse>>);
+    });
+    vi.mocked(saveQuestionnaireResponse).mockReturnValueOnce(savePromise);
+
+    render(<QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />);
+
+    const optionButton = screen.getByRole("radio", { name: "De obicei" }) as HTMLButtonElement;
+    fireEvent.click(optionButton);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    expect(screen.getAllByText("Salvăm draftul")).toHaveLength(1);
+    expect((screen.getByRole("button", { name: "Salvăm draftul" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(optionButton.disabled).toBe(false);
+
+    await act(async () => {
+      resolveSave();
+      await savePromise;
+    });
+
+    expect(screen.queryByText("Draft salvat.")).toBeNull();
   });
 
   it("renders 1-10 scales as a discrete slider and saves the selected score", async () => {
@@ -263,18 +328,21 @@ describe("QuestionnaireRunner", () => {
 
     render(<QuestionnaireRunner definition={tenPointDefinition} assignmentId="ten-point-assignment" />);
 
-    const slider = screen.getByRole("slider", { name: "Question One Label" }) as HTMLInputElement;
-    expect(slider.min).toBe("1");
-    expect(slider.max).toBe("10");
-    expect(slider.step).toBe("1");
-    expect(slider.getAttribute("aria-valuetext")).toBe("1: Alege un scor de la 1 la 10.");
+    const slider = screen.getByRole("slider", { name: "Question One Label" });
+    expect(slider.getAttribute("aria-valuemin")).toBe("1");
+    expect(slider.getAttribute("aria-valuemax")).toBe("10");
+    expect(slider.getAttribute("aria-valuenow")).toBe("5");
+    expect(slider.getAttribute("aria-valuetext")).toBe("Neselectat. Alege un scor de la 1 la 10.");
     expect(slider.getAttribute("aria-describedby")).toBeTruthy();
-    expect(screen.getByText("Alege un scor de la 1 la 10.")).toBeTruthy();
+    expect(screen.getByText("Alege un scor de la 1 la 10. Cursorul este poziționat neutru până selectezi.")).toBeTruthy();
 
-    fireEvent.change(slider, { target: { value: "7" } });
+    slider.focus();
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
 
     expect(screen.getByText("100% completat")).toBeTruthy();
     expect(screen.getByText("Scor selectat: 7")).toBeTruthy();
+    expect(slider.getAttribute("aria-valuenow")).toBe("7");
     expect(slider.getAttribute("aria-valuetext")).toBe("7: 7");
 
     await vi.advanceTimersByTimeAsync(450);
@@ -355,7 +423,7 @@ describe("QuestionnaireRunner", () => {
     });
   });
 
-  it("saves a draft and exits to the questionnaire list", async () => {
+  it("saves through the back action and exits to the questionnaire list", async () => {
     render(
       <QuestionnaireRunner
         definition={mockDefinition}
@@ -364,18 +432,52 @@ describe("QuestionnaireRunner", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Salvează draft" }));
+    expect(screen.queryByRole("button", { name: "Salvează draft" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Înapoi la chestionare" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Draft salvat.")).toBeTruthy();
       expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
     });
     expect(screen.getByRole("button", { name: "Trimite răspunsurile" })).toBeTruthy();
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 1 });
   });
 
+  it("shows save-before-exit feedback while the back action is pending", async () => {
+    let resolveSave!: () => void;
+    const savePromise = new Promise<Awaited<ReturnType<typeof saveQuestionnaireResponse>>>((resolve) => {
+      resolveSave = () => resolve({ status: "draft" } as Awaited<ReturnType<typeof saveQuestionnaireResponse>>);
+    });
+    vi.mocked(saveQuestionnaireResponse).mockReturnValueOnce(savePromise);
+
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+      />,
+    );
+
+    const optionButton = screen.getByRole("radio", { name: "Rar" }) as HTMLButtonElement;
+    const backButton = screen.getByRole("button", { name: "Înapoi la chestionare" });
+    fireEvent.click(backButton);
+    fireEvent.click(backButton);
+
+    expect(await screen.findAllByText("Salvăm draftul")).toHaveLength(2);
+    expect(screen.queryByText("Salvăm draftul înainte de ieșire")).toBeNull();
+    expect(optionButton.disabled).toBe(true);
+    expect(saveQuestionnaireResponse).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSave();
+      await savePromise;
+    });
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
+    });
+  });
+
   it("submits completed answers and exits to the return destination", async () => {
-    window.confirm = vi.fn(() => true);
     render(
       <QuestionnaireRunner
         definition={mockDefinition}
@@ -386,6 +488,8 @@ describe("QuestionnaireRunner", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+    expect(screen.getByRole("dialog", { name: "Trimiți răspunsurile finale?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
 
     await waitFor(() => {
       expect(submitQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 2 });
@@ -393,8 +497,44 @@ describe("QuestionnaireRunner", () => {
     });
   });
 
+  it("shows final-submit progress on the submit control and locks answers while pending", async () => {
+    let resolveSubmit!: () => void;
+    const submitPromise = new Promise<Awaited<ReturnType<typeof submitQuestionnaireResponse>>>((resolve) => {
+      resolveSubmit = () => resolve({ status: "submitted" } as Awaited<ReturnType<typeof submitQuestionnaireResponse>>);
+    });
+    vi.mocked(submitQuestionnaireResponse).mockReturnValueOnce(submitPromise);
+
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        returnHref="/participant/questionnaires"
+      />,
+    );
+
+    const optionButton = screen.getByRole("radio", { name: "De obicei" }) as HTMLButtonElement;
+    fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+    const confirmButton = screen.getByRole("button", { name: "Trimite" });
+    fireEvent.click(confirmButton);
+    fireEvent.click(confirmButton);
+
+    expect((await screen.findByRole("button", { name: "Trimitem răspunsurile" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("Trimitem răspunsurile finale")).toBeNull();
+    expect(optionButton.disabled).toBe(true);
+    expect(submitQuestionnaireResponse).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSubmit();
+      await submitPromise;
+    });
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
+    });
+  });
+
   it("shows a stale-session message when another tab changes the active account", async () => {
-    window.confirm = vi.fn(() => true);
     vi.mocked(submitQuestionnaireResponse).mockRejectedValueOnce(
       new QuestionnaireRequestError("Sesiunea activă nu este un cont de participant.", 403),
     );
@@ -408,6 +548,7 @@ describe("QuestionnaireRunner", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
 
     await waitFor(() => {
       expect(screen.getByText(/Sesiunea activă s-a schimbat în altă filă/)).toBeTruthy();
@@ -431,7 +572,7 @@ describe("QuestionnaireRunner", () => {
     expect(screen.getByRole("link", { name: "Înapoi la chestionare" }).getAttribute("href")).toBe(
       "/participant/questionnaires",
     );
-    expect((screen.getByRole("button", { name: "Salvează draft" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Salvează draft" })).toBeNull();
     expect((screen.getByRole("button", { name: "Trimite răspunsurile" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -465,9 +606,12 @@ describe("QuestionnaireRunner", () => {
 
     render(<QuestionnaireRunner definition={singleChoiceDefinition} assignmentId="pcm-assignment" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Gânditor/ }));
+    const thinkerOption = screen.getByRole("radio", { name: /Gânditor/ });
+    fireEvent.click(thinkerOption);
 
     expect(screen.getByText("100% completat")).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Care este baza ta PCM?" })).toBeTruthy();
+    expect(thinkerOption.getAttribute("aria-checked")).toBe("true");
 
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("pcm-assignment", {

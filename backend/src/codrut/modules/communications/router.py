@@ -1,19 +1,25 @@
+import hmac
 from html import escape
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.contracts.emails import EmailAddress, EmailMessage
 from codrut.core.config import Settings, get_settings
 from codrut.core.errors import DomainError
-from codrut.modules.communications.assets import store_campaign_asset
+from codrut.modules.communications.delivery_events import DeliveryEventService
 from codrut.modules.communications.email_provider import build_email_provider
+from codrut.modules.communications.models import Campaign
 from codrut.modules.communications.schemas import (
+    BrevoWebhookEvent,
+    BrevoWebhookResponse,
     CampaignAssetUploadResponse,
+    CampaignCancelResponse,
     CampaignCreateRequest,
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
@@ -36,6 +42,7 @@ from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 
 router = APIRouter()
+webhook_bearer = HTTPBearer(auto_error=False)
 TRANSPARENT_GIF_BYTES = (
     b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
     b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
@@ -49,6 +56,33 @@ def _require_trainer(principal: SessionPrincipal) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Trainer access is required.",
         )
+
+
+@router.post("/webhooks/brevo", response_model=BrevoWebhookResponse)
+async def receive_brevo_webhook(
+    payload: BrevoWebhookEvent,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(webhook_bearer)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> BrevoWebhookResponse:
+    expected_token = (
+        settings.email_webhook_token.get_secret_value()
+        if settings.email_webhook_token is not None
+        else None
+    )
+    valid = bool(
+        credentials
+        and credentials.scheme.casefold() == "bearer"
+        and expected_token
+        and hmac.compare_digest(credentials.credentials, expected_token)
+    )
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Webhook authentication failed.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await DeliveryEventService(session).apply_brevo_event(payload)
 
 
 @router.post("/test-email", response_model=EmailTestSendResponse)
@@ -86,6 +120,7 @@ async def upload_campaign_asset(
     request: Request,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
     content_type: Annotated[str | None, Header(alias="content-type")] = None,
     file_name: Annotated[str | None, Header(alias="x-file-name")] = None,
 ) -> CampaignAssetUploadResponse:
@@ -104,18 +139,37 @@ async def upload_campaign_asset(
                 "Thumbnailul depășește limita permisă.",
                 code="campaign_asset_too_large",
             )
-    asset = store_campaign_asset(
+    return await CommunicationsService(session).upload_campaign_asset(
         settings=settings,
         content=await request.body(),
         content_type=content_type,
         original_file_name=file_name,
+        owner_id=principal.user_id,
     )
-    return CampaignAssetUploadResponse(
-        url=asset.url,
-        file_name=asset.file_name,
-        content_type=asset.content_type,
-        size_bytes=asset.size_bytes,
+
+
+@router.delete("/campaign-assets/{file_name}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_campaign_asset(
+    file_name: str,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    _require_trainer(principal)
+    deleted = await CommunicationsService(session).remove_campaign_asset(
+        settings=settings,
+        file_name=file_name,
+        owner_id=principal.user_id,
     )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "campaign_asset_not_found",
+                "message": "Campaign asset not found.",
+            },
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/templates", response_model=list[EmailTemplateResponse])
@@ -371,6 +425,7 @@ async def confirm_unsubscribe_campaign_recipient(
         settings,
     )
     email = escape(recipient.email or "acest contact")
+    sender_name = escape(settings.email_from_name)
     action = escape(f"/api/communications/campaigns/unsubscribe/{token}", quote=True)
     return HTMLResponse(
         f"""
@@ -418,7 +473,7 @@ async def confirm_unsubscribe_campaign_recipient(
   <main>
     <section>
       <p style="margin:0 0 8px;font-size:12px;font-weight:700;">
-        Andrei Vacaru
+        {sender_name}
       </p>
       <h1 style="margin:0 0 14px;font-size:24px;">Confirmă dezabonarea</h1>
       <p>
@@ -451,6 +506,7 @@ async def unsubscribe_campaign_recipient(
     )
     await session.commit()
     email = escape(recipient.email or "acest contact")
+    sender_name = escape(settings.email_from_name)
     return HTMLResponse(
         f"""
 <!doctype html>
@@ -487,7 +543,7 @@ async def unsubscribe_campaign_recipient(
   <main>
     <section>
       <p style="margin:0 0 8px;font-size:12px;font-weight:700;">
-        Andrei Vacaru
+        {sender_name}
       </p>
       <h1 style="margin:0 0 14px;font-size:24px;">Dezabonare confirmată</h1>
       <p>
@@ -506,14 +562,19 @@ async def create_campaign(
     payload: CampaignCreateRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
     _require_trainer(principal)
     campaign = await CommunicationsService(session).create_campaign(
         payload,
         owner_id=principal.user_id,
+        settings=settings,
     )
     await session.commit()
-    return {"status": "success", "campaign_id": str(campaign.id)}
+    return {
+        **_campaign_response(campaign),
+        "campaign_id": str(campaign.id),
+    }
 
 
 @router.get(
@@ -561,17 +622,39 @@ async def send_campaign(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=8, max_length=128),
+    ] = None,
 ) -> CampaignSendResponse:
     _require_trainer(principal)
     result = await CommunicationsService(session).send_campaign(
         campaign_id,
         payload,
-        provider=build_email_provider(settings),
         settings=settings,
         owner_id=principal.user_id,
+        idempotency_key=idempotency_key,
     )
     await session.commit()
     return result
+
+
+@router.post(
+    "/campaigns/{campaign_id}/cancel",
+    response_model=CampaignCancelResponse,
+)
+async def cancel_campaign_delivery(
+    campaign_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CampaignCancelResponse:
+    _require_trainer(principal)
+    cancelled = await CommunicationsService(session).cancel_campaign_delivery(
+        campaign_id,
+        owner_id=principal.user_id,
+    )
+    await session.commit()
+    return CampaignCancelResponse(campaign_id=campaign_id, cancelled=cancelled)
 
 
 @router.patch("/campaigns/{campaign_id}")
@@ -580,26 +663,17 @@ async def update_campaign(
     payload: CampaignUpdateRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
     _require_trainer(principal)
     campaign = await CommunicationsService(session).update_campaign(
         campaign_id,
         payload,
         owner_id=principal.user_id,
+        settings=settings,
     )
     await session.commit()
-    return {
-        "id": str(campaign.id),
-        "name": campaign.name,
-        "segment": campaign.segment.value if campaign.segment is not None else None,
-        "status": campaign.status.value,
-        "subject": campaign.subject,
-        "html_body": campaign.html_body,
-        "text_body": campaign.text_body,
-        "video_url": campaign.video_url,
-        "thumbnail_url": campaign.thumbnail_url,
-        "landing_page_url": campaign.landing_page_url,
-    }
+    return _campaign_response(campaign)
 
 
 @router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -622,18 +696,21 @@ async def list_campaigns(
     _require_trainer(principal)
     campaigns = await CommunicationsService(session).list_campaigns(owner_id=principal.user_id)
     await session.commit()
-    return [
-        {
-            "id": str(c.id),
-            "name": c.name,
-            "segment": c.segment.value if c.segment is not None else None,
-            "status": c.status.value,
-            "subject": c.subject,
-            "html_body": c.html_body,
-            "text_body": c.text_body,
-            "video_url": c.video_url,
-            "thumbnail_url": c.thumbnail_url,
-            "landing_page_url": c.landing_page_url,
-        }
-        for c in campaigns
-    ]
+    return [_campaign_response(campaign) for campaign in campaigns]
+
+
+def _campaign_response(campaign: Campaign) -> dict[str, str | None]:
+    media_kind = "video" if campaign.video_url else "image" if campaign.thumbnail_url else "none"
+    return {
+        "id": str(campaign.id),
+        "name": campaign.name,
+        "segment": campaign.segment.value if campaign.segment is not None else None,
+        "status": campaign.status.value,
+        "subject": campaign.subject,
+        "html_body": campaign.html_body,
+        "text_body": campaign.text_body,
+        "video_url": campaign.video_url,
+        "thumbnail_url": campaign.thumbnail_url,
+        "landing_page_url": campaign.landing_page_url,
+        "media_kind": media_kind,
+    }

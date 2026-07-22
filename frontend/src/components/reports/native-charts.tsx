@@ -1,3 +1,5 @@
+import { cn } from "@/utils/cn";
+
 type ChartDatum = {
   id: string;
   label: string;
@@ -5,7 +7,15 @@ type ChartDatum = {
   color?: string;
 };
 
-const defaultColors = ["#7f1d1d", "#0f766e", "#b45309", "#1d4ed8", "#6d28d9", "#be123c", "#15803d"];
+const defaultColors = [
+  "var(--chart-1)",
+  "var(--foreground)",
+  "var(--brand-gray)",
+  "var(--chart-2)",
+  "var(--burgundy-dark)",
+  "var(--success-ink)",
+  "var(--muted-foreground)",
+];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -28,9 +38,9 @@ export function DonutChart({
 
   return (
     <div className="grid gap-4 sm:grid-cols-[132px_1fr] sm:items-center">
-      <div className="relative mx-auto h-32 w-32" role="img" aria-label={title}>
-        <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
-          <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(34, 24, 20, 0.08)" strokeWidth="18" />
+      <div className="relative mx-auto size-32" role="img" aria-label={title}>
+        <svg viewBox="0 0 120 120" className="size-32 -rotate-90">
+          <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--muted)" strokeWidth="18" />
           {total > 0
             ? visibleData.map((item, index) => {
                 const fraction = item.value / total;
@@ -60,12 +70,12 @@ export function DonutChart({
         </div>
       </div>
       {total > 0 ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {visibleData.map((item, index) => (
             <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-              <span className="flex min-w-0 items-center gap-2 text-foreground/72">
+              <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  className="size-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: item.color ?? defaultColors[index % defaultColors.length] }}
                 />
                 <span className="truncate">{item.label}</span>
@@ -75,7 +85,7 @@ export function DonutChart({
           ))}
         </div>
       ) : (
-        <p className="text-sm text-foreground/52">{emptyLabel}</p>
+        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       )}
     </div>
   );
@@ -94,7 +104,7 @@ export function ScaledBar({
 
   return (
     <div className="mt-1.5 h-2 rounded-full bg-surface-muted" aria-hidden="true">
-      <div className={`h-full rounded-full ${colorClassName}`} style={{ width: `${width}%` }} />
+      <div className={cn("h-full rounded-full", colorClassName)} style={{ width: `${width}%` }} />
     </div>
   );
 }

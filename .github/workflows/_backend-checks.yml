@@ -48,7 +48,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
       - run: uv sync
       - run: uv run ruff check src tests migrations
       - run: uv run alembic upgrade head
+      - run: uv run alembic check
       - run: uv run pytest
+      - name: Check committed OpenAPI snapshot
+        run: uv run python -m codrut.tools.export_openapi --check --output ../docs/api/openapi.json
+      - name: Check generated frontend API types
+        working-directory: frontend
+        run: |
+          pnpm exec openapi-typescript ../docs/api/openapi.json -o /tmp/codrut-schema.d.ts
+          cmp --silent /tmp/codrut-schema.d.ts src/api/generated/schema.d.ts || {
+            echo "Generated frontend API types differ from the committed OpenAPI snapshot."
+            exit 1
+          }

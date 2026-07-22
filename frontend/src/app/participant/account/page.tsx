@@ -24,9 +24,9 @@ export default async function ParticipantAccountPage() {
   return (
     <AppShell
       audience="participant"
-      eyebrow="Profil"
+      eyebrow=""
       title="Contul tău"
-      description="Aici poți vedea detaliile contului tău corporate, integrarea cu programul de training și setările de confidențialitate."
+      description=""
       navItems={participantNavItems}
       activeHref="/participant/account"
       userLabel={name.split(" ")[0]}

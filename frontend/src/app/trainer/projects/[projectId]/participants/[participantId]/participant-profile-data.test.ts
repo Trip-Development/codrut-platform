@@ -53,9 +53,9 @@ describe("participant profile data", () => {
       assignment("pcm", "project-1", "participant-1", "pcm_base", "self", null, "scored"),
     ];
     const results = [
-      result("self-driver", { be_strong: 76, be_perfect: 58 }, "be_strong"),
-      result("feedback-given", { icare_01_dezvolta_oamenii: { score: 90 } }, "icare_01_dezvolta_oamenii"),
-      result("self-360", { icare_01_dezvolta_oamenii: { score: 90 }, icare_02_conduce_prin_puterea_exemplului: { score: 70 } }, "icare_01_dezvolta_oamenii"),
+      result("self-driver", { work_signal_a: 76, work_signal_b: 58 }, "work_signal_a"),
+      result("feedback-given", { feedback_signal_a: { score: 90 } }, "feedback_signal_a"),
+      result("self-360", { feedback_signal_a: { score: 90 }, feedback_signal_b: { score: 70 } }, "feedback_signal_a"),
       result("pcm", { pcm_base: "thinker", pcm_phase: "persister" }, "pcm_base"),
     ];
 
@@ -77,7 +77,7 @@ describe("participant profile data", () => {
       targetLabel: "Autoevaluare",
       dimensionCount: 2,
       averageScore: 80,
-      primaryResultLabel: "Dezvolta Oamenii",
+      primaryResultLabel: "Feedback Signal A",
     });
     expect(countPrivateFeedbackGiven(assignments, "participant-1")).toBe(1);
     expect(countPrivateFeedbackReceived(assignments, "participant-1")).toBe(0);

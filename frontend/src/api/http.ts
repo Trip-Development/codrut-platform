@@ -1,4 +1,9 @@
-import { getApiBaseUrl } from "./runtime";
+import {
+  getApiBaseUrl,
+  isLocalAuthBypassEnabled,
+  LOCAL_AUTH_ROLE_HEADER,
+  localAuthRoleForPathname,
+} from "./runtime";
 
 const CSRF_COOKIE_NAME = "codrut_csrf";
 const CSRF_HEADER_NAME = "X-CSRF-Token";
@@ -86,6 +91,20 @@ function initWithCsrf(init: RequestInit | undefined, csrfToken: string): Request
   };
 }
 
+function initWithLocalAuthRole(init?: RequestInit): RequestInit | undefined {
+  if (typeof window === "undefined" || !isLocalAuthBypassEnabled()) return init;
+
+  const role = localAuthRoleForPathname(window.location.pathname);
+  if (!role) return init;
+
+  const headers = new Headers(init?.headers);
+  headers.set(LOCAL_AUTH_ROLE_HEADER, role);
+  return {
+    ...init,
+    headers,
+  };
+}
+
 async function isCsrfFailure(response: Response): Promise<boolean> {
   if (response.status !== 403) return false;
   if (typeof response.clone !== "function") return false;
@@ -104,13 +123,17 @@ function canRetryRequest(input: RequestInfo | URL, init?: RequestInit): boolean 
 }
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  if (!shouldAttachCsrf(input, init)) {
-    return fetch(input, init);
+  const requestInit = initWithLocalAuthRole(init);
+  if (!shouldAttachCsrf(input, requestInit)) {
+    return fetch(input, requestInit);
   }
 
   const csrfToken = readCookie(CSRF_COOKIE_NAME);
-  const response = await fetch(input, csrfToken ? initWithCsrf(init, csrfToken) : init);
-  if (!(await isCsrfFailure(response)) || !canRetryRequest(input, init)) {
+  const response = await fetch(
+    input,
+    csrfToken ? initWithCsrf(requestInit, csrfToken) : requestInit,
+  );
+  if (!(await isCsrfFailure(response)) || !canRetryRequest(input, requestInit)) {
     return response;
   }
 
@@ -119,5 +142,5 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     return response;
   }
 
-  return fetch(input, initWithCsrf(init, refreshedToken));
+  return fetch(input, initWithCsrf(requestInit, refreshedToken));
 }

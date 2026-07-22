@@ -1,23 +1,18 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter_Tight } from "next/font/google";
+import { Geist } from "next/font/google";
+import { THEME_PREPAINT_SCRIPT } from "@/lib/theme-prepaint";
 import "./globals.css";
 
-const interTight = Inter_Tight({
+const geist = Geist({
   subsets: ["latin"],
-  variable: "--font-inter-tight",
+  variable: "--font-geist",
   weight: ["400", "500", "600", "700"],
 });
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-  weight: ["500", "700"],
-});
-
 export const metadata: Metadata = {
-  title: "Codruț Platform",
-  description: "Platformă pentru assessment, coaching și management de rollout Codruț.",
-  applicationName: "Codruț",
+  title: "Cody Platform",
+  description: "Platformă pentru assessment, coaching și management de rollout Cody.",
+  applicationName: "Cody",
   icons: {
     icon: [
       { url: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
@@ -30,11 +25,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ro" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body className={`${interTight.variable} ${fraunces.variable}`}>
+      <body className={geist.variable}>
         <script
+          id="codrut-theme-prepaint"
           dangerouslySetInnerHTML={{
-            __html:
-              "try{var t=localStorage.getItem('codrut-theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t}else if(matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.dataset.theme='dark'}}catch(e){}",
+            __html: THEME_PREPAINT_SCRIPT,
           }}
         />
         <div className="app-min-height bg-background text-foreground selection:bg-burgundy selection:text-white">

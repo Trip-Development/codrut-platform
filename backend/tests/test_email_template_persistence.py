@@ -18,6 +18,7 @@ from codrut.modules.communications.campaign_tracking import (
 )
 from codrut.modules.communications.models import (
     Campaign,
+    CampaignAsset,
     CampaignRecipient,
     CampaignRecipientEvent,
     CampaignRecipientMembership,
@@ -35,6 +36,7 @@ from codrut.modules.communications.schemas import (
     CampaignRecipientMembershipUpdateRequest,
     CampaignRecipientUpdateRequest,
     CampaignSendRequest,
+    CampaignUpdateRequest,
     EmailTemplateCreateRequest,
     EmailTemplateUpdateRequest,
 )
@@ -42,15 +44,17 @@ from codrut.modules.communications.service import (
     AssignmentInvitationContext,
     CommunicationsService,
     TransactionalEmailService,
+    _email_message_from_outbox_payload,
 )
 from codrut.modules.communications.templates import (
-    EVALUATION_TEMPLATES,
-    PROMOTIONAL_TEMPLATES,
     TransactionalTemplateKey,
     get_transactional_template,
 )
 from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.identity import models as _identity_models  # noqa: F401
+from codrut.tools.local_preview import build_preview_email_templates
+
+TEST_OWNER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 class FakeCommunicationsRepository:
@@ -62,9 +66,16 @@ class FakeCommunicationsRepository:
         self.campaign_recipient_memberships: list[CampaignRecipientMembership] = []
         self.campaign_recipient_events: list[CampaignRecipientEvent] = []
         self.campaigns: list[Campaign] = []
+        self.campaign_assets: list[CampaignAsset] = []
         self.list_template_calls = 0
 
-    async def has_sent_emails(self, key: str, version: int) -> bool:
+    async def has_sent_emails(
+        self,
+        key: str,
+        version: int,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> bool:
         return (key, version) in self.sent_versions
 
     async def list_templates(
@@ -104,8 +115,15 @@ class FakeCommunicationsRepository:
             None,
         )
 
-    async def get_latest_version(self, key: str) -> int:
-        versions = [t.version for t in self.templates if t.key == key]
+    async def get_latest_version(
+        self,
+        key: str,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> int:
+        versions = [
+            t.version for t in self.templates if t.key == key and t.owner_id == owner_id
+        ]
         return max(versions, default=0)
 
     async def add_template(
@@ -140,13 +158,19 @@ class FakeCommunicationsRepository:
         return [
             recipient
             for recipient in self.campaign_recipients
-            if recipient.email is not None and recipient.email.lower() in emails
+            if recipient.email is not None
+            and recipient.email.lower() in emails
+            and (owner_id is None or recipient.owner_id == owner_id)
         ]
 
     async def add_campaign_recipients(
         self,
         recipients: list[CampaignRecipient],
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> None:
+        if owner_id is not None:
+            assert all(recipient.owner_id == owner_id for recipient in recipients)
         self.campaign_recipients.extend(recipients)
 
     async def get_campaign(
@@ -166,14 +190,43 @@ class FakeCommunicationsRepository:
         )
 
     async def add_campaign(self, campaign: Campaign) -> Campaign:
+        if campaign.id is None:
+            campaign.id = uuid.uuid4()
         self.campaigns.append(campaign)
         return campaign
 
+    async def get_campaign_asset_by_url(
+        self,
+        public_url: str,
+        *,
+        owner_id: uuid.UUID,
+        for_update: bool = False,
+    ) -> CampaignAsset | None:
+        del for_update
+        return next(
+            (
+                asset
+                for asset in self.campaign_assets
+                if asset.public_url == public_url and asset.owner_id == owner_id
+            ),
+            None,
+        )
+
+    async def list_campaign_assets_for_campaign(
+        self,
+        campaign_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID,
+    ) -> list[CampaignAsset]:
+        return [
+            asset
+            for asset in self.campaign_assets
+            if asset.campaign_id == campaign_id and asset.owner_id == owner_id
+        ]
+
     async def delete_campaign(self, campaign: Campaign) -> None:
         self.campaigns = [
-            saved_campaign
-            for saved_campaign in self.campaigns
-            if saved_campaign.id != campaign.id
+            saved_campaign for saved_campaign in self.campaigns if saved_campaign.id != campaign.id
         ]
         self.campaign_recipient_memberships = [
             membership
@@ -189,6 +242,7 @@ class FakeCommunicationsRepository:
         return [
             recipient
             for recipient in self.campaign_recipients
+            if owner_id is None or recipient.owner_id == owner_id
         ]
 
     async def list_campaign_recipients_by_ids(
@@ -202,6 +256,7 @@ class FakeCommunicationsRepository:
             recipient
             for recipient in self.campaign_recipients
             if recipient.id in recipient_id_set
+            and (owner_id is None or recipient.owner_id == owner_id)
         ]
 
     async def get_campaign_recipient(
@@ -215,6 +270,7 @@ class FakeCommunicationsRepository:
                 recipient
                 for recipient in self.campaign_recipients
                 if recipient.id == recipient_id
+                and (owner_id is None or recipient.owner_id == owner_id)
             ),
             None,
         )
@@ -229,7 +285,9 @@ class FakeCommunicationsRepository:
             (
                 recipient
                 for recipient in self.campaign_recipients
-                if recipient.email is not None and recipient.email.lower() == email.lower()
+                if recipient.email is not None
+                and recipient.email.lower() == email.lower()
+                and (owner_id is None or recipient.owner_id == owner_id)
             ),
             None,
         )
@@ -238,19 +296,40 @@ class FakeCommunicationsRepository:
         self.sends.append(send)
         return send
 
+    async def get_email_send_by_idempotency_key(self, key: str) -> EmailSend | None:
+        return next((send for send in self.sends if send.idempotency_key == key), None)
+
     async def add_campaign_recipient_event(
         self,
         event: CampaignRecipientEvent,
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> CampaignRecipientEvent:
+        assert any(
+            recipient.id == event.recipient_id
+            and (owner_id is None or recipient.owner_id == owner_id)
+            for recipient in self.campaign_recipients
+        )
         self.campaign_recipient_events.append(event)
         return event
 
-    async def list_accepted_campaign_recipient_ids(self, campaign_id: uuid.UUID) -> set[uuid.UUID]:
+    async def list_accepted_campaign_recipient_ids(
+        self,
+        campaign_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> set[uuid.UUID]:
+        owned_recipient_ids = {
+            recipient.id
+            for recipient in self.campaign_recipients
+            if owner_id is None or recipient.owner_id == owner_id
+        }
         return {
             send.campaign_recipient_id
             for send in self.sends
             if send.campaign_id == campaign_id
             and send.campaign_recipient_id is not None
+            and send.campaign_recipient_id in owned_recipient_ids
             and send.status in {EmailSendStatus.queued, EmailSendStatus.accepted}
         }
 
@@ -258,8 +337,15 @@ class FakeCommunicationsRepository:
         self,
         campaign_id: uuid.UUID,
         recipient_ids: list[uuid.UUID],
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> dict[uuid.UUID, str]:
-        recipient_id_set = set(recipient_ids)
+        recipient_id_set = {
+            recipient.id
+            for recipient in self.campaign_recipients
+            if recipient.id in recipient_ids
+            and (owner_id is None or recipient.owner_id == owner_id)
+        }
         statuses: dict[uuid.UUID, str] = {}
         priority = {
             "failed": 1,
@@ -301,6 +387,11 @@ class FakeCommunicationsRepository:
             membership.recipient_id
             for membership in self.campaign_recipient_memberships
             if membership.campaign_id == campaign_id
+            and any(
+                recipient.id == membership.recipient_id
+                and (owner_id is None or recipient.owner_id == owner_id)
+                for recipient in self.campaign_recipients
+            )
         ]
 
     async def list_campaign_member_recipients(
@@ -318,6 +409,7 @@ class FakeCommunicationsRepository:
             recipient
             for recipient in self.campaign_recipients
             if recipient.id in member_id_set
+            and (owner_id is None or recipient.owner_id == owner_id)
         ]
         recipients_by_id = {recipient.id: recipient for recipient in recipients}
         return [
@@ -338,6 +430,16 @@ class FakeCommunicationsRepository:
         if campaign is None:
             return
         next_ids = list(dict.fromkeys(recipient_ids))
+        if any(
+            recipient_id
+            not in {
+                recipient.id
+                for recipient in self.campaign_recipients
+                if owner_id is None or recipient.owner_id == owner_id
+            }
+            for recipient_id in next_ids
+        ):
+            raise ValueError("campaign membership contains contacts from another owner")
         next_id_set = set(next_ids)
         self.campaign_recipient_memberships = [
             membership
@@ -381,6 +483,14 @@ class FakeEmailProvider:
         )
 
 
+def queued_messages(repository: FakeCommunicationsRepository) -> list[EmailMessage]:
+    return [
+        _email_message_from_outbox_payload(send.message_payload)
+        for send in repository.sends
+        if send.status == EmailSendStatus.queued
+    ]
+
+
 def make_service(repository: FakeCommunicationsRepository) -> CommunicationsService:
     service = CommunicationsService()
     service.repository = cast(Any, repository)
@@ -401,7 +511,7 @@ def persisted_template(
         html_body=(
             "<p>Buna, ${participant_name}.</p>"
             "<p>Trainer: ${trainer_name}</p>"
-            "<p><a href=\"${action_url}\">link</a></p>"
+            '<p><a href="${action_url}">link</a></p>'
         ),
         text_body="Buna, ${participant_name}. Trainer: ${trainer_name}. link: ${action_url}",
         variables=["participant_name", "trainer_name", "company_name", "action_url"],
@@ -502,13 +612,14 @@ async def test_bulk_create_campaign_recipients_reports_created_and_updated_count
     assert result.created == 1
     assert result.updated == 1
     assert len(result.recipients) == 2
+    assert result.recipients[1].segment is CampaignRecipientSegment.potential_customer
     assert existing.contact_name == "Existing Again"
     assert existing.organization_name == "Existing Org Updated"
     assert existing.segment == "past_customer"
 
 
 @pytest.mark.asyncio
-async def test_bulk_create_campaign_recipients_updates_shared_existing_contact() -> None:
+async def test_bulk_create_campaign_recipients_creates_owner_local_contact() -> None:
     first_owner_id = uuid.uuid4()
     second_owner_id = uuid.uuid4()
     repository = FakeCommunicationsRepository()
@@ -532,12 +643,17 @@ async def test_bulk_create_campaign_recipients_updates_shared_existing_contact()
         owner_id=first_owner_id,
     )
 
-    assert result.created == 0
-    assert result.updated == 1
-    assert repository.campaign_recipients == [existing]
+    assert result.created == 1
+    assert result.updated == 0
+    assert len(repository.campaign_recipients) == 2
     assert existing.owner_id == second_owner_id
-    assert existing.contact_name == "Owner One"
-    assert existing.organization_name == "Compania owner one"
+    assert existing.contact_name == "Ana Director"
+    assert existing.organization_name == "Compania A"
+    owner_local = repository.campaign_recipients[1]
+    assert owner_local.owner_id == first_owner_id
+    assert owner_local.email == "shared@example.com"
+    assert owner_local.contact_name == "Owner One"
+    assert owner_local.organization_name == "Compania owner one"
 
 
 @pytest.mark.asyncio
@@ -568,6 +684,7 @@ async def test_bulk_create_campaign_recipients_allows_suppressed_contacts_withou
 def persisted_campaign() -> Campaign:
     return Campaign(
         id=uuid.uuid4(),
+        owner_id=TEST_OWNER_ID,
         name="Leadership video",
         segment=CampaignRecipientSegment.potential_customer,
         status=CampaignStatus.ready,
@@ -578,9 +695,26 @@ def persisted_campaign() -> Campaign:
     )
 
 
-def catalog_template(key: str):
-    templates = (*PROMOTIONAL_TEMPLATES, *EVALUATION_TEMPLATES)
-    return next(template for template in templates if template.key == key)
+def persisted_protected_template(
+    *,
+    key: str = "preview_campaign_reactivation",
+) -> EmailTemplate:
+    preview = build_preview_email_templates()[key]
+    return EmailTemplate(
+        id=uuid.uuid4(),
+        key=preview.key,
+        version=preview.version,
+        subject=preview.subject,
+        html_body=preview.html_body,
+        text_body=preview.text_body,
+        variables=sorted(preview.required_context),
+        audience=preview.audience,
+        active=True,
+        package_id="test-protected-package",
+        content_checksum="a" * 64,
+        system_managed=True,
+        owner_id=None,
+    )
 
 
 def persisted_campaign_recipient(
@@ -592,6 +726,7 @@ def persisted_campaign_recipient(
 ) -> CampaignRecipient:
     return CampaignRecipient(
         id=uuid.uuid4(),
+        owner_id=TEST_OWNER_ID,
         email=email,
         contact_name=contact_name,
         organization_name="Compania A",
@@ -618,34 +753,40 @@ async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscr
     provider = FakeEmailProvider()
     service = make_service(repository)
 
+    settings = Settings(
+        public_app_url="https://codrut.andreivacaru.ro",
+        email_legal_address="Cody legal footer",
+    )
     response = await service.send_campaign(
         campaign.id,
         CampaignSendRequest(recipient_ids=[active.id, suppressed.id, other_segment.id]),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=settings,
     )
 
-    assert response.sent == 1
+    assert response.queued == 1
+    assert response.sent == 0
     assert response.skipped == 2
-    assert campaign.status == CampaignStatus.completed
-    assert len(provider.sent) == 1
-    assert provider.sent[0].to.value == active.email
-    assert provider.sent[0].subject == "Salut Ana"
+    assert campaign.status == CampaignStatus.ready
+    assert provider.sent == []
+    message = queued_messages(repository)[0]
+    assert message.to.value == active.email
+    assert message.subject == "Salut Ana"
     assert (
         "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/"
-        in provider.sent[0].html_body
+        in message.html_body
     )
     assert (
         "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
-        in provider.sent[0].html_body
+        in message.html_body
     )
-    assert "Alege un slot" in provider.sent[0].html_body
+    assert "Alege un slot" in message.html_body
     assert (
         "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
-        in provider.sent[0].text_body
+        in message.text_body
     )
-    assert "Ai primit acest email deoarece" in provider.sent[0].html_body
-    assert "Str. Exemplu Nr. 10" in provider.sent[0].html_body
+    assert "Ai primit acest email deoarece" in message.html_body
+    assert settings.email_legal_address in message.html_body
     assert len(repository.sends) == 1
     assert repository.sends[0].assignment_id is None
     assert repository.sends[0].template_key == "campaign"
@@ -656,14 +797,13 @@ async def test_send_campaign_does_not_append_duplicate_calendly_cta() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     campaign.html_body = (
-        '<p>Bună, ${first_name}.</p>'
+        "<p>Bună, ${first_name}.</p>"
         '<p><a href="https://calendly.com/andrei-vacaru/discutie">'
         "Alege un slot"
         "</a></p>"
     )
     campaign.text_body = (
-        "Bună, ${first_name}.\n"
-        "Alege un slot: https://calendly.com/andrei-vacaru/discutie"
+        "Bună, ${first_name}.\nAlege un slot: https://calendly.com/andrei-vacaru/discutie"
     )
     active = persisted_campaign_recipient()
     repository.campaigns.append(campaign)
@@ -678,12 +818,13 @@ async def test_send_campaign_does_not_append_duplicate_calendly_cta() -> None:
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert response.sent == 1
-    assert provider.sent[0].html_body.count("Alege un slot") == 1
-    assert provider.sent[0].text_body.count("Alege un slot") == 1
+    assert response.queued == 1
+    message = queued_messages(repository)[0]
+    assert message.html_body.count("Alege un slot") == 1
+    assert message.text_body.count("Alege un slot") == 1
     assert (
         "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
-        in provider.sent[0].html_body
+        in message.html_body
     )
 
 
@@ -713,17 +854,16 @@ async def test_send_campaign_adds_open_click_and_video_tracking() -> None:
         settings=settings,
     )
 
-    html_body = provider.sent[0].html_body
-    assert response.sent == 1
+    html_body = queued_messages(repository)[0].html_body
+    assert response.queued == 1
     assert "/api/communications/campaigns/track/opened/" in html_body
     assert "/api/communications/campaigns/track/video_viewed/" in html_body
     assert "/api/communications/campaigns/track/clicked/" in html_body
     assert html_body.count("/api/communications/campaigns/track/calendly/") == 1
 
-    clicked_token = (
-        html_body.split("/api/communications/campaigns/track/clicked/", 1)[1]
-        .split('"', 1)[0]
-    )
+    clicked_token = html_body.split("/api/communications/campaigns/track/clicked/", 1)[1].split(
+        '"', 1
+    )[0]
     target_url = await service.record_campaign_tracking_link(
         clicked_token,
         settings,
@@ -738,7 +878,7 @@ async def test_send_campaign_without_video_removes_empty_video_blocks() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     campaign.html_body = (
-        '<p>Intro.</p>'
+        "<p>Intro.</p>"
         '<p><a href="${landing_page_url}"><img src="${thumbnail_url}" alt="Video" /></a></p>'
     )
     campaign.text_body = "Intro.\nVideo: ${landing_page_url}\nFinal."
@@ -755,89 +895,44 @@ async def test_send_campaign_without_video_removes_empty_video_blocks() -> None:
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert '<img src=""' not in provider.sent[0].html_body
-    assert 'href=""' not in provider.sent[0].html_body
-    assert "Video:" not in provider.sent[0].text_body
+    message = queued_messages(repository)[0]
+    assert '<img src=""' not in message.html_body
+    assert 'href=""' not in message.html_body
+    assert "Video:" not in message.text_body
 
 
-def test_promotional_catalog_templates_match_source_structure_and_include_calendly() -> None:
-    report = catalog_template("promo_past_report_2022_2025")
-    reactivation = catalog_template("promo_past_reactivation")
-    current_programs = catalog_template("promo_current_programs")
-    potential_intro = catalog_template("promo_potential_intro")
+@pytest.mark.asyncio
+async def test_trainer_edit_clones_protected_template_without_mutating_source() -> None:
+    source = persisted_protected_template()
+    repository = FakeCommunicationsRepository([source])
+    service = make_service(repository)
 
-    assert report.version == 9
-    assert "calendly_url" in report.required_context
-    assert 'role="presentation"' in report.html_body
-    assert "list-style:none" not in report.html_body
-    assert "A supraviețuit tranziției la freelancing" in report.html_body
-    assert "A livrat peste 1200 de sesiuni fără să adoarmă nimeni în sală" in report.html_body
-    assert "A neglijat să se reconecteze cu oameni cu care a lucrat bine" in report.html_body
-    assert "Influencing Skills for Trusted Stakeholder Partnerships" in report.html_body
-    assert "Aici ai calendarul meu" in report.html_body
-    assert "Alege un slot în Calendly" in report.html_body
-    assert "Link calendar" not in report.html_body
-    assert "${calendly_url}" in report.html_body
-    assert 'data-codrut-cta="calendly"' in report.html_body
-    assert report.html_body.index("Alege un slot în Calendly") < report.html_body.index(
-        "reply acestui email"
+    result = await service.update_template(
+        source.key,
+        EmailTemplateUpdateRequest(subject="Variantă locală pentru ${first_name}"),
+        owner_id=TEST_OWNER_ID,
     )
-    assert "${calendly_url}" in report.text_body
-    assert "Ultimul punct e motivul" in report.text_body
 
-    assert reactivation.version == 9
-    assert "Opțiunea A: Ignoră emailul" in reactivation.html_body
-    assert "Alege un slot în Calendly" in reactivation.html_body
-    assert "${calendly_url}" in reactivation.html_body
-    assert 'data-codrut-cta="calendly"' in reactivation.html_body
-    reactivation_cta_index = reactivation.html_body.index("Alege un slot în Calendly")
-    reactivation_reply_index = reactivation.html_body.index("Dă reply sau alege un slot")
-    assert reactivation_cta_index < reactivation_reply_index
-
-    assert current_programs.version == 9
-    assert "Programul 1: Influencing Skills" in current_programs.html_body
-    assert (
-        "Dacă îți vine să vorbim — nu despre contracte, ci despre idei — iată calendarul meu"
-        in current_programs.html_body
-    )
-    assert "Alege un slot în Calendly" in current_programs.html_body
-
-    assert potential_intro.version == 9
-    assert "Alege un slot în Calendly" in potential_intro.html_body
-    assert "${calendly_url}" in potential_intro.text_body
+    assert result.version == source.version + 1
+    assert result.owner_id == TEST_OWNER_ID
+    assert result.subject == "Variantă locală pentru ${first_name}"
+    assert source.subject == build_preview_email_templates()[source.key].subject
+    assert source.owner_id is None
+    assert source.system_managed is True
+    assert source.package_id == "test-protected-package"
 
 
-def test_evaluation_catalog_templates_match_source_structure() -> None:
-    leadership_invite = catalog_template("evaluation_leadership_invite")
-    leadership_reminder = catalog_template("evaluation_leadership_reminder")
-    team_invite = catalog_template("evaluation_team_invite")
-    team_reminder = catalog_template("evaluation_team_reminder")
+@pytest.mark.asyncio
+async def test_trainer_cannot_retire_protected_template() -> None:
+    source = persisted_protected_template(key="preview_evaluation_invite")
+    repository = FakeCommunicationsRepository([source])
+    service = make_service(repository)
 
-    assert leadership_invite.version == 7
-    assert "radiografie sinceră a echipei de direcție" in leadership_invite.subject
-    assert "vedem cum ne percepem reciproc" in leadership_invite.html_body
-    assert "Cu cât suntem mai sinceri acum" in leadership_invite.html_body
-    assert "Link platformă" in leadership_invite.html_body
-    assert "Link platformă: ${action_url}" in leadership_invite.text_body
+    with pytest.raises(DomainError) as exc_info:
+        await service.retire_template(source.key, owner_id=TEST_OWNER_ID)
 
-    assert leadership_reminder.version == 7
-    assert (
-        "Lipsa unui singur răspuns ne schimbă imaginea de ansamblu"
-        in leadership_reminder.html_body
-    )
-    assert "vă mulțumesc — ați făcut deja primul pas" in leadership_reminder.html_body
-    assert "Link platformă" in leadership_reminder.html_body
-
-    assert team_invite.version == 7
-    assert "Răspunsurile tale sunt 100% anonime și confidențiale" in team_invite.html_body
-    assert "cum se vede, din interior, echipa din care faci parte" in team_invite.html_body
-    assert "Link platformă" in team_invite.html_body
-
-    assert team_reminder.version == 7
-    assert "părerea ta încă lipsește" in team_reminder.subject
-    assert "fiecare răspuns în plus face imaginea mai corectă" in team_reminder.html_body
-    assert "necesare — fiecare răspuns" in team_reminder.html_body
-    assert "Link platformă" in team_reminder.html_body
+    assert exc_info.value.code == "email_template_system_retire_forbidden"
+    assert source.active is True
 
 
 @pytest.mark.asyncio
@@ -862,9 +957,10 @@ async def test_send_campaign_uses_video_url_when_landing_page_is_missing() -> No
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert response.sent == 1
-    assert "/api/communications/campaigns/track/video_viewed/" in provider.sent[0].html_body
-    assert "Vezi video: https://vimeo.com/123456789" in provider.sent[0].text_body
+    assert response.queued == 1
+    message = queued_messages(repository)[0]
+    assert "/api/communications/campaigns/track/video_viewed/" in message.html_body
+    assert "Vezi video: https://vimeo.com/123456789" in message.text_body
 
 
 @pytest.mark.asyncio
@@ -875,20 +971,22 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
     second = persisted_campaign_recipient(email="second@example.com", contact_name="Second")
     repository.campaigns.append(campaign)
     repository.campaign_recipients.extend([first, second])
-    repository.campaign_recipient_memberships.extend([
-        CampaignRecipientMembership(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            recipient_id=first.id,
-            source="manual",
-        ),
-        CampaignRecipientMembership(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            recipient_id=second.id,
-            source="manual",
-        ),
-    ])
+    repository.campaign_recipient_memberships.extend(
+        [
+            CampaignRecipientMembership(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                recipient_id=first.id,
+                source="manual",
+            ),
+            CampaignRecipientMembership(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                recipient_id=second.id,
+                source="manual",
+            ),
+        ]
+    )
     repository.sends.append(
         EmailSend(
             id=uuid.uuid4(),
@@ -911,9 +1009,49 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert second_response.sent == 1
-    assert provider.sent[0].to.value == second.email
-    assert len(provider.sent) == 1
+    assert second_response.queued == 1
+    assert queued_messages(repository)[0].to.value == second.email
+    assert provider.sent == []
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_reuses_result_for_same_idempotency_key() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    recipient = persisted_campaign_recipient(email="safe@example.com", contact_name="Safe")
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(recipient)
+    repository.campaign_recipient_memberships.append(
+        CampaignRecipientMembership(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            recipient_id=recipient.id,
+            source="manual",
+        )
+    )
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+
+    first = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(mode="all"),
+        provider=provider,
+        settings=settings,
+        idempotency_key="same-request-key",
+    )
+    second = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(mode="all"),
+        provider=provider,
+        settings=settings,
+        idempotency_key="same-request-key",
+    )
+
+    assert first.queued == second.queued == 1
+    assert first.sent == second.sent == 0
+    assert provider.sent == []
+    assert len(repository.sends) == 1
 
 
 @pytest.mark.asyncio
@@ -931,48 +1069,52 @@ async def test_campaign_membership_marks_sent_and_failed_delivery() -> None:
     )
     repository.campaigns.append(campaign)
     repository.campaign_recipients.extend([sent_recipient, failed_recipient, unsent_recipient])
-    repository.campaign_recipient_memberships.extend([
-        CampaignRecipientMembership(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            recipient_id=sent_recipient.id,
-            source="manual",
-        ),
-        CampaignRecipientMembership(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            recipient_id=failed_recipient.id,
-            source="manual",
-        ),
-        CampaignRecipientMembership(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            recipient_id=unsent_recipient.id,
-            source="manual",
-        ),
-    ])
-    repository.sends.extend([
-        EmailSend(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            campaign_recipient_id=sent_recipient.id,
-            recipient_email=sent_recipient.email or "",
-            template_key="campaign",
-            template_version=1,
-            provider="test",
-            status=EmailSendStatus.accepted,
-        ),
-        EmailSend(
-            id=uuid.uuid4(),
-            campaign_id=campaign.id,
-            campaign_recipient_id=failed_recipient.id,
-            recipient_email=failed_recipient.email or "",
-            template_key="campaign",
-            template_version=1,
-            provider="test",
-            status=EmailSendStatus.failed,
-        ),
-    ])
+    repository.campaign_recipient_memberships.extend(
+        [
+            CampaignRecipientMembership(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                recipient_id=sent_recipient.id,
+                source="manual",
+            ),
+            CampaignRecipientMembership(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                recipient_id=failed_recipient.id,
+                source="manual",
+            ),
+            CampaignRecipientMembership(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                recipient_id=unsent_recipient.id,
+                source="manual",
+            ),
+        ]
+    )
+    repository.sends.extend(
+        [
+            EmailSend(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                campaign_recipient_id=sent_recipient.id,
+                recipient_email=sent_recipient.email or "",
+                template_key="campaign",
+                template_version=1,
+                provider="test",
+                status=EmailSendStatus.accepted,
+            ),
+            EmailSend(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                campaign_recipient_id=failed_recipient.id,
+                recipient_email=failed_recipient.email or "",
+                template_key="campaign",
+                template_version=1,
+                provider="test",
+                status=EmailSendStatus.failed,
+            ),
+        ]
+    )
     service = make_service(repository)
 
     members = await service.list_campaign_recipient_memberships(campaign.id)
@@ -1155,9 +1297,11 @@ async def test_send_campaign_uses_persisted_membership_not_all_segment_contacts(
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert response.sent == 1
-    assert provider.sent[0].to.value == "selected@example.com"
-    assert all(message.to.value != "unselected@example.com" for message in provider.sent)
+    assert response.queued == 1
+    assert queued_messages(repository)[0].to.value == "selected@example.com"
+    assert all(
+        message.to.value != "unselected@example.com" for message in queued_messages(repository)
+    )
 
 
 @pytest.mark.asyncio
@@ -1195,15 +1339,13 @@ async def test_send_campaign_all_resends_only_campaign_members() -> None:
         settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
     )
 
-    assert response.sent == 1
-    assert [message.to.value for message in provider.sent] == [
-        "selected@example.com",
-        "selected@example.com",
-    ]
+    assert response.queued == 1
+    assert [message.to.value for message in queued_messages(repository)] == ["selected@example.com"]
+    assert provider.sent == []
 
 
 @pytest.mark.asyncio
-async def test_send_campaign_can_use_shared_contacts_from_any_owner() -> None:
+async def test_send_campaign_only_uses_contacts_owned_by_campaign_owner() -> None:
     owner_id = uuid.uuid4()
     other_owner_id = uuid.uuid4()
     repository = FakeCommunicationsRepository()
@@ -1226,12 +1368,32 @@ async def test_send_campaign_can_use_shared_contacts_from_any_owner() -> None:
         owner_id=owner_id,
     )
 
-    assert response.sent == 2
-    assert {message.to.value for message in provider.sent} == {
-        "owner@example.com",
-        "other@example.com",
-    }
-    assert provider.sent[0].to.value == "owner@example.com"
+    assert response.queued == 1
+    assert {message.to.value for message in queued_messages(repository)} == {"owner@example.com"}
+
+
+@pytest.mark.asyncio
+async def test_campaign_membership_rejects_contact_from_another_owner() -> None:
+    owner_id = uuid.uuid4()
+    other_owner_id = uuid.uuid4()
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.owner_id = owner_id
+    other_owner_contact = persisted_campaign_recipient(email="other@example.com")
+    other_owner_contact.owner_id = other_owner_id
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(other_owner_contact)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.replace_campaign_recipient_memberships(
+            campaign.id,
+            CampaignRecipientMembershipUpdateRequest(recipient_ids=[other_owner_contact.id]),
+            owner_id=owner_id,
+        )
+
+    assert exc_info.value.code == "campaign_membership_recipient_not_found"
+    assert repository.campaign_recipient_memberships == []
 
 
 @pytest.mark.asyncio
@@ -1255,10 +1417,11 @@ async def test_send_campaign_respects_daily_email_cap() -> None:
         ),
     )
 
-    assert response.sent == 1
+    assert response.queued == 1
+    assert response.sent == 0
     assert response.skipped == 1
     assert response.results[1].error == "Daily email send cap reached."
-    assert len(provider.sent) == 1
+    assert provider.sent == []
 
 
 @pytest.mark.asyncio
@@ -1305,6 +1468,25 @@ async def test_create_campaign_marks_valid_campaign_ready() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_campaign_keeps_incomplete_video_as_draft() -> None:
+    repository = FakeCommunicationsRepository()
+    service = make_service(repository)
+
+    campaign = await service.create_campaign(
+        CampaignCreateRequest(
+            name="Video în lucru",
+            segment="potential_customer",
+            subject="Salut ${first_name}",
+            html_body="<p>Bună.</p>",
+            text_body="Bună.",
+            video_url="https://vimeo.com/123456789",
+        )
+    )
+
+    assert campaign.status == CampaignStatus.draft
+
+
+@pytest.mark.asyncio
 async def test_create_campaign_allows_no_preselected_group() -> None:
     repository = FakeCommunicationsRepository()
     service = make_service(repository)
@@ -1321,6 +1503,79 @@ async def test_create_campaign_allows_no_preselected_group() -> None:
 
     assert campaign.segment is None
     assert campaign.status == CampaignStatus.ready
+
+
+@pytest.mark.asyncio
+async def test_campaign_asset_is_owner_validated_and_returns_to_staged_on_replacement() -> None:
+    repository = FakeCommunicationsRepository()
+    asset = CampaignAsset(
+        id=uuid.uuid4(),
+        owner_id=TEST_OWNER_ID,
+        file_name="owned-thumbnail.png",
+        public_url="https://codrut.local/api/campaign-assets/owned-thumbnail.png",
+        content_type="image/png",
+        size_bytes=128,
+        status="staged",
+    )
+    repository.campaign_assets.append(asset)
+    service = make_service(repository)
+    settings = Settings(campaign_asset_public_path="/api/campaign-assets")
+
+    campaign = await service.create_campaign(
+        CampaignCreateRequest(
+            name="Campanie cu imagine",
+            subject="Salut ${first_name}",
+            html_body="<p>Bună.</p>",
+            text_body="Bună.",
+            thumbnail_url=asset.public_url,
+        ),
+        owner_id=TEST_OWNER_ID,
+        settings=settings,
+    )
+
+    assert asset.status == "attached"
+    assert asset.campaign_id == campaign.id
+
+    await service.update_campaign(
+        campaign.id,
+        CampaignUpdateRequest(thumbnail_url=None),
+        owner_id=TEST_OWNER_ID,
+        settings=settings,
+    )
+
+    assert asset.status == "staged"
+    assert asset.campaign_id is None
+
+
+@pytest.mark.asyncio
+async def test_campaign_rejects_managed_asset_owned_by_another_trainer() -> None:
+    repository = FakeCommunicationsRepository()
+    other_asset = CampaignAsset(
+        id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
+        file_name="other-thumbnail.png",
+        public_url="https://codrut.local/api/campaign-assets/other-thumbnail.png",
+        content_type="image/png",
+        size_bytes=128,
+        status="staged",
+    )
+    repository.campaign_assets.append(other_asset)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_campaign(
+            CampaignCreateRequest(
+                name="Campanie invalidă",
+                subject="Salut ${first_name}",
+                html_body="<p>Bună.</p>",
+                text_body="Bună.",
+                thumbnail_url=other_asset.public_url,
+            ),
+            owner_id=TEST_OWNER_ID,
+            settings=Settings(campaign_asset_public_path="/api/campaign-assets"),
+        )
+
+    assert exc_info.value.code == "campaign_asset_not_owned"
 
 
 @pytest.mark.asyncio
@@ -1405,6 +1660,27 @@ async def test_update_campaign_recipient_rejects_duplicate_email() -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_campaign_recipient_rejects_other_owner_contact() -> None:
+    owner_id = uuid.uuid4()
+    other_owner_id = uuid.uuid4()
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient(email="private@example.com")
+    recipient.owner_id = other_owner_id
+    repository.campaign_recipients.append(recipient)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.update_campaign_recipient(
+            recipient.id,
+            CampaignRecipientUpdateRequest(contact_name="Leaked update"),
+            owner_id=owner_id,
+        )
+
+    assert exc_info.value.code == "campaign_recipient_not_found"
+    assert recipient.contact_name == "Ana Director"
+
+
+@pytest.mark.asyncio
 async def test_update_campaign_recipient_preserves_unsubscribe_status() -> None:
     repository = FakeCommunicationsRepository()
     recipient = persisted_campaign_recipient(status=CampaignRecipientStatus.unsubscribed)
@@ -1465,6 +1741,23 @@ async def test_delete_campaign_recipient_preserves_unsubscribe_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_delete_campaign_recipient_rejects_other_owner_contact() -> None:
+    owner_id = uuid.uuid4()
+    other_owner_id = uuid.uuid4()
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient()
+    recipient.owner_id = other_owner_id
+    repository.campaign_recipients.append(recipient)
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.delete_campaign_recipient(recipient.id, owner_id=owner_id)
+
+    assert exc_info.value.code == "campaign_recipient_not_found"
+    assert recipient.status == CampaignRecipientStatus.active
+
+
+@pytest.mark.asyncio
 async def test_send_campaign_rejects_campaigns_that_are_not_ready() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
@@ -1491,7 +1784,11 @@ async def test_unsubscribe_campaign_recipient_marks_recipient_unsubscribed() -> 
     repository.campaign_recipients.append(recipient)
     settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
     token = create_campaign_recipient_action_token(
-        CampaignRecipientActionClaims(recipient_id=recipient.id, action="unsubscribe"),
+        CampaignRecipientActionClaims(
+            recipient_id=recipient.id,
+            owner_id=recipient.owner_id,
+            action="unsubscribe",
+        ),
         settings,
     )
     service = make_service(repository)
@@ -1500,6 +1797,29 @@ async def test_unsubscribe_campaign_recipient_marks_recipient_unsubscribed() -> 
 
     assert result.id == recipient.id
     assert recipient.status == CampaignRecipientStatus.unsubscribed
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_campaign_recipient_rejects_other_owner_token() -> None:
+    repository = FakeCommunicationsRepository()
+    recipient = persisted_campaign_recipient()
+    repository.campaign_recipients.append(recipient)
+    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    token = create_campaign_recipient_action_token(
+        CampaignRecipientActionClaims(
+            recipient_id=recipient.id,
+            owner_id=uuid.uuid4(),
+            action="unsubscribe",
+        ),
+        settings,
+    )
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.unsubscribe_campaign_recipient(token, settings)
+
+    assert exc_info.value.code == "campaign_recipient_not_found"
+    assert recipient.status == CampaignRecipientStatus.active
 
 
 @pytest.mark.asyncio
@@ -1512,8 +1832,7 @@ async def test_create_template_persists_versioned_structure() -> None:
             key="account_setup",
             subject="Welcome, ${participant_name}",
             html_body=(
-                "<p>Buna, ${participant_name}. "
-                "${trainer_name} ${company_name} ${action_url}</p>"
+                "<p>Buna, ${participant_name}. ${trainer_name} ${company_name} ${action_url}</p>"
             ),
             text_body="Buna, ${participant_name}. ${trainer_name} ${company_name} ${action_url}",
             variables=["participant_name", "trainer_name", "company_name", "action_url"],
@@ -1607,7 +1926,7 @@ async def test_retire_template_without_version_marks_all_versions_inactive() -> 
 
 
 @pytest.mark.asyncio
-async def test_list_templates_does_not_reactivate_retired_catalog_template() -> None:
+async def test_list_templates_does_not_reactivate_retired_transactional_template() -> None:
     catalog = get_transactional_template(TransactionalTemplateKey.account_setup)
     template = persisted_template(
         key=TransactionalTemplateKey.account_setup.value,
@@ -1700,31 +2019,57 @@ async def test_template_validation_undeclared_variables() -> None:
 async def test_transactional_email_service_uses_db_template() -> None:
     # Set up provider and transactional service
     provider = FakeEmailProvider()
-    trans_service = TransactionalEmailService(provider)
+    trans_service = TransactionalEmailService(provider, owner_id=TEST_OWNER_ID)
 
     # Inject fake session/service
     class FakeSession:
         def add(self, obj: Any) -> None:
             pass
+
         async def flush(self) -> None:
             pass
+
     session = cast(Any, FakeSession())
     trans_service.session = session
-    
-    async def fake_get_template(key: str, *, version: int | None = None):
+
+    async def fake_get_template(
+        key: str,
+        *,
+        version: int | None = None,
+        owner_id: uuid.UUID | None = None,
+    ):
         # Return modified subject to verify it was read from database!
         t = persisted_template()
         t.subject = "Custom DB Subject for ${company_name}"
         return t
 
+    queued_sends: list[EmailSend] = []
+
     class MockCommunicationsRepository:
         def __init__(self, s: Any) -> None:
             pass
 
-        async def get_template(self, key: str, *, version: int | None = None):
-            return await fake_get_template(key, version=version)
+        async def get_template(
+            self,
+            key: str,
+            *,
+            version: int | None = None,
+            owner_id: uuid.UUID | None = None,
+        ):
+            return await fake_get_template(key, version=version, owner_id=owner_id)
+
+        async def get_email_send_by_idempotency_key(self, key: str):
+            return next(
+                (send for send in queued_sends if send.idempotency_key == key),
+                None,
+            )
+
+        async def add_email_send(self, send: EmailSend):
+            queued_sends.append(send)
+            return send
 
     import codrut.modules.communications.service as comm_svc_mod
+
     original_repository = comm_svc_mod.CommunicationsRepository
     comm_svc_mod.CommunicationsRepository = MockCommunicationsRepository
 
@@ -1756,8 +2101,10 @@ async def test_transactional_email_service_uses_db_template() -> None:
             context,
         )
 
-        assert result.status == EmailDeliveryStatus.accepted
-        assert len(provider.sent) == 1
-        assert provider.sent[0].subject == "Custom DB Subject for Demo Corp"
+        assert result.status == EmailDeliveryStatus.queued
+        assert provider.sent == []
+        assert len(queued_sends) == 1
+        message = _email_message_from_outbox_payload(queued_sends[0].message_payload)
+        assert message.subject == "Custom DB Subject for Demo Corp"
     finally:
         comm_svc_mod.CommunicationsRepository = original_repository

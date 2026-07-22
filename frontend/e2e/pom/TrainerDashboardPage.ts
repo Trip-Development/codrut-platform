@@ -42,8 +42,6 @@ export class TrainerDashboardPage {
     const warning = this.page.locator("text=Rezultatele sunt ascunse până există cel puțin 3 răspunsuri pentru acest instrument.");
     await expect(warning).toBeHidden();
     
-    // Core disfunctions averages should now be visible
-    const trustLabel = this.page.getByText("Absența încrederii (Trust)");
-    await expect(trustLabel).toBeVisible();
+    await expect(this.page.getByRole("heading", { name: "Rezultate" })).toBeVisible();
   }
 }

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from codrut.core.database import Base, TimestampMixin
@@ -62,8 +62,48 @@ class Session(TimestampMixin, Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    assignment_invite_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assignment_invites.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
 
     user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class ConsentAcceptance(TimestampMixin, Base):
+    __tablename__ = "consent_acceptances"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "session_id",
+            "terms_version",
+            name="uq_consent_acceptances_user_session_version",
+        ),
+        CheckConstraint(
+            "source in ('authenticated', 'secure_invite', 'local_preview')",
+            name="consent_acceptance_source",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Audit snapshots intentionally remain after a session or invite is revoked.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    assignment_invite_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    respondent_profile_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    terms_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class PasswordResetToken(TimestampMixin, Base):
@@ -86,6 +126,11 @@ class AssignmentInvite(TimestampMixin, Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
     respondent_profile_id: Mapped[uuid.UUID] = mapped_column(

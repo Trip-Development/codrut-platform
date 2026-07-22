@@ -1,15 +1,19 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { Suspense, act } from "react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { InviteBundle } from "@/api/invites";
-import { resolveInviteBundle } from "@/api/invites";
+import { acceptCurrentTerms } from "@/api/auth";
+import { exchangeInviteSession, resolveInviteBundle } from "@/api/invites";
 import InvitePage from "./page";
+
+vi.mock("@/api/auth", () => ({ acceptCurrentTerms: vi.fn() }));
 
 vi.mock("@/api/invites", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/invites")>();
   return {
     ...original,
+    exchangeInviteSession: vi.fn(),
     resolveInviteBundle: vi.fn(),
   };
 });
@@ -18,7 +22,7 @@ const validBundle: Extract<InviteBundle, { state: "valid" }> = {
   state: "valid",
   token: "demo-token",
   projectName: "Leadership operațional Q3",
-  participantEmail: "mihai.matei@atlas-mobility.ro",
+  participantEmail: "participant.demo@example.com",
   participantFullName: "Mihai Matei",
   anonymousName: "SignalHarbor5271",
   isLeadership: false,
@@ -39,33 +43,42 @@ const validBundle: Extract<InviteBundle, { state: "valid" }> = {
   ],
 };
 
+async function renderInvitePage(token = "demo-token") {
+  const ui = await InvitePage({ params: Promise.resolve({ token }) });
+  let result!: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(ui);
+    await Promise.resolve();
+  });
+  return result;
+}
+
 describe("InvitePage", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
+    vi.mocked(acceptCurrentTerms).mockResolvedValue();
+    vi.mocked(exchangeInviteSession).mockResolvedValue();
     vi.mocked(resolveInviteBundle).mockResolvedValue(validBundle);
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("uses stored consent only as a checkbox hint, not as screen authority", async () => {
-    window.localStorage.setItem("codrut_invite_consent:privacy-2026-06-12:demo-token", "accepted");
+    window.localStorage.setItem("codrut_invite_consent:privacy-2026-07-16:demo-token", "accepted");
 
-    await act(async () => {
-      render(
-        <Suspense fallback={null}>
-          <InvitePage params={Promise.resolve({ token: "demo-token" })} />
-        </Suspense>,
-      );
-    });
+    await renderInvitePage();
 
     await screen.findByText("Confirmă confidențialitatea înainte de chestionare");
-    expect(screen.queryByText("Sarcinile tale pentru acest proiect")).toBeNull();
-    expect(screen.getByRole("checkbox")).toHaveProperty("checked", true);
+    expect(screen.queryByText("Chestionarele tale")).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox").getAttribute("aria-checked")).toBe("true");
+    });
     await waitFor(() => {
       expect(resolveInviteBundle).toHaveBeenCalledWith("demo-token");
     });
@@ -75,18 +88,178 @@ describe("InvitePage", () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       termsAcceptedAt: "2026-06-27T10:00:00Z",
-      termsVersion: "privacy-2026-06-12",
+      termsVersion: "privacy-2026-07-16",
     });
+
+    await renderInvitePage();
+
+    await screen.findByText("Chestionarele tale");
+    expect(screen.queryByText("Confirmă confidențialitatea înainte de chestionare")).toBeNull();
+    await waitFor(() => {
+      expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+    });
+  });
+
+  it("persists anonymous invite consent before showing secure tasks", async () => {
+    await renderInvitePage();
+
+    await screen.findByText("Confirmă confidențialitatea înainte de chestionare");
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("checkbox"));
+    const consentButton = screen.getByRole("button", { name: "Continuă la chestionare" });
+    fireEvent.click(consentButton);
+    fireEvent.click(consentButton);
 
     await act(async () => {
-      render(
-        <Suspense fallback={null}>
-          <InvitePage params={Promise.resolve({ token: "demo-token" })} />
-        </Suspense>,
-      );
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
-    await screen.findByText("Sarcinile tale pentru acest proiect");
-    expect(screen.queryByText("Confirmă confidențialitatea înainte de chestionare")).toBeNull();
+    expect(screen.getByText("Pregătim accesul securizat")).toBeTruthy();
+    expect(screen.getByRole("checkbox")).toHaveProperty("disabled", true);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+    });
+    vi.useRealTimers();
+
+    await screen.findByText("Chestionarele tale");
+    expect(exchangeInviteSession).toHaveBeenCalledTimes(1);
+    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+    expect(acceptCurrentTerms).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBe("accepted");
+  });
+
+  it("keeps the consent screen and exposes retry when persistence fails", async () => {
+    vi.mocked(acceptCurrentTerms).mockRejectedValueOnce(new Error("Conexiunea a fost întreruptă."));
+
+    await renderInvitePage();
+    await screen.findByText("Confirmă confidențialitatea înainte de chestionare");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Continuă la chestionare" }));
+
+    expect(await screen.findByText("Acordul nu a fost salvat")).toBeTruthy();
+    expect(screen.getByText("Conexiunea a fost întreruptă.")).toBeTruthy();
+    expect(screen.getByRole("checkbox").getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByText("Chestionarele tale")).toBeNull();
+    expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBeNull();
+  });
+
+  it("stores leadership invite context before registration", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      isLeadership: true,
+    });
+
+    await renderInvitePage();
+
+    await screen.findByText("Activează contul înainte de chestionare");
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem("codrut_invite")).toContain("participant.demo@example.com");
+    });
+    expect(screen.getByRole("link", { name: /Înregistrează cont Leadership/ }).getAttribute("href")).toBe(
+      "/register",
+    );
+    expect(exchangeInviteSession).not.toHaveBeenCalled();
+  });
+
+  it("does not expose an account-like review target in the secure task list or link", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+      tasks: [
+        {
+          ...validBundle.tasks[0],
+          id: "review-1",
+          assignmentId: "review-1",
+          questionnaireKey: "boss_360",
+          targetLabel: "bianca.pavel@example.com",
+        },
+      ],
+    });
+
+    await renderInvitePage();
+
+    expect(await screen.findByText("Persoana indicată · 12 min")).toBeDefined();
+    expect(screen.queryByText(/bianca\.pavel@example\.com/i)).toBeNull();
+    expect(screen.getByRole("link", { name: /Deschide/i }).getAttribute("href")).not.toContain("bianca.pavel");
+  });
+
+  it("renders structured and unexpected invite lookup failures safely", async () => {
+    vi.mocked(resolveInviteBundle).mockRejectedValueOnce(new Error("Invitația a expirat."));
+    await renderInvitePage("expired-token");
+    expect(await screen.findByRole("heading", { name: "Invitație nevalidă" })).toBeTruthy();
+    expect(screen.getByText("Invitația a expirat.")).toBeTruthy();
+
+    cleanup();
+    vi.mocked(resolveInviteBundle).mockRejectedValueOnce({ reason: "unknown" });
+    await renderInvitePage("unknown-token");
+    expect(await screen.findByText("A apărut o eroare la verificarea invitației.")).toBeTruthy();
+  });
+
+  it("shows a recovery action for an invalid invite with empty backend copy", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      state: "expired",
+      token: "expired",
+      projectName: "Program pilot",
+      deadlineLabel: "Termen indisponibil",
+      message: "",
+    });
+    await renderInvitePage("expired");
+
+    expect(await screen.findByText("Nu am putut valida această invitație. Cere un link nou de la trainer.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Mergi la Cody/ }).getAttribute("href")).toBe("/");
+  });
+
+  it("routes an already registered leadership participant to authentication", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      isLeadership: true,
+      alreadyRegistered: true,
+    });
+    await renderInvitePage();
+
+    expect(await screen.findByRole("heading", { name: "Cont deja existent" })).toBeTruthy();
+    expect(screen.getByText("participant.demo@example.com")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Autentifică-te aici" }).getAttribute("href")).toBe("/login");
+  });
+
+  it("renders the empty secure queue after current server consent", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      tasks: [],
+      anonymousName: null,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+    });
+    await renderInvitePage();
+
+    expect(await screen.findByText("Nu ai chestionare disponibile")).toBeTruthy();
+    expect(screen.getByText(/participant anonim/i)).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+  });
+
+  it("renders completed, active, named, and redacted review targets", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+      tasks: [
+        { ...validBundle.tasks[0], id: "done", assignmentId: "done", title: "Finalizat echipă", status: "completed", targetLabel: "Echipa Nord" },
+        { ...validBundle.tasks[0], id: "regular", assignmentId: "regular", title: "Evaluare regulată", targetLabel: "" },
+        { ...validBundle.tasks[0], id: "named", assignmentId: "named", title: "Evaluare numită", questionnaireKey: "icare", targetLabel: "Bianca Pavel" },
+        { ...validBundle.tasks[0], id: "uuid", assignmentId: "uuid", title: "Evaluare anonimizată", questionnaireKey: "boss_360_en", targetLabel: "94620fe8-bd46-4f37-a813-5f80d9ac54b1" },
+      ],
+    });
+    await renderInvitePage();
+
+    expect(await screen.findByText("Finalizat")).toBeTruthy();
+    expect(screen.getByText(/Echipa Nord · 12 min/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Evaluare regulată" }).closest("article")?.textContent).toContain("12 min");
+    expect(screen.getByText(/Bianca Pavel · 12 min/)).toBeTruthy();
+    expect(screen.getByText(/Persoana indicată · 12 min/)).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /Deschide/i })).toHaveLength(3);
   });
 });

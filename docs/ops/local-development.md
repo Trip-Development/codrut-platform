@@ -17,7 +17,7 @@ Useful endpoints:
 
 The devcontainer attaches to the `backend` service and uses the same Compose files as normal local development.
 
-## Pilot Test Accounts
+## Local Product Preview
 
 Production-like local testing should use real seeded accounts and keep demo fallback disabled.
 
@@ -26,12 +26,50 @@ Set these values in `.env`:
 ```sh
 CODRUT_FRONTEND_DEMO_FALLBACK=false
 NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK=false
+CODRUT_LOCAL_AUTH_BYPASS=true
 CODRUT_SEED_TRAINER_EMAIL=trainer@example.com
 CODRUT_SEED_TRAINER_PASSWORD=replace-with-a-long-test-password
+CODRUT_SEED_PARTICIPANT_EMAIL=participant@example.com
+CODRUT_SEED_PARTICIPANT_PASSWORD=replace-with-a-long-test-password
 CODRUT_SEED_COMPANY_NAME=Pilot Codrut
 ```
 
-Then seed the local database from the backend/devcontainer environment:
+For the complete local product preview, migrate and seed persisted sample data:
+
+```sh
+just migrate
+just seed-local-preview
+```
+
+The local preview includes three companies, projects, participants, teams, assignments,
+invitation delivery states, submitted results, campaigns, contacts, and email templates. Its
+questionnaires are short, invented samples that exercise the production renderer without copying
+protected wording, scoring rules, or interpretations into the repository. The synthetic iCARE
+sample includes statement-specific participant choices so the real response interaction remains
+reviewable. All contact addresses are synthetic `.test` addresses. The command replaces only its
+named preview companies and communication records, then resets the local questionnaire samples.
+It is safe to run again and always refuses to run when `CODRUT_ENV=production`.
+
+With `CODRUT_LOCAL_AUTH_BYPASS=true`, local routes resolve these real seeded users directly:
+
+- `/trainer/*` uses the configured trainer.
+- `/participant/*` uses the configured participant.
+- Existing session cookies do not pin the browser to the wrong local role.
+
+No login or account switching is required. Set `CODRUT_LOCAL_AUTH_BYPASS=false` when testing
+the real login, logout, session restoration, CSRF, or role-mismatch flows. The backend rejects
+this bypass when `CODRUT_ENV=production`, and production Compose forces it off.
+
+Use these accounts when testing authentication explicitly:
+
+```text
+Trainer: trainer@example.com
+Participant: participant@example.com
+Password: replace-with-a-long-test-password
+```
+
+For the smaller pilot-only setup, seed the local database from the backend/devcontainer
+environment:
 
 ```sh
 uv run python -m codrut.tools.seed_pilot
@@ -51,9 +89,9 @@ Name,email,Reports To,Position,Location,PCM Bază,PCM Fază
 Example rows:
 
 ```text
-Vlad Soimu Manager,vlad.soimu2@gmail.com,,Manager,Bucuresti,Gânditor,Perseverent
-Vlad Soimu Membru,vlad.soimu@yahoo.com,Vlad Soimu Manager,Membru echipă,Bucuresti,Empatic,Promotor
-Ilinca Member,ilincacrb4825@gmail.com,Vlad Soimu Manager,Membru echipă,Bucuresti,Rebel,Imaginator
+Mara Ionescu Manager,mara.manager@example.com,,Manager,Bucuresti,Gânditor,Perseverent
+Tudor Stan,tudor.member@example.com,Mara Ionescu Manager,Membru echipă,Bucuresti,Empatic,Promotor
+Ioana Rusu,ioana.member@example.com,Mara Ionescu Manager,Membru echipă,Bucuresti,Rebel,Imaginator
 ```
 
 The same workbook is generated locally at
@@ -95,4 +133,5 @@ docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run python
 
 ## Demo Fallback
 
-`CODRUT_FRONTEND_DEMO_FALLBACK=true` is only for intentionally browsing seeded prototype/demo surfaces. Keep it `false` when checking whether frontend routes are genuinely connected to backend auth and data.
+`CODRUT_FRONTEND_DEMO_FALLBACK=true` is only for intentionally browsing the legacy prototype
+adapter. Keep it `false` for the local preview and for every backend-connected product check.

@@ -14,9 +14,7 @@ from codrut.modules.identity import models as identity_models  # noqa: F401
 
 
 def test_assignment_tables_are_registered() -> None:
-    assert {"teams", "team_memberships", "questionnaire_assignments"}.issubset(
-        Base.metadata.tables
-    )
+    assert {"teams", "team_memberships", "questionnaire_assignments"}.issubset(Base.metadata.tables)
     configure_mappers()
 
 
@@ -52,6 +50,7 @@ def test_assignment_target_shape_is_constrained() -> None:
     }
 
     assert "ck_questionnaire_assignments_assignment_target_shape" in checks
+    assert "ck_questionnaire_assignments_reminder_count_bounds" in checks
 
 
 def test_assignment_tracking_columns_exist() -> None:
@@ -66,4 +65,5 @@ def test_assignment_tracking_columns_exist() -> None:
         "scored_at",
         "reminder_due_at",
         "last_reminder_sent_at",
+        "reminder_count",
     }.issubset(columns.keys())

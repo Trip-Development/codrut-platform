@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2Icon, PlusIcon, SearchIcon } from "lucide-react";
 import {
   listQuestionnaireDefinitionStubs,
   latestDefinitionStubs,
@@ -14,18 +15,45 @@ import {
   type QuestionnaireDefinition,
   type QuestionnaireQuestion,
   type QuestionnaireScaleOption,
+  type QuestionnaireStatement,
 } from "@/api/questionnaires";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { ModalLayer } from "@/components/ui/modal-layer";
+import { SelectControl } from "@/components/ui/select-control";
+import { Textarea } from "@/components/ui/textarea";
 import { useUrlState } from "@/hooks/use-url-state";
-
-const destructiveButtonClass =
-  "tap-soft rounded-full border border-[#890505]/35 bg-transparent px-3 py-1.5 text-xs font-bold text-[#890505] shadow-none transition hover:bg-[#890505]/10 disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-transparent disabled:text-foreground/35 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
-const iconButtonClass =
-  "tap-soft inline-flex h-8 w-8 items-center justify-center text-burgundy transition hover:text-burgundy-dark";
-const destructiveIconButtonClass =
-  "tap-soft inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#890505]/35 bg-transparent text-[#890505] shadow-none transition hover:bg-[#890505]/10 disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-transparent disabled:text-foreground/35 dark:border-[#e35f5f]/45 dark:text-[#e35f5f] dark:hover:bg-[#890505]/22";
+import { cn } from "@/utils/cn";
+import {
+  QuestionnaireEditor,
+  type QuestionnaireScaleGroup,
+} from "./QuestionnaireEditor";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+const AUDIENCE_LABELS: Record<string, string> = {
+  leadership: "Leadership",
+  participant: "Individual",
+  team: "Echipă",
+};
+
+const QUESTIONNAIRE_STATUS_LABELS: Record<string, string> = {
+  active: "Activ",
+  draft: "Ciornă",
+  inactive: "Inactiv",
+  retired: "Pensionat",
+};
+
+type ConfirmDialogState = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone?: "default" | "danger";
+  onConfirm: () => void | Promise<void>;
+};
 
 function parseQuestionnaireVersion(value: string | null): number {
   const parsed = Number(value);
@@ -65,31 +93,6 @@ function hasStatementSpecificScales(question: QuestionnaireQuestion): boolean {
   );
 }
 
-type ScaleGroup = {
-  key: string;
-  renderKey: string;
-  type: QuestionnaireQuestion["type"];
-  title: string;
-  questionCount: number;
-  scale: QuestionnaireScaleOption[];
-};
-
-function PlusIcon() {
-  return (
-    <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-      <path strokeLinecap="round" d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M10 11v6M14 11v6M9 7l1-2h4l1 2M8 7l1 13h6l1-13" />
-    </svg>
-  );
-}
-
 export function QuestionnairesWorkspace() {
   const { get, searchKey, setParam, setParams } = useUrlState();
   const [stubs, setStubs] = useState<QuestionnaireDefinitionStub[]>([]);
@@ -105,14 +108,23 @@ export function QuestionnairesWorkspace() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const selectedKeyRef = useRef<string | null>(null);
+  const selectedVersionRef = useRef(selectedVersion);
+  const hasBlockingDraftRef = useRef(false);
   const currentDefinitionRef = useRef<QuestionnaireDefinition | null>(null);
   const persistedDefinitionRef = useRef<QuestionnaireDefinition | null>(null);
   const definitionRequestRef = useRef(0);
   const saveRequestRef = useRef(0);
+  const saveSubmittingRef = useRef(false);
+  const versionCreatingRef = useRef(false);
+  const questionnaireCreatingRef = useRef(false);
+  const questionnaireDeletingRef = useRef(false);
+  const localQuestionIdCounterRef = useRef(0);
 
   useEffect(() => {
     selectedKeyRef.current = selectedKey;
-  }, [selectedKey]);
+    selectedVersionRef.current = selectedVersion;
+    hasBlockingDraftRef.current = isDirty && saveState !== "saving";
+  }, [isDirty, saveState, selectedKey, selectedVersion]);
 
   const versionStubsByKey = useMemo(() => groupQuestionnaireStubsByKey(versionStubs), [versionStubs]);
   const latestStubByKey = useMemo(() => {
@@ -133,10 +145,13 @@ export function QuestionnairesWorkspace() {
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAudience, setNewAudience] = useState<"leadership" | "team" | "participant">("team");
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState("");
 
   // Search State
   const [searchQuery, setSearchQuery] = useState(get("q") ?? "");
-  const [expandedLocalScaleIds, setExpandedLocalScaleIds] = useState<Set<string>>(new Set());
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const filteredStubs = useMemo(() => {
     if (!searchQuery.trim()) return stubs;
@@ -147,22 +162,95 @@ export function QuestionnairesWorkspace() {
     );
   }, [stubs, searchQuery]);
 
+  const requestDiscardDraftForNavigation = useCallback(
+    (onDiscard: () => void) => {
+      if (!hasBlockingDraftRef.current) {
+        onDiscard();
+        return;
+      }
+
+      setConfirmDialog({
+        title: "Modificări nesalvate",
+        description: "Dacă schimbi chestionarul acum, pierzi modificările care nu au fost salvate.",
+        confirmLabel: "Renunță la modificări",
+        tone: "danger",
+        onConfirm: onDiscard,
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isDirty || saveState === "saving") return;
+
+    const protectedUrl = window.location.href;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasBlockingDraftRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!target || target.target === "_blank" || target.hasAttribute("download")) return;
+
+      const destination = new URL(target.href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
+
+      event.preventDefault();
+      requestDiscardDraftForNavigation(() => {
+        hasBlockingDraftRef.current = false;
+        window.location.assign(destination.href);
+      });
+    };
+    const handlePopState = () => {
+      const destination = window.location.href;
+      window.history.pushState(window.history.state, "", protectedUrl);
+      requestDiscardDraftForNavigation(() => {
+        hasBlockingDraftRef.current = false;
+        window.location.assign(destination);
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("click", handleDocumentClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [isDirty, requestDiscardDraftForNavigation, saveState]);
+
   useEffect(() => {
     setSearchQuery(get("q") ?? "");
     setShowCreateModal(get("modal") === "create");
 
     const nextKey = get("key");
     const nextVersion = parseQuestionnaireVersion(get("version"));
-    if (nextKey === selectedKey && nextVersion === selectedVersion) return;
+    const currentSelectedKey = selectedKeyRef.current;
+    const currentSelectedVersion = selectedVersionRef.current;
+    if (nextKey === currentSelectedKey && nextVersion === currentSelectedVersion) return;
 
-    if (!canDiscardDraftForNavigation()) {
+    if (hasBlockingDraftRef.current) {
       setParams(
         {
-          key: selectedKey,
-          version: selectedKey ? selectedVersion : null,
+          key: currentSelectedKey,
+          version: currentSelectedKey ? currentSelectedVersion : null,
         },
         "replace",
       );
+      requestDiscardDraftForNavigation(() => {
+        setSelectedKey(nextKey);
+        setSelectedVersion(nextVersion);
+        if (!nextKey) {
+          currentDefinitionRef.current = null;
+          setCurrentDefinition(null);
+        }
+        setParams({ key: nextKey, version: nextKey ? nextVersion : null }, "push");
+      });
       return;
     }
 
@@ -172,8 +260,7 @@ export function QuestionnairesWorkspace() {
       currentDefinitionRef.current = null;
       setCurrentDefinition(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchKey]);
+  }, [get, requestDiscardDraftForNavigation, searchKey, setParams]);
 
   // Load stubs list
   const loadStubs = useCallback(async () => {
@@ -182,6 +269,10 @@ export function QuestionnairesWorkspace() {
       const allVersions = await listQuestionnaireDefinitionStubs(false, { latestOnly: false });
       setVersionStubs(allVersions);
       setStubs(latestDefinitionStubs(allVersions));
+    } catch (error) {
+      setVersionStubs([]);
+      setStubs([]);
+      setNoticeMessage(error instanceof Error ? error.message : "Catalogul de chestionare nu a putut fi încărcat.");
     } finally {
       setIsCatalogLoading(false);
     }
@@ -228,12 +319,22 @@ export function QuestionnairesWorkspace() {
       try {
         const def = await getQuestionnaireDefinition(`${selectedKey}@${selectedVersion}`);
         if (definitionRequestRef.current !== requestId) return;
+        if (!def) {
+          throw new Error("Chestionarul nu a putut fi încărcat.");
+        }
         currentDefinitionRef.current = def;
         persistedDefinitionRef.current = def;
         setCurrentDefinition(def);
         setSaveState("idle");
         setIsDirty(false);
         setSaveError(null);
+      } catch (error) {
+        if (definitionRequestRef.current !== requestId) return;
+        currentDefinitionRef.current = null;
+        persistedDefinitionRef.current = null;
+        setCurrentDefinition(null);
+        setSaveState("error");
+        setSaveError(error instanceof Error ? error.message : "Chestionarul nu a putut fi încărcat.");
       } finally {
         if (definitionRequestRef.current === requestId) {
           setIsDefinitionLoading(false);
@@ -279,9 +380,11 @@ export function QuestionnairesWorkspace() {
 
   const handleSaveDraft = async () => {
     const draft = currentDefinitionRef.current;
-    if (!draft || saveState === "saving" || !isDirty) return;
+    if (!draft || saveSubmittingRef.current || saveState === "saving" || !isDirty) return;
+    const submittedDraft = draft;
     const requestId = saveRequestRef.current + 1;
     saveRequestRef.current = requestId;
+    saveSubmittingRef.current = true;
     setSaveState("saving");
     setSaveError(null);
     try {
@@ -295,11 +398,23 @@ export function QuestionnairesWorkspace() {
         draft.version,
       );
       if (saveRequestRef.current !== requestId) return;
-      currentDefinitionRef.current = saved;
-      persistedDefinitionRef.current = saved;
-      setCurrentDefinition(saved);
-      setIsDirty(false);
-      setSaveState("saved");
+      const currentDraft = currentDefinitionRef.current;
+      const stillEditingSavedDefinition =
+        selectedKeyRef.current === submittedDraft.key &&
+        currentDraft?.key === submittedDraft.key &&
+        currentDraft.version === submittedDraft.version;
+      if (stillEditingSavedDefinition) {
+        persistedDefinitionRef.current = saved;
+        if (currentDraft === submittedDraft) {
+          currentDefinitionRef.current = saved;
+          setCurrentDefinition(saved);
+          setIsDirty(false);
+          setSaveState("saved");
+        } else {
+          setIsDirty(true);
+          setSaveState("idle");
+        }
+      }
       setStubs((previousStubs) =>
         previousStubs.map((stub) =>
           stub.id === saved.key && (stub.version ?? 1) === saved.version
@@ -327,9 +442,18 @@ export function QuestionnairesWorkspace() {
         ),
       );
     } catch (error) {
-      if (saveRequestRef.current === requestId) {
+      const currentDraft = currentDefinitionRef.current;
+      const stillEditingFailedDefinition =
+        selectedKeyRef.current === submittedDraft.key &&
+        currentDraft?.key === submittedDraft.key &&
+        currentDraft.version === submittedDraft.version;
+      if (saveRequestRef.current === requestId && stillEditingFailedDefinition) {
         setSaveState("error");
         setSaveError(error instanceof Error ? error.message : "Chestionarul nu a putut fi salvat.");
+      }
+    } finally {
+      if (saveRequestRef.current === requestId) {
+        saveSubmittingRef.current = false;
       }
     }
   };
@@ -370,24 +494,25 @@ export function QuestionnairesWorkspace() {
     );
   };
 
-  const canDiscardDraftForNavigation = () => {
-    if (!isDirty || saveState === "saving") return true;
-    return window.confirm("Ai modificări nesalvate. Vrei să le pierzi și să schimbi chestionarul?");
+  const showNotice = (message: string) => {
+    setNoticeMessage(message);
   };
 
   const handleSelectDefinition = (key: string, version: number) => {
     if (key === selectedKey && version === selectedVersion) return;
-    if (!canDiscardDraftForNavigation()) return;
-    setSelectedKey(key);
-    setSelectedVersion(version);
-    setParams({ key, version, modal: null }, "push");
+    requestDiscardDraftForNavigation(() => {
+      setSelectedKey(key);
+      setSelectedVersion(version);
+      setParams({ key, version, modal: null }, "push");
+    });
   };
 
   const handleSelectVersion = (version: number) => {
     if (version === selectedVersion) return;
-    if (!canDiscardDraftForNavigation()) return;
-    setSelectedVersion(version);
-    setParam("version", version, "push");
+    requestDiscardDraftForNavigation(() => {
+      setSelectedVersion(version);
+      setParam("version", version, "push");
+    });
   };
 
   const updateDefinitionDraft = (updater: (current: QuestionnaireDefinition) => QuestionnaireDefinition) => {
@@ -412,12 +537,13 @@ export function QuestionnairesWorkspace() {
   };
 
   const handleRenameDefinitionKey = () => {
-    alert("Redenumirea cheii nu este permisă pe server. Creează un chestionar nou cu o altă cheie dacă este necesar.");
+    showNotice("Redenumirea cheii nu este permisă pe server. Creează un chestionar nou cu o altă cheie dacă este necesar.");
   };
 
   const handleCreateNewVersion = async () => {
     const draftDefinition = currentDefinitionRef.current;
-    if (!draftDefinition) return;
+    if (!draftDefinition || versionCreatingRef.current || isDefinitionLoading || saveSubmittingRef.current) return;
+    versionCreatingRef.current = true;
     setIsDefinitionLoading(true);
     try {
       const saved = await createQuestionnaireDefinitionOnServer({
@@ -431,53 +557,61 @@ export function QuestionnairesWorkspace() {
       setParam("version", saved.version, "replace");
       await loadStubs();
     } catch (e) {
-      alert((e as Error).message ?? "Eroare la crearea unei noi versiuni.");
+      showNotice((e as Error).message ?? "Eroare la crearea unei noi versiuni.");
     } finally {
+      versionCreatingRef.current = false;
       setIsDefinitionLoading(false);
     }
   };
 
-  const handleDeleteQuestionnaire = async () => {
+  const handleDeleteQuestionnaire = () => {
     if (!selectedKey) return;
     const selectedName = currentDefinition?.title ?? selectedKey;
-    const confirmed = window.confirm(
-      `Pensionați chestionarul "${selectedName}"? Această acțiune îl va marca ca inactiv pe server.`,
-    );
-    if (!confirmed) return;
-
-    setIsDefinitionLoading(true);
-    try {
-      await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
-      const remainingVersions = await listQuestionnaireDefinitionStubs(false, { latestOnly: false });
-      const remainingLatest = latestDefinitionStubs(remainingVersions);
-      setVersionStubs(remainingVersions);
-      setStubs(remainingLatest);
-      const nextSelection = remainingLatest.find((stub) => stub.id !== selectedKey) ?? remainingLatest[0];
-      if (nextSelection) {
-        setSelectedKey(nextSelection.id);
-        setSelectedVersion(nextSelection.version ?? 1);
-        setParams({ key: nextSelection.id, version: nextSelection.version ?? 1 }, "replace");
-      } else {
-        setSelectedKey(null);
-        currentDefinitionRef.current = null;
-        persistedDefinitionRef.current = null;
-        setCurrentDefinition(null);
-        setAvailableVersions([]);
-        setParams({ key: null, version: null }, "replace");
-      }
-    } catch (e) {
-      alert((e as Error).message ?? "Eroare la ștergerea/pensionarea chestionarului.");
-    } finally {
-      setIsDefinitionLoading(false);
-    }
+    setConfirmDialog({
+      title: "Pensionezi chestionarul?",
+      description: `"${selectedName}" va fi marcat ca inactiv pe server. Istoricul existent rămâne disponibil în proiectele care l-au folosit.`,
+      confirmLabel: "Pensionează",
+      tone: "danger",
+      onConfirm: async () => {
+        if (questionnaireDeletingRef.current) return;
+        questionnaireDeletingRef.current = true;
+        setIsDefinitionLoading(true);
+        try {
+          await deleteQuestionnaireDefinitionOnServer(selectedKey, selectedVersion);
+          const remainingVersions = await listQuestionnaireDefinitionStubs(false, { latestOnly: false });
+          const remainingLatest = latestDefinitionStubs(remainingVersions);
+          setVersionStubs(remainingVersions);
+          setStubs(remainingLatest);
+          const nextSelection = remainingLatest.find((stub) => stub.id !== selectedKey) ?? remainingLatest[0];
+          if (nextSelection) {
+            setSelectedKey(nextSelection.id);
+            setSelectedVersion(nextSelection.version ?? 1);
+            setParams({ key: nextSelection.id, version: nextSelection.version ?? 1 }, "replace");
+          } else {
+            setSelectedKey(null);
+            currentDefinitionRef.current = null;
+            persistedDefinitionRef.current = null;
+            setCurrentDefinition(null);
+            setAvailableVersions([]);
+            setParams({ key: null, version: null }, "replace");
+          }
+        } catch (e) {
+          showNotice((e as Error).message ?? "Eroare la ștergerea/pensionarea chestionarului.");
+        } finally {
+          questionnaireDeletingRef.current = false;
+          setIsDefinitionLoading(false);
+        }
+      },
+    });
   };
 
   const handleAddQuestionnaire = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newKey) return;
+    if (!newKey || questionnaireCreatingRef.current) return;
 
     const key = newKey.toLowerCase().replace(/[^a-z0-9_]/g, "_");
     const title = newTitle.trim() || "Chestionar nou";
+    questionnaireCreatingRef.current = true;
     setIsCatalogLoading(true);
     try {
       const saved = await createQuestionnaireDefinitionOnServer({
@@ -496,7 +630,7 @@ export function QuestionnairesWorkspace() {
             },
           ],
         },
-        active: false,
+        active: true,
       });
 
       setShowCreateModal(false);
@@ -508,31 +642,32 @@ export function QuestionnairesWorkspace() {
       setParams({ key: saved.key, version: saved.version, modal: null }, "replace");
       await loadStubs();
     } catch (e) {
-      alert((e as Error).message ?? "Eroare la crearea chestionarului.");
+      showNotice((e as Error).message ?? "Eroare la crearea chestionarului.");
     } finally {
+      questionnaireCreatingRef.current = false;
       setIsCatalogLoading(false);
     }
   };
 
   // Section modifiers
-  const handleAddSection = () => {
-    updateDefinitionDraft((definition) => {
-      const sections = [...definition.schema.sections];
-      const newSectionId = `sectiunea_${sections.length + 1}`;
-      sections.push({
-        id: newSectionId,
-        title: `Secțiunea ${sections.length + 1}`,
-        questions: [],
-      });
-
-      return {
-        ...definition,
-        schema: {
-          ...definition.schema,
-          sections,
-        },
-      };
+  const handleAddSection = (): string | null => {
+    const definition = currentDefinitionRef.current;
+    if (!definition) return null;
+    const sections = [...definition.schema.sections];
+    const newSectionId = `sectiunea_${sections.length + 1}`;
+    sections.push({
+      id: newSectionId,
+      title: `Secțiunea ${sections.length + 1}`,
+      questions: [],
     });
+    applyDefinitionDraft({
+      ...definition,
+      schema: {
+        ...definition.schema,
+        sections,
+      },
+    });
+    return newSectionId;
   };
 
   const handleUpdateSectionTitle = (sectionIndex: number, title: string) => {
@@ -557,7 +692,7 @@ export function QuestionnairesWorkspace() {
     const definition = currentDefinitionRef.current;
     if (!definition) return;
     if (definition.schema.sections.length <= 1) {
-      alert("Chestionarul trebuie să aibă cel puțin o secțiune.");
+      showNotice("Chestionarul trebuie să aibă cel puțin o secțiune.");
       return;
     }
     updateDefinitionDraft((current) => {
@@ -572,41 +707,55 @@ export function QuestionnairesWorkspace() {
     });
   };
 
+  const createLocalQuestionId = useCallback((definition: QuestionnaireDefinition, sectionIndex: number, nextIndex: number) => {
+    localQuestionIdCounterRef.current += 1;
+    const existingIds = new Set(
+      definition.schema.sections.flatMap((section) => section.questions.map((question) => question.id)),
+    );
+    const prefix = `${definition.key}_s${sectionIndex + 1}_q${nextIndex}`;
+    let candidate = `${prefix}_${localQuestionIdCounterRef.current}`;
+
+    while (existingIds.has(candidate)) {
+      localQuestionIdCounterRef.current += 1;
+      candidate = `${prefix}_${localQuestionIdCounterRef.current}`;
+    }
+
+    return candidate;
+  }, []);
+
   // Question modifiers
-  const handleAddQuestion = (sectionIndex: number) => {
-    updateDefinitionDraft((definition) => {
-      const sections = [...definition.schema.sections];
-      const section = sections[sectionIndex];
-      const nextIndex = section.questions.length + 1;
-      const questionId = `${definition.key}_s${sectionIndex + 1}_q${nextIndex}_${Date.now().toString().slice(-4)}`;
-
-      const newQuestion: QuestionnaireQuestion = {
-        id: questionId,
-        code: `Q${nextIndex}`,
-        type: "likert",
-        label: "Întrebare nouă. Apasă pentru a edita textul.",
-        required: true,
-        scale: [
-          { value: 1, label: "Rar" },
-          { value: 2, label: "Uneori" },
-          { value: 3, label: "De obicei" },
-        ],
-      };
-
-      const questions = [...section.questions, newQuestion];
-      sections[sectionIndex] = {
-        ...section,
-        questions,
-      };
-
-      return {
-        ...definition,
-        schema: {
-          ...definition.schema,
-          sections,
-        },
-      };
+  const handleAddQuestion = (sectionIndex: number): string | null => {
+    const definition = currentDefinitionRef.current;
+    if (!definition) return null;
+    const sections = [...definition.schema.sections];
+    const section = sections[sectionIndex];
+    if (!section) return null;
+    const nextIndex = section.questions.length + 1;
+    const questionId = createLocalQuestionId(definition, sectionIndex, nextIndex);
+    const newQuestion: QuestionnaireQuestion = {
+      id: questionId,
+      code: `Q${nextIndex}`,
+      type: "likert",
+      label: "Întrebare nouă",
+      required: true,
+      scale: [
+        { value: 1, label: "Rar" },
+        { value: 2, label: "Uneori" },
+        { value: 3, label: "De obicei" },
+      ],
+    };
+    sections[sectionIndex] = {
+      ...section,
+      questions: [...section.questions, newQuestion],
+    };
+    applyDefinitionDraft({
+      ...definition,
+      schema: {
+        ...definition.schema,
+        sections,
+      },
     });
+    return questionId;
   };
 
   const handleUpdateQuestion = (
@@ -660,6 +809,26 @@ export function QuestionnairesWorkspace() {
     });
   };
 
+  const handleMoveQuestion = (sectionIndex: number, questionIndex: number, direction: -1 | 1) => {
+    updateDefinitionDraft((definition) => {
+      const sections = [...definition.schema.sections];
+      const section = sections[sectionIndex];
+      const targetIndex = questionIndex + direction;
+      if (!section || targetIndex < 0 || targetIndex >= section.questions.length) return definition;
+      const questions = [...section.questions];
+      const [question] = questions.splice(questionIndex, 1);
+      questions.splice(targetIndex, 0, question);
+      sections[sectionIndex] = { ...section, questions };
+      return {
+        ...definition,
+        schema: {
+          ...definition.schema,
+          sections,
+        },
+      };
+    });
+  };
+
   // Statement list modifiers for Distress Drivers style statement set questions
   const handleAddStatement = (sectionIndex: number, questionIndex: number) => {
     const definition = currentDefinitionRef.current;
@@ -677,11 +846,11 @@ export function QuestionnairesWorkspace() {
     handleUpdateQuestion(sectionIndex, questionIndex, { statements });
   };
 
-  const handleUpdateStatementLabel = (
+  const handleUpdateStatement = (
     sectionIndex: number,
     questionIndex: number,
     statementIndex: number,
-    label: string
+    updates: Partial<QuestionnaireStatement>,
   ) => {
     updateDefinitionDraft((definition) => {
       const sections = [...definition.schema.sections];
@@ -692,7 +861,7 @@ export function QuestionnairesWorkspace() {
 
       statements[statementIndex] = {
         ...statements[statementIndex],
-        label,
+        ...updates,
       };
 
       questions[questionIndex] = {
@@ -704,36 +873,6 @@ export function QuestionnairesWorkspace() {
         ...section,
         questions,
       };
-
-      return {
-        ...definition,
-        schema: {
-          ...definition.schema,
-          sections,
-        },
-      };
-    });
-  };
-
-  const handleUpdateStatementScale = (
-    sectionIndex: number,
-    questionIndex: number,
-    statementIndex: number,
-    scale: QuestionnaireScaleOption[],
-  ) => {
-    updateDefinitionDraft((definition) => {
-      const sections = [...definition.schema.sections];
-      const section = sections[sectionIndex];
-      const questions = [...section.questions];
-      const question = questions[questionIndex];
-      const statements = [...(question.statements || [])];
-
-      statements[statementIndex] = {
-        ...statements[statementIndex],
-        scale,
-      };
-      questions[questionIndex] = { ...question, statements };
-      sections[sectionIndex] = { ...section, questions };
 
       return {
         ...definition,
@@ -757,10 +896,10 @@ export function QuestionnairesWorkspace() {
   const latestSelectedVersion = selectedKey
     ? (latestStubByKey.get(selectedKey)?.version ?? availableVersions[0])
     : availableVersions[0];
-  const scaleGroups = useMemo<ScaleGroup[]>(() => {
+  const scaleGroups = useMemo<QuestionnaireScaleGroup[]>(() => {
     if (!currentDefinition) return [];
 
-    const groups = new Map<string, ScaleGroup>();
+    const groups = new Map<string, QuestionnaireScaleGroup>();
     currentDefinition.schema.sections.forEach((section) => {
       section.questions.forEach((question) => {
         if (!question.scale?.length || hasStatementSpecificScales(question)) return;
@@ -788,7 +927,7 @@ export function QuestionnairesWorkspace() {
   const isEditorLoading = isDefinitionLoading && !currentDefinition;
   const saveStateLabel =
     saveState === "saving"
-      ? "Se salvează..."
+      ? "Salvăm modificările"
       : saveState === "saved"
         ? "Salvat"
         : saveState === "error"
@@ -798,7 +937,7 @@ export function QuestionnairesWorkspace() {
             : null;
 
   const handleUpdateScaleGroup = (
-    group: ScaleGroup,
+    group: QuestionnaireScaleGroup,
     updater: (scale: QuestionnaireScaleOption[]) => QuestionnaireScaleOption[],
   ) => {
     const previousSignature = scaleSignature(group.scale);
@@ -822,716 +961,202 @@ export function QuestionnairesWorkspace() {
     }));
   };
 
-  const toggleLocalScale = (scaleId: string) => {
-    setExpandedLocalScaleIds((current) => {
-      const next = new Set(current);
-      if (next.has(scaleId)) {
-        next.delete(scaleId);
-      } else {
-        next.add(scaleId);
-      }
-      return next;
+  const handleAddCustomCategory = () => {
+    const cleanName = categoryDraft.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    if (!cleanName) return;
+    if (!categories.includes(cleanName)) {
+      setCustomCategories((previous) => [...previous, cleanName]);
+    }
+    setNewKey(cleanName);
+    setCategoryDraft("");
+    setIsAddingCategory(false);
+  };
+
+  const handleDeleteSelectedCustomCategory = () => {
+    if (!newKey || !customCategories.includes(newKey)) return;
+    setConfirmDialog({
+      title: "Ștergi categoria locală?",
+      description: `"${newKey}" va fi eliminată doar din lista locală de creare. Chestionarele existente nu sunt modificate.`,
+      confirmLabel: "Șterge categoria",
+      tone: "danger",
+      onConfirm: () => {
+        setCustomCategories((previous) => previous.filter((cat) => cat !== newKey));
+        setNewKey("");
+      },
     });
   };
 
+  const canDeleteSelectedCustomCategory = Boolean(newKey && customCategories.includes(newKey));
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-5 text-foreground">
       {!selectedKey ? (
         // GALLERY MODE
-        <div className="space-y-6">
-          <div className="filter-toolbar">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-sm md:flex-row md:items-center">
             <div className="relative w-full md:flex-1">
-              <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
-              </svg>
-              <input
+              <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-11 items-center justify-center text-muted-foreground">
+                <SearchIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
+              </span>
+              <Input
                 type="text"
-                placeholder="Caută chestionar..."
+                placeholder="Caută chestionar"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setParam("q", e.target.value, "replace");
                 }}
-                className="control-input control-search w-full py-3 pl-12 pr-4"
+                className="!pl-11"
               />
             </div>
-            <button
+            <Button
+              type="button"
               onClick={() => {
                 setShowCreateModal(true);
                 setParam("modal", "create", "push");
               }}
               disabled={isCatalogLoading}
-              className="btn-primary shrink-0"
+              className="shrink-0"
             >
-              {isCatalogLoading ? "..." : "+ Creează chestionar"}
-            </button>
+              {isCatalogLoading ? (
+                <Loader2Icon
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                  className="animate-spin"
+                  strokeWidth={1.8}
+                />
+              ) : (
+                <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+              )}
+              {isCatalogLoading ? "Încărcăm catalogul" : "Creează chestionar"}
+            </Button>
           </div>
 
           {isCatalogLoading ? (
-            <div className="flex items-center justify-center h-64 rounded-xl border border-[var(--border)] bg-surface">
-              <p className="text-sm font-semibold text-foreground/50">Se încarcă catalogul...</p>
+            <div className="flex min-h-64 items-center justify-center rounded-lg border border-border bg-surface p-6">
+              <OperationFeedback
+                className="w-full max-w-md"
+                title="Încărcăm catalogul"
+              />
             </div>
           ) : filteredStubs.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredStubs.map((stub) => (
-                <article
+                <Button
                   key={`${stub.id}-${stub.version ?? "fără-versiune"}`}
-                  role="button"
-                  tabIndex={0}
+                  type="button"
+                  variant="outline"
                   onClick={() => handleSelectDefinition(stub.id, stub.version ?? 1)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      handleSelectDefinition(stub.id, stub.version ?? 1);
-                    }
-                  }}
                   aria-label={`Editează ${stub.name}`}
-                  className="group flex cursor-pointer flex-col rounded-xl border border-[var(--border)] bg-surface p-6 text-left shadow-sm transition-colors hover:border-burgundy/25 focus:outline-none focus:ring-2 focus:ring-burgundy/30"
+                  className="group h-auto min-h-[12rem] items-stretch justify-start whitespace-normal border-border bg-surface p-4 text-left shadow-sm hover:border-primary/35"
                 >
                   <div className="flex h-full flex-col">
-                    <div className="flex items-start justify-between mb-4">
-                      <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${
-                        stub.audience === "team"
-                          ? "text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50"
-                          : stub.audience === "leadership"
-                            ? "text-purple-700 bg-purple-50 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/50"
-                            : "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/50"
-                      }`}>
-                        {stub.audience}
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <span
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]",
+                          stub.audience === "team"
+                            ? "border-border bg-muted text-muted-foreground"
+                            : stub.audience === "leadership"
+                              ? "border-primary/35 bg-primary/10 text-primary"
+                              : "border-border bg-surface text-muted-foreground",
+                        )}
+                      >
+                        {AUDIENCE_LABELS[stub.audience] ?? stub.audience}
                       </span>
-                      <span className="rounded-full border border-[var(--border)] bg-surface-muted px-2 py-0.5 text-[10px] font-bold text-foreground/60">
+                      <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
                         v{stub.version ?? 1}
                       </span>
                     </div>
-                    <h4 className="font-bold text-lg text-foreground mb-2 group-hover:text-burgundy transition-colors line-clamp-1">
+                    <h4 className="mb-2 line-clamp-1 text-base font-bold text-foreground transition-colors group-hover:text-primary">
                       {stub.name}
                     </h4>
-                    <p className="text-sm text-foreground/60 mb-6 line-clamp-2 min-h-[2.5rem]">
-                      {stub.description || "Fără descriere. Apasă pentru a edita detaliile."}
+                    <p className="mb-5 line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">
+                      {stub.description || "Fără descriere"}
                     </p>
-                    <div className="mt-auto pt-4 border-t border-[var(--border)] flex items-center justify-between text-xs font-semibold text-foreground/50">
+                    <div className="mt-auto flex items-center justify-between border-t border-border pt-3 text-xs font-semibold text-muted-foreground">
                       <span>{stub.estimatedItems ?? "TBD"} întrebări</span>
-                      <span className="capitalize">{stub.status}</span>
+                      <span>{QUESTIONNAIRE_STATUS_LABELS[stub.status] ?? stub.status}</span>
                     </div>
                   </div>
-                </article>
+                </Button>
               ))}
             </div>
           ) : (
-            <div className="surface-panel-muted flex min-h-[40vh] flex-col items-center justify-center p-12 text-center">
+            <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-lg border border-border bg-surface p-12 text-center">
               <p className="text-xl font-bold text-foreground">Catalog gol</p>
-              <p className="mt-3 text-sm leading-relaxed text-foreground/60 max-w-md mx-auto">
-                Nu s-au găsit chestionare. Apasă pe butonul de mai sus pentru a crea unul nou.
-              </p>
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => {
+                  setShowCreateModal(true);
+                  setParam("modal", "create", "push");
+                }}
+              >
+                <PlusIcon data-icon="inline-start" aria-hidden="true" />
+                Creează chestionar
+              </Button>
             </div>
           )}
         </div>
       ) : (
-        // EDIT MODE
-        <div className="space-y-6">
-          {/* Editor Header / Back Button */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                if (canDiscardDraftForNavigation()) {
+        <div className="min-w-0">
+          {isEditorLoading ? (
+            <div className="flex min-h-64 items-center justify-center border-y border-border bg-surface p-6">
+              <OperationFeedback className="w-full max-w-md" title="Încărcăm chestionarul" />
+            </div>
+          ) : currentDefinition ? (
+            <QuestionnaireEditor
+              definition={currentDefinition}
+              categories={categories}
+              availableVersions={availableVersions}
+              selectedVersion={selectedVersion}
+              latestSelectedVersion={latestSelectedVersion}
+              scaleGroups={scaleGroups}
+              saveState={saveState}
+              saveStateLabel={saveStateLabel}
+              saveError={saveError}
+              isDirty={isDirty}
+              isBusy={isSaving || isDefinitionLoading}
+              canDelete={canDeleteSelected}
+              onBack={() => {
+                requestDiscardDraftForNavigation(() => {
                   setSelectedKey(null);
                   currentDefinitionRef.current = null;
                   setCurrentDefinition(null);
                   setParams({ key: null, version: null }, "push");
-                }
+                });
               }}
-              className="tap-soft rounded-full bg-surface px-4 py-2 text-sm font-bold text-foreground border border-[var(--border)] hover:bg-surface-muted hover:border-burgundy/30 transition-all flex items-center gap-2"
-            >
-              <span className="text-burgundy/70">&larr;</span> Înapoi la catalog
-            </button>
-          </div>
-          
-          {/* Main Content Area */}
-          <main className="space-y-5">
-            {isEditorLoading ? (
-              <div className="flex h-64 items-center justify-center rounded-xl border border-[var(--border)] bg-surface">
-                <p className="text-sm font-semibold text-foreground/50">Se încarcă detaliile chestionarului...</p>
-              </div>
-            ) : currentDefinition ? (
-              <section className="surface-panel space-y-7 p-5 md:p-6">
-                <div className="space-y-6">
-              {/* Header info card */}
-              <div className="grid gap-5 border-b border-[var(--border)] pb-6 xl:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="min-w-0 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-[#890505]/35 bg-[#890505]/10 px-2.5 py-1 text-xs font-bold text-[#890505] shadow-none dark:border-[#e35f5f]/45 dark:bg-[#890505]/22 dark:text-[#e35f5f]">
-                    Audiență: {currentDefinition.schema.audience ?? (currentDefinition.key === "distress_drivers" ? "leadership" : "team")}
-                  </span>
-                  <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-bold text-foreground/60 border border-[var(--border)]">
-                    {canDeleteSelected ? "Local editabil" : "Definiție de bază"}
-                  </span>
-                  {saveStateLabel ? (
-                    <span
-                      className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
-                        saveState === "error"
-                          ? "border-[#890505]/35 bg-[#890505]/10 text-[#890505] dark:border-[#e35f5f]/45 dark:bg-[#890505]/22 dark:text-[#e35f5f]"
-                          : isDirty
-                            ? "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                          : "border-success/25 bg-success/12 text-success-ink"
-                      }`}
-                    >
-                      {saveStateLabel}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem]">
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">Nume chestionar</span>
-                    <input
-                      value={currentDefinition.title}
-                      onChange={(e) => handleSaveMetadata({ title: e.target.value })}
-                      className="control-input w-full py-3 text-lg"
-                    />
-                  </label>
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">Categorie / Slug</span>
-                    <select
-                      value={currentDefinition.key}
-                      onChange={handleRenameDefinitionKey}
-                      className="control-input w-full py-3"
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">Descriere</span>
-                  <textarea
-                    value={currentDefinition.description}
-                    onChange={(e) => handleSaveMetadata({ description: e.target.value })}
-                    rows={2}
-                    className="control-input w-full py-3 leading-6"
-                  />
-                </label>
-              </div>
-
-              {/* Version Controls */}
-              <div className="flex flex-col gap-3 xl:items-end">
-                <label className="space-y-1.5">
-                  <span className="block text-xs font-bold uppercase tracking-wider text-foreground/50">Audiență</span>
-                  <select
-                    value={currentDefinition.schema.audience ?? (currentDefinition.key === "distress_drivers" ? "leadership" : "team")}
-                    onChange={(e) =>
-                      handleSaveMetadata({
-                        audience: e.target.value as "leadership" | "team" | "participant",
-                      })
-                    }
-                    className="control-input w-full px-3 py-2 text-xs xl:w-48"
-                  >
-                    <option value="team">Echipă</option>
-                    <option value="leadership">Leadership</option>
-                    <option value="participant">Individual</option>
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="block text-xs font-bold uppercase tracking-wider text-foreground/50">Versiune</span>
-                  <select
-                    value={selectedVersion}
-                    onChange={(e) => handleSelectVersion(Number(e.target.value))}
-                    className="control-input w-full px-3 py-2 text-xs xl:w-48"
-                  >
-                    {availableVersions.map((v) => (
-                      <option key={v} value={v}>
-                        v{v} {v === latestSelectedVersion ? "(Activă)" : "(Veche)"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="flex flex-wrap gap-2 xl:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveDraft()}
-                    disabled={!isDirty || isSaving || isDefinitionLoading}
-                    className="btn-primary !px-4 !py-2 !text-xs !rounded-full"
-                  >
-                    {isSaving ? "Se salvează..." : "Salvează modificările"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDiscardDraft}
-                    disabled={!isDirty || isSaving || isDefinitionLoading}
-                    className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    Revino la ultima versiune salvată
-                  </button>
-                </div>
-                {saveError ? (
-                  <p className="max-w-xs text-xs font-semibold leading-5 text-[#890505] dark:text-[#e35f5f]">
-                    {saveError}
-                  </p>
-                ) : null}
-                <div className="flex flex-wrap gap-2 xl:justify-end">
-                  <button
-                    onClick={handleCreateNewVersion}
-                    disabled={isSaving || isDefinitionLoading}
-                    className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy disabled:cursor-not-allowed disabled:text-foreground/35"
-                  >
-                    Versiune nouă (clonează)
-                  </button>
-                  <button
-                    onClick={handleDeleteQuestionnaire}
-                    disabled={!canDeleteSelected || isSaving || isDefinitionLoading}
-                    className={destructiveButtonClass}
-                    title={
-                      canDeleteSelected
-                        ? "Șterge chestionarul local"
-                        : "Definițiile de bază sunt protejate; clonează sau creează un chestionar local pentru ștergere."
-                    }
-                  >
-                    Șterge chestionarul
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Instruction editor */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-foreground/50">
-                Instrucțiuni chestionar
-              </label>
-              <textarea
-                value={currentDefinition.schema.instructions ?? ""}
-                onChange={(e) =>
-                  updateDefinitionDraft((definition) => ({
-                    ...definition,
-                    schema: { ...definition.schema, instructions: e.target.value },
-                  }))
-                }
-                rows={2}
-                className="control-input w-full py-3"
-                placeholder="Instrucțiuni prezentate utilizatorului..."
-              />
-            </div>
-
-            {scaleGroups.length > 0 ? (
-              <section className="rounded-xl border border-[var(--border)] bg-surface p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">Scări globale de răspuns</h3>
-                    <p className="mt-1 max-w-2xl text-xs leading-5 text-foreground/52">
-                      Editează aici opțiunile folosite în mai multe întrebări. Modificările se aplică tuturor
-                      întrebărilor care au exact aceeași scară.
-                    </p>
-                  </div>
-                  <span className="rounded-xl border border-[var(--border)] bg-background px-2.5 py-1 text-[11px] font-bold text-foreground/55">
-                    {scaleGroups.length} {scaleGroups.length === 1 ? "scară" : "scări"}
-                  </span>
-                </div>
-                <div className="mt-4 grid gap-3">
-                  {scaleGroups.map((group) => (
-                    <div key={group.renderKey} className="rounded-xl border border-[var(--border)] bg-surface p-3 shadow-sm">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-foreground">{group.title}</p>
-                          <p className="mt-0.5 text-[11px] font-semibold text-foreground/45">
-                            {group.questionCount} {group.questionCount === 1 ? "întrebare" : "întrebări"} ·{" "}
-                            {group.type === "statement_score_set" ? "set de afirmații" : "Likert"}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleUpdateScaleGroup(group, (scale) => {
-                              const numericValues = scale
-                                .map((option) => option.value)
-                                .filter((value): value is number => typeof value === "number");
-                              const nextValue = numericValues.length > 0 ? Math.max(...numericValues) + 1 : 1;
-                              return [...scale, { value: nextValue, label: `Opțiune ${nextValue}` }];
-                            })
-                          }
-                          className={iconButtonClass}
-                          aria-label={`Adaugă opțiune în scara ${group.title}`}
-                          title="Adaugă opțiune"
-                        >
-                          <PlusIcon />
-                        </button>
-                      </div>
-                      <div className="grid gap-2">
-                        {group.scale.map((option, optionIndex) => (
-                          <div
-                            key={`${group.renderKey}-${optionIndex}`}
-                            className="grid gap-2 rounded-xl border border-[var(--border)] bg-background px-2.5 py-2 text-xs md:grid-cols-[3rem_10rem_minmax(0,1fr)_2rem] md:items-center"
-                          >
-                            <span className="font-bold text-burgundy">{option.value}</span>
-                            <input
-                              type="text"
-                              value={option.label}
-                              onChange={(event) =>
-                                handleUpdateScaleGroup(group, (scale) => {
-                                  scale[optionIndex] = { ...scale[optionIndex], label: event.target.value };
-                                  return scale;
-                                })
-                              }
-                              className="control-input control-input-square w-full px-2 py-1 text-xs"
-                              placeholder="Etichetă"
-                            />
-                            <input
-                              type="text"
-                              value={option.description ?? ""}
-                              onChange={(event) =>
-                                handleUpdateScaleGroup(group, (scale) => {
-                                  scale[optionIndex] = {
-                                    ...scale[optionIndex],
-                                    description: event.target.value || undefined,
-                                  };
-                                  return scale;
-                                })
-                              }
-                              className="control-input control-input-square w-full px-2 py-1 text-xs"
-                              placeholder="Descriere opțională"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateScaleGroup(group, (scale) => scale.filter((_, index) => index !== optionIndex))
-                              }
-                              className="tap-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground/40 hover:bg-red-500/10 hover:text-red-700"
-                              aria-label={`Șterge opțiunea ${option.label}`}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {/* Sections & Questions Editor */}
-            <div className="space-y-5">
-              <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
-                <h3 className="text-base font-bold text-foreground">Secțiuni ({currentDefinition.schema.sections.length})</h3>
-                <button
-                  onClick={handleAddSection}
-                  className="btn-primary !px-4 !py-2 !text-xs !rounded-full"
-                >
-                  + Adaugă secțiune
-                </button>
-              </div>
-
-              {currentDefinition.schema.sections.map((section, sIndex) => (
-                <div key={section.id} className="rounded-xl border border-[var(--border)] bg-surface p-4 space-y-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
-                    <input
-                      type="text"
-                      value={section.title}
-                      onChange={(e) => handleUpdateSectionTitle(sIndex, e.target.value)}
-                      className="control-input min-w-[12rem] flex-1 px-3 py-2 text-sm font-bold"
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleAddQuestion(sIndex)}
-                        className={iconButtonClass}
-                        aria-label={`Adaugă întrebare în secțiunea ${section.title}`}
-                        title="Adaugă întrebare"
-                      >
-                        <PlusIcon />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSection(sIndex)}
-                        className={destructiveIconButtonClass}
-                        aria-label={`Șterge secțiunea ${section.title}`}
-                        title="Șterge secțiunea"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Questions inside Section */}
-                  <div className="space-y-4">
-                    {section.questions.length === 0 ? (
-                      <p className="text-xs font-semibold text-foreground/45 text-center py-4">
-                        Nicio întrebare în această secțiune. Apasă pe butonul de mai sus pentru a adăuga una.
-                      </p>
-                    ) : (
-                      section.questions.map((question, qIndex) => (
-                        <div
-                          key={question.id}
-                          data-testid={`question-editor-${question.id}`}
-                          className="rounded-xl border border-[var(--border)] bg-surface p-4 space-y-3 shadow-sm"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="flex gap-2 items-center flex-1">
-                              <input
-                                type="text"
-                                value={question.code}
-                                onChange={(e) =>
-                                  handleUpdateQuestion(sIndex, qIndex, { code: e.target.value })
-                                }
-                                placeholder="Cod"
-                                className="control-input w-16 px-2 py-1 text-center text-xs font-bold"
-                              />
-                              <input
-                                type="text"
-                                value={question.label}
-                                onChange={(e) =>
-                                  handleUpdateQuestion(sIndex, qIndex, { label: e.target.value })
-                                }
-                                placeholder="Textul întrebării"
-                                className="control-input flex-1 px-3 py-1 text-xs"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={question.type}
-                                onChange={(e) =>
-                                  handleUpdateQuestion(sIndex, qIndex, {
-                                    type: e.target.value as "likert" | "statement_score_set",
-                                    statements: e.target.value === "statement_score_set" ? [] : undefined,
-                                  })
-                                }
-                                className="control-input px-2.5 py-1 text-xs"
-                              >
-                                <option value="likert">Scările Likert</option>
-                                <option value="statement_score_set">Set de afirmații</option>
-                              </select>
-                              <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75 select-none cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={question.required}
-                                  onChange={(e) =>
-                                    handleUpdateQuestion(sIndex, qIndex, { required: e.target.checked })
-                                  }
-                                  className="rounded border-[var(--border)] accent-[#890505] focus:ring-burgundy"
-                                />
-                                Obligatoriu
-                              </label>
-                              <button
-                                onClick={() => handleDeleteQuestion(sIndex, qIndex)}
-                                className={destructiveButtonClass}
-                                title="Șterge întrebarea"
-                              >
-                                Șterge întrebarea
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Instructions (optional) */}
-                          <div>
-                            <input
-                              type="text"
-                              value={question.instructions ?? ""}
-                              onChange={(e) =>
-                                handleUpdateQuestion(sIndex, qIndex, { instructions: e.target.value || undefined })
-                              }
-                              placeholder="Indicații opționale de răspuns..."
-                              className="control-input w-full px-3 py-1.5 text-xs"
-                            />
-                          </div>
-
-                          {/* Statement sets may define their own participant-facing scale per behaviour. */}
-                          {!hasStatementSpecificScales(question) ? (
-                          <div className="border-t border-[var(--border)] pt-3">
-                            {(() => {
-                              const scalePanelId = `${section.id}:${question.id}`;
-                              const isExpanded = expandedLocalScaleIds.has(scalePanelId);
-                              const scalePreview = question.scale
-                                .slice(0, 4)
-                                .map((option) => option.label)
-                                .join(" / ");
-                              return (
-                                <div className="rounded-xl border border-[var(--border)] bg-background px-3 py-3">
-                                  <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">
-                                        Scară locală
-                                      </p>
-                                      <p className="mt-1 truncate text-xs font-semibold text-foreground/65">
-                                        {question.scale.length} opțiuni · {scalePreview}
-                                        {question.scale.length > 4 ? " / ..." : ""}
-                                      </p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleLocalScale(scalePanelId)}
-                                      className="tap-soft rounded-full border border-[var(--border)] bg-surface px-3 py-1.5 text-[11px] font-bold text-foreground/60 hover:border-burgundy/45 hover:text-burgundy"
-                                      aria-expanded={isExpanded}
-                                    >
-                                      {isExpanded ? "Ascunde scara" : "Editează scara locală"}
-                                    </button>
-                                  </div>
-
-                                  {isExpanded ? (
-                                    <div className="mt-3 grid gap-2">
-                                      {question.scale.map((opt, optIndex) => (
-                                        <div key={optIndex} className="grid gap-2 rounded-xl border border-[var(--border)] bg-surface px-2.5 py-2 text-xs md:grid-cols-[3rem_10rem_minmax(0,1fr)_2rem] md:items-center">
-                                          <span className="font-bold text-burgundy">{opt.value}</span>
-                                          <input
-                                            type="text"
-                                            value={opt.label}
-                                            onChange={(e) => {
-                                              const newScale = [...question.scale];
-                                              newScale[optIndex] = { ...newScale[optIndex], label: e.target.value };
-                                              handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
-                                            }}
-                                            className="control-input control-input-square w-full px-2 py-1 text-xs"
-                                            placeholder="Etichetă"
-                                          />
-                                          <input
-                                            type="text"
-                                            value={opt.description ?? ""}
-                                            onChange={(e) => {
-                                              const newScale = [...question.scale];
-                                              newScale[optIndex] = { ...newScale[optIndex], description: e.target.value || undefined };
-                                              handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
-                                            }}
-                                            className="control-input control-input-square w-full px-2 py-1 text-xs"
-                                            placeholder="Descriere opțională pentru această opțiune"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const newScale = question.scale.filter((_, i) => i !== optIndex);
-                                              handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
-                                            }}
-                                            className="tap-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground/40 hover:bg-red-500/10 hover:text-red-700"
-                                            aria-label={`Șterge opțiunea ${opt.label}`}
-                                          >
-                                            ×
-                                          </button>
-                                        </div>
-                                      ))}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const numericValues = question.scale
-                                            .map((option) => option.value)
-                                            .filter((value): value is number => typeof value === "number");
-                                          const nextVal = numericValues.length > 0 ? Math.max(...numericValues) + 1 : 1;
-                                          const newScale = [...question.scale, { value: nextVal, label: `Opțiune ${nextVal}` }];
-                                          handleUpdateQuestion(sIndex, qIndex, { scale: newScale });
-                                        }}
-                                        className="tap-soft justify-self-start rounded-full border border-dashed border-[var(--border)] px-2.5 py-1 text-[11px] font-bold text-foreground/60 hover:border-burgundy/45 hover:text-burgundy"
-                                      >
-                                        + Adaugă scor
-                                      </button>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                          ) : null}
-
-                          {/* Statement list for statement_score_set */}
-                          {question.type === "statement_score_set" && (
-                            <div className="border-t border-[var(--border)] pt-3 space-y-2.5">
-                              <div className="flex justify-between items-center">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">
-                                  Afirmații în set
-                                </p>
-                                <button
-                                  onClick={() => handleAddStatement(sIndex, qIndex)}
-                                  className={iconButtonClass}
-                                  aria-label={`Adaugă afirmație în întrebarea ${question.code}`}
-                                  title="Adaugă afirmație"
-                                >
-                                  <PlusIcon />
-                                </button>
-                              </div>
-
-                              <div className="space-y-2">
-                                {(question.statements || []).map((statement, stmtIndex) => (
-                                  <div key={statement.id} className="rounded-xl border border-[var(--border)] bg-background p-3">
-                                    <div className="flex gap-2 items-center">
-                                      <span className="text-xs font-bold text-foreground/50 w-8 text-right">
-                                        {statement.code}
-                                      </span>
-                                      <input
-                                        type="text"
-                                        value={statement.label}
-                                        onChange={(e) =>
-                                          handleUpdateStatementLabel(sIndex, qIndex, stmtIndex, e.target.value)
-                                        }
-                                        placeholder="Ex. Îmi place să organizez planuri clare..."
-                                        className="control-input flex-1 px-3 py-1 text-xs"
-                                        aria-label={`Comportament specific ${statement.code}`}
-                                      />
-                                      <button
-                                        onClick={() => handleDeleteStatement(sIndex, qIndex, stmtIndex)}
-                                        className={`${destructiveButtonClass} px-2`}
-                                        title="Șterge afirmația"
-                                      >
-                                        Șterge
-                                      </button>
-                                    </div>
-
-                                    {statement.scale?.length ? (
-                                      <div className="mt-3 border-t border-[var(--border)] pt-3">
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">
-                                          Răspunsuri văzute de participant
-                                        </p>
-                                        <p className="mt-1 text-xs text-foreground/58">
-                                          Participantul vede cele patru opțiuni de mai jos pentru acest comportament.
-                                        </p>
-                                        <div className="mt-2 grid gap-2">
-                                          {statement.scale.map((option, optionIndex) => (
-                                            <div
-                                              key={String(option.value)}
-                                              className="grid gap-2 rounded-lg border border-[var(--border)] bg-surface px-2.5 py-2 text-xs md:grid-cols-[2.25rem_9rem_minmax(0,1fr)] md:items-center"
-                                            >
-                                              <span className="font-bold text-burgundy">{option.value}</span>
-                                              <input
-                                                type="text"
-                                                value={option.label}
-                                                onChange={(event) => {
-                                                  const scale = cloneScale(statement.scale || []);
-                                                  scale[optionIndex] = { ...scale[optionIndex], label: event.target.value };
-                                                  handleUpdateStatementScale(sIndex, qIndex, stmtIndex, scale);
-                                                }}
-                                                className="control-input control-input-square w-full px-2 py-1 text-xs"
-                                                aria-label={`Etichetă participant ${statement.code} ${option.value}`}
-                                              />
-                                              <input
-                                                type="text"
-                                                value={option.description ?? ""}
-                                                onChange={(event) => {
-                                                  const scale = cloneScale(statement.scale || []);
-                                                  scale[optionIndex] = {
-                                                    ...scale[optionIndex],
-                                                    description: event.target.value || undefined,
-                                                  };
-                                                  handleUpdateStatementScale(sIndex, qIndex, stmtIndex, scale);
-                                                }}
-                                                className="control-input control-input-square w-full px-2 py-1 text-xs"
-                                                aria-label={`Descriere participant ${statement.code} ${option.value}`}
-                                                placeholder="Descrierea pe care o vede participantul"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            </div>
-          </section>
-        ) : null}
-          </main>
+              onSave={() => void handleSaveDraft()}
+              onDiscard={handleDiscardDraft}
+              onSelectVersion={handleSelectVersion}
+              onCreateVersion={() => void handleCreateNewVersion()}
+              onDeleteQuestionnaire={handleDeleteQuestionnaire}
+              onUpdateMetadata={handleSaveMetadata}
+              onRenameKey={handleRenameDefinitionKey}
+              onUpdateInstructions={(instructions) =>
+                updateDefinitionDraft((definition) => ({
+                  ...definition,
+                  schema: { ...definition.schema, instructions },
+                }))
+              }
+              onAddSection={handleAddSection}
+              onUpdateSectionTitle={handleUpdateSectionTitle}
+              onDeleteSection={handleDeleteSection}
+              onAddQuestion={handleAddQuestion}
+              onUpdateQuestion={handleUpdateQuestion}
+              onDeleteQuestion={handleDeleteQuestion}
+              onMoveQuestion={handleMoveQuestion}
+              onAddStatement={handleAddStatement}
+              onUpdateStatement={handleUpdateStatement}
+              onDeleteStatement={handleDeleteStatement}
+              onUpdateScaleGroup={handleUpdateScaleGroup}
+            />
+          ) : saveError ? (
+            <InlineFeedback tone="danger" className="p-5">
+              {saveError}
+            </InlineFeedback>
+          ) : null}
         </div>
       )}
 
@@ -1540,6 +1165,7 @@ export function QuestionnairesWorkspace() {
         <ModalLayer
           labelledBy="create-questionnaire-title"
           onClose={() => {
+            if (isCatalogLoading) return;
             setShowCreateModal(false);
             setParam("modal", null, "replace");
           }}
@@ -1547,114 +1173,205 @@ export function QuestionnairesWorkspace() {
         >
           <form
             onSubmit={handleAddQuestionnaire}
-            className="space-y-4"
+            className="flex flex-col gap-4"
           >
             <h3 id="create-questionnaire-title" className="text-lg font-bold text-foreground">Adaugă chestionar nou</h3>
-            
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Cod unic (slug / categorie)</label>
-              <div className="flex gap-2">
-                <select
-                  value={newKey}
-                  onChange={(e) => setNewKey(e.target.value)}
-                  className="flex-1 rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
-                  required
-                >
-                  <option value="">Alege o categorie...</option>
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const name = prompt("Introduceți codul categoriei noi (litere mici, cifre, sublinieri):");
-                    if (name) {
-                      const cleanName = name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-                      if (cleanName && !categories.includes(cleanName)) {
-                        setCustomCategories((previous) => [...previous, cleanName]);
-                        setNewKey(cleanName);
-                      }
-                    }
-                  }}
-                  className="tap-soft rounded-full bg-burgundy/10 px-3 text-xs font-bold text-burgundy border border-burgundy/20 hover:bg-burgundy/20"
-                >
-                  + Adaugă
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (newKey && window.confirm(`Ștergeți categoria "${newKey}" din listă?`)) {
-                      setCustomCategories((previous) => previous.filter((cat) => cat !== newKey));
-                      setNewKey("");
-                    }
-                  }}
-                  className="tap-soft rounded-full bg-[#890505]/10 border border-[#890505]/20 px-3 text-xs font-bold text-[#890505] hover:bg-[#890505]/20"
-                  disabled={!newKey}
-                >
-                  Șterge
-                </button>
-              </div>
-            </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Titlu</label>
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Chestionar nou"
-                className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Cod unic (slug / categorie)</FieldLabel>
+                <div className="flex gap-2">
+                  <SelectControl
+                    label="Cod unic (slug / categorie)"
+                    wrapperClassName="min-w-0 flex-1"
+                    value={newKey}
+                    onChange={(e) => setNewKey(e.target.value)}
+                    disabled={isCatalogLoading}
+                    required
+                  >
+                    <option value="">Alege o categorie</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </SelectControl>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAddingCategory((current) => !current)}
+                    disabled={isCatalogLoading}
+                  >
+                    <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={2.2} />
+                    Adaugă
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDeleteSelectedCustomCategory}
+                    disabled={isCatalogLoading || !canDeleteSelectedCustomCategory}
+                  >
+                    Șterge
+                  </Button>
+                </div>
+                {isAddingCategory ? (
+                  <div className="mt-2 rounded-md border border-border bg-muted p-2">
+                    <FieldLabel className="sr-only" htmlFor="new-questionnaire-category">Categorie nouă</FieldLabel>
+                    <div className="flex gap-2">
+                      <Input
+                        id="new-questionnaire-category"
+                        value={categoryDraft}
+                        onChange={(event) => setCategoryDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleAddCustomCategory();
+                          }
+                        }}
+                        placeholder="categorie_noua"
+                        className="min-w-0 flex-1"
+                        disabled={isCatalogLoading}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddCustomCategory}
+                        disabled={isCatalogLoading || !categoryDraft.trim()}
+                      >
+                        Salvează
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="new-questionnaire-title">Titlu</FieldLabel>
+                <Input
+                  id="new-questionnaire-title"
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Chestionar nou"
+                  disabled={isCatalogLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="new-questionnaire-description">Descriere</FieldLabel>
+                <Textarea
+                  id="new-questionnaire-description"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Scurtă descriere a scopului acestui chestionar"
+                  rows={2}
+                  className="min-h-16"
+                  disabled={isCatalogLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel>Audiență țintă</FieldLabel>
+                <SelectControl
+                  label="Audiență țintă"
+                  value={newAudience}
+                  onChange={(e) => setNewAudience(e.target.value as "leadership" | "team" | "participant")}
+                  disabled={isCatalogLoading}
+                >
+                  <option value="team">Echipă (ex. Lencioni)</option>
+                  <option value="leadership">Lideri (ex. Distress Drivers, PCM)</option>
+                  <option value="participant">Individual (ex. 360 Feedback)</option>
+                </SelectControl>
+              </Field>
+            </FieldGroup>
+
+            {isCatalogLoading ? (
+              <OperationFeedback
+                title="Creăm chestionarul"
               />
-            </div>
+            ) : null}
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Descriere</label>
-              <textarea
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                placeholder="Scurtă descriere a scopului acestui chestionar..."
-                rows={2}
-                className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground/60">Audiență țintă</label>
-              <select
-                value={newAudience}
-                onChange={(e) => setNewAudience(e.target.value as "leadership" | "team" | "participant")}
-                className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-sm font-semibold text-foreground focus:border-burgundy"
-              >
-                <option value="team">Echipă (ex. Lencioni)</option>
-                <option value="leadership">Lideri (ex. Distress Drivers, PCM)</option>
-                <option value="participant">Individual (ex. 360 Feedback)</option>
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
-              <button
+            <div className="flex justify-end gap-2 border-t border-border pt-2">
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   setShowCreateModal(false);
                   setParam("modal", null, "replace");
                 }}
-                className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:bg-surface-muted"
+                disabled={isCatalogLoading}
               >
                 Anulează
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="btn-primary !px-4 !py-2 !text-xs !rounded-full"
+                size="sm"
+                disabled={isCatalogLoading}
               >
-                Creează
-              </button>
+                {isCatalogLoading ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
+                {isCatalogLoading ? "Creăm" : "Creează"}
+              </Button>
             </div>
           </form>
         </ModalLayer>
       )}
+      {confirmDialog ? (
+        <ModalLayer
+          labelledBy="questionnaire-confirm-title"
+          onClose={() => setConfirmDialog(null)}
+          panelClassName="max-w-md"
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 id="questionnaire-confirm-title" className="text-lg font-bold text-foreground">
+                {confirmDialog.title}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{confirmDialog.description}</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setConfirmDialog(null)}>
+                Anulează
+              </Button>
+              <Button
+                type="button"
+                variant={confirmDialog.tone === "danger" ? "destructive" : "default"}
+                size="sm"
+                onClick={() => {
+                  const action = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  void action();
+                }}
+              >
+                {confirmDialog.confirmLabel}
+              </Button>
+            </div>
+          </div>
+        </ModalLayer>
+      ) : null}
+      {noticeMessage ? (
+        <ModalLayer
+          labelledBy="questionnaire-notice-title"
+          onClose={() => setNoticeMessage(null)}
+          panelClassName="max-w-md"
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 id="questionnaire-notice-title" className="text-lg font-bold text-foreground">
+                Atenție
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{noticeMessage}</p>
+            </div>
+            <div className="flex justify-end border-t border-border pt-3">
+              <Button type="button" size="sm" onClick={() => setNoticeMessage(null)}>
+                Am înțeles
+              </Button>
+            </div>
+          </div>
+        </ModalLayer>
+      ) : null}
     </div>
   );
 }

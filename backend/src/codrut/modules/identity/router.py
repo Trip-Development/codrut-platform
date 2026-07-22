@@ -5,10 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.csrf import csrf_token_for_session, set_csrf_cookie
+from codrut.core.errors import DomainError
 from codrut.modules.identity.schemas import (
     AuthResponse,
     ConsentRequest,
     CsrfTokenResponse,
+    InviteExchangeRequest,
     InviteVerifyResponse,
     LoginRequest,
     PasswordChangeRequest,
@@ -34,8 +36,32 @@ async def verify_invite(
     response: Response,
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> InviteVerifyResponse:
-    result = await IdentityService(session).verify_invite_token_and_create_session(token)
+    response.headers["Cache-Control"] = "no-store"
+    return await IdentityService(session).verify_invite_token(token)
+
+
+@router.post("/invite/exchange", response_model=InviteVerifyResponse)
+async def exchange_invite(
+    payload: InviteExchangeRequest,
+    request: Request,
+    response: Response,
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> InviteVerifyResponse:
+    try:
+        result = await IdentityService(session).verify_invite_token_and_create_session(
+            payload.token,
+            existing_session_token=request.cookies.get(SESSION_COOKIE_NAME),
+        )
+    except DomainError as exc:
+        if exc.code != "invite_session_conflict":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
     await session.commit()
+    response.headers["Cache-Control"] = "no-store"
     if result.session_token:
         _set_session_cookie(response, result.session_token)
     return result.response
@@ -102,7 +128,11 @@ async def consent(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> AuthResponse:
-    result = await IdentityService(session).accept_terms(principal.user_id, payload)
+    result = await IdentityService(session).accept_terms(
+        principal.user_id,
+        payload,
+        session_token=principal.session_token,
+    )
     await session.commit()
     return result
 
@@ -112,11 +142,10 @@ async def logout(
     response: Response,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
-) -> Response:
+) -> None:
     await IdentityService(session).logout(principal.session_token)
     await session.commit()
     delete_session_cookie(response)
-    return response
 
 
 @router.get("/csrf", response_model=CsrfTokenResponse)

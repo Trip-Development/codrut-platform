@@ -25,14 +25,16 @@ describe("HomePage", () => {
   it("renders the business landing and access paths", () => {
     render(<HomePage />);
 
-    expect(screen.getAllByText("Codruț").length).toBeGreaterThan(0);
-    expect(screen.getByRole("banner").className).toContain("public-glass");
-    expect(screen.getByText("Codruț transformă trainingul în pași clari pentru fiecare om.")).toBeTruthy();
-    expect(screen.getByText("Acasă")).toBeTruthy();
+    expect(screen.getAllByText("Cody").length).toBeGreaterThan(0);
+    expect(screen.getByRole("banner")).toBeTruthy();
+    expect(screen.getByText("Noul standard în training")).toBeTruthy();
+    expect(screen.getByText("Training care continuă după workshopuri.")).toBeTruthy();
+    expect(screen.getByText("Proces")).toBeTruthy();
+    expect(screen.queryByText("Platformă")).toBeNull();
     expect(screen.getAllByText("Intră în cont").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Autentificare trainer").length).toBeGreaterThan(0);
-    expect(screen.getByText("Link sigur")).toBeTruthy();
-    expect(screen.getByText("Continuitate după training, fără follow-up pierdut.")).toBeTruthy();
+    expect(screen.getByText("Acces prin link securizat")).toBeTruthy();
+    expect(screen.getByText("Raportare pregătită pentru decizie.")).toBeTruthy();
     expect(screen.queryByText("Tip 4")).toBeNull();
     expect(screen.queryByText("Workflow campanie")).toBeNull();
   });

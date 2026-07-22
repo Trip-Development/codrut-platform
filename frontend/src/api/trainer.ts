@@ -317,7 +317,7 @@ export async function getTrainerOperationsSummary(
       name: "Radu Munteanu",
       position: "Director General",
       location: "București",
-      email: "radu.munteanu@atlas-mobility.ro",
+      email: "radu.munteanu@atlas.example.com",
       pcmProfile: "Persister",
       role: "leadership",
       inviteStatus: "account_active",
@@ -329,7 +329,7 @@ export async function getTrainerOperationsSummary(
       reportsTo: "Radu Munteanu",
       position: "Director Operațiuni",
       location: "Cluj",
-      email: "bianca.pavel@atlas-mobility.ro",
+      email: "bianca.pavel@atlas.example.com",
       role: "leadership",
       inviteStatus: "account_active",
       completion: 62,
@@ -340,7 +340,7 @@ export async function getTrainerOperationsSummary(
       reportsTo: "Bianca Pavel",
       position: "Șef flotă",
       location: "Iași",
-      email: "mihai.matei@atlas-mobility.ro",
+      email: "mihai.matei@atlas.example.com",
       pcmProfile: "Promoter",
       role: "member",
       inviteStatus: "link_sent",
@@ -352,7 +352,7 @@ export async function getTrainerOperationsSummary(
       reportsTo: "Bianca Pavel",
       position: "Coordonator call-center",
       location: "Remote",
-      email: "ana.stan@atlas-mobility.ro",
+      email: "ana.stan@atlas.example.com",
       role: "member",
       inviteStatus: "link_sent",
       completion: 0,
@@ -363,7 +363,7 @@ export async function getTrainerOperationsSummary(
       reportsTo: "Radu Munteanu",
       position: "Director Service",
       location: "Bucuresti",
-      email: "sorin.dima@atlas-mobility.ro",
+      email: "sorin.dima@atlas.example.com",
       pcmProfile: "Harmonizer",
       role: "leadership",
       inviteStatus: "blocked",
@@ -467,7 +467,7 @@ function toOperationsRosterMember(
     reportsTo: participant.reports_to_name ?? undefined,
     position: participant.position ?? "Participant",
     location: participant.location ?? "Remote",
-    email: participant.email,
+    email: participant.email ?? "Email indisponibil",
     pcmProfile: participant.pcm_profile ?? undefined,
     role: participant.role_group === "leadership" ? "leadership" : "member",
     inviteStatus: deriveInviteStatus(participant, participantAssignments),
@@ -558,54 +558,30 @@ const fallbackScoringResults: Record<string, ScoringResultRecord> = {
   "11111111-1111-4111-8111-111111111111": {
     id: "seeded-score-11111111-1111-4111-8111-111111111111",
     assignment_id: "11111111-1111-4111-8111-111111111111",
-    primary_result: "absence_of_trust",
+    primary_result: "team_signal_a",
     scores: {
-      absence_of_trust: {
+      team_signal_a: {
         score: 5,
-        interpretation: "Disfuncția trebuie probabil abordată.",
+        label: "Semnal de echipă A",
       },
-      fear_of_conflict: {
+      team_signal_b: {
         score: 7,
-        interpretation: "Disfuncția poate fi o problemă.",
-      },
-      lack_of_commitment: {
-        score: 8,
-        interpretation: "Disfuncția probabil nu este o problemă.",
-      },
-      avoidance_of_accountability: {
-        score: 6,
-        interpretation: "Disfuncția poate fi o problemă.",
-      },
-      inattention_to_results: {
-        score: 9,
-        interpretation: "Disfuncția probabil nu este o problemă.",
+        label: "Semnal de echipă B",
       },
     },
   },
   "33333333-3333-4333-8333-333333333333": {
     id: "seeded-score-33333333-3333-4333-8333-333333333333",
     assignment_id: "33333333-3333-4333-8333-333333333333",
-    primary_result: "fear_of_conflict",
+    primary_result: "team_signal_b",
     scores: {
-      absence_of_trust: {
+      team_signal_a: {
         score: 8,
-        interpretation: "Disfuncția probabil nu este o problemă.",
+        label: "Semnal de echipă A",
       },
-      fear_of_conflict: {
+      team_signal_b: {
         score: 5,
-        interpretation: "Disfuncția trebuie probabil abordată.",
-      },
-      lack_of_commitment: {
-        score: 7,
-        interpretation: "Disfuncția poate fi o problemă.",
-      },
-      avoidance_of_accountability: {
-        score: 8,
-        interpretation: "Disfuncția probabil nu este o problemă.",
-      },
-      inattention_to_results: {
-        score: 9,
-        interpretation: "Disfuncția probabil nu este o problemă.",
+        label: "Semnal de echipă B",
       },
     },
   },
@@ -694,18 +670,18 @@ function fallbackTrainerReports(): TrainerReportItem[] {
       {
         assignmentId: "11111111-1111-4111-8111-111111111111",
         participantName: "Mihai Matei",
-        participantEmail: "mihai.matei@client.ro",
+        participantEmail: "mihai.matei@example.com",
         questionnaireKey: "lencioni",
         projectName: "Intake Iunie",
         status: "scored",
         submittedAt: "2026-06-04T12:00:00Z",
         scoredAt: "2026-06-04T12:00:00Z",
-        primaryResult: "absence_of_trust",
+        primaryResult: "team_signal_a",
       },
       {
         assignmentId: "22222222-2222-4222-8222-222222222222",
         participantName: "Ioana Ionescu",
-        participantEmail: "ioana.ionescu@client.ro",
+        participantEmail: "ioana.ionescu@example.com",
         questionnaireKey: "boss_360",
         projectName: "Intake Iunie",
         status: "submitted",
@@ -715,13 +691,13 @@ function fallbackTrainerReports(): TrainerReportItem[] {
       {
         assignmentId: "33333333-3333-4333-8333-333333333333",
         participantName: "Andrei Popescu",
-        participantEmail: "andrei.popescu@client.ro",
+        participantEmail: "andrei.popescu@example.com",
         questionnaireKey: "lencioni",
         projectName: "Intake Iunie",
         status: "scored",
         submittedAt: "2026-06-04T10:00:00Z",
         scoredAt: "2026-06-04T10:00:00Z",
-        primaryResult: "fear_of_conflict",
+        primaryResult: "team_signal_b",
       },
     ];
 }

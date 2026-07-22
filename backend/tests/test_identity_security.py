@@ -24,11 +24,9 @@ def test_password_hash_round_trip() -> None:
 @pytest.mark.parametrize(
     "password",
     [
-        "Short1!",
-        "lowercase1!",
-        "UPPERCASE1!",
-        "NoNumber!",
-        "NoSpecial1",
+        "prea-scurta",
+        "password1234",
+        "qwerty123456",
     ],
 )
 def test_new_password_policy_rejects_incomplete_passwords(password: str) -> None:
@@ -41,8 +39,8 @@ def test_new_password_policy_rejects_incomplete_passwords(password: str) -> None
         )
 
 
-def test_new_password_policy_accepts_eight_char_complex_passwords() -> None:
-    password = "Aa12345!"  # noqa: S105
+def test_new_password_policy_accepts_long_passphrases_without_composition_rules() -> None:
+    password = "o frază lungă și memorabilă"  # noqa: S105
 
     register = RegisterRequest(
         email="participant@example.com",
@@ -62,6 +60,27 @@ def test_new_password_policy_accepts_eight_char_complex_passwords() -> None:
     assert register.password == password
     assert reset.password == password
     assert change.new_password == password
+
+
+def test_new_password_policy_accepts_unicode_passphrases() -> None:
+    password = "Învăț în fiecare săptămână"  # noqa: S105
+
+    register = RegisterRequest(
+        email="participant@example.com",
+        password=password,
+        token="invite-token",  # noqa: S106
+        terms_accepted=True,
+    )
+
+    assert register.password == password
+
+
+def test_new_password_policy_rejects_passwords_over_maximum_length() -> None:
+    with pytest.raises(ValidationError):
+        PasswordResetConfirmRequest(
+            token="x" * 32,
+            password="Aa1!" + ("a" * 125),
+        )
 
 
 def test_session_cookie_uses_90_day_max_age() -> None:

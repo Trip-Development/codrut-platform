@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type UrlStateMode = "push" | "replace";
@@ -10,6 +10,7 @@ export function useUrlState() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
+  const [isPending, startTransition] = useTransition();
 
   const params = useMemo(() => new URLSearchParams(searchKey), [searchKey]);
 
@@ -33,13 +34,15 @@ export function useUrlState() {
       const currentHref = searchKey ? `${pathname}?${searchKey}` : pathname;
       if (href === currentHref) return;
 
-      if (mode === "replace") {
-        router.replace(href, { scroll: false });
-      } else {
-        router.push(href, { scroll: false });
-      }
+      startTransition(() => {
+        if (mode === "replace") {
+          router.replace(href, { scroll: false });
+        } else {
+          router.push(href, { scroll: false });
+        }
+      });
     },
-    [pathname, router, searchKey],
+    [pathname, router, searchKey, startTransition],
   );
   const get = useCallback((key: string) => params.get(key), [params]);
   const setParam = useCallback(
@@ -52,6 +55,7 @@ export function useUrlState() {
     get,
     params,
     searchKey,
+    isPending,
     setParams,
     setParam,
   };
