@@ -359,5 +359,12 @@ def _feedback_preview() -> PreviewQuestionnaireDefinition:
             "minimum_completed": 2,
             "target_completed": 3,
             "dimension_ids": [dimension for dimension, _label in dimensions],
+            "participant_results": {
+                "publication": "scores",
+                "target_types": ["person"],
+                "require_self_target": True,
+                "dimension_ids": [dimension for dimension, _label in dimensions],
+                "include_primary_result": True,
+            },
         },
     )

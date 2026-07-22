@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 
@@ -11,10 +11,12 @@ import {
 import { QuestionnaireRunner } from "./questionnaire-runner";
 
 const routerPush = vi.fn();
+const routerRefresh = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: routerPush,
+    refresh: routerRefresh,
   }),
 }));
 
@@ -122,7 +124,7 @@ describe("QuestionnaireRunner", () => {
     expect(screen.queryByText("S1.")).toBeNull();
   });
 
-  it("shows ICARE participants only the evaluated person and descriptive answers", () => {
+  it("shows ICARE participants the behavior prompt and descriptive answers", () => {
     const icareDefinition: QuestionnaireDefinition = {
       ...mockDefinition,
       key: "boss_360",
@@ -177,10 +179,51 @@ describe("QuestionnaireRunner", () => {
     expect(screen.getByRole("heading", { name: /Completezi feedback pentru Bianca Pavel/i })).toBeTruthy();
     expect(screen.getByText("Nu oferă feedback sau îl evită complet.")).toBeTruthy();
     expect(screen.getByText("Oferă feedback regulat, cu exemple concrete.")).toBeTruthy();
+    expect(screen.getByText("Dezvoltă oamenii")).toBeTruthy();
+    expect(screen.getByText("Oferă feedback constructiv")).toBeTruthy();
     expect(screen.queryByText("Inspiră (Inspiring)")).toBeNull();
-    expect(screen.queryByText("Dezvoltă oamenii")).toBeNull();
-    expect(screen.queryByText("Oferă feedback constructiv")).toBeNull();
+    expect(screen.queryByText("Metadata for trainer review only.")).toBeNull();
     expect(screen.queryByText("S1.")).toBeNull();
+  });
+
+  it("renders distress driver scales as horizontal native radio choices", () => {
+    const distressDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "distress_drivers",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [
+          {
+            id: "drivers",
+            title: "Driveri",
+            questions: [
+              {
+                id: "driver_set",
+                code: "D1",
+                type: "statement_score_set",
+                label: "Ritmul de lucru",
+                required: true,
+                scale: [
+                  { value: 1, label: "Deloc" },
+                  { value: 2, label: "Uneori" },
+                  { value: 3, label: "Des" },
+                ],
+                statements: [
+                  { id: "driver_a", code: "D1-A", label: "Lucrez sub presiunea timpului" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    render(<QuestionnaireRunner definition={distressDefinition} assignmentId="drivers-assignment" />);
+
+    const group = screen.getByRole("radiogroup", { name: "Lucrez sub presiunea timpului" });
+    expect(within(group).getAllByRole("radio")).toHaveLength(3);
+    expect(screen.getByText("Ritmul de lucru")).toBeTruthy();
+    expect(within(group).getByText("1")).toBeTruthy();
   });
 
   it("shows the 360 target prompt as an editorial Romanian heading using only the safe display name", () => {
@@ -508,6 +551,7 @@ describe("QuestionnaireRunner", () => {
     await waitFor(() => {
       expect(submitQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 2 });
       expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
+      expect(routerRefresh).toHaveBeenCalled();
     });
   });
 

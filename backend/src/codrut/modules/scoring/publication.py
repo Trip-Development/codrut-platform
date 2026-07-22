@@ -1,4 +1,6 @@
-from datetime import UTC, datetime
+import hashlib
+import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +25,10 @@ COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.validated,
     AssignmentStatus.scored,
 }
+
+LENCIONI_QUESTIONNAIRE_KEYS = {"lencioni", "lencioni_en"}
+DISTRESS_DRIVER_QUESTIONNAIRE_KEYS = {"distress_drivers", "distress_drivers_en"}
+ICARE_QUESTIONNAIRE_KEYS = {"boss_360", "boss_360_en", "icare"}
 
 
 def required_feedback_count(
@@ -123,8 +129,8 @@ class ResultPublicationService:
         definition: QuestionnaireDefinition | None,
     ) -> None:
         assert assignment.target_person_id is not None
+        feedback_policy = _effective_feedback_policy(definition)
         publication_key = _aggregate_publication_key(assignment)
-        feedback_policy = definition.feedback_policy if definition is not None else {}
         if definition is None or feedback_policy.get("publication", "none") != "aggregate":
             await self._revoke(publication_key)
             return
@@ -133,7 +139,6 @@ class ResultPublicationService:
             select(QuestionnaireAssignment, ScoringResult)
             .outerjoin(ScoringResult, ScoringResult.assignment_id == QuestionnaireAssignment.id)
             .where(QuestionnaireAssignment.company_id == assignment.company_id)
-            .where(QuestionnaireAssignment.assignment_round_id == assignment.assignment_round_id)
             .where(QuestionnaireAssignment.questionnaire_key == assignment.questionnaire_key)
             .where(QuestionnaireAssignment.target_type == AssignmentTargetType.person)
             .where(QuestionnaireAssignment.target_person_id == assignment.target_person_id)
@@ -152,7 +157,23 @@ class ResultPublicationService:
                 == assignment.questionnaire_definition_id
             )
         )
-        rows = list((await self.session.execute(statement)).all())
+        candidate_rows = list((await self.session.execute(statement)).all())
+        rows, publication_round_id, merged_round_ids = _aggregate_cycle_rows(
+            candidate_rows,
+            assignment.assignment_round_id,
+        )
+        publication_key = _aggregate_publication_key(
+            assignment,
+            assignment_round_id=publication_round_id,
+        )
+        for merged_round_id in merged_round_ids:
+            if merged_round_id != publication_round_id:
+                await self._revoke(
+                    _aggregate_publication_key(
+                        assignment,
+                        assignment_round_id=merged_round_id,
+                    )
+                )
         completed_rows = [
             (candidate, result)
             for candidate, result in rows
@@ -189,7 +210,11 @@ class ResultPublicationService:
                 "target_completed": target_completed,
                 "required_completed": required,
                 "dimension_ids": sorted(visible_dimensions),
+                "source_assignment_ids": sorted(
+                    str(candidate.id) for candidate, _result in completed_rows
+                ),
             },
+            assignment_round_id=publication_round_id,
         )
 
     async def _publish(
@@ -203,6 +228,7 @@ class ResultPublicationService:
         kind: ResultPublicationKind,
         source_count: int,
         policy_snapshot: dict[str, Any],
+        assignment_round_id: UUID | None = None,
     ) -> None:
         now = datetime.now(UTC)
         values = {
@@ -210,13 +236,13 @@ class ResultPublicationService:
             "participant_profile_id": participant_profile_id,
             "company_id": assignment.company_id,
             "project_id": assignment.project_id,
-            "assignment_round_id": assignment.assignment_round_id,
+            "assignment_round_id": assignment_round_id or assignment.assignment_round_id,
             "questionnaire_definition_id": assignment.questionnaire_definition_id,
             "questionnaire_key": assignment.questionnaire_key,
             "source_assignment_id": source_assignment_id,
             "kind": kind,
             "source_count": source_count,
-            "definition_checksum": definition.content_checksum,
+            "definition_checksum": definition_publication_checksum(definition),
             "policy_snapshot": policy_snapshot,
             "published_at": now,
             "revoked_at": None,
@@ -252,10 +278,119 @@ class ResultPublicationService:
 def _participant_result_policy(
     definition: QuestionnaireDefinition | None,
 ) -> dict[str, Any]:
-    if definition is None or not isinstance(definition.feedback_policy, dict):
-        return {}
-    policy = definition.feedback_policy.get("participant_results")
+    policy = _effective_feedback_policy(definition).get("participant_results")
     return policy if isinstance(policy, dict) else {}
+
+
+def _effective_feedback_policy(
+    definition: QuestionnaireDefinition | None,
+) -> dict[str, Any]:
+    if definition is None:
+        return {}
+    if isinstance(definition.feedback_policy, dict) and definition.feedback_policy:
+        return definition.feedback_policy
+
+    schema = _definition_scoring_schema(definition)
+    if schema is None:
+        return {}
+
+    if definition.key in LENCIONI_QUESTIONNAIRE_KEYS:
+        dimension_ids = _scoring_collection_ids(schema, "groups")
+        if not dimension_ids:
+            return {}
+        return {
+            "participant_results": {
+                "publication": "scores_and_interpretation",
+                "dimension_ids": dimension_ids,
+                "target_types": ["team"],
+                "include_primary_result": True,
+            }
+        }
+
+    if definition.key in DISTRESS_DRIVER_QUESTIONNAIRE_KEYS:
+        dimension_ids = _scoring_collection_ids(schema, "drivers")
+        if not dimension_ids:
+            return {}
+        return {
+            "participant_results": {
+                "publication": "scores",
+                "dimension_ids": dimension_ids,
+                "target_types": ["self"],
+                "include_primary_result": True,
+            }
+        }
+
+    if definition.key in ICARE_QUESTIONNAIRE_KEYS:
+        dimension_ids = _statement_score_set_ids(schema)
+        if not dimension_ids:
+            return {}
+        return {
+            "publication": "aggregate",
+            "minimum_completed": 2,
+            "target_completed": 3,
+            "dimension_ids": dimension_ids,
+            "participant_results": {
+                "publication": "scores",
+                "dimension_ids": dimension_ids,
+                "target_types": ["person"],
+                "require_self_target": True,
+                "include_primary_result": True,
+            },
+        }
+
+    return {}
+
+
+def definition_publication_checksum(definition: QuestionnaireDefinition) -> str:
+    if definition.content_checksum:
+        return definition.content_checksum
+    payload = {
+        "key": definition.key,
+        "version": definition.version,
+        "title": definition.title,
+        "description": definition.description,
+        "schema": definition.schema,
+        "private_config": definition.private_config,
+        "feedback_policy": definition.feedback_policy,
+        "trainer_visibility_policy": definition.trainer_visibility_policy,
+    }
+    serialized = json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _definition_scoring_schema(definition: QuestionnaireDefinition) -> dict[str, Any] | None:
+    private_schema = (definition.private_config or {}).get("schema")
+    for candidate in (private_schema, definition.schema):
+        if isinstance(candidate, dict) and isinstance(candidate.get("scoring"), dict):
+            return candidate
+    return None
+
+
+def _scoring_collection_ids(schema: dict[str, Any], collection: str) -> list[str]:
+    scoring = schema.get("scoring")
+    if not isinstance(scoring, dict):
+        return []
+    return [
+        dimension_id.strip()
+        for item in scoring.get(collection, [])
+        if isinstance(item, dict)
+        and isinstance((dimension_id := item.get("id")), str)
+        and dimension_id.strip()
+    ]
+
+
+def _statement_score_set_ids(schema: dict[str, Any]) -> list[str]:
+    dimension_ids: list[str] = []
+    for section in schema.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for question in section.get("questions", []):
+            if not isinstance(question, dict) or question.get("type") != "statement_score_set":
+                continue
+            dimension_id = question.get("id")
+            if isinstance(dimension_id, str) and dimension_id.strip():
+                dimension_ids.append(dimension_id.strip())
+    return dimension_ids
 
 
 def _dimension_ids(policy: dict[str, Any]) -> set[str]:
@@ -286,13 +421,74 @@ def _positive_int(value: object, fallback: int) -> int:
     return value
 
 
-def _aggregate_publication_key(assignment: QuestionnaireAssignment) -> str:
+def _aggregate_publication_key(
+    assignment: QuestionnaireAssignment,
+    *,
+    assignment_round_id: UUID | None = None,
+) -> str:
     return ":".join(
         (
             "aggregate-360",
             str(assignment.target_person_id),
             str(assignment.project_id or "none"),
-            str(assignment.assignment_round_id),
+            str(assignment_round_id or assignment.assignment_round_id),
             str(assignment.questionnaire_definition_id or assignment.questionnaire_key),
         )
     )
+
+
+def _aggregate_cycle_rows(
+    rows: list[tuple[QuestionnaireAssignment, ScoringResult | None]],
+    current_round_id: UUID,
+) -> tuple[
+    list[tuple[QuestionnaireAssignment, ScoringResult | None]],
+    UUID,
+    set[UUID],
+]:
+    rounds_by_reviewer: dict[UUID, set[UUID]] = {}
+    all_round_ids: set[UUID] = set()
+    for candidate, _result in rows:
+        all_round_ids.add(candidate.assignment_round_id)
+        rounds_by_reviewer.setdefault(candidate.respondent_profile_id, set()).add(
+            candidate.assignment_round_id
+        )
+
+    created_at_values = [candidate.created_at for candidate, _result in rows]
+    created_in_one_save_window = bool(created_at_values) and (
+        max(created_at_values) - min(created_at_values) <= timedelta(minutes=10)
+    )
+    split_batch = (
+        len(all_round_ids) > 1
+        and created_in_one_save_window
+        and all(len(round_ids) == 1 for round_ids in rounds_by_reviewer.values())
+    )
+    selected_rows = (
+        rows
+        if split_batch
+        else [
+            row
+            for row in rows
+            if row[0].assignment_round_id == current_round_id
+        ]
+    )
+    publication_round_id = (
+        min(all_round_ids, key=str) if split_batch and all_round_ids else current_round_id
+    )
+
+    by_reviewer: dict[UUID, tuple[QuestionnaireAssignment, ScoringResult | None]] = {}
+    for row in selected_rows:
+        candidate, result = row
+        current = by_reviewer.get(candidate.respondent_profile_id)
+        if current is None or _aggregate_row_priority(candidate, result) > _aggregate_row_priority(
+            *current
+        ):
+            by_reviewer[candidate.respondent_profile_id] = row
+    return list(by_reviewer.values()), publication_round_id, all_round_ids if split_batch else set()
+
+
+def _aggregate_row_priority(
+    assignment: QuestionnaireAssignment,
+    result: ScoringResult | None,
+) -> tuple[bool, datetime, str]:
+    completed = assignment.status in COMPLETED_ASSIGNMENT_STATUSES and result is not None
+    return completed, assignment.updated_at or datetime.min.replace(tzinfo=UTC), str(assignment.id)
