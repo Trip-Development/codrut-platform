@@ -33,6 +33,8 @@ export default async function ParticipantResultsPage() {
         receivedFeedbackGroups={summary.receivedFeedbackGroups}
         pcmBase={summary.pcmBase}
         pcmPhase={summary.pcmPhase}
+        hasTasks={summary.tasks.length > 0}
+        allTasksComplete={summary.tasks.length > 0 && summary.tasks.every((task) => task.status === "completed")}
       />
     </AppShell>
   );
