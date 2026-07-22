@@ -15,6 +15,7 @@ from codrut.tools.local_preview import (
     build_sample_answers,
 )
 from codrut.tools.seed_local_preview import _replace_preview_definitions
+from codrut.tools.seed_pilot_ui_e2e_state import _ensure_preview_questionnaire_definitions
 
 
 def test_preview_participant_domain_satisfies_api_email_validation() -> None:
@@ -164,6 +165,54 @@ async def test_preview_replacement_does_not_deactivate_system_definitions(
 
             assert definition.active is True
             assert preview_definitions["lencioni"].active is False
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_pilot_ui_seed_ensures_every_synthetic_questionnaire_definition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await engine.dispose()
+    preview_version = 1_000_000_000 + uuid.uuid4().int % 400_000_000
+    monkeypatch.setattr(
+        "codrut.tools.seed_pilot_ui_e2e_state.PREVIEW_DEFINITION_VERSION",
+        preview_version,
+    )
+    preview_keys = {
+        definition.key for definition in build_preview_questionnaire_definitions()
+    }
+    try:
+        async with SessionLocal() as session:
+            active_definitions = list(
+                (
+                    await session.execute(
+                        QuestionnaireDefinition.__table__.select().where(
+                            QuestionnaireDefinition.key.in_(preview_keys),
+                            QuestionnaireDefinition.active.is_(True),
+                        )
+                    )
+                ).mappings()
+            )
+            if active_definitions:
+                await session.execute(
+                    QuestionnaireDefinition.__table__.update()
+                    .where(
+                        QuestionnaireDefinition.id.in_(
+                            definition["id"] for definition in active_definitions
+                        )
+                    )
+                    .values(active=False)
+                )
+                await session.flush()
+
+            definitions = await _ensure_preview_questionnaire_definitions(session)
+
+            assert set(definitions) == preview_keys
+            assert all(definition.active for definition in definitions.values())
+            assert all(
+                definition.version == preview_version for definition in definitions.values()
+            )
             await session.rollback()
     finally:
         await engine.dispose()

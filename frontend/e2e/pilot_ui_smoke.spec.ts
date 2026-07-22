@@ -82,7 +82,7 @@ test.describe("Pilot trainer UI smoke", () => {
 
   test("generates assignments, saves them, and sends project invitations", async ({ page, request }) => {
     const loginPage = new LoginPage(page);
-    await loginPage.goto();
+    await loginPage.gotoTrainer();
     await loginPage.login("trainer@example.com", "replace-with-a-long-test-password");
     await expect(page).toHaveURL(/\/trainer/);
 
