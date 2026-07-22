@@ -402,7 +402,18 @@ class AssignmentService:
         seen_assignment_ids: set[UUID] = set()
         created_count = 0
         existing_count = 0
-        assignment_round_id = uuid4()
+        existing_assignments = await self.assignment_repository.list_assignments(
+            company_id,
+            payload.project_id,
+        )
+        assignment_round_id = (
+            min(
+                (assignment.assignment_round_id for assignment in existing_assignments),
+                key=str,
+            )
+            if existing_assignments
+            else uuid4()
+        )
 
         for item in payload.assignments:
             assignment, created = await self._create_or_get_planned_assignment(

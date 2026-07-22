@@ -51,7 +51,13 @@ export function ParticipantClientWorkspace({ summaryData }: ParticipantClientWor
     summaryData.tasks.length > 0 ? Math.round((completedTasksCount / summaryData.tasks.length) * 100) : 0;
   const hasAnyTasks = summaryData.tasks.length > 0;
   const isComplete = hasAnyTasks && pendingTasks.length === 0;
-  const resultCount = summaryData.results.length;
+  const feedbackResultCount = summaryData.receivedFeedbackGroups?.length
+    ? summaryData.receivedFeedbackGroups.length
+    : summaryData.receivedFeedback
+      ? 1
+      : 0;
+  const profileResultCount = summaryData.pcmBase || summaryData.pcmPhase ? 1 : 0;
+  const resultCount = summaryData.results.length + feedbackResultCount + profileResultCount;
   const projects = summaryData.projects ?? [];
   const hasMultipleProjects = projects.length > 1;
 
@@ -179,11 +185,7 @@ export function ParticipantResultsPanel({
   pcmBase?: string | null;
   pcmPhase?: string | null;
 }) {
-  const feedbackGroups = receivedFeedbackGroups.length > 0
-    ? receivedFeedbackGroups
-    : receivedFeedback
-      ? [receivedFeedback]
-      : [];
+  const feedbackGroups = mergeFeedbackGroups(receivedFeedbackGroups, receivedFeedback);
   return (
     <section className="flex flex-col gap-10">
       {pcmBase || pcmPhase ? (
@@ -225,7 +227,7 @@ export function ParticipantResultsPanel({
 }
 
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
-  const visible = feedback.visible && feedback.overallAverage !== null && feedback.overallAverage !== undefined && feedback.dimensions.length > 0;
+  const visible = feedback.visible;
   const observedMaximum = Math.max(
     feedback.overallAverage ?? 0,
     ...feedback.dimensions.map((dimension) => dimension.averageScore),
@@ -251,7 +253,7 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
         </div>
       </div>
 
-      {visible ? (
+      {visible && feedback.dimensions.length > 0 ? (
         <div className="mt-6 divide-y divide-border border-y border-border">
           {feedback.dimensions.map((dimension) => (
             <ScoreRow
@@ -266,13 +268,32 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
             />
           ))}
         </div>
-      ) : (
+      ) : !visible ? (
         <p className="mt-6 border-l-2 border-burgundy bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
           Media apare după minimum {feedback.minimumCompleted} feedbackuri completate. Pragul protejează anonimitatea respondenților.
         </p>
-      )}
+      ) : null}
     </article>
   );
+}
+
+function mergeFeedbackGroups(
+  groups: ParticipantReceivedFeedbackSummary[],
+  legacy?: ParticipantReceivedFeedbackSummary | null,
+): ParticipantReceivedFeedbackSummary[] {
+  const merged = legacy ? [...groups, legacy] : groups;
+  const seen = new Set<string>();
+  return merged.filter((feedback) => {
+    const identity = feedback.assignmentRoundId
+      ? `round:${feedback.assignmentRoundId}`
+      : [
+          feedback.projectId ?? feedback.projectName ?? "none",
+          feedback.questionnaireKey ?? feedback.questionnaireTitle ?? "legacy",
+        ].join(":");
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
 }
 
 function PcmResultChip({ label, value }: { label: string; value?: string | null }) {

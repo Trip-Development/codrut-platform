@@ -29,6 +29,7 @@ from codrut.modules.scoring.models import (
     ResultPublicationKind,
     ScoringResult,
 )
+from codrut.modules.scoring.publication import definition_publication_checksum
 
 COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.submitted,
@@ -321,7 +322,6 @@ class ParticipantWorkspaceService:
         statement = (
             select(QuestionnaireAssignment)
             .where(QuestionnaireAssignment.company_id == profile.company_id)
-            .where(QuestionnaireAssignment.assignment_round_id == publication.assignment_round_id)
             .where(QuestionnaireAssignment.questionnaire_key == publication.questionnaire_key)
             .where(
                 QuestionnaireAssignment.questionnaire_definition_id
@@ -331,6 +331,14 @@ class ParticipantWorkspaceService:
             .where(QuestionnaireAssignment.target_person_id == profile.id)
             .where(QuestionnaireAssignment.respondent_profile_id != profile.id)
             .order_by(QuestionnaireAssignment.created_at.asc())
+        )
+        source_assignment_ids = _source_assignment_ids(publication.policy_snapshot)
+        statement = (
+            statement.where(QuestionnaireAssignment.id.in_(source_assignment_ids))
+            if source_assignment_ids
+            else statement.where(
+                QuestionnaireAssignment.assignment_round_id == publication.assignment_round_id
+            )
         )
         statement = (
             statement.where(QuestionnaireAssignment.project_id.is_(None))
@@ -352,7 +360,10 @@ class ParticipantWorkspaceService:
             )
         )
         definition = result.scalar_one_or_none()
-        if definition is None or definition.content_checksum != publication.definition_checksum:
+        if (
+            definition is None
+            or definition_publication_checksum(definition) != publication.definition_checksum
+        ):
             return None
         return definition
 
@@ -583,7 +594,7 @@ class ParticipantWorkspaceService:
             or publication.questionnaire_definition_id
             != assignment.questionnaire_definition_id
             or not publication.definition_checksum
-            or publication.definition_checksum != definition.content_checksum
+            or publication.definition_checksum != definition_publication_checksum(definition)
             or publication.questionnaire_key != assignment.questionnaire_key
             or publication.assignment_round_id != assignment.assignment_round_id
         ):
@@ -813,6 +824,23 @@ def _extract_numeric_score(value: object) -> float | None:
     if isinstance(raw, (int, float)):
         return float(raw)
     return None
+
+
+def _source_assignment_ids(policy: object) -> set[UUID]:
+    if not isinstance(policy, dict):
+        return set()
+    values = policy.get("source_assignment_ids")
+    if not isinstance(values, list):
+        return set()
+    assignment_ids: set[UUID] = set()
+    for value in values:
+        if not isinstance(value, str):
+            return set()
+        try:
+            assignment_ids.add(UUID(value))
+        except ValueError:
+            return set()
+    return assignment_ids
 
 
 def _required_feedback_count(

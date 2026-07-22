@@ -128,7 +128,25 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
             )
             for index in range(2)
         ]
-        definition = _definition(key="pilot_feedback_360")
+        definition = _definition(key="boss_360")
+        definition.feedback_policy = {}
+        definition.private_config = None
+        definition.schema = {
+            "sections": [
+                {
+                    "id": "feedback",
+                    "questions": [
+                        {
+                            "id": "clarity",
+                            "type": "statement_score_set",
+                            "label": "Claritate",
+                            "statements": [],
+                        }
+                    ],
+                }
+            ],
+            "scoring": {"method": "average_statement_scores_by_section"},
+        }
         round_id = uuid.uuid4()
         session.add_all([company, definition])
         await session.flush()
@@ -138,7 +156,7 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
             QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
-                assignment_round_id=round_id,
+                assignment_round_id=uuid.uuid4(),
                 respondent_profile_id=reviewer.id,
                 questionnaire_key=definition.key,
                 questionnaire_definition_id=definition.id,
@@ -148,7 +166,18 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
             )
             for reviewer in reviewers
         ]
-        session.add_all(assignments)
+        self_assignment = QuestionnaireAssignment(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            assignment_round_id=round_id,
+            respondent_profile_id=target.id,
+            questionnaire_key=definition.key,
+            questionnaire_definition_id=definition.id,
+            target_type=AssignmentTargetType.person,
+            target_person_id=target.id,
+            status=AssignmentStatus.scored,
+        )
+        session.add_all([self_assignment, *assignments])
         await session.flush()
         results = [
             ScoringResult(
@@ -158,11 +187,29 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
             )
             for index, assignment in enumerate(assignments)
         ]
-        session.add_all(results)
+        session.add_all(
+            [
+                ScoringResult(
+                    assignment_id=self_assignment.id,
+                    scores={"clarity": {"score": 3.5}},
+                    primary_result="clarity",
+                ),
+                *results,
+            ]
+        )
         await session.flush()
 
         service = ResultPublicationService(session)
+        await service.reconcile_assignment(self_assignment.id)
         await service.reconcile_assignment(assignments[-1].id)
+        individual_publication = (
+            await session.execute(
+                select(ResultPublication).where(
+                    ResultPublication.kind == ResultPublicationKind.individual,
+                    ResultPublication.source_assignment_id == self_assignment.id,
+                )
+            )
+        ).scalar_one()
         publication = (
             await session.execute(
                 select(ResultPublication).where(
@@ -172,6 +219,8 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
             )
         ).scalar_one()
 
+        assert individual_publication.participant_profile_id == target.id
+        assert individual_publication.policy_snapshot["require_self_target"] is True
         assert publication.source_count == 2
         assert publication.policy_snapshot["required_completed"] == 2
         assert publication.revoked_at is None
@@ -185,5 +234,70 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
         await session.refresh(publication)
 
         assert publication.revoked_at is not None
+        await session.rollback()
+    await engine.dispose()
+
+
+async def test_legacy_empty_policies_publish_known_individual_results() -> None:
+    await engine.dispose()
+    async with SessionLocal() as session:
+        company = Company(id=uuid.uuid4(), name=f"Legacy results {uuid.uuid4()}")
+        profile = ParticipantProfile(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            full_name="Participant rezultat",
+            email=f"legacy-{uuid.uuid4().hex[:8]}@example.com",
+        )
+        definition = _definition(key="distress_drivers")
+        definition.feedback_policy = {}
+        definition.private_config = None
+        definition.schema = {
+            "sections": [],
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "drivers": [{"id": "be_strong", "label": "Fii puternic"}],
+            },
+        }
+        assignment = QuestionnaireAssignment(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            respondent_profile_id=profile.id,
+            questionnaire_key=definition.key,
+            questionnaire_definition_id=definition.id,
+            target_type=AssignmentTargetType.self_assessment,
+            status=AssignmentStatus.scored,
+        )
+        session.add_all([company, definition])
+        await session.flush()
+        session.add(profile)
+        await session.flush()
+        session.add(assignment)
+        await session.flush()
+        session.add(
+            ScoringResult(
+                assignment_id=assignment.id,
+                scores={"be_strong": {"score": 72.0}},
+                primary_result="be_strong",
+            )
+        )
+        await session.flush()
+
+        await ResultPublicationService(session).reconcile_assignment(assignment.id)
+        publication = (
+            await session.execute(
+                select(ResultPublication).where(
+                    ResultPublication.source_assignment_id == assignment.id
+                )
+            )
+        ).scalar_one()
+
+        assert publication.kind == ResultPublicationKind.individual
+        assert publication.policy_snapshot == {
+            "publication": "scores",
+            "dimension_ids": ["be_strong"],
+            "target_types": ["self"],
+            "require_self_target": False,
+            "include_primary_result": True,
+        }
         await session.rollback()
     await engine.dispose()

@@ -175,6 +175,10 @@ export function QuestionnaireRunner({
     () => definition.schema.sections.flatMap((section) => section.questions),
     [definition.schema.sections],
   );
+  const questionNumbers = useMemo(
+    () => new Map(questions.map((question, index) => [question.id, index + 1])),
+    [questions],
+  );
   const requiredAnswerKeys = useMemo(
     () =>
       questions.flatMap((question) => {
@@ -353,6 +357,7 @@ export function QuestionnaireRunner({
       setActiveOperation(null);
       setSaveError(null);
       router.push(returnHref);
+      router.refresh();
     } catch (error) {
       finalSubmittingRef.current = false;
       setSaveState("error");
@@ -468,22 +473,16 @@ export function QuestionnaireRunner({
                 </div>
               ) : null}
               <div className="divide-y divide-border">
-                {section.questions.map((question, index) => (
+                {section.questions.map((question) => (
                   <article key={question.id} className="px-5 py-5 md:px-6">
-                    <div
-                      className={hideIcareMeasurementContext ? "min-w-0" : "grid gap-3 md:grid-cols-[1.5rem_1fr]"}
-                    >
-                      {!hideIcareMeasurementContext ? (
-                        <span className="pt-0.5 text-sm font-bold tabular-nums text-burgundy/72">{index + 1}</span>
-                      ) : null}
+                    <div className="grid gap-3 md:grid-cols-[1.5rem_1fr]">
+                      <span className="pt-0.5 text-sm font-bold tabular-nums text-burgundy/72">
+                        {questionNumbers.get(question.id)}
+                      </span>
                       <div className="min-w-0">
-                        {!hideIcareMeasurementContext ? (
-                          <>
-                            <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
-                            {question.instructions ? (
-                              <p className="mt-2 text-sm leading-6 text-muted-foreground">{question.instructions}</p>
-                            ) : null}
-                          </>
+                        <h4 className="text-base font-semibold leading-6 text-foreground">{question.label}</h4>
+                        {question.instructions && !hideIcareMeasurementContext ? (
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{question.instructions}</p>
                         ) : null}
                         {question.type === "likert" ? (
                           <LikertQuestion
@@ -505,7 +504,7 @@ export function QuestionnaireRunner({
                             answers={answers}
                             disabled={responsesLocked}
                             onAnswerChange={handleAnswerChange}
-                            hideStatementLabels={hideIcareMeasurementContext}
+                            compactScale={isDistressQuestionnaire(definition.key)}
                           />
                         )}
                       </div>
@@ -624,6 +623,10 @@ function isReview360Questionnaire(questionnaireKey: string): boolean {
   return questionnaireKey === "boss_360" || questionnaireKey === "boss_360_en" || questionnaireKey === "icare";
 }
 
+function isDistressQuestionnaire(questionnaireKey: string): boolean {
+  return questionnaireKey === "distress_drivers" || questionnaireKey === "distress_drivers_en";
+}
+
 function safeReviewTargetLabel(value?: string): string {
   const cleaned = value?.trim().replace(/\s+/g, " ") ?? "";
   if (!cleaned || cleaned.toLocaleLowerCase("ro-RO") === "autoevaluare") return "";
@@ -703,7 +706,7 @@ type QuestionInputProps = {
   question: QuestionnaireQuestion;
   answers: AnswerState;
   disabled?: boolean;
-  hideStatementLabels?: boolean;
+  compactScale?: boolean;
   onAnswerChange: (key: string, value: QuestionnaireAnswerValue) => void;
 };
 
@@ -804,7 +807,7 @@ function StatementSetQuestion({
   question,
   answers,
   disabled,
-  hideStatementLabels = false,
+  compactScale = false,
   onAnswerChange,
 }: QuestionInputProps) {
   return (
@@ -818,11 +821,18 @@ function StatementSetQuestion({
             key={statement.id}
             className="border-b border-border bg-surface px-4 py-4 last:border-b-0"
           >
-            {!hideStatementLabels ? (
-              <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
-            ) : null}
+            <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
             {isTenPointScale(scale) ? (
               <DiscreteScaleSlider
+                label={statement.label}
+                scale={scale}
+                selectedValue={selectedValue}
+                disabled={disabled}
+                onChange={(value) => onAnswerChange(key, value)}
+              />
+            ) : compactScale ? (
+              <HorizontalScaleChoices
+                answerKey={key}
                 label={statement.label}
                 scale={scale}
                 selectedValue={selectedValue}
@@ -864,6 +874,62 @@ function StatementSetQuestion({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function HorizontalScaleChoices({
+  answerKey: key,
+  label,
+  scale,
+  selectedValue,
+  disabled,
+  onChange,
+}: {
+  answerKey: string;
+  label: string;
+  scale: QuestionnaireScaleOption[];
+  selectedValue: QuestionnaireAnswerValue | undefined;
+  disabled?: boolean;
+  onChange: (value: QuestionnaireAnswerValue) => void;
+}) {
+  return (
+    <div
+      data-testid="question-response-group"
+      role="radiogroup"
+      aria-label={label}
+      className="mt-3 overflow-x-auto pb-1"
+    >
+      <div className="flex min-w-max items-start gap-3">
+        {scale.map((option, index) => {
+          const selected = selectedValue === option.value;
+          const valueLabel = numericScaleOptionValue(option) ?? index + 1;
+          return (
+            <label
+              key={String(option.value)}
+              className={cn(
+                "flex w-24 cursor-pointer flex-col items-center gap-2 rounded-lg px-2 py-2 text-center text-xs font-medium text-muted-foreground transition-colors",
+                selected && "bg-burgundy/8 text-burgundy",
+                disabled && "cursor-not-allowed opacity-55",
+              )}
+            >
+              <input
+                type="radio"
+                name={key}
+                value={String(option.value)}
+                checked={selected}
+                disabled={disabled}
+                onChange={() => onChange(option.value)}
+                className="size-5 accent-burgundy"
+              />
+              <span className="font-bold tabular-nums text-foreground">{valueLabel}</span>
+              {option.label !== String(valueLabel) ? (
+                <span className="max-w-24 leading-4">{option.label}</span>
+              ) : null}
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
