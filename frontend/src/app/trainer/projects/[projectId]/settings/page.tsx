@@ -1,14 +1,23 @@
+import { notFound } from "next/navigation";
+
+import { getCompanyProjectById } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { getProjectWorkspaceData } from "../project-data";
-import { ProjectSettingsForm } from "./ProjectSettingsForm";
+import { LazyProjectSettingsForm } from "./LazyProjectSettingsForm";
 
 export default async function ProjectSettingsPage({
   params,
 }: {
   params: Promise<{ projectId: string }>;
 }) {
-  const { projectId } = await params;
-  const { project } = await getProjectWorkspaceData(projectId, await getServerApiRequestOptions());
+  const [{ projectId }, requestOptions] = await Promise.all([
+    params,
+    getServerApiRequestOptions(),
+  ]);
+  const project = await getCompanyProjectById(projectId, requestOptions);
 
-  return <ProjectSettingsForm project={project} />;
+  if (!project) {
+    notFound();
+  }
+
+  return <LazyProjectSettingsForm project={project} />;
 }

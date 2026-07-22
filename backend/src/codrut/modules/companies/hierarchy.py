@@ -126,8 +126,7 @@ def build_organization_hierarchy(
     leadership_ids = set(top_level_ids) | explicit_leadership_ids
     for top_level_id in top_level_ids:
         leadership_ids.update(
-            direct_report.id
-            for direct_report in direct_reports_by_manager_id.get(top_level_id, [])
+            direct_report.id for direct_report in direct_reports_by_manager_id.get(top_level_id, [])
         )
 
     return OrganizationHierarchy(

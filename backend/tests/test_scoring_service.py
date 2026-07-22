@@ -1,8 +1,12 @@
 import uuid
+from copy import deepcopy
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from codrut.core.database import SessionLocal, engine
+from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
@@ -14,8 +18,8 @@ from codrut.modules.companies.models import (
     ParticipantProfile,
     ProjectMembership,
 )
-from codrut.modules.forms.definitions.catalog import BOSS_360_DEFINITION
 from codrut.modules.forms.models import (
+    QuestionnaireDefinition,
     QuestionnaireKey,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
@@ -23,6 +27,11 @@ from codrut.modules.forms.models import (
 from codrut.modules.identity import models as identity_models  # noqa: F401
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.service import ScoringService
+from codrut.tools.local_preview import build_preview_questionnaire_definitions
+
+PREVIEW_DEFINITIONS = {
+    definition.key: definition for definition in build_preview_questionnaire_definitions()
+}
 
 
 class FakeScoringRepository:
@@ -42,6 +51,281 @@ class FakeScoringRepository:
 
 
 @pytest.mark.asyncio
+async def test_report_queries_enforce_company_project_scope_and_private_schema() -> None:
+    service = ScoringService(session=None)  # type: ignore[arg-type]
+    company_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+
+    service.company_repository = SimpleNamespace(get_company=AsyncMock(return_value=None))
+    with pytest.raises(DomainError) as missing_company_report:
+        await service.get_company_report_aggregate(company_id)
+    assert missing_company_report.value.code == "company_not_found"
+    with pytest.raises(DomainError) as missing_company_review:
+        await service.get_icare_answer_review(company_id)
+    assert missing_company_review.value.code == "company_not_found"
+
+    service.company_repository = SimpleNamespace(
+        get_company=AsyncMock(return_value=SimpleNamespace(id=company_id)),
+        get_project=AsyncMock(return_value=None),
+    )
+    with pytest.raises(DomainError) as missing_project_report:
+        await service.get_company_report_aggregate(company_id, project_id)
+    assert missing_project_report.value.code == "project_not_found"
+    with pytest.raises(DomainError) as missing_project_review:
+        await service.get_icare_answer_review(company_id, project_id)
+    assert missing_project_review.value.code == "project_not_found"
+
+    service.company_repository = SimpleNamespace(
+        list_project_memberships=AsyncMock(return_value=[]),
+        list_participants=AsyncMock(return_value=[]),
+    )
+    assert await service._list_report_participants(company_id, project_id) == []
+    assert await service._list_report_participants(company_id, None) == []
+
+    respondent = SimpleNamespace(id=uuid.uuid4(), full_name="Synthetic", email=None)
+    assignment = SimpleNamespace(target_type="self", id=uuid.uuid4())
+    definition = SimpleNamespace(
+        schema={"sections": [{"id": "public"}]},
+        private_config={"schema": {"sections": []}},
+    )
+    service.company_repository = SimpleNamespace(
+        get_company=AsyncMock(return_value=SimpleNamespace(id=company_id)),
+    )
+    service.repository = SimpleNamespace(
+        list_company_icare_answer_responses=AsyncMock(
+            return_value=[
+                (
+                    assignment,
+                    SimpleNamespace(answers={}),
+                    respondent,
+                    None,
+                    definition,
+                )
+            ]
+        )
+    )
+
+    review = await service.get_icare_answer_review(company_id)
+
+    assert review.rows == []
+    assert review.row_count == 0
+
+
+@pytest.mark.asyncio
+async def test_compute_and_save_score_rejects_missing_or_unsupported_metadata() -> None:
+    service = ScoringService(session=None)  # type: ignore[arg-type]
+    service.repository = FakeScoringRepository()
+
+    for questionnaire_key in (QuestionnaireKey.lencioni, "custom"):
+        with pytest.raises(DomainError) as missing_definition:
+            await service.compute_and_save_score(
+                assignment_id=uuid.uuid4(),
+                questionnaire_key=questionnaire_key,
+                answers={},
+            )
+        assert missing_definition.value.code == "scoring_not_supported"
+
+        with pytest.raises(DomainError) as missing_metadata:
+            await service.compute_and_save_score(
+                assignment_id=uuid.uuid4(),
+                questionnaire_key=questionnaire_key,
+                answers={},
+                definition_schema={},
+            )
+        assert missing_metadata.value.code == "scoring_metadata_missing"
+
+    with pytest.raises(DomainError) as unsupported:
+        await service.compute_and_save_score(
+            assignment_id=uuid.uuid4(),
+            questionnaire_key="custom",
+            answers={},
+            definition_schema={"scoring": {"method": "private_formula"}},
+        )
+    assert unsupported.value.code == "unsupported_scoring_method"
+
+
+@pytest.mark.asyncio
+async def test_compute_and_save_score_replaces_existing_empty_group_result() -> None:
+    repo = FakeScoringRepository()
+    service = ScoringService(session=None)  # type: ignore[arg-type]
+    service.repository = repo
+    assignment_id = uuid.uuid4()
+    existing = ScoringResult(
+        assignment_id=assignment_id,
+        scores={"stale": 99},
+        primary_result="stale",
+    )
+    repo.results[assignment_id] = existing
+
+    result = await service.compute_and_save_score(
+        assignment_id=assignment_id,
+        questionnaire_key="custom",
+        answers={},
+        definition_schema={
+            "scoring": {
+                "method": "sum_by_group",
+                "groups": [],
+                "interpretation": [],
+            }
+        },
+    )
+
+    assert result is existing
+    assert result.scores == {}
+    assert result.primary_result is None
+
+
+@pytest.mark.asyncio
+async def test_compute_and_save_score_handles_partial_rules_and_empty_dimensions() -> None:
+    service = ScoringService(session=None)  # type: ignore[arg-type]
+    service.repository = FakeScoringRepository()
+
+    group_result = await service.compute_and_save_score(
+        assignment_id=uuid.uuid4(),
+        questionnaire_key="custom",
+        answers={"signal": 3},
+        definition_schema={
+            "scoring": {
+                "method": "sum_by_group",
+                "groups": [{"id": "partial", "question_ids": ["signal"]}],
+                "interpretation": [
+                    {"min": None, "max": 5, "label": "Missing minimum"},
+                    {"min": 10, "max": 20, "label": "Outside range"},
+                ],
+            }
+        },
+    )
+    assert group_result.scores["partial"] == {"score": 3, "interpretation": ""}
+
+    driver_result = await service.compute_and_save_score(
+        assignment_id=uuid.uuid4(),
+        questionnaire_key="custom",
+        answers={},
+        definition_schema={
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "drivers": [],
+            },
+            "sections": [],
+        },
+    )
+    assert driver_result.scores == {}
+    assert driver_result.primary_result is None
+
+    average_result = await service.compute_and_save_score(
+        assignment_id=uuid.uuid4(),
+        questionnaire_key="custom",
+        answers={},
+        definition_schema={
+            "scoring": {"method": "average_statement_scores_by_section"},
+            "sections": [],
+        },
+    )
+    assert average_result.scores == {}
+    assert average_result.primary_result is None
+
+
+@pytest.mark.asyncio
+async def test_average_scoring_handles_empty_blocks_clamping_and_grade_output() -> None:
+    service = ScoringService(session=None)  # type: ignore[arg-type]
+    service.repository = FakeScoringRepository()
+    schema = {
+        "scoring": {
+            "method": "average_statement_scores_by_section",
+            "scale_min": 1,
+            "scale_max": 5,
+            "score_unit": "grade_1_to_5",
+        },
+        "sections": [
+            {
+                "id": "empty_section",
+                "questions": [{"id": "ignored", "type": "likert"}],
+            },
+            {
+                "id": "feedback_section",
+                "questions": [
+                    {
+                        "id": "empty_signal",
+                        "type": "statement_score_set",
+                        "statements": [{"id": "boolean"}],
+                    },
+                    {
+                        "id": "feedback_signal",
+                        "type": "statement_score_set",
+                        "statements": [
+                            {"id": "low"},
+                            {"id": "high"},
+                            {"id": "middle"},
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+
+    result = await service.compute_and_save_score(
+        assignment_id=uuid.uuid4(),
+        questionnaire_key="custom",
+        answers={
+            "empty_signal:boolean": True,
+            "feedback_signal:low": 0,
+            "feedback_signal:high": 6,
+            "feedback_signal:middle": "3",
+        },
+        definition_schema=schema,
+    )
+
+    assert result.scores["empty_section"] == {"score": 0, "raw_avg": 0, "answered": 0}
+    assert result.scores["empty_signal"] == {"score": 0, "raw_avg": 0, "answered": 0}
+    assert result.scores["feedback_signal"] == {
+        "score": 3.0,
+        "raw_avg": 3.0,
+        "answered": 3,
+    }
+    assert result.primary_result == "feedback_signal"
+
+
+@pytest.mark.asyncio
+async def test_driver_scoring_ignores_unmapped_statements_and_invalid_scale_options() -> None:
+    service = ScoringService(session=None)  # type: ignore[arg-type]
+    service.repository = FakeScoringRepository()
+    schema = {
+        "scoring": {
+            "method": "sum_statement_scores_by_driver",
+            "drivers": [{"id": "known"}],
+            "normalize_to": 0,
+        },
+        "sections": [
+            {
+                "questions": [
+                    {"id": "ignored", "type": "likert"},
+                    {
+                        "id": "signals",
+                        "type": "statement_score_set",
+                        "scale": ["invalid", {"value": True}, {"value": 5}],
+                        "statements": [
+                            {"id": "unmapped", "scoring": {}},
+                            {"id": "known", "scoring": {"driver": "known"}},
+                            {"id": "new", "scoring": {"driver": "new"}, "scale": []},
+                        ],
+                    },
+                ]
+            }
+        ],
+    }
+
+    result = await service.compute_and_save_score(
+        assignment_id=uuid.uuid4(),
+        questionnaire_key="custom",
+        answers={"signals:known": 4, "signals:new": 2},
+        definition_schema=schema,
+    )
+
+    assert result.scores == {"known": 4, "new": 2}
+    assert result.primary_result == "known"
+
+
+@pytest.mark.asyncio
 async def test_compute_and_save_score_lencioni() -> None:
     repo = FakeScoringRepository()
     service = ScoringService(session=None)  # type: ignore
@@ -49,51 +333,31 @@ async def test_compute_and_save_score_lencioni() -> None:
 
     assignment_id = uuid.uuid4()
 
+    schema = PREVIEW_DEFINITIONS["lencioni"].schema
     answers = {
-        # Group absence_of_trust (q04, q06, q12) -> 3 + 3 + 2 = 8
-        "lencioni_q04": 3,
-        "lencioni_q06": 3,
-        "lencioni_q12": 2,
-        # Group fear_of_conflict (q01, q07, q10) -> 2 + 1 + 2 = 5
-        "lencioni_q01": 2,
-        "lencioni_q07": 1,
-        "lencioni_q10": 2,
-        # Group avoidance_of_accountability (q02, q11, q14) -> 3 + 3 + 3 = 9
-        "lencioni_q02": 3,
-        "lencioni_q11": 3,
-        "lencioni_q14": 3,
-        # Group lack_of_commitment (q03, q08, q13) -> 1 + 1 + 1 = 3
-        "lencioni_q03": 1,
-        "lencioni_q08": 1,
-        "lencioni_q13": 1,
-        # Group inattention_to_results (q05, q09, q15) -> 2 + 2 + 2 = 6
-        "lencioni_q05": 2,
-        "lencioni_q09": 2,
-        "lencioni_q15": 2,
+        "team_sample_1": 3,
+        "team_sample_2": 2,
+        "team_sample_3": 1,
+        "team_sample_4": 2,
+        "team_sample_5": 3,
     }
 
     result = await service.compute_and_save_score(
         assignment_id=assignment_id,
         questionnaire_key=QuestionnaireKey.lencioni,
         answers=answers,
+        definition_schema=schema,
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["absence_of_trust"]["score"] == 8
-    assert result.scores["absence_of_trust"]["interpretation"] == (
-        "Disfuncția probabil nu este o problemă."
-    )
+    assert result.scores["team_signal_a"]["score"] == 3
+    assert result.scores["team_signal_a"]["interpretation"] == "Rezultat demonstrativ."
+    assert result.scores["team_signal_b"]["score"] == 2
+    assert result.scores["team_signal_c"]["score"] == 1
+    assert result.scores["team_signal_e"]["score"] == 3
+    assert result.scores["team_signal_d"]["score"] == 2
 
-    assert result.scores["fear_of_conflict"]["score"] == 5
-    assert result.scores["fear_of_conflict"]["interpretation"] == (
-        "Disfuncția trebuie probabil abordată."
-    )
-
-    assert result.scores["lack_of_commitment"]["score"] == 3
-    assert result.scores["inattention_to_results"]["score"] == 6
-    assert result.scores["avoidance_of_accountability"]["score"] == 9
-
-    assert result.primary_result == "lack_of_commitment"
+    assert result.primary_result == "team_signal_c"
 
 
 @pytest.mark.asyncio
@@ -104,30 +368,54 @@ async def test_compute_and_save_score_distress_drivers() -> None:
 
     assignment_id = uuid.uuid4()
 
-    # Generate a sample answer set where Be Strong gets 10 for all of its questions, others 1
-    # Catalog mapping for distress drivers:
-    # We can programmatically check which driver is in which question statement.
-    from codrut.modules.forms.definitions.catalog import DISTRESS_DRIVERS_DEFINITION
-
+    schema = PREVIEW_DEFINITIONS["distress_drivers"].schema
     answers = {}
-    for section in DISTRESS_DRIVERS_DEFINITION.schema.get("sections", []):
+    for section in schema.get("sections", []):
         for question in section.get("questions", []):
             q_id = question["id"]
             for statement in question.get("statements", []):
                 s_id = statement["id"]
                 driver = statement["scoring"]["driver"]
-                answers[f"{q_id}:{s_id}"] = 10 if driver == "be_strong" else 1
+                answers[f"{q_id}:{s_id}"] = 5 if driver == "work_signal_a" else 1
 
     result = await service.compute_and_save_score(
         assignment_id=assignment_id,
         questionnaire_key=QuestionnaireKey.distress_drivers,
         answers=answers,
+        definition_schema=schema,
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["be_strong"] == 100
-    assert result.scores["be_perfect"] == 10
-    assert result.primary_result == "be_strong"
+    assert result.scores["work_signal_a"] == 100
+    assert result.scores["work_signal_b"] == 20
+    assert result.primary_result == "work_signal_a"
+
+
+@pytest.mark.asyncio
+async def test_compute_and_save_score_normalizes_short_distress_sample() -> None:
+    repo = FakeScoringRepository()
+    service = ScoringService(session=None)  # type: ignore
+    service.repository = repo
+
+    schema = deepcopy(PREVIEW_DEFINITIONS["distress_drivers"].schema)
+    schema["scoring"]["normalize_to"] = 100
+    answers = {}
+    for question in schema["sections"][0]["questions"]:
+        for statement in question["statements"]:
+            answers[f"{question['id']}:{statement['id']}"] = (
+                5 if statement["scoring"]["driver"] == "work_signal_a" else 2
+            )
+
+    result = await service.compute_and_save_score(
+        assignment_id=uuid.uuid4(),
+        questionnaire_key=QuestionnaireKey.distress_drivers,
+        answers=answers,
+        definition_schema=schema,
+    )
+
+    assert result.scores["work_signal_a"] == 100
+    assert result.scores["work_signal_b"] == 40
+    assert result.primary_result == "work_signal_a"
 
 
 @pytest.mark.asyncio
@@ -138,34 +426,34 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
 
     assignment_id = uuid.uuid4()
 
+    schema = PREVIEW_DEFINITIONS["boss_360"].schema
     answers = {}
-    for section in BOSS_360_DEFINITION.schema.get("sections", []):
+    for section in schema.get("sections", []):
         for question in section.get("questions", []):
             for statement in question.get("statements", []):
-                score = 1 if section["id"] == "awareness" else 4
+                score = 1 if question["id"] == "feedback_signal_c" else 4
                 answers[f"{question['id']}:{statement['id']}"] = score
 
     result = await service.compute_and_save_score(
         assignment_id=assignment_id,
         questionnaire_key=QuestionnaireKey.boss_360,
         answers=answers,
+        definition_schema=schema,
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["inspiring"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
-    assert result.scores["create_trust"] == {"score": 100.0, "raw_avg": 4.0, "answered": 9}
-    assert result.scores["awareness"] == {"score": 0.0, "raw_avg": 1.0, "answered": 9}
-    assert result.scores["icare_01_dezvolta_oamenii"] == {
+    assert result.scores["feedback_signal_a"] == {
         "score": 100.0,
         "raw_avg": 4.0,
-        "answered": 3,
+        "answered": 2,
     }
-    assert result.scores["icare_07_modestie"] == {
+    assert result.scores["feedback_signal_c"] == {
         "score": 0.0,
         "raw_avg": 1.0,
-        "answered": 3,
+        "answered": 2,
     }
-    assert result.primary_result == "icare_07_modestie"
+    assert result.scores["feedback_section_3"]["score"] == 0.0
+    assert result.primary_result == "feedback_signal_c"
 
 
 async def test_icare_answer_review_returns_project_scoped_source_answers() -> None:
@@ -198,10 +486,52 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
                 full_name="Target Leader",
                 email=f"target-{uuid.uuid4().hex[:8]}@example.com",
             )
-            session.add_all([project, other_project, respondent, target])
+            definition_schema = deepcopy(PREVIEW_DEFINITIONS["boss_360"].schema)
+            definition_version = 100_000 + uuid.uuid4().int % 100_000
+            definition = QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key="boss_360",
+                version=definition_version,
+                title="Synthetic feedback review",
+                description="",
+                schema=definition_schema,
+                trainer_visibility_policy={"raw_responses": "visible"},
+                active=False,
+            )
+            hidden_definition = QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key="boss_360",
+                version=definition_version + 1,
+                title="Synthetic hidden feedback review",
+                description="",
+                schema=deepcopy(definition_schema),
+                trainer_visibility_policy={"raw_responses": "hidden"},
+                active=False,
+            )
+            controlled_definition = QuestionnaireDefinition(
+                id=uuid.uuid4(),
+                key="boss_360",
+                version=definition_version + 2,
+                title="Synthetic aggregate-only feedback review",
+                description="",
+                schema=deepcopy(definition_schema),
+                trainer_visibility_policy={"raw_responses": "policy_controlled"},
+                active=False,
+            )
+            session.add_all(
+                [
+                    project,
+                    other_project,
+                    respondent,
+                    target,
+                    definition,
+                    hidden_definition,
+                    controlled_definition,
+                ]
+            )
             await session.flush()
 
-            first_question = BOSS_360_DEFINITION.schema["sections"][0]["questions"][0]
+            first_question = definition_schema["sections"][0]["questions"][0]
             first_statement = first_question["statements"][0]
             answer_key = f"{first_question['id']}:{first_statement['id']}"
             assignment = QuestionnaireAssignment(
@@ -210,6 +540,7 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
                 project_id=project.id,
                 respondent_profile_id=respondent.id,
                 questionnaire_key="boss_360",
+                questionnaire_definition_id=definition.id,
                 target_type=AssignmentTargetType.person,
                 target_person_id=target.id,
                 status=AssignmentStatus.submitted,
@@ -220,11 +551,36 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
                 project_id=other_project.id,
                 respondent_profile_id=respondent.id,
                 questionnaire_key="boss_360",
+                questionnaire_definition_id=definition.id,
                 target_type=AssignmentTargetType.person,
                 target_person_id=target.id,
                 status=AssignmentStatus.submitted,
             )
-            session.add_all([assignment, other_assignment])
+            hidden_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                respondent_profile_id=respondent.id,
+                questionnaire_key="boss_360",
+                questionnaire_definition_id=hidden_definition.id,
+                target_type=AssignmentTargetType.person,
+                target_person_id=target.id,
+                status=AssignmentStatus.submitted,
+            )
+            controlled_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                respondent_profile_id=respondent.id,
+                questionnaire_key="boss_360",
+                questionnaire_definition_id=controlled_definition.id,
+                target_type=AssignmentTargetType.person,
+                target_person_id=target.id,
+                status=AssignmentStatus.submitted,
+            )
+            session.add_all(
+                [assignment, other_assignment, hidden_assignment, controlled_assignment]
+            )
             await session.flush()
 
             session.add_all(
@@ -233,7 +589,7 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
                         id=uuid.uuid4(),
                         assignment_id=assignment.id,
                         questionnaire_key="boss_360",
-                        questionnaire_version=BOSS_360_DEFINITION.version,
+                        questionnaire_version=definition_version,
                         status=QuestionnaireResponseStatus.submitted,
                         answers={answer_key: 1},
                     ),
@@ -241,9 +597,25 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
                         id=uuid.uuid4(),
                         assignment_id=other_assignment.id,
                         questionnaire_key="boss_360",
-                        questionnaire_version=BOSS_360_DEFINITION.version,
+                        questionnaire_version=definition_version,
                         status=QuestionnaireResponseStatus.submitted,
                         answers={answer_key: 4},
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=hidden_assignment.id,
+                        questionnaire_key="boss_360",
+                        questionnaire_version=hidden_definition.version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={answer_key: 5},
+                    ),
+                    QuestionnaireResponse(
+                        id=uuid.uuid4(),
+                        assignment_id=controlled_assignment.id,
+                        questionnaire_key="boss_360",
+                        questionnaire_version=controlled_definition.version,
+                        status=QuestionnaireResponseStatus.submitted,
+                        answers={answer_key: 3},
                     ),
                 ]
             )
@@ -256,19 +628,21 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
             assert row.assignment_id == assignment.id
             assert row.respondent_name == "Respondent One"
             assert row.target_name == "Target Leader"
-            assert row.section_label == "Inspiră (Inspiring)"
-            assert row.measurement_label == "Dezvoltă oamenii"
-            assert row.statement_label == "Oferă feedback constructiv"
+            assert row.section_label == "Dezvoltare"
+            assert row.measurement_label == "Dezvoltare"
+            assert row.statement_label == "Comportament sintetic pentru dezvoltare"
             assert row.answer_value == 1
-            assert row.answer_label == "1"
-            assert row.answer_description == "Nu oferă feedback sau îl evită complet."
+            assert row.answer_label == "Nu clarifică un comportament legat de dezvoltare"
+            assert row.answer_description is None
 
             await session.rollback()
     finally:
         await engine.dispose()
 
 
-async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results() -> None:
+async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
+    questionnaire_definition_factory,
+) -> None:
     await engine.dispose()
     try:
         async with SessionLocal() as session:
@@ -305,12 +679,20 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
             session.add_all([project, other_project])
             await session.flush()
 
+            definitions = {
+                key: questionnaire_definition_factory(key)
+                for key in ("lencioni", "distress_drivers", "boss_360")
+            }
+            session.add_all(definitions.values())
+            await session.flush()
+
             lencioni_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="lencioni",
+                questionnaire_definition_id=definitions["lencioni"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
@@ -320,6 +702,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="distress_drivers",
+                questionnaire_definition_id=definitions["distress_drivers"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
@@ -329,6 +712,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="boss_360",
+                questionnaire_definition_id=definitions["boss_360"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.submitted,
             )
@@ -338,6 +722,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 project_id=project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="boss_360",
+                questionnaire_definition_id=definitions["boss_360"].id,
                 target_type=AssignmentTargetType.person,
                 target_person_id=participant.id,
                 status=AssignmentStatus.scored,
@@ -347,6 +732,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 company_id=other_company.id,
                 respondent_profile_id=other_participant.id,
                 questionnaire_key="lencioni",
+                questionnaire_definition_id=definitions["lencioni"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
@@ -356,6 +742,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 project_id=other_project.id,
                 respondent_profile_id=participant.id,
                 questionnaire_key="lencioni",
+                questionnaire_definition_id=definitions["lencioni"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.scored,
             )
@@ -375,76 +762,55 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
                 [
                     ScoringResult(
                         assignment_id=lencioni_assignment.id,
-                        primary_result="absence_of_trust",
+                        primary_result="team_signal_a",
                         scores={
-                            "absence_of_trust": {"score": 6},
-                            "fear_of_conflict": {"score": 9},
-                            "lack_of_commitment": {"score": 8},
-                            "avoidance_of_accountability": {"score": 7},
-                            "inattention_to_results": {"score": 5},
+                            "team_signal_a": {"score": 6},
+                            "team_signal_b": {"score": 9},
+                            "team_signal_c": {"score": 8},
+                            "team_signal_d": {"score": 7},
+                            "team_signal_e": {"score": 5},
                         },
                     ),
                     ScoringResult(
                         assignment_id=driver_assignment.id,
-                        primary_result="hurry_up",
+                        primary_result="work_signal_d",
                         scores={
-                            "be_strong": 10,
-                            "be_perfect": "20",
-                            "try_hard": 30,
-                            "hurry_up": 60,
-                            "please_people": 50,
+                            "work_signal_a": 10,
+                            "work_signal_b": "20",
+                            "work_signal_c": 30,
+                            "work_signal_d": 60,
+                            "work_signal_e": 50,
                         },
                     ),
                     ScoringResult(
                         assignment_id=boss_360_assignment.id,
-                        primary_result="awareness",
+                        primary_result="feedback_signal_c",
                         scores={
-                            "inspiring": {"score": 80},
-                            "create_trust": {"score": 75},
-                            "awareness": {"score": 60},
-                            "results": {"score": 90},
-                            "empowerment": {"score": 85},
-                            "icare_01_dezvolta_oamenii": {"score": 80},
-                            "icare_02_conduce_prin_puterea_exemplului": {"score": 75},
-                            "icare_03_creeaza_un_mediu_care_stimuleaza_implicarea": {
-                                "score": 70
-                            },
-                            "icare_04_promotor_al_colaborarii": {"score": 65},
-                            "icare_05_ancorat_in_realitate": {"score": 60},
-                            "icare_06_aduce_claritate": {"score": 55},
-                            "icare_07_modestie": {"score": 50},
-                            "icare_08_inteligenta_emotionala_si_situationala": {"score": 45},
-                            "icare_09_deschis_catre_lume": {"score": 40},
-                            "icare_10_ambitios_pentru_companie": {"score": 35},
-                            "icare_11_grija_egala_pentru_angajati_si_clienti": {
-                                "score": 30
-                            },
-                            "icare_12_agilitate_antreprenoriala": {"score": 25},
-                            "icare_13_decizii_cat_mai_aproape_de_teren": {"score": 20},
-                            "icare_14_cultiva_inteligenta_colectiva": {"score": 15},
-                            "icare_15_ajuta_echipa": {"score": 10},
+                            "feedback_signal_a": {"score": 80},
+                            "feedback_signal_b": {"score": 75},
+                            "feedback_signal_c": {"score": 60},
+                            "feedback_signal_d": {"score": 90},
+                            "feedback_signal_e": {"score": 85},
                         },
                     ),
                     ScoringResult(
                         assignment_id=other_company_assignment.id,
-                        primary_result="fear_of_conflict",
+                        primary_result="team_signal_b",
                         scores={
-                            "absence_of_trust": {"score": 1},
-                            "fear_of_conflict": {"score": 1},
-                            "lack_of_commitment": {"score": 1},
-                            "avoidance_of_accountability": {"score": 1},
-                            "inattention_to_results": {"score": 1},
+                            "team_signal_a": {"score": 1},
+                            "team_signal_b": {"score": 1},
+                            "team_signal_c": {"score": 1},
                         },
                     ),
                     ScoringResult(
                         assignment_id=other_project_assignment.id,
-                        primary_result="absence_of_trust",
+                        primary_result="team_signal_a",
                         scores={
-                            "absence_of_trust": {"score": 15},
-                            "fear_of_conflict": {"score": 15},
-                            "lack_of_commitment": {"score": 15},
-                            "avoidance_of_accountability": {"score": 15},
-                            "inattention_to_results": {"score": 15},
+                            "team_signal_a": {"score": 15},
+                            "team_signal_b": {"score": 15},
+                            "team_signal_c": {"score": 15},
+                            "team_signal_d": {"score": 15},
+                            "team_signal_e": {"score": 15},
                         },
                     ),
                 ]
@@ -467,22 +833,21 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
             }
             assert aggregate.lencioni_averages[0].avg == 10.5
             assert [item.id for item in aggregate.driver_averages] == [
-                "be_strong",
-                "be_perfect",
-                "try_hard",
-                "hurry_up",
-                "please_people",
+                "work_signal_a",
+                "work_signal_b",
+                "work_signal_c",
+                "work_signal_d",
+                "work_signal_e",
             ]
             assert [item.avg for item in aggregate.driver_averages] == [10, 20, 30, 60, 50]
-            assert aggregate.driver_averages[3].interpretation == (
-                "Driver prezent peste pragul de atenție; merită explorat în debrief."
-            )
+            assert all(item.interpretation is None for item in aggregate.driver_averages)
             assert aggregate.pcm_base_count == 0
             assert aggregate.pcm_phase_count == 0
             assert aggregate.pcm_base_distribution == []
             assert aggregate.pcm_phase_distribution == []
-            assert aggregate.boss_360_averages[0].avg == 80
-            assert aggregate.boss_360_averages[-1].id == "icare_15_ajuta_echipa"
+            boss_scores = {item.id: item.avg for item in aggregate.boss_360_averages}
+            assert boss_scores["feedback_signal_c"] == 60
+            assert boss_scores["feedback_signal_d"] == 90
 
             project_aggregate = await ScoringService(session).get_company_report_aggregate(
                 company.id,
@@ -501,7 +866,9 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results()
         await engine.dispose()
 
 
-async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warnings() -> None:
+async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warnings(
+    questionnaire_definition_factory,
+) -> None:
     await engine.dispose()
     try:
         async with SessionLocal() as session:
@@ -552,6 +919,13 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
             session.add_all([ceo, manager, member, external])
             await session.flush()
 
+            definitions = {
+                key: questionnaire_definition_factory(key)
+                for key in ("pcm_base", "phase", "distress_drivers", "lencioni")
+            }
+            session.add_all(definitions.values())
+            await session.flush()
+
             session.add_all(
                 [
                     ProjectMembership(
@@ -597,6 +971,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                     project_id=project.id,
                     respondent_profile_id=ceo.id,
                     questionnaire_key="pcm_base",
+                    questionnaire_definition_id=definitions["pcm_base"].id,
                     target_type=AssignmentTargetType.self_assessment,
                     status=AssignmentStatus.submitted,
                 ),
@@ -606,6 +981,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                     project_id=project.id,
                     respondent_profile_id=manager.id,
                     questionnaire_key="pcm_base",
+                    questionnaire_definition_id=definitions["pcm_base"].id,
                     target_type=AssignmentTargetType.self_assessment,
                     status=AssignmentStatus.submitted,
                 ),
@@ -615,6 +991,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                     project_id=project.id,
                     respondent_profile_id=member.id,
                     questionnaire_key="phase",
+                    questionnaire_definition_id=definitions["phase"].id,
                     target_type=AssignmentTargetType.self_assessment,
                     status=AssignmentStatus.submitted,
                 ),
@@ -624,6 +1001,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                     project_id=project.id,
                     respondent_profile_id=external.id,
                     questionnaire_key="pcm_base",
+                    questionnaire_definition_id=definitions["pcm_base"].id,
                     target_type=AssignmentTargetType.self_assessment,
                     status=AssignmentStatus.submitted,
                 ),
@@ -633,6 +1011,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                     project_id=project.id,
                     respondent_profile_id=manager.id,
                     questionnaire_key="distress_drivers",
+                    questionnaire_definition_id=definitions["distress_drivers"].id,
                     target_type=AssignmentTargetType.self_assessment,
                     status=AssignmentStatus.scored,
                 ),
@@ -642,6 +1021,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                     project_id=project.id,
                     respondent_profile_id=member.id,
                     questionnaire_key="lencioni",
+                    questionnaire_definition_id=definitions["lencioni"].id,
                     target_type=AssignmentTargetType.self_assessment,
                     status=AssignmentStatus.scored,
                 ),
@@ -653,24 +1033,24 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
                 [
                     ScoringResult(
                         assignment_id=assignments[4].id,
-                        primary_result="hurry_up",
+                        primary_result="work_signal_d",
                         scores={
-                            "be_strong": 10,
-                            "be_perfect": 20,
-                            "try_hard": 30,
-                            "hurry_up": 70,
-                            "please_people": 40,
+                            "work_signal_a": 10,
+                            "work_signal_b": 20,
+                            "work_signal_c": 30,
+                            "work_signal_d": 70,
+                            "work_signal_e": 40,
                         },
                     ),
                     ScoringResult(
                         assignment_id=assignments[5].id,
-                        primary_result="absence_of_trust",
+                        primary_result="team_signal_a",
                         scores={
-                            "absence_of_trust": {"score": 4},
-                            "fear_of_conflict": {"score": 5},
-                            "lack_of_commitment": {"score": 6},
-                            "avoidance_of_accountability": {"score": 7},
-                            "inattention_to_results": {"score": 8},
+                            "team_signal_a": {"score": 4},
+                            "team_signal_b": {"score": 5},
+                            "team_signal_c": {"score": 6},
+                            "team_signal_d": {"score": 7},
+                            "team_signal_e": {"score": 8},
                         },
                     ),
                 ]

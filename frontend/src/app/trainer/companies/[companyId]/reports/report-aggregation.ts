@@ -3,46 +3,6 @@ import type { CompanyAssignment, CompanyParticipant, ReportTeamLens } from "@/ap
 import { formatPcmLabel, getPcmColor } from "@/api/pcm";
 import type { ScoringResultRecord } from "@/api/trainer";
 
-export const lencioniLabels: Record<string, string> = {
-  absence_of_trust: "Absența încrederii (Trust)",
-  fear_of_conflict: "Teama de conflict (Conflict)",
-  lack_of_commitment: "Lipsa angajamentului (Commitment)",
-  avoidance_of_accountability: "Evitarea responsabilității (Accountability)",
-  inattention_to_results: "Neatenția la rezultate (Results)",
-};
-
-export const driverLabels: Record<string, string> = {
-  be_strong: "Fii Puternic (Be Strong)",
-  be_perfect: "Fii Perfect (Be Perfect)",
-  try_hard: "Străduiește-te (Try Hard)",
-  hurry_up: "Grăbește-te (Hurry Up)",
-  please_people: "Mulțumește-i pe alții (Please People)",
-};
-
-export const boss360Labels: Record<string, string> = {
-  icare_01_dezvolta_oamenii: "Dezvoltă oamenii",
-  icare_02_conduce_prin_puterea_exemplului: "Conduce prin puterea exemplului",
-  icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: "Creează un mediu care stimulează implicarea",
-  icare_04_promotor_al_colaborarii: "Promotor al colaborării",
-  icare_05_ancorat_in_realitate: "Ancorat în realitate",
-  icare_06_aduce_claritate: "Aduce claritate",
-  icare_07_modestie: "Modestie",
-  icare_08_inteligenta_emotionala_si_situationala: "Inteligență emoțională și situațională",
-  icare_09_deschis_catre_lume: "Deschis către lume",
-  icare_10_ambitios_pentru_companie: "Ambițios pentru companie",
-  icare_11_grija_egala_pentru_angajati_si_clienti: "Grijă egală pentru angajați și clienți",
-  icare_12_agilitate_antreprenoriala: "Agilitate antreprenorială",
-  icare_13_decizii_cat_mai_aproape_de_teren: "Decizii cât mai aproape de teren",
-  icare_14_cultiva_inteligenta_colectiva: "Cultivă inteligența colectivă",
-  icare_15_ajuta_echipa: "Ajută echipa",
-};
-
-const lencioniInterpretations = [
-  { min: 8, max: 9, range: "8-9", label: "Disfuncția probabil nu este o problemă." },
-  { min: 6, max: 7.99, range: "6-7", label: "Disfuncția poate fi o problemă." },
-  { min: 3, max: 5.99, range: "3-5", label: "Disfuncția trebuie probabil abordată." },
-];
-
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const lencioniKeys = new Set(["lencioni", "lencioni_en"]);
 const distressDriverKeys = new Set(["distress_drivers", "distress_drivers_en"]);
@@ -168,108 +128,77 @@ function buildScoreSummary(
   | "driverAverages"
   | "boss360Averages"
 > {
-  const lencioniSums = zeroRecord(lencioniLabels);
-  const driverSums = zeroRecord(driverLabels);
-  const boss360Sums = zeroRecord(boss360Labels);
-  let lencioniCount = 0;
-  let driverCount = 0;
-  let boss360Count = 0;
+  const lencioni = summarizeCategory(reportableAssignments, resultMap, lencioniKeys);
+  const drivers = summarizeCategory(reportableAssignments, resultMap, distressDriverKeys);
+  const boss360 = summarizeCategory(reportableAssignments, resultMap, boss360Keys);
 
-  for (const assignment of reportableAssignments) {
-    const result = resultMap.get(assignment.id);
-    if (!result?.scores) continue;
+  return {
+    lencioniCount: lencioni.count,
+    driverCount: drivers.count,
+    boss360Count: boss360.count,
+    lencioniAverages: lencioni.averages,
+    driverAverages: drivers.averages,
+    boss360Averages: boss360.averages,
+  };
+}
 
-    if (lencioniKeys.has(assignment.questionnaire_key)) {
-      if (!hasAnyNumericScore(result.scores, Object.keys(lencioniSums))) continue;
-      lencioniCount += 1;
-      for (const key of Object.keys(lencioniSums)) {
-        const value = result.scores[key];
-        const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
-        lencioniSums[key] += Number(score || 0);
-      }
-    } else if (distressDriverKeys.has(assignment.questionnaire_key)) {
-      if (!hasAnyNumericScore(result.scores, Object.keys(driverSums))) continue;
-      driverCount += 1;
-      for (const key of Object.keys(driverSums)) {
-        const value = result.scores[key];
-        const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
-        driverSums[key] += Number(score || 0);
-      }
-    } else if (boss360Keys.has(assignment.questionnaire_key)) {
-      if (!hasAnyNumericScore(result.scores, Object.keys(boss360Sums))) continue;
-      boss360Count += 1;
-      for (const key of Object.keys(boss360Sums)) {
-        const value = result.scores[key];
-        const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
-        boss360Sums[key] += Number(score || 0);
-      }
+function summarizeCategory(
+  assignments: CompanyAssignment[],
+  resultMap: Map<string, ScoringResultRecord | null>,
+  questionnaireKeys: Set<string>,
+): { count: number; averages: ReportAverage[] } {
+  const dimensions = new Map<string, { label: string; total: number; count: number }>();
+  let count = 0;
+
+  for (const assignment of assignments) {
+    if (!questionnaireKeys.has(assignment.questionnaire_key)) continue;
+    const scores = resultMap.get(assignment.id)?.scores;
+    if (!scores) continue;
+    let hasScore = false;
+    for (const [id, value] of Object.entries(scores)) {
+      const score = numericScore(value);
+      if (score === null) continue;
+      const current = dimensions.get(id) ?? {
+        label: scoreLabel(id, value),
+        total: 0,
+        count: 0,
+      };
+      current.total += score;
+      current.count += 1;
+      dimensions.set(id, current);
+      hasScore = true;
     }
+    if (hasScore) count += 1;
   }
 
   return {
-    lencioniCount,
-    driverCount,
-    boss360Count,
-    lencioniAverages: averagesFromSums(lencioniSums, lencioniLabels, lencioniCount, {
-      interpretation: lencioniInterpretation,
-    }),
-    driverAverages: averagesFromSums(driverSums, driverLabels, driverCount, {
-      interpretation: distressDriverInterpretation,
-    }),
-    boss360Averages: averagesFromSums(boss360Sums, boss360Labels, boss360Count),
+    count,
+    averages: [...dimensions.entries()].map(([id, dimension]) => ({
+      id,
+      label: dimension.label,
+      avg: Number((dimension.total / dimension.count).toFixed(1)),
+      interpretation: null,
+      range_label: null,
+    })),
   };
 }
 
-function hasAnyNumericScore(scores: Record<string, unknown>, keys: string[]): boolean {
-  return keys.some((key) => {
-    const value = scores[key];
-    const score = typeof value === "object" && value !== null ? (value as { score?: unknown }).score : value;
-    return Number.isFinite(Number(score));
-  });
+function numericScore(value: unknown): number | null {
+  const raw = typeof value === "object" && value !== null && "score" in value ? (value as { score?: unknown }).score : value;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
 }
 
-function zeroRecord(labels: Record<string, string>): Record<string, number> {
-  return Object.fromEntries(Object.keys(labels).map((key) => [key, 0]));
-}
-
-function averagesFromSums(
-  sums: Record<string, number>,
-  labels: Record<string, string>,
-  count: number,
-  options: {
-    minimumAvg?: number;
-    interpretation?: (score: number) => { label: string; range: string } | undefined;
-  } = {},
-): ReportAverage[] {
-  return Object.entries(sums).flatMap(([key, sum]) => {
-    const avg = Number((count > 0 ? sum / count : 0).toFixed(1));
-    if (options.minimumAvg !== undefined && avg < options.minimumAvg) return [];
-    const interpretation = options.interpretation?.(avg);
-    return [
-      {
-        id: key,
-        label: labels[key] || key,
-        avg,
-        interpretation: interpretation?.label ?? null,
-        range_label: interpretation?.range ?? null,
-      },
-    ];
-  });
-}
-
-function lencioniInterpretation(score: number): { label: string; range: string } {
-  const match = lencioniInterpretations.find((item) => item.min <= score && score <= item.max);
-  if (match) return { label: match.label, range: match.range };
-  if (score < 3) return { label: "Scor sub intervalul de referință Lencioni.", range: "<3" };
-  return { label: "Scor peste intervalul de referință Lencioni.", range: ">9" };
-}
-
-function distressDriverInterpretation(score: number): { label: string; range: string } | undefined {
-  if (score <= 50) return undefined;
-  return {
-    label: "Driver prezent peste pragul de atenție; merită explorat în debrief.",
-    range: ">50",
-  };
+function scoreLabel(id: string, value: unknown): string {
+  if (typeof value === "object" && value !== null && "label" in value) {
+    const label = (value as { label?: unknown }).label;
+    if (typeof label === "string" && label.trim()) return label.trim();
+  }
+  return id
+    .replace(/_/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase("ro-RO") + part.slice(1))
+    .join(" ");
 }
 
 function distributionFromCompletedPcmAssignments(

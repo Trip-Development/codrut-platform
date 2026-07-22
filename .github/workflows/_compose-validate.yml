@@ -34,14 +34,17 @@ jobs:
       POSTGRES_PASSWORD: codrut
       CODRUT_DATABASE_URL: postgresql+asyncpg://codrut:codrut@db:5432/codrut
       CODRUT_REDIS_URL: redis://redis:6379/0
+      CODRUT_RATE_LIMIT_TRUSTED_PROXIES: '["10.0.0.2"]'
       CODRUT_SESSION_SECRET: compose-config-secret
       CODRUT_TASK_LINK_SECRET: compose-config-task-link-secret
+      CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: compose-config-campaign-asset-secret
       CODRUT_CORS_ORIGINS: '["https://codrut.example.com"]'
       CODRUT_PUBLIC_APP_URL: https://codrut.example.com
       CODRUT_EMAIL_PROVIDER: brevo
       CODRUT_EMAIL_FROM_ADDRESS: ops@example.com
       CODRUT_EMAIL_FROM_NAME: Andrei Văcaru
       CODRUT_EMAIL_BREVO_API_KEY: compose-config-placeholder
+      CODRUT_EMAIL_WEBHOOK_TOKEN: compose-webhook-token-with-at-least-32-characters
       CODRUT_DB_VOLUME_PATH: /tmp/codrut-postgres-data
     steps:
       - uses: actions/checkout@v4

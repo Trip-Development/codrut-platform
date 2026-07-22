@@ -91,9 +91,9 @@ test.describe("Pilot trainer UI smoke", () => {
     ]);
     await expect(page.getByText("Leadership", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Leadership · 3 rânduri")).toBeVisible();
-    await expect(page.getByText("Echipa Ilinca Corbu QA", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Echipa Mara Ionescu QA", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Echipă manager · 2 rânduri").first()).toBeVisible();
-    await expect(page.getByText("Echipa Vlad Soimu QA", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Echipa Sorin Pavel QA", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Echipă manager · 1 rânduri").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Salvează asignările bifate (24)" })).toBeEnabled();
 

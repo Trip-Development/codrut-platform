@@ -14,6 +14,9 @@ describe("generated API client facade", () => {
     expect(generatedApiUrl("/api/companies")).toBe(
       "http://localhost:3000/api/companies",
     );
+    expect(generatedApiUrl("/health/live" as never)).toBe(
+      "http://localhost:3000/api/health/live",
+    );
   });
 
   it("rejects non-absolute paths", () => {

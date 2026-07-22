@@ -23,35 +23,32 @@ async def get_assignment_scoring_result(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> ScoringResultResponse:
-    # 1. Authorize: trainers see only their companies; respondents see only their own.
-    is_trainer = principal.role == UserRole.trainer
-    forms_repo = FormsRepository(session)
-    if is_trainer:
-        assignment = await forms_repo.get_assignment_by_id(assignment_id)
-        if assignment is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Scoring result not found or assignment not submitted yet",
-            )
-        membership = await CompanyRepository(session).get_membership(
-            assignment.company_id,
-            principal.user_id,
+    # Participant-safe scores are exposed only through the policy-filtered workspace.
+    if principal.role != UserRole.trainer:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Raw scoring results are available only to trainers.",
         )
-        if membership is None or membership.role not in {
-            CompanyMembershipRole.owner,
-            CompanyMembershipRole.trainer,
-        }:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to access this assignment's result",
-            )
-    else:
-        assignment = await forms_repo.get_assignment_for_user(assignment_id, principal.user_id)
-        if assignment is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to access this assignment's result",
-            )
+
+    forms_repo = FormsRepository(session)
+    assignment = await forms_repo.get_assignment_by_id(assignment_id)
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scoring result not found or assignment not submitted yet",
+        )
+    membership = await CompanyRepository(session).get_membership(
+        assignment.company_id,
+        principal.user_id,
+    )
+    if membership is None or membership.role not in {
+        CompanyMembershipRole.owner,
+        CompanyMembershipRole.trainer,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this assignment's result",
+        )
 
     # 2. Get scoring result
     scoring_service = ScoringService(session)
@@ -65,13 +62,23 @@ async def get_assignment_scoring_result(
                 response.questionnaire_key,
                 version=response.questionnaire_version,
             )
+            private_config = getattr(definition, "private_config", None)
             result = await scoring_service.compute_and_save_score(
                 assignment_id=assignment_id,
                 questionnaire_key=response.questionnaire_key,
                 questionnaire_version=response.questionnaire_version,
                 answers=response.answers,
-                definition_schema=definition.schema if definition is not None else None,
+                definition_schema=(
+                    private_config.get("schema", definition.schema)
+                    if definition is not None and private_config
+                    else definition.schema
+                    if definition is not None
+                    else None
+                ),
             )
+            from codrut.modules.scoring.publication import ResultPublicationService
+
+            await ResultPublicationService(session).reconcile_assignment(assignment_id)
             await session.commit()
         else:
             raise HTTPException(

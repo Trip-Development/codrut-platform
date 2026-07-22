@@ -15,6 +15,7 @@ from codrut.core.errors import DomainError
 @dataclass(frozen=True)
 class CampaignTrackingClaims:
     recipient_id: UUID
+    owner_id: UUID
     target_url: str
     event_type: str
     expires_at: datetime
@@ -24,6 +25,7 @@ class CampaignTrackingClaims:
 @dataclass(frozen=True)
 class CampaignRecipientActionClaims:
     recipient_id: UUID
+    owner_id: UUID
     action: str
 
 
@@ -31,6 +33,7 @@ def create_campaign_tracking_token(claims: CampaignTrackingClaims, settings: Set
     _validate_tracking_target(claims.target_url, event_type=claims.event_type)
     payload = {
         "recipient_id": str(claims.recipient_id),
+        "owner_id": str(claims.owner_id),
         "target_url": claims.target_url,
         "event_type": claims.event_type,
         "expires_at": int(claims.expires_at.timestamp()),
@@ -64,6 +67,7 @@ def parse_campaign_tracking_token(
         payload = json.loads(_urlsafe_decode(encoded_payload))
         claims = CampaignTrackingClaims(
             recipient_id=UUID(payload["recipient_id"]),
+            owner_id=UUID(payload["owner_id"]),
             target_url=str(payload["target_url"]),
             event_type=str(payload["event_type"]),
             expires_at=datetime.fromtimestamp(payload["expires_at"], UTC),
@@ -97,6 +101,7 @@ def create_campaign_recipient_action_token(
 ) -> str:
     payload = {
         "recipient_id": str(claims.recipient_id),
+        "owner_id": str(claims.owner_id),
         "action": claims.action,
         "nonce": secrets.token_urlsafe(12),
     }
@@ -128,6 +133,7 @@ def parse_campaign_recipient_action_token(
         payload = json.loads(_urlsafe_decode(encoded_payload))
         return CampaignRecipientActionClaims(
             recipient_id=UUID(payload["recipient_id"]),
+            owner_id=UUID(payload["owner_id"]),
             action=str(payload["action"]),
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:

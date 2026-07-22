@@ -1,9 +1,8 @@
-import { getCompanyReportAggregate } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import type { ScoringResultRecord } from "@/api/trainer";
 import { adaptReportTeamLenses } from "@/app/trainer/companies/[companyId]/reports/report-aggregation";
 import { EmptyState } from "@/components/presentation/empty-state";
-import { getProjectReportData } from "../../project-data";
+import { getProjectReportWorkspaceData } from "../../project-data";
 import { buildDriverIndividualResults, DriverDetailBreakdown } from "../report-detail-sections";
 
 export default async function ProjectDriversReportPage({
@@ -11,10 +10,11 @@ export default async function ProjectDriversReportPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
-  const { projectId } = await params;
-  const requestOptions = await getServerApiRequestOptions();
-  const { project, participants, assignments } = await getProjectReportData(projectId, requestOptions);
-  const aggregate = await getCompanyReportAggregate(project.company_id, requestOptions, { projectId: project.id });
+  const [{ projectId }, requestOptions] = await Promise.all([
+    params,
+    getServerApiRequestOptions(),
+  ]);
+  const { participants, assignments, aggregate } = await getProjectReportWorkspaceData(projectId, requestOptions);
   const resultMap = new Map(
     aggregate.results.map((result) => [result.assignment_id, result as ScoringResultRecord]),
   );

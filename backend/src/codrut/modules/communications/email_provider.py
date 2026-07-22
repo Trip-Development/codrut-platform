@@ -1,6 +1,8 @@
 import asyncio
 import smtplib
+from datetime import UTC, datetime
 from email.message import EmailMessage as SmtpMessage
+from email.utils import parsedate_to_datetime
 from typing import Protocol
 
 import httpx
@@ -117,6 +119,8 @@ class BrevoEmailProvider:
         }
         if message.reply_to is not None:
             payload["replyTo"] = {"email": message.reply_to.value}
+        if message.provider_idempotency_key is not None:
+            payload["headers"] = {"idempotencyKey": message.provider_idempotency_key}
 
         headers = {
             "accept": "application/json",
@@ -136,6 +140,8 @@ class BrevoEmailProvider:
                 message_id="brevo:failed:network",
                 recipient=message.to,
                 error_details=f"Brevo HTTP error: {exc}",
+                retryable=False,
+                delivery_uncertain=True,
             )
 
         if response.is_success:
@@ -148,12 +154,21 @@ class BrevoEmailProvider:
             )
 
         error_msg = f"Brevo API error: status {response.status_code}"
+        provider_code: str | None = None
         try:
             body = response.json()
             if "message" in body:
                 error_msg = f"{error_msg} - {body['message']}"
+            if isinstance(body.get("code"), str):
+                provider_code = body["code"]
         except Exception:  # noqa: S110
             pass
+
+        retryable = response.status_code in {408, 425, 429} or response.status_code >= 500
+        retry_after_seconds = (
+            _retry_after_seconds(response) if response.status_code == 429 else None
+        )
+        delivery_uncertain = provider_code == "duplicate_parameter"
 
         return EmailSendResult(
             provider=self.key,
@@ -161,7 +176,32 @@ class BrevoEmailProvider:
             message_id=f"brevo:failed:{response.status_code}",
             recipient=message.to,
             error_details=error_msg,
+            retryable=retryable and not delivery_uncertain,
+            retry_after_seconds=retry_after_seconds,
+            delivery_uncertain=delivery_uncertain,
         )
+
+
+def _retry_after_seconds(response: httpx.Response) -> int | None:
+    raw_value = response.headers.get("Retry-After")
+    if raw_value:
+        try:
+            return max(1, min(int(raw_value), 3600))
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(raw_value)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                return max(1, min(int((retry_at - datetime.now(UTC)).total_seconds()), 3600))
+            except (TypeError, ValueError, OverflowError):
+                pass
+    reset_value = response.headers.get("x-sib-ratelimit-reset")
+    if reset_value:
+        try:
+            return max(1, min(int(reset_value), 3600))
+        except ValueError:
+            return None
+    return None
 
 
 def build_email_provider(settings: Settings) -> EmailProvider:

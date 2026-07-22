@@ -146,6 +146,20 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Link securizat activ")).toBeTruthy();
   });
 
+  it("searches the project roster and access view without diacritics", () => {
+    renderWorkspace();
+
+    fireEvent.change(screen.getByLabelText("Caută participant"), {
+      target: { value: "consultant" },
+    });
+    expect(screen.getByText("Dan Membru")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Ana Manager" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Acces intern" }));
+    expect(screen.getByText("Dan Membru")).toBeTruthy();
+    expect(screen.queryByText("Ana Manager")).toBeNull();
+  });
+
   it("opens the roster import modal from the project header", () => {
     renderWorkspace();
 
@@ -218,6 +232,34 @@ describe("ProjectParticipantsWorkspace", () => {
     );
   });
 
+  it("shows operation feedback while a participant edit is saving", async () => {
+    const updateRequest = createDeferred<Awaited<ReturnType<typeof updateCompanyParticipant>>>();
+    vi.mocked(updateCompanyParticipant).mockReturnValue(updateRequest.promise);
+
+    renderWorkspace();
+
+    const row = screen.getByText("Dan Membru").closest("tr");
+    expect(row).toBeTruthy();
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Editează" }));
+    const saveButton = screen.getByRole("button", { name: "Salvează" });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    expect(await screen.findByText("Salvăm Dan Membru")).toBeTruthy();
+    expect(screen.getByText("Actualizăm datele participantului și refacem contextul proiectului.")).toBeTruthy();
+    expect(updateCompanyParticipant).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole("button", { name: "Importă participanți" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Adaugă manual" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("tab", { name: "Acces intern" }) as HTMLButtonElement).disabled).toBe(true);
+
+    updateRequest.resolve({
+      ...participants[1],
+      full_name: "Dan Membru",
+    });
+
+    await waitFor(() => expect(screen.queryByText("Salvăm Dan Membru")).toBeNull());
+  });
+
   it("adds pasted participants through the roster import endpoint", async () => {
     vi.mocked(importCompanyRoster).mockResolvedValue({
       participants: [
@@ -247,6 +289,7 @@ describe("ProjectParticipantsWorkspace", () => {
       />,
     );
 
+    expect(screen.getByPlaceholderText(/Ana Popescu/).getAttribute("data-slot")).toBe("textarea");
     fireEvent.change(screen.getByPlaceholderText(/Ana Popescu/), {
       target: { value: "Ioana Nouă, ioana@example.test, Designer, -" },
     });
@@ -268,6 +311,53 @@ describe("ProjectParticipantsWorkspace", () => {
         { projectId: "project-1" },
       ),
     );
+    expect(await screen.findByText("Ioana Nouă")).toBeTruthy();
+  });
+
+  it("shows operation feedback while manual participants are being imported", async () => {
+    const importRequest = createDeferred<Awaited<ReturnType<typeof importCompanyRoster>>>();
+    vi.mocked(importCompanyRoster).mockReturnValue(importRequest.promise);
+
+    render(
+      <ProjectParticipantsWorkspace
+        companyId="company-1"
+        projectId="project-1"
+        companyName="Michelin"
+        project={project}
+        participants={[]}
+        invitationStatuses={[]}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Ana Popescu/), {
+      target: { value: "Ioana Nouă, ioana@example.test, Designer, -" },
+    });
+    const saveParticipantsButton = screen.getByRole("button", { name: "Salvează participanții" });
+    fireEvent.click(saveParticipantsButton);
+    fireEvent.click(saveParticipantsButton);
+
+    expect((await screen.findAllByText("Salvăm participanții")).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Actualizăm rosterul proiectului.")).toBeTruthy();
+    expect(importCompanyRoster).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole("button", { name: "Importă participanți" }) as HTMLButtonElement).disabled).toBe(true);
+
+    importRequest.resolve({
+      participants: [
+        {
+          ...participants[1],
+          id: "member-2",
+          full_name: "Ioana Nouă",
+          email: "ioana@example.test",
+          position: "Designer",
+          reports_to_name: null,
+        },
+      ],
+      email_results: [],
+      total_imported: 1,
+      emails_sent: 0,
+      emails_failed: 0,
+    });
+
     expect(await screen.findByText("Ioana Nouă")).toBeTruthy();
   });
 
@@ -314,4 +404,15 @@ function renderWorkspace() {
       invitationStatuses={invitationStatuses}
     />,
   );
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
 }

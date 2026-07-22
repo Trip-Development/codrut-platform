@@ -2,54 +2,59 @@
 
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrandMark } from "@/components/brand/brand-mark";
-import { dashboardHrefForRole, getAuthenticatedSession, loginWithPassword } from "@/api/auth";
+import { Loader2Icon } from "lucide-react";
 
-const quotes = [
-  "„Liderii nu creează adepți, ei creează alți lideri.”",
-  "„Feedback-ul este micul dejun al campionilor.”",
-  "„Niciunul dintre noi nu este la fel de inteligent ca noi toți împreună.”",
-  "„Performanța unei echipe depinde de claritatea direcției sale.”",
-  "„Ascultarea activă este prima formă de respect în leadership.”",
-];
+import { dashboardHrefForRole, getAuthenticatedSession, loginWithPassword, type CurrentUser } from "@/api/auth";
+import {
+  AuthQuotePanel,
+  AuthTextLink,
+  REMEMBERED_SESSION_DELAY_MS,
+  RememberedSessionSplash,
+} from "@/components/auth/auth-shell";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [quoteIdx, setQuoteIdx] = useState(0);
-  const [fade, setFade] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [rememberedUser, setRememberedUser] = useState<CurrentUser | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    let redirectTimer: number | undefined;
     void getAuthenticatedSession().then((session) => {
       if (cancelled || !session) return;
-      router.replace(dashboardHrefForRole(session.user.role));
-      router.refresh();
+      setRememberedUser(session.user);
+      redirectTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        router.replace(dashboardHrefForRole(session.user.role));
+        router.refresh();
+      }, REMEMBERED_SESSION_DELAY_MS);
     });
     return () => {
       cancelled = true;
+      if (redirectTimer !== undefined) {
+        window.clearTimeout(redirectTimer);
+      }
     };
   }, [router]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFade(false);
-      setTimeout(() => {
-        setQuoteIdx((prev) => (prev + 1) % quotes.length);
-        setFade(true);
-      }, 150); // Wait for fade-out animation to complete
-    }, 2500); // Rotate every 2.5 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
     setError(null);
     setSubmitting(true);
 
@@ -59,86 +64,93 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
+  if (rememberedUser) {
+    return <RememberedSessionSplash user={rememberedUser} />;
+  }
+
   return (
-    <main className="app-min-height flex items-center justify-center bg-background bg-vines-pattern px-4 py-10">
-      <section className="surface-panel w-full max-w-md p-8 transition-all duration-150 md:p-10">
-        <div className="mb-8 flex flex-col items-center">
-          <BrandMark size="lg" showText={false} />
-          <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            Bine ai venit
-          </h1>
-          <div className="mt-3 w-full min-h-[3rem] flex items-center justify-center px-2">
-            <p className={`text-center text-sm italic font-medium leading-relaxed text-foreground/56 transition-all duration-150 ${fade ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
-              {quotes[quoteIdx]}
-            </p>
-          </div>
-        </div>
+    <main className="grid min-h-[100dvh] bg-background text-foreground lg:grid-cols-[0.95fr_1.05fr]">
+      <AuthQuotePanel variant="participant" />
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="login-email" className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Email
-            </label>
-            <input
-              id="login-email"
-              className="control-input w-full py-3.5 text-base"
-              placeholder="example@email.com"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
-                Parolă
-              </label>
-              <Link
-                href="/reset-password"
-                className="text-xs font-semibold text-burgundy hover:text-burgundy-dark transition-colors"
-              >
-                Ai uitat parola?
-              </Link>
-            </div>
-            <input
-              id="login-password"
-              className="control-input w-full py-3.5 text-base"
-              placeholder="Introdu parola"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="btn-primary mt-2 w-full px-4 py-4"
-          >
-            {submitting ? "Se verifică..." : "Intră în cont"}
-          </button>
-          {error ? (
-            <p className="status-panel-danger px-4 py-3">
-              {error}
-            </p>
-          ) : null}
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-[var(--border)] flex justify-center text-sm">
-          <span className="text-foreground/50">Ești trainer sau owner?</span>
-          <Link
-            href="/trainer/login"
-            className="ml-2 font-bold text-burgundy hover:text-burgundy-dark transition-colors"
-          >
-            Intră în portalul trainer
+      <section className="flex items-center justify-center px-4 py-10 md:px-8">
+        <div className="w-full max-w-md">
+          <Link href="/" className="mb-10 inline-flex rounded-lg px-2 py-1 transition-colors hover:bg-muted lg:hidden">
+            <BrandMark subtitle="Spațiu participant" />
           </Link>
+
+          <div>
+            <Badge variant="outline">Autentificare</Badge>
+            <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-normal">
+              Bine ai revenit.
+            </h1>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <FieldGroup>
+              <Field data-invalid={Boolean(error) || undefined}>
+                <FieldLabel htmlFor="login-email">Email</FieldLabel>
+                <Input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  disabled={submitting}
+                  required
+                  aria-invalid={Boolean(error) || undefined}
+                />
+              </Field>
+
+              <Field data-invalid={Boolean(error) || undefined}>
+                <div className="flex items-center justify-between gap-3">
+                  <FieldLabel htmlFor="login-password">Parolă</FieldLabel>
+                  <Link href="/reset-password" className="text-sm font-semibold text-primary hover:underline">
+                    Ai uitat parola?
+                  </Link>
+                </div>
+                <Input
+                  id="login-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  disabled={submitting}
+                  required
+                  aria-invalid={Boolean(error) || undefined}
+                />
+              </Field>
+            </FieldGroup>
+
+            {error ? (
+              <Alert variant="destructive">
+                <AlertTitle>Autentificarea nu a reușit</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {submitting ? (
+              <OperationFeedback
+                title="Verificăm accesul participant"
+                detail="Confirmăm sesiunea și pregătim spațiul tău de lucru."
+                meta="în verificare"
+              />
+            ) : null}
+
+            <Button type="submit" size="lg" disabled={submitting} className="w-full">
+              {submitting ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+              {submitting ? "Verificăm accesul" : "Intră în cont"}
+            </Button>
+          </form>
+
+          <div className="mt-8 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <span className="font-medium text-muted-foreground">Ești trainer sau owner?</span>
+            <AuthTextLink href="/trainer/login">Autentificare trainer</AuthTextLink>
+          </div>
         </div>
       </section>
     </main>

@@ -25,17 +25,18 @@ def test_openapi_operation_ids_preserve_existing_shape() -> None:
     assert schema["paths"]["/api/auth/login"]["post"]["operationId"] == (
         "login_api_auth_login_post"
     )
-    assert schema["paths"]["/api/companies/{company_id}/participants"]["get"][
-        "operationId"
-    ] == "list_company_participants_api_companies__company_id__participants_get"
+    assert (
+        schema["paths"]["/api/companies/{company_id}/participants"]["get"]["operationId"]
+        == "list_company_participants_api_companies__company_id__participants_get"
+    )
 
 
 def test_openapi_validation_errors_use_standard_error_envelope() -> None:
     schema = create_app().openapi()
 
-    validation_schema = schema["paths"]["/api/auth/login"]["post"]["responses"]["422"][
-        "content"
-    ]["application/json"]["schema"]
+    validation_schema = schema["paths"]["/api/auth/login"]["post"]["responses"]["422"]["content"][
+        "application/json"
+    ]["schema"]
 
     assert validation_schema == {"$ref": "#/components/schemas/ErrorResponse"}
 
@@ -49,3 +50,7 @@ def test_openapi_export_is_deterministic(tmp_path: Path) -> None:
 
     assert output.read_text() == first_export
     assert check_openapi_schema(output)
+
+
+def test_committed_openapi_snapshot_matches_application_contract() -> None:
+    assert check_openapi_schema()

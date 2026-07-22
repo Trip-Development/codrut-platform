@@ -2,6 +2,9 @@
 const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   async rewrites() {
     const backendUrl = process.env.INTERNAL_API_BASE_URL || "http://backend:8000/api";
     const destination = backendUrl.endsWith("/api") ? `${backendUrl}/:path*` : `${backendUrl}/api/:path*`;

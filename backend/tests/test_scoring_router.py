@@ -122,6 +122,16 @@ class FakeSession:
         self.committed = True
 
 
+class FakeResultPublicationService:
+    reconciled_assignment_ids: list[uuid.UUID] = []
+
+    def __init__(self, _session: object) -> None:
+        return None
+
+    async def reconcile_assignment(self, assignment_id: uuid.UUID) -> None:
+        self.reconciled_assignment_ids.append(assignment_id)
+
+
 @pytest.mark.asyncio
 async def test_lazy_scoring_uses_response_version_and_persisted_definition_schema(
     monkeypatch: pytest.MonkeyPatch,
@@ -136,6 +146,11 @@ async def test_lazy_scoring_uses_response_version_and_persisted_definition_schem
     monkeypatch.setattr("codrut.modules.scoring.router.FormsRepository", FakeFormsRepository)
     monkeypatch.setattr("codrut.modules.scoring.router.CompanyRepository", FakeCompanyRepository)
     monkeypatch.setattr("codrut.modules.scoring.router.ScoringService", FakeScoringService)
+    monkeypatch.setattr(
+        "codrut.modules.scoring.publication.ResultPublicationService",
+        FakeResultPublicationService,
+    )
+    FakeResultPublicationService.reconciled_assignment_ids = []
     assignment_id = uuid.uuid4()
     session = FakeSession()
 
@@ -160,6 +175,7 @@ async def test_lazy_scoring_uses_response_version_and_persisted_definition_schem
         "answers": {"custom_q01": 3},
         "definition_schema": FakeFormsRepository.definition.schema,
     }
+    assert FakeResultPublicationService.reconciled_assignment_ids == [assignment_id]
 
 
 @pytest.mark.asyncio
@@ -215,3 +231,21 @@ async def test_trainer_scoring_result_requires_company_membership(
 
     assert exc_info.value.status_code == 403
     FakeCompanyRepository.membership = FakeCompanyMembership(CompanyMembershipRole.owner)
+
+
+@pytest.mark.asyncio
+async def test_participant_cannot_read_raw_scoring_result() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        await get_assignment_scoring_result(
+            uuid.uuid4(),
+            SessionPrincipal(
+                user_id=uuid.uuid4(),
+                email="participant@example.com",
+                role=UserRole.participant,
+                session_token="test-token",  # noqa: S106
+            ),
+            FakeSession(),  # type: ignore[arg-type]
+        )
+
+    assert exc_info.value.status_code == 403
+    assert "trainers" in str(exc_info.value.detail).lower()

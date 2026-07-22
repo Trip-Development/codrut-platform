@@ -11,6 +11,7 @@ from codrut.modules.identity.password_policy import (
     PASSWORD_MIN_LENGTH,
     validate_new_password,
 )
+from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
 
 
 class RegisterRequest(StrictRequestModel):
@@ -18,7 +19,7 @@ class RegisterRequest(StrictRequestModel):
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
     token: str
     terms_accepted: bool = False
-    terms_version: str = Field(default="privacy-2026-06-12", max_length=80)
+    terms_version: str = Field(default=CURRENT_TERMS_VERSION, max_length=80)
 
     @field_validator("password")
     @classmethod
@@ -28,7 +29,7 @@ class RegisterRequest(StrictRequestModel):
 
 class ConsentRequest(StrictRequestModel):
     terms_accepted: bool = False
-    terms_version: str = Field(default="privacy-2026-06-12", max_length=80)
+    terms_version: str = Field(default=CURRENT_TERMS_VERSION, max_length=80)
 
 
 class InviteTask(BaseModel):
@@ -41,6 +42,9 @@ class InviteTask(BaseModel):
     targetLabel: str
     estimatedMinutes: int
     questionnaireKey: str
+    projectId: UUID | None = None
+    projectName: str | None = None
+    assignmentRoundId: UUID | None = None
 
 
 class InviteVerifyResponse(BaseModel):
@@ -56,6 +60,10 @@ class InviteVerifyResponse(BaseModel):
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None
     tasks: list[InviteTask]
+
+
+class InviteExchangeRequest(StrictRequestModel):
+    token: str = Field(min_length=1, max_length=2048)
 
 
 class LoginRequest(StrictRequestModel):
@@ -102,6 +110,9 @@ class SessionPrincipal(BaseModel):
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None
     session_token: str = Field(exclude=True)
+    assignment_invite_id: UUID | None = Field(default=None, exclude=True)
+    assignment_ids: tuple[UUID, ...] | None = Field(default=None, exclude=True)
+    project_id: UUID | None = Field(default=None, exclude=True)
 
 
 class AuthResponse(BaseModel):

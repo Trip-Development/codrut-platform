@@ -3,7 +3,7 @@ import { getEmailOpsSummary } from "@/api/email";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
-import { EmailWorkspace } from "./EmailWorkspace";
+import { LazyEmailWorkspace } from "./LazyEmailWorkspace";
 
 export default async function TrainerEmailPage() {
   const requestOptions = await getServerApiRequestOptions();
@@ -15,15 +15,16 @@ export default async function TrainerEmailPage() {
   return (
     <AppShell
       audience="trainer"
-      eyebrow="Email"
-      title="Șabloane email și campanii"
-      description="Biblioteca de texte pentru invitații, remindere și campanii. Trimiterea operațională se gestionează din spațiul fiecărei companii."
+      eyebrow=""
+      title="Comunicare"
+      description=""
       navItems={trainerNavItems}
       activeHref="/trainer/email"
       userLabel={trainer.user.name}
       session={trainer}
+      showHeader={false}
     >
-      <EmailWorkspace initialSummary={summary} />
+      <LazyEmailWorkspace initialSummary={summary} />
     </AppShell>
   );
 }

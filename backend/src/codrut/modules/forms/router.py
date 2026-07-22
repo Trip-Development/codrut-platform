@@ -4,7 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.api.dependencies import current_principal, db_session, require_current_terms
+from codrut.api.dependencies import (
+    current_principal,
+    db_session,
+    require_current_terms,
+    secure_link_principal,
+)
 from codrut.modules.forms.schemas import (
     ParticipantOnboardingResponse,
     QuestionnaireDefinitionCreateRequest,
@@ -29,6 +34,8 @@ async def get_participant_onboarding(
     if principal.role != UserRole.participant:
         return ParticipantOnboardingResponse(required=False)
     require_current_terms(principal)
+    if principal.assignment_ids is not None:
+        return ParticipantOnboardingResponse(required=False)
     response = await FormsService(session).get_participant_onboarding(principal.user_id)
     await session.commit()
     return response
@@ -40,10 +47,10 @@ async def list_questionnaire_definitions(
     session: Annotated[AsyncSession, Depends(db_session)],
     include_retired: bool = False,
 ) -> list[QuestionnaireDefinitionResponse]:
-    if include_retired:
-        _require_trainer(principal)
+    _require_trainer(principal)
     definitions = await FormsService(session).list_persisted_definitions(
         active_only=not include_retired,
+        include_private=principal.role == UserRole.trainer,
     )
     await session.commit()
     return definitions
@@ -52,13 +59,45 @@ async def list_questionnaire_definitions(
 @router.get("/definitions/{key}", response_model=QuestionnaireDefinitionResponse)
 async def get_questionnaire_definition(
     key: QuestionnaireSlug,
-    _principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     version: int | None = None,
 ) -> QuestionnaireDefinitionResponse:
-    definition = await FormsService(session).get_persisted_definition(key, version=version)
+    if principal.role == UserRole.participant:
+        require_current_terms(principal)
+        definition = await FormsService(session).get_participant_definition_by_key(
+            principal.user_id,
+            key,
+            version=version,
+            allowed_assignment_ids=principal.assignment_ids,
+        )
+    else:
+        _require_trainer(principal)
+        definition = await FormsService(session).get_persisted_definition(
+            key,
+            version=version,
+            include_private=True,
+        )
     await session.commit()
     return definition
+
+
+@router.get(
+    "/assignments/{assignment_id}/definition",
+    response_model=QuestionnaireDefinitionResponse,
+)
+async def get_assignment_definition(
+    assignment_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> QuestionnaireDefinitionResponse:
+    _require_participant(principal)
+    require_current_terms(principal)
+    return await FormsService(session).get_assignment_definition(
+        principal.user_id,
+        assignment_id,
+        allowed_assignment_ids=principal.assignment_ids,
+    )
 
 
 @router.post("/definitions", response_model=QuestionnaireDefinitionResponse)
@@ -127,7 +166,37 @@ async def get_assignment_response(
 ) -> QuestionnaireResponseResponse:
     _require_participant(principal)
     require_current_terms(principal)
-    return await FormsService(session).get_assignment_response(principal.user_id, assignment_id)
+    return await FormsService(session).get_assignment_response(
+        principal.user_id,
+        assignment_id,
+        allowed_assignment_ids=principal.assignment_ids,
+    )
+
+
+@router.get(
+    "/secure-links/{token}/assignments/{assignment_id}/response",
+    response_model=QuestionnaireResponseResponse,
+)
+async def get_secure_assignment_response(
+    token: str,
+    assignment_id: UUID,
+    _principal: Annotated[SessionPrincipal, Depends(secure_link_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> QuestionnaireResponseResponse:
+    return await FormsService(session).get_secure_assignment_response(token, assignment_id)
+
+
+@router.get(
+    "/secure-links/{token}/assignments/{assignment_id}/definition",
+    response_model=QuestionnaireDefinitionResponse,
+)
+async def get_secure_assignment_definition(
+    token: str,
+    assignment_id: UUID,
+    _principal: Annotated[SessionPrincipal, Depends(secure_link_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> QuestionnaireDefinitionResponse:
+    return await FormsService(session).get_secure_assignment_definition(token, assignment_id)
 
 
 @router.put(
@@ -144,6 +213,27 @@ async def save_assignment_response(
     require_current_terms(principal)
     response = await FormsService(session).save_assignment_response(
         principal.user_id,
+        assignment_id,
+        payload,
+        allowed_assignment_ids=principal.assignment_ids,
+    )
+    await session.commit()
+    return response
+
+
+@router.put(
+    "/secure-links/{token}/assignments/{assignment_id}/response",
+    response_model=QuestionnaireResponseResponse,
+)
+async def save_secure_assignment_response(
+    token: str,
+    assignment_id: UUID,
+    payload: QuestionnaireResponseSaveRequest,
+    _principal: Annotated[SessionPrincipal, Depends(secure_link_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> QuestionnaireResponseResponse:
+    response = await FormsService(session).save_secure_assignment_response(
+        token,
         assignment_id,
         payload,
     )
@@ -165,6 +255,28 @@ async def submit_assignment_response(
     require_current_terms(principal)
     response = await FormsService(session).save_assignment_response(
         principal.user_id,
+        assignment_id,
+        payload,
+        submit=True,
+        allowed_assignment_ids=principal.assignment_ids,
+    )
+    await session.commit()
+    return response
+
+
+@router.post(
+    "/secure-links/{token}/assignments/{assignment_id}/response/submit",
+    response_model=QuestionnaireResponseResponse,
+)
+async def submit_secure_assignment_response(
+    token: str,
+    assignment_id: UUID,
+    payload: QuestionnaireResponseSaveRequest,
+    _principal: Annotated[SessionPrincipal, Depends(secure_link_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> QuestionnaireResponseResponse:
+    response = await FormsService(session).save_secure_assignment_response(
+        token,
         assignment_id,
         payload,
         submit=True,

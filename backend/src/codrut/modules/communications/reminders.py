@@ -12,6 +12,7 @@ REMINDABLE_STATUSES = {AssignmentStatus.invited, AssignmentStatus.started}
 @dataclass(frozen=True)
 class ReminderPolicy:
     minimum_interval: timedelta = timedelta(days=2)
+    max_rounds: int = 2
 
 
 DEFAULT_REMINDER_POLICY = ReminderPolicy()
@@ -37,6 +38,8 @@ def _is_reminder_candidate(
     policy: ReminderPolicy,
 ) -> bool:
     if assignment.status not in REMINDABLE_STATUSES:
+        return False
+    if (assignment.reminder_count or 0) >= policy.max_rounds:
         return False
     if assignment.reminder_due_at is not None and assignment.reminder_due_at > now:
         return False

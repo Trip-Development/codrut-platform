@@ -1,6 +1,7 @@
 import asyncio
 import os
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 
@@ -24,19 +25,22 @@ from codrut.modules.companies.models import (
 )
 from codrut.modules.identity.models import AssignmentInvite, User, UserRole
 from codrut.modules.identity.service import IdentityService
+from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
+from codrut.tools.local_preview import assert_local_preview_allowed
 
 
 async def seed_e2e_state() -> None:
     settings = get_settings()
+    assert_local_preview_allowed(settings)
     company_name = "E2E Test Company"
 
     async with SessionLocal() as session:
         # 1. Clean up old E2E Test Company data and users if exists
         test_emails = [
-            "alice.popescu@e2etest.com",
-            "bob.ionescu@e2etest.com",
-            "charlie.vasilescu@e2etest.com",
-            "test@gmail.com",
+            "alice.popescu@example.com",
+            "bob.ionescu@example.com",
+            "charlie.vasilescu@example.com",
+            "participant@example.com",
         ]
         await session.execute(delete(User).where(User.email.in_(test_emails)))
         await session.commit()
@@ -122,7 +126,7 @@ async def seed_e2e_state() -> None:
         participants_data = [
             {
                 "name": "Participant Demo",
-                "email": "test@gmail.com",
+                "email": "participant@example.com",
                 "pcm": "Gânditor",
                 "pcm_base": "Gânditor",
                 "pcm_phase": "Perseverent",
@@ -131,7 +135,7 @@ async def seed_e2e_state() -> None:
             },
             {
                 "name": "Alice Popescu",
-                "email": "alice.popescu@e2etest.com",
+                "email": "alice.popescu@example.com",
                 "pcm": "Thinker",
                 "pcm_base": "Gânditor",
                 "pcm_phase": "Gânditor",
@@ -140,7 +144,7 @@ async def seed_e2e_state() -> None:
             },
             {
                 "name": "Bob Ionescu",
-                "email": "bob.ionescu@e2etest.com",
+                "email": "bob.ionescu@example.com",
                 "pcm": "Persister",
                 "pcm_base": "Perseverent",
                 "pcm_phase": "Promotor",
@@ -149,7 +153,7 @@ async def seed_e2e_state() -> None:
             },
             {
                 "name": "Charlie Vasilescu",
-                "email": "charlie.vasilescu@e2etest.com",
+                "email": "charlie.vasilescu@example.com",
                 "pcm": "Harmonizer",
                 "pcm_base": "Empatic",
                 "pcm_phase": "Imaginator",
@@ -157,9 +161,9 @@ async def seed_e2e_state() -> None:
                 "with_account": False,
             },
         ]
-        
+
         identity_service = IdentityService(session)
-        
+
         print("--- SEEDED E2E PARTICIPANTS ---")
         print(f"Project ID: {project.id}")
         for p_data in participants_data:
@@ -174,6 +178,8 @@ async def seed_e2e_state() -> None:
                     email=p_data["email"],
                     password_hash=hash_password(demo_password),
                     role=UserRole.participant,
+                    terms_accepted_at=datetime.now(UTC),
+                    terms_version=CURRENT_TERMS_VERSION,
                 )
                 session.add(demo_user)
                 await session.flush()
@@ -209,7 +215,7 @@ async def seed_e2e_state() -> None:
                 )
             )
             await session.flush()
-            
+
             # Create Distress Drivers Assignment
             distress_assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
@@ -241,21 +247,23 @@ async def seed_e2e_state() -> None:
                 company_id=company.id,
                 respondent_profile_id=profile.id,
                 assignment_ids=[distress_assignment.id, lencioni_assignment.id],
-                force_rotate=True
+                force_rotate=True,
             )
-            
+
             # Update assignment status to invited
             distress_assignment.status = AssignmentStatus.invited
             lencioni_assignment.status = AssignmentStatus.invited
-            
+
             invite_url = build_task_url(invite.token, settings)
             print(f"{p_data['name']} ({p_data['email']}): {invite_url}")
 
         await session.commit()
         print("-------------------------------")
 
+
 def main() -> None:
     asyncio.run(seed_e2e_state())
+
 
 if __name__ == "__main__":
     main()

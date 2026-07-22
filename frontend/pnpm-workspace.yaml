@@ -1,0 +1,7 @@
+packages:
+  - "."
+
+overrides:
+  esbuild: 0.28.1
+  js-yaml: 4.2.0
+  postcss: 8.5.16

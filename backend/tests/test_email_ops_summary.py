@@ -59,6 +59,7 @@ class FakeScalarOneResult:
 
 @pytest.mark.asyncio
 async def test_get_email_ops_summary_success() -> None:
+    owner_id = uuid.uuid4()
     company_id = uuid.uuid4()
     respondent_1_id = uuid.uuid4()
     respondent_2_id = uuid.uuid4()
@@ -79,10 +80,12 @@ async def test_get_email_ops_summary_success() -> None:
         email="mihai@example.com",
     )
 
-    profiles_result = FakeTupleResult([
-        (profile_1, "Compania A"),
-        (profile_2, "Compania A"),
-    ])
+    profiles_result = FakeTupleResult(
+        [
+            (profile_1, "Compania A"),
+            (profile_2, "Compania A"),
+        ]
+    )
 
     # 2. Assignments
     assignment_1 = QuestionnaireAssignment(
@@ -120,7 +123,12 @@ async def test_get_email_ops_summary_success() -> None:
     ]
 
     service = CommunicationsService(session)
-    summary = await service.get_email_ops_summary()
+    summary = await service.get_email_ops_summary(owner_id=owner_id)
+
+    latest_send_statement = session.execute.await_args_list[2].args[0]
+    latest_send_sql = str(latest_send_statement)
+    assert "email_sends.owner_id =" in latest_send_sql
+    assert "PARTITION BY email_sends.owner_id" in latest_send_sql
 
     # Assert metrics
     # Invitatii trimise: 1 (send_1 exists)
@@ -155,14 +163,16 @@ async def test_get_email_ops_summary_success() -> None:
 
 @pytest.mark.asyncio
 async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metrics() -> None:
+    owner_id = uuid.uuid4()
     recipient_id = uuid.uuid4()
     recipient = CampaignRecipient(
         id=recipient_id,
+        owner_id=owner_id,
         email="ceo@example.com",
         contact_name="Ana Director",
         organization_name="Compania B",
         segment=CampaignRecipientSegment.potential_customer,
-        source="variant_a",
+        source="excel_import",
         status=CampaignRecipientStatus.active,
     )
     session = MagicMock()
@@ -172,17 +182,19 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
         FakeScalarsResult([]),
         FakeTupleResult([]),
         FakeScalarsResult([recipient]),
-        FakeTupleResult([
-            (recipient_id, "opened", 1),
-            (recipient_id, "clicked", 1),
-            (recipient_id, "video_viewed", 1),
-            (recipient_id, "calendly_clicked", 1),
-            (recipient_id, "replied", 1),
-        ]),
+        FakeTupleResult(
+            [
+                (recipient_id, "opened", 1),
+                (recipient_id, "clicked", 1),
+                (recipient_id, "video_viewed", 1),
+                (recipient_id, "calendly_clicked", 1),
+                (recipient_id, "replied", 1),
+            ]
+        ),
         FakeTupleResult([(recipient_id, "variant_a")]),
     ]
 
-    summary = await CommunicationsService(session).get_email_ops_summary()
+    summary = await CommunicationsService(session).get_email_ops_summary(owner_id=owner_id)
 
     [row] = summary["campaign"]["recipients"]
     assert row["company"] == "Compania B"
@@ -195,6 +207,7 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
     assert row["viewCount"] == 1
     assert row["replyCount"] == 1
     assert row["calendlyClickCount"] == 1
+    assert row["source"] == "excel_import"
     assert row["emailVariant"] == "variant_a"
     assert "reply-uri" in summary["campaign"]["weeklyReport"]["metrics"]
     assert "clickuri Calendly" in summary["campaign"]["weeklyReport"]["metrics"]
@@ -202,8 +215,10 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
 
 @pytest.mark.asyncio
 async def test_get_email_ops_summary_keeps_unsubscribed_campaign_status() -> None:
+    owner_id = uuid.uuid4()
     recipient = CampaignRecipient(
         id=uuid.uuid4(),
+        owner_id=owner_id,
         email="stop@example.com",
         contact_name="Stop Contact",
         organization_name="Compania C",
@@ -222,7 +237,7 @@ async def test_get_email_ops_summary_keeps_unsubscribed_campaign_status() -> Non
         FakeTupleResult([]),
     ]
 
-    summary = await CommunicationsService(session).get_email_ops_summary()
+    summary = await CommunicationsService(session).get_email_ops_summary(owner_id=owner_id)
 
     [row] = summary["campaign"]["recipients"]
     assert row["status"] == "unsubscribed"
@@ -230,10 +245,12 @@ async def test_get_email_ops_summary_keeps_unsubscribed_campaign_status() -> Non
 
 @pytest.mark.asyncio
 async def test_record_campaign_recipient_event_persists_allowed_event() -> None:
+    owner_id = uuid.uuid4()
     recipient_id = uuid.uuid4()
     occurred_at = datetime.now(UTC)
     recipient = CampaignRecipient(
         id=recipient_id,
+        owner_id=owner_id,
         email="ceo@example.com",
         contact_name="Ana Director",
         organization_name="Compania B",
@@ -251,6 +268,7 @@ async def test_record_campaign_recipient_event_persists_allowed_event() -> None:
             variant_key="variant_b",
             occurred_at=occurred_at,
         ),
+        owner_id=owner_id,
     )
 
     session.add.assert_called_once()
@@ -266,8 +284,10 @@ async def test_record_campaign_recipient_event_persists_allowed_event() -> None:
 @pytest.mark.asyncio
 async def test_record_calendly_tracking_click_persists_event_and_returns_target() -> None:
     recipient_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
     recipient = CampaignRecipient(
         id=recipient_id,
+        owner_id=owner_id,
         email="ceo@example.com",
         contact_name="Ana Director",
         organization_name="Compania B",
@@ -279,6 +299,7 @@ async def test_record_calendly_tracking_click_persists_event_and_returns_target(
     token = create_campaign_tracking_token(
         CampaignTrackingClaims(
             recipient_id=recipient_id,
+            owner_id=owner_id,
             target_url=target_url,
             event_type="calendly_clicked",
             variant_key="variant_b",
@@ -311,6 +332,7 @@ async def test_record_calendly_tracking_click_rejects_non_calendly_target() -> N
         create_campaign_tracking_token(
             CampaignTrackingClaims(
                 recipient_id=recipient_id,
+                owner_id=uuid.uuid4(),
                 target_url="https://example.com/book",
                 event_type="calendly_clicked",
                 variant_key="variant_b",

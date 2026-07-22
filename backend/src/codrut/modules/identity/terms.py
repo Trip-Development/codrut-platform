@@ -1,0 +1,1 @@
+CURRENT_TERMS_VERSION = "privacy-2026-07-16"

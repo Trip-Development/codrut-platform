@@ -61,7 +61,7 @@ async def smoke_mailpit() -> None:
 
     recipient = _recipient()
     marker = uuid.uuid4().hex[:12]
-    subject = f"Codrut Mailpit smoke {marker}"
+    subject = f"Cody Mailpit smoke {marker}"
     text_body = f"Mailpit smoke marker: {marker}"
     html_body = f"<p>Mailpit smoke marker: <strong>{marker}</strong></p>"
 

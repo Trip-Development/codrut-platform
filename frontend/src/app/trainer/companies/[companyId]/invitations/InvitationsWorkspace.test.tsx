@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -17,7 +17,11 @@ import {
   sendParticipantInvitations,
 } from "@/api/companies";
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
-import { buildInvitationRows, InvitationsWorkspace } from "./InvitationsWorkspace";
+import { AssignmentWorkspace } from "./AssignmentWorkspace";
+import {
+  buildInvitationRows,
+  InvitationDeliveryWorkspace,
+} from "./InvitationDeliveryWorkspace";
 
 vi.mock("@/api/companies", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/companies")>();
@@ -200,7 +204,55 @@ describe("buildInvitationRows", () => {
     });
   });
 
-  it("creates a company assignment and updates the delivery table", async () => {
+  it("keeps assignment names collapsed until the task count is opened", () => {
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    expect(screen.queryByText("Lencioni - evaluare echipă · autoevaluare")).toBeNull();
+    const taskCounts = screen.getAllByRole("button", { name: "0/1 finalizate" });
+    fireEvent.click(taskCounts[0]);
+
+    expect(screen.getByText("Lencioni - evaluare echipă · autoevaluare")).toBeTruthy();
+    expect(taskCounts[0].getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("keeps failed persisted deliveries in the error state without provider detail", () => {
+    const rows = buildInvitationRows(
+      participants,
+      assignments,
+      [
+        {
+          participant_id: "ana",
+          latest_delivery_mode: "email",
+          latest_email_status: "bounced",
+          latest_email_error: null,
+          last_sent_at: "2026-06-25T12:00:00Z",
+          email_send_count: 1,
+          has_active_secure_link: false,
+          active_secure_link_expires_at: null,
+          active_secure_link_url: null,
+        },
+      ],
+      new Map(),
+    );
+
+    expect(rows[1]).toMatchObject({
+      deliveryLabel: "Eroare trimitere",
+      deliveryTone: "danger",
+    });
+  });
+
+  it("creates an individual assignment with the existing backend payload", async () => {
     vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([
       {
         id: "boss_360",
@@ -226,23 +278,27 @@ describe("buildInvitationRows", () => {
     });
 
     render(
-      <InvitationsWorkspace
+      <AssignmentWorkspace
         companyId="company-1"
         companyName="Michelin"
         projects={projects}
         selectedProjectId="project-1"
         participants={participants}
         assignments={[]}
-        invitationStatuses={[]}
         teams={teams}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Avansat" }));
+    expect(screen.queryByRole("heading", { name: "Livrare invitații" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Asignare individuală" }));
     await screen.findByRole("option", { name: "Boss 360" });
 
-    fireEvent.change(screen.getByLabelText("Persoană"), { target: { value: "ana" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Persoană/ }));
+    expect(screen.getByLabelText("Respondent").getAttribute("data-slot")).toBe("select");
+
+    fireEvent.change(screen.getByLabelText("Respondent"), { target: { value: "ana" } });
+    fireEvent.click(screen.getByRole("button", { name: "Persoană" }));
+    expect(screen.getByLabelText("Persoana evaluată").getAttribute("data-slot")).toBe("select");
     fireEvent.change(screen.getByLabelText("Persoana evaluată"), { target: { value: "andrei" } });
     fireEvent.click(screen.getByRole("button", { name: "Creează asignarea" }));
 
@@ -258,29 +314,49 @@ describe("buildInvitationRows", () => {
     });
 
     expect(await screen.findByText(/Asignare creată pentru Ana Pop/)).toBeTruthy();
-    expect(screen.getByText("iCARE 360 pentru manager · despre Andrei Manager")).toBeTruthy();
+    expect(screen.getByText("iCARE 360 pentru manager")).toBeTruthy();
+    expect(screen.getByText("Andrei Manager")).toBeTruthy();
   });
 
-  it("keeps advanced assignment controls visibly locked until roster participants exist", async () => {
+  it("keeps individual assignment creation unavailable without participants", async () => {
     vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
 
     render(
-      <InvitationsWorkspace
+      <AssignmentWorkspace
         companyId="company-1"
         companyName="Michelin"
         projects={projects}
         selectedProjectId="project-1"
         participants={[]}
         assignments={[]}
-        invitationStatuses={[]}
         teams={[]}
       />,
     );
 
-    const advancedButton = screen.getByRole("button", { name: "Adaugă participanți pentru Avansat" });
+    const advancedButton = screen.getByRole("button", { name: "Asignare individuală" });
     expect(advancedButton.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/După ce adaugi participanți în roster/)).toBeTruthy();
-    expect(screen.getByText("Configurează asignările înainte de trimitere")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Plan de asignări" })).toBeTruthy();
+    expect(screen.queryByText("Configurează asignările înainte de trimitere")).toBeNull();
+  });
+
+  it("offers plan regeneration after assignments already exist", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        teams={teams}
+      />,
+    );
+
+    expect(screen.getByText("2 salvate")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Generează plan" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Regenerează planul" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("generates a default assignment plan and saves only selected rows", async () => {
@@ -361,29 +437,28 @@ describe("buildInvitationRows", () => {
     });
 
     render(
-      <InvitationsWorkspace
+      <AssignmentWorkspace
         companyId="company-1"
         companyName="Michelin"
         projects={projects}
         selectedProjectId="project-1"
         participants={participants}
         assignments={[]}
-        invitationStatuses={[]}
         teams={teams}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Avansat" }));
-    fireEvent.click(screen.getByRole("button", { name: "Generează plan de asignări" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generează plan" }));
 
     expect(await screen.findAllByText("Leadership")).not.toHaveLength(0);
     expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, { projectId: "project-1" });
-    expect(screen.getAllByText("Andrei Manager").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Ana Pop").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Lencioni - evaluare echipă").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Andrei Manager")).toBeTruthy();
+    expect(screen.getByText("Ana Pop")).toBeTruthy();
+    expect(screen.getAllByText("Lencioni - evaluare echipă")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Generează plan" })).toBeNull();
 
     fireEvent.click(screen.getByLabelText("Selectează asignarea pentru Ana Pop"));
-    fireEvent.click(screen.getByRole("button", { name: "Salvează asignările bifate (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează 1 asignare" }));
 
     await waitFor(() => {
       expect(saveCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", [
@@ -394,8 +469,13 @@ describe("buildInvitationRows", () => {
         }),
       ], "project-1");
     });
-    expect(await screen.findByText("1 asignări create, 0 deja existente.")).toBeTruthy();
-    expect(screen.getByText("Lencioni - evaluare echipă · echipa selectată")).toBeTruthy();
+    expect(await screen.findByText("1 create, 0 deja existente.")).toBeTruthy();
+    expect(screen.getAllByText("Salvată").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("button", { name: "Regenerează planul" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByRole("button", { name: "Salvează 0 asignări" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerează planul" }));
+    await waitFor(() => expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledTimes(2));
   });
 
   it("generates secure links, updates participant rows, and copies the active link", async () => {
@@ -424,7 +504,7 @@ describe("buildInvitationRows", () => {
     });
 
     render(
-      <InvitationsWorkspace
+      <InvitationDeliveryWorkspace
         companyId="company-1"
         companyName="Michelin"
         projects={projects}
@@ -458,6 +538,127 @@ describe("buildInvitationRows", () => {
     expect(await screen.findByText("Link securizat copiat pentru Ana Pop.")).toBeTruthy();
   });
 
+  it("shows operation feedback while selected email invitations are pending", async () => {
+    let resolveSend!: (value: Awaited<ReturnType<typeof sendParticipantInvitations>>) => void;
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(sendParticipantInvitations).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Selectează Ana Pop"));
+    expect(screen.getByRole("region", { name: "Acțiuni pentru persoanele selectate" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Plan de asignări" })).toBeNull();
+    const selectedSendButton = screen.getByRole("button", { name: "Trimite email invitații" });
+    fireEvent.click(selectedSendButton);
+    fireEvent.click(selectedSendButton);
+
+    expect(await screen.findByRole("button", { name: "Trimitem emailurile" })).toBeTruthy();
+    expect(sendParticipantInvitations).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Trimite tuturor" })).toBeTruthy();
+    expect((await screen.findByRole("status")).textContent).toContain("Trimitem emailurile selectate");
+    expect(screen.getByText("1 persoane.")).toBeTruthy();
+
+    await act(async () => {
+      resolveSend({
+        total: 1,
+        emails_sent: 1,
+        emails_failed: 0,
+        links_generated: 0,
+        results: [
+          {
+            participant_id: "ana",
+            email: "ana@example.com",
+            full_name: "Ana Pop",
+            delivery_mode: "email",
+            email_sent: true,
+            error: null,
+            invite_url: null,
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText("1/1 emailuri trimise.")).toBeTruthy();
+  });
+
+  it("marks only the all-email invitation action as pending", async () => {
+    let resolveSend!: (value: Awaited<ReturnType<typeof sendParticipantInvitations>>) => void;
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(sendParticipantInvitations).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    const allSendButton = screen.getByRole("button", { name: "Trimite tuturor" });
+    fireEvent.click(allSendButton);
+    fireEvent.click(allSendButton);
+
+    expect(await screen.findByRole("button", { name: "Trimitem tuturor" })).toBeTruthy();
+    expect(sendParticipantInvitations).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Trimite email netrimișilor" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Trimitem emailurile tuturor");
+
+    await act(async () => {
+      resolveSend({
+        total: 2,
+        emails_sent: 2,
+        emails_failed: 0,
+        links_generated: 0,
+        results: [
+          {
+            participant_id: "andrei",
+            email: "andrei@example.com",
+            full_name: "Andrei Manager",
+            delivery_mode: "email",
+            email_sent: true,
+            error: null,
+            invite_url: null,
+          },
+          {
+            participant_id: "ana",
+            email: "ana@example.com",
+            full_name: "Ana Pop",
+            delivery_mode: "email",
+            email_sent: true,
+            error: null,
+            invite_url: null,
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText("2/2 emailuri trimise.")).toBeTruthy();
+  });
+
   it("sends email invites to all participants with saved assignments from the invited people tab", async () => {
     vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
     vi.mocked(sendParticipantInvitations).mockResolvedValue({
@@ -488,7 +689,7 @@ describe("buildInvitationRows", () => {
     });
 
     render(
-      <InvitationsWorkspace
+      <InvitationDeliveryWorkspace
         companyId="company-1"
         companyName="Michelin"
         projects={projects}
@@ -500,7 +701,7 @@ describe("buildInvitationRows", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Trimite email tuturor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite tuturor" }));
 
     await waitFor(() => {
       expect(sendParticipantInvitations).toHaveBeenCalledWith("company-1", {
@@ -526,7 +727,7 @@ describe("buildInvitationRows", () => {
     });
 
     render(
-      <InvitationsWorkspace
+      <InvitationDeliveryWorkspace
         companyId="company-1"
         companyName="Michelin"
         projects={projects}
@@ -538,11 +739,14 @@ describe("buildInvitationRows", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Retrimite" }));
+    const resendButton = screen.getByRole("button", { name: "Retrimite" });
+    fireEvent.click(resendButton);
+    fireEvent.click(resendButton);
 
     await waitFor(() => {
       expect(resendParticipantInvitation).toHaveBeenCalledWith("company-1", "ana", "project-1");
     });
+    expect(resendParticipantInvitation).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Emailul nu a fost retrimis către ana@example.com: provider unavailable")).toBeTruthy();
     expect(screen.getByText("Eroare trimitere")).toBeTruthy();
   });

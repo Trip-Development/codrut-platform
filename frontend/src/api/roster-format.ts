@@ -18,7 +18,8 @@ const TOP_LEVEL_MANAGER_VALUES = new Set([
   "superior",
   "superior direct",
   "-",
-  "—",
+  "\u2013",
+  "\u2014",
 ]);
 
 export function normalizeReportsToName(value: string | null | undefined): string {
@@ -33,7 +34,7 @@ export function normalizeReportsToName(value: string | null | undefined): string
 }
 
 export function displayReportsToName(value: string | null | undefined): string {
-  return normalizeReportsToName(value) || "—";
+  return normalizeReportsToName(value) || "-";
 }
 
 export function isExternalMatrixManagerLabel(value: string | null | undefined): boolean {

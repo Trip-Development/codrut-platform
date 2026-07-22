@@ -16,9 +16,11 @@
 **/coverage/
 
 backend/.venv/
+backend/coverage.json
 
 frontend/node_modules/
 frontend/.next/
+frontend/.next-build/
 frontend/coverage/
 frontend/tsconfig.tsbuildinfo
 

@@ -2,10 +2,16 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, MetaData, func
-from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncAttrs,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from codrut.core.config import get_settings
+from codrut.core.config import Settings, get_settings
 
 metadata = MetaData(
     naming_convention={
@@ -43,7 +49,17 @@ class TimestampMixin:
 
 
 settings = get_settings()
-engine = create_async_engine(str(settings.database_url), pool_pre_ping=True)
+
+
+def build_database_engine(active_settings: Settings) -> AsyncEngine:
+    return create_async_engine(
+        str(active_settings.database_url),
+        pool_pre_ping=True,
+        hide_parameters=active_settings.is_production,
+    )
+
+
+engine = build_database_engine(settings)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

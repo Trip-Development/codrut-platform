@@ -21,8 +21,10 @@ class FormsRepository:
         self,
         assignment_id: UUID,
         user_id: UUID,
+        *,
+        allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> QuestionnaireAssignment | None:
-        result = await self.session.execute(
+        statement = (
             select(QuestionnaireAssignment)
             .join(
                 ParticipantProfile,
@@ -31,6 +33,41 @@ class FormsRepository:
             .where(QuestionnaireAssignment.id == assignment_id)
             .where(ParticipantProfile.user_id == user_id)
         )
+        if allowed_assignment_ids is not None:
+            if assignment_id not in allowed_assignment_ids:
+                return None
+            statement = statement.where(QuestionnaireAssignment.id.in_(allowed_assignment_ids))
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def get_assignment_for_user_by_key(
+        self,
+        user_id: UUID,
+        questionnaire_key: str,
+        *,
+        version: int | None = None,
+        allowed_assignment_ids: tuple[UUID, ...] | None = None,
+    ) -> QuestionnaireAssignment | None:
+        statement = (
+            select(QuestionnaireAssignment)
+            .join(
+                ParticipantProfile,
+                ParticipantProfile.id == QuestionnaireAssignment.respondent_profile_id,
+            )
+            .where(ParticipantProfile.user_id == user_id)
+            .where(QuestionnaireAssignment.questionnaire_key == questionnaire_key)
+            .order_by(QuestionnaireAssignment.created_at.desc())
+        )
+        if allowed_assignment_ids is not None:
+            if not allowed_assignment_ids:
+                return None
+            statement = statement.where(QuestionnaireAssignment.id.in_(allowed_assignment_ids))
+        if version is not None:
+            statement = statement.join(
+                QuestionnaireDefinition,
+                QuestionnaireDefinition.id == QuestionnaireAssignment.questionnaire_definition_id,
+            ).where(QuestionnaireDefinition.version == version)
+        result = await self.session.execute(statement.limit(1))
         return result.scalar_one_or_none()
 
     async def get_assignment_by_id(
@@ -152,6 +189,15 @@ class FormsRepository:
         result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
+    async def get_definition_by_id(
+        self,
+        definition_id: UUID,
+    ) -> QuestionnaireDefinition | None:
+        result = await self.session.execute(
+            select(QuestionnaireDefinition).where(QuestionnaireDefinition.id == definition_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_latest_version(self, key: str) -> int:
         result = await self.session.execute(
             select(func.max(QuestionnaireDefinition.version)).where(
@@ -178,6 +224,14 @@ class FormsRepository:
             .where(QuestionnaireResponse.questionnaire_key == key)
             .where(QuestionnaireResponse.questionnaire_version == version)
             .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def has_assignments_for_definition(self, definition_id: UUID) -> bool:
+        result = await self.session.execute(
+            select(QuestionnaireAssignment.id)
+            .where(QuestionnaireAssignment.questionnaire_definition_id == definition_id)
             .limit(1)
         )
         return result.scalar_one_or_none() is not None

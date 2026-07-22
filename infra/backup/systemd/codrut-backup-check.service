@@ -1,0 +1,17 @@
+[Unit]
+Description=Codrut Restic repository integrity check
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/codrut-platform
+EnvironmentFile=/etc/codrut/backup.env
+ExecStart=/usr/bin/flock --nonblock /run/lock/codrut-backup.lock /usr/bin/docker compose -f compose.yaml -f compose.prod.yaml -f compose.backup.yaml run --rm -v /etc/codrut/backup-secrets:/run/secrets:ro backup check
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/lock
+TimeoutStartSec=2h

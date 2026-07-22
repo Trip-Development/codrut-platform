@@ -22,9 +22,9 @@ CampaignSegmentValue = Literal["past_customer", "potential_customer"]
 
 class EmailTestSendRequest(StrictRequestModel):
     to: EmailStr
-    subject: str = Field(default="Test Codruț email", min_length=1, max_length=180)
-    html_body: str = Field(default="<p>Test email din Codruț.</p>", min_length=1)
-    text_body: str = Field(default="Test email din Codruț.", min_length=1)
+    subject: str = Field(default="Test Cody email", min_length=1, max_length=180)
+    html_body: str = Field(default="<p>Test email din Cody.</p>", min_length=1)
+    text_body: str = Field(default="Test email din Cody.", min_length=1)
 
 
 class EmailTestSendResponse(BaseModel):
@@ -32,6 +32,21 @@ class EmailTestSendResponse(BaseModel):
     status: EmailDeliveryStatus
     message_id: str
     recipient: EmailStr
+
+
+class BrevoWebhookEvent(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    event: str = Field(min_length=1, max_length=64)
+    email: EmailStr
+    message_id: str = Field(alias="message-id", min_length=1, max_length=255)
+    ts_event: int | None = Field(default=None, ge=0)
+    ts: int | None = Field(default=None, ge=0)
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class BrevoWebhookResponse(BaseModel):
+    status: Literal["applied", "duplicate", "ignored"]
 
 
 class EmailTemplateResponse(BaseModel):
@@ -104,6 +119,7 @@ class CampaignRecipientRowResponse(BaseModel):
     viewCount: int = 0
     replyCount: int = 0
     calendlyClickCount: int = 0
+    source: str | None = None
     emailVariant: str | None = None
     outcome: str | None = None
 
@@ -218,9 +234,7 @@ ORGANIZATION_KEYS = [
 
 def _normalize_import_key(value: str) -> str:
     without_marks = "".join(
-        char
-        for char in unicodedata.normalize("NFKD", value)
-        if not unicodedata.combining(char)
+        char for char in unicodedata.normalize("NFKD", value) if not unicodedata.combining(char)
     )
     return " ".join(without_marks.strip().lower().split())
 
@@ -240,10 +254,7 @@ def _read_import_value(row: dict[str, object], keys: list[str]) -> str:
 
 
 def _is_spreadsheet_import_row(row: dict[str, object]) -> bool:
-    return any(
-        _normalize_import_key(str(key)) in CAMPAIGN_RECIPIENT_IMPORT_HEADERS
-        for key in row
-    )
+    return any(_normalize_import_key(str(key)) in CAMPAIGN_RECIPIENT_IMPORT_HEADERS for key in row)
 
 
 def _is_marked_for_campaign_send(row: dict[str, object]) -> bool:
@@ -383,11 +394,17 @@ class CampaignSendRecipientResult(BaseModel):
 class CampaignSendResponse(BaseModel):
     campaign_id: UUID
     total: int
+    queued: int = 0
     sent: int
     failed: int
     skipped: int
     dry_run: bool
     results: list[CampaignSendRecipientResult]
+
+
+class CampaignCancelResponse(BaseModel):
+    campaign_id: UUID
+    cancelled: int
 
 
 class CampaignAssetUploadResponse(BaseModel):
@@ -419,21 +436,6 @@ class CampaignCreateRequest(StrictRequestModel):
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("Campaign asset URLs must be absolute HTTP(S) URLs.")
         return stripped
-
-    @model_validator(mode="after")
-    def require_video_asset_pair(self) -> "CampaignCreateRequest":
-        if self.video_url or self.thumbnail_url:
-            missing = [
-                label
-                for label, value in (
-                    ("video_url", self.video_url),
-                    ("thumbnail_url", self.thumbnail_url),
-                )
-                if value is None
-            ]
-            if missing:
-                raise ValueError("Video campaigns require video_url and thumbnail_url.")
-        return self
 
 
 class CampaignUpdateRequest(StrictRequestModel):

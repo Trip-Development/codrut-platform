@@ -1,4 +1,8 @@
 import { apiFetch } from "./http";
+import {
+  SYNTHETIC_QUESTIONNAIRE_DEFINITIONS,
+  SYNTHETIC_QUESTIONNAIRE_STUBS,
+} from "./questionnaire-synthetic-fallback";
 import { getApiBaseUrl, isDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
 
 export type QuestionnaireDefinitionStub = {
@@ -65,6 +69,22 @@ export type QuestionnaireDefinition = {
   };
 };
 
+export type ParticipantQuestionnaireStatement = Omit<QuestionnaireStatement, "scoring">;
+export type ParticipantQuestionnaireQuestion = Omit<QuestionnaireQuestion, "statements"> & {
+  statements?: ParticipantQuestionnaireStatement[];
+};
+export type ParticipantQuestionnaireSection = Omit<QuestionnaireSection, "questions"> & {
+  questions: ParticipantQuestionnaireQuestion[];
+};
+export type ParticipantQuestionnaireDefinition = Omit<QuestionnaireDefinition, "schema"> & {
+  schema: {
+    schema_version: string;
+    audience?: "leadership" | "team" | "participant";
+    instructions?: string;
+    sections: ParticipantQuestionnaireSection[];
+  };
+};
+
 export type QuestionnaireResponseRecord = {
   id: string;
   assignment_id: string;
@@ -91,6 +111,108 @@ export function isQuestionnaireSessionError(error: unknown): boolean {
     error instanceof QuestionnaireRequestError &&
     (error.status === 401 || error.status === 403)
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function participantScale(payload: unknown): QuestionnaireScaleOption[] {
+  if (!Array.isArray(payload)) throw invalidParticipantDefinition();
+  return payload.map((option) => {
+    if (!isRecord(option) || !["number", "string"].includes(typeof option.value) || typeof option.label !== "string") {
+      throw invalidParticipantDefinition();
+    }
+    return {
+      value: option.value as number | string,
+      label: option.label,
+      ...(typeof option.description === "string" ? { description: option.description } : {}),
+    };
+  });
+}
+
+function invalidParticipantDefinition(): QuestionnaireRequestError {
+  return new QuestionnaireRequestError(
+    "Chestionarul primit nu are un format valid. Încearcă din nou.",
+    502,
+    "invalid_definition_response",
+  );
+}
+
+export function participantQuestionnaireDefinitionFromPayload(
+  payload: unknown,
+): ParticipantQuestionnaireDefinition {
+  if (
+    !isRecord(payload)
+    || typeof payload.key !== "string"
+    || typeof payload.version !== "number"
+    || typeof payload.title !== "string"
+    || typeof payload.description !== "string"
+    || !isRecord(payload.schema)
+    || typeof payload.schema.schema_version !== "string"
+    || !Array.isArray(payload.schema.sections)
+  ) {
+    throw invalidParticipantDefinition();
+  }
+
+  const sections = payload.schema.sections.map((section) => {
+    if (!isRecord(section) || typeof section.id !== "string" || typeof section.title !== "string" || !Array.isArray(section.questions)) {
+      throw invalidParticipantDefinition();
+    }
+    const questions = section.questions.map((question) => {
+      if (
+        !isRecord(question)
+        || typeof question.id !== "string"
+        || typeof question.code !== "string"
+        || !["likert", "statement_score_set", "single_choice"].includes(String(question.type))
+        || typeof question.label !== "string"
+        || typeof question.required !== "boolean"
+      ) {
+        throw invalidParticipantDefinition();
+      }
+      const statements = Array.isArray(question.statements)
+        ? question.statements.map((statement) => {
+          if (!isRecord(statement) || typeof statement.id !== "string" || typeof statement.code !== "string" || typeof statement.label !== "string") {
+            throw invalidParticipantDefinition();
+          }
+          return {
+            id: statement.id,
+            code: statement.code,
+            label: statement.label,
+            ...(Array.isArray(statement.scale) ? { scale: participantScale(statement.scale) } : {}),
+          };
+        })
+        : undefined;
+      return {
+        id: question.id,
+        code: question.code,
+        type: question.type as ParticipantQuestionnaireQuestion["type"],
+        label: question.label,
+        required: question.required,
+        ...(typeof question.instructions === "string" ? { instructions: question.instructions } : {}),
+        scale: participantScale(question.scale),
+        ...(statements ? { statements } : {}),
+      };
+    });
+    return { id: section.id, title: section.title, questions };
+  });
+
+  const audience = ["leadership", "team", "participant"].includes(String(payload.schema.audience))
+    ? payload.schema.audience as ParticipantQuestionnaireDefinition["schema"]["audience"]
+    : undefined;
+  return {
+    key: payload.key,
+    version: payload.version,
+    title: payload.title,
+    description: payload.description,
+    ...(typeof payload.active === "boolean" ? { active: payload.active } : {}),
+    schema: {
+      schema_version: payload.schema.schema_version,
+      ...(audience ? { audience } : {}),
+      ...(typeof payload.schema.instructions === "string" ? { instructions: payload.schema.instructions } : {}),
+      sections,
+    },
+  };
 }
 
 const seededAssignmentQuestionnaires: Record<string, string> = {
@@ -191,575 +313,8 @@ export function groupQuestionnaireStubsByKey(
   return stubsByKey;
 }
 
-const fallbackDefinitions: QuestionnaireDefinitionStub[] = [
-  {
-    id: "lencioni",
-    name: "Lencioni - evaluare echipă (RO)",
-    description: "15 itemi pentru evaluarea echipei pe cele cinci disfuncții Lencioni.",
-    status: "active",
-    version: 1,
-    source: "docs/questionnaires/lencioni.pdf",
-    audience: "team",
-    estimatedItems: 15,
-  },
-  {
-    id: "distress_drivers",
-    name: "Driveri de stres TA (RO)",
-    description: "10 seturi de afirmații pentru autoevaluarea driverilor de stres TA.",
-    status: "active",
-    version: 1,
-    source: "docs/questionnaires/distress_drivers.pdf",
-    audience: "leadership",
-    estimatedItems: 50,
-  },
-  {
-    id: "pcm_base",
-    name: "Baza și faza PCM",
-    description: "Alegere ghidată pentru baza și faza PCM din profilul participantului.",
-    status: "active",
-    version: 1,
-    audience: "leadership",
-    estimatedItems: 2,
-  },
-  {
-    id: "boss_360",
-    name: "iCARE 360 pentru manager",
-    description: "Feedback comportamental iCARE pentru manager din autoevaluare, colegi și raportori direcți.",
-    status: "active",
-    version: 1,
-    audience: "participant",
-    estimatedItems: 48,
-  },
-];
-
-const icareGradeScale: QuestionnaireScaleOption[] = [
-  { value: 1, label: "1", description: "Niciodată sau aproape niciodată." },
-  { value: 2, label: "2", description: "Rar." },
-  { value: 3, label: "3", description: "Deseori." },
-  { value: 4, label: "4", description: "Aproape întotdeauna." },
-];
-
-const lencioniThreePointScale: QuestionnaireScaleOption[] = [
-  { value: 1, label: "Rar" },
-  { value: 2, label: "Uneori" },
-  { value: 3, label: "De obicei" },
-];
-
-const distressTenPointScale: QuestionnaireScaleOption[] = Array.from({ length: 10 }, (_, index) => ({
-  value: index + 1,
-  label: String(index + 1),
-}));
-
-function shouldUseClientSeededDefinitionFallback(): boolean {
-  return (
-    !process.env.VITEST &&
-    typeof document !== "undefined" &&
-    isSeededDemoFallbackEnabled() &&
-    !document.cookie.includes("codrut_session=")
-  );
-}
-
-const fallbackDefinitionDetails: Record<string, QuestionnaireDefinition> = {
-  lencioni: {
-    key: "lencioni",
-    version: 1,
-    title: "Lencioni - evaluare echipă",
-    description: "Evaluează echipa pe cele cinci disfuncții Lencioni.",
-    schema: {
-      schema_version: "questionnaire.v1",
-      audience: "team",
-      instructions:
-        "Răspunde pentru echipa indicată în sarcină. Scorurile sunt agregate la nivel de echipă.",
-      sections: [
-        {
-          id: "lencioni_team_health",
-          title: "Evaluarea echipei",
-          questions: [
-            "Membrii echipei admit greșelile și punctele vulnerabile.",
-            "Membrii echipei cer ajutor unii altora.",
-            "Membrii echipei discută deschis idei și opinii diferite.",
-            "Întâlnirile includ dezbateri reale, nu doar aprobări formale.",
-            "După discuții, echipa se aliniază clar pe decizii.",
-            "Prioritățile importante sunt clare pentru toți membrii.",
-            "Membrii echipei se trag reciproc la răspundere.",
-            "Comportamentele care afectează echipa sunt adresate direct.",
-            "Echipa pune rezultatele comune înaintea intereselor individuale.",
-            "Membrii echipei urmăresc activ obiectivele comune.",
-            "Se poate cere feedback sincer fără defensivitate.",
-            "Conflictele importante sunt rezolvate, nu evitate.",
-            "Deciziile sunt asumate chiar când nu există acord total.",
-            "Standardele echipei sunt respectate consecvent.",
-            "Succesul echipei contează mai mult decât recunoașterea personală.",
-          ].map((label, index) => ({
-            id: `lencioni_q${index + 1}`,
-            code: `Q${index + 1}`,
-            type: "likert" as const,
-            label,
-            required: true,
-            scale: lencioniThreePointScale,
-          })),
-        },
-      ],
-    },
-  },
-  distress_drivers: {
-    key: "distress_drivers",
-    version: 1,
-    title: "Driveri de stres TA",
-    description: "Autoevaluare pentru driverii de stres din Analiza Tranzacțională.",
-    schema: {
-      schema_version: "questionnaire.v1",
-      audience: "leadership",
-      instructions:
-        "Alege pe scala 1-10 cât de mult te regăsești în fiecare afirmație.",
-      sections: [
-        {
-          id: "distress_driveri",
-          title: "Driveri de stres",
-          questions: [
-            {
-              id: "driver_be_strong",
-              code: "D1",
-              type: "statement_score_set",
-              label: "Set 1",
-              required: true,
-              scale: distressTenPointScale,
-              statements: [
-                { id: "be_strong_1", code: "S1", label: "Îmi este greu să cer ajutor când am nevoie." },
-                { id: "be_strong_2", code: "S2", label: "Prefer să nu arăt când sunt sub presiune." },
-              ],
-            },
-            {
-              id: "driver_be_perfect",
-              code: "D2",
-              type: "statement_score_set",
-              label: "Set 2",
-              required: true,
-              scale: distressTenPointScale,
-              statements: [
-                { id: "be_perfect_1", code: "S1", label: "Îmi este greu să livrez ceva până nu este foarte bine finisat." },
-                { id: "be_perfect_2", code: "S2", label: "Observ rapid erorile și detaliile lipsă." },
-              ],
-            },
-            {
-              id: "driver_try_hard",
-              code: "D3",
-              type: "statement_score_set",
-              label: "Set 3",
-              required: true,
-              scale: distressTenPointScale,
-              statements: [
-                { id: "try_hard_1", code: "S1", label: "Pun mult efort în sarcini chiar și când direcția nu este clară." },
-                { id: "try_hard_2", code: "S2", label: "Am tendința să încep multe lucruri în paralel." },
-              ],
-            },
-            {
-              id: "driver_hurry_up",
-              code: "D4",
-              type: "statement_score_set",
-              label: "Set 4",
-              required: true,
-              scale: distressTenPointScale,
-              statements: [
-                { id: "hurry_up_1", code: "S1", label: "Simt frecvent că trebuie să termin mai repede." },
-                { id: "hurry_up_2", code: "S2", label: "Mă irită ritmul lent al celorlalți." },
-              ],
-            },
-            {
-              id: "driver_please_people",
-              code: "D5",
-              type: "statement_score_set",
-              label: "Set 5",
-              required: true,
-              scale: distressTenPointScale,
-              statements: [
-                { id: "please_people_1", code: "S1", label: "Îmi adaptez rapid răspunsul ca să evit dezamăgirea altora." },
-                { id: "please_people_2", code: "S2", label: "Îmi este greu să spun nu unor cereri suplimentare." },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  },
-  icare: {
-    key: "icare",
-    version: 1,
-    title: "Comportamente de leadership ICARE",
-    description:
-      "Evaluare comportamentală pe atributele ICARE cu note de la 1 la 4.",
-    schema: {
-      schema_version: "questionnaire.v1",
-      audience: "leadership",
-      source: {
-        type: "xlsx",
-        path: "docs/questionnaires/ICARE_scala.xlsx",
-        status: "provisional",
-      },
-      instructions:
-        "Alege nota care descrie cel mai bine comportamentul observat. Scala are valori de la 1 la 4.",
-      scoring: {
-        scale_status: "approved_1_to_4",
-        score_unit: "percent",
-      },
-      sections: [
-        {
-          id: "inspiring",
-          title: "Inspirație",
-          questions: [
-            {
-              id: "icare_inspiring_developing_people",
-              code: "ICARE-1.1",
-              type: "statement_score_set",
-              label: "Dezvoltarea oamenilor",
-              required: true,
-              instructions: "Dezvoltare continuă prin feedback constructiv, încurajare și follow-up.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_01", code: "S1", label: "Oferă feedback constructiv" },
-                { id: "icare_02", code: "S2", label: "Sprijină planurile de dezvoltare" },
-                { id: "icare_03", code: "S3", label: "Se implică în propria dezvoltare continuă" },
-              ],
-            },
-            {
-              id: "icare_inspiring_leading_by_example",
-              code: "ICARE-1.2",
-              type: "statement_score_set",
-              label: "Conducere prin exemplu",
-              required: true,
-              instructions: "Aliniere între valori, angajamente și comportamentul zilnic.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_04", code: "S1", label: "Acționează conform valorilor declarate" },
-                { id: "icare_05", code: "S2", label: "Respectă angajamentele asumate față de echipă" },
-                { id: "icare_06", code: "S3", label: "Tratează toți membrii echipei cu respect și echitate" },
-              ],
-            },
-            {
-              id: "icare_inspiring_engagement_environment",
-              code: "ICARE-1.3",
-              type: "statement_score_set",
-              label: "Crearea unui mediu care stimulează implicarea",
-              required: true,
-              instructions: "Mediu sigur, energizant și orientat către contribuția fiecărui membru.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_07", code: "S1", label: "Creează spațiu psihologic sigur pentru exprimare" },
-                { id: "icare_08", code: "S2", label: "Delegă cu sens, nu doar cu sarcini" },
-                { id: "icare_09", code: "S3", label: "Recunoaște contribuția individuală la succesul echipei" },
-              ],
-            },
-          ],
-        },
-        {
-          id: "create_trust",
-          title: "Construirea încrederii",
-          questions: [
-            {
-              id: "icare_trust_collaboration",
-              code: "ICARE-2.1",
-              type: "statement_score_set",
-              label: "Promotor al colaborării",
-              required: true,
-              instructions: "Transparență, colaborare și prioritizarea interesului comun.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_10", code: "S1", label: "Verifică înțelegerea comună după discuții" },
-                { id: "icare_11", code: "S2", label: "Împărtășește context și motivații proprii" },
-                { id: "icare_12", code: "S3", label: "Prioritizează interesul comun față de cel personal sau al echipei" },
-              ],
-            },
-            {
-              id: "icare_trust_inspired",
-              code: "ICARE-2.2",
-              type: "statement_score_set",
-              label: "Inspirație împărtășită",
-              required: true,
-              instructions: "Sens, ambiție și angajament construite împreună cu echipa.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_13", code: "S1", label: "Conectează munca echipei la un scop mai larg" },
-                { id: "icare_14", code: "S2", label: "Co-construiește ambiții îndrăznețe cu echipa" },
-                { id: "icare_15", code: "S3", label: "Inspiră prin propriul nivel de angajament" },
-              ],
-            },
-            {
-              id: "icare_trust_reality",
-              code: "ICARE-2.3",
-              type: "statement_score_set",
-              label: "Ancorare în realitate",
-              required: true,
-              instructions: "Ascultare activă, informații relevante și realism onest.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_16", code: "S1", label: "Ascultă activ înainte de a răspunde sau decide" },
-                { id: "icare_17", code: "S2", label: "Împărtășește informații relevante proactiv" },
-                { id: "icare_18", code: "S3", label: "Recunoaște faptele neplăcute cu onestitate" },
-              ],
-            },
-            {
-              id: "icare_trust_illuminating",
-              code: "ICARE-2.4",
-              type: "statement_score_set",
-              label: "Clarificare",
-              required: true,
-              instructions: "Claritate strategică în contexte complexe și incerte.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_19", code: "S1", label: "Comunică strategia și direcția cu claritate" },
-                { id: "icare_20", code: "S2", label: "Oferă claritate în situații de ambiguitate" },
-                { id: "icare_21", code: "S3", label: "Acționează cu claritate în medii complexe și incerte" },
-              ],
-            },
-          ],
-        },
-        {
-          id: "awareness",
-          title: "Conștientizare",
-          questions: [
-            {
-              id: "icare_awareness_humility",
-              code: "ICARE-3.1",
-              type: "statement_score_set",
-              label: "Modestie",
-              required: true,
-              instructions: "Feedback, limite personale și integrarea perspectivelor diferite.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_22", code: "S1", label: "Solicită feedback despre propriul comportament" },
-                { id: "icare_23", code: "S2", label: "Știe când să ceară ajutor sau să admită că nu știe" },
-                { id: "icare_24", code: "S3", label: "Integrează perspectivele diferite de a sa în decizii" },
-              ],
-            },
-            {
-              id: "icare_awareness_emotional_intelligence",
-              code: "ICARE-3.2",
-              type: "statement_score_set",
-              label: "Inteligență emoțională și situațională",
-              required: true,
-              instructions: "Autoreglare, interes autentic și adaptarea comunicării.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_25", code: "S1", label: "Recunoaște și gestionează propriile emoții în interacțiuni" },
-                { id: "icare_26", code: "S2", label: "Arată interes autentic față de oameni ca indivizi" },
-                { id: "icare_27", code: "S3", label: "Adaptează comunicarea la stilul și nevoile interlocutorului" },
-              ],
-            },
-            {
-              id: "icare_awareness_open_world",
-              code: "ICARE-3.3",
-              type: "statement_score_set",
-              label: "Deschidere către lume",
-              required: true,
-              instructions: "Curiozitate, benchmarkuri externe și facilitarea schimbării.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_28", code: "S1", label: "Caută activ benchmarkuri și tendințe externe" },
-                { id: "icare_29", code: "S2", label: "Îmbrățișează și facilitează schimbarea" },
-                { id: "icare_30", code: "S3", label: "Explorează activ domenii adiacente sau noi tehnologii" },
-              ],
-            },
-          ],
-        },
-        {
-          id: "results",
-          title: "Rezultate",
-          questions: [
-            {
-              id: "icare_results_ambitious",
-              code: "ICARE-4.1",
-              type: "statement_score_set",
-              label: "Ambiție asumată pentru companie",
-              required: true,
-              instructions: "Inovație, asumarea riscului și învățare din performanță.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_31", code: "S1", label: "Propune soluții inovatoare și îndrăznețe" },
-                { id: "icare_32", code: "S2", label: "Promovează asumarea responsabilă a riscului" },
-                { id: "icare_33", code: "S3", label: "Urmărește performanța și învață din eșecuri" },
-              ],
-            },
-            {
-              id: "icare_results_caring",
-              code: "ICARE-4.2",
-              type: "statement_score_set",
-              label: "Grijă egală pentru angajați și clienți",
-              required: true,
-              instructions: "Echilibru între performanță, bunăstarea echipei și standarde realiste.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_34", code: "S1", label: "Echilibrează presiunile de performanță cu bunăstarea echipei" },
-                { id: "icare_35", code: "S2", label: "Acordă atenție echilibrului muncă-viață al membrilor echipei" },
-                { id: "icare_36", code: "S3", label: "Construiește standarde înalte bazate pe înțelegerea realității" },
-              ],
-            },
-            {
-              id: "icare_results_agility",
-              code: "ICARE-4.3",
-              type: "statement_score_set",
-              label: "Agilitate antreprenorială",
-              required: true,
-              instructions: "Testare rapidă, simplificare și conectarea rețelei externe la oportunități.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_37", code: "S1", label: "Testează și învață rapid (test & learn)" },
-                { id: "icare_38", code: "S2", label: "Livrează rezultate mai rapid prin simplificare și prioritizare" },
-                { id: "icare_39", code: "S3", label: "Conectează rețeaua externă la oportunități de business" },
-              ],
-            },
-          ],
-        },
-        {
-          id: "empowerment",
-          title: "Împuternicire",
-          questions: [
-            {
-              id: "icare_empowerment_decision_making",
-              code: "ICARE-5.1",
-              type: "statement_score_set",
-              label: "Decizie aproape de teren",
-              required: true,
-              instructions: "Autonomie, inițiativă și raportare transparentă.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_40", code: "S1", label: "Delegă autoritatea decizională la nivelul potrivit" },
-                { id: "icare_41", code: "S2", label: "Ia inițiativă și acționează fără să aștepte permisiunea" },
-                { id: "icare_42", code: "S3", label: "Setează obiective clare și raportează transparent rezultatele" },
-              ],
-            },
-            {
-              id: "icare_empowerment_collective_intelligence",
-              code: "ICARE-5.2",
-              type: "statement_score_set",
-              label: "Cultivarea inteligenței colective",
-              required: true,
-              instructions: "Diversitate, co-construcție, decizii asumate și refuzul compromisului facil.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_43", code: "S1", label: "Susține decizia finală chiar dacă diferă de propria opinie" },
-                { id: "icare_44", code: "S2", label: "Caută și oferă sfaturi fără a impune soluții" },
-                { id: "icare_45", code: "S3", label: "Refuză compromisul sistematic în favoarea soluțiilor mai bune" },
-              ],
-            },
-            {
-              id: "icare_empowerment_helping_team",
-              code: "ICARE-5.3",
-              type: "statement_score_set",
-              label: "Sprijinirea echipei",
-              required: true,
-              instructions: "Contribuție la dinamica echipei, deblocare și sharing de cunoaștere.",
-              scale: icareGradeScale,
-              statements: [
-                { id: "icare_46", code: "S1", label: "Alimentează dinamica și energia pozitivă a echipei" },
-                { id: "icare_47", code: "S2", label: "Facilitează deblocarea obstacolelor pentru colegii din echipă" },
-                { id: "icare_48", code: "S3", label: "Dezvoltă competențele echipei prin sharing de cunoaștere" },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  },
-  boss_360: {
-    key: "boss_360",
-    version: 1,
-    title: "Feedback 360 pentru manager",
-    description: "Formular scurt de feedback confidențial pentru persoana către care raportezi.",
-    schema: {
-      schema_version: "questionnaire.v1",
-      source: {
-        type: "prototype",
-        path: "seeded/boss_360",
-        status: "provisional",
-      },
-      instructions:
-        "Răspunde concret și echilibrat. Persoana evaluată nu primește răspunsurile individuale.",
-      sections: [
-        {
-          id: "manager_feedback",
-          title: "Feedback manager",
-          questions: [
-            {
-              id: "boss_360_q01",
-              code: "Q1",
-              type: "likert",
-              label: "Managerul meu clarifică așteptările și prioritățile.",
-              required: true,
-              scale: [
-                { value: 1, label: "Rar" },
-                { value: 2, label: "Uneori" },
-                { value: 3, label: "De obicei" },
-              ],
-            },
-            {
-              id: "boss_360_q02",
-              code: "Q2",
-              type: "likert",
-              label: "Managerul meu oferă feedback util și la timp.",
-              required: true,
-              scale: [
-                { value: 1, label: "Rar" },
-                { value: 2, label: "Uneori" },
-                { value: 3, label: "De obicei" },
-              ],
-            },
-            {
-              id: "boss_360_q03",
-              code: "Q3",
-              type: "likert",
-              label: "Managerul meu creează spațiu pentru întrebări și opinii diferite.",
-              required: true,
-              scale: [
-                { value: 1, label: "Rar" },
-                { value: 2, label: "Uneori" },
-                { value: 3, label: "De obicei" },
-              ],
-            },
-            {
-              id: "boss_360_q04",
-              code: "Q4",
-              type: "likert",
-              label: "Managerul meu susține colaborarea în echipă.",
-              required: true,
-              scale: [
-                { value: 1, label: "Rar" },
-                { value: 2, label: "Uneori" },
-                { value: 3, label: "De obicei" },
-              ],
-            },
-            {
-              id: "boss_360_q05",
-              code: "Q5",
-              type: "likert",
-              label: "Managerul meu gestionează tensiunile într-un mod constructiv.",
-              required: true,
-              scale: [
-                { value: 1, label: "Rar" },
-                { value: 2, label: "Uneori" },
-                { value: 3, label: "De obicei" },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  },
-};
-
-fallbackDefinitionDetails.boss_360 = {
-  ...fallbackDefinitionDetails.icare,
-  key: "boss_360",
-  title: "Feedback 360 iCARE pentru manager",
-  description:
-    "Feedback comportamental iCARE pentru manager din autoevaluare, colegi și raportori direcți.",
-  schema: {
-    ...fallbackDefinitionDetails.icare.schema,
-    audience: "participant",
-    instructions:
-      "Răspunde pentru persoana indicată în sarcină. Evaluează comportamentele iCARE observabile din perspectiva ta.",
-    scoring: fallbackDefinitionDetails.icare.schema.scoring,
-  },
-};
+const fallbackDefinitions = SYNTHETIC_QUESTIONNAIRE_STUBS;
+const fallbackDefinitionDetails = SYNTHETIC_QUESTIONNAIRE_DEFINITIONS;
 
 export async function listQuestionnaireDefinitionStubs(
   includeRetired = false,
@@ -768,10 +323,6 @@ export async function listQuestionnaireDefinitionStubs(
   const latestOnly = options.latestOnly ?? true;
   const cacheKey = `stubs:${includeRetired ? "all" : "active"}:${latestOnly ? "latest" : "versions"}`;
   return cached(stubsCache, cacheKey, async () => {
-    if (shouldUseClientSeededDefinitionFallback()) {
-      return latestOnly ? latestDefinitionStubs(fallbackDefinitions) : fallbackDefinitions;
-    }
-
     try {
       const url = includeRetired
         ? `${getApiBaseUrl()}/forms/definitions?include_retired=true`
@@ -781,17 +332,19 @@ export async function listQuestionnaireDefinitionStubs(
         credentials: "include",
       });
       if (!response.ok) {
-        return isSeededDemoFallbackEnabled() ? fallbackDefinitions : [];
+        if (isSeededDemoFallbackEnabled()) return fallbackDefinitions;
+        throw await responseError(response, "Nu am putut încărca lista de chestionare.");
       }
       const serverDefs = (await response.json()) as QuestionnaireDefinition[];
       const stubs = serverDefs
         .filter((definition) => !legacyHiddenQuestionnaireKeys.has(definition.key))
         .map(stubFromDefinition);
       return latestOnly ? latestDefinitionStubs(stubs) : stubs;
-    } catch (e) {
-      console.error("Error listing definitions", e);
-      const fallback = isSeededDemoFallbackEnabled() ? fallbackDefinitions : [];
-      return latestOnly ? latestDefinitionStubs(fallback) : fallback;
+    } catch (error) {
+      if (isSeededDemoFallbackEnabled()) {
+        return latestOnly ? latestDefinitionStubs(fallbackDefinitions) : fallbackDefinitions;
+      }
+      throw normalizeResponseError(error, "Nu am putut încărca lista de chestionare.");
     }
   });
 }
@@ -805,10 +358,6 @@ export async function getQuestionnaireDefinition(
   const cacheKey = targetVersion ? `definition:${realKey}@${targetVersion}` : `definition:${realKey}`;
 
   return cached(definitionCache, cacheKey, async () => {
-    if (shouldUseClientSeededDefinitionFallback()) {
-      return fallbackDefinitionDetails[realKey] ?? null;
-    }
-
     try {
       const url = targetVersion
         ? `${getApiBaseUrl()}/forms/definitions/${realKey}?version=${targetVersion}`
@@ -818,15 +367,74 @@ export async function getQuestionnaireDefinition(
         credentials: "include",
         ...options,
       });
+      if (response.status === 404 || response.status === 410) return null;
       if (!response.ok) {
-        return isSeededDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
+        if (isSeededDemoFallbackEnabled()) return fallbackDefinitionDetails[realKey] ?? null;
+        throw await responseError(response, "Nu am putut încărca chestionarul.");
       }
       return (await response.json()) as QuestionnaireDefinition;
-    } catch (e) {
-      console.error("Error getting definition", e);
-      return isSeededDemoFallbackEnabled() ? (fallbackDefinitionDetails[realKey] ?? null) : null;
+    } catch (error) {
+      if (isSeededDemoFallbackEnabled()) return fallbackDefinitionDetails[realKey] ?? null;
+      throw normalizeResponseError(error, "Nu am putut încărca chestionarul.");
     }
   });
+}
+
+export async function getSecureQuestionnaireDefinition(
+  token: string,
+  assignmentId: string,
+): Promise<ParticipantQuestionnaireDefinition | null> {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
+    const key = seededAssignmentQuestionnaires[assignmentId];
+    const fallback = fallbackDefinitionDetails[key];
+    return fallback ? participantQuestionnaireDefinitionFromPayload(fallback) : null;
+  }
+
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/forms/secure-links/${encodeURIComponent(token)}/assignments/${encodeURIComponent(assignmentId)}/definition`,
+      {
+        cache: "no-store",
+      },
+    );
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      throw await responseError(response, "Nu am putut încărca chestionarul.");
+    }
+    return participantQuestionnaireDefinitionFromPayload(await response.json());
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut încărca chestionarul.");
+  }
+}
+
+export async function getAssignedQuestionnaireDefinition(
+  assignmentId: string,
+  options: RequestInit = {},
+): Promise<ParticipantQuestionnaireDefinition | null> {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
+    const key = seededAssignmentQuestionnaires[assignmentId];
+    const fallback = fallbackDefinitionDetails[key];
+    return fallback ? participantQuestionnaireDefinitionFromPayload(fallback) : null;
+  }
+
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/forms/assignments/${encodeURIComponent(assignmentId)}/definition`,
+      {
+        cache: "no-store",
+        credentials: "include",
+        ...options,
+        headers: new Headers(options.headers),
+      },
+    );
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      throw await responseError(response, "Nu am putut încărca chestionarul.");
+    }
+    return participantQuestionnaireDefinitionFromPayload(await response.json());
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut încărca chestionarul.");
+  }
 }
 
 export async function createQuestionnaireDefinitionOnServer(
@@ -855,7 +463,7 @@ export async function createQuestionnaireDefinitionOnServer(
 
 export async function updateQuestionnaireDefinitionOnServer(
   key: string,
-  fields: { title?: string; description?: string; schema?: any; active?: boolean }, // eslint-disable-line @typescript-eslint/no-explicit-any
+  fields: { title?: string; description?: string; schema?: QuestionnaireDefinition["schema"]; active?: boolean },
   version?: number
 ): Promise<QuestionnaireDefinition> {
   const url = version
@@ -938,14 +546,47 @@ export async function getQuestionnaireResponse(
       cache: "no-store",
       credentials: "include",
       ...options,
-      headers: {
-        ...(options.headers ?? {}),
-      },
+      headers: new Headers(options.headers),
     });
-    if (!response.ok) return null;
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      throw await responseError(response, "Nu am putut încărca răspunsurile salvate.");
+    }
     return (await response.json()) as QuestionnaireResponseRecord;
-  } catch {
-    return null;
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut încărca răspunsurile salvate.");
+  }
+}
+
+export async function getSecureQuestionnaireResponse(
+  token: string,
+  assignmentId: string,
+): Promise<QuestionnaireResponseRecord | null> {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
+    return {
+      id: `seeded-${assignmentId}-draft`,
+      assignment_id: assignmentId,
+      questionnaire_key: seededAssignmentQuestionnaires[assignmentId],
+      questionnaire_version: 1,
+      status: "draft",
+      answers: {},
+    };
+  }
+
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/forms/secure-links/${encodeURIComponent(token)}/assignments/${encodeURIComponent(assignmentId)}/response`,
+      {
+        cache: "no-store",
+      },
+    );
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      throw await responseError(response, "Nu am putut încărca răspunsurile salvate.");
+    }
+    return (await response.json()) as QuestionnaireResponseRecord;
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut încărca răspunsurile salvate.");
   }
 }
 
@@ -964,6 +605,35 @@ export async function saveQuestionnaireResponse(
       credentials: "include",
       body: JSON.stringify({ answers }),
     });
+
+    if (!response.ok) {
+      throw await responseError(response, "Nu am putut salva draftul.");
+    }
+
+    return (await response.json()) as QuestionnaireResponseRecord;
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut salva draftul.");
+  }
+}
+
+export async function saveSecureQuestionnaireResponse(
+  token: string,
+  assignmentId: string,
+  answers: Record<string, QuestionnaireAnswerValue>,
+): Promise<QuestionnaireResponseRecord> {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
+    return seededQuestionnaireResponse(assignmentId, answers, "draft");
+  }
+
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/forms/secure-links/${encodeURIComponent(token)}/assignments/${encodeURIComponent(assignmentId)}/response`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers }),
+      },
+    );
 
     if (!response.ok) {
       throw await responseError(response, "Nu am putut salva draftul.");
@@ -1001,6 +671,35 @@ export async function submitQuestionnaireResponse(
   }
 }
 
+export async function submitSecureQuestionnaireResponse(
+  token: string,
+  assignmentId: string,
+  answers: Record<string, QuestionnaireAnswerValue>,
+): Promise<QuestionnaireResponseRecord> {
+  if (canUseSeededAssignmentFallback(assignmentId)) {
+    return seededQuestionnaireResponse(assignmentId, answers, "submitted");
+  }
+
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/forms/secure-links/${encodeURIComponent(token)}/assignments/${encodeURIComponent(assignmentId)}/response/submit`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await responseError(response, "Nu am putut trimite răspunsurile.");
+    }
+
+    return (await response.json()) as QuestionnaireResponseRecord;
+  } catch (error) {
+    throw normalizeResponseError(error, "Nu am putut trimite răspunsurile.");
+  }
+}
+
 function canUseSeededAssignmentFallback(assignmentId: string): boolean {
   return isDemoFallbackEnabled() && Boolean(seededAssignmentQuestionnaires[assignmentId]);
 }
@@ -1016,8 +715,12 @@ async function responseError(response: Response, fallbackMessage: string): Promi
 }
 
 function normalizeResponseError(error: unknown, fallbackMessage: string): Error {
-  if (error instanceof Error) return error;
-  return new Error(fallbackMessage);
+  if (error instanceof QuestionnaireRequestError) return error;
+  return new QuestionnaireRequestError(
+    error instanceof Error && error.message ? error.message : fallbackMessage,
+    0,
+    "network_error",
+  );
 }
 
 function seededQuestionnaireResponse(

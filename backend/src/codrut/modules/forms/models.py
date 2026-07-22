@@ -2,7 +2,8 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from codrut.core.database import Base, TimestampMixin
@@ -36,8 +37,28 @@ class QuestionnaireDefinition(TimestampMixin, Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    schema: Mapped[dict] = mapped_column(JSON, nullable=False)
+    schema: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    private_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    feedback_policy: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    trainer_visibility_policy: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+    package_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    content_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    system_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class ProtectedContentImport(TimestampMixin, Base):
+    __tablename__ = "protected_content_imports"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    package_id: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    questionnaire_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    template_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class QuestionnaireResponse(TimestampMixin, Base):
@@ -59,5 +80,5 @@ class QuestionnaireResponse(TimestampMixin, Base):
         nullable=False,
         default=QuestionnaireResponseStatus.draft,
     )
-    answers: Mapped[dict] = mapped_column(JSON, nullable=False)
+    answers: Mapped[dict] = mapped_column(JSONB, nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

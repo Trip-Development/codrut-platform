@@ -17,6 +17,8 @@ export type ParticipantTaskGroup = {
   pendingCount: number;
   tasks: InviteTask[];
   actionTask?: InviteTask;
+  projectId?: string | null;
+  projectName?: string | null;
 };
 
 const review360Keys = new Set(["boss_360", "boss_360_en", "icare"]);
@@ -38,17 +40,22 @@ export const participantTaskStatusCopy: Record<InviteTaskStatus, { label: string
 
 export function groupParticipantTasks(tasks: InviteTask[]): ParticipantTaskGroup[] {
   const groups: ParticipantTaskGroup[] = [];
-  const reviewTasks: InviteTask[] = [];
+  const reviewTasksByProject = new Map<string, InviteTask[]>();
 
   for (const task of tasks) {
     if (isReview360Task(task)) {
-      reviewTasks.push(task);
+      const projectKey = task.projectId ?? task.projectName ?? "legacy";
+      const roundKey = task.assignmentRoundId ?? "legacy";
+      const groupKey = `${projectKey}:${roundKey}`;
+      const projectTasks = reviewTasksByProject.get(groupKey) ?? [];
+      projectTasks.push(task);
+      reviewTasksByProject.set(groupKey, projectTasks);
       continue;
     }
     groups.push(singleTaskGroup(task));
   }
 
-  if (reviewTasks.length > 0) {
+  for (const reviewTasks of reviewTasksByProject.values()) {
     groups.push(review360TaskGroup(reviewTasks));
   }
 
@@ -84,6 +91,8 @@ function singleTaskGroup(task: InviteTask): ParticipantTaskGroup {
     pendingCount: task.status === "completed" ? 0 : 1,
     tasks: [task],
     actionTask: task.status === "completed" ? undefined : task,
+    projectId: task.projectId,
+    projectName: task.projectName,
   };
 }
 
@@ -94,7 +103,7 @@ function review360TaskGroup(tasks: InviteTask[]): ParticipantTaskGroup {
   const targetCount = tasks.length;
 
   return {
-    id: "review-360",
+    id: `review-360:${tasks[0]?.projectId ?? tasks[0]?.projectName ?? "legacy"}:${tasks[0]?.assignmentRoundId ?? "legacy"}`,
     kind: "review360",
     title: "Review 360",
     detail:
@@ -109,6 +118,8 @@ function review360TaskGroup(tasks: InviteTask[]): ParticipantTaskGroup {
     pendingCount,
     tasks,
     actionTask: tasks.find((task) => task.status !== "completed"),
+    projectId: tasks[0]?.projectId,
+    projectName: tasks[0]?.projectName,
   };
 }
 

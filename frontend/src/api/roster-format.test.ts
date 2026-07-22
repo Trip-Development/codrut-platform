@@ -16,14 +16,16 @@ describe("roster manager formatting", () => {
     expect(normalizeReportsToName("Manager")).toBe("");
     expect(normalizeReportsToName("Manager direct")).toBe("");
     expect(normalizeReportsToName("Șef")).toBe("");
-    expect(normalizeReportsToName("—")).toBe("");
+    expect(normalizeReportsToName("-")).toBe("");
+    expect(normalizeReportsToName("\u2013")).toBe("");
+    expect(normalizeReportsToName("\u2014")).toBe("");
     expect(normalizeReportsToName("1")).toBe("");
     expect(normalizeReportsToName(" 002 ")).toBe("");
   });
 
   it("preserves real manager names and displays empty values as a dash", () => {
     expect(normalizeReportsToName("Maria Popescu")).toBe("Maria Popescu");
-    expect(displayReportsToName("radacina")).toBe("—");
+    expect(displayReportsToName("radacina")).toBe("-");
     expect(displayReportsToName("Maria Popescu")).toBe("Maria Popescu");
   });
 

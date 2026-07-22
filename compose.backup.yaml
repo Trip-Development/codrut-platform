@@ -1,0 +1,75 @@
+x-backup-environment: &backup-environment
+  RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+  RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+  RESTIC_PASSWORD_FILE: ${RESTIC_PASSWORD_FILE:-}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+  AWS_ACCESS_KEY_ID_FILE: ${AWS_ACCESS_KEY_ID_FILE:-}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+  AWS_SECRET_ACCESS_KEY_FILE: ${AWS_SECRET_ACCESS_KEY_FILE:-}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-central-1}
+  AWS_S3_FORCE_PATH_STYLE: ${AWS_S3_FORCE_PATH_STYLE:-true}
+  POSTGRES_HOST: ${CODRUT_BACKUP_POSTGRES_HOST:-db}
+  POSTGRES_PORT: ${CODRUT_BACKUP_POSTGRES_PORT:-5432}
+  POSTGRES_DB: ${POSTGRES_DB:-codrut}
+  POSTGRES_USER: ${POSTGRES_USER:-codrut}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+  POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-}
+  BACKUP_ASSET_DIR: /data/campaign-assets
+  BACKUP_HOST: ${CODRUT_BACKUP_HOST:-codrut-controlled-pilot}
+  BACKUP_APPLY_RETENTION: ${CODRUT_BACKUP_APPLY_RETENTION:-true}
+  RESTIC_CHECK_MODE: ${RESTIC_CHECK_MODE:-subset}
+  RESTIC_CHECK_READ_DATA_SUBSET: ${RESTIC_CHECK_READ_DATA_SUBSET:-5%}
+
+x-backup-service: &backup-service
+  build:
+    context: .
+    dockerfile: infra/backup/Dockerfile
+  environment: *backup-environment
+  restart: "no"
+
+services:
+  backup:
+    <<: *backup-service
+    profiles: [backup]
+    command: [backup]
+    volumes:
+      - campaign_assets:/data/campaign-assets:ro
+
+  backup-restore-db:
+    image: postgres:17-bookworm
+    profiles: [backup-rehearsal]
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_USER: codrut_restore
+      POSTGRES_DB: postgres
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U codrut_restore -d postgres]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: "no"
+
+  backup-rehearsal:
+    <<: *backup-service
+    profiles: [backup-rehearsal]
+    command: [restore-rehearsal]
+    environment:
+      <<: *backup-environment
+      POSTGRES_PASSWORD: ""
+      POSTGRES_PASSWORD_FILE: ""
+      RESTORE_POSTGRES_HOST: backup-restore-db
+      RESTORE_POSTGRES_PORT: 5432
+      RESTORE_POSTGRES_USER: codrut_restore
+      RESTORE_POSTGRES_DB: ${CODRUT_RESTORE_DATABASE:-codrut_restore}
+      RESTORE_ROOT: /restore
+      RESTORE_SNAPSHOT: ${CODRUT_RESTORE_SNAPSHOT:-latest}
+    volumes:
+      - backup_rehearsal_workspace:/restore
+    depends_on:
+      backup-restore-db:
+        condition: service_healthy
+
+volumes:
+  backup_rehearsal_workspace:

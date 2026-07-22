@@ -1,11 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowRightIcon,
+  BriefcaseBusinessIcon,
+  Building2Icon,
+  CalendarDaysIcon,
+  FilterIcon,
+  FolderPlusIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
-import type { CompanyProject, CompanyProjectStatus } from "@/api/companies";
-import { ProjectCardLink } from "@/components/projects/project-card";
+import type { CompanyProject } from "@/api/companies";
+import {
+  formatProjectDate,
+  formatProjectDateRange,
+  ProjectStatusBadge,
+  projectTypeLabel,
+  statusRank,
+} from "@/components/projects/project-display";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { useUrlState } from "@/hooks/use-url-state";
+import { cn } from "@/utils/cn";
+import {
+  normalizeWorkspaceSearch,
+  SearchableProjectFilter,
+  WorkspaceSearchInput,
+} from "./project-workspace-controls";
 
 type ProjectFilters = {
   q?: string;
@@ -14,7 +45,7 @@ type ProjectFilters = {
   type?: string;
 };
 
-type ProjectsWorkspaceProps = {
+export type ProjectsWorkspaceProps = {
   projects: CompanyProject[];
   initialFilters: ProjectFilters;
   companies: Array<[string, string]>;
@@ -22,14 +53,15 @@ type ProjectsWorkspaceProps = {
 };
 
 export function ProjectsWorkspace({ projects, initialFilters, companies, projectTypes }: ProjectsWorkspaceProps) {
-  const urlState = useUrlState();
-  const { get, searchKey, setParam } = urlState;
+  const { get, searchKey, isPending: isUrlPending, setParam, setParams } = useUrlState();
   const [values, setValues] = useState({
     q: initialFilters.q ?? "",
     company: initialFilters.company ?? "",
     status: initialFilters.status ?? "",
     type: initialFilters.type ?? "",
   });
+  const deferredQuery = useDeferredValue(values.q);
+  const isFilterPending = isUrlPending || values.q !== deferredQuery;
 
   useEffect(() => {
     setValues({
@@ -41,114 +73,212 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
   }, [get, searchKey]);
 
   const filteredProjects = useMemo(() => {
-    const query = values.q.trim().toLowerCase();
+    const query = normalizeWorkspaceSearch(deferredQuery);
+
     return projects
-      .filter((project) => !query || `${project.name} ${project.company_name ?? ""}`.toLowerCase().includes(query))
+      .filter((project) => {
+        if (!query) return true;
+        return normalizeWorkspaceSearch(
+          `${project.name} ${project.company_name ?? ""} ${project.description ?? ""} ${projectTypeLabel(project.project_type)}`,
+        ).includes(query);
+      })
       .filter((project) => !values.company || project.company_id === values.company)
       .filter((project) => !values.status || project.status === values.status)
       .filter((project) => !values.type || project.project_type === values.type)
       .sort((first, second) => {
-        const rankDiff = statusRank(first.status) - statusRank(second.status);
-        if (rankDiff !== 0) return rankDiff;
+        const rankDifference = statusRank(first.status) - statusRank(second.status);
+        if (rankDifference !== 0) return rankDifference;
         return (second.updated_at ?? "").localeCompare(first.updated_at ?? "");
       });
-  }, [projects, values.company, values.q, values.status, values.type]);
+  }, [deferredQuery, projects, values.company, values.status, values.type]);
+
+  const activeCount = filteredProjects.filter((project) => project.status === "active").length;
+  const draftCount = filteredProjects.filter((project) => project.status === "draft").length;
+  const completedCount = filteredProjects.filter((project) => project.status === "completed").length;
+  const hasActiveFilters = Boolean(values.q || values.company || values.status || values.type);
 
   function updateValue(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
     setParam(key, value, "replace");
   }
 
+  function resetFilters() {
+    setValues({ q: "", company: "", status: "", type: "" });
+    setParams({ q: null, company: null, status: null, type: null }, "replace");
+  }
+
   return (
-    <>
-      <section className="filter-toolbar">
-        <div className="relative w-full md:flex-1">
-          <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            name="q"
-            value={values.q}
-            onChange={(event) => updateValue("q", event.target.value)}
-            placeholder="Caută proiect sau companie..."
-            className="control-input control-search w-full py-3 pl-12 pr-4"
-          />
-        </div>
-        <select
-          name="company"
+    <div className="flex min-w-0 flex-col gap-5">
+      <section
+        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
+        aria-label="Filtre proiecte"
+      >
+        <WorkspaceSearchInput
+          id="projects-search"
+          label="Caută proiect sau companie"
+          value={values.q}
+          onValueChange={(value) => updateValue("q", value)}
+          placeholder="Caută proiect sau companie"
+          className="lg:col-span-2 xl:col-span-1"
+        />
+        <SearchableProjectFilter
+          icon={Building2Icon}
+          label="Companie"
           value={values.company}
-          onChange={(event) => updateValue("company", event.target.value)}
-          className="control-input min-h-[3rem] w-full cursor-pointer appearance-none px-4 md:w-auto"
-        >
-          <option value="">Toate companiile</option>
-          {companies.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-        <select
-          name="status"
+          allLabel="Toate companiile"
+          options={companies.map(([value, label]) => ({ value, label }))}
+          onValueChange={(value) => updateValue("company", value)}
+        />
+        <SearchableProjectFilter
+          icon={FilterIcon}
+          label="Status"
           value={values.status}
-          onChange={(event) => updateValue("status", event.target.value)}
-          className="control-input min-h-[3rem] w-full cursor-pointer appearance-none px-4 md:w-auto"
-        >
-          <option value="">Status</option>
-          <option value="active">Active</option>
-          <option value="draft">În pregătire</option>
-          <option value="completed">Finalizate</option>
-          <option value="archived">Arhivate</option>
-        </select>
-        <select
-          name="type"
+          allLabel="Toate statusurile"
+          options={[
+            { value: "active", label: "Active" },
+            { value: "draft", label: "În pregătire" },
+            { value: "completed", label: "Finalizate" },
+            { value: "archived", label: "Arhivate" },
+          ]}
+          onValueChange={(value) => updateValue("status", value)}
+        />
+        <SearchableProjectFilter
+          icon={BriefcaseBusinessIcon}
+          label="Tip proiect"
           value={values.type}
-          onChange={(event) => updateValue("type", event.target.value)}
-          className="control-input min-h-[3rem] w-full cursor-pointer appearance-none px-4 md:w-auto"
-        >
-          <option value="">Tip proiect</option>
-          {projectTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-        </select>
+          allLabel="Toate tipurile"
+          options={projectTypes.map((type) => ({ value: type, label: projectTypeLabel(type) }))}
+          onValueChange={(value) => updateValue("type", value)}
+        />
       </section>
 
+      <span className="sr-only" role="status" aria-live="polite">
+        {isFilterPending ? "Se actualizează lista" : ""}
+      </span>
+
       {projects.length === 0 ? (
-        <section className="surface-panel flex min-h-[40vh] flex-col items-center justify-center border-dashed p-12 text-center">
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-xl bg-surface-muted text-foreground/30">
-            <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2m14 0V9a2 2 0 0 0-2-2M5 11V9a2 2 0 0 1 2-2m0 0V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 7h10" /></svg>
-          </div>
-          <p className="font-display text-xl font-bold text-foreground">Nu există proiecte încă.</p>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-foreground/50">
-            Intră într-o companie și creează primul proiect din sumarul ei pentru a începe lucrul cu participanții.
-          </p>
-          <Link
-            href="/trainer/companies"
-            className="tap-soft mt-8 inline-flex items-center justify-center rounded-full bg-burgundy px-6 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-burgundy/90"
-          >
-            Deschide companii
-          </Link>
-        </section>
+        <Empty className="min-h-[40vh] border bg-surface p-12 shadow-sm">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <FolderPlusIcon aria-hidden="true" strokeWidth={1.8} />
+            </EmptyMedia>
+            <EmptyTitle>Nu există proiecte încă</EmptyTitle>
+            <EmptyDescription>Creează primul proiect din spațiul unei companii.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button asChild>
+              <Link href="/trainer/companies">Deschide companii</Link>
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : filteredProjects.length === 0 ? (
-        <section className="surface-panel flex min-h-[18rem] flex-col items-center justify-center p-10 text-center">
-          <p className="font-display text-lg font-bold text-foreground">Nu am găsit proiecte pentru filtrul curent.</p>
-          <p className="mt-2 max-w-sm text-sm text-foreground/55">Șterge o parte din căutare sau schimbă filtrele.</p>
-        </section>
+        <Empty className="min-h-[18rem] border bg-surface p-10 shadow-sm">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <SearchIcon aria-hidden="true" strokeWidth={1.8} />
+            </EmptyMedia>
+            <EmptyTitle>Niciun proiect găsit</EmptyTitle>
+            <EmptyDescription>Schimbă căutarea sau filtrele active.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button type="button" variant="outline" onClick={resetFilters}>
+              <XIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+              Resetează filtrele
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredProjects.map((project) => (
-            <ProjectCardLink key={project.id} project={project} />
-          ))}
-        </div>
+        <section
+          aria-label="Lista proiectelor"
+          aria-busy={isFilterPending}
+          className={cn(
+            "min-w-0 overflow-hidden rounded-lg border bg-surface shadow-sm transition-opacity",
+            isFilterPending && "opacity-70",
+          )}
+        >
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{filteredProjects.length}</span> {filteredProjects.length === 1 ? "proiect" : "proiecte"}
+              <span aria-hidden="true"> · </span>{activeCount} {activeCount === 1 ? "activ" : "active"}
+              <span aria-hidden="true"> · </span>{draftCount} de configurat
+              <span aria-hidden="true"> · </span>{completedCount} {completedCount === 1 ? "finalizat" : "finalizate"}
+            </p>
+            {hasActiveFilters ? (
+              <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+                <XIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                Resetează
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="w-full max-w-full overflow-x-auto [scrollbar-width:thin]">
+            <table className="w-full min-w-[64rem] text-left text-sm">
+              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+                <tr>
+                  <th scope="col" className="min-w-64 px-4 py-3">Proiect</th>
+                  <th scope="col" className="min-w-44 px-4 py-3">Companie</th>
+                  <th scope="col" className="min-w-28 px-4 py-3">Status</th>
+                  <th scope="col" className="min-w-36 px-4 py-3">Tip</th>
+                  <th scope="col" className="min-w-40 px-4 py-3">Calendar</th>
+                  <th scope="col" className="px-4 py-3">Actualizat</th>
+                  <th scope="col" className="min-w-40 px-4 py-3">Următorul pas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredProjects.map((project) => (
+                  <tr key={project.id} className="transition-colors hover:bg-muted/35">
+                    <td className="max-w-[24rem] px-4 py-4">
+                      <Link
+                        href={`/trainer/projects/${project.id}`}
+                        className="group inline-flex max-w-full flex-col gap-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+                      >
+                        <span className="truncate font-semibold text-foreground group-hover:text-primary">{project.name}</span>
+                        {project.description ? (
+                          <span className="line-clamp-1 text-xs leading-5 text-muted-foreground">{project.description}</span>
+                        ) : null}
+                      </Link>
+                    </td>
+                    <td className="max-w-[14rem] px-4 py-4">
+                      <span className="block truncate font-medium text-foreground">{project.company_name ?? "Companie"}</span>
+                    </td>
+                    <td className="min-w-28 px-4 py-4"><ProjectStatusBadge status={project.status} /></td>
+                    <td className="px-4 py-4 font-medium text-foreground">{projectTypeLabel(project.project_type)}</td>
+                    <td className="min-w-40 px-4 py-4">
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground">
+                        <CalendarDaysIcon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
+                        {formatProjectDateRange(project.starts_at, project.due_at)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-muted-foreground">{formatProjectDate(project.updated_at)}</td>
+                    <td className="px-4 py-4">
+                      <Link
+                        href={`/trainer/projects/${project.id}`}
+                        className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+                      >
+                        {projectActionLabel(project)}
+                        <ArrowRightIcon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
-    </>
+    </div>
   );
 }
 
-function statusRank(status: CompanyProjectStatus): number {
-  switch (status) {
-    case "active":
-      return 0;
+function projectActionLabel(project: CompanyProject): string {
+  switch (project.status) {
     case "draft":
-      return 1;
+      return "Continuă configurarea";
+    case "active":
+      return "Urmărește progresul";
     case "completed":
-      return 2;
+      return "Deschide raportul";
     case "archived":
-      return 3;
-    default:
-      return 4;
+      return "Consultă istoricul";
   }
 }

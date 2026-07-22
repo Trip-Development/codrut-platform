@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+import { THEME_PREPAINT_CSP_HASH } from "@/lib/theme-prepaint";
 import { middleware } from "./middleware";
 
 function requestFor(path: string, cookie?: string, origin = "http://localhost:3000") {
@@ -13,7 +14,10 @@ describe("middleware", () => {
   afterEach(() => {
     delete process.env.CODRUT_FRONTEND_DEMO_FALLBACK;
     delete process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK;
+    delete process.env.CODRUT_LOCAL_AUTH_BYPASS;
+    delete process.env.NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS;
     delete process.env.CI;
+    vi.unstubAllEnvs();
   });
 
   it("allows the trainer login route without a session", () => {
@@ -23,11 +27,11 @@ describe("middleware", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("allows protected localhost routes without a session when demo fallback is automatic", () => {
+  it("redirects protected localhost routes without an explicit demo mode", () => {
     const response = middleware(requestFor("/trainer"));
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
   });
 
   it("redirects protected trainer routes without a session when demo fallback is explicitly disabled", () => {
@@ -40,13 +44,41 @@ describe("middleware", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3000/login");
   });
 
-  it("redirects protected localhost routes in CI unless demo fallback is explicit", () => {
-    process.env.CI = "true";
+  it("allows an explicit demo mode outside production", () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
 
     const response = middleware(requestFor("/participant"));
 
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("allows protected localhost routes with the local auth bypass", () => {
+    process.env.CODRUT_LOCAL_AUTH_BYPASS = "true";
+
+    const response = middleware(requestFor("/participant/results"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("never allows the local auth bypass in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.CODRUT_LOCAL_AUTH_BYPASS = "true";
+
+    const response = middleware(requestFor("/trainer"));
+
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+  });
+
+  it("does not allow the local auth bypass on a remote development host", () => {
+    process.env.CODRUT_LOCAL_AUTH_BYPASS = "true";
+
+    const response = middleware(requestFor("/trainer", undefined, "https://preview.example.com"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://preview.example.com/login");
   });
 
   it("honors an explicit server false when the public fallback env is empty", () => {
@@ -66,23 +98,15 @@ describe("middleware", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("hides dev routes in production when demo fallback is disabled", () => {
-    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
-    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+  it("adds a nonce-based content security policy without inline script permission", () => {
+    const response = middleware(requestFor("/login"));
+    const policy = response.headers.get("content-security-policy") ?? "";
 
-    const response = middleware(requestFor("/dev/routes", undefined, "https://codrut.andreivacaru.ro"));
-
-    expect(response.status).toBe(404);
-    expect(response.headers.get("location")).toBeNull();
+    expect(policy).toContain("script-src 'self' 'nonce-");
+    expect(policy).toContain(THEME_PREPAINT_CSP_HASH);
+    expect(policy).toContain("'strict-dynamic'");
+    expect(policy).not.toContain("script-src 'self' 'unsafe-inline'");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
-  it("allows dev routes during explicit demo fallback", () => {
-    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
-    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "true";
-
-    const response = middleware(requestFor("/dev/routes", undefined, "https://codrut.andreivacaru.ro"));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
-  });
 });

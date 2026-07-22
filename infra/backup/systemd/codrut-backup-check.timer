@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Codrut Restic repository integrity check
+
+[Timer]
+OnCalendar=Sun *-*-* 04:15:00
+Persistent=true
+RandomizedDelaySec=30m
+Unit=codrut-backup-check.service
+
+[Install]
+WantedBy=timers.target

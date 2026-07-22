@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,8 +38,9 @@ from codrut.modules.companies.models import (
     ProjectMembership,
 )
 from codrut.modules.companies.repository import CompanyRepository
-from codrut.modules.forms.definitions import get_approved_questionnaire_definition
+from codrut.modules.forms.models import QuestionnaireDefinition
 from codrut.modules.forms.repository import FormsRepository
+from codrut.modules.scoring.publication import ResultPublicationService
 from codrut.modules.scoring.repository import ScoringRepository
 
 COMPLETED_ASSIGNMENT_STATUSES = frozenset(
@@ -60,10 +61,12 @@ EDITABLE_ASSIGNMENT_STATUSES = frozenset(
 
 class AssignmentService:
     def __init__(self, session: AsyncSession) -> None:
+        self.session = session
         self.assignment_repository = AssignmentRepository(session)
         self.company_repository = CompanyRepository(session)
         self.forms_repository = FormsRepository(session)
         self.scoring_repository = ScoringRepository(session)
+        self.result_publication_service = ResultPublicationService(session)
 
     async def create_team(
         self,
@@ -128,20 +131,37 @@ class AssignmentService:
         await self._require_company_project(company_id, payload.project_id)
         _validate_target_shape(payload)
         questionnaire_key = payload.questionnaire_key.strip()
-        await self._require_active_questionnaire_definition(questionnaire_key)
         await self._require_company_participant(company_id, payload.respondent_profile_id)
+        await self._require_project_participant(
+            company_id,
+            payload.project_id,
+            payload.respondent_profile_id,
+        )
         if payload.target_person_id is not None:
             await self._require_company_participant(company_id, payload.target_person_id)
+            await self._require_project_participant(
+                company_id,
+                payload.project_id,
+                payload.target_person_id,
+            )
         if payload.target_team_id is not None:
             team = await self.assignment_repository.get_team(company_id, payload.target_team_id)
             if team is None:
                 raise DomainError("Target team not found in this company.", code="team_not_found")
+            await self._require_project_team_members(
+                company_id,
+                payload.project_id,
+                team.id,
+            )
+        definition = await self._require_active_questionnaire_definition(questionnaire_key)
         return await self.assignment_repository.add_assignment(
             QuestionnaireAssignment(
                 company_id=company_id,
                 project_id=payload.project_id,
+                assignment_round_id=uuid4(),
                 respondent_profile_id=payload.respondent_profile_id,
                 questionnaire_key=questionnaire_key,
+                questionnaire_definition_id=definition.id,
                 target_type=payload.target_type,
                 target_person_id=payload.target_person_id,
                 target_team_id=payload.target_team_id,
@@ -382,12 +402,14 @@ class AssignmentService:
         seen_assignment_ids: set[UUID] = set()
         created_count = 0
         existing_count = 0
+        assignment_round_id = uuid4()
 
         for item in payload.assignments:
             assignment, created = await self._create_or_get_planned_assignment(
                 company_id,
                 payload.project_id,
                 item,
+                assignment_round_id=assignment_round_id,
             )
             if assignment.id in seen_assignment_ids:
                 continue
@@ -423,6 +445,7 @@ class AssignmentService:
         ):
             await self.forms_repository.unlock_response_for_assignment(assignment_id)
             await self.scoring_repository.delete_by_assignment(assignment_id)
+            await self.result_publication_service.reconcile_assignment(assignment_id)
             assignment.submitted_at = None
             assignment.validated_at = None
             assignment.scored_at = None
@@ -434,14 +457,26 @@ class AssignmentService:
         company_id: UUID,
         project_id: UUID | None,
         item: AssignmentPlanSaveItem,
+        *,
+        assignment_round_id: UUID,
     ) -> tuple[QuestionnaireAssignment, bool]:
-        await self._require_active_questionnaire_definition(item.questionnaire_key)
+        definition = await self._require_active_questionnaire_definition(item.questionnaire_key)
         await self._require_company_participant(company_id, item.respondent_profile_id)
+        await self._require_project_participant(
+            company_id,
+            project_id,
+            item.respondent_profile_id,
+        )
         target_team_id = item.target_team_id
         if item.target_person_id is not None:
             await self._require_company_participant(company_id, item.target_person_id)
+            await self._require_project_participant(
+                company_id,
+                project_id,
+                item.target_person_id,
+            )
         if item.target_type == AssignmentTargetType.team:
-            target_team_id = await self._resolve_plan_team(company_id, item)
+            target_team_id = await self._resolve_plan_team(company_id, project_id, item)
 
         existing = await self.assignment_repository.get_matching_assignment(
             company_id=company_id,
@@ -477,8 +512,10 @@ class AssignmentService:
             QuestionnaireAssignment(
                 company_id=company_id,
                 project_id=payload.project_id,
+                assignment_round_id=assignment_round_id,
                 respondent_profile_id=payload.respondent_profile_id,
                 questionnaire_key=payload.questionnaire_key.strip(),
+                questionnaire_definition_id=definition.id,
                 target_type=payload.target_type,
                 target_person_id=payload.target_person_id,
                 target_team_id=payload.target_team_id,
@@ -492,12 +529,14 @@ class AssignmentService:
     async def _resolve_plan_team(
         self,
         company_id: UUID,
+        project_id: UUID | None,
         item: AssignmentPlanSaveItem,
     ) -> UUID:
         if item.target_team_id is not None:
             team = await self.assignment_repository.get_team(company_id, item.target_team_id)
             if team is None:
                 raise DomainError("Target team not found in this company.", code="team_not_found")
+            await self._require_project_team_members(company_id, project_id, team.id)
             return team.id
 
         team_name = (item.target_team_name or "").strip()
@@ -515,6 +554,7 @@ class AssignmentService:
 
         for member_id in dict.fromkeys(item.target_team_member_ids):
             await self._require_company_participant(company_id, member_id)
+            await self._require_project_participant(company_id, project_id, member_id)
             existing = await self.assignment_repository.get_team_membership(team.id, member_id)
             if existing is not None:
                 continue
@@ -571,24 +611,52 @@ class AssignmentService:
                 code="project_not_found",
             )
 
-    async def _require_active_questionnaire_definition(self, questionnaire_key: str) -> None:
-        definition = await self.forms_repository.get_definition(questionnaire_key)
-        if definition is not None:
+    async def _require_project_participant(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+        participant_profile_id: UUID,
+    ) -> None:
+        if project_id is None:
             return
-
-        if await self.forms_repository.get_latest_version(questionnaire_key) > 0:
+        membership = await self.company_repository.get_project_membership(
+            project_id,
+            participant_profile_id,
+        )
+        if membership is None or membership.company_id != company_id or not membership.active:
             raise DomainError(
-                "Questionnaire definition not found.",
-                code="definition_not_found",
+                "Participant is not active in this project.",
+                code="participant_not_in_project",
             )
 
-        try:
-            get_approved_questionnaire_definition(questionnaire_key)
-        except KeyError as exc:
-            raise DomainError(
-                "Questionnaire definition not found.",
-                code="definition_not_found",
-            ) from exc
+    async def _require_project_team_members(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+        team_id: UUID,
+    ) -> None:
+        if project_id is None:
+            return
+        memberships = await self.assignment_repository.list_team_memberships(team_id)
+        for membership in memberships:
+            await self._require_project_participant(
+                company_id,
+                project_id,
+                membership.participant_profile_id,
+            )
+
+    async def _require_active_questionnaire_definition(
+        self,
+        questionnaire_key: str,
+    ) -> QuestionnaireDefinition:
+        definition = await self.forms_repository.get_definition(questionnaire_key)
+        if definition is not None:
+            return definition
+
+        raise DomainError(
+            "Questionnaire definition not found.",
+            code="definition_not_found",
+        )
 
 
 def _validate_target_shape(payload: AssignmentCreateRequest) -> None:

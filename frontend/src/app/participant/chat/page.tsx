@@ -1,52 +1,69 @@
+import Link from "next/link";
+import { ArrowRightIcon } from "lucide-react";
+
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
 
-const scenarios = [
-  "Ce înseamnă feedback 360 iCARE?",
-  "Cum răspund dacă nu am observat direct comportamentul?",
-  "Cum funcționează confidențialitatea răspunsurilor?",
-];
-
 export default async function ParticipantChatPage() {
   const requestOptions = await getServerApiRequestOptions();
   const summary = await getParticipantWorkspaceSummary(requestOptions);
-  const identity = summary.anonymousName ?? "Profil anonim";
+  const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
+  const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
 
   return (
     <AppShell
       audience="participant"
-      eyebrow="Asistent"
-      title="Asistent pentru completare"
-      description="Spațiu de ghidaj pentru întrebări despre chestionare. Momentan este un preview de scenarii, fără conversație AI activă."
+      eyebrow=""
+      title="Suport"
+      description=""
       navItems={participantNavItems}
       activeHref="/participant/chat"
-      userLabel={identity}
+      userLabel={identity.split(/\s+/)[0]}
     >
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <section className="surface-panel p-5 md:p-6">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Preview scenarii</p>
-          <h2 className="mt-2 text-2xl font-semibold text-foreground">Întrebări utile înainte de răspuns</h2>
-          <div className="mt-5 space-y-3">
-            {scenarios.map((scenario) => (
-              <article key={scenario} className="rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 transition hover:border-burgundy/25">
-                <p className="text-sm font-semibold text-foreground">{scenario}</p>
-                <p className="mt-1 text-xs leading-5 text-foreground/55">
-                  Va deschide un răspuns ghidat în versiunea completă a asistentului.
-                </p>
-              </article>
-            ))}
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
+        <section>
+          <div className="border-b border-border pb-6">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Ai nevoie de ajutor?</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Răspunde mesajului primit de la trainer pentru întrebări despre proiect sau acces.
+            </p>
           </div>
+          <nav className="divide-y divide-border" aria-label="Acțiuni de suport">
+            <SupportLink href="/participant/questionnaires" label="Chestionare" detail={openTasks > 0 ? `${openTasks} sarcini deschise` : "Nicio sarcină deschisă"} />
+            <SupportLink href="/participant/results" label="Rezultate" detail="Scoruri și interpretări disponibile" />
+          </nav>
         </section>
-        <aside className="rounded-xl border border-burgundy/16 bg-surface p-5 shadow-sm">
-          <p className="text-sm font-bold text-burgundy">Identitate anonimă</p>
-          <p className="mt-2 text-2xl font-semibold text-foreground">{identity}</p>
-          <p className="mt-3 text-sm leading-6 text-foreground/62">
-            Răspunsurile la chestionare rămân legate de această identitate anonimă în experiența ta de participant.
+
+        <aside className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+          <p className="text-sm font-semibold text-foreground">{identity}</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{summary.projectName}</p>
+          <p className="mt-6 border-t border-border pt-5 text-sm leading-6 text-muted-foreground">
+            Răspunsurile individuale nu sunt afișate celorlalți participanți.
           </p>
         </aside>
       </div>
     </AppShell>
+  );
+}
+
+function SupportLink({
+  href,
+  label,
+  detail,
+}: {
+  href: string;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <Link href={href} className="group flex items-center justify-between gap-4 py-5">
+      <span>
+        <span className="block text-base font-semibold text-foreground group-hover:text-burgundy">{label}</span>
+        <span className="mt-1 block text-sm text-muted-foreground">{detail}</span>
+      </span>
+      <ArrowRightIcon aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-burgundy" />
+    </Link>
   );
 }

@@ -71,56 +71,41 @@ describe("buildReportAggregation", () => {
       [
         "old",
         result("old", {
-          absence_of_trust: { score: 6 },
-          fear_of_conflict: { score: 3 },
-          lack_of_commitment: { score: 9 },
-          avoidance_of_accountability: { score: 6 },
-          inattention_to_results: { score: 6 },
+          team_signal_a: { score: 6, label: "Semnal echipă A" },
+          team_signal_b: { score: 3, label: "Semnal echipă B" },
+          team_signal_c: { score: 9, label: "Semnal echipă C" },
+          team_signal_d: { score: 6, label: "Semnal echipă D" },
+          team_signal_e: { score: 6, label: "Semnal echipă E" },
         }),
       ],
       [
         "new",
         result("new", {
-          absence_of_trust: { score: 9 },
-          fear_of_conflict: { score: 6 },
-          lack_of_commitment: { score: 3 },
-          avoidance_of_accountability: { score: 9 },
-          inattention_to_results: { score: 9 },
+          team_signal_a: { score: 9, label: "Semnal echipă A" },
+          team_signal_b: { score: 6, label: "Semnal echipă B" },
+          team_signal_c: { score: 3, label: "Semnal echipă C" },
+          team_signal_d: { score: 9, label: "Semnal echipă D" },
+          team_signal_e: { score: 9, label: "Semnal echipă E" },
         }),
       ],
       [
         "driver",
         result("driver", {
-          be_strong: 100,
-          be_perfect: 50,
-          try_hard: 25,
-          hurry_up: 75,
-          please_people: 0,
+          work_signal_a: { score: 100, label: "Semnal lucru A" },
+          work_signal_b: { score: 50, label: "Semnal lucru B" },
+          work_signal_c: { score: 25, label: "Semnal lucru C" },
+          work_signal_d: { score: 75, label: "Semnal lucru D" },
+          work_signal_e: { score: 0, label: "Semnal lucru E" },
         }),
       ],
       [
         "feedback",
         result("feedback", {
-          inspiring: { score: 76 },
-          create_trust: { score: 80 },
-          awareness: { score: 66 },
-          results: { score: 90 },
-          empowerment: { score: 86 },
-          icare_01_dezvolta_oamenii: { score: 76 },
-          icare_02_conduce_prin_puterea_exemplului: { score: 80 },
-          icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 86 },
-          icare_04_promotor_al_colaborarii: { score: 90 },
-          icare_05_ancorat_in_realitate: { score: 96 },
-          icare_06_aduce_claritate: { score: 100 },
-          icare_07_modestie: { score: 66 },
-          icare_08_inteligenta_emotionala_si_situationala: { score: 60 },
-          icare_09_deschis_catre_lume: { score: 56 },
-          icare_10_ambitios_pentru_companie: { score: 50 },
-          icare_11_grija_egala_pentru_angajati_si_clienti: { score: 46 },
-          icare_12_agilitate_antreprenoriala: { score: 40 },
-          icare_13_decizii_cat_mai_aproape_de_teren: { score: 36 },
-          icare_14_cultiva_inteligenta_colectiva: { score: 30 },
-          icare_15_ajuta_echipa: { score: 26 },
+          feedback_signal_a: { score: 76, label: "Feedback A" },
+          feedback_signal_b: { score: 80, label: "Feedback B" },
+          feedback_signal_c: { score: 66, label: "Feedback C" },
+          feedback_signal_d: { score: 90, label: "Feedback D" },
+          feedback_signal_e: { score: 86, label: "Feedback E" },
         }),
       ],
     ]);
@@ -132,36 +117,36 @@ describe("buildReportAggregation", () => {
     expect(aggregation.completionRate).toBe(80);
     expect(aggregation.reportableAssignments.map((item) => item.id)).toEqual(["feedback", "new", "old", "driver"]);
     expect(aggregation.lencioniCount).toBe(2);
-    expect(aggregation.lencioniAverages.find((item) => item.id === "absence_of_trust")).toMatchObject({
+    expect(aggregation.lencioniAverages.find((item) => item.id === "team_signal_a")).toMatchObject({
       avg: 7.5,
     });
-    expect(aggregation.lencioniAverages.find((item) => item.id === "lack_of_commitment")).toMatchObject({
+    expect(aggregation.lencioniAverages.find((item) => item.id === "team_signal_c")).toMatchObject({
       avg: 6,
     });
     expect(aggregation.driverCount).toBe(1);
     expect(aggregation.driverAverages.map((item) => item.id)).toEqual([
-      "be_strong",
-      "be_perfect",
-      "try_hard",
-      "hurry_up",
-      "please_people",
+      "work_signal_a",
+      "work_signal_b",
+      "work_signal_c",
+      "work_signal_d",
+      "work_signal_e",
     ]);
-    expect(aggregation.driverAverages.find((item) => item.id === "be_perfect")).toMatchObject({
+    expect(aggregation.driverAverages.find((item) => item.id === "work_signal_b")).toMatchObject({
       avg: 50,
       interpretation: null,
     });
-    expect(aggregation.driverAverages.find((item) => item.id === "hurry_up")).toMatchObject({
+    expect(aggregation.driverAverages.find((item) => item.id === "work_signal_d")).toMatchObject({
       avg: 75,
-      interpretation: "Driver prezent peste pragul de atenție; merită explorat în debrief.",
-      range_label: ">50",
+      interpretation: null,
+      range_label: null,
     });
     expect(aggregation.boss360Count).toBe(1);
-    expect(aggregation.boss360Averages.find((item) => item.id === "icare_07_modestie")).toMatchObject({
+    expect(aggregation.boss360Averages.find((item) => item.id === "feedback_signal_c")).toMatchObject({
       avg: 66,
     });
-    expect(aggregation.lencioniAverages.find((item) => item.id === "fear_of_conflict")).toMatchObject({
-      interpretation: "Disfuncția trebuie probabil abordată.",
-      range_label: "3-5",
+    expect(aggregation.lencioniAverages.find((item) => item.id === "team_signal_b")).toMatchObject({
+      interpretation: null,
+      range_label: null,
     });
   });
 
@@ -175,11 +160,9 @@ describe("buildReportAggregation", () => {
         [
           "scored",
           result("scored", {
-            absence_of_trust: { score: 9 },
-            fear_of_conflict: { score: 9 },
-            lack_of_commitment: { score: 9 },
-            avoidance_of_accountability: { score: 9 },
-            inattention_to_results: { score: 9 },
+            team_signal_a: { score: 9 },
+            team_signal_b: { score: 9 },
+            team_signal_c: { score: 9 },
           }),
         ],
       ]),
@@ -201,64 +184,54 @@ describe("buildReportAggregation", () => {
         [
           "lencioni-en",
           result("lencioni-en", {
-            absence_of_trust: { score: 8 },
-            fear_of_conflict: { score: 7 },
-            lack_of_commitment: { score: 6 },
-            avoidance_of_accountability: { score: 5 },
-            inattention_to_results: { score: 4 },
+            team_signal_a: { score: 8 },
+            team_signal_b: { score: 7 },
+            team_signal_c: { score: 6 },
           }),
         ],
         [
           "driver-en",
           result("driver-en", {
-            be_strong: 20,
-            be_perfect: 40,
-            try_hard: 60,
-            hurry_up: 80,
-            please_people: 100,
+            work_signal_a: 20,
+            work_signal_b: 40,
+            work_signal_c: 60,
+            work_signal_d: 80,
+            work_signal_e: 100,
           }),
         ],
         [
           "boss-en",
           result("boss-en", {
-            inspiring: { score: 70 },
-            create_trust: { score: 76 },
-            awareness: { score: 80 },
-            results: { score: 86 },
-            empowerment: { score: 90 },
-            icare_15_ajuta_echipa: { score: 90 },
+            feedback_signal_a: { score: 70 },
+            feedback_signal_b: { score: 90 },
           }),
         ],
       ]),
     );
 
     expect(aggregation.lencioniCount).toBe(1);
-    expect(aggregation.lencioniAverages.find((item) => item.id === "absence_of_trust")).toMatchObject({ avg: 8 });
+    expect(aggregation.lencioniAverages.find((item) => item.id === "team_signal_a")).toMatchObject({ avg: 8 });
     expect(aggregation.driverCount).toBe(1);
-    expect(aggregation.driverAverages.find((item) => item.id === "please_people")).toMatchObject({ avg: 100 });
+    expect(aggregation.driverAverages.find((item) => item.id === "work_signal_e")).toMatchObject({ avg: 100 });
     expect(aggregation.boss360Count).toBe(1);
-    expect(aggregation.boss360Averages.find((item) => item.id === "icare_15_ajuta_echipa")).toMatchObject({ avg: 90 });
+    expect(aggregation.boss360Averages.find((item) => item.id === "feedback_signal_b")).toMatchObject({ avg: 90 });
   });
 
-  it("does not count legacy 360 result keys as reportable iCARE aggregate scores", () => {
+  it("counts score-bearing feedback results without reconstructing private dimensions", () => {
     const aggregation = buildReportAggregation(
       [assignment("legacy-360", "boss_360", "scored", "2026-06-11T09:00:00Z")],
       new Map([
         [
           "legacy-360",
           result("legacy-360", {
-            inspiring: { score: 76 },
-            create_trust: { score: 80 },
-            awareness: { score: 66 },
-            results: { score: 90 },
-            empowerment: { score: 86 },
+            feedback_signal_a: { score: 76, label: "Feedback A" },
           }),
         ],
       ]),
     );
 
     expect(aggregation.totalCompleted).toBe(1);
-    expect(aggregation.boss360Count).toBe(0);
+    expect(aggregation.boss360Count).toBe(1);
   });
 
   it("adapts backend canonical team lenses to the report view model", () => {
@@ -276,9 +249,9 @@ describe("buildReportAggregation", () => {
           boss_360_count: 1,
           pcm_base_count: 2,
           pcm_phase_count: 2,
-          lencioni_averages: [{ id: "absence_of_trust", label: "Trust", avg: 8, interpretation: null, range_label: null }],
-          driver_averages: [{ id: "be_strong", label: "Fii Puternic", avg: 62, interpretation: ">50", range_label: ">50" }],
-          boss_360_averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 80 }],
+          lencioni_averages: [{ id: "team_signal_a", label: "Semnal echipă A", avg: 8, interpretation: null, range_label: null }],
+          driver_averages: [{ id: "work_signal_a", label: "Semnal lucru A", avg: 62, interpretation: null, range_label: null }],
+          boss_360_averages: [{ id: "feedback_signal_a", label: "Feedback A", avg: 80 }],
           pcm_base_distribution: [{ id: "thinker", label: "Gânditor", value: 1, color: null }],
           pcm_phase_distribution: [{ id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" }],
         },
@@ -296,9 +269,9 @@ describe("buildReportAggregation", () => {
         boss360Count: 1,
         pcmBaseCount: 2,
         pcmPhaseCount: 2,
-        lencioniAverages: [{ id: "absence_of_trust", label: "Trust", avg: 8, interpretation: null, range_label: null }],
-        driverAverages: [{ id: "be_strong", label: "Fii Puternic", avg: 62, interpretation: ">50", range_label: ">50" }],
-        boss360Averages: [{ id: "icare_01_dezvolta_oamenii", label: "Dezvoltă oamenii", avg: 80 }],
+        lencioniAverages: [{ id: "team_signal_a", label: "Semnal echipă A", avg: 8, interpretation: null, range_label: null }],
+        driverAverages: [{ id: "work_signal_a", label: "Semnal lucru A", avg: 62, interpretation: null, range_label: null }],
+        boss360Averages: [{ id: "feedback_signal_a", label: "Feedback A", avg: 80 }],
         pcmBaseDistribution: [{ id: "thinker", label: "Gânditor", value: 1, color: undefined }],
         pcmPhaseDistribution: [{ id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" }],
       },
@@ -323,17 +296,14 @@ describe("buildReportAggregation", () => {
         [
           "leader-score",
           result("leader-score", {
-            absence_of_trust: { score: 8 },
-            fear_of_conflict: { score: 7 },
-            lack_of_commitment: { score: 6 },
-            avoidance_of_accountability: { score: 5 },
-            inattention_to_results: { score: 4 },
+            team_signal_a: { score: 8, label: "Semnal echipă A" },
+            team_signal_b: { score: 7, label: "Semnal echipă B" },
           }),
         ],
         [
           "member-score",
           result("member-score", {
-            be_strong: 60,
+            work_signal_a: { score: 60, label: "Semnal lucru A" },
           }),
         ],
       ]),
@@ -370,9 +340,9 @@ describe("buildReportAggregation", () => {
         { id: "persister", label: "Perseverent", value: 1, color: "#7c3aed" },
       ],
     });
-    expect(aggregation.teamLenses[0].driverAverages.find((item) => item.id === "be_strong")).toMatchObject({
+    expect(aggregation.teamLenses[0].driverAverages.find((item) => item.id === "work_signal_a")).toMatchObject({
       avg: 60,
-      interpretation: "Driver prezent peste pragul de atenție; merită explorat în debrief.",
+      interpretation: null,
     });
   });
 
@@ -401,11 +371,8 @@ describe("buildReportAggregation", () => {
     });
 
     const lencioniScores = {
-      absence_of_trust: { score: 8 },
-      fear_of_conflict: { score: 7 },
-      lack_of_commitment: { score: 6 },
-      avoidance_of_accountability: { score: 5 },
-      inattention_to_results: { score: 4 },
+      team_signal_a: { score: 8, label: "Semnal echipă A" },
+      team_signal_b: { score: 7, label: "Semnal echipă B" },
     };
     const aggregation = buildReportAggregation(
       assignments,
@@ -413,16 +380,16 @@ describe("buildReportAggregation", () => {
         ["ceo-lencioni", result("ceo-lencioni", lencioniScores)],
         ["ilinca-lencioni", result("ilinca-lencioni", lencioniScores)],
         ["vlad-lencioni", result("vlad-lencioni", lencioniScores)],
-        ["alex-driver", result("alex-driver", { be_strong: 80, be_perfect: 20 })],
-        ["member-driver", result("member-driver", { be_strong: 40, be_perfect: 90 })],
+        ["alex-driver", result("alex-driver", { work_signal_a: 80, work_signal_b: 20 })],
+        ["member-driver", result("member-driver", { work_signal_a: 40, work_signal_b: 90 })],
       ]),
       [
-        participant("andrei", "Andrei Vacaru", "1", "thinker", "thinker", "manager"),
-        participant("ilinca", "Ilinca Corbu", "AndreiVacaru", "harmonizer", "harmonizer", "manager"),
-        participant("vlad", "Vlad Soimu", "AndreiVacaru", "rebel", "promoter", "manager"),
-        participant("alex", "Alexandra Giurca", "IlincaCorbu", "persister", "persister"),
-        participant("member-vlad", "Member Vlad", "IlincaCorbu", "imaginer", "imaginer"),
-        participant("member-ilinca", "Member Ilinca", "VladSoimu", "promoter", "rebel"),
+        participant("andrei", "Alex Dima", "1", "thinker", "thinker", "manager"),
+        participant("ilinca", "Mara Ionescu", "AlexDima", "harmonizer", "harmonizer", "manager"),
+        participant("vlad", "Sorin Pavel", "AlexDima", "rebel", "promoter", "manager"),
+        participant("alex", "Diana Luca", "MaraIonescu", "persister", "persister"),
+        participant("member-vlad", "Tudor Stan", "MaraIonescu", "imaginer", "imaginer"),
+        participant("member-ilinca", "Ioana Rusu", "SorinPavel", "promoter", "rebel"),
       ],
     );
 

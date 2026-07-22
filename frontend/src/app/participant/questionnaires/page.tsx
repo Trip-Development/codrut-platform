@@ -13,11 +13,12 @@ export default async function ParticipantQuestionnairesPage() {
   return (
     <AppShell
       audience="participant"
-      eyebrow="Chestionare"
-      title="Formele asignate ție"
-      description="Aici vezi doar chestionarele care ți-au fost alocate pentru proiectul curent."
+      eyebrow=""
+      title="Chestionare"
+      description=""
       navItems={participantNavItems}
       activeHref="/participant/questionnaires"
+      userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
     >
       {taskGroups.length > 0 ? (
         <ParticipantTaskList
@@ -27,9 +28,9 @@ export default async function ParticipantQuestionnairesPage() {
           emptyDescription={summary.emptyState.description}
         />
       ) : (
-        <section className="rounded-xl border border-[var(--border)] bg-surface p-6 shadow-sm">
+        <section className="border-y border-border py-8">
           <h2 className="text-base font-semibold text-foreground">{summary.emptyState.title}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {summary.emptyState.description}
           </p>
         </section>

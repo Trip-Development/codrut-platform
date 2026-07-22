@@ -42,7 +42,7 @@ export const campaignClientTypes: CampaignClientType[] = [
 export const campaignWorkflowSteps: CampaignWorkflowStep[] = [
   { id: "segment", label: "Împărțim baza de date în funcție de tip client" },
   { id: "copy_review", label: "Redactăm emailul și verificăm template-ul" },
-  { id: "host_video", label: "Host film pe pagina Codruț cu video în R2" },
+  { id: "host_video", label: "Host film pe pagina Cody cu video în R2" },
   { id: "template", label: "Template email cu prenumele completat automat" },
   { id: "send", label: "Trimitem emailul" },
   { id: "follow_up", label: "Setăm notificări Calendly și formular de contact" },

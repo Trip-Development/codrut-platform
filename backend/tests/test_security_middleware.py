@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from codrut.api.dependencies import current_principal
 from codrut.core.config import Settings, get_settings
-from codrut.core.rate_limit import RateLimitDecision, install_rate_limit_middleware
+from codrut.core.rate_limit import RateLimitDecision, RateLimiter, install_rate_limit_middleware
 from codrut.core.request_id import REQUEST_ID_HEADER, install_request_id_middleware
 from codrut.core.request_limits import install_request_limit_middleware
 from codrut.core.security_headers import install_security_headers_middleware
@@ -26,9 +26,24 @@ class CountingRateLimiter:
         )
 
 
+class PerKeyRateLimiter:
+    def __init__(self) -> None:
+        self.counts: dict[str, int] = {}
+        self.keys: list[str] = []
+
+    async def hit(self, key: str, *, limit: int, window_seconds: int) -> RateLimitDecision:
+        self.keys.append(key)
+        self.counts[key] = self.counts.get(key, 0) + 1
+        allowed = self.counts[key] <= limit
+        return RateLimitDecision(
+            allowed=allowed,
+            retry_after_seconds=window_seconds if not allowed else None,
+        )
+
+
 def create_middleware_test_app(
     settings: Settings,
-    limiter: CountingRateLimiter | None = None,
+    limiter: RateLimiter | None = None,
 ) -> FastAPI:
     app = FastAPI()
     install_rate_limit_middleware(app, settings=settings, limiter=limiter)
@@ -70,7 +85,10 @@ def test_api_responses_include_conservative_security_headers() -> None:
 
 
 def test_hsts_header_is_added_only_for_production_settings() -> None:
-    settings = Settings(env="production", security_hsts_max_age_seconds=3600)
+    settings = Settings.model_construct(
+        env="production",
+        security_hsts_max_age_seconds=3600,
+    )
     client = TestClient(create_middleware_test_app(settings))
 
     response = client.get("/api/ok")
@@ -146,3 +164,99 @@ def test_rate_limiter_hook_can_block_unsafe_requests() -> None:
             "request_id": "req-rate",
         }
     }
+
+
+def test_untrusted_peer_cannot_bypass_rate_limit_with_spoofed_forwarded_for() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_trusted_proxies=["10.0.0.0/8"],
+    )
+    client = TestClient(
+        create_middleware_test_app(settings, limiter),
+        client=("198.51.100.20", 50000),
+    )
+
+    first = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.1"})
+    second = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.2"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert limiter.keys == [
+        "198.51.100.20:POST:/api/echo",
+        "198.51.100.20:POST:/api/echo",
+    ]
+
+
+def test_trusted_proxy_uses_forwarded_client_for_rate_limit_key() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_trusted_proxies=["10.0.0.0/8"],
+    )
+    client = TestClient(
+        create_middleware_test_app(settings, limiter),
+        client=("10.0.0.10", 50000),
+    )
+
+    first_client = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.1"})
+    second_client = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.2"})
+    first_client_again = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.1"})
+
+    assert first_client.status_code == 200
+    assert second_client.status_code == 200
+    assert first_client_again.status_code == 429
+
+
+def test_forwarding_chain_stops_at_first_untrusted_peer() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_trusted_proxies=["10.0.0.0/8"],
+    )
+    client = TestClient(
+        create_middleware_test_app(settings, limiter),
+        client=("10.0.0.10", 50000),
+    )
+
+    first = client.post(
+        "/api/echo",
+        headers={"X-Forwarded-For": "203.0.113.1, 198.51.100.30, 10.0.0.9"},
+    )
+    second = client.post(
+        "/api/echo",
+        headers={"X-Forwarded-For": "203.0.113.2, 198.51.100.30, 10.0.0.9"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert limiter.keys == [
+        "198.51.100.30:POST:/api/echo",
+        "198.51.100.30:POST:/api/echo",
+    ]
+
+
+def test_malformed_forwarded_chain_falls_back_to_trusted_direct_peer() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_trusted_proxies=["10.0.0.0/8"],
+    )
+    client = TestClient(
+        create_middleware_test_app(settings, limiter),
+        client=("10.0.0.10", 50000),
+    )
+
+    first = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.1, invalid"})
+    second = client.post("/api/echo", headers={"X-Forwarded-For": "203.0.113.2, invalid"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert limiter.keys == [
+        "10.0.0.10:POST:/api/echo",
+        "10.0.0.10:POST:/api/echo",
+    ]

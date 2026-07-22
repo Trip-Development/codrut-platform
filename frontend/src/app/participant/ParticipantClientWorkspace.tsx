@@ -1,13 +1,18 @@
-"use client";
-
 import Link from "next/link";
+import { ArrowRightIcon, ClipboardCheckIcon, MessageSquareTextIcon } from "lucide-react";
 
 import type { SessionState } from "@/api/auth";
 import type { InviteTask } from "@/api/invites";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
-import type { ParticipantReceivedFeedbackSummary, ParticipantWorkspaceResult } from "@/api/participants";
+import type {
+  ParticipantReceivedFeedbackSummary,
+  ParticipantWorkspaceProject,
+  ParticipantWorkspaceResult,
+} from "@/api/participants";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
+import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
+import { cn } from "@/utils/cn";
 import { ParticipantTaskList } from "./ParticipantTaskList";
 import { groupParticipantTasks } from "./task-display";
 
@@ -15,6 +20,7 @@ type ParticipantClientWorkspaceProps = {
   session: SessionState;
   summaryData: {
     projectName: string;
+    projects?: ParticipantWorkspaceProject[];
     companyName?: string;
     participantFullName?: string;
     anonymousName?: string | null;
@@ -25,224 +31,137 @@ type ParticipantClientWorkspaceProps = {
     pcmPhase?: string | null;
     results: ParticipantWorkspaceResult[];
     receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
+    receivedFeedbackGroups?: ParticipantReceivedFeedbackSummary[];
+    emptyState?: {
+      title: string;
+      description: string;
+    };
   };
 };
 
-const driverLabels: Record<string, string> = {
-  be_strong: "Tipar de distres A",
-  be_perfect: "Tipar de distres B",
-  try_hard: "Tipar de distres C",
-  hurry_up: "Tipar de distres D",
-  please_people: "Tipar de distres E",
-};
-
-const driverExplanations: Record<string, string> = {
-  be_strong:
-    "Feedback: sub presiune poți simți că trebuie să rămâi tare, autonom și să nu arăți cât te costă efortul. Punctul util de lucru este să ceri sprijin mai devreme, să spui explicit ce resurse îți lipsesc și să nu transformi rezistența într-o obligație permanentă.",
-  be_perfect:
-    "Feedback: standardele înalte ajută calitatea, dar peste prag pot duce la control excesiv, verificări repetate și dificultatea de a considera ceva suficient de bun. Punctul util de lucru este să definești dinainte nivelul acceptabil și să separi lucrurile critice de cele unde 80% este suficient.",
-  try_hard:
-    "Feedback: energia de a încerca poate fi valoroasă, dar peste prag poate arăta mult efort consumat fără finalizare proporțională. Punctul util de lucru este să alegi mai puține direcții, să clarifici ce înseamnă terminat și să urmărești rezultatul, nu doar intensitatea efortului.",
-  hurry_up:
-    "Feedback: viteza poate crea ritm, dar peste prag poate aduce urgență constantă, multitasking și decizii luate înainte ca informația importantă să fie clară. Punctul util de lucru este să introduci pauze scurte de prioritizare și să alegi explicit ce nu faci acum.",
-  please_people:
-    "Feedback: atenția la ceilalți susține colaborarea, dar peste prag poate duce la evitare de conflict, acord rapid și limite personale neclare. Punctul util de lucru este să exprimi dezacordul mai devreme, să verifici cererea reală și să spui ce poți face fără să preiei tot.",
-};
-
-const lencioniLabels: Record<string, string> = {
-  absence_of_trust: "Absența încrederii",
-  fear_of_conflict: "Teama de conflict",
-  lack_of_commitment: "Lipsa angajamentului",
-  avoidance_of_accountability: "Evitarea responsabilității",
-  inattention_to_results: "Neatenția la rezultate",
-};
-
-const icareLabels: Record<string, string> = {
-  icare_01_dezvolta_oamenii: "Dezvoltă oamenii",
-  icare_02_conduce_prin_puterea_exemplului: "Conduce prin exemplu",
-  icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: "Creează implicare",
-  icare_04_promotor_al_colaborarii: "Promotor al colaborării",
-  icare_05_ancorat_in_realitate: "Ancorat în realitate",
-  icare_06_aduce_claritate: "Aduce claritate",
-  icare_07_modestie: "Modestie",
-  icare_08_inteligenta_emotionala_si_situationala: "Inteligență emoțională și situațională",
-  icare_09_deschis_catre_lume: "Deschis către lume",
-  icare_10_ambitios_pentru_companie: "Ambițios pentru companie",
-  icare_11_grija_egala_pentru_angajati_si_clienti: "Grijă pentru angajați și clienți",
-  icare_12_agilitate_antreprenoriala: "Agilitate antreprenorială",
-  icare_13_decizii_cat_mai_aproape_de_teren: "Decizii aproape de teren",
-  icare_14_cultiva_inteligenta_colectiva: "Cultivă inteligența colectivă",
-  icare_15_ajuta_echipa: "Ajută echipa",
-};
-
-export function ParticipantClientWorkspace({ session, summaryData }: ParticipantClientWorkspaceProps) {
-  const realIdentity = summaryData.participantFullName || session.user.name || summaryData.participantEmail;
-  const anonymousIdentity = summaryData.anonymousName || "Profil anonim";
-  const displayIdentity = `${anonymousIdentity}${realIdentity ? ` (${realIdentity})` : ""}`;
+export function ParticipantClientWorkspace({ summaryData }: ParticipantClientWorkspaceProps) {
+  const participantIdentity =
+    summaryData.participantFullName?.trim() || summaryData.anonymousName?.trim() || "Participant";
+  const participantFirstName = participantIdentity.split(/\s+/)[0];
   const pendingTasks = summaryData.tasks.filter((task) => task.status !== "completed");
   const taskGroups = groupParticipantTasks(summaryData.tasks);
   const pendingTaskGroups = taskGroups.filter((group) => group.status !== "completed");
   const completedTasksCount = summaryData.tasks.length - pendingTasks.length;
   const tasksProgressPct =
-    summaryData.tasks.length > 0 ? Math.round((completedTasksCount / summaryData.tasks.length) * 100) : 100;
-  const nextGroup = pendingTaskGroups[0];
+    summaryData.tasks.length > 0 ? Math.round((completedTasksCount / summaryData.tasks.length) * 100) : 0;
   const hasAnyTasks = summaryData.tasks.length > 0;
   const isComplete = hasAnyTasks && pendingTasks.length === 0;
   const resultCount = summaryData.results.length;
+  const projects = summaryData.projects ?? [];
+  const hasMultipleProjects = projects.length > 1;
 
   return (
     <AppShell
       audience="participant"
-      eyebrow={summaryData.projectName}
-      title={`Bună, ${anonymousIdentity}`}
-      description="Ai chestionarele pregătite aici. Completează-le pe rând, iar progresul rămâne salvat automat."
+      eyebrow=""
+      title={`Bună, ${participantFirstName}`}
+      description=""
       navItems={participantNavItems}
       activeHref="/participant"
-      userLabel={anonymousIdentity}
+      userLabel={participantFirstName}
     >
-      <div className="space-y-7">
-        <section className="surface-panel p-5 md:p-6">
-          <div className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
-            <div className="min-w-0">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-burgundy/80">
-                    Prioritatea ta acum
-                  </p>
-                  <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                    {pendingTaskGroups.length > 0 ? "Chestionare active" : isComplete ? "Ai finalizat partea ta" : "Ești la zi"}
-                  </h2>
-                  {isComplete ? (
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/62">
-                      Nu mai ai nimic de făcut acum. Rezultatele calculate sunt în tabul dedicat.
-                    </p>
-                  ) : null}
-                </div>
-                <div
-                  className="inline-flex w-fit items-center gap-2 rounded-full border border-[rgb(230,92,92)] bg-burgundy/10 px-3 py-1.5 text-burgundy shadow-sm shadow-burgundy/5"
-                  role="status"
-                  aria-label={`${pendingTaskGroups.length} ${
-                    pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"
-                  }`}
-                >
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-burgundy px-1.5 text-xs font-bold leading-none text-white">
-                    {pendingTaskGroups.length}
-                  </span>
-                  <span className="text-xs font-bold">
-                    {pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <ParticipantTaskList
-                  groups={taskGroups}
-                  returnTo="/participant/questionnaires"
-                  emptyTitle={isComplete ? "Participarea ta este completă" : "Nu ai sarcini active"}
-                  emptyDescription={
-                    isComplete
-                      ? "Rezultatele tale sunt disponibile în tabul Rezultate pentru chestionarele care au scor calculat."
-                      : "Când trainerul îți trimite o invitație nouă, o vei vedea aici și în pagina de chestionare."
-                  }
-                />
-              </div>
-            </div>
-
-            <aside className="rounded-xl border border-[var(--border)] bg-surface-muted p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/48">Următorul pas</p>
-                  <h3 className="mt-2 text-xl font-semibold text-foreground">
-                    {nextGroup ? nextGroup.title : "Așteaptă următoarea invitație"}
-                  </h3>
-                </div>
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/20 text-success-ink">
-                  <CheckIcon />
-                </span>
-              </div>
-              <p className="mt-4 text-sm leading-6 text-foreground/62">
-                {nextGroup
-                  ? "Deschide chestionarul, completează răspunsurile și revino aici pentru restul pașilor."
-                  : isComplete
-                    ? "Ai terminat sarcinile disponibile. Poți consulta scorurile în Rezultate."
-                    : "Progresul tău rămâne salvat. Când apare o sarcină nouă, o vei vedea aici."}
+      <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_17rem] xl:gap-12">
+        <section className="min-w-0" aria-labelledby="participant-tasks-title">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
+            <div>
+              <h2 id="participant-tasks-title" className="text-2xl font-semibold tracking-tight text-foreground">
+                {pendingTaskGroups.length > 0 ? "De completat" : isComplete ? "Totul este trimis" : "Chestionare"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {hasMultipleProjects ? `${projects.length} proiecte active` : summaryData.projectName}
               </p>
-              <div className="mt-6 rounded-xl border border-[var(--border)] bg-surface p-4">
-                <div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground/55">
-                  <span>Completare proiect</span>
-                  <span>{tasksProgressPct}%</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-burgundy/10">
-                  <div className="h-full rounded-full bg-burgundy transition-all duration-200" style={{ width: `${tasksProgressPct}%` }} />
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3 text-sm">
-                <ContextRow label="Companie" value={summaryData.companyName || "Companie neasociată"} />
-                <ContextRow label="Identitate anonimă" value={displayIdentity} />
-                <ContextRow label="Email" value={summaryData.participantEmail || "Email indisponibil"} />
-              </div>
-            </aside>
+            </div>
+            <div
+              className="flex items-baseline gap-2 text-burgundy"
+              role="status"
+              aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
+            >
+              <span className="font-mono text-2xl font-semibold tabular-nums">{pendingTaskGroups.length}</span>
+              <span className="text-sm font-semibold">active</span>
+            </div>
           </div>
+          <ParticipantTaskList
+            groups={taskGroups}
+            returnTo="/participant/questionnaires"
+            emptyTitle={
+              isComplete
+                ? "Toate răspunsurile au fost trimise"
+                : summaryData.emptyState?.title ?? "Nu ai chestionare disponibile"
+            }
+            emptyDescription={
+              isComplete
+                ? "Nu mai ai sarcini active."
+                : summaryData.emptyState?.description ??
+                  "Deschide linkul unei invitații noi pentru a vedea sarcinile asociate."
+            }
+          />
+
+          {resultCount > 0 ? (
+            <div className="mt-8 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Ai {resultCount} {resultCount === 1 ? "rezultat disponibil" : "rezultate disponibile"}.
+              </p>
+              <Link href="/participant/results" className={serverLinkButtonClassName({ variant: "ghost", className: "w-fit text-burgundy" })}>
+                Vezi rezultatele
+                <ArrowRightIcon data-icon="inline-end" aria-hidden="true" strokeWidth={2.2} />
+              </Link>
+            </div>
+          ) : null}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatusCard label="Progres" value={`${tasksProgressPct}%`} detail={`${completedTasksCount}/${summaryData.tasks.length} sarcini finalizate`} tone="burgundy" />
-          <StatusCard label="Rezultate" value={`${resultCount}`} detail="Chestionare finalizate cu scor disponibil." tone="green" />
-          <StatusCard label="Proiect" value={summaryData.projectName} detail="Programul activ pentru invitațiile tale." tone="gray" />
-        </section>
-
-        <section className="surface-panel flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Rezultate</p>
-            <h2 className="mt-1 text-lg font-semibold text-foreground">Scorurile sunt într-un tab separat</h2>
-            <p className="mt-1 text-sm leading-6 text-foreground/58">
-              Acasă rămâne pentru progres și sarcini. Deschide rezultatele când vrei detaliile pe chestionar.
-            </p>
-          </div>
-          <Link
-            href="/participant/results"
-            className="tap-soft inline-flex justify-center rounded-full bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-burgundy-dark"
+        <aside className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0" aria-label="Stadiul proiectului">
+          <p className="text-sm font-semibold text-foreground">Progres</p>
+          <p className="mt-3 font-mono text-5xl font-semibold tracking-tight text-burgundy tabular-nums">{tasksProgressPct}%</p>
+          <div
+            className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Progresul sarcinilor"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={tasksProgressPct}
           >
-            Vezi rezultatele
-          </Link>
-        </section>
+            <div className="h-full rounded-full bg-burgundy transition-[width] duration-200" style={{ width: `${tasksProgressPct}%` }} />
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {completedTasksCount}/{summaryData.tasks.length} finalizate
+          </p>
+          {hasMultipleProjects ? (
+            <div className="mt-7 border-y border-border" aria-label="Progres pe proiecte">
+              {projects.map((project) => {
+                const projectTasks = summaryData.tasks.filter((task) => task.projectId === project.id);
+                const completed = projectTasks.filter((task) => task.status === "completed").length;
+                return (
+                  <div key={project.id} className="border-b border-border py-3 last:border-b-0">
+                    <p className="text-sm font-semibold text-foreground">{project.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {completed}/{projectTasks.length} finalizate · {project.deadlineLabel}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          <dl className={cn("divide-y divide-border border-y border-border", hasMultipleProjects ? "mt-5" : "mt-7")}>
+            <ContextRow label="Companie" value={summaryData.companyName || "Neasociată"} />
+            {!hasMultipleProjects ? <ContextRow label="Termen" value={summaryData.deadlineLabel || "Fără termen"} /> : null}
+            <ContextRow label="Profil" value={participantIdentity} />
+          </dl>
+        </aside>
       </div>
     </AppShell>
   );
 }
 
-function StatusCard({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "burgundy" | "green" | "gray";
-}) {
-  return (
-    <div className="surface-panel p-5">
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/45">{label}</p>
-      <p
-        className={[
-          "mt-2 line-clamp-2 text-2xl font-semibold tracking-tight",
-          tone === "green" ? "text-success-ink" : tone === "burgundy" ? "text-burgundy" : "text-foreground",
-        ].join(" ")}
-      >
-        {value}
-      </p>
-      <p className="mt-2 text-sm leading-6 text-foreground/58">{detail}</p>
-    </div>
-  );
-}
-
 function ContextRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-surface px-4 py-3">
-      <span className="block text-xs font-semibold text-foreground/45">{label}</span>
-      <span className="mt-1 block break-words text-sm font-bold text-foreground">{value}</span>
+    <div className="py-3">
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words text-sm font-semibold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -250,49 +169,53 @@ function ContextRow({ label, value }: { label: string; value: string }) {
 export function ParticipantResultsPanel({
   results,
   receivedFeedback,
+  receivedFeedbackGroups = [],
   pcmBase,
   pcmPhase,
 }: {
   results: ParticipantWorkspaceResult[];
   receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
+  receivedFeedbackGroups?: ParticipantReceivedFeedbackSummary[];
   pcmBase?: string | null;
   pcmPhase?: string | null;
 }) {
+  const feedbackGroups = receivedFeedbackGroups.length > 0
+    ? receivedFeedbackGroups
+    : receivedFeedback
+      ? [receivedFeedback]
+      : [];
   return (
-    <section className="space-y-4">
-      <div className="surface-panel flex flex-col gap-4 p-5 md:flex-row md:items-start md:justify-between md:p-6">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Rezultatele tale</p>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">Scoruri și profil</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
-            Vezi scorurile calculate din chestionarele finalizate. La driverii de stres sunt explicate doar scorurile peste 50, conform pragului folosit în materialul chestionarului.
-            Pentru Lencioni și iCARE, explicațiile folosesc intervalele de scor salvate în definițiile chestionarelor.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <PcmResultChip label="Bază PCM" value={pcmBase} />
-            <PcmResultChip label="Fază PCM" value={pcmPhase} />
+    <section className="flex flex-col gap-10">
+      {pcmBase || pcmPhase ? (
+        <section className="grid gap-7 rounded-lg bg-foreground px-6 py-6 text-background md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] md:items-center md:px-8">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-background/55">Profil personal</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight">PCM</h2>
           </div>
-        </div>
-        <Link
-          href="/participant/questionnaires"
-          className="tap-soft inline-flex justify-center rounded-full border border-burgundy/20 bg-surface px-4 py-3 text-sm font-bold text-burgundy hover:bg-burgundy hover:text-white"
-        >
-          Vezi chestionarele
-        </Link>
-      </div>
+          <div className="flex flex-wrap gap-x-12 gap-y-5">
+            {pcmBase ? <PcmResultChip label="Bază PCM" value={pcmBase} /> : null}
+            {pcmPhase ? <PcmResultChip label="Fază PCM" value={pcmPhase} /> : null}
+          </div>
+        </section>
+      ) : null}
 
-      {receivedFeedback ? <ReceivedFeedbackPanel feedback={receivedFeedback} /> : null}
+      {feedbackGroups.map((feedback, index) => (
+        <ReceivedFeedbackPanel
+          key={feedback.assignmentRoundId ?? `${feedback.projectId ?? feedback.projectName ?? "legacy"}-${index}`}
+          feedback={feedback}
+        />
+      ))}
 
       {results.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="divide-y divide-border border-y border-border">
           {results.map((result) => (
             <ResultCard key={result.assignmentId} result={result} />
           ))}
         </div>
-      ) : receivedFeedback ? null : (
-        <div className="surface-panel p-5">
+      ) : feedbackGroups.length > 0 ? null : (
+        <div className="border-y border-border py-8">
           <h3 className="text-base font-semibold text-foreground">Nu există scoruri calculate încă</h3>
-          <p className="mt-1 text-sm leading-6 text-foreground/62">
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
             După ce finalizezi chestionarele cu scor, sumarul apare aici automat.
           </p>
         </div>
@@ -303,41 +226,48 @@ export function ParticipantResultsPanel({
 
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
   const visible = feedback.visible && feedback.overallAverage !== null && feedback.overallAverage !== undefined && feedback.dimensions.length > 0;
+  const observedMaximum = Math.max(
+    feedback.overallAverage ?? 0,
+    ...feedback.dimensions.map((dimension) => dimension.averageScore),
+  );
+  const scaleMax = feedback.scaleMax ?? (observedMaximum > 5 ? 100 : 5);
 
   return (
-    <article className="surface-panel p-4 md:p-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <article className="border-t border-border pt-6">
+      <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-burgundy/75">Feedback 360 primit anonim</p>
-          <h3 className="mt-1 text-base font-semibold leading-6 text-foreground">iCARE completat de ceilalți</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
-            Vezi doar media feedbackului primit. Identitatea celor care au completat nu este afișată.
-          </p>
+          <h3 className="text-2xl font-semibold tracking-tight text-foreground">Feedback primit</h3>
+          {feedback.projectName ? (
+            <p className="mt-1 text-sm font-semibold text-burgundy">{feedback.projectName}</p>
+          ) : null}
+          {feedback.questionnaireTitle ? (
+            <p className="mt-1 text-sm text-muted-foreground">{feedback.questionnaireTitle}</p>
+          ) : null}
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Mediile sunt anonime și nu includ răspunsuri individuale.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-72">
-          <MiniMetric label="Completate" value={String(feedback.completedCount)} />
-          <MiniMetric label="Medie" value={visible ? formatScore(feedback.overallAverage ?? 0) : "N/A"} />
+        <div className="flex gap-10">
+          <FeedbackMetric label="Feedbackuri" value={String(feedback.completedCount)} />
+          <FeedbackMetric label="Medie" value={visible ? formatScore(feedback.overallAverage ?? 0) : "N/A"} />
         </div>
       </div>
 
       {visible ? (
-        <div className="mt-4 grid gap-3">
+        <div className="mt-6 divide-y divide-border border-y border-border">
           {feedback.dimensions.map((dimension) => (
             <ScoreRow
               key={dimension.id}
               item={{
                 id: dimension.id,
-                label: labelForScore(dimension.id, "icare"),
+                label: dimension.label,
                 score: dimension.averageScore,
-                interpretation: fallbackInterpretationForScore("icare", dimension.averageScore),
               }}
-              max={5}
-              showExplanation={false}
+              max={scaleMax}
+              showSignal={false}
             />
           ))}
         </div>
       ) : (
-        <p className="mt-4 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-sm leading-6 text-foreground/62">
+        <p className="mt-6 border-l-2 border-burgundy bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
           Media apare după minimum {feedback.minimumCompleted} feedbackuri completate. Pragul protejează anonimitatea respondenților.
         </p>
       )}
@@ -349,42 +279,92 @@ function PcmResultChip({ label, value }: { label: string; value?: string | null 
   const profile = getPcmProfile(value);
   const color = profile?.color ?? "var(--border)";
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/70">
-      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-      {label}: <span className="text-foreground">{formatPcmLabel(value)}</span>
-    </span>
+    <div>
+      <p className="text-xs font-semibold text-background/55">{label}</p>
+      <p className="mt-1.5 flex items-center gap-2.5 text-xl font-semibold text-background">
+        <span className="size-3 rounded-full ring-2 ring-background/15" style={{ backgroundColor: color }} />
+        {formatPcmLabel(value)}
+      </p>
+    </div>
   );
 }
 
 function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
   const kind = resultKind(result.questionnaireKey);
-  const items = scoreItemsForResult(result, kind);
+  const items = scoreItemsForResult(result);
   const max = maxScoreForKind(kind);
   const average = averageScore(items);
   const scaleLabel = scaleLabelForKind(kind, max);
+  const highlightedItems = items.filter((item) => kind === "drivers" && item.score > 50 && item.explanation);
 
   return (
-    <article className="surface-panel p-4 md:p-5">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+    <article className="py-8">
+      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-burgundy/75">{resultKindLabel(kind)}</p>
-          <h3 className="mt-1 text-base font-semibold leading-6 text-foreground" title={result.title}>{result.title}</h3>
-          <p className="mt-1 text-sm text-foreground/55">{result.targetLabel}</p>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-foreground/42">
-            {items.length} dimensiuni · scor mediu {average === null ? "N/A" : formatScore(average)} · {scaleLabel}
+          <p className="text-xs font-semibold text-burgundy">{resultKindLabel(kind)}</p>
+          <h3 className="mt-2 text-2xl font-semibold leading-8 tracking-tight text-foreground" title={result.title}>{result.title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {[result.projectName, result.targetLabel].filter(Boolean).join(" · ")}
           </p>
         </div>
-        {result.primaryResult ? (
-          <span className="w-fit rounded-full border border-[var(--border)] bg-surface-muted px-3 py-1.5 text-xs font-bold text-foreground/65">
-            Principal: {labelForScore(result.primaryResult, kind)}
-          </span>
-        ) : null}
+        <dl className="flex flex-wrap gap-x-8 gap-y-3">
+          <ResultStat label="Dimensiuni" value={String(items.length)} />
+          <ResultStat label="Scor mediu" value={average === null ? "N/A" : formatScore(average)} />
+          <ResultStat label="Scală" value={scaleLabel.replace("scală ", "")} />
+        </dl>
       </div>
-      <div className="mt-4 grid gap-3">
+
+      {result.primaryResult ? (
+        <p className="mt-5 text-sm text-muted-foreground">
+          Rezultat principal:{" "}
+          <strong className="text-foreground">
+            {labelForScore(result.primaryResult, result.scores[result.primaryResult])}
+          </strong>
+        </p>
+      ) : null}
+
+      {highlightedItems.length > 0 ? (
+        <section className="mt-7 border-l-2 border-burgundy pl-5" aria-labelledby={`guidance-${result.assignmentId}`}>
+          <div className="flex items-center gap-2 text-burgundy">
+            <MessageSquareTextIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
+            <h4 id={`guidance-${result.assignmentId}`} className="text-sm font-semibold">Ce merită atenție</h4>
+          </div>
+          <div className="mt-4 grid gap-5">
+            {highlightedItems.map((item) => (
+              <GuidanceBlock key={item.id} item={item} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="mt-7 divide-y divide-border border-y border-border" aria-label="Scoruri detaliate">
         {items.map((item) => (
-          <ScoreRow key={item.id} item={item} max={max} showExplanation={kind === "drivers" && item.score > 50} />
+          <ScoreRow key={item.id} item={item} max={max} showSignal={kind === "drivers" && item.score > 50} />
         ))}
       </div>
+    </article>
+  );
+}
+
+function ResultStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-lg font-semibold text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function GuidanceBlock({ item }: { item: ScoreItem }) {
+  if (!item.explanation) return null;
+
+  return (
+    <article>
+      <div className="flex items-center gap-2 text-burgundy">
+        <ClipboardCheckIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
+        <h5 className="text-sm font-semibold">Punct de lucru pentru {item.label}</h5>
+      </div>
+      <p className="mt-2 max-w-4xl text-base leading-7 text-foreground">{item.explanation}</p>
     </article>
   );
 }
@@ -392,47 +372,50 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
 function ScoreRow({
   item,
   max,
-  showExplanation,
+  showSignal,
 }: {
   item: ScoreItem;
   max: number;
-  showExplanation: boolean;
+  showSignal: boolean;
 }) {
   const width = Math.max(0, Math.min(100, (item.score / max) * 100));
-  const tone = showExplanation ? "bg-burgundy" : "bg-success";
-  const hasFeedback = showExplanation && Boolean(item.explanation);
-  const content = (
-    <>
-      <span className="flex items-center justify-between gap-4">
-        <span className="min-w-0">
-          <span className="block text-sm font-bold leading-5 text-foreground">{item.label}</span>
-          {item.interpretation ? (
-            <span className="mt-1 block text-xs leading-5 text-foreground/56">{item.interpretation}</span>
-          ) : null}
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          {hasFeedback ? (
-            <span className="rounded-full bg-burgundy/10 px-2 py-1 text-[11px] font-bold text-burgundy">
-              Feedback
-            </span>
-          ) : null}
-          <span className="text-base font-semibold text-foreground">{formatScore(item.score)}</span>
-        </span>
-      </span>
-      <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-muted">
-        <span className={`block h-full rounded-full ${tone}`} style={{ width: `${width}%` }} />
-      </span>
-    </>
-  );
+  const tone = showSignal ? "bg-burgundy" : "bg-foreground";
 
   return (
-    <div>
-      <div className="rounded-xl p-2">{content}</div>
-      {hasFeedback ? (
-        <p className="mt-1 rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-foreground/68">
-          {item.explanation}
-        </p>
-      ) : null}
+    <div className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_7rem] md:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="text-base font-semibold leading-6 text-foreground">{item.label}</h4>
+          {showSignal ? (
+            <span className="rounded-md bg-burgundy/10 px-2 py-1 text-[11px] font-semibold text-burgundy">
+              De urmărit
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_9rem] lg:items-center">
+          {item.interpretation ? (
+            <p className="text-sm leading-6 text-muted-foreground">{item.interpretation}</p>
+          ) : null}
+          <div
+            className="h-1.5 overflow-hidden rounded-full bg-muted"
+            role="meter"
+            aria-label={`Scor ${item.label}`}
+            aria-valuemin={0}
+            aria-valuemax={max}
+            aria-valuenow={item.score}
+          >
+            <div
+              className={cn("h-full rounded-full", tone)}
+              style={{ width: `${width}%` }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="md:text-right">
+        <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">{formatScore(item.score)}</p>
+        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">scor</p>
+      </div>
     </div>
   );
 }
@@ -471,18 +454,17 @@ function scaleLabelForKind(kind: ResultKind, max: number): string {
   return `scală 0-${max}`;
 }
 
-function scoreItemsForResult(result: ParticipantWorkspaceResult, kind: ResultKind): ScoreItem[] {
+function scoreItemsForResult(result: ParticipantWorkspaceResult): ScoreItem[] {
   const items: ScoreItem[] = [];
   for (const [id, value] of Object.entries(result.scores)) {
-    if (kind === "icare" && !Object.prototype.hasOwnProperty.call(icareLabels, id)) continue;
     const score = extractScore(value);
     if (score === null) continue;
     items.push({
       id,
-      label: labelForScore(id, kind),
+      label: labelForScore(id, value),
       score,
-      interpretation: extractInterpretation(value) ?? fallbackInterpretationForScore(kind, score),
-      explanation: kind === "drivers" ? driverExplanations[id] : undefined,
+      interpretation: extractInterpretation(value),
+      explanation: extractFeedback(value),
     });
   }
   return items.sort((first, second) => second.score - first.score);
@@ -494,10 +476,11 @@ function averageScore(items: ScoreItem[]): number | null {
   return Math.round((total / items.length) * 10) / 10;
 }
 
-function labelForScore(id: string, kind: ResultKind): string {
-  if (kind === "drivers") return driverLabels[id] ?? prettifyScoreKey(id);
-  if (kind === "lencioni") return lencioniLabels[id] ?? prettifyScoreKey(id);
-  if (kind === "icare") return icareLabels[id] ?? prettifyScoreKey(id);
+function labelForScore(id: string, value: unknown): string {
+  if (typeof value === "object" && value !== null && "label" in value) {
+    const label = (value as { label?: unknown }).label;
+    if (typeof label === "string" && label.trim()) return label.trim();
+  }
   return prettifyScoreKey(id);
 }
 
@@ -511,28 +494,16 @@ function extractScore(value: unknown): number | null {
   return null;
 }
 
-function fallbackInterpretationForScore(kind: ResultKind, score: number): string | null {
-  if (kind === "lencioni") {
-    if (score >= 8 && score <= 9) return "Disfuncția probabil nu este o problemă.";
-    if (score >= 6 && score < 8) return "Disfuncția poate fi o problemă.";
-    if (score >= 3 && score < 6) return "Disfuncția trebuie probabil abordată.";
-    if (score < 3) return "Scor sub intervalul de referință Lencioni.";
-    return "Scor peste intervalul de referință Lencioni.";
-  }
-
-  if (kind === "icare") {
-    if (score >= 75) return "Comportamentul este observat frecvent sau constant pe scala iCARE.";
-    if (score >= 50) return "Comportamentul este observat uneori; zona merită clarificată în feedback.";
-    return "Comportamentul apare rar în evaluare; poate fi o zonă de dezvoltare.";
-  }
-
-  return null;
-}
-
 function extractInterpretation(value: unknown): string | null {
   if (typeof value !== "object" || value === null || !("interpretation" in value)) return null;
   const interpretation = (value as { interpretation?: unknown }).interpretation;
   return typeof interpretation === "string" && interpretation.trim() ? interpretation : null;
+}
+
+function extractFeedback(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || !("feedback" in value)) return undefined;
+  const feedback = (value as { feedback?: unknown }).feedback;
+  return typeof feedback === "string" && feedback.trim() ? feedback.trim() : undefined;
 }
 
 function prettifyScoreKey(value: string): string {
@@ -549,19 +520,11 @@ function formatScore(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function MiniMetric({ label, value }: { label: string; value: string }) {
+function FeedbackMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-2">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/45">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    <div className="min-w-20">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 font-mono text-2xl font-semibold tabular-nums text-foreground">{value}</p>
     </div>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.4" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
-    </svg>
   );
 }

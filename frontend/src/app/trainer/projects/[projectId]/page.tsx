@@ -1,119 +1,260 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  ArrowRightIcon,
+  BarChart3Icon,
+  ClipboardListIcon,
+  LockIcon,
+  MailIcon,
+  UsersIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 import {
   getCompanyAssignments,
   getCompanyInvitationStatuses,
   getCompanyProjectById,
   getProjectParticipants,
+  type CompanyProject,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { StatCard } from "@/components/presentation/stat-card";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { projectTypeLabel } from "@/components/projects/project-display";
+import { cn } from "@/utils/cn";
+import { formatRomanianDate } from "@/utils/date-format";
 
 export default async function ProjectOverviewPage({
   params,
 }: {
   params: Promise<{ projectId: string }>;
 }) {
-  const { projectId } = await params;
-  const requestOptions = await getServerApiRequestOptions();
+  const [{ projectId }, requestOptions] = await Promise.all([
+    params,
+    getServerApiRequestOptions(),
+  ]);
   const project = await getCompanyProjectById(projectId, requestOptions);
 
-  if (!project) {
-    notFound();
-  }
+  if (!project) notFound();
 
-  const [participants, assignments, invitationStatuses] = await Promise.all([
+  const results = await Promise.allSettled([
     getProjectParticipants(project.company_id, project.id, requestOptions),
     getCompanyAssignments(project.company_id, requestOptions, { projectId: project.id }),
     getCompanyInvitationStatuses(project.company_id, requestOptions, { projectId: project.id }),
   ]);
+  const participants = results[0].status === "fulfilled" ? results[0].value : [];
+  const assignments = results[1].status === "fulfilled" ? results[1].value : [];
+  const invitationStatuses = results[2].status === "fulfilled" ? results[2].value : [];
+  const loadErrors = [
+    results[0].status === "rejected" ? "Participanții nu au putut fi încărcați." : null,
+    results[1].status === "rejected" ? "Asignările nu au putut fi încărcate." : null,
+    results[2].status === "rejected" ? "Statusul invitațiilor nu a putut fi încărcat." : null,
+  ].filter((error): error is string => Boolean(error));
+
   const completed = assignments.filter((assignment) =>
     ["submitted", "validated", "scored"].includes(assignment.status),
   ).length;
-  const completionRate = assignments.length > 0 ? Math.round((completed / assignments.length) * 100) : 0;
+  const completionRate = assignments.length > 0
+    ? Math.round((completed / assignments.length) * 100)
+    : 0;
+  const pendingAssignments = Math.max(0, assignments.length - completed);
   const invited = invitationStatuses.filter(
     (status) => status.latest_delivery_mode || status.has_active_secure_link,
   ).length;
+  const deliveryFailures = invitationStatuses.filter(
+    (status) => status.latest_email_error || status.latest_email_status === "failed",
+  ).length;
+  const pendingInvites = Math.max(0, participants.length - invited);
   const basePath = `/trainer/projects/${project.id}`;
+  const workflows: WorkflowStep[] = [
+    {
+      href: `${basePath}/participants`,
+      title: "Participanți",
+      metric: `${participants.length} persoane`,
+      state: participants.length > 0 ? "Roster pregătit" : "Adaugă rosterul",
+      icon: UsersIcon,
+      attention: participants.length === 0,
+    },
+    {
+      href: `${basePath}/assignments`,
+      title: "Asignări",
+      metric: `${assignments.length} sarcini`,
+      state: assignments.length === 0
+        ? "Generează planul"
+        : pendingAssignments > 0
+          ? `${pendingAssignments} în lucru`
+          : "Finalizate",
+      icon: ClipboardListIcon,
+      locked: participants.length === 0,
+      attention: assignments.length === 0 || pendingAssignments > 0,
+    },
+    {
+      href: `${basePath}/invitations`,
+      title: "Invitații",
+      metric: `${invited}/${participants.length} trimise`,
+      state: deliveryFailures > 0
+        ? `${deliveryFailures} erori`
+        : pendingInvites > 0
+          ? `${pendingInvites} de trimis`
+          : "Acoperite",
+      icon: MailIcon,
+      locked: participants.length === 0,
+      attention: deliveryFailures > 0 || pendingInvites > 0,
+    },
+    {
+      href: `${basePath}/reports`,
+      title: "Rezultate",
+      metric: `${completionRate}% completare`,
+      state: completionRate >= 80 ? "Raportabil" : "În colectare",
+      icon: BarChart3Icon,
+      locked: participants.length === 0,
+      attention: completionRate < 80,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <section className="surface-panel p-5 md:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-bold text-green-800 dark:text-green-300">
-              <span className="h-2 w-2 rounded-full bg-green-500" />
-              {statusLabel(project.status)}
-            </div>
-            <h2 className="mt-4 text-2xl font-bold text-foreground">Comandă proiect</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/62">
-              Gestionează acest proiect separat de restul companiei: roster, plan de asignări, invitații și rezultate.
-            </p>
+    <div className="flex flex-col gap-5">
+      {loadErrors.map((error) => (
+        <InlineFeedback key={error} tone="danger">{error}</InlineFeedback>
+      ))}
+
+      <section className="overflow-hidden rounded-lg border bg-surface shadow-sm" aria-labelledby="project-overview-title">
+        <div className="border-b px-5 py-5">
+          <h2 id="project-overview-title" className="sr-only">Sumar proiect</h2>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <ProjectStatus project={project} />
+            <span className="font-medium text-foreground">{projectTypeLabel(project.project_type)}</span>
+            <span className="text-muted-foreground">{formatDateRange(project.starts_at, project.due_at)}</span>
           </div>
-          <Link
-            href={`/trainer/companies/${project.company_id}`}
-            className="btn-secondary"
-          >
-            Înapoi la companie
-          </Link>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Completare</p>
+                  <p className="mt-1 text-4xl font-semibold tabular-nums text-foreground">{completionRate}%</p>
+                </div>
+                <p className="pb-1 text-sm font-semibold text-muted-foreground">{completed}/{assignments.length} sarcini</p>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${completionRate}%` }} />
+              </div>
+            </div>
+            <dl className="flex flex-wrap gap-x-7 gap-y-3 lg:justify-end">
+              <ProjectCount label="Participanți" value={participants.length} />
+              <ProjectCount label="De urmărit" value={pendingAssignments + pendingInvites} attention />
+              <ProjectCount label="Erori livrare" value={deliveryFailures} attention />
+            </dl>
+          </div>
         </div>
-      </section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Participanți" value={participants.length} detail="Rosterul acestui proiect." />
-        <StatCard label="Asignări" value={assignments.length} detail="Sarcini generate în proiect." />
-        <StatCard label="Invitați" value={invited} detail="Email sau link securizat pregătit." />
-        <StatCard label="Completare" value={completionRate} suffix="%" detail="Asignări finalizate." tone="success" />
-      </div>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <WorkflowTile href={`${basePath}/participants`} title="Participanți" detail="Importă rosterul proiectului și verifică datele." />
-        <WorkflowTile href={`${basePath}/assignments`} title="Asignări" detail="Generează și salvează planul implicit." locked={participants.length === 0} />
-        <WorkflowTile href={`${basePath}/invitations`} title="Invitații" detail="Trimite emailuri, retrimite și vezi linkuri active." locked={participants.length === 0} />
-        <WorkflowTile href={`${basePath}/reports`} title="Rezultate" detail="Urmărește progresul și rezultatele agregate." locked={participants.length === 0} />
+        <div className="divide-y divide-border">
+          {workflows.map((step) => <WorkflowRow key={step.href} step={step} />)}
+        </div>
       </section>
     </div>
   );
 }
 
-function WorkflowTile({
-  href,
-  title,
-  detail,
-  locked = false,
-}: {
+type WorkflowStep = {
   href: string;
   title: string;
-  detail: string;
+  metric: string;
+  state: string;
+  icon: LucideIcon;
   locked?: boolean;
-}) {
-  if (locked) {
-    return (
-      <div className="rounded-xl border border-dashed border-[var(--border)] bg-surface-muted p-6 text-foreground/52">
-        <h3 className="text-base font-bold text-foreground/65">{title}</h3>
-        <p className="mt-2 text-sm leading-6">{detail}</p>
-        <p className="mt-4 rounded-xl border border-[var(--border)] bg-surface px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-foreground/58">
-          După ce adaugi participanți, această funcție devine disponibilă.
-        </p>
-      </div>
-    );
+  attention?: boolean;
+};
+
+function WorkflowRow({ step }: { step: WorkflowStep }) {
+  const Icon = step.icon;
+  const content = (
+    <>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-flex size-9 shrink-0 items-center justify-center rounded-md",
+          step.locked ? "bg-muted text-muted-foreground" : "bg-primary/8 text-primary",
+        )}
+      >
+        {step.locked ? <LockIcon className="size-4" strokeWidth={1.8} /> : <Icon className="size-4" strokeWidth={1.8} />}
+      </span>
+      <span className="min-w-0 flex-1 font-semibold text-foreground">{step.title}</span>
+      <span className="hidden min-w-32 text-sm font-medium text-muted-foreground sm:block">{step.metric}</span>
+      <span
+        className={cn(
+          "min-w-32 text-right text-sm font-semibold",
+          step.locked ? "text-muted-foreground" : step.attention ? "text-primary" : "text-success-ink",
+        )}
+      >
+        {step.locked ? "Blocat" : step.state}
+      </span>
+      <ArrowRightIcon
+        aria-hidden="true"
+        className={cn("size-4 shrink-0", step.locked ? "text-muted-foreground/40" : "text-primary")}
+        strokeWidth={1.8}
+      />
+    </>
+  );
+
+  if (step.locked) {
+    return <div className="flex items-center gap-4 bg-muted/25 px-5 py-4">{content}</div>;
   }
 
   return (
     <Link
-      href={href}
-      className="group rounded-xl border border-[var(--border)] bg-surface p-6 shadow-sm transition-colors hover:border-burgundy/25"
+      href={step.href}
+      className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45"
     >
-      <h3 className="font-bold text-base text-foreground transition-colors group-hover:text-burgundy">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-foreground/60">{detail}</p>
+      {content}
     </Link>
   );
 }
 
-function statusLabel(status: string): string {
-  if (status === "active") return "Activ";
-  if (status === "completed") return "Finalizat";
-  if (status === "archived") return "Arhivat";
-  return "În pregătire";
+function ProjectCount({ label, value, attention = false }: { label: string; value: number; attention?: boolean }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+      <dd className={cn("mt-1 text-xl font-semibold tabular-nums", attention && value > 0 ? "text-primary" : "text-foreground")}>{value}</dd>
+    </div>
+  );
+}
+
+function ProjectStatus({ project }: { project: CompanyProject }) {
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
+      project.status === "active" && "status-success-soft",
+      project.status === "draft" && "bg-muted text-muted-foreground",
+      project.status === "completed" && "bg-primary/8 text-primary",
+      project.status === "archived" && "bg-muted text-muted-foreground",
+    )}>
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      {projectStatusLabel(project.status)}
+    </span>
+  );
+}
+
+function projectStatusLabel(status: CompanyProject["status"]): string {
+  switch (status) {
+    case "active":
+      return "Activ";
+    case "completed":
+      return "Finalizat";
+    case "archived":
+      return "Arhivat";
+    case "draft":
+      return "În pregătire";
+  }
+}
+
+function formatDateRange(start: string | null, end: string | null): string {
+  if (!start && !end) return "Perioadă nesetată";
+  if (start && end) return `${formatShortDate(start)} - ${formatShortDate(end)}`;
+  if (start) return `Din ${formatShortDate(start)}`;
+  return `Până la ${formatShortDate(end)}`;
+}
+
+function formatShortDate(value: string | null): string {
+  if (!value) return "";
+  return formatRomanianDate(value, { fallback: value, includeYear: false });
 }

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -13,17 +13,22 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
-from codrut.modules.forms.definitions.catalog import BOSS_360_DEFINITION
+from codrut.modules.forms.models import QuestionnaireDefinition
 from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
 from codrut.modules.participants.schemas import (
     ParticipantReceivedFeedbackDimension,
     ParticipantReceivedFeedbackSummary,
     ParticipantWorkspaceCard,
+    ParticipantWorkspaceProject,
     ParticipantWorkspaceResult,
     ParticipantWorkspaceSummary,
 )
-from codrut.modules.scoring.models import ScoringResult
+from codrut.modules.scoring.models import (
+    ResultPublication,
+    ResultPublicationKind,
+    ScoringResult,
+)
 
 COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.submitted,
@@ -32,49 +37,77 @@ COMPLETED_ASSIGNMENT_STATUSES = {
 }
 RECEIVED_360_QUESTIONNAIRE_KEYS = {"boss_360", "boss_360_en", "icare"}
 RECEIVED_360_MINIMUM_COMPLETED = 2
-ICARE_DIMENSION_IDS = [
-    question["id"]
-    for section in BOSS_360_DEFINITION.schema["sections"]
-    for question in section.get("questions", [])
-]
-ICARE_DIMENSION_ID_SET = set(ICARE_DIMENSION_IDS)
+RECEIVED_360_TARGET_COMPLETED = 3
 
 
 class ParticipantWorkspaceService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_workspace_summary(self, user_id: UUID) -> ParticipantWorkspaceSummary:
+    async def get_workspace_summary(
+        self,
+        user_id: UUID,
+        *,
+        allowed_assignment_ids: tuple[UUID, ...] | None = None,
+        scoped_project_id: UUID | None = None,
+    ) -> ParticipantWorkspaceSummary:
         profile, company = await self._get_profile_and_company(user_id)
         if not profile.anonymous_name:
             profile.anonymous_name = new_anonymous_name()
             await self.session.flush()
-        assignments = await self._list_assignments(profile)
+        assignments = await self._list_assignments(
+            profile,
+            allowed_assignment_ids=allowed_assignment_ids,
+        )
         projects = await self._get_projects(assignments)
         teams = await self._get_teams(assignments)
         people = await self._get_people(assignments, profile.company_id)
         scoring_results = await self._get_scoring_results(assignments)
-        received_feedback = await self._get_received_feedback_summary(profile)
+        result_definitions = await self._get_result_definitions(assignments)
+        individual_publications = await self._get_active_individual_publications(
+            profile,
+            assignments,
+        )
+        allowed_project_ids: set[UUID | None] | None = None
+        if allowed_assignment_ids is not None:
+            allowed_project_ids = {assignment.project_id for assignment in assignments}
+            if scoped_project_id is not None:
+                allowed_project_ids = {scoped_project_id}
+        received_feedback_groups = await self._get_received_feedback_summaries(
+            profile,
+            allowed_project_ids=allowed_project_ids,
+        )
+        received_feedback = (
+            received_feedback_groups[0] if len(received_feedback_groups) == 1 else None
+        )
 
         tasks = [
             self._assignment_to_task(
                 assignment=assignment,
                 teams=teams,
                 people=people,
+                projects=projects,
             )
             for assignment in assignments
         ]
-        results = [
-            self._assignment_to_result(
+        results: list[ParticipantWorkspaceResult] = []
+        for assignment in assignments:
+            if (
+                assignment.status not in COMPLETED_ASSIGNMENT_STATUSES
+                or assignment.id not in scoring_results
+            ):
+                continue
+            workspace_result = self._assignment_to_result(
                 assignment=assignment,
                 result=scoring_results[assignment.id],
+                definition=result_definitions.get(assignment.id),
+                publication=individual_publications.get(assignment.id),
                 teams=teams,
                 people=people,
+                projects=projects,
             )
-            for assignment in assignments
-            if assignment.status in COMPLETED_ASSIGNMENT_STATUSES
-            and assignment.id in scoring_results
-        ]
+            if workspace_result is not None:
+                results.append(workspace_result)
         project_id, project_name = self._workspace_project(company, assignments, projects)
         deadline_at = self._workspace_deadline(assignments, projects)
         completed = sum(1 for task in tasks if task.status == "completed")
@@ -91,11 +124,13 @@ class ParticipantWorkspaceService:
             company_name=company.name,
             project_id=project_id,
             project_name=project_name,
+            projects=self._workspace_projects(assignments, projects),
             deadline_label=_format_deadline(deadline_at),
             deadline_at=deadline_at,
             tasks=tasks,
             results=results,
             received_feedback=received_feedback,
+            received_feedback_groups=received_feedback_groups,
             cards=[
                 ParticipantWorkspaceCard(
                     title="De completat",
@@ -116,94 +151,210 @@ class ParticipantWorkspaceService:
             empty_state=ParticipantWorkspaceCard(
                 title="Nu ai sarcini active",
                 description=(
-                    "Când trainerul salvează alocări pentru tine, chestionarele apar aici "
-                    "automat."
+                    "Când trainerul salvează alocări pentru tine, chestionarele apar aici automat."
                 ),
             ),
         )
 
-    async def _get_received_feedback_summary(
+    async def _get_received_feedback_summaries(
         self,
         profile: ParticipantProfile,
-    ) -> ParticipantReceivedFeedbackSummary | None:
-        result = await self.session.execute(
-            select(QuestionnaireAssignment)
-            .where(QuestionnaireAssignment.company_id == profile.company_id)
-            .where(QuestionnaireAssignment.target_type == AssignmentTargetType.person)
-            .where(QuestionnaireAssignment.target_person_id == profile.id)
-            .where(QuestionnaireAssignment.respondent_profile_id != profile.id)
-            .where(QuestionnaireAssignment.questionnaire_key.in_(RECEIVED_360_QUESTIONNAIRE_KEYS))
+        *,
+        allowed_project_ids: set[UUID | None] | None,
+    ) -> list[ParticipantReceivedFeedbackSummary]:
+        statement = (
+            select(ResultPublication)
+            .where(ResultPublication.company_id == profile.company_id)
+            .where(ResultPublication.participant_profile_id == profile.id)
+            .where(ResultPublication.kind == ResultPublicationKind.aggregate_360)
+            .where(ResultPublication.revoked_at.is_(None))
+            .where(ResultPublication.questionnaire_key.in_(RECEIVED_360_QUESTIONNAIRE_KEYS))
+            .order_by(
+                ResultPublication.project_id.asc().nulls_last(),
+                ResultPublication.published_at.asc(),
+            )
         )
-        received_assignments = list(result.scalars().all())
-        if not received_assignments:
+        if allowed_project_ids is not None:
+            conditions = []
+            concrete_project_ids = {
+                project_id for project_id in allowed_project_ids if project_id is not None
+            }
+            if concrete_project_ids:
+                conditions.append(ResultPublication.project_id.in_(concrete_project_ids))
+            if None in allowed_project_ids:
+                conditions.append(ResultPublication.project_id.is_(None))
+            if not conditions:
+                return []
+            statement = statement.where(or_(*conditions))
+
+        result = await self.session.execute(statement)
+        publications = list(result.scalars().all())
+        if not publications:
+            return []
+
+        project_ids = {
+            publication.project_id for publication in publications if publication.project_id
+        }
+        projects: dict[UUID, CompanyProject] = {}
+        if project_ids:
+            project_result = await self.session.execute(
+                select(CompanyProject).where(CompanyProject.id.in_(project_ids))
+            )
+            projects = {project.id: project for project in project_result.scalars().all()}
+
+        summaries: list[ParticipantReceivedFeedbackSummary] = []
+        for publication in publications:
+            definition = await self._definition_for_publication(publication)
+            if definition is None:
+                continue
+            assignments = await self._received_assignments_for_publication(
+                profile,
+                publication,
+            )
+            summary = await self._build_received_feedback_summary(
+                assignments,
+                publication=publication,
+                definition=definition,
+                project_id=publication.project_id,
+                project_name=(
+                    projects[publication.project_id].name
+                    if publication.project_id is not None
+                    and publication.project_id in projects
+                    else "Fără proiect"
+                ),
+            )
+            if summary is not None:
+                summaries.append(summary)
+        return summaries
+
+    async def _build_received_feedback_summary(
+        self,
+        received_assignments: list[QuestionnaireAssignment],
+        *,
+        publication: ResultPublication,
+        definition: QuestionnaireDefinition,
+        project_id: UUID | None,
+        project_name: str,
+    ) -> ParticipantReceivedFeedbackSummary | None:
+        policy = publication.policy_snapshot
+        if not isinstance(policy, dict) or policy.get("publication") != "aggregate":
             return None
+        minimum_completed = _positive_int(
+            policy.get("required_completed"),
+            RECEIVED_360_MINIMUM_COMPLETED,
+        )
+        allowed_dimensions = {
+            str(dimension_id)
+            for dimension_id in policy.get("dimension_ids", [])
+            if isinstance(dimension_id, str) and dimension_id.strip()
+        }
+        if publication.source_count < minimum_completed or not allowed_dimensions:
+            return None
+        labels = _definition_score_labels(definition)
+        questionnaire_title = definition.title
+        scale_max = _definition_scale_max(definition)
 
         completed_assignments = [
             assignment
             for assignment in received_assignments
             if assignment.status in COMPLETED_ASSIGNMENT_STATUSES
         ]
-        completed_count = len(completed_assignments)
-        if completed_count < RECEIVED_360_MINIMUM_COMPLETED:
-            return ParticipantReceivedFeedbackSummary(
-                completed_count=completed_count,
-                minimum_completed=RECEIVED_360_MINIMUM_COMPLETED,
-                visible=False,
-            )
+        if len(completed_assignments) != publication.source_count:
+            return None
 
         completed_assignment_ids = {assignment.id for assignment in completed_assignments}
         scoring_result = await self.session.execute(
             select(ScoringResult).where(ScoringResult.assignment_id.in_(completed_assignment_ids))
         )
         scoring_results = list(scoring_result.scalars().all())
-        if len(scoring_results) < RECEIVED_360_MINIMUM_COMPLETED:
-            return ParticipantReceivedFeedbackSummary(
-                completed_count=completed_count,
-                minimum_completed=RECEIVED_360_MINIMUM_COMPLETED,
-                visible=False,
-            )
+        if len(scoring_results) != publication.source_count:
+            return None
 
-        dimension_values: dict[str, list[float]] = {
-            dimension_id: [] for dimension_id in ICARE_DIMENSION_IDS
-        }
+        dimension_values: dict[str, list[float]] = {}
         for scoring in scoring_results:
             for dimension_id, value in scoring.scores.items():
-                if dimension_id not in ICARE_DIMENSION_ID_SET:
+                if allowed_dimensions and dimension_id not in allowed_dimensions:
                     continue
                 score = _extract_numeric_score(value)
                 if score is None:
                     continue
-                dimension_values[dimension_id].append(score)
+                dimension_values.setdefault(dimension_id, []).append(score)
 
         visible_dimension_values = {
             dimension_id: values
             for dimension_id, values in dimension_values.items()
-            if len(values) >= RECEIVED_360_MINIMUM_COMPLETED
+            if len(values) >= minimum_completed
         }
-        visible_scores = [
-            score
-            for values in visible_dimension_values.values()
-            for score in values
-        ]
+        visible_scores = [score for values in visible_dimension_values.values() for score in values]
         dimensions = [
             ParticipantReceivedFeedbackDimension(
                 id=dimension_id,
+                label=labels.get(dimension_id, _prettify_score_key(dimension_id)),
                 average_score=round(sum(values) / len(values), 1),
                 completed_count=len(values),
             )
             for dimension_id, values in visible_dimension_values.items()
         ]
+        if not dimensions:
+            return None
         return ParticipantReceivedFeedbackSummary(
-            completed_count=completed_count,
-            minimum_completed=RECEIVED_360_MINIMUM_COMPLETED,
-            visible=bool(dimensions),
+            project_id=project_id,
+            project_name=project_name,
+            assignment_round_id=publication.assignment_round_id,
+            questionnaire_key=publication.questionnaire_key,
+            questionnaire_title=questionnaire_title,
+            completed_count=publication.source_count,
+            minimum_completed=minimum_completed,
+            scale_max=scale_max,
+            visible=True,
             overall_average=(
-                round(sum(visible_scores) / len(visible_scores), 1)
-                if visible_scores
-                else None
+                round(sum(visible_scores) / len(visible_scores), 1) if visible_scores else None
             ),
             dimensions=dimensions,
         )
+
+    async def _received_assignments_for_publication(
+        self,
+        profile: ParticipantProfile,
+        publication: ResultPublication,
+    ) -> list[QuestionnaireAssignment]:
+        statement = (
+            select(QuestionnaireAssignment)
+            .where(QuestionnaireAssignment.company_id == profile.company_id)
+            .where(QuestionnaireAssignment.assignment_round_id == publication.assignment_round_id)
+            .where(QuestionnaireAssignment.questionnaire_key == publication.questionnaire_key)
+            .where(
+                QuestionnaireAssignment.questionnaire_definition_id
+                == publication.questionnaire_definition_id
+            )
+            .where(QuestionnaireAssignment.target_type == AssignmentTargetType.person)
+            .where(QuestionnaireAssignment.target_person_id == profile.id)
+            .where(QuestionnaireAssignment.respondent_profile_id != profile.id)
+            .order_by(QuestionnaireAssignment.created_at.asc())
+        )
+        statement = (
+            statement.where(QuestionnaireAssignment.project_id.is_(None))
+            if publication.project_id is None
+            else statement.where(QuestionnaireAssignment.project_id == publication.project_id)
+        )
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def _definition_for_publication(
+        self,
+        publication: ResultPublication,
+    ) -> QuestionnaireDefinition | None:
+        if publication.questionnaire_definition_id is None or not publication.definition_checksum:
+            return None
+        result = await self.session.execute(
+            select(QuestionnaireDefinition).where(
+                QuestionnaireDefinition.id == publication.questionnaire_definition_id
+            )
+        )
+        definition = result.scalar_one_or_none()
+        if definition is None or definition.content_checksum != publication.definition_checksum:
+            return None
+        return definition
 
     async def _get_profile_and_company(self, user_id: UUID) -> tuple[ParticipantProfile, Company]:
         result = await self.session.execute(
@@ -222,8 +373,10 @@ class ParticipantWorkspaceService:
     async def _list_assignments(
         self,
         profile: ParticipantProfile,
+        *,
+        allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> list[QuestionnaireAssignment]:
-        result = await self.session.execute(
+        statement = (
             select(QuestionnaireAssignment)
             .where(QuestionnaireAssignment.company_id == profile.company_id)
             .where(QuestionnaireAssignment.respondent_profile_id == profile.id)
@@ -232,6 +385,11 @@ class ParticipantWorkspaceService:
                 QuestionnaireAssignment.created_at.asc(),
             )
         )
+        if allowed_assignment_ids is not None:
+            if not allowed_assignment_ids:
+                return []
+            statement = statement.where(QuestionnaireAssignment.id.in_(allowed_assignment_ids))
+        result = await self.session.execute(statement)
         return list(result.scalars().all())
 
     async def _get_projects(
@@ -295,12 +453,82 @@ class ParticipantWorkspaceService:
             for scoring_result in result.scalars().all()
         }
 
+    async def _get_active_individual_publications(
+        self,
+        profile: ParticipantProfile,
+        assignments: list[QuestionnaireAssignment],
+    ) -> dict[UUID, ResultPublication]:
+        assignment_ids = {assignment.id for assignment in assignments}
+        if not assignment_ids:
+            return {}
+        result = await self.session.execute(
+            select(ResultPublication)
+            .where(ResultPublication.company_id == profile.company_id)
+            .where(ResultPublication.participant_profile_id == profile.id)
+            .where(ResultPublication.kind == ResultPublicationKind.individual)
+            .where(ResultPublication.revoked_at.is_(None))
+            .where(ResultPublication.source_assignment_id.in_(assignment_ids))
+        )
+        return {
+            publication.source_assignment_id: publication
+            for publication in result.scalars().all()
+            if publication.source_assignment_id is not None
+        }
+
+    async def _get_result_definitions(
+        self,
+        assignments: list[QuestionnaireAssignment],
+    ) -> dict[UUID, QuestionnaireDefinition]:
+        definition_ids = {
+            assignment.questionnaire_definition_id
+            for assignment in assignments
+            if assignment.questionnaire_definition_id is not None
+        }
+        definitions_by_id: dict[UUID, QuestionnaireDefinition] = {}
+        if definition_ids:
+            result = await self.session.execute(
+                select(QuestionnaireDefinition).where(
+                    QuestionnaireDefinition.id.in_(definition_ids)
+                )
+            )
+            definitions_by_id = {definition.id: definition for definition in result.scalars().all()}
+
+        missing_keys = {
+            assignment.questionnaire_key
+            for assignment in assignments
+            if assignment.questionnaire_definition_id not in definitions_by_id
+        }
+        latest_by_key: dict[str, QuestionnaireDefinition] = {}
+        if missing_keys:
+            result = await self.session.execute(
+                select(QuestionnaireDefinition)
+                .where(QuestionnaireDefinition.key.in_(missing_keys))
+                .where(QuestionnaireDefinition.active.is_(True))
+                .order_by(
+                    QuestionnaireDefinition.key,
+                    QuestionnaireDefinition.version.desc(),
+                )
+            )
+            for definition in result.scalars().all():
+                latest_by_key.setdefault(definition.key, definition)
+
+        return {
+            assignment.id: definition
+            for assignment in assignments
+            if (
+                definition := definitions_by_id.get(assignment.questionnaire_definition_id)
+                or latest_by_key.get(assignment.questionnaire_key)
+            )
+            is not None
+        }
+
     def _assignment_to_task(
         self,
         *,
         assignment: QuestionnaireAssignment,
         teams: dict[UUID, Team],
         people: dict[UUID, ParticipantProfile],
+        projects: dict[UUID, CompanyProject],
     ) -> InviteTask:
         title, detail, estimated_minutes = _invite_task_copy(assignment.questionnaire_key)
         target_label = "Autoevaluare"
@@ -324,6 +552,13 @@ class ParticipantWorkspaceService:
             targetLabel=target_label,
             estimatedMinutes=estimated_minutes,
             questionnaireKey=assignment.questionnaire_key,
+            projectId=assignment.project_id,
+            projectName=(
+                projects[assignment.project_id].name
+                if assignment.project_id is not None and assignment.project_id in projects
+                else None
+            ),
+            assignmentRoundId=assignment.assignment_round_id,
         )
 
     def _assignment_to_result(
@@ -331,17 +566,87 @@ class ParticipantWorkspaceService:
         *,
         assignment: QuestionnaireAssignment,
         result: ScoringResult,
+        definition: QuestionnaireDefinition | None,
+        publication: ResultPublication | None,
         teams: dict[UUID, Team],
         people: dict[UUID, ParticipantProfile],
-    ) -> ParticipantWorkspaceResult:
-        task = self._assignment_to_task(assignment=assignment, teams=teams, people=people)
+        projects: dict[UUID, CompanyProject],
+    ) -> ParticipantWorkspaceResult | None:
+        if (
+            publication is None
+            or definition is None
+            or publication.source_count != 1
+            or publication.source_assignment_id != assignment.id
+            or publication.questionnaire_definition_id != definition.id
+            or publication.questionnaire_definition_id
+            != assignment.questionnaire_definition_id
+            or not publication.definition_checksum
+            or publication.definition_checksum != definition.content_checksum
+            or publication.questionnaire_key != assignment.questionnaire_key
+            or publication.assignment_round_id != assignment.assignment_round_id
+        ):
+            return None
+        policy = (
+            publication.policy_snapshot
+            if isinstance(publication.policy_snapshot, dict)
+            else {}
+        )
+        publication_mode = policy.get("publication", "none")
+        target_type = assignment.target_type.value
+        allowed_target_types = policy.get("target_types", ["self", "team"])
+        if publication_mode == "none" or target_type not in allowed_target_types:
+            return None
+        if (
+            policy.get("require_self_target", False)
+            and assignment.target_person_id != assignment.respondent_profile_id
+        ):
+            return None
+
+        visible_dimension_ids = {
+            value
+            for value in policy.get("dimension_ids", [])
+            if isinstance(value, str) and value.strip()
+        }
+        labels = _definition_score_labels(definition)
+        public_scores: dict[str, dict[str, float | str]] = {}
+        for dimension_id in visible_dimension_ids:
+            value = result.scores.get(dimension_id)
+            score = _extract_numeric_score(value)
+            if score is None:
+                continue
+            public_value: dict[str, float | str] = {
+                "score": score,
+                "label": labels.get(dimension_id, _prettify_score_key(dimension_id)),
+            }
+            if publication_mode == "scores_and_interpretation" and isinstance(value, dict):
+                interpretation = value.get("interpretation")
+                if isinstance(interpretation, str) and interpretation.strip():
+                    public_value["interpretation"] = interpretation.strip()
+            public_scores[dimension_id] = public_value
+
+        if not public_scores:
+            return None
+        task = self._assignment_to_task(
+            assignment=assignment,
+            teams=teams,
+            people=people,
+            projects=projects,
+        )
+        include_primary = policy.get("include_primary_result", True)
+        primary_result = (
+            result.primary_result
+            if include_primary and result.primary_result in public_scores
+            else None
+        )
         return ParticipantWorkspaceResult(
             assignment_id=assignment.id,
+            project_id=assignment.project_id,
+            project_name=task.projectName,
             questionnaire_key=assignment.questionnaire_key,
             title=task.title,
             target_label=task.targetLabel,
-            scores=result.scores,
-            primary_result=result.primary_result,
+            scores=public_scores,
+            primary_result=primary_result,
         )
 
     def _workspace_project(
@@ -363,15 +668,42 @@ class ParticipantWorkspaceService:
             return None, "Toate proiectele active"
         return None, company.name
 
+    def _workspace_projects(
+        self,
+        assignments: list[QuestionnaireAssignment],
+        projects: dict[UUID, CompanyProject],
+    ) -> list[ParticipantWorkspaceProject]:
+        ordered_project_ids = list(
+            dict.fromkeys(
+                assignment.project_id
+                for assignment in assignments
+                if assignment.project_id is not None and assignment.project_id in projects
+            )
+        )
+        workspace_projects: list[ParticipantWorkspaceProject] = []
+        for project_id in ordered_project_ids:
+            project = projects[project_id]
+            project_assignments = [
+                assignment for assignment in assignments if assignment.project_id == project_id
+            ]
+            deadline_at = self._workspace_deadline(project_assignments, {project_id: project})
+            workspace_projects.append(
+                ParticipantWorkspaceProject(
+                    id=project.id,
+                    name=project.name,
+                    deadline_label=_format_deadline(deadline_at),
+                    deadline_at=deadline_at,
+                )
+            )
+        return workspace_projects
+
     def _workspace_deadline(
         self,
         assignments: list[QuestionnaireAssignment],
         projects: dict[UUID, CompanyProject],
     ) -> datetime | None:
         candidates = [
-            assignment.due_at
-            for assignment in assignments
-            if assignment.due_at is not None
+            assignment.due_at for assignment in assignments if assignment.due_at is not None
         ]
         candidates.extend(
             project.due_at for project in projects.values() if project.due_at is not None
@@ -379,6 +711,85 @@ class ParticipantWorkspaceService:
         if not candidates:
             return None
         return min(candidates)
+
+
+def _definition_score_labels(
+    definition: QuestionnaireDefinition | None,
+) -> dict[str, str]:
+    if definition is None:
+        return {}
+
+    labels: dict[str, str] = {}
+    if definition.private_config:
+        labels.update(_schema_score_labels(definition.private_config.get("schema")))
+
+    # Participant-safe labels own the UI copy. Private scoring metadata only fills
+    # gaps when an older definition does not include labels in its public schema.
+    labels.update(_schema_score_labels(definition.schema))
+    return labels
+
+
+def _schema_score_labels(schema: object) -> dict[str, str]:
+    if not isinstance(schema, dict):
+        return {}
+    scoring = schema.get("scoring")
+    labels: dict[str, str] = {}
+    if isinstance(scoring, dict):
+        for collection_name in ("groups", "drivers"):
+            for item in scoring.get(collection_name, []):
+                if not isinstance(item, dict):
+                    continue
+                dimension_id = item.get("id")
+                label = item.get("label")
+                if isinstance(dimension_id, str) and isinstance(label, str) and label.strip():
+                    labels[dimension_id] = label.strip()
+
+    for section in schema.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for question in section.get("questions", []):
+            if not isinstance(question, dict) or question.get("type") != "statement_score_set":
+                continue
+            dimension_id = question.get("id")
+            label = question.get("label")
+            if isinstance(dimension_id, str) and isinstance(label, str) and label.strip():
+                labels[dimension_id] = label.strip()
+    return labels
+
+
+def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
+    explicit = definition.feedback_policy.get("scale_max")
+    if isinstance(explicit, (int, float)) and not isinstance(explicit, bool) and explicit > 0:
+        return float(explicit)
+
+    numeric_values: list[float] = []
+    for schema in (definition.schema, (definition.private_config or {}).get("schema")):
+        if not isinstance(schema, dict):
+            continue
+        for section in schema.get("sections", []):
+            if not isinstance(section, dict):
+                continue
+            for question in section.get("questions", []):
+                if not isinstance(question, dict):
+                    continue
+                scales = [question.get("scale", [])]
+                scales.extend(
+                    statement.get("scale", [])
+                    for statement in question.get("statements", [])
+                    if isinstance(statement, dict)
+                )
+                for scale in scales:
+                    if not isinstance(scale, list):
+                        continue
+                    for option in scale:
+                        value = option.get("value") if isinstance(option, dict) else None
+                        if isinstance(value, (int, float)) and not isinstance(value, bool):
+                            numeric_values.append(float(value))
+    return max(numeric_values, default=5.0)
+
+
+def _prettify_score_key(value: str) -> str:
+    return " ".join(part.capitalize() for part in value.replace("_", " ").split()) or value
 
 
 def _task_status(status: AssignmentStatus) -> str:
@@ -400,3 +811,24 @@ def _extract_numeric_score(value: object) -> float | None:
     if isinstance(raw, (int, float)):
         return float(raw)
     return None
+
+
+def _required_feedback_count(
+    *,
+    eligible_count: int,
+    minimum_completed: object,
+    target_completed: object,
+) -> int:
+    minimum = _positive_int(minimum_completed, RECEIVED_360_MINIMUM_COMPLETED)
+    target = _positive_int(target_completed, RECEIVED_360_TARGET_COMPLETED)
+    return max(minimum, min(target, eligible_count))
+
+
+def _positive_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default

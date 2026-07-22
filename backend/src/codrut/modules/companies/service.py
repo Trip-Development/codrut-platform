@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Literal, NoReturn
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -334,7 +335,8 @@ class CompanyService:
         fields_set = payload.model_fields_set
         if "email" in fields_set and payload.email is not None:
             email = payload.email.lower()
-            if participant.user_id is not None and email != participant.email.lower():
+            email_changed = participant.email is None or email != participant.email.lower()
+            if participant.user_id is not None and email_changed:
                 raise DomainError(
                     "Claimed participant account email cannot be changed by a trainer.",
                     code="participant_email_claimed",
@@ -393,6 +395,8 @@ class CompanyService:
         user_id: UUID,
         company_id: UUID,
         payload: RosterImportRequest,
+        *,
+        idempotency_key: str | None = None,
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
@@ -407,6 +411,8 @@ class CompanyService:
         }
         seen_emails: set[str] = set()
         for row in rows:
+            if row.email is None:
+                continue
             if row.email in seen_emails:
                 raise DomainError(
                     f"Duplicate roster email: {row.email}",
@@ -416,9 +422,19 @@ class CompanyService:
 
         participants: list[ParticipantProfile] = []
         for row in rows:
-            participant = await self.repository.get_participant_by_company_email(
-                company_id,
-                row.email,
+            participant = (
+                await self.repository.get_participant_by_company_email(
+                    company_id,
+                    row.email,
+                )
+                if row.email is not None
+                else await self.repository.get_unemailed_participant_by_roster_identity(
+                    company_id,
+                    full_name=row.full_name,
+                    reports_to_name=row.reports_to_name,
+                    position=row.position,
+                    location=row.location,
+                )
             )
             if participant is None:
                 participant = await self.repository.add_participant(
@@ -470,19 +486,35 @@ class CompanyService:
                 emails_failed=0,
             )
 
+        invite_participants = await self._filter_participants_without_accepted_email(
+            company.id,
+            participants,
+            payload.project_id,
+        )
+        if not invite_participants:
+            return RosterImportResponse(
+                participants=participants,
+                email_results=[],
+                total_imported=len(participants),
+                emails_sent=0,
+                emails_failed=0,
+            )
+
         invite_result = await self._dispatch_participant_invites(
             user_id=user_id,
             company=company,
-            participants=participants,
+            participants=invite_participants,
             project_id=payload.project_id,
             mode="email",
-            force_rotate=True,
+            force_rotate=False,
+            idempotency_key=idempotency_key,
         )
         return RosterImportResponse(
             participants=participants,
             email_results=invite_result.results,
             total_imported=len(participants),
             emails_sent=invite_result.emails_sent,
+            emails_queued=invite_result.emails_queued,
             emails_failed=invite_result.emails_failed,
         )
 
@@ -491,6 +523,8 @@ class CompanyService:
         user_id: UUID,
         company_id: UUID,
         payload: ParticipantInviteBatchRequest,
+        *,
+        idempotency_key: str | None = None,
     ) -> ParticipantInviteBatchResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
@@ -549,6 +583,7 @@ class CompanyService:
             project_id=payload.project_id,
             mode=payload.mode,
             force_rotate=payload.force_rotate,
+            idempotency_key=idempotency_key,
         )
 
     async def _ensure_anonymous_names(self, participants: list[ParticipantProfile]) -> None:
@@ -580,8 +615,7 @@ class CompanyService:
                 participant.id,
             )
             should_be_leadership = any(
-                _is_leadership_role(membership.role_group)
-                for membership in memberships
+                _is_leadership_role(membership.role_group) for membership in memberships
             )
 
         leadership_team = await self.repository.get_team_by_company_name(
@@ -668,10 +702,12 @@ class CompanyService:
         project_id: UUID | None,
         mode: Literal["email", "secure_links"],
         force_rotate: bool,
+        idempotency_key: str | None = None,
     ) -> ParticipantInviteBatchResponse:
         from codrut.core.config import get_settings
         from codrut.modules.assignments.models import AssignmentStatus
         from codrut.modules.communications.email_provider import build_email_provider
+        from codrut.modules.communications.reminders import reminder_candidates
         from codrut.modules.communications.repository import CommunicationsRepository
         from codrut.modules.communications.service import (
             AssignmentInvitationContext,
@@ -685,7 +721,11 @@ class CompanyService:
         trainer_name = trainer.email.split("@", 1)[0] if trainer is not None else "trainer"
         settings = get_settings()
         email_service = (
-            TransactionalEmailService(build_email_provider(settings), self.repository.session)
+            TransactionalEmailService(
+                build_email_provider(settings),
+                self.repository.session,
+                owner_id=user_id,
+            )
             if mode == "email"
             else None
         )
@@ -702,110 +742,176 @@ class CompanyService:
             participants,
             project_id,
         )
+        active_assignment_ids = {
+            assignment.id
+            for assignments in active_assignments_by_participant.values()
+            for assignment in assignments
+        }
+        successfully_delivered_assignment_ids = (
+            await communications_repository.list_successfully_delivered_assignment_ids(
+                active_assignment_ids
+            )
+            if mode == "email"
+            else set()
+        )
 
         results: list[RosterImportEmailResult] = []
+        has_sendable_email = any(participant.email is not None for participant in participants)
         remaining_sends = (
             await _remaining_email_sends_today(communications_repository, settings)
-            if mode == "email"
+            if mode == "email" and has_sendable_email
             else 0
         )
         for participant in participants:
+            if participant.email is None:
+                results.append(
+                    RosterImportEmailResult(
+                        participant_id=participant.id,
+                        email=None,
+                        full_name=participant.full_name,
+                        delivery_mode=mode,
+                        email_sent=False,
+                        error_code="participant_email_missing",
+                        error="Participantul nu are un email valid pentru invitații.",
+                        invite_url=None,
+                    )
+                )
+                continue
+
             assignments = active_assignments_by_participant.get(participant.id, [])
             if not assignments:
-                raise DomainError(
-                    f"No assignments found for participant: {participant.email}",
-                    code="no_assignments",
-                )
-
-            invite = await identity_service.create_invite(
-                company_id=company.id,
-                respondent_profile_id=participant.id,
-                assignment_ids=[assignment.id for assignment in assignments],
-                project_id=project_id,
-                expires_at=invite_expires_at,
-                force_rotate=force_rotate,
-            )
-            invite_url = build_task_url(invite.token, settings)
-
-            if mode == "secure_links":
-                now = datetime.now(UTC)
-                for assignment in assignments:
-                    if assignment.status == AssignmentStatus.assigned:
-                        assignment.status = AssignmentStatus.invited
-                    assignment.invited_at = assignment.invited_at or now
                 results.append(
                     RosterImportEmailResult(
                         participant_id=participant.id,
                         email=participant.email,
                         full_name=participant.full_name,
-                        delivery_mode="secure_links",
+                        delivery_mode=mode,
                         email_sent=False,
-                        invite_url=invite_url,
+                        error_code="no_assignments",
+                        error="Participantul nu are sarcini active pentru acest proiect.",
+                        invite_url=None,
                     )
                 )
                 continue
 
-            if mode == "email" and remaining_sends <= 0:
-                results.append(
-                    RosterImportEmailResult(
-                        participant_id=participant.id,
-                        email=participant.email,
-                        full_name=participant.full_name,
-                        delivery_mode="email",
-                        email_sent=False,
-                        error="Daily email send cap reached.",
-                        invite_url=invite_url,
-                    )
-                )
-                continue
-
+            invite_url: str | None = None
             send_error: str | None = None
+            send_error_code: str | None = None
+            delivery_status: str | None = None
             try:
-                assert email_service is not None
-                result = await email_service.send_assignment_invitation(
-                    assignments[0],
-                    participant,
-                    AssignmentInvitationContext(
-                        company_name=company.name,
-                        trainer_name=trainer_name,
-                        action_url=invite_url,
-                        task_count=len(assignments),
-                    ),
-                )
-                if result.status == "accepted":
-                    now = datetime.now(UTC)
-                    for assignment in assignments:
-                        assignment.status = AssignmentStatus.invited
-                        assignment.invited_at = now
-                else:
-                    send_error = result.error_details or "Email provider rejected the message."
+                async with self.repository.session.begin_nested():
+                    invite = await identity_service.create_invite(
+                        company_id=company.id,
+                        respondent_profile_id=participant.id,
+                        assignment_ids=[assignment.id for assignment in assignments],
+                        project_id=project_id,
+                        expires_at=invite_expires_at,
+                        force_rotate=force_rotate,
+                    )
+                    invite_url = build_task_url(invite.token, settings)
+
+                    if mode == "secure_links":
+                        now = datetime.now(UTC)
+                        for assignment in assignments:
+                            if assignment.status == AssignmentStatus.assigned:
+                                assignment.status = AssignmentStatus.invited
+                            assignment.invited_at = assignment.invited_at or now
+                    elif remaining_sends <= 0:
+                        send_error_code = "daily_send_cap_reached"
+                        send_error = "Limita zilnică de emailuri a fost atinsă."
+                    else:
+                        assert email_service is not None
+                        reminder_assignment_ids = [
+                            assignment.id for assignment in reminder_candidates(assignments)
+                        ]
+                        has_prior_delivery = any(
+                            assignment.id in successfully_delivered_assignment_ids
+                            for assignment in assignments
+                        )
+                        if has_prior_delivery and not reminder_assignment_ids:
+                            raise DomainError(
+                                "Reminderul nu este încă disponibil sau cele două runde au fost "
+                                "trimise.",
+                                code="reminder_not_due",
+                            )
+                        result = await email_service.send_assignment_invitation(
+                            assignments[0],
+                            participant,
+                            AssignmentInvitationContext(
+                                company_name=company.name,
+                                trainer_name=trainer_name,
+                                action_url=invite_url,
+                                task_count=len(assignments),
+                            ),
+                            idempotency_key=_participant_invite_idempotency_key(
+                                idempotency_key,
+                                company_id=company.id,
+                                project_id=project_id,
+                                participant_id=participant.id,
+                            ),
+                            assignment_ids=[assignment.id for assignment in assignments],
+                            reminder_assignment_ids=(
+                                reminder_assignment_ids if has_prior_delivery else None
+                            ),
+                        )
+                        delivery_status = result.status.value
+                        if result.status == "accepted":
+                            now = datetime.now(UTC)
+                            for assignment in assignments:
+                                assignment.status = AssignmentStatus.invited
+                                assignment.invited_at = now
+                        elif result.status != "queued":
+                            send_error_code = "email_provider_rejected"
+                            send_error = "Furnizorul de email a refuzat mesajul."
+            except DomainError as exc:
+                invite_url = None
+                send_error_code = exc.code
+                send_error = _invite_batch_error_message(exc.code)
+            except SQLAlchemyError as exc:
+                invite_url = None
+                send_error_code = "invitation_persistence_error"
+                send_error = "Invitația nu a putut fi salvată. Încearcă din nou."
+                _log_invitation_batch_failure(settings.is_production, participant.id, exc)
             except Exception as exc:  # noqa: BLE001
-                send_error = str(exc)
+                invite_url = None
+                send_error_code = "invitation_delivery_error"
+                send_error = "Invitația nu a putut fi pregătită. Încearcă din nou."
+                _log_invitation_batch_failure(settings.is_production, participant.id, exc)
 
             results.append(
                 RosterImportEmailResult(
                     participant_id=participant.id,
                     email=participant.email,
                     full_name=participant.full_name,
-                    delivery_mode="email",
-                    email_sent=send_error is None,
+                    delivery_mode=mode,
+                    email_sent=send_error is None and delivery_status == "accepted",
+                    email_queued=send_error is None and delivery_status == "queued",
+                    error_code=send_error_code,
                     error=send_error,
                     invite_url=invite_url,
                 )
             )
-            if send_error is None:
+            if mode == "email" and send_error is None:
                 remaining_sends -= 1
 
         emails_sent = sum(1 for result in results if result.email_sent)
-        links_generated = sum(1 for result in results if result.delivery_mode == "secure_links")
+        emails_queued = sum(1 for result in results if result.email_queued)
+        links_generated = sum(
+            1
+            for result in results
+            if result.delivery_mode == "secure_links" and result.invite_url is not None
+        )
         return ParticipantInviteBatchResponse(
             results=results,
             total=len(results),
             emails_sent=emails_sent,
+            emails_queued=emails_queued,
             emails_failed=sum(
                 1
                 for result in results
-                if result.delivery_mode == "email" and not result.email_sent
+                if result.delivery_mode == "email"
+                and not result.email_sent
+                and not result.email_queued
             ),
             links_generated=links_generated,
         )
@@ -830,7 +936,16 @@ class CompanyService:
             .join(EmailSend, EmailSend.assignment_id == QuestionnaireAssignment.id)
             .where(QuestionnaireAssignment.company_id == company_id)
             .where(QuestionnaireAssignment.respondent_profile_id.in_(participant_ids))
-            .where(EmailSend.status == EmailSendStatus.accepted)
+            .where(
+                EmailSend.status.in_(
+                    (
+                        EmailSendStatus.queued,
+                        EmailSendStatus.dispatching,
+                        EmailSendStatus.accepted,
+                        EmailSendStatus.delivered,
+                    )
+                )
+            )
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
@@ -1006,7 +1121,9 @@ class CompanyService:
                 and assignment.status in active_statuses
                 and (project_id is None or assignment.project_id == project_id)
             ):
-                active_assignments_by_participant[assignment.respondent_profile_id].append(assignment)
+                active_assignments_by_participant[assignment.respondent_profile_id].append(
+                    assignment
+                )
         return active_assignments_by_participant
 
     async def resend_invite(
@@ -1015,6 +1132,8 @@ class CompanyService:
         company_id: UUID,
         participant_id: UUID,
         project_id: UUID | None = None,
+        *,
+        idempotency_key: str | None = None,
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
@@ -1031,12 +1150,14 @@ class CompanyService:
             project_id=project_id,
             mode="email",
             force_rotate=False,
+            idempotency_key=idempotency_key,
         )
         return RosterImportResponse(
             participants=[participant],
             email_results=result.results,
             total_imported=1,
             emails_sent=result.emails_sent,
+            emails_queued=result.emails_queued,
             emails_failed=result.emails_failed,
         )
 
@@ -1259,7 +1380,7 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
         reports_to_name=clean_manager_reference(row.reports_to_name),
         position=_clean_optional(row.position),
         location=_clean_optional(row.location),
-        email=row.email.lower(),
+        email=row.email.lower() if row.email is not None else None,
         role_group=_normalize_role_group(row.role_group),
         pcm_profile=_clean_optional(row.pcm_profile),
         pcm_base=_clean_optional(row.pcm_base),
@@ -1307,14 +1428,61 @@ def _derive_company_stage(
     return "invites"
 
 
-def _new_access_code() -> str:
-    alphabet = string.ascii_uppercase + string.digits
-    return "-".join(
-        "".join(secrets.choice(alphabet) for _ in range(4))
-        for _ in range(3)
+def _participant_invite_idempotency_key(
+    request_key: str | None,
+    *,
+    company_id: UUID,
+    project_id: UUID | None,
+    participant_id: UUID,
+) -> str | None:
+    if not request_key:
+        return None
+    scope = f"invite:{company_id}:{project_id or 'all'}:{participant_id}"
+    return hashlib.sha256(f"{request_key}:{scope}".encode()).hexdigest()
+
+
+def _invite_batch_error_message(code: str) -> str:
+    messages = {
+        "reminder_not_due": (
+            "Reminderul nu este încă disponibil sau cele două runde au fost trimise."
+        ),
+        "no_active_assignments": "Participantul nu are sarcini active pentru acest proiect.",
+        "project_not_open": "Chestionarele proiectului nu sunt încă deschise.",
+        "project_closed": "Perioada de completare a proiectului s-a încheiat.",
+        "profile_not_found": "Participantul nu mai este disponibil în acest proiect.",
+    }
+    return messages.get(code, "Invitația nu a putut fi pregătită. Încearcă din nou.")
+
+
+def _log_invitation_batch_failure(
+    production: bool,
+    participant_id: UUID,
+    exc: Exception,
+) -> None:
+    context = {
+        "participant_id": str(participant_id),
+        "error_category": type(exc).__name__,
+    }
+    if production:
+        logger.error(
+            "Invitation batch recipient failed participant_id=%s category=%s",
+            participant_id,
+            type(exc).__name__,
+            extra=context,
+        )
+        return
+    logger.exception(
+        "Invitation batch recipient failed participant_id=%s category=%s",
+        participant_id,
+        type(exc).__name__,
+        exc_info=exc,
+        extra=context,
     )
 
 
+def _new_access_code() -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "-".join("".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
 
 
 def hash_company_access_code(code: str) -> str:

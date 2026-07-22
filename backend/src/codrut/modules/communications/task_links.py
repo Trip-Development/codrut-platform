@@ -18,6 +18,7 @@ class TaskLinkClaims:
     respondent_profile_id: UUID
     assignment_ids: tuple[UUID, ...]
     expires_at: datetime
+    project_id: UUID | None = None
 
 
 def create_task_token(claims: TaskLinkClaims, settings: Settings) -> str:
@@ -33,6 +34,8 @@ def create_task_token(claims: TaskLinkClaims, settings: Settings) -> str:
         "expires_at": int(claims.expires_at.timestamp()),
         "nonce": secrets.token_urlsafe(12),
     }
+    if claims.project_id is not None:
+        payload["project_id"] = str(claims.project_id)
     encoded_payload = _urlsafe_encode(
         json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
     )
@@ -62,6 +65,7 @@ def parse_task_token(
             respondent_profile_id=UUID(payload["respondent_profile_id"]),
             assignment_ids=assignment_ids,
             expires_at=expires_at,
+            project_id=UUID(payload["project_id"]) if payload.get("project_id") else None,
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise DomainError("Invalid task link.", code="task_link_invalid") from exc
