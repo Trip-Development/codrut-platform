@@ -147,7 +147,7 @@ describe("buildInvitationRows", () => {
     const rows = buildInvitationRows(participants, assignments, invitationStatuses, new Map());
 
     expect(rows[0]).toMatchObject({
-      deliveryLabel: "Email trimis",
+      deliveryLabel: "Acceptat de furnizor",
       signedUp: true,
       completionLabel: "0/1",
     });
@@ -172,8 +172,84 @@ describe("buildInvitationRows", () => {
     const rows = buildInvitationRows(participants, assignments, invitationStatuses, new Map([["ana", result]]));
 
     expect(rows[1]).toMatchObject({
-      deliveryLabel: "Email trimis",
+      deliveryLabel: "Acceptat de furnizor",
       deliveryTone: "success",
+    });
+  });
+
+  it("shows dispatching delivery as pending instead of sent", () => {
+    const rows = buildInvitationRows(
+      participants,
+      assignments,
+      [
+        {
+          ...invitationStatuses[0],
+          participant_id: "ana",
+          latest_email_status: "dispatching",
+        },
+      ],
+      new Map(),
+    );
+
+    expect(rows[1]).toMatchObject({
+      deliveryLabel: "Trimitere în curs",
+      deliveryTone: "warning",
+      deliveryState: "pending",
+      nextAction: "În curs de trimitere",
+    });
+  });
+
+  it("shows indeterminate delivery as an explicit reconciliation error", () => {
+    const rows = buildInvitationRows(
+      participants,
+      assignments,
+      [
+        {
+          ...invitationStatuses[0],
+          participant_id: "ana",
+          latest_email_status: "indeterminate",
+          latest_email_error: null,
+        },
+      ],
+      new Map(),
+    );
+
+    expect(rows[1]).toMatchObject({
+      deliveryLabel: "Livrare neconfirmată",
+      deliveryTone: "danger",
+      deliveryState: "danger",
+      deliveryError: "Verifică starea livrării înainte de retrimitere.",
+      nextAction: "Verifică livrarea",
+    });
+  });
+
+  it.each([
+    ["queued", "Email în coadă", "warning", "pending"],
+    ["accepted", "Acceptat de furnizor", "success", "success"],
+    ["delivered", "Email livrat", "success", "success"],
+    ["opened", "Email deschis", "success", "success"],
+    ["clicked", "Link accesat", "success", "success"],
+    ["failed", "Trimitere eșuată", "danger", "danger"],
+    ["bounced", "Email respins", "danger", "danger"],
+    ["cancelled", "Trimitere anulată", "danger", "danger"],
+  ])("maps persisted %s delivery truthfully", (status, label, tone, state) => {
+    const rows = buildInvitationRows(
+      participants,
+      assignments,
+      [
+        {
+          ...invitationStatuses[0],
+          participant_id: "ana",
+          latest_email_status: status,
+        },
+      ],
+      new Map(),
+    );
+
+    expect(rows[1]).toMatchObject({
+      deliveryLabel: label,
+      deliveryTone: tone,
+      deliveryState: state,
     });
   });
 
@@ -247,7 +323,7 @@ describe("buildInvitationRows", () => {
     );
 
     expect(rows[1]).toMatchObject({
-      deliveryLabel: "Eroare trimitere",
+      deliveryLabel: "Email respins",
       deliveryTone: "danger",
     });
   });
@@ -488,6 +564,7 @@ describe("buildInvitationRows", () => {
     vi.mocked(sendParticipantInvitations).mockResolvedValue({
       total: 1,
       emails_sent: 0,
+      emails_queued: 0,
       emails_failed: 0,
       links_generated: 1,
       results: [
@@ -593,7 +670,50 @@ describe("buildInvitationRows", () => {
       });
     });
 
-    expect(await screen.findByText("1/1 emailuri trimise.")).toBeTruthy();
+    expect(await screen.findByText("1 acceptate de furnizor, 0 în coadă, 0 eșuate.")).toBeTruthy();
+  });
+
+  it("shows queued API results immediately without claiming delivery", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(sendParticipantInvitations).mockResolvedValue({
+      total: 1,
+      emails_sent: 0,
+      emails_queued: 1,
+      emails_failed: 0,
+      links_generated: 0,
+      results: [
+        {
+          participant_id: "ana",
+          email: "ana@example.com",
+          full_name: "Ana Pop",
+          delivery_mode: "email",
+          email_sent: false,
+          email_queued: true,
+          error: null,
+          invite_url: null,
+        },
+      ],
+    });
+
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Selectează Ana Pop"));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite email invitații" }));
+
+    expect(await screen.findByText("0 acceptate de furnizor, 1 în coadă, 0 eșuate.")).toBeTruthy();
+    expect(screen.getByText("Email în coadă")).toBeTruthy();
+    expect(screen.queryByText("Email trimis")).toBeNull();
   });
 
   it("marks only the all-email invitation action as pending", async () => {
@@ -656,7 +776,7 @@ describe("buildInvitationRows", () => {
       });
     });
 
-    expect(await screen.findByText("2/2 emailuri trimise.")).toBeTruthy();
+    expect(await screen.findByText("2 acceptate de furnizor, 0 în coadă, 0 eșuate.")).toBeTruthy();
   });
 
   it("sends email invites to all participants with saved assignments from the invited people tab", async () => {
@@ -711,7 +831,7 @@ describe("buildInvitationRows", () => {
         targetMode: "all",
       });
     });
-    expect(await screen.findByText("2/2 emailuri trimise.")).toBeTruthy();
+    expect(await screen.findByText("2 acceptate de furnizor, 0 în coadă, 0 eșuate.")).toBeTruthy();
   });
 
   it("resends one participant invitation and surfaces backend delivery failures", async () => {
@@ -748,6 +868,6 @@ describe("buildInvitationRows", () => {
     });
     expect(resendParticipantInvitation).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Emailul nu a fost retrimis către ana@example.com: provider unavailable")).toBeTruthy();
-    expect(screen.getByText("Eroare trimitere")).toBeTruthy();
+    expect(screen.getByText("Trimitere eșuată")).toBeTruthy();
   });
 });

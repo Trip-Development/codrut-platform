@@ -8,6 +8,7 @@ from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.service import EmailOutboxProcessor
+from codrut.modules.forms import models as forms_models  # noqa: F401
 from codrut.modules.health.service import publish_worker_heartbeat
 from codrut.modules.identity import models as identity_models  # noqa: F401
 
