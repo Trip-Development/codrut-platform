@@ -2292,24 +2292,24 @@ class EmailOutboxProcessor:
         if current is None:
             await self.session.rollback()
             return "failed"
-        now = datetime.now(UTC)
-        current.provider = result.provider.value
-        current.provider_message_id = result.message_id
-        current.status = EmailSendStatus.accepted
-        current.error_details = None
-        current.lease_token = None
-        current.lease_expires_at = None
-        current.next_attempt_at = None
-        current.last_event_at = now
-        await self.repository.add_email_event(
-            current.id,
-            EmailEventType.accepted,
-            occurred_at=now,
-        )
-        await self._mark_invitation_assignments_accepted(current, now=now)
-        await self.session.flush()
-        await self._complete_campaign_if_idle(current.campaign_id)
         try:
+            now = datetime.now(UTC)
+            current.provider = result.provider.value
+            current.provider_message_id = result.message_id
+            current.status = EmailSendStatus.accepted
+            current.error_details = None
+            current.lease_token = None
+            current.lease_expires_at = None
+            current.next_attempt_at = None
+            current.last_event_at = now
+            await self.repository.add_email_event(
+                current.id,
+                EmailEventType.accepted,
+                occurred_at=now,
+            )
+            await self._mark_invitation_assignments_accepted(current, now=now)
+            await self.session.flush()
+            await self._complete_campaign_if_idle(current.campaign_id)
             await self.session.commit()
         except Exception:  # noqa: BLE001
             await self.session.rollback()

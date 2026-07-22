@@ -219,6 +219,7 @@ export type RosterInviteResult = {
   full_name: string;
   delivery_mode: "email" | "secure_links";
   email_sent: boolean;
+  email_queued?: boolean;
   error: string | null;
   invite_url: string | null;
 };
@@ -240,6 +241,7 @@ export type RosterImportResponse = {
   email_results: RosterInviteResult[];
   total_imported: number;
   emails_sent: number;
+  emails_queued?: number;
   emails_failed: number;
 };
 
@@ -249,6 +251,7 @@ export type ParticipantInviteBatchResponse = {
   results: RosterInviteResult[];
   total: number;
   emails_sent: number;
+  emails_queued?: number;
   emails_failed: number;
   links_generated: number;
 };

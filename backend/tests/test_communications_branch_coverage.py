@@ -1212,6 +1212,45 @@ async def test_outbox_does_not_finalize_acceptance_after_lease_loss() -> None:
     session.rollback.assert_awaited_once()
 
 
+async def test_outbox_marks_provider_acceptance_indeterminate_when_local_flush_fails() -> None:
+    send = email_send(status=EmailSendStatus.dispatching)
+    lease_token = cast(str, send.lease_token)
+    result = EmailSendResult(
+        provider=EmailProviderKey.brevo,
+        status=EmailDeliveryStatus.accepted,
+        message_id="accepted-provider-id",
+        recipient=EmailAddress("ana@example.com"),
+    )
+    repository = SimpleNamespace(
+        get_email_suppression=AsyncMock(return_value=None),
+        begin_email_provider_request=AsyncMock(return_value=send),
+        get_claimed_email_send=AsyncMock(return_value=send),
+        add_email_event=AsyncMock(),
+    )
+    session = SimpleNamespace(
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+        flush=AsyncMock(side_effect=RuntimeError("metadata incomplete")),
+    )
+    provider = SimpleNamespace(send=AsyncMock(return_value=result))
+    processor = EmailOutboxProcessor(cast(Any, session), cast(Any, provider))
+    processor.repository = cast(Any, repository)
+    processor._mark_invitation_assignments_accepted = AsyncMock()  # type: ignore[method-assign]
+    processor._complete_campaign_if_idle = AsyncMock()  # type: ignore[method-assign]
+    processor._record_indeterminate = AsyncMock(return_value="indeterminate")  # type: ignore[method-assign]
+
+    assert await processor._process_claimed(send) == "indeterminate"
+
+    session.rollback.assert_awaited_once()
+    processor._record_indeterminate.assert_awaited_once_with(
+        send.id,
+        lease_token,
+        "Provider accepted the message, but local persistence failed.",
+        provider=EmailProviderKey.brevo,
+        provider_message_id="accepted-provider-id",
+    )
+
+
 async def test_outbox_failure_records_retry_metadata_then_terminal_failure() -> None:
     send = email_send(status=EmailSendStatus.dispatching)
     repository = SimpleNamespace(

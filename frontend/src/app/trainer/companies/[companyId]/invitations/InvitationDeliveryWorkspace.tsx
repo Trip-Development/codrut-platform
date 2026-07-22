@@ -52,6 +52,7 @@ type ParticipantInviteRow = {
   signedUp: boolean;
   deliveryLabel: string;
   deliveryTone: "default" | "success" | "warning" | "danger";
+  deliveryState: "none" | "ready" | "pending" | "success" | "danger";
   deliveryError: string | null;
   secureLinkUrl: string | null;
   secureLinkExpiresAt: string | null;
@@ -69,6 +70,61 @@ type InvitationPendingAction =
 
 const completedStatuses = new Set(["submitted", "validated", "scored"]);
 const activeInviteStatuses = new Set(["invited", "started", "submitted", "validated", "scored"]);
+const persistedEmailStates: Record<
+  string,
+  Pick<ParticipantInviteRow, "deliveryLabel" | "deliveryTone" | "deliveryState">
+> = {
+  queued: {
+    deliveryLabel: "Email în coadă",
+    deliveryTone: "warning",
+    deliveryState: "pending",
+  },
+  dispatching: {
+    deliveryLabel: "Trimitere în curs",
+    deliveryTone: "warning",
+    deliveryState: "pending",
+  },
+  accepted: {
+    deliveryLabel: "Acceptat de furnizor",
+    deliveryTone: "success",
+    deliveryState: "success",
+  },
+  delivered: {
+    deliveryLabel: "Email livrat",
+    deliveryTone: "success",
+    deliveryState: "success",
+  },
+  opened: {
+    deliveryLabel: "Email deschis",
+    deliveryTone: "success",
+    deliveryState: "success",
+  },
+  clicked: {
+    deliveryLabel: "Link accesat",
+    deliveryTone: "success",
+    deliveryState: "success",
+  },
+  indeterminate: {
+    deliveryLabel: "Livrare neconfirmată",
+    deliveryTone: "danger",
+    deliveryState: "danger",
+  },
+  cancelled: {
+    deliveryLabel: "Trimitere anulată",
+    deliveryTone: "danger",
+    deliveryState: "danger",
+  },
+  failed: {
+    deliveryLabel: "Trimitere eșuată",
+    deliveryTone: "danger",
+    deliveryState: "danger",
+  },
+  bounced: {
+    deliveryLabel: "Email respins",
+    deliveryTone: "danger",
+    deliveryState: "danger",
+  },
+};
 const questionnaireLabels: Record<string, string> = {
   lencioni: "Lencioni - evaluare echipă",
   lencioni_en: "Lencioni - evaluare echipă",
@@ -120,37 +176,62 @@ export function buildInvitationRows(
     const signedUp = Boolean(participant.user_id);
     const secureLinkUrl = result?.invite_url ?? persistedStatus?.active_secure_link_url ?? null;
     const secureLinkExpiresAt = persistedStatus?.active_secure_link_expires_at ?? null;
-    const deliveryError = result?.error ?? persistedStatus?.latest_email_error ?? null;
-    const persistedDeliveryFailed =
-      persistedStatus?.latest_email_status === "failed" ||
-      persistedStatus?.latest_email_status === "bounced";
+    let deliveryError = result
+      ? result.error
+      : persistedStatus?.latest_email_error ?? null;
     let deliveryLabel = "Fără asignări";
     let deliveryTone: ParticipantInviteRow["deliveryTone"] = "default";
+    let deliveryState: ParticipantInviteRow["deliveryState"] = "none";
 
-    if (deliveryError || persistedDeliveryFailed) {
-      deliveryLabel = "Eroare trimitere";
+    if (result?.error) {
+      deliveryLabel = "Trimitere eșuată";
       deliveryTone = "danger";
+      deliveryState = "danger";
+    } else if (result?.email_queued) {
+      deliveryLabel = "Email în coadă";
+      deliveryTone = "warning";
+      deliveryState = "pending";
     } else if (result?.email_sent) {
-      deliveryLabel = "Email trimis";
+      deliveryLabel = "Acceptat de furnizor";
       deliveryTone = "success";
+      deliveryState = "success";
     } else if (result?.delivery_mode === "secure_links") {
       deliveryLabel = "Link securizat generat";
       deliveryTone = "success";
-    } else if (persistedStatus?.latest_email_status === "queued") {
-      deliveryLabel = "Email în coadă";
-      deliveryTone = "warning";
+      deliveryState = "success";
+    } else if (result) {
+      deliveryLabel = "Livrare neconfirmată";
+      deliveryTone = "danger";
+      deliveryState = "danger";
+      deliveryError = "Verifică starea livrării înainte de retrimitere.";
     } else if (persistedStatus?.latest_email_status) {
-      deliveryLabel = "Email trimis";
-      deliveryTone = "success";
+      const persistedEmailState = persistedEmailStates[persistedStatus.latest_email_status];
+      if (persistedEmailState) {
+        ({ deliveryLabel, deliveryTone, deliveryState } = persistedEmailState);
+        if (deliveryState !== "danger") {
+          deliveryError = null;
+        }
+        if (persistedStatus.latest_email_status === "indeterminate" && !deliveryError) {
+          deliveryError = "Verifică starea livrării înainte de retrimitere.";
+        }
+      } else {
+        deliveryLabel = "Stare de livrare necunoscută";
+        deliveryTone = "danger";
+        deliveryState = "danger";
+        deliveryError ??= "Reîncarcă pagina sau verifică livrarea înainte de retrimitere.";
+      }
     } else if (persistedStatus?.has_active_secure_link) {
       deliveryLabel = "Link securizat activ";
       deliveryTone = "success";
+      deliveryState = "success";
     } else if (participantAssignments.some((assignment) => activeInviteStatuses.has(assignment.status))) {
       deliveryLabel = "Invitație activă";
       deliveryTone = "success";
+      deliveryState = "success";
     } else if (totalTasks > 0) {
       deliveryLabel = "Pregătit, netrimis";
       deliveryTone = "warning";
+      deliveryState = "ready";
     }
 
     const nextAction =
@@ -158,9 +239,13 @@ export function buildInvitationRows(
         ? "Adaugă asignări"
         : completedTasks === totalTasks
           ? "Raport disponibil"
-          : deliveryTone === "success"
-            ? "În progres"
-            : "Trimite invitația";
+          : deliveryState === "pending"
+            ? "În curs de trimitere"
+            : deliveryState === "success"
+              ? "În progres"
+              : deliveryState === "danger"
+                ? "Verifică livrarea"
+                : "Trimite invitația";
 
     return {
       participant,
@@ -171,6 +256,7 @@ export function buildInvitationRows(
       signedUp,
       deliveryLabel,
       deliveryTone,
+      deliveryState,
       deliveryError,
       secureLinkUrl,
       secureLinkExpiresAt,
@@ -338,7 +424,7 @@ export function InvitationDeliveryWorkspace({
       setSelectedParticipantIds(new Set());
       setMessage(
         mode === "email"
-          ? `${result.emails_sent}/${result.total} emailuri trimise.`
+          ? formatEmailBatchMessage(result)
           : `${result.links_generated}/${result.total} linkuri securizate generate.`,
       );
     } catch (error) {
@@ -701,8 +787,8 @@ function getCurrentOperation(
 }
 
 function matchesInvitationFilter(row: ParticipantInviteRow, filter: InvitationFilter): boolean {
-  if (filter === "ready") return row.totalTasks > 0 && row.deliveryTone !== "success";
-  if (filter === "errors") return row.deliveryTone === "danger";
+  if (filter === "ready") return row.totalTasks > 0 && row.deliveryState === "ready";
+  if (filter === "errors") return row.deliveryState === "danger";
   if (filter === "no_assignments") return row.totalTasks === 0;
   if (filter === "not_signed_up") return !row.signedUp;
   return true;
@@ -801,10 +887,22 @@ function StatusMarker({
 }
 
 function formatResendMessage(result: RosterInviteResult): string {
-  if (result.email_sent) return `Email retrimis către ${result.email}.`;
+  if (result.email_queued) return `Emailul pentru ${result.email} a fost pus în coadă.`;
+  if (result.email_sent) return `Email acceptat de furnizor pentru ${result.email}.`;
   if (result.error) return `Emailul nu a fost retrimis către ${result.email}: ${result.error}`;
   if (result.invite_url) return `Link pregătit pentru ${result.email}.`;
   return `Invitația nu a fost retrimisă către ${result.email}.`;
+}
+
+function formatEmailBatchMessage(result: {
+  total: number;
+  emails_sent: number;
+  emails_queued?: number;
+  emails_failed: number;
+}): string {
+  const queued = result.emails_queued
+    ?? result.total - result.emails_sent - result.emails_failed;
+  return `${result.emails_sent} acceptate de furnizor, ${Math.max(0, queued)} în coadă, ${result.emails_failed} eșuate.`;
 }
 
 function formatAssignmentLabel(
