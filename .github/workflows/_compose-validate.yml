@@ -47,7 +47,7 @@ jobs:
       CODRUT_EMAIL_WEBHOOK_TOKEN: compose-webhook-token-with-at-least-32-characters
       CODRUT_DB_VOLUME_PATH: /tmp/codrut-postgres-data
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate Development Compose Config
         if: inputs.mode == 'both'
         run: |
@@ -68,6 +68,11 @@ jobs:
               raise SystemExit("Development backend processes must run as vscode to keep cache ownership stable.")
           if cache_init.get("user") != "root":
               raise SystemExit("Development cache initializer must run as root to repair existing volumes.")
+          cache_command = " ".join(cache_init.get("command", []))
+          if "frontend-next-cache" not in cache_command or "-delete" not in cache_command:
+              raise SystemExit("Development startup must clear the disposable Next.js cache.")
+          if not frontend.get("healthcheck", {}).get("test"):
+              raise SystemExit("Development frontend must verify that emitted script assets resolve.")
           for service_name in ("frontend", "backend", "worker"):
               cache_dependency = services[service_name].get("depends_on", {}).get(
                   "development-cache-init",
@@ -91,4 +96,23 @@ jobs:
           worker_origin = services["worker"]["environment"]["CODRUT_CORS_ORIGINS"]
           if worker_origin != backend_origin:
               raise SystemExit("Worker and backend production CORS origins must match.")
+
+          frontend_labels = services["frontend"]["labels"]
+          backend_labels = services["backend"]["labels"]
+          for service_name in ("frontend", "backend"):
+              environment = services[service_name]["environment"]
+              if environment.get("CODRUT_LOCAL_AUTH_BYPASS") != "false":
+                  raise SystemExit(
+                      f"Production {service_name} must explicitly disable local auth bypass."
+                  )
+          if services["frontend"]["environment"].get("NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS") != "false":
+              raise SystemExit("Production frontend public auth bypass must be disabled.")
+          if frontend_labels.get("traefik.http.middlewares.codrut-hsts.headers.stsSeconds") != "31536000":
+              raise SystemExit("Production HSTS must remain enabled for one year.")
+          for labels, router in (
+              (frontend_labels, "codrut-frontend"),
+              (backend_labels, "codrut-api"),
+          ):
+              if labels.get(f"traefik.http.routers.{router}.middlewares") != "codrut-hsts":
+                  raise SystemExit(f"Production router {router} must use the HSTS middleware.")
           PY

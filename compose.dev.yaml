@@ -10,6 +10,7 @@ services:
       - sh
       - -lc
       - >-
+        find /volumes/frontend-next-cache -mindepth 1 -delete &&
         chown -R 1000:1000 /volumes
     volumes:
       - backend_uv_cache:/volumes/backend-uv-cache
@@ -62,6 +63,24 @@ services:
         condition: service_completed_successfully
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/').then(async response => {
+            if (!response.ok) throw new Error('page ' + response.status);
+            const html = await response.text();
+            const script = html.match(/<script[^>]+src="([^"]+)"/);
+            if (!script) throw new Error('missing script asset');
+            const asset = await fetch(new URL(script[1], response.url));
+            if (!asset.ok) throw new Error('script ' + asset.status);
+          }).catch(error => { console.error(error); process.exit(1); })
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
     init: true
     tty: true
     stdin_open: true
