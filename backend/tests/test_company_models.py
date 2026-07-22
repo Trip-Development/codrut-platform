@@ -1,8 +1,21 @@
+import uuid
+
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
 from sqlalchemy.orm import configure_mappers
 
 from codrut.core.database import Base
-from codrut.modules.companies.models import CompanyMembershipRole, ProjectMembership
+from codrut.core.security import hash_password
+from codrut.modules.companies.models import (
+    CompanyMembershipRole,
+    ParticipantProfile,
+    ProjectMembership,
+)
+from codrut.modules.companies.schemas import ParticipantResponse
+from codrut.modules.identity.models import (
+    SHADOW_ACCOUNT_PASSWORD_HASH,
+    User,
+    UserRole,
+)
 
 
 def test_company_participant_tables_are_registered() -> None:
@@ -40,6 +53,40 @@ def test_participant_profile_matches_roster_shape() -> None:
     }.issubset(columns.keys())
     assert columns["pcm_profile"].nullable
     assert columns["reports_to_name"].nullable
+
+
+def test_participant_response_distinguishes_shadow_and_permanent_accounts() -> None:
+    shadow_user = User(
+        id=uuid.uuid4(),
+        email="temporary@example.com",
+        password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+        role=UserRole.participant,
+    )
+    shadow_profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=shadow_user.id,
+        full_name="Temporary Participant",
+        email=shadow_user.email,
+        user=shadow_user,
+    )
+    permanent_user = User(
+        id=uuid.uuid4(),
+        email="permanent@example.com",
+        password_hash=hash_password("permanent-password-123"),
+        role=UserRole.participant,
+    )
+    permanent_profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=permanent_user.id,
+        full_name="Permanent Participant",
+        email=permanent_user.email,
+        user=permanent_user,
+    )
+
+    assert ParticipantResponse.model_validate(shadow_profile).is_shadow_account is True
+    assert ParticipantResponse.model_validate(permanent_profile).is_shadow_account is False
 
 
 def test_participant_profile_is_company_scoped() -> None:

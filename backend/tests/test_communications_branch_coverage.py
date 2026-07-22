@@ -355,7 +355,7 @@ async def test_campaign_dry_run_explains_ineligible_recipients_without_enqueuing
     current_campaign = campaign()
     wrong_segment = recipient(segment=CampaignRecipientSegment.past_customer)
     suppressed = recipient(status=CampaignRecipientStatus.suppressed)
-    eligible = recipient()
+    eligible = recipient(owner_id=None)
     repository = SimpleNamespace(
         get_campaign=AsyncMock(return_value=current_campaign),
         list_campaign_recipients_by_ids=AsyncMock(
@@ -380,6 +380,34 @@ async def test_campaign_dry_run_explains_ineligible_recipients_without_enqueuing
     assert result.skipped == 3
     assert "segment" in cast(str, result.results[0].error).lower()
     assert "suppressed" in cast(str, result.results[1].error).lower()
+
+
+async def test_campaign_dry_run_uses_contacts_created_by_another_trainer() -> None:
+    current_campaign = campaign()
+    shared_recipient = recipient(owner_id=OTHER_OWNER_ID)
+    repository = SimpleNamespace(
+        get_campaign=AsyncMock(return_value=current_campaign),
+        list_campaign_recipients_by_ids=AsyncMock(return_value=[shared_recipient]),
+        count_accepted_sends_since=AsyncMock(return_value=0),
+    )
+    service = service_with(repository)
+
+    result = await service.send_campaign(
+        current_campaign.id,
+        CampaignSendRequest(
+            mode="selected",
+            recipient_ids=[shared_recipient.id],
+            dry_run=True,
+        ),
+        settings=SETTINGS,
+        owner_id=OWNER_ID,
+    )
+
+    assert [item.status for item in result.results] == ["dry_run"]
+    repository.get_campaign.assert_awaited_once_with(
+        current_campaign.id,
+        owner_id=OWNER_ID,
+    )
 
 
 async def test_campaign_send_preserves_existing_delivery_states_and_daily_cap() -> None:
@@ -501,8 +529,11 @@ def test_communications_service_requires_explicit_persistence_dependencies() -> 
         service._require_session()
 
 
-async def test_contact_edit_preserves_unsubscribe_and_owner_scope() -> None:
-    unsubscribed = recipient(status=CampaignRecipientStatus.unsubscribed)
+async def test_contact_edit_preserves_unsubscribe_for_shared_contact() -> None:
+    unsubscribed = recipient(
+        status=CampaignRecipientStatus.unsubscribed,
+        owner_id=OTHER_OWNER_ID,
+    )
     repository = SimpleNamespace(
         get_campaign_recipient=AsyncMock(return_value=unsubscribed),
         flush=AsyncMock(),
@@ -637,7 +668,7 @@ async def test_campaign_membership_backfill_leaves_empty_audience_uninitialized(
     repository.replace_campaign_memberships.assert_not_awaited()
 
 
-async def test_recording_campaign_event_rejects_foreign_recipient() -> None:
+async def test_recording_campaign_event_rejects_unknown_recipient() -> None:
     repository = SimpleNamespace(get_campaign_recipient=AsyncMock(return_value=None))
     service = service_with(repository)
 

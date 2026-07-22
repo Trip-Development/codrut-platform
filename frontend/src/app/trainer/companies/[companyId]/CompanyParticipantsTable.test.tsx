@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CompanyParticipant } from "@/api/companies";
@@ -37,6 +37,18 @@ const participants: CompanyParticipant[] = [
     pcm_profile: null,
     user_id: "user-2",
   },
+  {
+    id: "participant-3",
+    full_name: "Mihai Temporar",
+    email: "mihai@example.test",
+    reports_to_name: "Ana Manager",
+    position: "Specialist",
+    location: "Iași",
+    role_group: "member",
+    pcm_profile: null,
+    user_id: "shadow-user-3",
+    is_shadow_account: true,
+  },
 ];
 
 describe("CompanyParticipantsTable", () => {
@@ -58,5 +70,17 @@ describe("CompanyParticipantsTable", () => {
       "/trainer/companies/company-1/participants?q=stefan",
       { scroll: false },
     );
+  });
+
+  it("shows only real linked accounts as active", () => {
+    render(<CompanyParticipantsTable participants={participants} />);
+
+    const permanentRow = screen.getByText("ana@example.test").closest("tr");
+    const shadowRow = screen.getByText("Mihai Temporar").closest("tr");
+
+    expect(permanentRow).toBeTruthy();
+    expect(shadowRow).toBeTruthy();
+    expect(within(permanentRow as HTMLElement).getByText("Activ")).toBeTruthy();
+    expect(within(shadowRow as HTMLElement).getByText("Necreat")).toBeTruthy();
   });
 });

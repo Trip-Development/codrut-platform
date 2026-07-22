@@ -419,7 +419,7 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 str(team_assignment.id),
                 str(person_assignment.id),
             ]
-            assert summary.tasks[0].targetLabel == "Leadership"
+            assert summary.tasks[0].targetLabel == "Echipa ta"
             assert summary.tasks[0].status == "not_started"
             assert summary.tasks[1].targetLabel == "Mara Manager"
             assert summary.tasks[1].status == "completed"

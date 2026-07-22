@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { headers } from "next/headers";
 import { THEME_PREPAINT_SCRIPT } from "@/lib/theme-prepaint";
 import "./globals.css";
+
+export const dynamic = "force-dynamic";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -22,12 +25,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="ro" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={geist.variable}>
         <script
           id="codrut-theme-prepaint"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: THEME_PREPAINT_SCRIPT,
           }}

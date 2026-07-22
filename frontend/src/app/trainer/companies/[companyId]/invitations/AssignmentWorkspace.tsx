@@ -711,50 +711,76 @@ function AssignmentPlanGroups({
               </span>
             </header>
 
-            <div
-              className="hidden grid-cols-[3rem_1fr_1.2fr_1fr_7rem] border-t border-border/70 px-2 text-[11px] font-semibold uppercase text-muted-foreground sm:grid"
-              aria-hidden="true"
-            >
-              <span className="px-2 py-2" />
-              <span className="px-2 py-2">Respondent</span>
-              <span className="px-2 py-2">Chestionar</span>
-              <span className="px-2 py-2">Țintă</span>
-              <span className="px-2 py-2">Stare</span>
-            </div>
+            <div className="space-y-3 p-3 md:p-4">
+              {buildAssignmentTargetGroups(scopeAssignments).map((targetGroup) => (
+                <section
+                  key={targetGroup.id}
+                  aria-label={`Țintă ${formatTargetType(targetGroup.type)}: ${targetGroup.name}`}
+                  className="overflow-hidden rounded-md border border-border bg-background"
+                >
+                  <header className="flex items-start justify-between gap-4 border-b border-border bg-muted/35 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase text-muted-foreground">
+                        {formatTargetType(targetGroup.type)}
+                      </p>
+                      <h4 className="mt-0.5 break-words text-sm font-semibold text-foreground">
+                        {targetGroup.name}
+                      </h4>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+                      {targetGroup.assignments.length}{" "}
+                      {targetGroup.assignments.length === 1 ? "asignare" : "asignări"}
+                    </span>
+                  </header>
 
-            <div role="list" className="divide-y divide-border/80">
-              {scopeAssignments.map((assignment) => {
-                const saved = Boolean(assignment.existing_assignment_id);
-                const selected = selectedKeys.has(assignment.key);
-                return (
                   <div
-                    key={assignment.key}
-                    role="listitem"
-                    className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 sm:grid-cols-[3rem_1fr_1.2fr_1fr_7rem] sm:items-center sm:gap-0 sm:px-2 sm:py-3"
+                    className="hidden grid-cols-[3rem_minmax(9rem,1fr)_minmax(12rem,1.2fr)_minmax(9rem,1fr)_minmax(8rem,.8fr)_7rem] bg-muted/15 px-2 text-[11px] font-semibold uppercase text-muted-foreground lg:grid"
+                    aria-hidden="true"
                   >
-                    <div className="pt-0.5 sm:px-2 sm:pt-0">
-                      <Checkbox
-                        aria-label={`Selectează asignarea pentru ${assignment.respondent_name}`}
-                        checked={saved || selected}
-                        disabled={saved}
-                        onCheckedChange={() => onToggleItem(assignment.key)}
-                      />
-                    </div>
-                    <PlanRowValue label="Respondent" strong>{assignment.respondent_name}</PlanRowValue>
-                    <PlanRowValue label="Chestionar">
-                      {formatQuestionnaireLabel(assignment.questionnaire_key)}
-                    </PlanRowValue>
-                    <div className="col-start-2 min-w-0 sm:col-start-auto sm:px-2">
-                      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Țintă</span>
-                      <p className="font-medium text-foreground">{formatPlanTarget(assignment)}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{formatTargetType(assignment.target_type)}</p>
-                    </div>
-                    <div className="col-start-2 sm:col-start-auto sm:px-2">
-                      <AssignmentState saved={saved} selected={selected} />
-                    </div>
+                    <span className="px-2 py-2" />
+                    <span className="px-2 py-2">Respondent</span>
+                    <span className="px-2 py-2">Chestionar</span>
+                    <span className="px-2 py-2">Țintă</span>
+                    <span className="px-2 py-2">Grup</span>
+                    <span className="px-2 py-2">Stare</span>
                   </div>
-                );
-              })}
+
+                  <div role="list" className="divide-y divide-border/80">
+                    {targetGroup.assignments.map((assignment) => {
+                      const saved = Boolean(assignment.existing_assignment_id);
+                      const selected = selectedKeys.has(assignment.key);
+                      return (
+                        <div
+                          key={assignment.key}
+                          role="listitem"
+                          className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 lg:grid-cols-[3rem_minmax(9rem,1fr)_minmax(12rem,1.2fr)_minmax(9rem,1fr)_minmax(8rem,.8fr)_7rem] lg:items-center lg:gap-0 lg:px-2 lg:py-3"
+                        >
+                          <div className="pt-0.5 lg:px-2 lg:pt-0">
+                            <Checkbox
+                              aria-label={`Selectează asignarea pentru ${assignment.respondent_name}`}
+                              checked={saved || selected}
+                              disabled={saved}
+                              onCheckedChange={() => onToggleItem(assignment.key)}
+                            />
+                          </div>
+                          <PlanRowValue label="Respondent" strong>{assignment.respondent_name}</PlanRowValue>
+                          <PlanRowValue label="Chestionar">
+                            {formatQuestionnaireLabel(assignment.questionnaire_key)}
+                          </PlanRowValue>
+                          <PlanRowValue label="Țintă">{formatPlanTarget(assignment)}</PlanRowValue>
+                          <PlanRowValue label="Grup">{scope.name}</PlanRowValue>
+                          <div className="col-start-2 lg:col-start-auto lg:px-2">
+                            <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">
+                              Stare
+                            </span>
+                            <AssignmentState saved={saved} selected={selected} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           </section>
         ))}
@@ -773,11 +799,47 @@ function PlanRowValue({
   children: React.ReactNode;
 }) {
   return (
-    <div className="col-start-2 min-w-0 sm:col-start-auto sm:px-2">
-      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">{label}</span>
+    <div className="col-start-2 min-w-0 lg:col-start-auto lg:px-2">
+      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">{label}</span>
       <span className={cn("break-words", strong && "font-semibold text-foreground")}>{children}</span>
     </div>
   );
+}
+
+function buildAssignmentTargetGroups(assignments: CompanyAssignmentPlanItem[]) {
+  const groups = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      type: AssignmentTargetType;
+      assignments: CompanyAssignmentPlanItem[];
+    }
+  >();
+
+  for (const assignment of assignments) {
+    const targetId =
+      assignment.target_type === "person"
+        ? (assignment.target_person_id ?? assignment.target_person_name)
+        : assignment.target_type === "team"
+          ? (assignment.target_team_id ?? assignment.target_team_name)
+          : assignment.respondent_profile_id;
+    const id = `${assignment.target_type}:${targetId ?? assignment.key}`;
+    const current = groups.get(id);
+    if (current) {
+      current.assignments.push(assignment);
+      continue;
+    }
+
+    groups.set(id, {
+      id,
+      name: formatPlanTarget(assignment),
+      type: assignment.target_type,
+      assignments: [assignment],
+    });
+  }
+
+  return Array.from(groups.values());
 }
 
 function buildAssignmentPlanGroups(plan: CompanyAssignmentPlan) {

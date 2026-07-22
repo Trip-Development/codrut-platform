@@ -584,6 +584,12 @@ function evaluationTargetCopy(
   targetLabel: string | undefined,
   questionnaireKey: string,
 ): { eyebrow: string; title: string; targetName?: string } {
+  if (questionnaireKey === "lencioni" || questionnaireKey === "lencioni_en") {
+    return {
+      eyebrow: "Feedback pentru echipă",
+      title: "Răspunzi despre echipa ta",
+    };
+  }
   const isReview360 = isReview360Questionnaire(questionnaireKey);
   const cleaned = targetLabel?.trim();
   if (isReview360) {

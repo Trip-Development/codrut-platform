@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2Icon } from "lucide-react";
 
 import {
+  hasPermanentParticipantAccount,
   importCompanyRoster,
   updateCompanyParticipant,
   type CompanyParticipant,
@@ -102,7 +103,7 @@ export function buildProjectParticipantAccessRows(
   return participants.map((participant) => {
     const status = statusByParticipant.get(participant.id);
     const isPermanentParticipant = isPermanentAccountParticipant(participant, managerNameKeys);
-    const hasAccount = Boolean(participant.user_id);
+    const hasAccount = hasPermanentParticipantAccount(participant);
     const hasSecureLink = Boolean(status?.has_active_secure_link || status?.active_secure_link_url);
     const latestDelivery = status?.latest_delivery_mode;
 
@@ -138,12 +139,15 @@ function buildManagerNameKeys(participants: CompanyParticipant[]): Set<string> {
 }
 
 function isPermanentAccountParticipant(participant: CompanyParticipant, managerNameKeys: Set<string>): boolean {
+  if (participant.is_shadow_account === true) {
+    return false;
+  }
   const role = participant.role_group?.trim().toLowerCase();
   if (isExternalMatrixManagerLabel(participant.full_name)) {
-    return role === "manager" || role === "leadership" || Boolean(participant.user_id);
+    return role === "manager" || role === "leadership" || hasPermanentParticipantAccount(participant);
   }
   const participantName = managerReferenceKey(participant.full_name);
-  return role === "manager" || role === "leadership" || Boolean(participant.user_id) || managerNameKeys.has(participantName);
+  return role === "manager" || role === "leadership" || hasPermanentParticipantAccount(participant) || managerNameKeys.has(participantName);
 }
 
 export function ProjectParticipantsWorkspace({
@@ -545,16 +549,16 @@ function RosterTable({
   emptyMessage: string;
 }) {
   return (
-    <div className="min-w-0 max-w-full overflow-x-auto px-5 pb-5">
+    <div className="min-w-0 max-w-full px-4 pb-5 sm:px-5">
       <div
         role="table"
         aria-label="Roster participanți"
-        className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface text-sm shadow-sm sm:min-w-[920px]"
+        className="w-full min-w-0 overflow-hidden rounded-lg border border-border bg-surface text-sm shadow-sm"
       >
         <div role="rowgroup">
           <div
             role="row"
-            className="hidden grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] bg-muted text-xs font-semibold text-muted-foreground sm:grid"
+            className="hidden grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] bg-muted text-xs font-semibold text-muted-foreground lg:grid"
           >
             <span role="columnheader" className="px-5 py-3">Nume</span>
             <span role="columnheader" className="px-5 py-3">Email</span>
@@ -627,10 +631,10 @@ function ParticipantRow({
       <div
         role="row"
         data-participant-row={participant.id}
-        className="grid min-w-0 gap-4 px-4 py-4 sm:grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] sm:items-center sm:gap-0 sm:px-0"
+        className="grid min-w-0 gap-4 px-4 py-4 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] lg:items-center lg:gap-0 lg:px-0"
       >
-        <div role="cell" className="min-w-0 sm:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Nume</span>
+        <div role="cell" className="min-w-0 lg:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Nume</span>
           <Link
             href={`/trainer/projects/${projectId}/participants/${participant.id}`}
             className="font-semibold text-foreground underline-offset-4 hover:text-burgundy hover:underline"
@@ -638,23 +642,23 @@ function ParticipantRow({
             {participant.full_name}
           </Link>
         </div>
-        <div role="cell" className="min-w-0 text-foreground/62 sm:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Email</span>
-          <span className="break-all sm:block sm:truncate">{participant.email ?? "email lipsă"}</span>
+        <div role="cell" className="min-w-0 text-foreground/62 lg:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Email</span>
+          <span className="break-all lg:block lg:truncate">{participant.email ?? "email lipsă"}</span>
         </div>
-        <div role="cell" className="min-w-0 text-foreground/62 sm:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Manager</span>
+        <div role="cell" className="min-w-0 text-foreground/62 lg:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Manager</span>
           <span className="break-words">{formatManagerName(participant.reports_to_name)}</span>
         </div>
-        <div role="cell" className="min-w-0 text-foreground/62 sm:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Poziție</span>
+        <div role="cell" className="min-w-0 text-foreground/62 lg:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Poziție</span>
           <span className="break-words">{participant.position ?? "-"}</span>
         </div>
-        <div role="cell" className="min-w-0 sm:px-5">
-          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Tip acces</span>
+        <div role="cell" className="min-w-0 lg:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground lg:hidden">Tip acces</span>
           <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
         </div>
-        <div role="cell" className="min-w-0 sm:px-3 sm:text-right">
+        <div role="cell" className="min-w-0 self-end sm:text-right lg:px-3">
           <Button
             type="button"
             onClick={onEdit}

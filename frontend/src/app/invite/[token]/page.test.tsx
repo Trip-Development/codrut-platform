@@ -256,7 +256,8 @@ describe("InvitePage", () => {
     await renderInvitePage();
 
     expect(await screen.findByText("Finalizat")).toBeTruthy();
-    expect(screen.getByText(/Echipa Nord · 12 min/)).toBeTruthy();
+    expect(screen.getAllByText(/Echipa ta · 12 min/)).toHaveLength(2);
+    expect(screen.queryByText(/Echipa Nord/)).toBeNull();
     expect(screen.getByRole("heading", { name: "Evaluare regulată" }).closest("article")?.textContent).toContain("12 min");
     expect(screen.getByText(/Bianca Pavel · 12 min/)).toBeTruthy();
     expect(screen.getByText(/Persoana indicată · 12 min/)).toBeTruthy();

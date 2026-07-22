@@ -2,7 +2,10 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
-import type { CompanyParticipant } from "@/api/companies";
+import {
+  hasPermanentParticipantAccount,
+  type CompanyParticipant,
+} from "@/api/companies";
 import { useUrlState } from "@/hooks/use-url-state";
 import {
   normalizeWorkspaceSearch,
@@ -83,25 +86,28 @@ export function CompanyParticipantsTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {visibleParticipants.length > 0 ? visibleParticipants.map((participant) => (
-                  <tr key={participant.id} className="transition-colors hover:bg-muted/35">
-                    <td className="px-5 py-4 font-semibold text-foreground">{participant.full_name}</td>
-                    <td className="px-4 py-4 text-muted-foreground">{participant.email ?? "Email lipsă"}</td>
-                    <td className="px-4 py-4 text-foreground">
-                      {participant.position ?? (participant.role_group === "leadership" ? "Leadership" : "Membru")}
-                    </td>
-                    <td className="px-4 py-4 text-muted-foreground">{participant.reports_to_name ?? "Fără manager"}</td>
-                    <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-2 whitespace-nowrap font-medium text-foreground">
-                        <span
-                          aria-hidden="true"
-                          className={participant.user_id ? "size-2 rounded-full bg-emerald-500" : "size-2 rounded-full bg-zinc-400"}
-                        />
-                        {participant.user_id ? "Activ" : "Necreat"}
-                      </span>
-                    </td>
-                  </tr>
-                )) : (
+                {visibleParticipants.length > 0 ? visibleParticipants.map((participant) => {
+                  const hasPermanentAccount = hasPermanentParticipantAccount(participant);
+                  return (
+                    <tr key={participant.id} className="transition-colors hover:bg-muted/35">
+                      <td className="px-5 py-4 font-semibold text-foreground">{participant.full_name}</td>
+                      <td className="px-4 py-4 text-muted-foreground">{participant.email ?? "Email lipsă"}</td>
+                      <td className="px-4 py-4 text-foreground">
+                        {participant.position ?? (participant.role_group === "leadership" ? "Leadership" : "Membru")}
+                      </td>
+                      <td className="px-4 py-4 text-muted-foreground">{participant.reports_to_name ?? "Fără manager"}</td>
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center gap-2 whitespace-nowrap font-medium text-foreground">
+                          <span
+                            aria-hidden="true"
+                            className={hasPermanentAccount ? "size-2 rounded-full bg-emerald-500" : "size-2 rounded-full bg-zinc-400"}
+                          />
+                          {hasPermanentAccount ? "Activ" : "Necreat"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                }) : (
                   <tr>
                     <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
                       Niciun participant pentru căutarea curentă.

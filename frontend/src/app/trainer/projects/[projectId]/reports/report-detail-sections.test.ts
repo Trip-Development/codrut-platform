@@ -138,7 +138,7 @@ describe("buildDriverIndividualResults", () => {
 });
 
 describe("report detail sections", () => {
-  it("renders the Lencioni empty, privacy-suppressed, unscored, and scored states", () => {
+  it("renders Lencioni aggregates from the first scored response", () => {
     const { rerender } = render(LencioniTeamBreakdown({ teams: [], overviewHref: "/reports" }));
     expect(screen.getByText("Nu există încă rezultate Lencioni pe echipe.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Înapoi la sumar" }).getAttribute("href")).toBe("/reports");
@@ -146,7 +146,14 @@ describe("report detail sections", () => {
     rerender(LencioniTeamBreakdown({
       overviewHref: "/reports",
       teams: [
-        team({ id: "private", name: "Echipa Privată", lencioniCount: 1 }),
+        team({
+          id: "single",
+          name: "Echipa cu un răspuns",
+          lencioniCount: 1,
+          lencioniAverages: [
+            { id: "trust-single", label: "Încredere individuală", avg: 6.8 },
+          ],
+        }),
         team({ id: "unscored", name: "Echipa Nescorată", lencioniCount: 3 }),
         team({
           id: "ready",
@@ -161,7 +168,10 @@ describe("report detail sections", () => {
       ],
     }));
 
-    expect(screen.getByText("Ascuns până există cel puțin 3 răspunsuri.")).toBeTruthy();
+    const singleResponseTeam = screen.getByText("Echipa cu un răspuns").closest("article");
+    expect(singleResponseTeam).not.toBeNull();
+    expect(within(singleResponseTeam as HTMLElement).getByText("6.8 / 0-10")).toBeTruthy();
+    expect(screen.queryByText(/Prag de confidențialitate|Ascuns până există/)).toBeNull();
     expect(screen.getByText("Nu există încă rezultate scorate pentru echipă.")).toBeTruthy();
     const readyTeam = screen.getByText("Echipa Pregătită").closest("article");
     expect(readyTeam).not.toBeNull();
@@ -177,7 +187,14 @@ describe("report detail sections", () => {
     rerender(DriverDetailBreakdown({
       overviewHref: "/reports",
       teams: [
-        team({ id: "private", name: "Driver privat", driverCount: 2 }),
+        team({
+          id: "single",
+          name: "Driver cu un răspuns",
+          driverCount: 1,
+          driverAverages: [
+            { id: "single-pressure", label: "Presiune individuală", avg: 73 },
+          ],
+        }),
         team({
           id: "ready",
           name: "Driver disponibil",
@@ -203,8 +220,11 @@ describe("report detail sections", () => {
     }));
 
     expect(screen.getByText("Ridicat: Necesită atenție.")).toBeTruthy();
+    const singleResponseTeam = screen.getByText("Driver cu un răspuns").closest("article");
+    expect(singleResponseTeam).not.toBeNull();
+    expect(within(singleResponseTeam as HTMLElement).getByText("73%")).toBeTruthy();
     expect(screen.getByText("Ridicat: Semnal aprobat.")).toBeTruthy();
     expect(screen.getByText("Autoevaluare / Fără dată")).toBeTruthy();
-    expect(screen.getByText(/nu răspunsuri brute/i)).toBeTruthy();
+    expect(screen.queryByText(/Agregatele cer|Ascuns până există/)).toBeNull();
   });
 });
