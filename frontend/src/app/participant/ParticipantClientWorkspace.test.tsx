@@ -82,6 +82,93 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.queryByText("Bună, SignalHarbor5271")).toBeNull();
   });
 
+  it("makes ready results the primary action after every questionnaire is complete", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{ state: "authenticated", user: { id: "participant-1", name: "Mihai", role: "participant" } }}
+        summaryData={{
+          projectName: "Leadership operațional Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "31 iul.",
+          tasks: [
+            {
+              id: "drivers-self",
+              assignmentId: "drivers-self",
+              title: "Driveri de stres TA",
+              status: "completed",
+              detail: "Autoevaluare finalizată.",
+              href: "/participant/questionnaires/distress_drivers?assignmentId=drivers-self",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 8,
+              questionnaireKey: "distress_drivers",
+            },
+          ],
+          results: [
+            {
+              assignmentId: "drivers-self",
+              questionnaireKey: "distress_drivers",
+              title: "Driveri de stres TA",
+              targetLabel: "Autoevaluare",
+              scores: { fii_puternic: { score: 72, label: "Fii puternic" } },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Rezultatele tale sunt disponibile." })).toBeDefined();
+    expect(screen.getByText("Toate chestionarele sunt finalizate")).toBeDefined();
+    expect(screen.getByText("1 rezultat este pregătit.")).toBeDefined();
+    expect(screen.getByRole("link", { name: /Deschide rezultatele/i }).getAttribute("href")).toBe(
+      "/participant/results",
+    );
+    expect(screen.queryByRole("status", { name: /sarcini active/i })).toBeNull();
+  });
+
+  it("keeps the completion state in processing until feedback is actually visible", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{ state: "authenticated", user: { id: "participant-1", name: "Mihai", role: "participant" } }}
+        summaryData={{
+          projectName: "Leadership operațional Q3",
+          companyName: "Atlas Mobility",
+          participantFullName: "Mihai Matei",
+          participantEmail: "mihai.matei@example.com",
+          deadlineLabel: "31 iul.",
+          tasks: [
+            {
+              id: "feedback-1",
+              assignmentId: "feedback-1",
+              title: "Feedback confidențial",
+              status: "completed",
+              detail: "Feedback finalizat.",
+              href: "/participant/questionnaires/boss_360?assignmentId=feedback-1",
+              targetLabel: "Manager",
+              estimatedMinutes: 10,
+              questionnaireKey: "boss_360",
+            },
+          ],
+          results: [],
+          receivedFeedbackGroups: [
+            {
+              assignmentRoundId: "round-1",
+              completedCount: 1,
+              minimumCompleted: 2,
+              visible: false,
+              dimensions: [],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Răspunsurile au fost trimise." })).toBeDefined();
+    expect(screen.getByText("Rezultatele vor apărea aici când sunt disponibile.")).toBeDefined();
+    expect(screen.queryByRole("link", { name: /Deschide rezultatele/i })).toBeNull();
+  });
+
   it("shows the backend recovery state instead of generic workspace filler", () => {
     render(
       <ParticipantClientWorkspace
@@ -366,6 +453,35 @@ describe("ParticipantResultsPanel", () => {
     );
 
     expect(screen.getAllByText("Feedback primit")).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "2 rezultate" })).toBeDefined();
+  });
+
+  it("shows a clear waiting state when all tasks are complete but no result is publishable", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[]}
+        hasTasks
+        allTasksComplete
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Răspunsurile au fost trimise" })).toBeDefined();
+    expect(screen.getByText("Rezultatele vor apărea aici când sunt disponibile.")).toBeDefined();
+    expect(screen.queryByText("Disponibile acum")).toBeNull();
+  });
+
+  it("does not show an empty result message when the PCM profile is available", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[]}
+        pcmBase="thinker"
+        pcmPhase="persister"
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "1 rezultat" })).toBeDefined();
+    expect(screen.getByText("Profil PCM")).toBeDefined();
+    expect(screen.queryByText("Nu există rezultate disponibile încă")).toBeNull();
   });
 });
 

@@ -13,7 +13,9 @@ import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { cn } from "@/utils/cn";
+import { ParticipantCompletionState } from "./ParticipantCompletionState";
 import { ParticipantTaskList } from "./ParticipantTaskList";
+import { countAvailableParticipantResults, mergeParticipantFeedbackGroups } from "./result-state";
 import { groupParticipantTasks } from "./task-display";
 
 type ParticipantClientWorkspaceProps = {
@@ -51,13 +53,7 @@ export function ParticipantClientWorkspace({ summaryData }: ParticipantClientWor
     summaryData.tasks.length > 0 ? Math.round((completedTasksCount / summaryData.tasks.length) * 100) : 0;
   const hasAnyTasks = summaryData.tasks.length > 0;
   const isComplete = hasAnyTasks && pendingTasks.length === 0;
-  const feedbackResultCount = summaryData.receivedFeedbackGroups?.length
-    ? summaryData.receivedFeedbackGroups.length
-    : summaryData.receivedFeedback
-      ? 1
-      : 0;
-  const profileResultCount = summaryData.pcmBase || summaryData.pcmPhase ? 1 : 0;
-  const resultCount = summaryData.results.length + feedbackResultCount + profileResultCount;
+  const resultCount = countAvailableParticipantResults(summaryData);
   const projects = summaryData.projects ?? [];
   const hasMultipleProjects = projects.length > 1;
 
@@ -72,42 +68,55 @@ export function ParticipantClientWorkspace({ summaryData }: ParticipantClientWor
       userLabel={participantFirstName}
     >
       <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_17rem] xl:gap-12">
-        <section className="min-w-0" aria-labelledby="participant-tasks-title">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
-            <div>
-              <h2 id="participant-tasks-title" className="text-2xl font-semibold tracking-tight text-foreground">
-                {pendingTaskGroups.length > 0 ? "De completat" : isComplete ? "Totul este trimis" : "Chestionare"}
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {hasMultipleProjects ? `${projects.length} proiecte active` : summaryData.projectName}
-              </p>
-            </div>
-            <div
-              className="flex items-baseline gap-2 text-burgundy"
-              role="status"
-              aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
-            >
-              <span className="font-mono text-2xl font-semibold tabular-nums">{pendingTaskGroups.length}</span>
-              <span className="text-sm font-semibold">active</span>
-            </div>
-          </div>
-          <ParticipantTaskList
-            groups={taskGroups}
-            returnTo="/participant/questionnaires"
-            emptyTitle={
-              isComplete
-                ? "Toate răspunsurile au fost trimise"
-                : summaryData.emptyState?.title ?? "Nu ai chestionare disponibile"
-            }
-            emptyDescription={
-              isComplete
-                ? "Nu mai ai sarcini active."
-                : summaryData.emptyState?.description ??
+        <section
+          className="min-w-0"
+          aria-labelledby={isComplete ? "participant-completion-title" : "participant-tasks-title"}
+        >
+          {isComplete ? (
+            <>
+              <ParticipantCompletionState resultCount={resultCount} />
+              <div className="mt-8">
+                <ParticipantTaskList
+                  groups={taskGroups}
+                  returnTo="/participant/questionnaires"
+                  emptyTitle="Toate răspunsurile au fost trimise"
+                  emptyDescription="Nu mai ai sarcini active."
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
+                <div>
+                  <h2 id="participant-tasks-title" className="text-2xl font-semibold tracking-tight text-foreground">
+                    {pendingTaskGroups.length > 0 ? "De completat" : "Chestionare"}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {hasMultipleProjects ? `${projects.length} proiecte active` : summaryData.projectName}
+                  </p>
+                </div>
+                <div
+                  className="flex items-baseline gap-2 text-burgundy"
+                  role="status"
+                  aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
+                >
+                  <span className="font-mono text-2xl font-semibold tabular-nums">{pendingTaskGroups.length}</span>
+                  <span className="text-sm font-semibold">active</span>
+                </div>
+              </div>
+              <ParticipantTaskList
+                groups={taskGroups}
+                returnTo="/participant/questionnaires"
+                emptyTitle={summaryData.emptyState?.title ?? "Nu ai chestionare disponibile"}
+                emptyDescription={
+                  summaryData.emptyState?.description ??
                   "Deschide linkul unei invitații noi pentru a vedea sarcinile asociate."
-            }
-          />
+                }
+              />
+            </>
+          )}
 
-          {resultCount > 0 ? (
+          {!isComplete && resultCount > 0 ? (
             <div className="mt-8 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
                 Ai {resultCount} {resultCount === 1 ? "rezultat disponibil" : "rezultate disponibile"}.
@@ -178,16 +187,40 @@ export function ParticipantResultsPanel({
   receivedFeedbackGroups = [],
   pcmBase,
   pcmPhase,
+  hasTasks = false,
+  allTasksComplete = false,
 }: {
   results: ParticipantWorkspaceResult[];
   receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
   receivedFeedbackGroups?: ParticipantReceivedFeedbackSummary[];
   pcmBase?: string | null;
   pcmPhase?: string | null;
+  hasTasks?: boolean;
+  allTasksComplete?: boolean;
 }) {
-  const feedbackGroups = mergeFeedbackGroups(receivedFeedbackGroups, receivedFeedback);
+  const feedbackGroups = mergeParticipantFeedbackGroups(receivedFeedbackGroups, receivedFeedback);
+  const visibleFeedbackCount = feedbackGroups.filter((feedback) => feedback.visible).length;
+  const profileResultCount = pcmBase || pcmPhase ? 1 : 0;
+  const availableResultCount = results.length + visibleFeedbackCount + profileResultCount;
+  const availableLabels = [
+    profileResultCount > 0 ? "Profil PCM" : null,
+    visibleFeedbackCount > 0 ? "Feedback iCARE" : null,
+    results.length > 0 ? "Chestionare" : null,
+  ].filter(Boolean);
   return (
     <section className="flex flex-col gap-10">
+      {availableResultCount > 0 ? (
+        <header className="flex flex-col gap-3 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold text-burgundy">Disponibile acum</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+              {availableResultCount} {availableResultCount === 1 ? "rezultat" : "rezultate"}
+            </h2>
+          </div>
+          <p className="text-sm font-semibold text-muted-foreground">{availableLabels.join(" · ")}</p>
+        </header>
+      ) : null}
+
       {pcmBase || pcmPhase ? (
         <section className="grid gap-7 rounded-lg bg-foreground px-6 py-6 text-background md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] md:items-center md:px-8">
           <div>
@@ -209,16 +242,25 @@ export function ParticipantResultsPanel({
       ))}
 
       {results.length > 0 ? (
-        <div className="divide-y divide-border border-y border-border">
-          {results.map((result) => (
-            <ResultCard key={result.assignmentId} result={result} />
-          ))}
-        </div>
-      ) : feedbackGroups.length > 0 ? null : (
+        <section aria-labelledby="questionnaire-results-title">
+          <h2 id="questionnaire-results-title" className="text-xl font-semibold tracking-tight text-foreground">
+            Rezultate chestionare
+          </h2>
+          <div className="mt-4 divide-y divide-border border-y border-border">
+            {results.map((result) => (
+              <ResultCard key={result.assignmentId} result={result} />
+            ))}
+          </div>
+        </section>
+      ) : feedbackGroups.length > 0 || profileResultCount > 0 ? null : (
         <div className="border-y border-border py-8">
-          <h3 className="text-base font-semibold text-foreground">Nu există scoruri calculate încă</h3>
+          <h3 className="text-base font-semibold text-foreground">
+            {allTasksComplete && hasTasks ? "Răspunsurile au fost trimise" : "Nu există rezultate disponibile încă"}
+          </h3>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            După ce finalizezi chestionarele cu scor, sumarul apare aici automat.
+            {allTasksComplete && hasTasks
+              ? "Rezultatele vor apărea aici când sunt disponibile."
+              : "Finalizează chestionarele eligibile pentru a vedea rezultatele."}
           </p>
         </div>
       )}
@@ -275,25 +317,6 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
       ) : null}
     </article>
   );
-}
-
-function mergeFeedbackGroups(
-  groups: ParticipantReceivedFeedbackSummary[],
-  legacy?: ParticipantReceivedFeedbackSummary | null,
-): ParticipantReceivedFeedbackSummary[] {
-  const merged = legacy ? [...groups, legacy] : groups;
-  const seen = new Set<string>();
-  return merged.filter((feedback) => {
-    const identity = feedback.assignmentRoundId
-      ? `round:${feedback.assignmentRoundId}`
-      : [
-          feedback.projectId ?? feedback.projectName ?? "none",
-          feedback.questionnaireKey ?? feedback.questionnaireTitle ?? "legacy",
-        ].join(":");
-    if (seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
 }
 
 function PcmResultChip({ label, value }: { label: string; value?: string | null }) {
