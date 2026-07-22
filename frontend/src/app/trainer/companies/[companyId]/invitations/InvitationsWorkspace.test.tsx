@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -526,7 +526,9 @@ describe("buildInvitationRows", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generează plan" }));
 
-    expect(await screen.findAllByText("Leadership")).not.toHaveLength(0);
+    const leadershipGroup = await screen.findByRole("region", { name: "Leadership" });
+    expect(within(leadershipGroup).getByText("Echipă de leadership")).toBeTruthy();
+    expect(within(leadershipGroup).getByText("2 asignări")).toBeTruthy();
     expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, { projectId: "project-1" });
     expect(screen.getByText("Andrei Manager")).toBeTruthy();
     expect(screen.getByText("Ana Pop")).toBeTruthy();
