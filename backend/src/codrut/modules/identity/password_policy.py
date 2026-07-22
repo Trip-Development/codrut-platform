@@ -1,16 +1,21 @@
-PASSWORD_MIN_LENGTH = 12
+PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
-CREDENTIAL_POLICY_MESSAGE = "Parola trebuie să aibă cel puțin 12 caractere."
+CREDENTIAL_POLICY_MESSAGE = "Parola trebuie să aibă cel puțin 8 caractere."
 
 COMMON_PASSWORDS = frozenset(
     {
+        "12345678",
         "123456789012",
         "administrator",
         "changeme1234",
+        "codrut12",
         "codrut123456",
         "letmeinplease",
+        "parola12",
         "parola123456",
+        "password",
         "password1234",
+        "qwertyui",
         "qwerty123456",
         "qwertyuiop12",
         "welcome12345",

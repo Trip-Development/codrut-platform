@@ -50,7 +50,34 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Development Compose Config
         if: inputs.mode == 'both'
-        run: docker compose -f compose.yaml -f compose.dev.yaml config >/dev/null
+        run: |
+          docker compose -f compose.yaml -f compose.dev.yaml config --format json > /tmp/compose-dev.json
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/compose-dev.json", encoding="utf-8") as config_file:
+              services = json.load(config_file)["services"]
+
+          frontend = services["frontend"]
+          backend = services["backend"]
+          worker = services["worker"]
+          cache_init = services["development-cache-init"]
+          if frontend.get("user") != "node":
+              raise SystemExit("Development frontend must run as node to keep cache ownership stable.")
+          if backend.get("user") != "vscode" or worker.get("user") != "vscode":
+              raise SystemExit("Development backend processes must run as vscode to keep cache ownership stable.")
+          if cache_init.get("user") != "root":
+              raise SystemExit("Development cache initializer must run as root to repair existing volumes.")
+          for service_name in ("frontend", "backend", "worker"):
+              cache_dependency = services[service_name].get("depends_on", {}).get(
+                  "development-cache-init",
+                  {},
+              )
+              if cache_dependency.get("condition") != "service_completed_successfully":
+                  raise SystemExit(
+                      f"Development {service_name} must wait for cache ownership initialization."
+                  )
+          PY
       - name: Validate Production Compose Config
         run: |
           docker compose -f compose.yaml -f compose.prod.yaml config --format json > /tmp/compose-prod.json

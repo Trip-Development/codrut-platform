@@ -1547,8 +1547,8 @@ describe("frontend API adapter stubs", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(changePassword("old-password-123", "weakpass")).rejects.toThrow(
-      "Parola trebuie să aibă cel puțin 12 caractere.",
+    await expect(changePassword("old-password-123", "weakpw")).rejects.toThrow(
+      "Parola trebuie să aibă cel puțin 8 caractere.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });

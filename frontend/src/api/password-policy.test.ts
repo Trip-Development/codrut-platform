@@ -11,8 +11,12 @@ describe("password policy", () => {
     expect(validatePasswordPolicy("Învăț în fiecare săptămână")).toBeNull();
   });
 
+  it("accepts a password at the eight-character boundary", () => {
+    expect(validatePasswordPolicy("Abcd123!")).toBeNull();
+  });
+
   it("rejects common passwords", () => {
-    expect(validatePasswordPolicy("password" + "1234")).toBe(
+    expect(validatePasswordPolicy("password")).toBe(
       "Parola este prea frecventă. Alege o frază mai greu de ghicit.",
     );
   });
@@ -23,7 +27,7 @@ describe("password policy", () => {
     );
   });
 
-  it.each(["prea-scurta", "scurtă"])(
+  it.each(["scurt", "șapte7!"])(
     "rejects short password %s",
     (password) => {
       expect(validatePasswordPolicy(password)).toBe(PASSWORD_POLICY_MESSAGE);
