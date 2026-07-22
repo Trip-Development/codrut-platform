@@ -340,6 +340,41 @@ class CompanyRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_unemailed_participant_by_roster_identity(
+        self,
+        company_id: UUID,
+        *,
+        full_name: str,
+        reports_to_name: str | None,
+        position: str | None,
+        location: str | None,
+    ) -> ParticipantProfile | None:
+        reports_to_filter = (
+            ParticipantProfile.reports_to_name.is_(None)
+            if reports_to_name is None
+            else ParticipantProfile.reports_to_name == reports_to_name
+        )
+        position_filter = (
+            ParticipantProfile.position.is_(None)
+            if position is None
+            else ParticipantProfile.position == position
+        )
+        location_filter = (
+            ParticipantProfile.location.is_(None)
+            if location is None
+            else ParticipantProfile.location == location
+        )
+        result = await self.session.execute(
+            select(ParticipantProfile)
+            .where(ParticipantProfile.company_id == company_id)
+            .where(ParticipantProfile.email.is_(None))
+            .where(ParticipantProfile.full_name == full_name)
+            .where(reports_to_filter)
+            .where(position_filter)
+            .where(location_filter)
+        )
+        return result.scalar_one_or_none()
+
     async def add_participant(self, participant: ParticipantProfile) -> ParticipantProfile:
         self.session.add(participant)
         await self.session.flush()
@@ -381,9 +416,7 @@ class CompanyRepository:
         from codrut.modules.assignments.models import Team
 
         result = await self.session.execute(
-            select(Team)
-            .where(Team.company_id == company_id)
-            .where(Team.name == name)
+            select(Team).where(Team.company_id == company_id).where(Team.name == name)
         )
         return result.scalar_one_or_none()
 

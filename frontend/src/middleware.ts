@@ -1,61 +1,115 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const protectedPrefixes = ["/participant", "/trainer"];
-const devPrefixes = ["/dev"];
-const publicPaths = new Set(["/trainer/login"]);
+import { THEME_PREPAINT_CSP_HASH } from "@/lib/theme-prepaint";
 
-function isDemoFallbackEnabled(request: NextRequest): boolean {
+const protectedPrefixes = ["/participant", "/trainer"];
+const publicPaths = new Set(["/trainer/login"]);
+const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function isDemoFallbackEnabled(): boolean {
   const explicitSetting = [
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK,
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK,
   ].find((value): value is string => Boolean(value));
-  if (explicitSetting === "false") return false;
-  if (explicitSetting === "true") return true;
+  if (process.env.NODE_ENV === "production") return false;
+  return explicitSetting === "true";
+}
 
-  if (process.env.CI === "true") return false;
+function requestHostname(request: NextRequest): string {
+  const host =
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    request.nextUrl.hostname;
+  if (localHosts.has(host)) return host;
+  try {
+    return new URL(`http://${host}`).hostname;
+  } catch {
+    return host;
+  }
+}
 
-  if (process.env.NODE_ENV === "development") return true;
+function isLocalAuthBypassEnabled(request: NextRequest): boolean {
+  const explicitSetting = [
+    process.env.NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS,
+    process.env.CODRUT_LOCAL_AUTH_BYPASS,
+  ].find((value): value is string => Boolean(value));
+  if (process.env.NODE_ENV === "production") return false;
+  return explicitSetting === "true" && localHosts.has(requestHostname(request));
+}
 
-  return ["localhost", "127.0.0.1", "::1"].includes(request.nextUrl.hostname);
+function buildContentSecurityPolicy(nonce: string): string {
+  const developmentScriptPolicy = process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
+  const upgradeInsecureRequests = process.env.NODE_ENV === "production" ? " upgrade-insecure-requests;" : "";
+
+  return [
+    "default-src 'self';",
+    `script-src 'self' 'nonce-${nonce}' ${THEME_PREPAINT_CSP_HASH} 'strict-dynamic'${developmentScriptPolicy};`,
+    "style-src 'self' 'unsafe-inline';",
+    "img-src 'self' blob: data: https:;",
+    "font-src 'self' data:;",
+    "connect-src 'self' ws: wss:;",
+    "media-src 'self' blob: https:;",
+    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com;",
+    "object-src 'none';",
+    "base-uri 'self';",
+    "form-action 'self' mailto:;",
+    "frame-ancestors 'none';",
+    upgradeInsecureRequests,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function applyPageSecurityHeaders(response: NextResponse, contentSecurityPolicy: string): NextResponse {
+  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  return response;
 }
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const nonce = btoa(crypto.randomUUID());
+  const contentSecurityPolicy = buildContentSecurityPolicy(nonce);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-codrut-pathname", pathname);
-
-  const isDevPath = devPrefixes.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-  if (isDevPath && !isDemoFallbackEnabled(request)) {
-    return new NextResponse(null, { status: 404 });
-  }
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
 
   const isProtectedPath = protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
   if (!isProtectedPath || publicPaths.has(pathname)) {
-    return NextResponse.next({
+    return applyPageSecurityHeaders(NextResponse.next({
       request: {
         headers: requestHeaders,
       },
-    });
+    }), contentSecurityPolicy);
   }
 
-  if (!request.cookies.has("codrut_session") && !isDemoFallbackEnabled(request)) {
+  if (
+    !request.cookies.has("codrut_session") &&
+    !isDemoFallbackEnabled() &&
+    !isLocalAuthBypassEnabled(request)
+  ) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
-    return NextResponse.redirect(loginUrl);
+    return applyPageSecurityHeaders(NextResponse.redirect(loginUrl), contentSecurityPolicy);
   }
 
-  return NextResponse.next({
+  return applyPageSecurityHeaders(NextResponse.next({
     request: {
       headers: requestHeaders,
     },
-  });
+  }), contentSecurityPolicy);
 }
 
 export const config = {
-  matcher: ["/trainer/:path*", "/participant/:path*", "/dev/:path*"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icons/|landing/).*)"],
 };

@@ -34,7 +34,7 @@ def test_company_listing_is_scoped_to_current_trainer(monkeypatch) -> None:
             email="trainer@example.com",
             role=UserRole.trainer,
             terms_accepted_at=datetime.now(UTC),
-            terms_version="privacy-2026-06-12",
+            terms_version="privacy-2026-07-16",
             session_token="test-session",  # noqa: S106
         )
 

@@ -25,12 +25,16 @@ jobs:
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       CODRUT_REDIS_URL: ${{ secrets.CODRUT_REDIS_URL }}
       CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
+      CODRUT_TASK_LINK_SECRET: ${{ secrets.CODRUT_TASK_LINK_SECRET }}
+      CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${{ secrets.CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET }}
       CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
       CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
       CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
       CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
       CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
       CODRUT_EMAIL_BREVO_API_KEY: ${{ secrets.CODRUT_EMAIL_BREVO_API_KEY }}
+      CODRUT_EMAIL_WEBHOOK_TOKEN: ${{ secrets.CODRUT_EMAIL_WEBHOOK_TOKEN }}
+      CODRUT_RATE_LIMIT_TRUSTED_PROXIES: ${{ secrets.CODRUT_RATE_LIMIT_TRUSTED_PROXIES }}
       CODRUT_HOST: ${{ secrets.CODRUT_HOST }}
       TRAEFIK_ACME_EMAIL: ${{ secrets.TRAEFIK_ACME_EMAIL }}
       CODRUT_DB_VOLUME_PATH: ${{ secrets.CODRUT_DB_VOLUME_PATH }}
@@ -49,12 +53,16 @@ jobs:
             POSTGRES_PASSWORD
             CODRUT_REDIS_URL
             CODRUT_SESSION_SECRET
+            CODRUT_TASK_LINK_SECRET
+            CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET
             CODRUT_CORS_ORIGINS
             CODRUT_PUBLIC_APP_URL
             CODRUT_EMAIL_PROVIDER
             CODRUT_EMAIL_FROM_ADDRESS
             CODRUT_EMAIL_FROM_NAME
             CODRUT_EMAIL_BREVO_API_KEY
+            CODRUT_EMAIL_WEBHOOK_TOKEN
+            CODRUT_RATE_LIMIT_TRUSTED_PROXIES
             CODRUT_HOST
             TRAEFIK_ACME_EMAIL
             CODRUT_DB_VOLUME_PATH
@@ -75,8 +83,10 @@ jobs:
 
           python3 - <<'PY'
           import json
+          import ipaddress
           import os
           import sys
+          from urllib.parse import urlsplit
 
           try:
               origins = json.loads(os.environ["CODRUT_CORS_ORIGINS"])
@@ -87,4 +97,37 @@ jobs:
           if not isinstance(origins, list) or not origins or not all(isinstance(origin, str) and origin for origin in origins):
               print("CODRUT_CORS_ORIGINS must be a non-empty JSON array of origin strings.", file=sys.stderr)
               raise SystemExit(1)
+
+          if any(urlsplit(origin).scheme != "https" or not urlsplit(origin).hostname for origin in origins):
+              print("CODRUT_CORS_ORIGINS must contain only absolute HTTPS origins.", file=sys.stderr)
+              raise SystemExit(1)
+
+          public_url = urlsplit(os.environ["CODRUT_PUBLIC_APP_URL"])
+          if public_url.scheme != "https" or not public_url.hostname:
+              print("CODRUT_PUBLIC_APP_URL must be an absolute HTTPS URL.", file=sys.stderr)
+              raise SystemExit(1)
+
+          if os.environ["CODRUT_EMAIL_PROVIDER"] != "brevo":
+              print("CODRUT_EMAIL_PROVIDER must be brevo for deployment.", file=sys.stderr)
+              raise SystemExit(1)
+
+          secrets = [
+              os.environ["CODRUT_SESSION_SECRET"],
+              os.environ["CODRUT_TASK_LINK_SECRET"],
+              os.environ["CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET"],
+              os.environ["CODRUT_EMAIL_WEBHOOK_TOKEN"],
+          ]
+          if any(len(secret.strip()) < 32 for secret in secrets) or len(set(secrets)) != 4:
+              print("Runtime secrets must be distinct and at least 32 characters.", file=sys.stderr)
+              raise SystemExit(1)
+
+          try:
+              trusted_proxies = json.loads(os.environ["CODRUT_RATE_LIMIT_TRUSTED_PROXIES"])
+              if not isinstance(trusted_proxies, list) or not trusted_proxies:
+                  raise ValueError("expected a non-empty JSON array")
+              for proxy in trusted_proxies:
+                  ipaddress.ip_network(proxy, strict=False)
+          except (json.JSONDecodeError, TypeError, ValueError) as exc:
+              print(f"CODRUT_RATE_LIMIT_TRUSTED_PROXIES is invalid: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
           PY

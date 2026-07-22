@@ -1,4 +1,5 @@
 import type { SessionState } from "@/api/auth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type SessionBannerProps = {
   session?: SessionState;
@@ -13,8 +14,10 @@ export function SessionBanner({ session, note }: SessionBannerProps) {
   }
 
   return (
-    <div className="mb-5 rounded-xl border border-[var(--border)] bg-surface-muted px-4 py-3 text-sm font-semibold leading-6 text-foreground/65">
-      {message}
-    </div>
+    <Alert className="mb-5 border-border bg-muted px-4 py-3" role="status">
+      <AlertDescription className="text-sm font-semibold leading-6 text-muted-foreground">
+        {message}
+      </AlertDescription>
+    </Alert>
   );
 }

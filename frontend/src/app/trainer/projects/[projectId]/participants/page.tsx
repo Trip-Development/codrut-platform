@@ -2,15 +2,17 @@ import { notFound } from "next/navigation";
 
 import { getCompanyInvitationStatuses, getCompanyProjectById, getProjectParticipants } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { ProjectParticipantsWorkspace } from "./ProjectParticipantsWorkspace";
+import { LazyProjectParticipantsWorkspace } from "./LazyProjectParticipantsWorkspace";
 
 export default async function ProjectParticipantsPage({
   params,
 }: {
   params: Promise<{ projectId: string }>;
 }) {
-  const { projectId } = await params;
-  const requestOptions = await getServerApiRequestOptions();
+  const [{ projectId }, requestOptions] = await Promise.all([
+    params,
+    getServerApiRequestOptions(),
+  ]);
   const project = await getCompanyProjectById(projectId, requestOptions);
 
   if (!project) {
@@ -23,7 +25,7 @@ export default async function ProjectParticipantsPage({
   ]);
 
   return (
-    <ProjectParticipantsWorkspace
+    <LazyProjectParticipantsWorkspace
       companyId={project.company_id}
       projectId={project.id}
       companyName={project.company_name ?? "Companie"}

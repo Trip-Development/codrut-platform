@@ -1,10 +1,18 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-import { getQuestionnaireDefinition, getQuestionnaireResponse } from "@/api/questionnaires";
+import {
+  getAssignedQuestionnaireDefinition,
+  getQuestionnaireResponse,
+  isQuestionnaireSessionError,
+  QuestionnaireRequestError,
+  type QuestionnaireDefinition,
+  type QuestionnaireResponseRecord,
+} from "@/api/questionnaires";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { QuestionnaireRunner } from "@/components/questionnaires/questionnaire-runner";
-import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems } from "@/components/shell/nav";
+import { EmptyState } from "@/components/presentation/empty-state";
+import { LazyQuestionnaireRunner } from "@/components/questionnaires/lazy-questionnaire-runner";
+import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { safeReturnHref } from "./return-href";
 
 type ParticipantQuestionnaireRunPageProps = {
@@ -16,31 +24,38 @@ export default async function ParticipantQuestionnaireRunPage({
   params,
   searchParams,
 }: ParticipantQuestionnaireRunPageProps) {
-  const { key } = await params;
-  const { assignmentId, access, returnTo, target } = await searchParams;
+  const [{ key }, { assignmentId, access, returnTo, target }, requestOptions] = await Promise.all([
+    params,
+    searchParams,
+    getServerApiRequestOptions("participant"),
+  ]);
   const safeReturnTo = safeReturnHref(returnTo, access === "secure" ? "/" : "/participant/questionnaires", {
     secureInvite: access === "secure",
   });
-  const requestOptions = await getServerApiRequestOptions();
-  const responseRecord = assignmentId ? await getQuestionnaireResponse(assignmentId, requestOptions) : null;
-  const definitionKey = responseRecord
-    ? `${responseRecord.questionnaire_key}@${responseRecord.questionnaire_version}`
-    : key;
-  const definition = await getQuestionnaireDefinition(definitionKey, requestOptions);
+  let responseRecord: QuestionnaireResponseRecord | null = null;
+  let definition: QuestionnaireDefinition | null = null;
+  let loadError: unknown = null;
+  if (assignmentId) {
+    try {
+      [responseRecord, definition] = await Promise.all([
+        getQuestionnaireResponse(assignmentId, requestOptions),
+        getAssignedQuestionnaireDefinition(assignmentId, requestOptions),
+      ]);
+    } catch (error) {
+      loadError = error;
+    }
+  }
+  const retryHref = questionnaireRetryHref(key, { assignmentId, access, returnTo, target });
 
   if (access === "secure") {
     return (
-      <main className="min-h-screen bg-background px-4 py-8 text-foreground md:px-6">
-        <div className="mx-auto max-w-5xl">
-          <section className="surface-panel mb-5 p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">Chestionar securizat</p>
-            <h1 className="mt-2 text-2xl font-semibold text-foreground">{definition?.title ?? "Chestionar indisponibil"}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/62">
-              Completezi formularul prin link securizat. Nu ai nevoie de meniul complet de participant pentru această sarcină.
-            </p>
-          </section>
-          {definition ? (
-            <QuestionnaireRunner
+      <main className="min-h-[100dvh] bg-background px-4 py-8 text-foreground md:px-6">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="sr-only">{definition?.title ?? "Chestionar indisponibil"}</h1>
+          {loadError ? (
+            <QuestionnaireLoadFailure error={loadError} retryHref={retryHref} returnHref={safeReturnTo} />
+          ) : definition ? (
+            <LazyQuestionnaireRunner
               definition={definition}
               assignmentId={assignmentId}
               initialAnswers={responseRecord?.answers}
@@ -50,15 +65,13 @@ export default async function ParticipantQuestionnaireRunPage({
               targetLabel={target}
             />
           ) : (
-            <section className="rounded-xl border border-[var(--border)] bg-surface p-6 text-center shadow-sm">
-              <h2 className="text-xl font-bold text-foreground">Chestionarul nu este disponibil</h2>
-              <Link
-                href={safeReturnTo}
-                className="tap-soft mt-4 inline-flex rounded-full bg-burgundy px-4 py-3 text-sm font-bold text-white"
-              >
-                Înapoi la invitație
-              </Link>
-            </section>
+            <EmptyState
+              title="Chestionarul nu este disponibil"
+              description="Formularul asociat linkului securizat nu a putut fi încărcat."
+              action={(
+                <Link href={safeReturnTo} className={serverLinkButtonClassName()}>Înapoi la invitație</Link>
+              )}
+            />
           )}
         </div>
       </main>
@@ -66,16 +79,11 @@ export default async function ParticipantQuestionnaireRunPage({
   }
 
   return (
-    <AppShell
-      audience="participant"
-      eyebrow="Chestionar"
-      title={definition?.title ?? "Chestionar indisponibil"}
-      description="Completează răspunsurile în ritmul tău. Draftul și trimiterea folosesc sarcina din link când este disponibilă."
-      navItems={participantNavItems}
-      activeHref="/participant/questionnaires"
-    >
-      {definition ? (
-        <QuestionnaireRunner
+    <QuestionnaireFocusShell title={definition?.title ?? "Chestionar indisponibil"}>
+      {loadError ? (
+        <QuestionnaireLoadFailure error={loadError} retryHref={retryHref} returnHref={safeReturnTo} />
+      ) : definition ? (
+        <LazyQuestionnaireRunner
           definition={definition}
           assignmentId={assignmentId}
           initialAnswers={responseRecord?.answers}
@@ -85,21 +93,77 @@ export default async function ParticipantQuestionnaireRunPage({
           targetLabel={target}
         />
       ) : (
-        <section className="rounded-xl border border-[var(--border)] bg-surface p-6 shadow-sm max-w-lg mx-auto text-center space-y-4 my-8">
-          <h2 className="text-xl font-bold text-foreground">Chestionarul nu este disponibil</h2>
-          <p className="text-sm leading-relaxed text-foreground/70">
-            Formularul solicitat nu a putut fi încărcat. Este posibil ca linkul să fie incorect sau chestionarul să nu mai fie activ.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/participant/questionnaires"
-              className="tap-soft inline-flex items-center justify-center rounded-full bg-burgundy px-5 py-3 text-sm font-bold text-white hover:bg-burgundy/90 transition"
-            >
-              Înapoi la chestionare
-            </Link>
-          </div>
-        </section>
+        <EmptyState
+          className="mx-auto my-8 max-w-lg"
+          title="Chestionarul nu este disponibil"
+          description="Formularul solicitat nu a putut fi încărcat. Este posibil ca linkul să fie incorect sau chestionarul să nu mai fie activ."
+          action={(
+            <Link href="/participant/questionnaires" className={serverLinkButtonClassName()}>Înapoi la chestionare</Link>
+          )}
+        />
       )}
-    </AppShell>
+    </QuestionnaireFocusShell>
+  );
+}
+
+function QuestionnaireLoadFailure({
+  error,
+  retryHref,
+  returnHref,
+}: {
+  error: unknown;
+  retryHref: string;
+  returnHref: string;
+}) {
+  const sessionError = isQuestionnaireSessionError(error);
+  const description = sessionError
+    ? "Sesiunea a expirat sau nu mai are acces la această sarcină. Autentifică-te din nou din invitația primită."
+    : error instanceof QuestionnaireRequestError && error.status >= 500
+      ? "Serverul nu a putut încărca sarcina. Răspunsurile existente nu au fost modificate."
+      : "Nu am putut încărca sarcina. Verifică conexiunea și încearcă din nou.";
+
+  return (
+    <EmptyState
+      className="mx-auto my-8 max-w-lg"
+      title={sessionError ? "Sesiunea trebuie reînnoită" : "Chestionarul nu s-a încărcat"}
+      description={description}
+      action={(
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href={sessionError ? returnHref : retryHref} className={serverLinkButtonClassName()}>
+            {sessionError ? "Înapoi la invitație" : "Încearcă din nou"}
+          </Link>
+        </div>
+      )}
+    />
+  );
+}
+
+function questionnaireRetryHref(
+  key: string,
+  params: { assignmentId?: string; access?: string; returnTo?: string; target?: string },
+): string {
+  const query = new URLSearchParams();
+  if (params.assignmentId) query.set("assignmentId", params.assignmentId);
+  if (params.access) query.set("access", params.access);
+  if (params.returnTo) query.set("returnTo", params.returnTo);
+  if (params.target) query.set("target", params.target);
+  const suffix = query.toString();
+  return `/participant/questionnaires/${encodeURIComponent(key)}${suffix ? `?${suffix}` : ""}`;
+}
+
+function QuestionnaireFocusShell({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <main className="min-h-[100dvh] bg-background px-4 py-6 text-foreground md:px-6 lg:py-8">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="sr-only">{title}</h1>
+        {children}
+      </div>
+    </main>
   );
 }

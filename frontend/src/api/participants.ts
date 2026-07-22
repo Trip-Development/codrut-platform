@@ -16,12 +16,14 @@ export type ParticipantWorkspaceSummary = {
   pcmPhase?: string | null;
   projectName: string;
   projectId?: string | null;
+  projects: ParticipantWorkspaceProject[];
   companyName: string;
   participantEmail: string;
   deadlineLabel: string;
   tasks: InviteTask[];
   results: ParticipantWorkspaceResult[];
   receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
+  receivedFeedbackGroups: ParticipantReceivedFeedbackSummary[];
   cards: ParticipantWorkspaceCard[];
   emptyState: {
     title: string;
@@ -29,8 +31,17 @@ export type ParticipantWorkspaceSummary = {
   };
 };
 
+export type ParticipantWorkspaceProject = {
+  id: string;
+  name: string;
+  deadlineLabel: string;
+  deadlineAt?: string | null;
+};
+
 export type ParticipantWorkspaceResult = {
   assignmentId: string;
+  projectId?: string | null;
+  projectName?: string | null;
   questionnaireKey: string;
   title: string;
   targetLabel: string;
@@ -40,13 +51,20 @@ export type ParticipantWorkspaceResult = {
 
 export type ParticipantReceivedFeedbackDimension = {
   id: string;
+  label: string;
   averageScore: number;
   completedCount: number;
 };
 
 export type ParticipantReceivedFeedbackSummary = {
+  projectId?: string | null;
+  projectName?: string | null;
+  assignmentRoundId?: string;
+  questionnaireKey?: string;
+  questionnaireTitle?: string;
   completedCount: number;
   minimumCompleted: number;
+  scaleMax?: number;
   visible: boolean;
   overallAverage?: number | null;
   dimensions: ParticipantReceivedFeedbackDimension[];
@@ -63,17 +81,28 @@ type BackendParticipantWorkspaceSummary = {
   company_name: string;
   project_id: string | null;
   project_name: string;
+  projects?: BackendParticipantWorkspaceProject[];
   deadline_label: string;
   deadline_at?: string | null;
   tasks: InviteTask[];
   results?: BackendParticipantWorkspaceResult[];
   received_feedback?: BackendParticipantReceivedFeedbackSummary | null;
+  received_feedback_groups?: BackendParticipantReceivedFeedbackSummary[];
   cards: ParticipantWorkspaceCard[];
   empty_state: ParticipantWorkspaceCard;
 };
 
+type BackendParticipantWorkspaceProject = {
+  id: string;
+  name: string;
+  deadline_label: string;
+  deadline_at?: string | null;
+};
+
 type BackendParticipantWorkspaceResult = {
   assignment_id: string;
+  project_id?: string | null;
+  project_name?: string | null;
   questionnaire_key: string;
   title: string;
   target_label: string;
@@ -83,39 +112,68 @@ type BackendParticipantWorkspaceResult = {
 
 type BackendParticipantReceivedFeedbackDimension = {
   id: string;
+  label: string;
   average_score: number;
   completed_count: number;
 };
 
 type BackendParticipantReceivedFeedbackSummary = {
+  project_id?: string | null;
+  project_name?: string | null;
+  assignment_round_id?: string;
+  questionnaire_key?: string;
+  questionnaire_title?: string;
   completed_count: number;
   minimum_completed: number;
+  scale_max?: number;
   visible: boolean;
   overall_average?: number | null;
   dimensions?: BackendParticipantReceivedFeedbackDimension[];
 };
 
+export class ParticipantWorkspaceError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+    readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = "ParticipantWorkspaceError";
+  }
+}
+
 export async function getParticipantWorkspaceSummary(
   options: Pick<RequestInit, "headers"> = {},
 ): Promise<ParticipantWorkspaceSummary> {
-  let unavailableReason: string | undefined;
+  let response: Response;
   try {
-    const response = await apiFetch(`${getApiBaseUrl()}/participants/me/workspace`, {
+    response = await apiFetch(`${getApiBaseUrl()}/participants/me/workspace`, {
       cache: "no-store",
       credentials: "include",
       ...options,
     });
-    if (response.ok) {
-      return mapParticipantWorkspaceSummary((await response.json()) as BackendParticipantWorkspaceSummary);
-    }
-    unavailableReason = await readWorkspaceError(response);
   } catch {
-    unavailableReason = "Nu am putut încărca spațiul tău de lucru acum.";
+    if (!isSeededDemoFallbackEnabled()) {
+      throw new ParticipantWorkspaceError(
+        "Nu am putut încărca spațiul tău de lucru. Verifică conexiunea și încearcă din nou.",
+        0,
+        "network_error",
+      );
+    }
+    return getDemoParticipantWorkspaceSummary();
   }
 
-  if (!isSeededDemoFallbackEnabled()) {
-    return getUnavailableParticipantWorkspaceSummary(unavailableReason);
+  if (response.ok) {
+    return mapParticipantWorkspaceSummary((await response.json()) as BackendParticipantWorkspaceSummary);
   }
+  const error = await participantWorkspaceErrorFromResponse(response);
+  if (error.code === "participant_profile_not_found") {
+    return getUnavailableParticipantWorkspaceSummary(
+      "Profilul nu este încă legat de acest cont. Verifică adresa de email cu trainerul.",
+    );
+  }
+  if (!isSeededDemoFallbackEnabled()) throw error;
 
   return getDemoParticipantWorkspaceSummary();
 }
@@ -131,12 +189,19 @@ function mapParticipantWorkspaceSummary(
     pcmPhase: data.pcm_phase,
     projectName: data.project_name,
     projectId: data.project_id,
+    projects: (data.projects ?? []).map((project) => ({
+      id: project.id,
+      name: project.name,
+      deadlineLabel: project.deadline_label,
+      deadlineAt: project.deadline_at,
+    })),
     companyName: data.company_name,
     participantEmail: data.participant_email,
     deadlineLabel: data.deadline_label,
     tasks: data.tasks,
     results: (data.results ?? []).map(mapParticipantWorkspaceResult),
     receivedFeedback: data.received_feedback ? mapParticipantReceivedFeedback(data.received_feedback) : null,
+    receivedFeedbackGroups: (data.received_feedback_groups ?? []).map(mapParticipantReceivedFeedback),
     cards: data.cards,
     emptyState: data.empty_state,
   };
@@ -147,6 +212,8 @@ function mapParticipantWorkspaceResult(
 ): ParticipantWorkspaceResult {
   return {
     assignmentId: result.assignment_id,
+    projectId: result.project_id,
+    projectName: result.project_name,
     questionnaireKey: result.questionnaire_key,
     title: result.title,
     targetLabel: result.target_label,
@@ -159,12 +226,19 @@ function mapParticipantReceivedFeedback(
   feedback: BackendParticipantReceivedFeedbackSummary,
 ): ParticipantReceivedFeedbackSummary {
   return {
+    projectId: feedback.project_id,
+    projectName: feedback.project_name,
+    assignmentRoundId: feedback.assignment_round_id,
+    questionnaireKey: feedback.questionnaire_key,
+    questionnaireTitle: feedback.questionnaire_title,
     completedCount: feedback.completed_count,
     minimumCompleted: feedback.minimum_completed,
+    scaleMax: feedback.scale_max,
     visible: feedback.visible,
     overallAverage: feedback.overall_average,
     dimensions: (feedback.dimensions ?? []).map((dimension) => ({
       id: dimension.id,
+      label: dimension.label,
       averageScore: dimension.average_score,
       completedCount: dimension.completed_count,
     })),
@@ -173,71 +247,94 @@ function mapParticipantReceivedFeedback(
 
 async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspaceSummary> {
   const bundle = await resolveInviteBundle("demo-token");
-  const tasks = bundle.state === "valid" ? bundle.tasks : [];
+  const demoProjectName = bundle.state === "valid"
+    ? bundle.projectName
+    : "Leadership operațional Q3";
+  const tasks = bundle.state === "valid"
+    ? bundle.tasks.map((task) => ({
+        ...task,
+        projectId: task.projectId ?? "synthetic-leadership-project",
+        projectName: task.projectName ?? demoProjectName,
+      }))
+    : [];
 
   return {
     participantFullName: bundle.state === "valid" ? bundle.participantFullName : "Mihai Matei",
     anonymousName: bundle.state === "valid" ? bundle.anonymousName : "SignalHarbor5271",
     pcmBase: "thinker",
     pcmPhase: "persister",
-    projectName: bundle.state === "valid" ? bundle.projectName : "Leadership operațional Q3",
+    projectName: demoProjectName,
     projectId: null,
+    projects: [
+      {
+        id: "synthetic-leadership-project",
+        name: demoProjectName,
+        deadlineLabel: bundle.state === "valid" ? bundle.deadlineLabel : "deadline-ul proiectului",
+      },
+    ],
     companyName: "Atlas Mobility",
-    participantEmail: bundle.state === "valid" ? bundle.participantEmail : "mihai.matei@atlas-mobility.ro",
+    participantEmail: bundle.state === "valid" ? bundle.participantEmail : "participant.demo@example.com",
     deadlineLabel: bundle.state === "valid" ? bundle.deadlineLabel : "deadline-ul proiectului",
     tasks,
     receivedFeedback: {
+      projectId: "synthetic-leadership-project",
+      projectName: "Leadership operațional Q3",
       completedCount: 3,
       minimumCompleted: 2,
       visible: true,
       overallAverage: 4.0,
       dimensions: [
-        { id: "icare_01_dezvolta_oamenii", averageScore: 4.2, completedCount: 3 },
-        { id: "icare_02_conduce_prin_puterea_exemplului", averageScore: 3.8, completedCount: 3 },
-        { id: "icare_06_aduce_claritate", averageScore: 4.0, completedCount: 3 },
+        { id: "clarity", label: "Claritate", averageScore: 4.2, completedCount: 3 },
+        { id: "support", label: "Sprijin", averageScore: 3.8, completedCount: 3 },
+        { id: "follow_through", label: "Consecvență", averageScore: 4.0, completedCount: 3 },
       ],
     },
+    receivedFeedbackGroups: [
+      {
+        projectId: "synthetic-leadership-project",
+        projectName: "Leadership operațional Q3",
+        completedCount: 3,
+        minimumCompleted: 2,
+        visible: true,
+        overallAverage: 4.0,
+        dimensions: [
+          { id: "clarity", label: "Claritate", averageScore: 4.2, completedCount: 3 },
+          { id: "support", label: "Sprijin", averageScore: 3.8, completedCount: 3 },
+          { id: "follow_through", label: "Consecvență", averageScore: 4.0, completedCount: 3 },
+        ],
+      },
+    ],
     results: [
       {
-        assignmentId: "demo-driver-result",
-        questionnaireKey: "distress_drivers",
-        title: "Driveri de stres TA",
+        assignmentId: "synthetic-personal-result",
+        projectId: "synthetic-leadership-project",
+        projectName: "Leadership operațional Q3",
+        questionnaireKey: "synthetic_personal_checkin",
+        title: "Autoevaluare de leadership",
         targetLabel: "Autoevaluare",
-        primaryResult: "be_strong",
+        primaryResult: "focus",
         scores: {
-          be_strong: 76,
-          be_perfect: 58,
-          try_hard: 42,
-          hurry_up: 66,
-          please_people: 34,
+          focus: { score: 76, label: "Focalizare" },
+          planning: { score: 68, label: "Planificare" },
+          collaboration: { score: 82, label: "Colaborare" },
         },
       },
       {
-        assignmentId: "demo-lencioni-result",
-        questionnaireKey: "lencioni",
-        title: "Lencioni - evaluare echipă",
-        targetLabel: "Echipa de direcție",
-        primaryResult: "fear_of_conflict",
+        assignmentId: "synthetic-team-result",
+        projectId: "synthetic-leadership-project",
+        projectName: "Leadership operațional Q3",
+        questionnaireKey: "synthetic_team_checkin",
+        title: "Evaluare de echipă",
+        targetLabel: "Echipa pilot",
+        primaryResult: "alignment",
         scores: {
-          absence_of_trust: { score: 7, interpretation: "Disfuncția poate fi o problemă." },
-          fear_of_conflict: { score: 5, interpretation: "Disfuncția trebuie probabil abordată." },
-          lack_of_commitment: { score: 8, interpretation: "Disfuncția probabil nu este o problemă." },
-          avoidance_of_accountability: { score: 6, interpretation: "Disfuncția poate fi o problemă." },
-          inattention_to_results: { score: 9, interpretation: "Disfuncția probabil nu este o problemă." },
-        },
-      },
-      {
-        assignmentId: "demo-icare-result",
-        questionnaireKey: "boss_360",
-        title: "iCARE 360 pentru manager",
-        targetLabel: "Manager direct",
-        primaryResult: "icare_06_aduce_claritate",
-        scores: {
-          icare_01_dezvolta_oamenii: { score: 84 },
-          icare_02_conduce_prin_puterea_exemplului: { score: 76 },
-          icare_03_creeaza_un_mediu_care_stimuleaza_implicarea: { score: 72 },
-          icare_06_aduce_claritate: { score: 62 },
-          icare_12_agilitate_antreprenoriala: { score: 80 },
+          alignment: {
+            score: 72,
+            label: "Aliniere",
+            interpretation: "Echipa are o bază comună, cu câteva decizii care merită clarificate.",
+          },
+          delivery: { score: 81, label: "Livrare" },
+          learning: { score: 66, label: "Învățare" },
         },
       },
     ],
@@ -266,12 +363,26 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
   };
 }
 
-async function readWorkspaceError(response: Response): Promise<string> {
+async function participantWorkspaceErrorFromResponse(
+  response: Response,
+): Promise<ParticipantWorkspaceError> {
   try {
-    const body = (await response.json()) as { error?: { message?: string } };
-    return body.error?.message || "Nu am putut încărca spațiul tău de lucru acum.";
+    const body = (await response.json()) as {
+      error?: { code?: string; message?: string; request_id?: string };
+    };
+    return new ParticipantWorkspaceError(
+      body.error?.message || "Nu am putut încărca datele contului. Reîncearcă în câteva momente.",
+      response.status,
+      body.error?.code || `http_${response.status}`,
+      body.error?.request_id,
+    );
   } catch {
-    return "Nu am putut încărca spațiul tău de lucru acum.";
+    return new ParticipantWorkspaceError(
+      "Nu am putut încărca datele contului. Reîncearcă în câteva momente.",
+      response.status,
+      `http_${response.status}`,
+      response.headers?.get("X-Request-ID") ?? undefined,
+    );
   }
 }
 
@@ -279,14 +390,16 @@ function getUnavailableParticipantWorkspaceSummary(reason?: string): Participant
   return {
     participantFullName: "Participant",
     anonymousName: null,
-    projectName: "Spațiul tău de lucru",
+    projectName: "Niciun proiect activ",
     projectId: null,
-    companyName: "Codruț",
+    projects: [],
+    companyName: "Neasociată",
     participantEmail: "",
-    deadlineLabel: "după ce profilul este sincronizat",
+    deadlineLabel: "Fără termen",
     tasks: [],
     results: [],
     receivedFeedback: null,
+    receivedFeedbackGroups: [],
     cards: [
       {
         title: "Profil în verificare",
@@ -305,10 +418,10 @@ function getUnavailableParticipantWorkspaceSummary(reason?: string): Participant
       },
     ],
     emptyState: {
-      title: "Spațiul de participant nu este încă disponibil",
+      title: "Spațiul nu este disponibil",
       description:
         reason ||
-        "Contul este activ, dar profilul de participant nu este conectat la o companie sau la un proiect.",
+        "Contul este activ, dar profilul nu este încă legat de o companie sau de un proiect.",
     },
   };
 }

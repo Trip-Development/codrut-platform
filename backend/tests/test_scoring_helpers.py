@@ -1,0 +1,282 @@
+import uuid
+from types import SimpleNamespace
+
+from codrut.modules.assignments.models import AssignmentStatus
+from codrut.modules.companies.hierarchy import HierarchyIssue
+from codrut.modules.scoring.service import (
+    ReportDimensionAccumulator,
+    ReportParticipant,
+    _accumulate_scores,
+    _averages_from_accumulators,
+    _build_score_summary,
+    _distribution_count,
+    _distribution_from_completed_pcm_assignments,
+    _format_pcm_label,
+    _get_pcm_color,
+    _interpretation_from_rules,
+    _non_empty_string,
+    _pcm_profile_key,
+    _prettify_score_key,
+    _private_definition_schema,
+    _report_dimensions,
+    _report_hierarchy_issue,
+    _valid_interpretation_rules,
+)
+
+
+def _definition(private_schema: object) -> SimpleNamespace:
+    return SimpleNamespace(private_config={"schema": private_schema})
+
+
+def _result(scores: dict) -> SimpleNamespace:
+    return SimpleNamespace(scores=scores)
+
+
+def _assignment(
+    questionnaire_key: str,
+    *,
+    status: AssignmentStatus = AssignmentStatus.scored,
+    respondent_profile_id: uuid.UUID | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        questionnaire_key=questionnaire_key,
+        status=status,
+        respondent_profile_id=respondent_profile_id or uuid.uuid4(),
+    )
+
+
+def _participant(
+    participant_id: uuid.UUID,
+    *,
+    pcm_base: str | None = None,
+    pcm_phase: str | None = None,
+) -> ReportParticipant:
+    return ReportParticipant(
+        id=participant_id,
+        full_name="Synthetic Participant",
+        reports_to_name=None,
+        role_group=None,
+        pcm_base=pcm_base,
+        pcm_phase=pcm_phase,
+        user_id=None,
+    )
+
+
+def test_report_dimension_projection_rejects_private_or_malformed_metadata() -> None:
+    assert _private_definition_schema(None) == {}
+    assert _private_definition_schema(_definition([])) == {}  # type: ignore[arg-type]
+    assert _valid_interpretation_rules(None) == ()
+    assert _valid_interpretation_rules([{"min": 0}, "private"]) == ({"min": 0},)
+    assert _non_empty_string(None) is None
+    assert _non_empty_string("   ") is None
+    assert _non_empty_string("  Visible  ") == "Visible"
+    assert _prettify_score_key("") == ""
+
+
+def test_report_dimensions_use_public_labels_rules_and_safe_fallbacks() -> None:
+    group_definition = _definition(
+        {
+            "scoring": {
+                "method": "sum_by_group",
+                "interpretation": [{"min": 0, "max": 10, "label": "Global"}],
+                "groups": [
+                    "invalid",
+                    {"label": "Missing ID"},
+                    {"id": "team_signal", "label": "  Team signal  "},
+                    {
+                        "id": "team_fallback",
+                        "interpretation": [{"min": 0, "max": 5, "label": "Specific"}],
+                    },
+                ],
+            }
+        }
+    )
+    dimensions = _report_dimensions(group_definition, {})  # type: ignore[arg-type]
+    assert dimensions["team_signal"][0] == "Team signal"
+    assert dimensions["team_signal"][1][0]["label"] == "Global"
+    assert dimensions["team_fallback"][0] == "Team Fallback"
+    assert dimensions["team_fallback"][1][0]["label"] == "Specific"
+
+    driver_definition = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "drivers": [
+                    None,
+                    {"label": "Missing ID"},
+                    {"id": "work_signal", "label": "Work signal"},
+                ],
+            }
+        }
+    )
+    assert _report_dimensions(driver_definition, {}) == {  # type: ignore[arg-type]
+        "work_signal": ("Work signal", ())
+    }
+
+    section_definition = _definition(
+        {
+            "scoring": {"method": "average_statement_scores_by_section"},
+            "sections": [
+                "invalid",
+                {
+                    "questions": [
+                        "invalid",
+                        {"id": "ignored", "type": "likert"},
+                        {"type": "statement_score_set"},
+                        {
+                            "id": "feedback_signal",
+                            "type": "statement_score_set",
+                            "label": "Feedback signal",
+                            "interpretation": [{"min": 1, "max": 5, "label": "Visible"}],
+                        },
+                    ]
+                },
+            ],
+        }
+    )
+    assert _report_dimensions(section_definition, {}) == {  # type: ignore[arg-type]
+        "feedback_signal": (
+            "Feedback signal",
+            ({"min": 1, "max": 5, "label": "Visible"},),
+        )
+    }
+
+    assert _report_dimensions(  # type: ignore[arg-type]
+        _definition({}), {"valid_score": "7", "private": None}
+    ) == {
+        "valid_score": ("Valid Score", ())
+    }
+
+
+def test_interpretation_and_average_helpers_ignore_invalid_rules() -> None:
+    rules = (
+        {"min": None, "max": 10, "label": "Missing minimum"},
+        {"min": 0, "max": "bad", "label": "Invalid maximum"},
+        {"min": 0, "max": 10, "label": "   "},
+        {"min": 0, "max": 5, "label": "Low"},
+        {
+            "min": 6,
+            "max": 10,
+            "label": "High",
+            "range_label": "Interval explicit",
+        },
+    )
+    assert _interpretation_from_rules(4, rules) == ("Low", "0-5")
+    assert _interpretation_from_rules(8, rules) == ("High", "Interval explicit")
+    assert _interpretation_from_rules(20, rules) is None
+
+    averages = _averages_from_accumulators(
+        {
+            "empty": ReportDimensionAccumulator(label="Empty"),
+            "plain": ReportDimensionAccumulator(label="Plain", total=7, count=2),
+            "interpreted": ReportDimensionAccumulator(
+                label="Interpreted",
+                total=16,
+                count=2,
+                interpretation_rules=rules,
+            ),
+        }
+    )
+    assert [item.id for item in averages] == ["interpreted", "plain"]
+    assert averages[0].interpretation == "High"
+    assert averages[1].interpretation is None
+
+
+def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
+    accumulator: dict[str, ReportDimensionAccumulator] = {}
+    assert _accumulate_scores(  # type: ignore[arg-type]
+        accumulator, _result({"invalid": True}), None
+    ) is False
+    assert _accumulate_scores(  # type: ignore[arg-type]
+        accumulator, _result({"signal": {"score": "4.5"}}), None
+    )
+    assert _accumulate_scores(  # type: ignore[arg-type]
+        accumulator, _result({"signal": 5.5}), None
+    )
+    assert accumulator["signal"].total == 10
+    assert accumulator["signal"].count == 2
+
+    rows = [
+        (_assignment("lencioni", status=AssignmentStatus.assigned), _result({"a": 1}), None),
+        (_assignment("lencioni"), None, None),
+        (_assignment("lencioni"), _result({"a": 1}), None),
+        (_assignment("distress_drivers"), _result({"b": 2}), None),
+        (_assignment("boss_360"), _result({"c": 3}), None),
+        (_assignment("unrelated"), _result({"d": 4}), None),
+    ]
+    summary = _build_score_summary(rows)  # type: ignore[arg-type]
+    assert (summary.lencioni_count, summary.driver_count, summary.boss_360_count) == (
+        1,
+        1,
+        1,
+    )
+
+
+def test_pcm_distribution_requires_completed_known_profiles() -> None:
+    thinker_id = uuid.uuid4()
+    alias_id = uuid.uuid4()
+    blank_id = uuid.uuid4()
+    missing_id = uuid.uuid4()
+    participants = [
+        _participant(thinker_id, pcm_base=" thinker "),
+        _participant(alias_id, pcm_base="Gânditor"),
+        _participant(blank_id, pcm_base="  "),
+    ]
+    assignments = [
+        _assignment("pcm_base", respondent_profile_id=thinker_id),
+        _assignment("pcm_base", respondent_profile_id=alias_id),
+        _assignment("pcm_base", respondent_profile_id=blank_id),
+        _assignment("pcm_base", respondent_profile_id=missing_id),
+        _assignment(
+            "pcm_base",
+            status=AssignmentStatus.assigned,
+            respondent_profile_id=thinker_id,
+        ),
+        _assignment("lencioni", respondent_profile_id=thinker_id),
+    ]
+    distribution = _distribution_from_completed_pcm_assignments(
+        participants,
+        assignments,  # type: ignore[arg-type]
+        "pcm_base",
+    )
+    assert _distribution_count(distribution) == 2
+    assert [item.label for item in distribution] == ["Gânditor", "Gânditor"]
+    assert all(item.color == "#2563eb" for item in distribution)
+    assert _pcm_profile_key(None) is None
+    assert _pcm_profile_key("Gânditor") == "thinker"
+    assert _pcm_profile_key("harmo_nizer") == "harmonizer"
+    assert _format_pcm_label(None) == "Necompletată"
+    assert _format_pcm_label("custom_profile") == "Custom Profile"
+    assert _get_pcm_color("custom") is None
+
+
+def test_hierarchy_issue_copy_is_specific_and_preserves_fallback() -> None:
+    participant_id = uuid.uuid4()
+    unresolved = _report_hierarchy_issue(
+        HierarchyIssue(
+            code="manager_unresolved",
+            message="fallback",
+            participant_id=participant_id,
+            participant_name="Ana",
+            reports_to_name="Bogdan",
+        )
+    )
+    self_reference = _report_hierarchy_issue(
+        HierarchyIssue(
+            code="manager_self_reference",
+            message="fallback",
+            participant_id=participant_id,
+            participant_name="Ana",
+            reports_to_name="Ana",
+        )
+    )
+    fallback = _report_hierarchy_issue(
+        HierarchyIssue(
+            code="other",
+            message="Mesaj păstrat",
+            participant_id=participant_id,
+        )
+    )
+    assert '"Bogdan"' in unresolved.message
+    assert "propriul manager" in self_reference.message
+    assert fallback.message == "Mesaj păstrat"

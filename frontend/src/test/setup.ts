@@ -29,8 +29,39 @@ Object.defineProperty(window, "localStorage", {
   writable: true,
 });
 
+class ResizeObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+  value: ResizeObserverMock,
+  writable: true,
+});
+
+Object.defineProperties(HTMLElement.prototype, {
+  hasPointerCapture: {
+    configurable: true,
+    value: vi.fn(() => false),
+  },
+  setPointerCapture: {
+    configurable: true,
+    value: vi.fn(),
+  },
+  releasePointerCapture: {
+    configurable: true,
+    value: vi.fn(),
+  },
+});
+
 vi.mock("next/navigation", () => ({
   useRouter: () => nextRouterMock,
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "",
+}));
+
+vi.mock("next/font/google", () => ({
+  Geist: () => ({ className: "__geist", variable: "__geist-variable" }),
+  Fraunces: () => ({ className: "__fraunces", variable: "__fraunces-variable" }),
 }));

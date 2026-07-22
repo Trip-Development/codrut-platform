@@ -22,4 +22,8 @@ async def get_my_workspace(
 
         raise DomainError("Participant account required.", code="participant_required")
     require_current_terms(principal)
-    return await ParticipantWorkspaceService(session).get_workspace_summary(principal.user_id)
+    return await ParticipantWorkspaceService(session).get_workspace_summary(
+        principal.user_id,
+        allowed_assignment_ids=principal.assignment_ids,
+        scoped_project_id=principal.project_id,
+    )

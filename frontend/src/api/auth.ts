@@ -1,12 +1,15 @@
 import { apiFetch } from "./http";
 import { validatePasswordPolicy } from "./password-policy";
-import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
+import { getApiBaseUrl, isLocalSeededDemoFallbackEnabled, isSeededDemoFallbackEnabled } from "./runtime";
+import { CURRENT_TERMS_VERSION } from "./terms";
 
 export type CurrentUser = {
   id: string;
   name: string;
   email?: string;
   role: "trainer" | "participant";
+  termsAcceptedAt?: string | null;
+  termsVersion?: string | null;
 };
 
 export type SessionState = {
@@ -19,12 +22,16 @@ type AuthApiResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
 };
 
 type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
 };
 
 type AuthSessionUnavailableContext = {
@@ -92,6 +99,8 @@ export async function loginWithPassword(email: string, password: string): Promis
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      termsAcceptedAt: user.terms_accepted_at,
+      termsVersion: user.terms_version,
     },
   };
 }
@@ -104,6 +113,8 @@ function sessionStateFromPrincipal(user: SessionPrincipalResponse): SessionState
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      termsAcceptedAt: user.terms_accepted_at,
+      termsVersion: user.terms_version,
     },
   };
 }
@@ -184,6 +195,24 @@ export async function changePassword(
   }
 }
 
+export async function acceptCurrentTerms(): Promise<void> {
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/consent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      terms_accepted: true,
+      terms_version: CURRENT_TERMS_VERSION,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message = payload?.error?.message ?? "Acordul nu a putut fi salvat.";
+    throw new Error(message);
+  }
+}
+
 async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
   try {
     const response = await apiFetch(`${getApiBaseUrl()}/auth/me`, {
@@ -231,7 +260,7 @@ export async function getTrainerSession(): Promise<SessionState> {
   try {
     session = await getSessionFromApi("trainer");
   } catch (error) {
-    if (isAuthRoleMismatchError(error)) throw error;
+    if (isAuthRoleMismatchError(error) && !isLocalSeededDemoFallbackEnabled()) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
@@ -255,7 +284,7 @@ export async function getParticipantSession(): Promise<SessionState> {
   try {
     session = await getSessionFromApi("participant");
   } catch (error) {
-    if (isAuthRoleMismatchError(error)) throw error;
+    if (isAuthRoleMismatchError(error) && !isLocalSeededDemoFallbackEnabled()) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
@@ -272,16 +301,4 @@ export async function getParticipantSession(): Promise<SessionState> {
       role: "participant",
     },
   };
-}
-
-export function audienceAccessNote(audience: "trainer" | "participant" | "invitee"): string {
-  if (audience === "trainer") {
-    return "Acces trainer: cont necesar în producție; demo fallback activ în prototip.";
-  }
-
-  if (audience === "participant") {
-    return "Leadership: cont necesar pentru progres persistent și sarcini recurente.";
-  }
-
-  return "Invitați fără cont: linkul securizat strânge toate sarcinile proiectului pentru emailul primit.";
 }

@@ -11,23 +11,18 @@ export default async function TrainerSettingsPage() {
   return (
     <AppShell
       audience="trainer"
-      eyebrow="Setări"
-      title="Cont și preferințe"
-      description="Detalii de acces, context operațional și securitate pentru contul de trainer."
+      title="Setări"
       navItems={trainerNavItems}
       activeHref="/trainer/settings"
       userLabel={trainer.user.name}
       session={trainer}
     >
       <AccountSettingsPanel
-        eyebrow="Cont trainer"
-        title={trainer.user.name}
         passwordEnabled={trainer.state === "authenticated"}
         accountRows={[
           { label: "Email", value: email, tone: "accent" },
-          { label: "Rol", value: "Trainer / owner" },
+          { label: "Rol", value: "Trainer" },
           { label: "Sesiune", value: sessionLabel },
-          { label: "Acces", value: "Companii, proiecte, participanți, rapoarte și emailuri" },
         ]}
       />
     </AppShell>

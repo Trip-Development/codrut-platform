@@ -1,5 +1,7 @@
 import Image from "next/image";
 
+import { cn } from "@/utils/cn";
+
 type BrandMarkProps = {
   size?: "sm" | "md" | "lg";
   showText?: boolean;
@@ -9,30 +11,30 @@ type BrandMarkProps = {
 };
 
 const sizeClasses = {
-  sm: "h-10 w-10 rounded-xl",
-  md: "h-11 w-11 rounded-xl",
-  lg: "h-14 w-14 rounded-xl",
+  sm: "size-10 rounded-lg",
+  md: "size-11 rounded-lg",
+  lg: "size-14 rounded-lg",
 };
 
 export function BrandMark({
   size = "md",
   showText = true,
   subtitle = "Platformă de training și coaching",
-  className = "",
+  className,
   tone = "default",
 }: BrandMarkProps) {
   return (
-    <span className={`inline-flex min-w-0 items-center gap-3 ${className}`}>
+    <span className={cn("inline-flex min-w-0 items-center gap-3", className)}>
       <span
-        className={[
+        className={cn(
           "relative flex shrink-0 items-center justify-center overflow-hidden bg-surface shadow-brand border border-[var(--border)]",
           sizeClasses[size],
-        ].join(" ")}
+        )}
         aria-hidden="true"
       >
         <Image
           src="/logo.png"
-          alt="Sigla Codruț"
+          alt="Sigla Cody"
           fill
           sizes="(max-width: 768px) 40px, 56px"
           priority
@@ -40,21 +42,25 @@ export function BrandMark({
         />
       </span>
       {showText ? (
-        <span className="min-w-0 text-left">
+        <span className="min-w-0 text-left leading-none">
           <span
-            className={`block truncate text-sm font-bold font-display transition-colors ${
-              tone === "inverted" ? "text-white" : "text-foreground group-hover:text-burgundy"
-            }`}
+            className={cn(
+              "block truncate text-base font-semibold transition-colors",
+              tone === "inverted" ? "text-white" : "text-foreground group-hover:text-burgundy",
+            )}
           >
-            Codruț
+            Cody
           </span>
-          <span
-            className={`block truncate text-xs font-semibold transition-colors ${
-              tone === "inverted" ? "text-white/68" : "text-foreground/55 group-hover:text-burgundy/68"
-            }`}
-          >
-            {subtitle}
-          </span>
+          {subtitle ? (
+            <span
+              className={cn(
+                "mt-1 block truncate text-xs font-semibold transition-colors",
+                tone === "inverted" ? "text-white/68" : "text-foreground/55 group-hover:text-burgundy/68",
+              )}
+            >
+              {subtitle}
+            </span>
+          ) : null}
         </span>
       ) : null}
     </span>

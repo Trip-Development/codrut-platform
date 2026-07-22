@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session
@@ -233,12 +233,17 @@ async def import_company_roster(
     payload: RosterImportRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=8, max_length=128),
+    ] = None,
 ) -> RosterImportResponse:
     require_trainer_principal(principal)
     result = await CompanyService(session).import_roster(
         principal.user_id,
         company_id,
         payload,
+        idempotency_key=idempotency_key,
     )
     await session.commit()
     return result
@@ -254,12 +259,17 @@ async def send_participant_invitations(
     payload: ParticipantInviteBatchRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=8, max_length=128),
+    ] = None,
 ) -> ParticipantInviteBatchResponse:
     require_trainer_principal(principal)
     result = await CompanyService(session).send_participant_invites(
         principal.user_id,
         company_id,
         payload,
+        idempotency_key=idempotency_key,
     )
     await session.commit()
     return result
@@ -294,6 +304,10 @@ async def resend_participant_invite(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=8, max_length=128),
+    ] = None,
 ) -> RosterImportResponse:
     require_trainer_principal(principal)
     result = await CompanyService(session).resend_invite(
@@ -301,6 +315,7 @@ async def resend_participant_invite(
         company_id,
         participant_id,
         project_id,
+        idempotency_key=idempotency_key,
     )
     await session.commit()
     return result

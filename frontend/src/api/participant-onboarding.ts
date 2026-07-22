@@ -1,8 +1,7 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-
 import { getApiBaseUrl } from "./runtime";
+import { getServerApiRequestOptions } from "./server-request";
 
 export type ParticipantOnboardingState = {
   required: boolean;
@@ -12,18 +11,12 @@ export type ParticipantOnboardingState = {
 };
 
 export async function getParticipantOnboardingState(): Promise<ParticipantOnboardingState> {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("codrut_session");
-  if (!sessionCookie?.value) {
-    return emptyOnboarding();
-  }
+  const requestOptions = await getServerApiRequestOptions();
 
   try {
     const response = await fetch(`${getApiBaseUrl()}/forms/participant/onboarding`, {
       cache: "no-store",
-      headers: {
-        Cookie: `codrut_session=${sessionCookie.value}`,
-      },
+      ...requestOptions,
     });
     if (!response.ok) {
       return emptyOnboarding();

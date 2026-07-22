@@ -1,53 +1,87 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/api/http";
-import { BrandMark } from "@/components/brand/brand-mark";
-import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/api/password-policy";
-import { getApiBaseUrl, isDemoFallbackEnabled } from "@/api/runtime";
+import { Loader2Icon, LockKeyholeIcon } from "lucide-react";
 
-const generateNickname = (name: string) => {
-  if (!name) return "";
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // remove Romanian diacritics
-    .replace(/[^a-z0-9]/g, "_")      // replace non-alphanumeric with underscore
-    .replace(/_+/g, "_")             // remove duplicate underscores
-    .replace(/^_+|_+$/g, "");        // trim leading/trailing underscores
+import { apiFetch } from "@/api/http";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_POLICY_HELP,
+  validatePasswordPolicy,
+} from "@/api/password-policy";
+import { getApiBaseUrl, isDemoFallbackEnabled } from "@/api/runtime";
+import { CURRENT_TERMS_VERSION } from "@/api/terms";
+import { AuthQuotePanel, AuthTextLink } from "@/components/auth/auth-shell";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+
+const INVITE_STORAGE_KEY = "codrut_invite";
+
+type RegisterInviteData = {
+  email?: string;
+  token?: string;
+  fullName?: string;
+  isLeadership?: boolean;
 };
 
-const TERMS_VERSION = "privacy-2026-06-12";
+function readStoredInvite(): RegisterInviteData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const storedInvite = window.sessionStorage?.getItem(INVITE_STORAGE_KEY);
+    if (!storedInvite) return null;
+    return JSON.parse(storedInvite) as RegisterInviteData;
+  } catch {
+    return null;
+  }
+}
+
+function storeInvite(inviteData: RegisterInviteData): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage?.setItem(INVITE_STORAGE_KEY, JSON.stringify(inviteData));
+  } catch {
+    // The current form state remains usable if browser storage is unavailable.
+  }
+}
+
+function clearStoredInvite(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage?.removeItem(INVITE_STORAGE_KEY);
+  } catch {
+    // Ignore unavailable browser storage after successful registration.
+  }
+}
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [nickname, setNickname] = useState("");
-  const [isNicknameCustom, setIsNicknameCustom] = useState(false);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
-    // Retrieve invitation data from sessionStorage
-    const storedInvite = sessionStorage.getItem("codrut_invite");
-    let inviteData = null;
-    if (storedInvite) {
-      try {
-        inviteData = JSON.parse(storedInvite);
-      } catch {
-        // ignore
-      }
-    }
+    let inviteData = readStoredInvite();
 
-    // Fallback/demo invite if not found, only for intentional demo browsing.
     if (!inviteData) {
       if (!isDemoFallbackEnabled()) {
         setError("Invitația lipsește sau nu mai este activă. Folosește linkul primit pe email.");
@@ -56,23 +90,23 @@ export default function RegisterPage() {
       }
 
       inviteData = {
-        email: "lider.demo@companie.ro",
+        email: "lider.demo@example.com",
         token: "demo-token",
         fullName: "Lider Demo",
         isLeadership: true,
       };
-      sessionStorage.setItem("codrut_invite", JSON.stringify(inviteData));
+      storeInvite(inviteData);
     }
 
-    setEmail(inviteData.email || "lider.demo@companie.ro");
-    setFullName(inviteData.fullName || "");
-    setNickname(generateNickname(inviteData.fullName || ""));
+    setEmail(inviteData.email || "lider.demo@example.com");
     setToken(inviteData.token || "demo-token");
     setLoading(false);
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+
     setError(null);
 
     const passwordError = validatePasswordPolicy(password);
@@ -91,6 +125,7 @@ export default function RegisterPage() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
@@ -105,7 +140,7 @@ export default function RegisterPage() {
           password,
           token,
           terms_accepted: termsAccepted,
-          terms_version: TERMS_VERSION,
+          terms_version: CURRENT_TERMS_VERSION,
         }),
       });
 
@@ -114,177 +149,152 @@ export default function RegisterPage() {
         throw new Error(data.error?.message || "Înregistrarea a eșuat. Reîncearcă.");
       }
 
-      // Registration successful, remove invite session and redirect to dashboard
-      sessionStorage.removeItem("codrut_invite");
+      clearStoredInvite();
       router.push("/participant");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "A apărut o eroare la înregistrare.";
       setError(msg);
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   if (loading) {
     return (
-      <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
-        <section className="surface-panel w-full max-w-md p-10 text-center">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10 text-foreground">
+        <section className="w-full max-w-md rounded-lg border bg-surface p-8 shadow-sm">
           <BrandMark size="lg" showText={false} className="mx-auto" />
-          <div className="mt-8 flex justify-center">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-burgundy border-t-transparent"></div>
-          </div>
-          <p className="mt-6 text-foreground/60 font-semibold text-sm">Se încarcă datele invitației...</p>
+          <OperationFeedback
+            className="mt-8"
+            title="Verificăm invitația"
+            detail="Confirmăm că linkul de activare este încă valid."
+            meta="în verificare"
+          />
         </section>
       </main>
     );
   }
 
   return (
-    <main className="app-min-height flex items-center justify-center bg-background px-4 py-10">
-      <section className="surface-panel w-full max-w-md p-8 transition-all duration-150 md:p-10">
-        <div className="mb-8 flex flex-col items-center">
-          <BrandMark size="lg" showText={false} />
-          <h1 className="font-display mt-6 text-center text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            Înregistrare cont
-          </h1>
-          <p className="mt-2 text-center text-sm leading-6 text-foreground/60">
-            Setează numele și parola pentru acces permanent la platformă.
-          </p>
-        </div>
+    <main className="grid min-h-[100dvh] bg-background text-foreground lg:grid-cols-[0.85fr_1.15fr]">
+      <AuthQuotePanel variant="activation" />
 
-        {error && (
-          <div className="status-panel-danger mb-6 p-4">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75">
-                Email securizat
-              </label>
-              <span className="flex items-center gap-1 text-[11px] font-bold text-burgundy bg-burgundy/5 px-2 py-0.5 rounded-full border border-burgundy/10">
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                </svg>
-                Asociat invitației
-              </span>
-            </div>
-            <input
-              className="control-input w-full cursor-not-allowed select-none bg-surface-muted py-3.5 text-base text-foreground/45"
-              type="email"
-              value={email}
-              disabled={true}
-              title="Adresa de email este blocată la cea specificată în invitație."
-            />
-            <p className="mt-1.5 text-[11px] text-foreground/45 italic">
-              * Emailul este blocat pentru a păstra continuitatea profilului tău.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Nume complet
-            </label>
-            <input
-              className="control-input w-full bg-surface-muted py-3.5 text-base"
-              type="text"
-              placeholder="Numele tău complet"
-              value={fullName}
-              onChange={(e) => {
-                setFullName(e.target.value);
-                if (!isNicknameCustom) {
-                  setNickname(generateNickname(e.target.value));
-                }
-              }}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Nume utilizator (Nickname)
-            </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-4 text-foreground/40 font-bold select-none">@</span>
-              <input
-                className="control-input w-full bg-surface-muted py-3.5 pl-8 pr-4 text-base"
-                type="text"
-                placeholder="nickname_ul_tau"
-                value={nickname}
-                onChange={(e) => {
-                  setNickname(generateNickname(e.target.value));
-                  setIsNicknameCustom(true);
-                }}
-                required
-              />
-            </div>
-            <p className="mt-1.5 text-[11px] text-foreground/45 italic">
-              Nume de utilizator generat automat. Îl poți edita.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Parolă
-            </label>
-            <input
-              className="control-input w-full bg-surface-muted py-3.5 text-base"
-              type="password"
-              placeholder={`Minim ${PASSWORD_MIN_LENGTH} caractere`}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-foreground/75 mb-1.5">
-              Confirmă parola
-            </label>
-            <input
-              className="control-input w-full bg-surface-muted py-3.5 text-base"
-              type="password"
-              placeholder="Reintroduce parola"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <label className="flex gap-3 rounded-xl border border-[var(--border)] bg-surface-muted p-4 text-left">
-            <input
-              type="checkbox"
-              checked={termsAccepted}
-              onChange={(event) => setTermsAccepted(event.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-[var(--border)] accent-burgundy"
-            />
-            <span className="text-xs font-semibold leading-5 text-foreground/65">
-              Confirm că am citit și accept regulile de confidențialitate și prelucrare a datelor pentru utilizarea
-              platformei Codruț.
-            </span>
-          </label>
-
-          <button type="submit" disabled={submitting || !termsAccepted} className="btn-primary mt-2.5 w-full gap-2 px-4 py-4">
-            {submitting ? (
-              <>
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                Se creează contul...
-              </>
-            ) : (
-              "Finalizează înregistrarea"
-            )}
-          </button>
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-[var(--border)] flex justify-center text-sm">
-          <span className="text-foreground/50">Ai deja cont?</span>
-          <Link
-            href="/login"
-            className="ml-2 font-bold text-burgundy transition-colors hover:text-burgundy-dark"
-          >
-            Intră în cont
+      <section className="flex items-center justify-center px-4 py-10 md:px-8">
+        <div className="w-full max-w-xl">
+          <Link href="/" className="mb-10 inline-flex rounded-lg px-2 py-1 transition-colors hover:bg-muted lg:hidden">
+            <BrandMark subtitle="Activare cont" />
           </Link>
+
+          <div>
+            <Badge variant="outline">Înregistrare</Badge>
+            <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-normal">
+              Activează accesul permanent.
+            </h1>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
+              Emailul vine din invitație. Alege parola contului și confirmă acordul de confidențialitate.
+            </p>
+          </div>
+
+          {error ? (
+            <Alert variant="destructive" className="mt-6">
+              <AlertTitle>Înregistrarea nu a reușit</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <FieldGroup>
+              <Field data-disabled>
+                <div className="flex items-center justify-between gap-3">
+                  <FieldLabel htmlFor="register-email">Email securizat</FieldLabel>
+                  <Badge variant="secondary">
+                    <LockKeyholeIcon data-icon="inline-start" />
+                    Asociat invitației
+                  </Badge>
+                </div>
+                <Input
+                  id="register-email"
+                  type="email"
+                  value={email}
+                  disabled
+                  title="Adresa de email este blocată la cea specificată în invitație."
+                />
+              </Field>
+
+              <Field data-invalid={Boolean(error) || undefined}>
+                <FieldLabel htmlFor="register-password">Parolă</FieldLabel>
+                <Input
+                  id="register-password"
+                  type="password"
+                  placeholder="Parolă sigură"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  maxLength={PASSWORD_MAX_LENGTH}
+                  disabled={submitting}
+                  required
+                  aria-invalid={Boolean(error) || undefined}
+                />
+                <FieldDescription>{PASSWORD_POLICY_HELP}</FieldDescription>
+              </Field>
+
+              <Field data-invalid={Boolean(error) || undefined}>
+                <FieldLabel htmlFor="register-confirm-password">Confirmă parola</FieldLabel>
+                <Input
+                  id="register-confirm-password"
+                  type="password"
+                  placeholder="Reintrodu parola"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  maxLength={PASSWORD_MAX_LENGTH}
+                  disabled={submitting}
+                  required
+                  aria-invalid={Boolean(error) || undefined}
+                />
+              </Field>
+
+              <Field orientation="horizontal" className="rounded-lg border bg-surface p-4">
+                <Checkbox
+                  id="register-terms"
+                  checked={termsAccepted}
+                  onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                  disabled={submitting}
+                  className="mt-1"
+                />
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="register-terms" className="font-semibold">
+                    Accept termenii și politica de confidențialitate.
+                  </FieldLabel>
+                  <FieldDescription>
+                    Citește <Link href="/termeni" className="font-semibold text-primary hover:underline">termenii</Link>
+                    {" și "}
+                    <Link href="/confidentialitate" className="font-semibold text-primary hover:underline">politica de confidențialitate</Link>.
+                  </FieldDescription>
+                </div>
+              </Field>
+            </FieldGroup>
+
+            {submitting ? (
+              <OperationFeedback
+                title="Creăm contul Cody"
+                detail="Validăm invitația, parola și acordul de confidențialitate înainte de activare."
+                meta="în activare"
+              />
+            ) : null}
+
+            <Button type="submit" size="lg" disabled={submitting || !termsAccepted} className="w-full">
+              {submitting ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+              {submitting ? "Activăm contul" : "Finalizează înregistrarea"}
+            </Button>
+          </form>
+
+          <div className="mt-8 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <span className="font-medium text-muted-foreground">Ai deja cont?</span>
+            <AuthTextLink href="/login">Intră în cont</AuthTextLink>
+          </div>
         </div>
       </section>
     </main>

@@ -26,7 +26,7 @@ def check_openapi_schema(output: Path = DEFAULT_OUTPUT) -> bool:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export the Codrut OpenAPI schema.")
+    parser = argparse.ArgumentParser(description="Export the Cody OpenAPI schema.")
     parser.add_argument(
         "--output",
         type=Path,

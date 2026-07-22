@@ -56,6 +56,34 @@ class ScoringRepository:
         result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
         return [(assignment, scoring_result) for assignment, scoring_result in result.all()]
 
+    async def list_company_assignment_results_with_definitions(
+        self,
+        company_id: UUID,
+        project_id: UUID | None = None,
+    ) -> list[
+        tuple[
+            QuestionnaireAssignment,
+            ScoringResult | None,
+            QuestionnaireDefinition | None,
+        ]
+    ]:
+        stmt = (
+            select(QuestionnaireAssignment, ScoringResult, QuestionnaireDefinition)
+            .outerjoin(ScoringResult, ScoringResult.assignment_id == QuestionnaireAssignment.id)
+            .outerjoin(
+                QuestionnaireDefinition,
+                QuestionnaireDefinition.id == QuestionnaireAssignment.questionnaire_definition_id,
+            )
+            .where(QuestionnaireAssignment.company_id == company_id)
+        )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
+        return [
+            (assignment, scoring_result, definition)
+            for assignment, scoring_result, definition in result.all()
+        ]
+
     async def list_company_icare_answer_responses(
         self,
         company_id: UUID,
@@ -66,15 +94,26 @@ class ScoringRepository:
             QuestionnaireResponse,
             ParticipantProfile,
             ParticipantProfile | None,
+            QuestionnaireDefinition,
         ]
     ]:
         respondent = aliased(ParticipantProfile)
         target = aliased(ParticipantProfile)
         stmt = (
-            select(QuestionnaireAssignment, QuestionnaireResponse, respondent, target)
+            select(
+                QuestionnaireAssignment,
+                QuestionnaireResponse,
+                respondent,
+                target,
+                QuestionnaireDefinition,
+            )
             .join(
                 QuestionnaireResponse,
                 QuestionnaireResponse.assignment_id == QuestionnaireAssignment.id,
+            )
+            .join(
+                QuestionnaireDefinition,
+                QuestionnaireDefinition.id == QuestionnaireAssignment.questionnaire_definition_id,
             )
             .join(respondent, respondent.id == QuestionnaireAssignment.respondent_profile_id)
             .outerjoin(target, target.id == QuestionnaireAssignment.target_person_id)
@@ -83,6 +122,11 @@ class ScoringRepository:
                 QuestionnaireAssignment.questionnaire_key.in_(("boss_360", "boss_360_en", "icare"))
             )
             .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
+            .where(QuestionnaireResponse.questionnaire_version == QuestionnaireDefinition.version)
+            .where(
+                QuestionnaireDefinition.trainer_visibility_policy["raw_responses"].astext
+                == "visible"
+            )
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
@@ -95,8 +139,8 @@ class ScoringRepository:
             )
         )
         return [
-            (assignment, response, respondent_profile, target_profile)
-            for assignment, response, respondent_profile, target_profile in result.all()
+            (assignment, response, respondent_profile, target_profile, definition)
+            for assignment, response, respondent_profile, target_profile, definition in result.all()
         ]
 
     async def delete_by_assignment(self, assignment_id: UUID) -> None:

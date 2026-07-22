@@ -55,7 +55,7 @@ export function ModalLayer({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    window.requestAnimationFrame(() => {
+    const focusFrame = window.requestAnimationFrame(() => {
       const panel = panelRef.current;
       const firstFocusable = panel?.querySelector<HTMLElement>(focusableSelector);
       (firstFocusable ?? panel)?.focus({ preventScroll: true });
@@ -92,9 +92,12 @@ export function ModalLayer({
 
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
-      previousFocusRef.current?.focus({ preventScroll: true });
+      if (previousFocusRef.current?.isConnected) {
+        previousFocusRef.current.focus({ preventScroll: true });
+      }
     };
   }, [mounted]);
 

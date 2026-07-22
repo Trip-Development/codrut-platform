@@ -38,7 +38,7 @@ UUID_VALUE = "00000000-0000-4000-8000-000000000001"
             CompanyAccessCodeRegistrationRequest,
             {
                 "email": "trainer@example.com",
-                "password": "Aa12345!",
+                "password": "o frază lungă și memorabilă",
                 "access_code": "ABCD-1234",
             },
             {"role": "trainer"},

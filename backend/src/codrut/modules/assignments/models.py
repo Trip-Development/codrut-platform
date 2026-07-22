@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from codrut.core.database import Base, TimestampMixin
@@ -44,9 +44,7 @@ class ResponseVisibilityPolicy(StrEnum):
 
 class Team(TimestampMixin, Base):
     __tablename__ = "teams"
-    __table_args__ = (
-        UniqueConstraint("company_id", "name"),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "name"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(
@@ -59,9 +57,7 @@ class Team(TimestampMixin, Base):
 
 class TeamMembership(TimestampMixin, Base):
     __tablename__ = "team_memberships"
-    __table_args__ = (
-        UniqueConstraint("team_id", "participant_profile_id"),
-    )
+    __table_args__ = (UniqueConstraint("team_id", "participant_profile_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     team_id: Mapped[uuid.UUID] = mapped_column(
@@ -98,6 +94,10 @@ class QuestionnaireAssignment(TimestampMixin, Base):
             """,
             name="assignment_target_shape",
         ),
+        CheckConstraint(
+            "reminder_count >= 0 and reminder_count <= 2",
+            name="reminder_count_bounds",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -110,11 +110,22 @@ class QuestionnaireAssignment(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    assignment_round_id: Mapped[uuid.UUID] = mapped_column(
+        nullable=False,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+        index=True,
+    )
     respondent_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("participant_profiles.id", ondelete="CASCADE"),
         index=True,
     )
     questionnaire_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    questionnaire_definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("questionnaire_definitions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     target_type: Mapped[AssignmentTargetType] = mapped_column(
         Enum(
             AssignmentTargetType,
@@ -159,3 +170,4 @@ class QuestionnaireAssignment(TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    reminder_count: Mapped[int] = mapped_column(nullable=False, default=0)

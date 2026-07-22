@@ -1,0 +1,305 @@
+"use client";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { ArrowRightIcon, Loader2Icon } from "lucide-react";
+
+import { acceptCurrentTerms } from "@/api/auth";
+import { exchangeInviteSession, type InviteBundle } from "@/api/invites";
+import { CURRENT_TERMS_VERSION } from "@/api/terms";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
+import { cn } from "@/utils/cn";
+
+type ValidInviteBundle = Extract<InviteBundle, { state: "valid" }>;
+
+const CONSENT_FEEDBACK_MIN_MS = 450;
+const INVITE_STORAGE_KEY = "codrut_invite";
+
+function consentStorageKey(token: string): string {
+  return `codrut_invite_consent:${CURRENT_TERMS_VERSION}:${token}`;
+}
+
+function hasStoredConsent(token: string): boolean {
+  try {
+    return window.localStorage.getItem(consentStorageKey(token)) === "accepted";
+  } catch {
+    return false;
+  }
+}
+
+function storeConsent(token: string): void {
+  try {
+    window.localStorage.setItem(consentStorageKey(token), "accepted");
+  } catch {
+    // Consent is saved server-side when the backend exposes it; local persistence is best-effort.
+  }
+}
+
+function inviteStoragePayload(token: string, bundle: ValidInviteBundle) {
+  return {
+    email: bundle.participantEmail,
+    token,
+    fullName: bundle.participantFullName,
+    anonymousName: bundle.anonymousName,
+    isLeadership: bundle.isLeadership,
+  };
+}
+
+function storeInviteForRegistration(token: string, bundle: ValidInviteBundle): void {
+  try {
+    window.sessionStorage?.setItem(INVITE_STORAGE_KEY, JSON.stringify(inviteStoragePayload(token, bundle)));
+  } catch {
+    // Registration shows an explicit missing-invite state if browser storage is unavailable.
+  }
+}
+
+function waitForConsentFeedback(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, CONSENT_FEEDBACK_MIN_MS);
+  });
+}
+
+export function InviteRegistrationLink({
+  token,
+  bundle,
+  children,
+  className,
+}: {
+  token: string;
+  bundle: ValidInviteBundle;
+  children: ReactNode;
+  className?: string;
+}) {
+  useEffect(() => {
+    storeInviteForRegistration(token, bundle);
+  }, [bundle, token]);
+
+  return (
+    <Link
+      href="/register"
+      className={className ?? serverLinkButtonClassName({ size: "lg" })}
+      onClick={() => storeInviteForRegistration(token, bundle)}
+    >
+      {children}
+    </Link>
+  );
+}
+
+export function InviteSessionExchange({
+  token,
+  children,
+}: {
+  token: string;
+  children: ReactNode;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<"pending" | "ready" | "error">("pending");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setState("pending");
+    setError(null);
+
+    void exchangeInviteSession(token)
+      .then(() => {
+        if (active) setState("ready");
+      })
+      .catch((exchangeError: unknown) => {
+        if (!active) return;
+        setError(
+          exchangeError instanceof Error
+            ? exchangeError.message
+            : "Nu am putut pregăti accesul securizat.",
+        );
+        setState("error");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [attempt, token]);
+
+  if (state === "ready") return <>{children}</>;
+
+  return (
+    <InviteFrame width="sm">
+      <InvitePanel>
+        {state === "pending" ? (
+          <OperationFeedback
+            title="Pregătim accesul securizat"
+            detail="Verificăm invitația înainte de a deschide chestionarele."
+          />
+        ) : (
+          <Alert variant="destructive">
+            <AlertTitle>Accesul nu a putut fi pregătit</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {state === "error" ? (
+          <Button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-5 w-full">
+            Reîncearcă
+          </Button>
+        ) : null}
+      </InvitePanel>
+    </InviteFrame>
+  );
+}
+
+export function InviteConsentGate({
+  token,
+  bundle,
+  children,
+}: {
+  token: string;
+  bundle: ValidInviteBundle;
+  children: ReactNode;
+}) {
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [consentSaved, setConsentSaved] = useState(false);
+  const [consentSubmitting, setConsentSubmitting] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const consentSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    setTermsChecked(hasStoredConsent(token));
+    storeInviteForRegistration(token, bundle);
+  }, [bundle, token]);
+
+  const handleAcceptTerms = async () => {
+    if (consentSubmittingRef.current) return;
+
+    consentSubmittingRef.current = true;
+    setConsentError(null);
+    setConsentSubmitting(true);
+    try {
+      const minimumFeedback = waitForConsentFeedback();
+      await exchangeInviteSession(token);
+      await acceptCurrentTerms();
+      await minimumFeedback;
+      storeConsent(token);
+      setConsentSaved(true);
+    } catch (err) {
+      setConsentError(err instanceof Error ? err.message : "Nu am putut salva acordul de confidențialitate.");
+    } finally {
+      consentSubmittingRef.current = false;
+      setConsentSubmitting(false);
+    }
+  };
+
+  if (consentSaved) {
+    return <>{children}</>;
+  }
+
+  return (
+    <InviteFrame width="md">
+      <InvitePanel>
+        <BrandMark size="lg" showText={false} className="mx-auto" />
+        <h1 className="mt-8 text-center text-3xl font-semibold leading-tight tracking-normal">
+          Confirmă confidențialitatea înainte de chestionare
+        </h1>
+        <p className="mx-auto mt-4 max-w-md text-center text-sm leading-6 text-muted-foreground">
+          Vei răspunde ca <strong className="text-foreground">{bundle.anonymousName ?? "participant anonim"}</strong>{" "}
+          pentru proiectul <strong className="text-foreground">{bundle.projectName}</strong>.
+        </p>
+
+        <Field
+          orientation="horizontal"
+          data-disabled={consentSubmitting ? "true" : undefined}
+          className="mt-8 rounded-lg border bg-background p-4"
+        >
+          <Checkbox
+            id="invite-terms"
+            checked={termsChecked}
+            disabled={consentSubmitting}
+            onCheckedChange={(checked) => setTermsChecked(checked === true)}
+            className="mt-1"
+          />
+          <div className="flex flex-col gap-1">
+            <FieldLabel htmlFor="invite-terms" className="font-semibold">
+              Accept regulile de confidențialitate și prelucrare a datelor.
+            </FieldLabel>
+            <FieldDescription>
+              Acordul permite completarea chestionarelor pentru proiectul asociat invitației.
+            </FieldDescription>
+          </div>
+        </Field>
+
+        {consentError ? (
+          <Alert variant="destructive" className="mt-5">
+            <AlertTitle>Acordul nu a fost salvat</AlertTitle>
+            <AlertDescription>{consentError}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {consentSubmitting ? (
+          <OperationFeedback
+            className="mt-5"
+            title="Pregătim accesul securizat"
+            detail="Deschidem sarcinile proiectului."
+          />
+        ) : null}
+
+        <Button
+          type="button"
+          onClick={handleAcceptTerms}
+          disabled={!termsChecked || consentSubmitting}
+          size="lg"
+          className="mt-5 w-full"
+        >
+          {consentSubmitting ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+          {consentSubmitting ? "Pregătim accesul" : "Continuă la chestionare"}
+        </Button>
+      </InvitePanel>
+    </InviteFrame>
+  );
+}
+
+export function InviteRegisterPrimaryAction({
+  token,
+  bundle,
+}: {
+  token: string;
+  bundle: ValidInviteBundle;
+}) {
+  return (
+    <InviteRegistrationLink token={token} bundle={bundle}>
+      Înregistrează cont Leadership
+      <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+    </InviteRegistrationLink>
+  );
+}
+
+function InviteFrame({
+  children,
+  width,
+}: {
+  children: ReactNode;
+  width: "sm" | "md" | "lg";
+}) {
+  const maxWidth = {
+    sm: "max-w-md",
+    md: "max-w-xl",
+    lg: "max-w-5xl",
+  }[width];
+
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10 text-foreground md:px-6">
+      <div className={cn("w-full", maxWidth)}>{children}</div>
+    </main>
+  );
+}
+
+function InvitePanel({ children }: { children: ReactNode }) {
+  return (
+    <section className="rounded-lg border bg-surface p-6 shadow-sm md:p-8">
+      {children}
+    </section>
+  );
+}

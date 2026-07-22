@@ -1,5 +1,15 @@
 import type { ReactNode } from "react";
 
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { cn } from "@/utils/cn";
+
 type EmptyStateProps = {
   title: string;
   description?: string;
@@ -10,15 +20,17 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, description, icon, action, className = "" }: EmptyStateProps) {
   return (
-    <div className={`rounded-xl border border-[var(--border)] bg-surface px-5 py-6 text-center shadow-sm ${className}`}>
+    <Empty className={cn("rounded-lg border border-border bg-surface px-5 py-6 shadow-sm", className)}>
       {icon ? (
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-cream-100 text-lg">
+        <EmptyMedia variant="icon" className="size-12 text-muted-foreground [&_svg:not([class*='size-'])]:size-5">
           {icon}
-        </div>
+        </EmptyMedia>
       ) : null}
-      <p className="text-base font-semibold text-foreground">{title}</p>
-      {description ? <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-foreground/65">{description}</p> : null}
-      {action ? <div className="mt-4">{action}</div> : null}
-    </div>
+      <EmptyHeader>
+        <EmptyTitle className="text-base font-semibold text-foreground">{title}</EmptyTitle>
+        {description ? <EmptyDescription className="max-w-md">{description}</EmptyDescription> : null}
+      </EmptyHeader>
+      {action ? <EmptyContent className="mt-0">{action}</EmptyContent> : null}
+    </Empty>
   );
 }

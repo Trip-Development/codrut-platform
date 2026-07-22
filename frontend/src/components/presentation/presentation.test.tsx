@@ -1,25 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { CountUp } from "./count-up";
 import { EmptyState } from "./empty-state";
-import { StatCard } from "./stat-card";
+import { InlineFeedback } from "./inline-feedback";
 
 describe("presentation components", () => {
-  beforeEach(() => {
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("renders count up values immediately for reduced motion", () => {
-    render(<CountUp value={42} />);
-
-    expect(screen.getByText("42")).toBeTruthy();
-  });
-
   it("renders empty state content", () => {
     render(<EmptyState title="No data yet" description="This is a placeholder." />);
 
@@ -27,10 +12,19 @@ describe("presentation components", () => {
     expect(screen.getByText("This is a placeholder.")).toBeTruthy();
   });
 
-  it("renders stat cards with detail copy", () => {
-    render(<StatCard label="Invitations" value={7} detail="Sent to participants." />);
+  it("renders neutral and danger inline feedback with the right live roles", () => {
+    const { rerender } = render(<InlineFeedback>Saved.</InlineFeedback>);
 
-    expect(screen.getByText("Invitations")).toBeTruthy();
-    expect(screen.getByText("Sent to participants.")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Saved.");
+
+    rerender(<InlineFeedback tone="danger">Could not save.</InlineFeedback>);
+
+    expect(screen.getByRole("alert").textContent).toContain("Could not save.");
+  });
+
+  it("allows compact inline feedback descriptions", () => {
+    render(<InlineFeedback descriptionClassName="text-xs">Filtering.</InlineFeedback>);
+
+    expect(screen.getByText("Filtering.").className).toContain("text-xs");
   });
 });

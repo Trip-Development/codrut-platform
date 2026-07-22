@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from starlette import status
 
-from codrut.core.request_id import request_id_from_request
+from codrut.core.config import Settings, get_settings
+from codrut.core.request_id import REQUEST_ID_HEADER, request_id_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +71,17 @@ def error_response(
         "message": message,
     }
     request_id = request_id_from_request(request)
+    response_headers = dict(headers or {})
     if request_id:
         error["request_id"] = request_id
+        response_headers.setdefault(REQUEST_ID_HEADER, request_id)
     if details is not None:
         error["details"] = details
-    return JSONResponse(status_code=status_code, content={"error": error}, headers=headers)
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": error},
+        headers=response_headers,
+    )
 
 
 def validation_error_details(exc: RequestValidationError) -> list[dict[str, Any]]:
@@ -98,7 +105,9 @@ def http_error_payload(exc: HTTPException) -> tuple[str, str, Any | None]:
     return f"http_{exc.status_code}", "HTTP error.", None
 
 
-def install_exception_handlers(app: FastAPI) -> None:
+def install_exception_handlers(app: FastAPI, *, settings: Settings | None = None) -> None:
+    active_settings = settings or get_settings()
+
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
         request: Request,
@@ -137,16 +146,63 @@ def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(SQLAlchemyError)
     async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
         request_id = request_id_from_request(request)
-        logger.exception(
-            "Database error while handling %s %s",
-            request.method,
-            request.url.path,
-            exc_info=exc,
-            extra={"request_id": request_id},
-        )
+        error_category = type(exc).__name__
+        log_context = {
+            "request_id": request_id,
+            "error_category": error_category,
+        }
+        if active_settings.is_production:
+            logger.error(
+                "Database error request_id=%s category=%s",
+                request_id or "unknown",
+                error_category,
+                extra=log_context,
+            )
+        else:
+            logger.exception(
+                "Database error while handling %s %s request_id=%s category=%s",
+                request.method,
+                request.url.path,
+                request_id or "unknown",
+                error_category,
+                exc_info=exc,
+                extra=log_context,
+            )
         return error_response(
             request,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             code="database_error",
             message="The request could not be completed because of a database error.",
+        )
+
+    @app.exception_handler(Exception)
+    async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        request_id = request_id_from_request(request)
+        error_category = type(exc).__name__
+        log_context = {
+            "request_id": request_id,
+            "error_category": error_category,
+        }
+        if active_settings.is_production:
+            logger.error(
+                "Unexpected error request_id=%s category=%s",
+                request_id or "unknown",
+                error_category,
+                extra=log_context,
+            )
+        else:
+            logger.exception(
+                "Unexpected error while handling %s %s request_id=%s category=%s",
+                request.method,
+                request.url.path,
+                request_id or "unknown",
+                error_category,
+                exc_info=exc,
+                extra=log_context,
+            )
+        return error_response(
+            request,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="unexpected_error",
+            message="The request could not be completed because of an unexpected error.",
         )

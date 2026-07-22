@@ -4,13 +4,13 @@ import {
   getCompanyAssignments,
   getCompanyInvitationStatuses,
   getCompanyProjectById,
-  getCompanyProjects,
+  getCompanyReportAggregate,
   getCompanyTeams,
   getProjectParticipants,
 } from "@/api/companies";
 import type { ApiRequestOptions } from "@/api/companies";
 
-export async function getProjectWorkspaceData(
+async function getRequiredProject(
   projectId: string,
   requestOptions: ApiRequestOptions,
 ) {
@@ -20,8 +20,36 @@ export async function getProjectWorkspaceData(
     notFound();
   }
 
-  const [companyProjects, participants, assignments, invitationStatuses, teams] = await Promise.all([
-    getCompanyProjects(project.company_id, requestOptions),
+  return project;
+}
+
+export async function getProjectAssignmentWorkspaceData(
+  projectId: string,
+  requestOptions: ApiRequestOptions,
+) {
+  const project = await getRequiredProject(projectId, requestOptions);
+
+  const [participants, assignments, teams] = await Promise.all([
+    getProjectParticipants(project.company_id, project.id, requestOptions),
+    getCompanyAssignments(project.company_id, requestOptions, { projectId: project.id }),
+    getCompanyTeams(project.company_id, requestOptions),
+  ]);
+
+  return {
+    project,
+    participants,
+    assignments,
+    teams,
+  };
+}
+
+export async function getProjectInvitationWorkspaceData(
+  projectId: string,
+  requestOptions: ApiRequestOptions,
+) {
+  const project = await getRequiredProject(projectId, requestOptions);
+
+  const [participants, assignments, invitationStatuses, teams] = await Promise.all([
     getProjectParticipants(project.company_id, project.id, requestOptions),
     getCompanyAssignments(project.company_id, requestOptions, { projectId: project.id }),
     getCompanyInvitationStatuses(project.company_id, requestOptions, { projectId: project.id }),
@@ -30,7 +58,6 @@ export async function getProjectWorkspaceData(
 
   return {
     project,
-    companyProjects,
     participants,
     assignments,
     invitationStatuses,
@@ -38,24 +65,40 @@ export async function getProjectWorkspaceData(
   };
 }
 
-export async function getProjectReportData(
+export async function getProjectReportAggregateData(
   projectId: string,
   requestOptions: ApiRequestOptions,
 ) {
-  const project = await getCompanyProjectById(projectId, requestOptions);
+  const project = await getRequiredProject(projectId, requestOptions);
 
-  if (!project) {
-    notFound();
-  }
+  const aggregate = await getCompanyReportAggregate(
+    project.company_id,
+    requestOptions,
+    { projectId: project.id },
+  );
 
-  const [participants, assignments] = await Promise.all([
+  return {
+    project,
+    aggregate,
+  };
+}
+
+export async function getProjectReportWorkspaceData(
+  projectId: string,
+  requestOptions: ApiRequestOptions,
+) {
+  const project = await getRequiredProject(projectId, requestOptions);
+
+  const [participants, assignments, aggregate] = await Promise.all([
     getProjectParticipants(project.company_id, project.id, requestOptions),
     getCompanyAssignments(project.company_id, requestOptions, { projectId: project.id }),
+    getCompanyReportAggregate(project.company_id, requestOptions, { projectId: project.id }),
   ]);
 
   return {
     project,
     participants,
     assignments,
+    aggregate,
   };
 }

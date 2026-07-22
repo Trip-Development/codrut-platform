@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -16,6 +17,8 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.assignments.schemas import (
     AssignmentCreateRequest,
+    AssignmentPlanSaveItem,
+    AssignmentPlanSaveRequest,
     AssignmentStatusUpdateRequest,
     TeamMembershipCreateRequest,
 )
@@ -189,6 +192,19 @@ class FakeCompanyRepository:
             and membership.participant_profile_id in self.participants
         ]
 
+    async def get_project_membership(
+        self,
+        project_id: uuid.UUID,
+        participant_profile_id: uuid.UUID,
+    ) -> ProjectMembership | None:
+        for membership in self.project_memberships:
+            if (
+                membership.project_id == project_id
+                and membership.participant_profile_id == participant_profile_id
+            ):
+                return membership
+        return None
+
     async def list_reporting_relationships(
         self,
         company_id: uuid.UUID,
@@ -226,7 +242,9 @@ class FakeFormsRepository:
 
     async def get_definition(self, key: str) -> object | None:
         if key in self.active_keys:
-            return object()
+            return SimpleNamespace(
+                id=uuid.uuid5(uuid.NAMESPACE_URL, f"test-questionnaire-definition:{key}")
+            )
         return None
 
     async def get_latest_version(self, key: str) -> int:
@@ -252,6 +270,14 @@ class FakeScoringRepository:
         self.deleted_assignment_ids.append(assignment_id)
 
 
+class FakeResultPublicationService:
+    def __init__(self) -> None:
+        self.reconciled_assignment_ids: list[uuid.UUID] = []
+
+    async def reconcile_assignment(self, assignment_id: uuid.UUID) -> None:
+        self.reconciled_assignment_ids.append(assignment_id)
+
+
 def make_assignment_service(
     *,
     assignment_repository: FakeAssignmentRepository,
@@ -259,6 +285,7 @@ def make_assignment_service(
     forms_repository: FakeFormsRepository | None = None,
     identity_repository: FakeIdentityRepository | None = None,
     scoring_repository: FakeScoringRepository | None = None,
+    result_publication_service: FakeResultPublicationService | None = None,
 ) -> AssignmentService:
     service = AssignmentService(cast(Any, None))
     service.assignment_repository = cast(Any, assignment_repository)
@@ -266,6 +293,10 @@ def make_assignment_service(
     service.forms_repository = cast(Any, forms_repository or FakeFormsRepository())
     service.identity_repository = cast(Any, identity_repository or FakeIdentityRepository())
     service.scoring_repository = cast(Any, scoring_repository or FakeScoringRepository())
+    service.result_publication_service = cast(
+        Any,
+        result_publication_service or FakeResultPublicationService(),
+    )
     return service
 
 
@@ -313,9 +344,12 @@ def seed_assignment_scope() -> tuple[
         full_name="Outside",
         email="outside@example.com",
     )
+    forms_repository = FakeFormsRepository()
+    forms_repository.active_keys.add("lencioni")
     service = make_assignment_service(
         assignment_repository=assignment_repository,
         company_repository=company_repository,
+        forms_repository=forms_repository,
     )
     return (
         service,
@@ -503,6 +537,14 @@ async def test_create_assignment_persists_project_scope() -> None:
         company_id=company_id,
         name="Leadership Septembrie",
     )
+    company_repository.project_memberships.append(
+        ProjectMembership(
+            company_id=company_id,
+            project_id=project_id,
+            participant_profile_id=respondent_id,
+            active=True,
+        )
+    )
 
     assignment = await service.create_assignment(
         user_id,
@@ -516,6 +558,178 @@ async def test_create_assignment_persists_project_scope() -> None:
     )
 
     assert assignment.project_id == project_id
+
+
+async def test_project_assignment_requires_active_respondent_and_person_target_memberships(
+) -> None:
+    (
+        service,
+        _assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Project roster",
+    )
+    company_repository.project_memberships.extend(
+        [
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=respondent_id,
+                active=False,
+            ),
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=target_id,
+                active=True,
+            ),
+        ]
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(
+            user_id,
+            company_id,
+            AssignmentCreateRequest(
+                project_id=project_id,
+                respondent_profile_id=respondent_id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.person,
+                target_person_id=target_id,
+            ),
+        )
+    assert exc_info.value.code == "participant_not_in_project"
+
+    company_repository.project_memberships[0].active = True
+    company_repository.project_memberships[1].active = False
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(
+            user_id,
+            company_id,
+            AssignmentCreateRequest(
+                project_id=project_id,
+                respondent_profile_id=respondent_id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.person,
+                target_person_id=target_id,
+            ),
+        )
+    assert exc_info.value.code == "participant_not_in_project"
+
+
+async def test_project_assignment_requires_every_existing_team_member_in_project() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    team_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Project roster",
+    )
+    company_repository.project_memberships.append(
+        ProjectMembership(
+            company_id=company_id,
+            project_id=project_id,
+            participant_profile_id=respondent_id,
+            active=True,
+        )
+    )
+    assignment_repository.teams[team_id] = Team(
+        id=team_id,
+        company_id=company_id,
+        name="Mixed team",
+        type=TeamType.functional,
+    )
+    assignment_repository.memberships.append(
+        TeamMembership(
+            team_id=team_id,
+            participant_profile_id=target_id,
+            role=TeamMembershipRole.member,
+        )
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.create_assignment(
+            user_id,
+            company_id,
+            AssignmentCreateRequest(
+                project_id=project_id,
+                respondent_profile_id=respondent_id,
+                questionnaire_key="lencioni",
+                target_type=AssignmentTargetType.team,
+                target_team_id=team_id,
+            ),
+        )
+
+    assert exc_info.value.code == "participant_not_in_project"
+
+
+async def test_project_assignment_plan_requires_every_proposed_team_member_in_project() -> None:
+    (
+        service,
+        _assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        target_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Project roster",
+    )
+    company_repository.project_memberships.append(
+        ProjectMembership(
+            company_id=company_id,
+            project_id=project_id,
+            participant_profile_id=respondent_id,
+            active=True,
+        )
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.save_assignment_plan(
+            user_id,
+            company_id,
+            AssignmentPlanSaveRequest(
+                project_id=project_id,
+                assignments=[
+                    AssignmentPlanSaveItem(
+                        respondent_profile_id=respondent_id,
+                        questionnaire_key="lencioni",
+                        target_type=AssignmentTargetType.team,
+                        target_team_name="Proposed team",
+                        target_team_type=TeamType.functional,
+                        target_team_member_ids=[respondent_id, target_id],
+                        target_team_leader_id=respondent_id,
+                    )
+                ],
+            ),
+        )
+
+    assert exc_info.value.code == "participant_not_in_project"
 
 
 async def test_create_assignment_rejects_project_from_another_company() -> None:
@@ -564,8 +778,10 @@ async def test_reopening_completed_assignment_unlocks_response_and_clears_score(
     ) = seed_assignment_scope()
     forms_repository = FakeFormsRepository()
     scoring_repository = FakeScoringRepository()
+    result_publication_service = FakeResultPublicationService()
     service.forms_repository = cast(Any, forms_repository)
     service.scoring_repository = cast(Any, scoring_repository)
+    service.result_publication_service = cast(Any, result_publication_service)
     now = datetime.now(UTC)
     assignment = QuestionnaireAssignment(
         id=uuid.uuid4(),
@@ -604,6 +820,7 @@ async def test_reopening_completed_assignment_unlocks_response_and_clears_score(
     assert response.status == QuestionnaireResponseStatus.draft
     assert response.submitted_at is None
     assert scoring_repository.deleted_assignment_ids == [assignment.id]
+    assert result_publication_service.reconciled_assignment_ids == [assignment.id]
 
 
 async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_teams() -> None:
@@ -628,36 +845,36 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
         company_id=company_id,
         name="Leadership Septembrie",
     )
-    company_repository.participants[respondent_id].full_name = "Andrei Vacaru"
+    company_repository.participants[respondent_id].full_name = "Alex Dima"
     company_repository.participants[respondent_id].role_group = "leadership"
-    company_repository.participants[target_id].full_name = "Vlad Soimu"
+    company_repository.participants[target_id].full_name = "Sorin Pavel"
     company_repository.participants[target_id].role_group = "leadership"
     company_repository.participants[ilinca_id] = ParticipantProfile(
         id=ilinca_id,
         company_id=company_id,
-        full_name="Ilinca Corbu",
-        email="ilinca@example.com",
+        full_name="Mara Ionescu",
+        email="mara@example.com",
         role_group="leadership",
     )
     company_repository.participants[alexandra_id] = ParticipantProfile(
         id=alexandra_id,
         company_id=company_id,
-        full_name="Alexandra Giurca",
-        email="alexandra@example.com",
+        full_name="Diana Luca",
+        email="diana@example.com",
         role_group="member",
     )
     company_repository.participants[member_vlad_id] = ParticipantProfile(
         id=member_vlad_id,
         company_id=company_id,
-        full_name="Member Vlad",
-        email="member-vlad@example.com",
+        full_name="Tudor Stan",
+        email="tudor@example.com",
         role_group="member",
     )
     company_repository.participants[member_ilinca_id] = ParticipantProfile(
         id=member_ilinca_id,
         company_id=company_id,
-        full_name="Member Ilinca",
-        email="member-ilinca@example.com",
+        full_name="Ioana Rusu",
+        email="member-mara@example.com",
         role_group="member",
     )
     company_repository.reporting_relationships.extend(
@@ -730,15 +947,15 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
     assert leadership_scope.participant_ids == [respondent_id, ilinca_id, target_id]
 
     manager_team_scopes = [scope.name for scope in plan.scopes if scope.type == "manager_team"]
-    assert manager_team_scopes == ["Echipa Ilinca Corbu", "Echipa Vlad Soimu"]
-    assert "Echipa Andrei Vacaru" not in manager_team_scopes
+    assert manager_team_scopes == ["Echipa Mara Ionescu", "Echipa Sorin Pavel"]
+    assert "Echipa Alex Dima" not in manager_team_scopes
 
     manager_team_members = {
         scope.name: scope.participant_ids for scope in plan.scopes if scope.type == "manager_team"
     }
     assert manager_team_members == {
-        "Echipa Ilinca Corbu": [ilinca_id, alexandra_id, member_vlad_id],
-        "Echipa Vlad Soimu": [target_id, member_ilinca_id],
+        "Echipa Mara Ionescu": [ilinca_id, alexandra_id, member_vlad_id],
+        "Echipa Sorin Pavel": [target_id, member_ilinca_id],
     }
 
     andrei_360_respondents = {
@@ -776,16 +993,14 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
     andrei_lencioni_team_assignments = [
         item
         for item in plan.assignments
-        if item.questionnaire_key == "lencioni"
-        and item.scope_name == "Echipa Andrei Vacaru"
+        if item.questionnaire_key == "lencioni" and item.scope_name == "Echipa Alex Dima"
     ]
     assert andrei_lencioni_team_assignments == []
 
     andrei_pcm_assignments = [
         item
         for item in plan.assignments
-        if item.questionnaire_key == "pcm_base"
-        and item.respondent_profile_id == respondent_id
+        if item.questionnaire_key == "pcm_base" and item.respondent_profile_id == respondent_id
     ]
     assert len(andrei_pcm_assignments) == 1
 
@@ -799,8 +1014,7 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
     assert not [
         item
         for item in plan_without_pcm_gap.assignments
-        if item.questionnaire_key == "pcm_base"
-        and item.respondent_profile_id == respondent_id
+        if item.questionnaire_key == "pcm_base" and item.respondent_profile_id == respondent_id
     ]
 
 
@@ -972,8 +1186,7 @@ async def test_default_assignment_plan_uses_project_roles_not_stale_profile_role
     operations_team_assignments = [
         item
         for item in plan.assignments
-        if item.questionnaire_key == "lencioni"
-        and item.scope_name == "Echipa Operations Leader"
+        if item.questionnaire_key == "lencioni" and item.scope_name == "Echipa Operations Leader"
     ]
     assert {item.respondent_profile_id for item in operations_team_assignments} == {
         stale_manager_id
@@ -1045,6 +1258,7 @@ async def test_create_assignment_rejects_inactive_persisted_questionnaire_key() 
         _target_id,
         _outside_participant_id,
     ) = seed_assignment_scope()
+    service.forms_repository.active_keys.discard("lencioni")
     service.forms_repository.persisted_keys.add("lencioni")
 
     with pytest.raises(DomainError) as exc_info:
@@ -1162,3 +1376,50 @@ def test_stamp_status_time_sets_first_matching_timestamp_once() -> None:
 
     assert first_started_at is not None
     assert assignment.started_at == first_started_at
+
+
+@pytest.mark.parametrize(
+    ("status", "timestamp_field"),
+    [
+        (AssignmentStatus.invited, "invited_at"),
+        (AssignmentStatus.submitted, "submitted_at"),
+        (AssignmentStatus.validated, "validated_at"),
+        (AssignmentStatus.scored, "scored_at"),
+    ],
+)
+def test_stamp_status_time_records_each_terminal_transition_once(
+    status: AssignmentStatus,
+    timestamp_field: str,
+) -> None:
+    assignment = QuestionnaireAssignment(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        questionnaire_key="pcm_base",
+        target_type=AssignmentTargetType.self_assessment,
+        status=status,
+    )
+
+    _stamp_status_time(assignment)
+    first_timestamp = getattr(assignment, timestamp_field)
+    _stamp_status_time(assignment)
+
+    assert first_timestamp is not None
+    assert getattr(assignment, timestamp_field) == first_timestamp
+
+
+def test_stamp_status_time_leaves_non_transition_status_unchanged() -> None:
+    assignment = QuestionnaireAssignment(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        questionnaire_key="pcm_base",
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.assigned,
+    )
+
+    _stamp_status_time(assignment)
+
+    assert assignment.invited_at is None
+    assert assignment.started_at is None
+    assert assignment.submitted_at is None
+    assert assignment.validated_at is None
+    assert assignment.scored_at is None

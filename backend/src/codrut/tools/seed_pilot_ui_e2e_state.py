@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 
+from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
 from codrut.modules.companies.models import (
@@ -17,9 +18,11 @@ from codrut.modules.companies.models import (
     ProjectMembership,
 )
 from codrut.modules.identity.models import User, UserRole
+from codrut.tools.local_preview import assert_local_preview_allowed
 
 
 async def seed_pilot_ui_e2e_state() -> None:
+    assert_local_preview_allowed(get_settings())
     run_id = os.getenv("CODRUT_E2E_PILOT_RUN_ID", uuid.uuid4().hex[:8])
     company_name = f"E2E Pilot UI Company {run_id}"
     project_name = f"E2E Pilot UI Project {run_id}"
@@ -29,7 +32,7 @@ async def seed_pilot_ui_e2e_state() -> None:
         "CODRUT_SEED_TRAINER_PASSWORD",
         "replace-with-a-long-test-password",
     )
-    participant_email_domain = f"{run_id}.pilot-ui.e2e"
+    participant_email_domain = f"{run_id}.pilot-ui.example.com"
 
     async with SessionLocal() as session:
         old_companies = await session.execute(
@@ -39,9 +42,7 @@ async def seed_pilot_ui_e2e_state() -> None:
             await session.delete(company)
         await session.commit()
 
-        await session.execute(
-            delete(User).where(User.email.like(f"%@{participant_email_domain}"))
-        )
+        await session.execute(delete(User).where(User.email.like(f"%@{participant_email_domain}")))
 
         trainer_result = await session.execute(select(User).where(User.email == trainer_email))
         trainer = trainer_result.scalar_one_or_none()
@@ -86,12 +87,12 @@ async def seed_pilot_ui_e2e_state() -> None:
         )
 
         roster = [
-            ("Andrei Vacaru QA", None, "Director general", "Leadership"),
-            ("Ilinca Corbu QA", "Andrei Vacaru QA", "Manager operațional", "Leadership"),
-            ("Vlad Soimu QA", "Andrei Vacaru QA", "Manager comercial", "Leadership"),
-            ("Alexandra Giurca QA", "Ilinca Corbu QA", "Specialist HR", "Membru"),
-            ("Mihai Matei QA", "Ilinca Corbu QA", "Consultant intern", "Membru"),
-            ("Radu Pop QA", "Vlad Soimu QA", "Analist vânzări", "Membru"),
+            ("Alex Dima QA", None, "Director general", "Leadership"),
+            ("Mara Ionescu QA", "Alex Dima QA", "Manager operațional", "Leadership"),
+            ("Sorin Pavel QA", "Alex Dima QA", "Manager comercial", "Leadership"),
+            ("Diana Luca QA", "Mara Ionescu QA", "Specialist HR", "Membru"),
+            ("Tudor Stan QA", "Mara Ionescu QA", "Consultant intern", "Membru"),
+            ("Ioana Rusu QA", "Sorin Pavel QA", "Analist vânzări", "Membru"),
         ]
 
         for full_name, reports_to_name, position, role_group in roster:

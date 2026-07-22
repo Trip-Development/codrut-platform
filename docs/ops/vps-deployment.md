@@ -138,18 +138,26 @@ Required GitHub secrets for the `VPS Deployment` workflow:
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `CODRUT_REDIS_URL`
 - `CODRUT_SESSION_SECRET`
+- `CODRUT_TASK_LINK_SECRET`
+- `CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET`
 - `CODRUT_CORS_ORIGINS`
 - `CODRUT_PUBLIC_APP_URL`
 - `CODRUT_EMAIL_PROVIDER`
 - `CODRUT_EMAIL_FROM_ADDRESS`
 - `CODRUT_EMAIL_FROM_NAME`
 - `CODRUT_EMAIL_BREVO_API_KEY`
+- `CODRUT_EMAIL_WEBHOOK_TOKEN`
+- `CODRUT_RATE_LIMIT_TRUSTED_PROXIES`
 - `CODRUT_DB_VOLUME_PATH`
 
 Optional environment secrets:
 
 - `CODRUT_DEPLOY_DIR` defaults to `/opt/codrut-platform`.
 - `CODRUT_COMPOSE_PROJECT_NAME` defaults to `codrut-platform`.
+- `CODRUT_MIGRATION_LOCK_TIMEOUT_MS` defaults to `5000` so deployment fails
+  instead of waiting indefinitely for a conflicting database lock.
+- `CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS` defaults to `900000` and bounds the
+  total execution time of any migration statement.
 
 For the current single-host Compose deployment, the workflow derives
 `CODRUT_DATABASE_URL` from the `POSTGRES_*` secrets and writes the database into a
@@ -166,6 +174,30 @@ Set `CODRUT_PUBLIC_APP_URL` to the final HTTPS origin, for example:
 ```text
 https://app.example.com
 ```
+
+The session, task-link, campaign-asset, and Brevo webhook secrets must each
+contain at least 32 characters and must be different. Production accepts only
+the `brevo` email provider and fails startup when the Brevo API key or webhook
+bearer token is missing.
+
+Configure the Brevo outbound webhook after the release is reachable over HTTPS:
+
+1. Create an independent high-entropy token and store the same value as the
+   `CODRUT_EMAIL_WEBHOOK_TOKEN` secret in the `prod` GitHub Environment.
+2. In Brevo, open Integrations, Webhooks, add an outbound webhook, and choose the
+   Transactional email category.
+3. Set the URL to
+   `${CODRUT_PUBLIC_APP_URL}/api/communications/webhooks/brevo`.
+4. Select token authentication and enter the webhook token. Do not reuse the
+   Brevo API key, session secret, or link-signing secrets.
+5. Enable request/sent, delivered, opened, clicked, soft and hard bounce,
+   blocked, invalid, error, unsubscribe, and spam/complaint events.
+6. Send one event at a time, activate the webhook, and run Brevo's test request
+   after deployment. A valid callback returns HTTP 200; a missing or incorrect
+   token returns HTTP 401.
+
+Brevo documents bearer-token webhook authentication at
+<https://developers.brevo.com/docs/secured-webhooks>.
 
 Set `CODRUT_CORS_ORIGINS` as a JSON array, not a comma-separated string:
 
@@ -195,7 +227,15 @@ the rollout use the exact images that were just pulled instead of rebuilding or
 implicitly changing refs during startup. The database, Redis, and Traefik
 containers are not force-recreated during ordinary app rollouts. The migration
 step disables container stdin so it cannot consume the remaining SSH deploy
-script before the app service recreate runs.
+script before the app service recreate runs. Alembic applies transaction-local
+PostgreSQL lock and statement timeouts before running any online migration.
+
+Before promotion, `backend/rehearse-production-shape.sh` can recreate the
+synthetic `0033` legacy shape, prove bounded lock failure, upgrade through
+`0044`, validate owner isolation and duplicate repair, exercise the documented
+unsafe rollback boundary, run `alembic check`, and remove its guarded
+`*_rehearsal` database. It uses only `.invalid` email addresses and never reads
+the active development or production database.
 
 After startup, the workflow checks:
 
@@ -204,10 +244,12 @@ After startup, the workflow checks:
   The workflow repeats this assertion in a separate SSH command after the
   remote deploy script returns, so a skipped recreate cannot produce a false
   green deployment.
-- Backend health inside the VPS container network:
-  `http://127.0.0.1:8000/api/health/live`.
-- Public health through the configured app URL:
-  `${CODRUT_PUBLIC_APP_URL}/api/health/live`.
+- Backend readiness inside the VPS container network:
+  `http://127.0.0.1:8000/api/health/ready`. Readiness requires PostgreSQL, Redis,
+  the current Alembic head, a fresh worker heartbeat, and a healthy outbox backlog.
+- A healthy worker container, backed by the same Redis heartbeat.
+- Public readiness through the configured app URL:
+  `${CODRUT_PUBLIC_APP_URL}/api/health/ready`.
 
 The workflow summary records the deployed release SHA, deployed image refs, and
 the previous frontend/backend image refs from the deploy job.
@@ -242,8 +284,9 @@ Rollback is manual and image-ref based:
    docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q backend)" --format '{{ index .Config.Image }}'
    docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q worker)" --format '{{ index .Config.Image }}'
    docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q frontend)" --format '{{ index .Config.Image }}'
-   docker compose -f compose.yaml -f compose.prod.yaml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=10).read()"
-   curl --fail --silent --show-error "${CODRUT_PUBLIC_APP_URL%/}/api/health/live"
+   docker compose -f compose.yaml -f compose.prod.yaml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=10).read()"
+   docker inspect "$(docker compose -f compose.yaml -f compose.prod.yaml ps -q worker)" --format '{{.State.Health.Status}}'
+   curl --fail --silent --show-error "${CODRUT_PUBLIC_APP_URL%/}/api/health/ready"
    ```
 
    The backend and worker image refs must match `BACKEND_IMAGE`; the frontend

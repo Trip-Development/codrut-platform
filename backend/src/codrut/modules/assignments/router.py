@@ -258,26 +258,25 @@ async def create_company_invitation(
 
     # 2. Update status of the assignments included in this invite to "invited"
     from codrut.modules.communications.task_links import parse_task_token
-    try:
-        claims = parse_task_token(invite.token, settings)
-        from sqlalchemy import select
 
-        from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
-        assignments_result = await session.execute(
-            select(QuestionnaireAssignment)
-            .where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
-            .where(QuestionnaireAssignment.company_id == company_id)
-            .where(QuestionnaireAssignment.respondent_profile_id == payload.respondent_profile_id)
-            .where(QuestionnaireAssignment.status == AssignmentStatus.assigned)
-        )
-        assignments = assignments_result.scalars().all()
-        for assignment in assignments:
-            assignment.status = AssignmentStatus.invited
-            # Also update invited_at
-            from datetime import UTC, datetime
-            assignment.invited_at = datetime.now(UTC)
-    except Exception:  # noqa: S110
-        pass
+    claims = parse_task_token(invite.token, settings)
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+
+    assignments_result = await session.execute(
+        select(QuestionnaireAssignment)
+        .where(QuestionnaireAssignment.id.in_(claims.assignment_ids))
+        .where(QuestionnaireAssignment.company_id == company_id)
+        .where(QuestionnaireAssignment.respondent_profile_id == payload.respondent_profile_id)
+        .where(QuestionnaireAssignment.status == AssignmentStatus.assigned)
+    )
+    invited_at = datetime.now(UTC)
+    for assignment in assignments_result.scalars().all():
+        assignment.status = AssignmentStatus.invited
+        assignment.invited_at = invited_at
 
     await session.commit()
 
@@ -285,6 +284,7 @@ async def create_company_invitation(
     return InvitationResponse(
         id=invite.id,
         company_id=invite.company_id,
+        project_id=invite.project_id,
         respondent_profile_id=invite.respondent_profile_id,
         token=invite.token,
         invite_url=invite_url,
@@ -306,6 +306,7 @@ async def invalidate_company_invitation(
     require_trainer_principal(principal)
     await AssignmentService(session).require_company_manager(principal.user_id, company_id)
     from codrut.modules.identity.service import IdentityService
+
     service = IdentityService(session)
     await service.invalidate_invite(company_id, respondent_profile_id)
     await session.commit()

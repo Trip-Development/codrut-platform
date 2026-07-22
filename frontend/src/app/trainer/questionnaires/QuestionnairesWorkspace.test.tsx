@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -130,6 +130,79 @@ describe("QuestionnairesWorkspace", () => {
       expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledWith(false, { latestOnly: false }),
     );
     expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledTimes(1);
+    expect(screen.getByPlaceholderText("Caută chestionar").getAttribute("data-slot")).toBe("input");
+    const catalogCard = await screen.findByRole("button", { name: "Editează Chestionar de evaluare a echipei" });
+    expect(catalogCard.getAttribute("data-slot")).toBe("button");
+    expect(catalogCard.getAttribute("data-variant")).toBe("outline");
+  });
+
+  it("shows catalog load failures instead of leaving the editor empty", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockRejectedValueOnce(new Error("Catalog indisponibil."));
+
+    render(<QuestionnairesWorkspace />);
+
+    expect(await screen.findByText("Catalog indisponibil.")).toBeTruthy();
+  });
+
+  it("shows definition load failures after selecting a questionnaire", async () => {
+    vi.mocked(getQuestionnaireDefinition).mockRejectedValueOnce(new Error("Definiția nu poate fi citită."));
+
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Chestionar de evaluare a echipei"));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Definiția nu poate fi citită.");
+  });
+
+  it("shows a missing-definition error instead of an empty editor shell", async () => {
+    vi.mocked(getQuestionnaireDefinition).mockResolvedValueOnce(null);
+
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Chestionar de evaluare a echipei"));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Chestionarul nu a putut fi încărcat.");
+  });
+
+  it("keeps single-choice questionnaire questions explicit in the trainer editor", async () => {
+    vi.mocked(getQuestionnaireDefinition).mockResolvedValueOnce({
+      ...fixtures.definition,
+      key: "pcm_base",
+      title: "Baza și faza ta PCM",
+      schema: {
+        ...fixtures.definition.schema,
+        sections: [
+          {
+            id: "pcm_base",
+            title: "Profil PCM",
+            questions: [
+              {
+                id: "pcm_base",
+                code: "PCM-BASE",
+                type: "single_choice",
+                label: "Care este baza ta PCM?",
+                required: true,
+                scale: [
+                  { value: "harmonizer", label: "Armonizator" },
+                  { value: "thinker", label: "Gânditor" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Chestionar de evaluare a echipei"));
+
+    const questionCard = await screen.findByTestId("question-editor-pcm_base");
+    expect(questionCard).toBeTruthy();
+    expect(screen.getByLabelText("Tip întrebare PCM-BASE").getAttribute("data-slot")).toBe("select");
+    expect(screen.getByDisplayValue("Alegere unică")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Scări" }));
+    expect(screen.getByText("1 întrebare · Alegere unică")).toBeTruthy();
   });
 
   it("shows one latest catalog card while keeping older versions selectable", async () => {
@@ -170,34 +243,63 @@ describe("QuestionnairesWorkspace", () => {
 
     fireEvent.click(latestCard);
 
+    expect((await screen.findByLabelText("Versiune")).getAttribute("data-slot")).toBe("select");
     expect(await screen.findByRole("option", { name: "v2 (Activă)" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "v1 (Veche)" })).toBeTruthy();
   });
 
-  it("creates a new questionnaire as an incomplete draft", async () => {
+  it("creates a new questionnaire as an active incomplete definition", async () => {
+    let resolveCreate: (definition: QuestionnaireDefinition) => void = () => {};
+    vi.mocked(createQuestionnaireDefinitionOnServer).mockImplementation(
+      () =>
+        new Promise<QuestionnaireDefinition>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
     render(<QuestionnairesWorkspace />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "+ Creează chestionar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Creează chestionar" }));
     const modalTitle = await screen.findByText("Adaugă chestionar nou");
     const form = modalTitle.closest("form");
     expect(form).not.toBeNull();
 
     const formScope = within(form as HTMLElement);
-    fireEvent.change(formScope.getAllByRole("combobox")[0], { target: { value: "lencioni" } });
-    fireEvent.click(formScope.getByRole("button", { name: "Creează" }));
+    const categorySelect = formScope.getByLabelText("Cod unic (slug / categorie)");
+    expect(categorySelect.getAttribute("data-slot")).toBe("select");
+    expect(formScope.getByLabelText("Audiență țintă").getAttribute("data-slot")).toBe("select");
+    expect(formScope.getByPlaceholderText("Chestionar nou").getAttribute("data-slot")).toBe("input");
+    expect(formScope.getByPlaceholderText("Scurtă descriere a scopului acestui chestionar").getAttribute("data-slot")).toBe("textarea");
+    fireEvent.change(categorySelect, { target: { value: "lencioni" } });
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
 
-    await waitFor(() =>
-      expect(createQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
-        expect.objectContaining({
-          key: "lencioni",
-          title: "Chestionar nou",
-          active: false,
-          schema: expect.objectContaining({
-            sections: [expect.objectContaining({ questions: [] })],
-          }),
+    expect(await screen.findByText("Creăm chestionarul")).toBeTruthy();
+    expect(createQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1);
+    expect(createQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "lencioni",
+        title: "Chestionar nou",
+        active: true,
+        schema: expect.objectContaining({
+          sections: [expect.objectContaining({ questions: [] })],
         }),
-      ),
+      }),
     );
+    expect(formScope.getByRole("button", { name: "Creăm" })).toHaveProperty("disabled", true);
+
+    await act(async () => {
+      resolveCreate({
+        ...fixtures.definition,
+        key: "lencioni",
+        version: 2,
+        title: "Chestionar nou",
+        schema: {
+          ...fixtures.definition.schema,
+          sections: [{ id: "sectiunea_1", title: "Secțiunea 1", questions: [] }],
+        },
+      });
+    });
   });
 
   it("keeps typing local until the trainer explicitly saves", async () => {
@@ -205,8 +307,12 @@ describe("QuestionnairesWorkspace", () => {
 
     const card = await screen.findByText("Chestionar de evaluare a echipei");
     fireEvent.click(card);
+    fireEvent.click(await screen.findByRole("button", { name: "Setări" }));
 
     const titleInput = await screen.findByDisplayValue("Chestionar de evaluare a echipei");
+    expect(titleInput.getAttribute("data-slot")).toBe("input");
+    expect(screen.getByLabelText("Categorie / Slug").getAttribute("data-slot")).toBe("select");
+    expect(screen.getByLabelText("Audiență").getAttribute("data-slot")).toBe("select");
 
     fireEvent.change(titleInput, { target: { value: "L" } });
     fireEvent.change(titleInput, { target: { value: "Le" } });
@@ -216,7 +322,9 @@ describe("QuestionnairesWorkspace", () => {
     expect(screen.getByText("Modificări nesalvate")).toBeTruthy();
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
+    const saveButton = screen.getByRole("button", { name: "Salvează modificările" });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
 
     await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
     expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
@@ -225,6 +333,37 @@ describe("QuestionnairesWorkspace", () => {
       1,
     );
     expect(await screen.findByText("Salvat")).toBeTruthy();
+  });
+
+  it("protects a dirty questionnaire from reload and sidebar navigation", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Chestionar de evaluare a echipei"));
+    fireEvent.click(await screen.findByRole("button", { name: "Setări" }));
+    fireEvent.change(await screen.findByDisplayValue("Chestionar de evaluare a echipei"), {
+      target: { value: "Titlu nesalvat" },
+    });
+
+    const beforeUnload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+
+    const sidebarLink = document.createElement("a");
+    sidebarLink.href = `${window.location.href}#projects`;
+    sidebarLink.textContent = "Proiecte";
+    document.body.appendChild(sidebarLink);
+    fireEvent.click(sidebarLink);
+
+    expect(screen.getAllByText("Modificări nesalvate")).toHaveLength(2);
+    expect(screen.getByText(/pierzi modificările/i)).toBeTruthy();
+    expect(window.location.hash).not.toBe("#projects");
+
+    fireEvent.click(screen.getByRole("button", { name: "Renunță la modificări" }));
+    expect(window.location.hash).toBe("#projects");
+    const confirmedBeforeUnload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(confirmedBeforeUnload);
+    expect(confirmedBeforeUnload.defaultPrevented).toBe(false);
+    sidebarLink.remove();
   });
 
   it("keeps nested question typing stable during a slow explicit save", async () => {
@@ -251,8 +390,10 @@ describe("QuestionnairesWorkspace", () => {
     expect(screen.getByText("Modificări nesalvate")).toBeTruthy();
     expect(updateQuestionnaireDefinitionOnServer).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
-    expect(screen.getAllByText("Se salvează...").length).toBeGreaterThanOrEqual(1);
+    const saveButton = screen.getByRole("button", { name: "Salvează modificările" });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+    expect(screen.getAllByText("Salvăm modificările").length).toBeGreaterThanOrEqual(1);
     expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă");
 
     await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
@@ -273,6 +414,10 @@ describe("QuestionnairesWorkspace", () => {
       1,
     );
     expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă");
+
+    fireEvent.change(questionInput, { target: { value: "Proces clar pentru echipă extins" } });
+    expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă extins");
+
     resolveSave({
       ...fixtures.definition,
       schema: {
@@ -291,7 +436,43 @@ describe("QuestionnairesWorkspace", () => {
       },
     });
 
-    expect(await screen.findByText("Salvat")).not.toBeNull();
+    await waitFor(() => expect(questionInput).toHaveProperty("value", "Proces clar pentru echipă extins"));
+    expect(screen.getByText("Modificări nesalvate")).toBeTruthy();
+  });
+
+  it("does not create duplicate questionnaire versions on rapid repeat clicks", async () => {
+    let resolveCreate: (definition: QuestionnaireDefinition) => void = () => {};
+    vi.mocked(createQuestionnaireDefinitionOnServer).mockImplementation(
+      () =>
+        new Promise<QuestionnaireDefinition>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    render(<QuestionnairesWorkspace />);
+
+    const card = await screen.findByText("Chestionar de evaluare a echipei");
+    fireEvent.click(card);
+
+    const versionButton = await screen.findByRole("button", { name: "Versiune nouă (clonează)" });
+    fireEvent.click(versionButton);
+    fireEvent.click(versionButton);
+
+    await waitFor(() => expect(createQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
+    expect(createQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "lencioni",
+        title: "Chestionar de evaluare a echipei",
+        active: true,
+      }),
+    );
+
+    await act(async () => {
+      resolveCreate({
+        ...fixtures.definition,
+        version: 2,
+      });
+    });
   });
 
   it("can discard local questionnaire edits without touching the server", async () => {
@@ -299,8 +480,10 @@ describe("QuestionnairesWorkspace", () => {
 
     const card = await screen.findByText("Chestionar de evaluare a echipei");
     fireEvent.click(card);
+    fireEvent.click(await screen.findByRole("button", { name: "Setări" }));
 
     const descriptionInput = await screen.findByDisplayValue("Initial description");
+    expect(descriptionInput.getAttribute("data-slot")).toBe("textarea");
     fireEvent.change(descriptionInput, { target: { value: "Draft description" } });
 
     expect(descriptionInput).toHaveProperty("value", "Draft description");
@@ -315,6 +498,7 @@ describe("QuestionnairesWorkspace", () => {
 
     const card = await screen.findByText("Chestionar de evaluare a echipei");
     fireEvent.click(card);
+    fireEvent.click(await screen.findByRole("button", { name: "Scări" }));
 
     const globalPanel = await screen.findByText("Scări globale de răspuns");
     const scaleCard = globalPanel.closest("section");
@@ -359,13 +543,14 @@ describe("QuestionnairesWorkspace", () => {
 
     const card = await screen.findByText("Chestionar de evaluare a echipei");
     fireEvent.click(card);
+    fireEvent.click(await screen.findByRole("button", { name: "Scări" }));
 
     const globalPanel = await screen.findByText("Scări globale de răspuns");
     const scaleCard = globalPanel.closest("section");
     expect(scaleCard).not.toBeNull();
 
     const labelInput = within(scaleCard as HTMLElement).getAllByDisplayValue("Rar")[0] as HTMLInputElement;
-    expect(labelInput.getAttribute("class")).toContain("control-input-square");
+    expect(labelInput.getAttribute("data-slot")).toBe("input");
     labelInput.focus();
 
     fireEvent.change(labelInput, { target: { value: "Foarte r" } });
@@ -377,11 +562,12 @@ describe("QuestionnairesWorkspace", () => {
     expect(labelInput).toHaveProperty("value", "Foarte rar");
   });
 
-  it("uses compact icon controls in the dense questionnaire editor", async () => {
+  it("uses compact icon controls in the questionnaire workspace", async () => {
     render(<QuestionnairesWorkspace />);
 
     const card = await screen.findByText("Chestionar de evaluare a echipei");
     fireEvent.click(card);
+    fireEvent.click(await screen.findByRole("button", { name: "Scări" }));
 
     const globalPanel = await screen.findByText("Scări globale de răspuns");
     const scaleCard = globalPanel.closest("section");
@@ -391,30 +577,40 @@ describe("QuestionnairesWorkspace", () => {
       name: "Adaugă opțiune în scara Rar / Des",
     });
     expect(addOptionButton.textContent).not.toContain("Adaugă");
-    expect(addOptionButton.getAttribute("class")).not.toContain("rounded-full");
-    expect(addOptionButton.getAttribute("class")).not.toContain("border");
-    expect(addOptionButton.getAttribute("class")).not.toContain("bg-burgundy");
+    expect(addOptionButton.getAttribute("data-slot")).toBe("button");
+    expect(addOptionButton.getAttribute("data-size")).toBe("icon-sm");
+    expect(addOptionButton.getAttribute("data-variant")).toBe("ghost");
 
-    const addQuestionButton = await screen.findByRole("button", {
+    const addQuestionButtons = await screen.findAllByRole("button", {
       name: "Adaugă întrebare în secțiunea Section one",
     });
+    const addQuestionButton = addQuestionButtons.find((button) => button.getAttribute("data-size") === "icon-sm")!;
+    expect(addQuestionButton).toBeTruthy();
     expect(addQuestionButton.textContent).not.toContain("Adaugă");
+    expect(addQuestionButton.getAttribute("data-slot")).toBe("button");
+    expect(addQuestionButton.getAttribute("data-size")).toBe("icon-sm");
 
     const deleteSectionButton = screen.getByRole("button", {
       name: "Șterge secțiunea Section one",
     });
     expect(deleteSectionButton.textContent).not.toContain("Șterge");
+    expect(deleteSectionButton.getAttribute("data-slot")).toBe("button");
+    expect(deleteSectionButton.getAttribute("data-size")).toBe("icon-sm");
+    expect(deleteSectionButton.getAttribute("data-variant")).toBe("ghost");
 
-    const questionCard = await screen.findByTestId("question-editor-q1");
-    const questionScope = within(questionCard);
-    fireEvent.change(questionScope.getByDisplayValue("Scările Likert"), {
+    fireEvent.click(screen.getByRole("button", { name: "Întrebare" }));
+    fireEvent.change(screen.getByDisplayValue("Scară Likert"), {
       target: { value: "statement_score_set" },
     });
 
+    const questionCard = await screen.findByTestId("question-editor-q1");
+    const questionScope = within(questionCard);
     const addStatementButton = questionScope.getByRole("button", {
       name: "Adaugă afirmație în întrebarea Q1",
     });
     expect(addStatementButton.textContent).not.toContain("Adaugă");
+    expect(addStatementButton.getAttribute("data-slot")).toBe("button");
+    expect(addStatementButton.getAttribute("data-size")).toBe("icon-sm");
   });
 
   it("shows statement-specific participant answers instead of an empty fallback scale", async () => {
@@ -539,5 +735,56 @@ describe("QuestionnairesWorkspace", () => {
     expect(document.activeElement).toBe(localLabelInput);
     expect(localLabelInput).toHaveProperty("value", "Aproape niciodată");
     expect(questionScope.getByRole("button", { name: "Ascunde scara" })).toBeTruthy();
+  });
+
+  it("keeps one question active and uses compact rows for the rest", async () => {
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Chestionar de evaluare a echipei"));
+
+    expect(await screen.findByTestId("question-editor-q1")).toBeTruthy();
+    expect(screen.queryByTestId("question-editor-q2")).toBeNull();
+    expect(screen.getByTestId("question-row-q2")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Editează Q2 Second question" }));
+
+    expect(await screen.findByTestId("question-editor-q2")).toBeTruthy();
+    expect(screen.queryByTestId("question-editor-q1")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Second question" })).toBeTruthy();
+  });
+
+  it("persists question order changed with accessible controls", async () => {
+    vi.mocked(updateQuestionnaireDefinitionOnServer).mockImplementation(async (_key, payload, version) => ({
+      ...fixtures.definition,
+      version: version ?? fixtures.definition.version,
+      title: payload.title ?? fixtures.definition.title,
+      description: payload.description ?? fixtures.definition.description,
+      schema: payload.schema ?? fixtures.definition.schema,
+    }));
+    render(<QuestionnairesWorkspace />);
+
+    fireEvent.click(await screen.findByText("Chestionar de evaluare a echipei"));
+    await screen.findByTestId("question-editor-q1");
+    fireEvent.click(screen.getByRole("button", { name: "Editează Q2 Second question" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mută întrebarea mai sus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvează modificările" }));
+
+    await waitFor(() => expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledTimes(1));
+    expect(updateQuestionnaireDefinitionOnServer).toHaveBeenCalledWith(
+      "lencioni",
+      expect.objectContaining({
+        schema: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              questions: [
+                expect.objectContaining({ id: "q2" }),
+                expect.objectContaining({ id: "q1" }),
+              ],
+            }),
+          ],
+        }),
+      }),
+      1,
+    );
   });
 });

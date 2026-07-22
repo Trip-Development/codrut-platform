@@ -1,6 +1,7 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { cache } from "react";
 
 import {
   AuthRoleMismatchError,
@@ -10,26 +11,46 @@ import {
   type CurrentUser,
   type SessionState,
 } from "./auth";
-import { getApiBaseUrl, isSeededDemoFallbackEnabled } from "./runtime";
+import {
+  getApiBaseUrl,
+  isLocalAuthBypassEnabled,
+  isLocalSeededDemoFallbackEnabled,
+  isSeededDemoFallbackEnabled,
+  LOCAL_AUTH_ROLE_HEADER,
+} from "./runtime";
 
 type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
 };
 
-async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {
+const getSessionFromApi = cache(async function getSessionFromApi(
+  expectedRole: "trainer" | "participant",
+): Promise<SessionState | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("codrut_session");
-  if (!sessionCookie?.value) return null;
+  const incomingHeaders = await headers();
+  const requestHost =
+    incomingHeaders.get("x-forwarded-host") ?? incomingHeaders.get("host") ?? "";
+  const localAuthBypassEnabled = isLocalAuthBypassEnabled(requestHost);
+  if (!sessionCookie?.value && !localAuthBypassEnabled) return null;
+
+  const requestHeaders = new Headers();
+  if (sessionCookie?.value) {
+    requestHeaders.set("Cookie", `codrut_session=${sessionCookie.value}`);
+  }
+  if (localAuthBypassEnabled) {
+    requestHeaders.set(LOCAL_AUTH_ROLE_HEADER, expectedRole);
+  }
 
   let user: SessionPrincipalResponse;
   try {
     const response = await fetch(`${getApiBaseUrl()}/auth/me`, {
       cache: "no-store",
-      headers: {
-        Cookie: `codrut_session=${sessionCookie.value}`,
-      },
+      headers: requestHeaders,
     });
     if (response.status === 401 || response.status === 403) return null;
     if (!response.ok) {
@@ -61,24 +82,18 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      termsAcceptedAt: user.terms_accepted_at,
+      termsVersion: user.terms_version,
     },
   };
-}
+});
 
-export async function getCurrentTrainer(): Promise<CurrentUser> {
-  return getTrainerSession().then((session) => session.user);
-}
-
-export async function getCurrentParticipant(): Promise<CurrentUser> {
-  return getParticipantSession().then((session) => session.user);
-}
-
-export async function getTrainerSession(): Promise<SessionState> {
+export const getTrainerSession = cache(async function getTrainerSession(): Promise<SessionState> {
   let session: SessionState | null = null;
   try {
     session = await getSessionFromApi("trainer");
   } catch (error) {
-    if (isAuthRoleMismatchError(error)) throw error;
+    if (isAuthRoleMismatchError(error) && !isLocalSeededDemoFallbackEnabled()) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
@@ -95,14 +110,14 @@ export async function getTrainerSession(): Promise<SessionState> {
       role: "trainer",
     },
   };
-}
+});
 
-export async function getParticipantSession(): Promise<SessionState> {
+export const getParticipantSession = cache(async function getParticipantSession(): Promise<SessionState> {
   let session: SessionState | null = null;
   try {
     session = await getSessionFromApi("participant");
   } catch (error) {
-    if (isAuthRoleMismatchError(error)) throw error;
+    if (isAuthRoleMismatchError(error) && !isLocalSeededDemoFallbackEnabled()) throw error;
     if (!isSeededDemoFallbackEnabled()) throw error;
   }
   if (session) return session;
@@ -119,4 +134,12 @@ export async function getParticipantSession(): Promise<SessionState> {
       role: "participant",
     },
   };
-}
+});
+
+export const getCurrentTrainer = cache(async function getCurrentTrainer(): Promise<CurrentUser> {
+  return getTrainerSession().then((session) => session.user);
+});
+
+export const getCurrentParticipant = cache(async function getCurrentParticipant(): Promise<CurrentUser> {
+  return getParticipantSession().then((session) => session.user);
+});

@@ -4,91 +4,62 @@ import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { participantNavItems } from "@/components/shell/nav";
+import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 
 export default async function ParticipantFinalEvaluationPage() {
   const requestOptions = await getServerApiRequestOptions();
   const summary = await getParticipantWorkspaceSummary(requestOptions);
   const completed = summary.tasks.filter((task) => task.status === "completed").length;
   const total = summary.tasks.length;
-  const hasOpenTasks = summary.tasks.some((task) => task.status !== "completed");
+  const openTasks = summary.tasks.filter((task) => task.status !== "completed");
+  const hasOpenTasks = openTasks.length > 0;
 
   return (
     <AppShell
       audience="participant"
-      eyebrow={summary.projectName}
+      eyebrow=""
       title={hasOpenTasks ? "Mai ai sarcini de completat" : "Ai finalizat partea ta"}
-      description={
-        hasOpenTasks
-          ? "Rezultatele proiectului sunt gestionate de trainer. Continuă sarcinile active din pagina de chestionare."
-          : "Răspunsurile tale au fost salvate. Scorurile calculate sunt disponibile în tabul Rezultate după scorare."
-      }
+      description=""
       navItems={participantNavItems}
       activeHref="/participant"
-      userLabel={summary.anonymousName ?? "Profil anonim"}
+      userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
     >
-      <section className="surface-panel p-5 md:p-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-burgundy/75">
-              {hasOpenTasks ? "Acțiune necesară" : "Proiect închis pentru tine"}
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">
-              {hasOpenTasks ? "Completează sarcinile rămase" : "Nu mai ai nimic de făcut acum"}
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/62">
-              {hasOpenTasks
-                ? "Pentru a închide participarea, finalizează toate chestionarele active. După trimitere, vei reveni la un ecran de finalizare."
-                : "Datele tale intră în rezultatele agregate pentru echipe și manageri. În tabul Rezultate vezi scoruri sumarizate, profil PCM și interpretări disponibile; răspunsurile brute rămân private."}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {hasOpenTasks ? (
-                <Link
-                  href="/participant/questionnaires"
-                  className="tap-soft inline-flex rounded-full bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-burgundy-dark"
-                >
-                  Mergi la chestionare
-                </Link>
-              ) : (
-                <Link
-                  href="/participant"
-                  className="tap-soft inline-flex rounded-full border border-[var(--border)] bg-surface px-5 py-3 text-sm font-bold text-foreground hover:border-burgundy/30 hover:text-burgundy"
-                >
-                  Înapoi la acasă
-                </Link>
-              )}
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
+        <section>
+          {hasOpenTasks ? (
+            <>
+              <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+                <h2 className="text-xl font-semibold text-foreground">Sarcini rămase</h2>
+                <Link href="/participant/questionnaires" className={serverLinkButtonClassName()}>Continuă</Link>
+              </div>
+              <div className="divide-y divide-border">
+                {openTasks.map((task) => (
+                  <div key={task.id} className="grid gap-2 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-foreground">{task.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{task.targetLabel}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-burgundy">{task.estimatedMinutes} min</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="border-y border-border py-8">
+              <h2 className="text-xl font-semibold text-foreground">Răspunsurile au fost trimise</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Rezultatele apar după procesarea chestionarelor eligibile.</p>
+              <Link href="/participant/results" className={serverLinkButtonClassName({ className: "mt-5" })}>Vezi rezultatele</Link>
             </div>
-          </div>
+          )}
+        </section>
 
-          <aside className="rounded-xl border border-[var(--border)] bg-surface-muted p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-foreground/45">Completare</p>
-            <p className="mt-3 text-3xl font-semibold text-foreground">
-              {completed}/{total}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-foreground/62">
-              {total === 0
-                ? "Nu există sarcini active pentru acest cont."
-                : hasOpenTasks
-                  ? "Finalizează sarcinile rămase înainte de termen."
-                  : "Toate sarcinile disponibile au fost trimise."}
-            </p>
-          </aside>
-        </div>
-      </section>
-
-      <section className="mt-5 grid gap-4 md:grid-cols-3">
-        <InfoCard title="Ce se întâmplă cu răspunsurile" text="Trainerul le folosește pentru raportare agregată, progres de proiect și analiză de echipă." />
-        <InfoCard title="Ce vezi tu" text="Starea de completare, sarcinile active, profilul PCM și scorurile sumarizate disponibile după scorare." />
-        <InfoCard title="Ce nu afișăm" text="Răspunsuri brute sau răspunsurile individuale ale altor persoane." />
-      </section>
+        <aside className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+          <p className="text-sm font-semibold text-foreground">Progres</p>
+          <p className="mt-3 font-mono text-5xl font-semibold tabular-nums text-burgundy">{completed}/{total}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{hasOpenTasks ? `${openTasks.length} rămase` : "Complet"}</p>
+          <p className="mt-7 border-t border-border pt-5 text-sm leading-6 text-muted-foreground">Răspunsurile individuale nu sunt afișate participanților.</p>
+        </aside>
+      </div>
     </AppShell>
-  );
-}
-
-function InfoCard({ title, text }: { title: string; text: string }) {
-  return (
-    <article className="surface-panel p-5">
-      <h3 className="text-sm font-bold text-foreground">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-foreground/62">{text}</p>
-    </article>
   );
 }

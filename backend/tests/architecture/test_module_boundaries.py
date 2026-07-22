@@ -50,11 +50,7 @@ class ModuleImport:
 
 
 def iter_module_files() -> list[Path]:
-    return sorted(
-        path
-        for path in MODULE_ROOT.rglob("*.py")
-        if "__pycache__" not in path.parts
-    )
+    return sorted(path for path in MODULE_ROOT.rglob("*.py") if "__pycache__" not in path.parts)
 
 
 def source_module_for(path: Path) -> str:
@@ -143,8 +139,7 @@ def test_repository_modules_do_not_depend_on_services_or_routers() -> None:
     violations = [
         item
         for item in iter_imports()
-        if item.source_layer == "repository"
-        and item.imported_layer in {"router", "service"}
+        if item.source_layer == "repository" and item.imported_layer in {"router", "service"}
     ]
 
     assert format_imports(violations) == []
@@ -200,8 +195,7 @@ def test_service_modules_do_not_depend_on_routers() -> None:
     violations = [
         item
         for item in iter_imports()
-        if item.source_layer == "service"
-        and item.imported_layer == "router"
+        if item.source_layer == "service" and item.imported_layer == "router"
     ]
 
     assert format_imports(violations) == []

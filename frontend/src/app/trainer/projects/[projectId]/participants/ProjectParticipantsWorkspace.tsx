@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Loader2Icon } from "lucide-react";
 
 import {
   importCompanyRoster,
@@ -12,16 +13,27 @@ import {
   type ParticipantInvitationStatus,
 } from "@/api/companies";
 import {
-  displayReportsToName,
   isExternalMatrixManagerLabel,
   managerReferenceKey,
   normalizeReportsToName,
 } from "@/api/roster-format";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { RosterImporter } from "@/components/roster-importer";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { ModalLayer } from "@/components/ui/modal-layer";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/utils/cn";
 import { useUrlState } from "@/hooks/use-url-state";
+import {
+  normalizeWorkspaceSearch,
+  WorkspaceSearchInput,
+} from "../../project-workspace-controls";
 
-type ProjectParticipantsWorkspaceProps = {
+export type ProjectParticipantsWorkspaceProps = {
   companyId: string;
   projectId: string;
   companyName: string;
@@ -72,6 +84,11 @@ const emptyManualForm: ManualAddForm = {
   reportsToName: "",
   position: "",
 };
+const workspaceShellClass =
+  "overflow-hidden border-y border-border bg-surface text-foreground";
+const workspaceHeaderClass = "border-b border-border px-5 py-5";
+const secondaryButtonClass =
+  "border-border bg-surface text-foreground hover:border-burgundy/45 hover:text-burgundy";
 
 export function buildProjectParticipantAccessRows(
   participants: CompanyParticipant[],
@@ -140,6 +157,8 @@ export function ProjectParticipantsWorkspace({
   const router = useRouter();
   const { get, searchKey, setParam, setParams } = useUrlState();
   const [participants, setParticipants] = useState(initialParticipants);
+  const [query, setQuery] = useState(() => get("q") ?? "");
+  const deferredQuery = useDeferredValue(query);
   const [activeTab, setActiveTabState] = useState<TabKey>(normalizeParticipantsTab(get("view")));
   const [showAddPanel, setShowAddPanel] = useState(get("panel") === "add" || initialParticipants.length === 0);
   const [showImportModal, setShowImportModal] = useState(get("modal") === "import");
@@ -150,6 +169,8 @@ export function ProjectParticipantsWorkspace({
   const [form, setForm] = useState<ParticipantEditForm | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const addingRef = useRef(false);
+  const savingParticipantRef = useRef<string | null>(null);
 
   const statusByParticipantId = useMemo(
     () => new Map(invitationStatuses.map((status) => [status.participant_id, status])),
@@ -160,10 +181,29 @@ export function ProjectParticipantsWorkspace({
     () => buildProjectParticipantAccessRows(participants, invitationStatuses),
     [participants, invitationStatuses],
   );
+  const visibleParticipants = useMemo(() => {
+    const normalizedQuery = normalizeWorkspaceSearch(deferredQuery);
+    if (!normalizedQuery) return participants;
+    return participants.filter((participant) =>
+      normalizeWorkspaceSearch([
+        participant.full_name,
+        participant.email,
+        participant.reports_to_name,
+        participant.position,
+        participant.location,
+        participant.role_group,
+      ].filter(Boolean).join(" ")).includes(normalizedQuery),
+    );
+  }, [deferredQuery, participants]);
+  const visibleAccessRows = useMemo(() => {
+    const visibleIds = new Set(visibleParticipants.map((participant) => participant.id));
+    return accessRows.filter((row) => visibleIds.has(row.participant.id));
+  }, [accessRows, visibleParticipants]);
   const permanentCount = accessRows.filter((row) => row.accountTypeLabel === "Cont permanent").length;
   const temporaryCount = accessRows.length - permanentCount;
   const activeAccountCount = accessRows.filter((row) => row.hasAccount).length;
   const activeSecureLinkCount = accessRows.filter((row) => row.hasSecureLink).length;
+  const mutationLocked = adding || Boolean(savingId);
 
   useEffect(() => {
     setParticipants(initialParticipants);
@@ -171,6 +211,7 @@ export function ProjectParticipantsWorkspace({
 
   useEffect(() => {
     setActiveTabState(normalizeParticipantsTab(get("view")));
+    setQuery(get("q") ?? "");
     setShowImportModal(get("modal") === "import");
     setShowAddPanel(get("panel") === "add" || (participants.length === 0 && get("panel") !== "closed"));
   }, [get, participants.length, searchKey]);
@@ -180,23 +221,30 @@ export function ProjectParticipantsWorkspace({
     setParams({ view: tab === "roster" ? null : tab }, "push");
   };
 
+  const updateQuery = (nextQuery: string) => {
+    setQuery(nextQuery);
+    setParam("q", nextQuery || null, "replace");
+  };
+
   const setAddPanelOpen = (open: boolean) => {
     setShowAddPanel(open);
     setParam("panel", open ? "add" : "closed", "push");
   };
 
   const setImportModalOpen = (open: boolean) => {
+    if (open && (addingRef.current || savingParticipantRef.current)) return;
     setShowImportModal(open);
     setParam("modal", open ? "import" : null, open ? "push" : "replace");
   };
 
   const startEdit = (participant: CompanyParticipant) => {
+    if (addingRef.current || savingParticipantRef.current) return;
     const storedRole = participant.role_group?.trim().toLowerCase();
     setError(null);
     setEditingId(participant.id);
     setForm({
       fullName: participant.full_name,
-      email: participant.email,
+      email: participant.email ?? "",
       reportsToName: participant.reports_to_name ?? "",
       position: participant.position ?? "",
       location: participant.location ?? "",
@@ -221,8 +269,9 @@ export function ProjectParticipantsWorkspace({
   };
 
   const saveEdit = async (participant: CompanyParticipant) => {
-    if (!form) return;
+    if (!form || addingRef.current || savingParticipantRef.current) return;
 
+    savingParticipantRef.current = participant.id;
     setSavingId(participant.id);
     setError(null);
     try {
@@ -257,17 +306,21 @@ export function ProjectParticipantsWorkspace({
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Participantul nu a putut fi salvat.");
     } finally {
+      savingParticipantRef.current = null;
       setSavingId(null);
     }
   };
 
   const addManualRows = async () => {
+    if (addingRef.current || savingParticipantRef.current) return;
+
     const rows = buildManualImportRows(manualForm, pasteText);
     if (rows.length === 0) {
       setError("Adaugă cel puțin un participant cu nume și email.");
       return;
     }
 
+    addingRef.current = true;
     setAdding(true);
     setError(null);
     try {
@@ -291,62 +344,90 @@ export function ProjectParticipantsWorkspace({
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Participanții nu au putut fi salvați.");
     } finally {
+      addingRef.current = false;
       setAdding(false);
     }
   };
 
   return (
-    <section className="surface-panel overflow-hidden">
-      <div className="border-b border-[var(--border)] px-5 py-4">
+    <section className={workspaceShellClass} aria-busy={query !== deferredQuery}>
+      <div className={workspaceHeaderClass}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold text-burgundy/75">Roster proiect</p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">Participanți în proiect</h2>
-            <p className="mt-2 text-sm leading-6 text-foreground/62">
-              Tabelul este read-only implicit. Intră în editare doar pentru corecții operaționale.
-            </p>
+            <h2 className="text-xl font-semibold text-foreground">Participanți</h2>
+            <div className="mt-4 flex flex-wrap gap-x-7 gap-y-3">
+              <ParticipantMetric label="Roster" value={participants.length} />
+              <ParticipantMetric label="Permanente" value={permanentCount} />
+              <ParticipantMetric label="Linkuri active" value={activeSecureLinkCount} />
+              <ParticipantMetric label="Conturi create" value={activeAccountCount} />
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
               onClick={() => setImportModalOpen(true)}
-              className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy-700"
+              disabled={mutationLocked}
+              size="sm"
             >
               Importă participanți
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => setAddPanelOpen(!showAddPanel)}
-              className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+              disabled={mutationLocked}
+              variant="outline"
+              size="sm"
+              className={secondaryButtonClass}
             >
               {showAddPanel ? "Ascunde adăugarea" : "Adaugă manual"}
-            </button>
+            </Button>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Vizualizări participanți">
+        <div className="mt-5 inline-flex h-10 w-fit items-center gap-1 rounded-md bg-muted p-1" role="tablist" aria-label="Vizualizări participanți">
           {tabs.map((tab) => (
-            <button
+            <Button
               key={tab.key}
               type="button"
               role="tab"
+              variant="ghost"
+              size="sm"
               aria-selected={activeTab === tab.key}
               onClick={() => selectTab(tab.key)}
-              className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+              disabled={mutationLocked && activeTab !== tab.key}
+              className={cn(
+                "h-8 min-w-28 justify-center rounded-sm border-0 px-3 shadow-none",
                 activeTab === tab.key
-                  ? "border-burgundy bg-burgundy text-white"
-                  : "border-[var(--border)] bg-surface-muted text-foreground/70 hover:text-foreground"
-              }`}
+                  ? "bg-surface text-foreground shadow-sm hover:bg-surface"
+                  : "text-muted-foreground hover:bg-background/70",
+              )}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
+        {participants.length > 0 ? (
+          <WorkspaceSearchInput
+            id="project-participants-search"
+            label="Caută participant"
+            value={query}
+            onValueChange={updateQuery}
+            placeholder="Caută după nume, email, rol sau manager"
+            className="mt-4 max-w-2xl"
+          />
+        ) : null}
+        <span className="sr-only" role="status" aria-live="polite">
+          {query !== deferredQuery ? "Se actualizează lista" : ""}
+        </span>
       </div>
 
       {error ? (
-        <p className="status-panel-danger rounded-none border-x-0 border-t-0 px-5 py-3">
+        <InlineFeedback
+          tone="danger"
+          className="rounded-none border-x-0 border-t-0 px-5 py-3"
+          descriptionClassName="text-sm leading-6"
+        >
           {error}
-        </p>
+        </InlineFeedback>
       ) : null}
 
       {activeTab === "roster" ? (
@@ -356,32 +437,40 @@ export function ProjectParticipantsWorkspace({
               form={manualForm}
               pasteText={pasteText}
               adding={adding}
+              operationLocked={mutationLocked}
               onUpdateForm={(field, value) => setManualForm((current) => ({ ...current, [field]: value }))}
               onPasteText={setPasteText}
               onAdd={() => void addManualRows()}
             />
           ) : null}
           <RosterTable
-            participants={participants}
+            participants={visibleParticipants}
             projectId={projectId}
             statusByParticipantId={statusByParticipantId}
             managerNameKeys={managerNameKeys}
             editingId={editingId}
             form={form}
             savingId={savingId}
+            operationLocked={mutationLocked}
             onCancel={cancelEdit}
             onEdit={startEdit}
             onSave={(participant) => void saveEdit(participant)}
             onUpdateField={updateField}
+            emptyMessage={participants.length === 0
+              ? "Nu există participanți. Adaugă manual sau importă rosterul."
+              : "Niciun participant pentru căutarea curentă."}
           />
         </>
       ) : (
         <AccessTable
-          rows={accessRows}
+          rows={visibleAccessRows}
           permanentCount={permanentCount}
           temporaryCount={temporaryCount}
           activeAccountCount={activeAccountCount}
           activeSecureLinkCount={activeSecureLinkCount}
+          emptyMessage={participants.length === 0
+            ? "Niciun participant în acest proiect încă."
+            : "Niciun participant pentru căutarea curentă."}
         />
       )}
 
@@ -393,18 +482,20 @@ export function ProjectParticipantsWorkspace({
         >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-burgundy/75">Import participanți</p>
                 <h2 id="project-import-title" className="mt-1 text-xl font-semibold text-foreground">
-                  {companyName} · {project.name}
+                  Import participanți pentru {project.name}
                 </h2>
+                <p className="mt-1 text-sm text-muted-foreground">{companyName}</p>
               </div>
-              <button
+              <Button
                 type="button"
                 onClick={() => setImportModalOpen(false)}
-                className="tap-soft rounded-full border border-[var(--border)] bg-surface-muted px-3 py-2 text-xs font-bold text-foreground/60 hover:text-burgundy"
+                variant="outline"
+                size="sm"
+                className={secondaryButtonClass}
               >
                 Închide
-              </button>
+              </Button>
             </div>
             <div className="mt-5 max-h-[80vh] overflow-y-auto pr-1">
               <RosterImporter
@@ -432,10 +523,12 @@ function RosterTable({
   editingId,
   form,
   savingId,
+  operationLocked,
   onCancel,
   onEdit,
   onSave,
   onUpdateField,
+  emptyMessage,
 }: {
   participants: CompanyParticipant[];
   projectId: string;
@@ -444,14 +537,16 @@ function RosterTable({
   editingId: string | null;
   form: ParticipantEditForm | null;
   savingId: string | null;
+  operationLocked: boolean;
   onCancel: () => void;
   onEdit: (participant: CompanyParticipant) => void;
   onSave: (participant: CompanyParticipant) => void;
   onUpdateField: (field: keyof ParticipantEditForm, value: string) => void;
+  emptyMessage: string;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="data-table min-w-full text-left text-sm">
+    <div className="overflow-x-auto p-5 pt-0">
+      <table className="data-table min-w-[920px] text-left text-sm">
         <thead>
           <tr>
             <th>Nume</th>
@@ -466,7 +561,7 @@ function RosterTable({
           {participants.length === 0 ? (
             <tr>
               <td colSpan={6} className="px-5 py-6 text-center text-foreground/62">
-                Niciun participant în acest proiect încă. Adaugă manual, lipește rânduri sau importă un fișier mai jos.
+                {emptyMessage}
               </td>
             </tr>
           ) : (
@@ -479,6 +574,7 @@ function RosterTable({
                 managerNameKeys={managerNameKeys}
                 form={editingId === member.id ? form : null}
                 saving={savingId === member.id}
+                operationLocked={operationLocked}
                 onCancel={onCancel}
                 onEdit={() => onEdit(member)}
                 onSave={() => onSave(member)}
@@ -499,6 +595,7 @@ function ParticipantRow({
   managerNameKeys,
   form,
   saving,
+  operationLocked,
   onCancel,
   onEdit,
   onSave,
@@ -510,6 +607,7 @@ function ParticipantRow({
   managerNameKeys: Set<string>;
   form: ParticipantEditForm | null;
   saving: boolean;
+  operationLocked: boolean;
   onCancel: () => void;
   onEdit: () => void;
   onSave: () => void;
@@ -526,33 +624,37 @@ function ParticipantRow({
             {participant.full_name}
           </Link>
         </td>
-        <td className="text-foreground/62">{participant.email}</td>
-        <td className="text-foreground/62">{displayReportsToName(participant.reports_to_name)}</td>
+        <td className="text-foreground/62">{participant.email ?? "email lipsă"}</td>
+        <td className="text-foreground/62">{formatManagerName(participant.reports_to_name)}</td>
         <td className="text-foreground/62">{participant.position ?? "-"}</td>
         <td>
           <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
         </td>
         <td className="text-right">
-          <button
+          <Button
             type="button"
             onClick={onEdit}
-            className="tap-soft rounded-full border border-[var(--border)] bg-background px-3 py-2 text-xs font-bold text-foreground hover:border-burgundy/45 hover:text-burgundy"
+            disabled={operationLocked}
+            variant="outline"
+            size="xs"
+            className={secondaryButtonClass}
           >
             Editează
-          </button>
+          </Button>
         </td>
       </tr>
     );
   }
 
   return (
-    <tr className="bg-surface-muted">
+    <tr className="bg-muted">
       <td colSpan={6} className="px-5 py-4">
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <EditField
             label="Nume"
             value={form.fullName}
             required
+            disabled={saving}
             onChange={(value) => onUpdateField("fullName", value)}
           />
           <EditField
@@ -560,29 +662,33 @@ function ParticipantRow({
             value={form.email}
             required
             type="email"
+            disabled={saving}
             onChange={(value) => onUpdateField("email", value)}
           />
           <EditField
             label="Manager"
             value={form.reportsToName}
+            disabled={saving}
             onChange={(value) => onUpdateField("reportsToName", value)}
           />
           <EditField
             label="Poziție"
             value={form.position}
+            disabled={saving}
             onChange={(value) => onUpdateField("position", value)}
           />
           <EditField
             label="Locație"
             value={form.location}
+            disabled={saving}
             onChange={(value) => onUpdateField("location", value)}
           />
-          <div className="rounded-xl border border-[var(--border)] bg-surface px-3 py-3">
+          <div className="border-l border-border pl-3 py-1">
             <span className="text-xs font-bold text-foreground/58">Rol proiect</span>
             <button
               type="button"
               onClick={() => onUpdateField("roleGroup", form.roleGroup === "leadership" ? "member" : "leadership")}
-              className={`tap-soft mt-2 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${
+              className={`tap-soft mt-2 rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
                 form.roleGroup === "leadership"
                   ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-700"
                   : "border-[var(--border)] bg-background text-foreground/55 hover:border-burgundy/35 hover:text-burgundy"
@@ -592,34 +698,41 @@ function ParticipantRow({
               {form.roleGroup === "leadership" ? "Leadership" : "Membru"}
             </button>
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-surface-muted px-3 py-3">
+          <div className="border-l border-border pl-3 py-1">
             <span className="text-xs font-bold text-foreground/58">Tip acces</span>
             <div className="mt-2">
               <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
             </div>
-            <p className="mt-2 text-xs font-medium leading-5 text-foreground/52">
-              Tipul de acces urmează rolul de leadership salvat pentru proiect și starea invitațiilor.
-            </p>
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <button
+          <Button
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="tap-soft rounded-full border border-[var(--border)] bg-background px-4 py-2 text-xs font-bold text-foreground hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
+            variant="outline"
+            size="sm"
+            className={secondaryButtonClass}
           >
             Anulează
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onSave}
             disabled={saving || !form.fullName.trim() || !form.email.trim()}
-            className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+            size="sm"
           >
-            {saving ? "Se salvează..." : "Salvează"}
-          </button>
+            {saving ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
+            {saving ? "Salvăm participantul" : "Salvează"}
+          </Button>
         </div>
+        {saving ? (
+          <OperationFeedback
+            title={`Salvăm ${participant.full_name}`}
+            detail="Actualizăm datele participantului și refacem contextul proiectului."
+            className="mt-4"
+          />
+        ) : null}
       </td>
     </tr>
   );
@@ -629,6 +742,7 @@ function ManualAddPanel({
   form,
   pasteText,
   adding,
+  operationLocked,
   onUpdateForm,
   onPasteText,
   onAdd,
@@ -636,6 +750,7 @@ function ManualAddPanel({
   form: ManualAddForm;
   pasteText: string;
   adding: boolean;
+  operationLocked: boolean;
   onUpdateForm: (field: keyof ManualAddForm, value: string) => void;
   onPasteText: (value: string) => void;
   onAdd: () => void;
@@ -643,36 +758,49 @@ function ManualAddPanel({
   const parsedCount = buildManualImportRows(form, pasteText).length;
 
   return (
-    <div className="border-b border-[var(--border)] bg-surface-muted px-5 py-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <EditField label="Nume" value={form.fullName} onChange={(value) => onUpdateForm("fullName", value)} />
-        <EditField label="Email" value={form.email} type="email" onChange={(value) => onUpdateForm("email", value)} />
-        <EditField label="Manager" value={form.reportsToName} onChange={(value) => onUpdateForm("reportsToName", value)} />
-        <EditField label="Poziție" value={form.position} onChange={(value) => onUpdateForm("position", value)} />
-      </div>
-      <label className="mt-4 block">
-        <span className="text-xs font-bold text-foreground/58">Lipește rânduri: nume, email, poziție, manager</span>
-        <textarea
+    <div className="border-b border-border bg-muted/35 px-5 py-4" aria-busy={adding}>
+      <FieldGroup className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <EditField label="Nume" value={form.fullName} disabled={operationLocked} onChange={(value) => onUpdateForm("fullName", value)} />
+        <EditField label="Email" value={form.email} type="email" disabled={operationLocked} onChange={(value) => onUpdateForm("email", value)} />
+        <EditField label="Manager" value={form.reportsToName} disabled={operationLocked} onChange={(value) => onUpdateForm("reportsToName", value)} />
+        <EditField label="Poziție" value={form.position} disabled={operationLocked} onChange={(value) => onUpdateForm("position", value)} />
+      </FieldGroup>
+      <Field className="mt-4" data-disabled={operationLocked ? true : undefined}>
+        <FieldLabel htmlFor="manual-participant-rows">
+          Lipește rânduri: nume, email, poziție, manager
+        </FieldLabel>
+        <Textarea
+          id="manual-participant-rows"
           value={pasteText}
           onChange={(event) => onPasteText(event.target.value)}
           rows={4}
-          className="control-input mt-1.5 w-full"
+          disabled={operationLocked}
+          className="min-h-28 bg-surface"
           placeholder={"Ana Popescu, ana@companie.ro, Manager, -\nMihai Ionescu\tmihai@companie.ro\tConsultant\tAna Popescu"}
         />
-      </label>
+        <FieldDescription>Separă coloanele prin virgulă sau tab.</FieldDescription>
+      </Field>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-foreground/52">
-          {parsedCount} rânduri pregătite pentru salvare prin importul de roster.
+        <p className="text-xs font-semibold text-muted-foreground">
+          {parsedCount} {parsedCount === 1 ? "rând pregătit" : "rânduri pregătite"}
         </p>
-        <button
+        <Button
           type="button"
           onClick={onAdd}
-          disabled={adding || parsedCount === 0}
-          className="tap-soft rounded-full bg-burgundy px-4 py-2 text-xs font-bold text-white hover:bg-burgundy-700 disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={operationLocked || parsedCount === 0}
+          size="sm"
         >
-          {adding ? "Se salvează..." : "Salvează participanții"}
-        </button>
+          {adding ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
+          {adding ? "Salvăm participanții" : "Salvează participanții"}
+        </Button>
       </div>
+      {adding ? (
+        <OperationFeedback
+          title="Salvăm participanții"
+          detail="Actualizăm rosterul proiectului."
+          className="mt-4"
+        />
+      ) : null}
     </div>
   );
 }
@@ -688,24 +816,24 @@ function AccountTypeBadge({
 }) {
   if (isPermanentAccountParticipant(participant, managerNameKeys)) {
     return (
-      <span className="status-pill border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/55 dark:bg-emerald-950/30 dark:text-emerald-200">
+      <Badge variant="secondary" className="status-success-soft">
         cont permanent
-      </span>
+      </Badge>
     );
   }
 
   if (invitationStatus?.has_active_secure_link || invitationStatus?.latest_delivery_mode === "secure_links") {
     return (
-      <span className="status-pill border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/55 dark:bg-sky-950/30 dark:text-sky-200">
+      <Badge variant="secondary" className="status-info-soft">
         invitație temporară activă
-      </span>
+      </Badge>
     );
   }
 
   return (
-    <span className="status-pill">
+    <Badge variant="outline">
       membru temporar
-    </span>
+    </Badge>
   );
 }
 
@@ -715,23 +843,25 @@ function AccessTable({
   temporaryCount,
   activeAccountCount,
   activeSecureLinkCount,
+  emptyMessage,
 }: {
   rows: AccessRow[];
   permanentCount: number;
   temporaryCount: number;
   activeAccountCount: number;
   activeSecureLinkCount: number;
+  emptyMessage: string;
 }) {
   return (
     <div>
-      <div className="grid gap-3 border-b border-[var(--border)] bg-surface-muted px-5 py-4 text-sm sm:grid-cols-4">
+      <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-border bg-muted/35 px-5 py-4 text-sm">
         <AccessMetric label="Cont permanent" value={permanentCount} />
         <AccessMetric label="Acces temporar" value={temporaryCount} />
         <AccessMetric label="Conturi create" value={activeAccountCount} />
         <AccessMetric label="Linkuri active" value={activeSecureLinkCount} />
       </div>
-      <div className="overflow-x-auto">
-        <table className="data-table min-w-full text-left text-sm">
+      <div className="overflow-x-auto p-5 pt-0">
+        <table className="data-table min-w-[860px] text-left text-sm">
           <thead>
             <tr>
               <th>Participant</th>
@@ -745,7 +875,7 @@ function AccessTable({
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-6 text-center text-foreground/62">
-                  Niciun participant în acest proiect încă.
+                  {emptyMessage}
                 </td>
               </tr>
             ) : (
@@ -753,12 +883,10 @@ function AccessTable({
                 <tr key={row.participant.id}>
                   <td>
                     <p className="font-semibold text-foreground">{row.participant.full_name}</p>
-                    <p className="mt-1 text-xs text-foreground/52">{row.participant.email}</p>
+                    <p className="mt-1 text-xs text-foreground/52">{row.participant.email ?? "email lipsă"}</p>
                   </td>
                   <td className="text-foreground/70">{row.internalRoleLabel}</td>
-                  <td>
-                    <span className="status-pill">{row.accountTypeLabel}</span>
-                  </td>
+                  <td><Badge variant="outline">{row.accountTypeLabel}</Badge></td>
                   <td className="text-foreground/70">{row.accountStateLabel}</td>
                   <td className="text-foreground/70">{row.deliveryLabel}</td>
                 </tr>
@@ -773,9 +901,22 @@ function AccessTable({
 
 function AccessMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div>
-      <p className="text-xs font-semibold text-foreground/50">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+    <div className="min-w-28">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function formatManagerName(value: string | null | undefined): string {
+  return normalizeReportsToName(value) || "Fără manager";
+}
+
+function ParticipantMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-20">
+      <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 }
@@ -786,24 +927,30 @@ function EditField({
   onChange,
   required = false,
   type = "text",
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   required?: boolean;
   type?: "email" | "text";
+  disabled?: boolean;
 }) {
+  const inputId = useId();
+
   return (
-    <label className="block">
-      <span className="text-xs font-bold text-foreground/58">{label}</span>
-      <input
+    <Field data-disabled={disabled ? true : undefined}>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <Input
+        id={inputId}
         type={type}
         required={required}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="control-input mt-1.5 w-full"
+        className="h-10"
       />
-    </label>
+    </Field>
   );
 }
 

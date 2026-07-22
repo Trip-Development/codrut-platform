@@ -30,7 +30,7 @@ const pcmProfiles: Record<PcmProfileKey, PcmProfile> = {
     key: "imaginer",
     label: "Imaginator",
     color: "#fb923c",
-    badgeClassName: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/55 dark:bg-amber-950/30 dark:text-amber-200",
+    badgeClassName: "border-[#f2c879] bg-[#fff8df] text-[#8a5b00] dark:border-[#8a5b00]/55 dark:bg-[#8a5b00]/18 dark:text-[#f2c879]",
   },
   rebel: {
     key: "rebel",

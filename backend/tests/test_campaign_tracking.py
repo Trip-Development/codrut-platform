@@ -25,6 +25,7 @@ def make_claims(
 ) -> CampaignTrackingClaims:
     return CampaignTrackingClaims(
         recipient_id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
         target_url=target_url,
         event_type=event_type,
         variant_key="variant_a",
@@ -40,6 +41,7 @@ def test_campaign_tracking_token_round_trips_claims() -> None:
     parsed = parse_campaign_tracking_token(token, settings)
 
     assert parsed.recipient_id == claims.recipient_id
+    assert parsed.owner_id == claims.owner_id
     assert parsed.target_url == claims.target_url
     assert parsed.event_type == "calendly_clicked"
     assert parsed.variant_key == "variant_a"
@@ -89,16 +91,21 @@ def test_build_campaign_tracking_url_points_to_public_calendly_redirect() -> Non
 
     url = build_campaign_tracking_url("token.value", settings)
 
-    assert url == "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/token.value"
+    assert (
+        url
+        == "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/token.value"
+    )
 
 
 def test_campaign_recipient_action_token_round_trips_unsubscribe_claims() -> None:
     settings = Settings()
     recipient_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
 
     token = create_campaign_recipient_action_token(
         CampaignRecipientActionClaims(
             recipient_id=recipient_id,
+            owner_id=owner_id,
             action="unsubscribe",
         ),
         settings,
@@ -106,6 +113,7 @@ def test_campaign_recipient_action_token_round_trips_unsubscribe_claims() -> Non
     parsed = parse_campaign_recipient_action_token(token, settings)
 
     assert parsed.recipient_id == recipient_id
+    assert parsed.owner_id == owner_id
     assert parsed.action == "unsubscribe"
 
 
@@ -114,4 +122,6 @@ def test_build_campaign_unsubscribe_url_points_to_public_endpoint() -> None:
 
     url = build_campaign_unsubscribe_url("token.value", settings)
 
-    assert url == "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/token.value"
+    assert (
+        url == "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/token.value"
+    )

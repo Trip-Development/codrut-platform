@@ -13,6 +13,9 @@ export type InviteTask = {
   targetLabel: string;
   estimatedMinutes: number;
   questionnaireKey: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  assignmentRoundId?: string;
 };
 
 const questionnaireLabels: Record<string, string> = {
@@ -112,7 +115,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
       state: "valid",
       token,
       projectName: "Leadership operațional Q3",
-      participantEmail: "mihai.matei@atlas-mobility.ro",
+      participantEmail: "participant.demo@example.com",
       participantFullName: "Mihai Matei",
       anonymousName: "SignalHarbor5271",
       isLeadership: false,
@@ -170,6 +173,26 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
   return resolveBackendInviteBundle(token);
 }
 
+export async function exchangeInviteSession(token: string): Promise<void> {
+  if (token === "demo-token" && isDemoFallbackEnabled()) return;
+
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/invite/exchange`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as BackendErrorResponse | null;
+    const message =
+      payload?.error?.message ??
+      "Nu am putut pregăti sesiunea invitației. Reîncearcă sau deschide linkul într-o fereastră privată.";
+    throw new Error(message);
+  }
+}
+
 async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> {
   const response = await apiFetch(`${getApiBaseUrl()}/auth/invite/verify?token=${encodeURIComponent(token)}`, {
     cache: "no-store",
@@ -212,7 +235,7 @@ async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> 
     expiresAt: data.expires_at,
     termsAcceptedAt: data.terms_accepted_at,
     termsVersion: data.terms_version,
-    tasks: normalizeInviteTasks(data.tasks),
+    tasks: normalizeInviteTasks(data.tasks, token),
   };
 }
 
@@ -276,7 +299,10 @@ export function participantTaskTypeLabel(key: string): string {
   return "Chestionar";
 }
 
-export function inviteTaskHref(task: InviteTask, options: { returnTo?: string } = {}): string {
+export function inviteTaskHref(
+  task: InviteTask,
+  options: { returnTo?: string; inviteToken?: string } = {},
+): string {
   if (task.assignmentId && isSecureInviteTaskHref(task.href)) {
     return secureTaskHref(task, options);
   }
@@ -301,16 +327,21 @@ function isSecureInviteTaskHref(href: string): boolean {
   return href.includes("access=secure");
 }
 
-function normalizeInviteTasks(tasks: InviteTask[]): InviteTask[] {
+function normalizeInviteTasks(tasks: InviteTask[], inviteToken?: string): InviteTask[] {
   return tasks.map((task) =>
     task.assignmentId && isSecureInviteTaskHref(task.href)
-      ? { ...task, href: secureTaskHref(task) }
+      ? { ...task, href: secureTaskHref(task, { inviteToken }) }
       : task,
   );
 }
 
-function secureTaskHref(task: InviteTask, options: { returnTo?: string } = {}): string {
-  const query = new URLSearchParams({ access: "secure" });
+function secureTaskHref(
+  task: InviteTask,
+  options: { returnTo?: string; inviteToken?: string } = {},
+): string {
+  const inviteToken = options.inviteToken ?? inviteTokenFromReturnTo(options.returnTo)
+    ?? inviteTokenFromReturnTo(new URLSearchParams(task.href.split("?")[1] ?? "").get("returnTo"));
+  const query = new URLSearchParams();
   if (options.returnTo) {
     query.set("returnTo", options.returnTo);
   } else {
@@ -320,5 +351,15 @@ function secureTaskHref(task: InviteTask, options: { returnTo?: string } = {}): 
   if (task.targetLabel) {
     query.set("target", task.targetLabel);
   }
-  return `/participant/tasks/${encodeURIComponent(task.assignmentId)}?${query.toString()}`;
+  const queryString = query.toString();
+  if (!inviteToken) {
+    return `/participant/tasks/${encodeURIComponent(task.assignmentId)}?access=secure${queryString ? `&${queryString}` : ""}`;
+  }
+  return `/invite/${encodeURIComponent(inviteToken)}/tasks/${encodeURIComponent(task.assignmentId)}${queryString ? `?${queryString}` : ""}`;
+}
+
+function inviteTokenFromReturnTo(returnTo: string | null | undefined): string | null {
+  if (!returnTo) return null;
+  const match = /^\/invite\/([^/?#]+)$/.exec(returnTo);
+  return match ? decodeURIComponent(match[1]) : null;
 }

@@ -1,6 +1,7 @@
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address, ip_network
 from typing import Protocol
 
 from fastapi import FastAPI, Request, Response
@@ -10,6 +11,8 @@ from codrut.core.config import Settings, get_settings
 from codrut.core.errors import error_response
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+type TrustedProxyNetwork = IPv4Network | IPv6Network
+type ClientAddress = IPv4Address | IPv6Address
 
 
 @dataclass(frozen=True)
@@ -19,8 +22,7 @@ class RateLimitDecision:
 
 
 class RateLimiter(Protocol):
-    async def hit(self, key: str, *, limit: int, window_seconds: int) -> RateLimitDecision:
-        ...
+    async def hit(self, key: str, *, limit: int, window_seconds: int) -> RateLimitDecision: ...
 
 
 class NoopRateLimiter:
@@ -66,6 +68,7 @@ def install_rate_limit_middleware(
     limiter: RateLimiter | None = None,
 ) -> None:
     active_settings = settings or get_settings()
+    trusted_proxies = trusted_proxy_networks(active_settings.rate_limit_trusted_proxies)
     app.state.rate_limiter = limiter or build_rate_limiter(active_settings)
 
     @app.middleware("http")
@@ -78,7 +81,7 @@ def install_rate_limit_middleware(
 
         rate_limiter: RateLimiter = request.app.state.rate_limiter
         decision = await rate_limiter.hit(
-            rate_limit_key(request),
+            rate_limit_key(request, trusted_proxies=trusted_proxies),
             limit=active_settings.rate_limit_max_requests,
             window_seconds=active_settings.rate_limit_window_seconds,
         )
@@ -103,19 +106,62 @@ def is_rate_limited_request(request: Request) -> bool:
     return request.url.path.startswith("/api/")
 
 
-def rate_limit_key(request: Request) -> str:
-    client_ip = forwarded_client_ip(request)
-    if client_ip is None:
-        client_ip = request.client.host if request.client else "unknown"
+def rate_limit_key(
+    request: Request,
+    *,
+    trusted_proxies: tuple[TrustedProxyNetwork, ...] = (),
+) -> str:
+    client_ip = rate_limit_client_ip(request, trusted_proxies=trusted_proxies)
     path = rate_limit_path_family(request.url.path)
     return f"{client_ip}:{request.method.upper()}:{path}"
 
 
-def forwarded_client_ip(request: Request) -> str | None:
+def trusted_proxy_networks(proxies: list[str]) -> tuple[TrustedProxyNetwork, ...]:
+    return tuple(ip_network(proxy, strict=False) for proxy in proxies)
+
+
+def rate_limit_client_ip(
+    request: Request,
+    *,
+    trusted_proxies: tuple[TrustedProxyNetwork, ...],
+) -> str:
+    direct_host = request.client.host if request.client else "unknown"
+    try:
+        client_ip = ip_address(direct_host)
+    except ValueError:
+        return direct_host
+
+    if not is_trusted_proxy(client_ip, trusted_proxies):
+        return str(client_ip)
+
     forwarded_for = request.headers.get("x-forwarded-for")
     if not forwarded_for:
-        return None
-    return forwarded_for.split(",", 1)[0].strip() or None
+        return str(client_ip)
+
+    forwarded_hosts = tuple(proxy.strip() for proxy in forwarded_for.split(","))
+    if not forwarded_hosts or any(not proxy for proxy in forwarded_hosts):
+        return str(client_ip)
+
+    try:
+        forwarded_chain = tuple(ip_address(proxy) for proxy in forwarded_hosts)
+    except ValueError:
+        return str(client_ip)
+
+    for forwarded_ip in reversed(forwarded_chain):
+        if not is_trusted_proxy(client_ip, trusted_proxies):
+            break
+        client_ip = forwarded_ip
+    return str(client_ip)
+
+
+def is_trusted_proxy(
+    address: ClientAddress,
+    trusted_proxies: tuple[TrustedProxyNetwork, ...],
+) -> bool:
+    return any(
+        address.version == trusted_proxy.version and address in trusted_proxy
+        for trusted_proxy in trusted_proxies
+    )
 
 
 def rate_limit_path_family(path: str) -> str:

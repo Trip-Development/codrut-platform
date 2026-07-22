@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+!frontend/src/lib/
+!frontend/src/lib/**
 parts/
 sdist/
 var/
@@ -208,12 +210,14 @@ tempCodeRunnerFile.py
 
 # Codrut local app state
 backend/.coverage
+backend/coverage.json
 backend/.pytest_cache/
 backend/.ruff_cache/
 backend/.venv/
 .playwright-cli/
 .pnpm-store/
 frontend/.next/
+frontend/.next-build/
 frontend/coverage/
 frontend/node_modules/
 frontend/tsconfig.tsbuildinfo

@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -22,8 +24,8 @@ async def test_test_email_provider_accepts_and_records_message() -> None:
     message = EmailMessage(
         to=EmailAddress("participant@example.com"),
         subject="Invitatie assessment",
-        html_body="<p>Intra in Codrut</p>",
-        text_body="Intra in Codrut",
+        html_body="<p>Intra in Cody</p>",
+        text_body="Intra in Cody",
     )
 
     result = await provider.send(message)
@@ -50,10 +52,8 @@ def test_build_email_provider_rejects_unknown_provider() -> None:
 
 
 def test_build_email_provider_blocks_local_provider_in_production() -> None:
-    settings = Settings(env="production", email_provider="test")
-
-    with pytest.raises(DomainError, match="Production email requires"):
-        build_email_provider(settings)
+    with pytest.raises(ValueError, match="Production email provider must be Brevo"):
+        Settings(env="production", email_provider="test")
 
 
 def test_build_email_provider_supports_brevo_provider() -> None:
@@ -93,15 +93,16 @@ async def test_brevo_email_provider_sends_transactional_payload() -> None:
             Settings(
                 email_brevo_api_key="brevo-secret",
                 email_from_address="hello@codrut.local",
-                email_from_name="Codrut",
+                email_from_name="Cody",
             ),
             client=client,
         )
         message = EmailMessage(
             to=EmailAddress("participant@example.com"),
             subject="Invitatie assessment",
-            html_body="<p>Intra in Codrut</p>",
-            text_body="Intra in Codrut",
+            html_body="<p>Intra in Cody</p>",
+            text_body="Intra in Cody",
+            provider_idempotency_key="delivery-request-id",
         )
 
         result = await provider.send(message)
@@ -113,8 +114,93 @@ async def test_brevo_email_provider_sends_transactional_payload() -> None:
     assert requests[0].headers["content-type"] == "application/json"
     assert requests[0].url == "https://api.brevo.com/v3/smtp/email"
     assert requests[0].read()
-    assert b'"sender":{"email":"hello@codrut.local","name":"Codrut"}' in requests[0].content
+    assert b'"sender":{"email":"hello@codrut.local","name":"Cody"}' in requests[0].content
     assert b'"to":[{"email":"participant@example.com"}]' in requests[0].content
+    assert json.loads(requests[0].content)["headers"] == {
+        "idempotencyKey": "delivery-request-id"
+    }
+
+
+@pytest.mark.parametrize(
+    ("status_code", "retryable"),
+    [(400, False), (401, False), (408, True), (500, True)],
+)
+async def test_brevo_email_provider_classifies_http_failures(
+    status_code: int,
+    retryable: bool,
+) -> None:
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            status_code,
+            json={"code": "provider_error", "message": "Provider rejected request"},
+        )
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = BrevoEmailProvider(
+            Settings(email_brevo_api_key="brevo-secret"),
+            client=client,
+        )
+        result = await provider.send(
+            EmailMessage(
+                to=EmailAddress("participant@example.com"),
+                subject="Invitatie",
+                html_body="<p>Mesaj</p>",
+                text_body="Mesaj",
+            )
+        )
+
+    assert result.status == EmailDeliveryStatus.failed
+    assert result.retryable is retryable
+    assert result.delivery_uncertain is False
+
+
+async def test_brevo_email_provider_honors_retry_after_for_rate_limits() -> None:
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            429,
+            headers={"Retry-After": "120"},
+            json={"code": "too_many_requests", "message": "Slow down"},
+        )
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = BrevoEmailProvider(
+            Settings(email_brevo_api_key="brevo-secret"),
+            client=client,
+        )
+        result = await provider.send(
+            EmailMessage(
+                to=EmailAddress("participant@example.com"),
+                subject="Invitatie",
+                html_body="<p>Mesaj</p>",
+                text_body="Mesaj",
+            )
+        )
+
+    assert result.retryable is True
+    assert result.retry_after_seconds == 120
+
+
+async def test_brevo_email_provider_marks_network_outcome_indeterminate() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadError("connection closed after request", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = BrevoEmailProvider(
+            Settings(email_brevo_api_key="brevo-secret"),
+            client=client,
+        )
+        result = await provider.send(
+            EmailMessage(
+                to=EmailAddress("participant@example.com"),
+                subject="Invitatie",
+                html_body="<p>Mesaj</p>",
+                text_body="Mesaj",
+            )
+        )
+
+    assert result.status == EmailDeliveryStatus.failed
+    assert result.retryable is False
+    assert result.delivery_uncertain is True
 
 
 async def test_smtp_email_provider_sends_multipart_message(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -142,7 +228,7 @@ async def test_smtp_email_provider_sends_multipart_message(monkeypatch: pytest.M
             email_smtp_host="mailpit",
             email_smtp_port=1025,
             email_from_address="hello@codrut.local",
-            email_from_name="Codrut",
+            email_from_name="Cody",
         )
     )
 
@@ -150,8 +236,8 @@ async def test_smtp_email_provider_sends_multipart_message(monkeypatch: pytest.M
         EmailMessage(
             to=EmailAddress("participant@example.com"),
             subject="Invitatie assessment",
-            html_body="<p>Intra in Codrut</p>",
-            text_body="Intra in Codrut",
+            html_body="<p>Intra in Cody</p>",
+            text_body="Intra in Cody",
         )
     )
 
