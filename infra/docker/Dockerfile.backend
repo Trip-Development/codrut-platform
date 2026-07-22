@@ -89,4 +89,4 @@ COPY --from=runtime-builder --chown=codrut:codrut /app /app
 
 USER codrut
 
-CMD ["uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
