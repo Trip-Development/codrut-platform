@@ -31,7 +31,7 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
   it("redirects protected trainer routes without a session when demo fallback is explicitly disabled", () => {
@@ -41,7 +41,7 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
   it("allows an explicit demo mode only on localhost", () => {
@@ -74,7 +74,7 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer", undefined, "https://preview.example.com"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://preview.example.com/login");
+    expect(response.headers.get("location")).toBe("https://preview.example.com/trainer/login");
   });
 
   it("honors an explicit server false when the public fallback env is empty", () => {
@@ -84,7 +84,7 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
   it("allows protected routes with a session cookie", () => {

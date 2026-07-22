@@ -104,7 +104,9 @@ export function middleware(request: NextRequest) {
     !isLocalAuthBypassEnabled(request)
   ) {
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
+    loginUrl.pathname = pathname === "/trainer" || pathname.startsWith("/trainer/")
+      ? "/trainer/login"
+      : "/login";
     loginUrl.search = "";
     return applyPageSecurityHeaders(
       NextResponse.redirect(loginUrl),
