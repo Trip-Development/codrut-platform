@@ -183,10 +183,11 @@ describe("ProjectParticipantsWorkspace", () => {
     renderWorkspace();
 
     expect(screen.queryByDisplayValue("Dan Membru")).toBeNull();
+    expect(screen.getByRole("table", { name: "Roster participanți" })).toBeTruthy();
 
-    const row = screen.getByText("Dan Membru").closest("tr");
+    const row = screen.getByText("Dan Membru").closest("[data-participant-row]");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Editează" }));
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează" }));
 
     fireEvent.change(screen.getByDisplayValue("Dan Membru"), {
       target: { value: "Dan Actualizat" },
@@ -218,9 +219,9 @@ describe("ProjectParticipantsWorkspace", () => {
 
     renderWorkspace();
 
-    const row = screen.getByText("Dan Membru").closest("tr");
+    const row = screen.getByText("Dan Membru").closest("[data-participant-row]");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Editează" }));
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează" }));
     fireEvent.click(screen.getByRole("button", { name: "Membru" }));
     fireEvent.click(screen.getByRole("button", { name: "Salvează" }));
 
@@ -238,9 +239,9 @@ describe("ProjectParticipantsWorkspace", () => {
 
     renderWorkspace();
 
-    const row = screen.getByText("Dan Membru").closest("tr");
+    const row = screen.getByText("Dan Membru").closest("[data-participant-row]");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Editează" }));
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Editează" }));
     const saveButton = screen.getByRole("button", { name: "Salvează" });
     fireEvent.click(saveButton);
     fireEvent.click(saveButton);

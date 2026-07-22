@@ -545,27 +545,36 @@ function RosterTable({
   emptyMessage: string;
 }) {
   return (
-    <div className="overflow-x-auto p-5 pt-0">
-      <table className="data-table min-w-[920px] text-left text-sm">
-        <thead>
-          <tr>
-            <th>Nume</th>
-            <th>Email</th>
-            <th>Manager</th>
-            <th>Poziție</th>
-            <th>Tip acces</th>
-            <th className="text-right">Acțiuni</th>
-          </tr>
-        </thead>
-        <tbody>
-          {participants.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="px-5 py-6 text-center text-foreground/62">
+    <div className="min-w-0 max-w-full overflow-x-auto px-5 pb-5">
+      <div
+        role="table"
+        aria-label="Roster participanți"
+        className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface text-sm shadow-sm sm:min-w-[920px]"
+      >
+        <div role="rowgroup">
+          <div
+            role="row"
+            className="hidden grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] bg-muted text-xs font-semibold text-muted-foreground sm:grid"
+          >
+            <span role="columnheader" className="px-5 py-3">Nume</span>
+            <span role="columnheader" className="px-5 py-3">Email</span>
+            <span role="columnheader" className="px-5 py-3">Manager</span>
+            <span role="columnheader" className="px-5 py-3">Poziție</span>
+            <span role="columnheader" className="px-5 py-3">Tip acces</span>
+            <span role="columnheader" className="px-5 py-3 text-right">Acțiuni</span>
+          </div>
+        </div>
+        {participants.length === 0 ? (
+          <div role="rowgroup">
+            <div role="row">
+              <div role="cell" aria-colspan={6} className="px-5 py-8 text-center text-foreground/62">
                 {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            participants.map((member) => (
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div role="rowgroup" className="divide-y divide-border">
+            {participants.map((member) => (
               <ParticipantRow
                 key={member.id}
                 participant={member}
@@ -580,10 +589,10 @@ function RosterTable({
                 onSave={() => onSave(member)}
                 onUpdateField={onUpdateField}
               />
-            ))
-          )}
-        </tbody>
-      </table>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -615,22 +624,37 @@ function ParticipantRow({
 }) {
   if (!form) {
     return (
-      <tr>
-        <td className="font-semibold text-foreground">
+      <div
+        role="row"
+        data-participant-row={participant.id}
+        className="grid min-w-0 gap-4 px-4 py-4 sm:grid-cols-[1.05fr_1.35fr_0.9fr_0.9fr_10rem_6rem] sm:items-center sm:gap-0 sm:px-0"
+      >
+        <div role="cell" className="min-w-0 sm:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Nume</span>
           <Link
             href={`/trainer/projects/${projectId}/participants/${participant.id}`}
-            className="text-foreground underline-offset-4 hover:text-burgundy hover:underline"
+            className="font-semibold text-foreground underline-offset-4 hover:text-burgundy hover:underline"
           >
             {participant.full_name}
           </Link>
-        </td>
-        <td className="text-foreground/62">{participant.email ?? "email lipsă"}</td>
-        <td className="text-foreground/62">{formatManagerName(participant.reports_to_name)}</td>
-        <td className="text-foreground/62">{participant.position ?? "-"}</td>
-        <td>
+        </div>
+        <div role="cell" className="min-w-0 text-foreground/62 sm:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Email</span>
+          <span className="break-all sm:block sm:truncate">{participant.email ?? "email lipsă"}</span>
+        </div>
+        <div role="cell" className="min-w-0 text-foreground/62 sm:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Manager</span>
+          <span className="break-words">{formatManagerName(participant.reports_to_name)}</span>
+        </div>
+        <div role="cell" className="min-w-0 text-foreground/62 sm:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Poziție</span>
+          <span className="break-words">{participant.position ?? "-"}</span>
+        </div>
+        <div role="cell" className="min-w-0 sm:px-5">
+          <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Tip acces</span>
           <AccountTypeBadge participant={participant} invitationStatus={invitationStatus} managerNameKeys={managerNameKeys} />
-        </td>
-        <td className="text-right">
+        </div>
+        <div role="cell" className="min-w-0 sm:px-3 sm:text-right">
           <Button
             type="button"
             onClick={onEdit}
@@ -641,14 +665,14 @@ function ParticipantRow({
           >
             Editează
           </Button>
-        </td>
-      </tr>
+        </div>
+      </div>
     );
   }
 
   return (
-    <tr className="bg-muted">
-      <td colSpan={6} className="px-5 py-4">
+    <div role="row" data-participant-row={participant.id} className="bg-muted">
+      <div role="cell" aria-colspan={6} className="px-4 py-4 sm:px-5">
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <EditField
             label="Nume"
@@ -733,8 +757,8 @@ function ParticipantRow({
             className="mt-4"
           />
         ) : null}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -860,41 +884,69 @@ function AccessTable({
         <AccessMetric label="Conturi create" value={activeAccountCount} />
         <AccessMetric label="Linkuri active" value={activeSecureLinkCount} />
       </div>
-      <div className="overflow-x-auto p-5 pt-0">
-        <table className="data-table min-w-[860px] text-left text-sm">
-          <thead>
-            <tr>
-              <th>Participant</th>
-              <th>Rol intern</th>
-              <th>Tip acces</th>
-              <th>Stare cont</th>
-              <th>Livrare</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-5 py-6 text-center text-foreground/62">
+      <div className="min-w-0 max-w-full overflow-x-auto px-5 pb-5">
+        <div
+          role="table"
+          aria-label="Acces participanți"
+          className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface text-sm shadow-sm sm:min-w-[860px]"
+        >
+          <div role="rowgroup">
+            <div
+              role="row"
+              className="hidden grid-cols-[1.35fr_1fr_0.9fr_0.9fr_1fr] bg-muted text-xs font-semibold text-muted-foreground sm:grid"
+            >
+              <span role="columnheader" className="px-5 py-3">Participant</span>
+              <span role="columnheader" className="px-5 py-3">Rol intern</span>
+              <span role="columnheader" className="px-5 py-3">Tip acces</span>
+              <span role="columnheader" className="px-5 py-3">Stare cont</span>
+              <span role="columnheader" className="px-5 py-3">Livrare</span>
+            </div>
+          </div>
+          {rows.length === 0 ? (
+            <div role="rowgroup">
+              <div role="row">
+                <div role="cell" aria-colspan={5} className="px-5 py-8 text-center text-foreground/62">
                   {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.participant.id}>
-                  <td>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div role="rowgroup" className="divide-y divide-border">
+              {rows.map((row) => (
+                <div
+                  key={row.participant.id}
+                  role="row"
+                  className="grid min-w-0 gap-4 px-4 py-4 sm:grid-cols-[1.35fr_1fr_0.9fr_0.9fr_1fr] sm:items-center sm:gap-0 sm:px-0"
+                >
+                  <div role="cell" className="min-w-0 sm:px-5">
+                    <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Participant</span>
                     <p className="font-semibold text-foreground">{row.participant.full_name}</p>
-                    <p className="mt-1 text-xs text-foreground/52">{row.participant.email ?? "email lipsă"}</p>
-                  </td>
-                  <td className="text-foreground/70">{row.internalRoleLabel}</td>
-                  <td><Badge variant="outline">{row.accountTypeLabel}</Badge></td>
-                  <td className="text-foreground/70">{row.accountStateLabel}</td>
-                  <td className="text-foreground/70">{row.deliveryLabel}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    <p className="mt-1 break-all text-xs text-foreground/52 sm:truncate">
+                      {row.participant.email ?? "email lipsă"}
+                    </p>
+                  </div>
+                  <AccessRowValue label="Rol intern">{row.internalRoleLabel}</AccessRowValue>
+                  <div role="cell" className="min-w-0 sm:px-5">
+                    <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Tip acces</span>
+                    <Badge variant="outline">{row.accountTypeLabel}</Badge>
+                  </div>
+                  <AccessRowValue label="Stare cont">{row.accountStateLabel}</AccessRowValue>
+                  <AccessRowValue label="Livrare">{row.deliveryLabel}</AccessRowValue>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function AccessRowValue({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div role="cell" className="min-w-0 text-foreground/70 sm:px-5">
+      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">{label}</span>
+      <span className="break-words">{children}</span>
     </div>
   );
 }

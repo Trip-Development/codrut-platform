@@ -38,4 +38,11 @@ describe("ProjectTabs", () => {
 
     expect(screen.getByRole("link", { name: "Echipe" }).getAttribute("aria-current")).toBe("page");
   });
+
+  it("places teams immediately after the organization chart", () => {
+    render(<ProjectTabs basePath="/trainer/projects/project-1" />);
+
+    const labels = screen.getAllByRole("link").map((link) => link.textContent);
+    expect(labels.indexOf("Echipe")).toBe(labels.indexOf("Organigramă") + 1);
+  });
 });

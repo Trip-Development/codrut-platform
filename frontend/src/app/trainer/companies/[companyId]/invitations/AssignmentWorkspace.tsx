@@ -595,23 +595,26 @@ function AssignmentTable({
   onToggleAll: (checked: boolean) => void;
   onToggleItem: (key: string) => void;
 }) {
-  const hasRows = plan ? plan.assignments.length > 0 : assignments.length > 0;
+  if (plan) {
+    return (
+      <AssignmentPlanGroups
+        plan={plan}
+        selectedKeys={selectedKeys}
+        allSelected={allSelected}
+        onToggleAll={onToggleAll}
+        onToggleItem={onToggleItem}
+      />
+    );
+  }
+
+  const hasRows = assignments.length > 0;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="min-w-0 max-w-full overflow-x-auto">
       <table className="min-w-[760px] w-full text-left text-sm">
         <thead className="bg-muted text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
           <tr>
-            <th className="w-12 px-4 py-3">
-              {plan ? (
-                <Checkbox
-                  aria-label="Selectează toate asignările propuse"
-                  checked={allSelected}
-                  disabled={plan.assignments.every((assignment) => Boolean(assignment.existing_assignment_id))}
-                  onCheckedChange={(checked) => onToggleAll(checked === true)}
-                />
-              ) : null}
-            </th>
+            <th className="w-12 px-4 py-3" />
             <th className="px-4 py-3">Respondent</th>
             <th className="px-4 py-3">Chestionar</th>
             <th className="px-4 py-3">Țintă</th>
@@ -624,43 +627,8 @@ function AssignmentTable({
             <tr>
               <td colSpan={6} className="px-4 py-10 text-center">
                 <p className="font-semibold text-foreground">Nicio asignare</p>
-                {plan ? (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Structura proiectului nu a produs propuneri.
-                  </p>
-                ) : null}
               </td>
             </tr>
-          ) : plan ? (
-            plan.assignments.map((assignment) => {
-              const saved = Boolean(assignment.existing_assignment_id);
-              return (
-                <tr key={assignment.key} className="hover:bg-muted/60">
-                  <td className="px-4 py-3">
-                    <Checkbox
-                      aria-label={`Selectează asignarea pentru ${assignment.respondent_name}`}
-                      checked={saved || selectedKeys.has(assignment.key)}
-                      disabled={saved}
-                      onCheckedChange={() => onToggleItem(assignment.key)}
-                    />
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-foreground">
-                    {assignment.respondent_name}
-                  </td>
-                  <td className="px-4 py-3">{formatQuestionnaireLabel(assignment.questionnaire_key)}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-foreground">{formatPlanTarget(assignment)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatTargetType(assignment.target_type)}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{assignment.scope_name}</td>
-                  <td className="px-4 py-3">
-                    <AssignmentState saved={saved} selected={selectedKeys.has(assignment.key)} />
-                  </td>
-                </tr>
-              );
-            })
           ) : (
             assignments.map((assignment) => (
               <tr key={assignment.id} className="hover:bg-muted/60">
@@ -688,6 +656,166 @@ function AssignmentTable({
       </table>
     </div>
   );
+}
+
+function AssignmentPlanGroups({
+  plan,
+  selectedKeys,
+  allSelected,
+  onToggleAll,
+  onToggleItem,
+}: {
+  plan: CompanyAssignmentPlan;
+  selectedKeys: Set<string>;
+  allSelected: boolean;
+  onToggleAll: (checked: boolean) => void;
+  onToggleItem: (key: string) => void;
+}) {
+  const groups = buildAssignmentPlanGroups(plan);
+  const selectableCount = plan.assignments.filter((assignment) => !assignment.existing_assignment_id).length;
+
+  if (plan.assignments.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <p className="font-semibold text-foreground">Nicio asignare</p>
+        <p className="mt-1 text-sm text-muted-foreground">Structura proiectului nu a produs propuneri.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 md:px-5">
+        <Checkbox
+          aria-label="Selectează toate asignările propuse"
+          checked={allSelected}
+          disabled={selectableCount === 0}
+          onCheckedChange={(checked) => onToggleAll(checked === true)}
+        />
+        <span className="text-sm font-semibold text-foreground">Selectează toate propunerile</span>
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+          {selectedKeys.size} selectate din {selectableCount}
+        </span>
+      </div>
+
+      <div className="divide-y divide-border">
+        {groups.map(({ scope, assignments: scopeAssignments }) => (
+          <section key={scope.id} aria-label={scope.name}>
+            <header className="flex items-center justify-between gap-4 bg-muted/45 px-4 py-3 md:px-5">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold text-foreground">{scope.name}</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">{formatScopeType(scope.type)}</p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+                {scopeAssignments.length} {scopeAssignments.length === 1 ? "asignare" : "asignări"}
+              </span>
+            </header>
+
+            <div
+              className="hidden grid-cols-[3rem_1fr_1.2fr_1fr_7rem] border-t border-border/70 px-2 text-[11px] font-semibold uppercase text-muted-foreground sm:grid"
+              aria-hidden="true"
+            >
+              <span className="px-2 py-2" />
+              <span className="px-2 py-2">Respondent</span>
+              <span className="px-2 py-2">Chestionar</span>
+              <span className="px-2 py-2">Țintă</span>
+              <span className="px-2 py-2">Stare</span>
+            </div>
+
+            <div role="list" className="divide-y divide-border/80">
+              {scopeAssignments.map((assignment) => {
+                const saved = Boolean(assignment.existing_assignment_id);
+                const selected = selectedKeys.has(assignment.key);
+                return (
+                  <div
+                    key={assignment.key}
+                    role="listitem"
+                    className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 sm:grid-cols-[3rem_1fr_1.2fr_1fr_7rem] sm:items-center sm:gap-0 sm:px-2 sm:py-3"
+                  >
+                    <div className="pt-0.5 sm:px-2 sm:pt-0">
+                      <Checkbox
+                        aria-label={`Selectează asignarea pentru ${assignment.respondent_name}`}
+                        checked={saved || selected}
+                        disabled={saved}
+                        onCheckedChange={() => onToggleItem(assignment.key)}
+                      />
+                    </div>
+                    <PlanRowValue label="Respondent" strong>{assignment.respondent_name}</PlanRowValue>
+                    <PlanRowValue label="Chestionar">
+                      {formatQuestionnaireLabel(assignment.questionnaire_key)}
+                    </PlanRowValue>
+                    <div className="col-start-2 min-w-0 sm:col-start-auto sm:px-2">
+                      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">Țintă</span>
+                      <p className="font-medium text-foreground">{formatPlanTarget(assignment)}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{formatTargetType(assignment.target_type)}</p>
+                    </div>
+                    <div className="col-start-2 sm:col-start-auto sm:px-2">
+                      <AssignmentState saved={saved} selected={selected} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlanRowValue({
+  label,
+  strong = false,
+  children,
+}: {
+  label: string;
+  strong?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="col-start-2 min-w-0 sm:col-start-auto sm:px-2">
+      <span className="mb-1 block text-[11px] font-semibold text-muted-foreground sm:hidden">{label}</span>
+      <span className={cn("break-words", strong && "font-semibold text-foreground")}>{children}</span>
+    </div>
+  );
+}
+
+function buildAssignmentPlanGroups(plan: CompanyAssignmentPlan) {
+  const assignmentsByScope = new Map<string, CompanyAssignmentPlanItem[]>();
+  for (const assignment of plan.assignments) {
+    const current = assignmentsByScope.get(assignment.scope_id) ?? [];
+    current.push(assignment);
+    assignmentsByScope.set(assignment.scope_id, current);
+  }
+
+  const knownScopeIds = new Set(plan.scopes.map((scope) => scope.id));
+  const groups = plan.scopes
+    .map((scope) => ({ scope, assignments: assignmentsByScope.get(scope.id) ?? [] }))
+    .filter((group) => group.assignments.length > 0);
+
+  for (const assignment of plan.assignments) {
+    if (knownScopeIds.has(assignment.scope_id)) continue;
+    knownScopeIds.add(assignment.scope_id);
+    groups.push({
+      scope: {
+        id: assignment.scope_id,
+        name: assignment.scope_name,
+        type: assignment.scope_type,
+        participant_ids: [],
+      },
+      assignments: assignmentsByScope.get(assignment.scope_id) ?? [],
+    });
+  }
+
+  return groups;
+}
+
+function formatScopeType(type: string): string {
+  if (type === "leadership_team") return "Echipă de leadership";
+  if (type === "manager_team") return "Echipă funcțională";
+  if (type === "manager") return "Autoevaluare și feedback 360";
+  if (type === "member") return "Participant";
+  return "Grup de asignări";
 }
 
 function AssignmentState({ saved, selected }: { saved: boolean; selected: boolean }) {
