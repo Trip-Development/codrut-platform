@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
@@ -23,10 +24,66 @@ from codrut.modules.companies.models import (
     ParticipantProfile,
     ProjectMembership,
 )
+from codrut.modules.forms.models import QuestionnaireDefinition
 from codrut.modules.identity.models import AssignmentInvite, User, UserRole
 from codrut.modules.identity.service import IdentityService
 from codrut.modules.identity.terms import CURRENT_TERMS_VERSION
-from codrut.tools.local_preview import assert_local_preview_allowed
+from codrut.modules.protected_content.package import canonical_checksum
+from codrut.tools.local_preview import (
+    PREVIEW_DEFINITION_VERSION,
+    assert_local_preview_allowed,
+    build_preview_questionnaire_definitions,
+)
+
+E2E_QUESTIONNAIRE_KEYS = ("distress_drivers", "lencioni")
+
+
+async def _ensure_e2e_questionnaire_definitions(
+    session: AsyncSession,
+) -> dict[str, QuestionnaireDefinition]:
+    previews = {
+        definition.key: definition
+        for definition in build_preview_questionnaire_definitions()
+        if definition.key in E2E_QUESTIONNAIRE_KEYS
+    }
+    persisted: dict[str, QuestionnaireDefinition] = {}
+
+    for key in E2E_QUESTIONNAIRE_KEYS:
+        existing = (
+            await session.execute(
+                select(QuestionnaireDefinition).where(
+                    QuestionnaireDefinition.key == key,
+                    QuestionnaireDefinition.version == PREVIEW_DEFINITION_VERSION,
+                    QuestionnaireDefinition.system_managed.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            persisted[key] = existing
+            continue
+
+        preview = previews[key]
+        content = {
+            "key": preview.key,
+            "version": PREVIEW_DEFINITION_VERSION,
+            "title": preview.title,
+            "description": preview.description,
+            "schema": preview.schema,
+            "feedback_policy": preview.feedback_policy,
+            "trainer_visibility_policy": {},
+        }
+        definition = QuestionnaireDefinition(
+            id=uuid.uuid4(),
+            **content,
+            content_checksum=canonical_checksum(content),
+            system_managed=False,
+            active=True,
+        )
+        session.add(definition)
+        persisted[key] = definition
+
+    await session.flush()
+    return persisted
 
 
 async def seed_e2e_state() -> None:
@@ -35,6 +92,8 @@ async def seed_e2e_state() -> None:
     company_name = "E2E Test Company"
 
     async with SessionLocal() as session:
+        questionnaire_definitions = await _ensure_e2e_questionnaire_definitions(session)
+
         # 1. Clean up old E2E Test Company data and users if exists
         test_emails = [
             "alice.popescu@example.com",
@@ -223,6 +282,7 @@ async def seed_e2e_state() -> None:
                 project_id=project.id,
                 respondent_profile_id=profile.id,
                 questionnaire_key="distress_drivers",
+                questionnaire_definition_id=questionnaire_definitions["distress_drivers"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.assigned,
             )
@@ -236,6 +296,7 @@ async def seed_e2e_state() -> None:
                 project_id=project.id,
                 respondent_profile_id=profile.id,
                 questionnaire_key="lencioni",
+                questionnaire_definition_id=questionnaire_definitions["lencioni"].id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.assigned,
             )

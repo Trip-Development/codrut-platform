@@ -90,8 +90,8 @@ export class ParticipantPage {
     }
   }
 
-  async saveDraft() {
-    const btn = this.page.getByRole("button", { name: "Salvează draft" });
+  async saveDraftAndExit() {
+    const btn = this.page.getByRole("button", { name: /^Înapoi la/ });
     await expect(btn).toBeEnabled();
     await btn.click();
     await this.page.waitForLoadState("networkidle");
