@@ -26,7 +26,15 @@ export class LoginPage {
   async login(email: string, password: string) {
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
-    await this.submitButton.click();
+    const [response] = await Promise.all([
+      this.page.waitForResponse(
+        (candidate) =>
+          candidate.url().endsWith("/api/auth/login") &&
+          candidate.request().method() === "POST",
+      ),
+      this.submitButton.click(),
+    ]);
+    expect(response.ok()).toBeTruthy();
   }
 
   async verifyErrorContains(text: string) {

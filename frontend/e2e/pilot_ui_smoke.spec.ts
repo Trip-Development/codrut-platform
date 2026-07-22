@@ -84,7 +84,7 @@ test.describe("Pilot trainer UI smoke", () => {
     const loginPage = new LoginPage(page);
     await loginPage.gotoTrainer();
     await loginPage.login("trainer@example.com", "replace-with-a-long-test-password");
-    await expect(page).toHaveURL(/\/trainer/);
+    await expect(page).toHaveURL(/\/trainer\/?$/);
 
     await page.goto(`/trainer/projects/${seeded.projectId}`);
     await expect(page.getByRole("heading", { name: seeded.projectName })).toBeVisible();
