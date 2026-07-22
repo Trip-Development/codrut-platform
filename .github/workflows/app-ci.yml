@@ -26,7 +26,7 @@ jobs:
 
   e2e:
     name: end-to-end / playwright
-    if: github.base_ref == 'prod'
+    if: github.base_ref == 'prod' && !contains(github.event.pull_request.labels.*.name, 'skip-release-e2e')
     uses: ./.github/workflows/_e2e-playwright.yml
 
   infra:
@@ -55,6 +55,7 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           HEAD_REF: ${{ github.head_ref }}
           INFRA_RESULT: ${{ needs.infra.result }}
+          SKIP_RELEASE_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'skip-release-e2e') }}
         run: |
           set -euo pipefail
 
@@ -93,7 +94,7 @@ jobs:
               fi
             done
 
-            if [[ "${E2E_RESULT}" != "success" ]]; then
+            if [[ "${E2E_RESULT}" != "success" && !( "${SKIP_RELEASE_E2E}" == "true" && "${E2E_RESULT}" == "skipped" ) ]]; then
               echo "E2E_RESULT=${E2E_RESULT}; expected success for prod PR."
               exit 1
             fi
