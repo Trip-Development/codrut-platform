@@ -125,21 +125,23 @@ def upgrade() -> None:
         )
     )
 
-    # An unanswered assignment is only safe to pin when its key has exactly one
-    # definition. Choosing the latest or currently active version would rewrite history.
+    # The previous application resolved unanswered assignments through the key's
+    # single active definition. Freeze that existing behavior while retaining all
+    # historical versions for assignments whose responses identify an exact version.
     op.execute(
         sa.text(
             """
-            WITH unique_definitions AS (
+            WITH unique_active_definitions AS (
                 SELECT key, min(id::text)::uuid AS definition_id
                 FROM questionnaire_definitions
+                WHERE active IS TRUE
                 GROUP BY key
                 HAVING count(*) = 1
             )
             UPDATE questionnaire_assignments assignment
-            SET questionnaire_definition_id = unique_definitions.definition_id
-            FROM unique_definitions
-            WHERE assignment.questionnaire_key = unique_definitions.key
+            SET questionnaire_definition_id = unique_active_definitions.definition_id
+            FROM unique_active_definitions
+            WHERE assignment.questionnaire_key = unique_active_definitions.key
               AND assignment.questionnaire_definition_id IS NULL
               AND NOT EXISTS (
                   SELECT 1
