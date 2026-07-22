@@ -73,8 +73,9 @@ test.describe("Pilot trainer UI smoke", () => {
 
     await page.getByRole("link", { exact: true, name: "Asignări" }).click();
     await expect(page).toHaveURL(new RegExp(`/trainer/projects/${seeded.projectId}/assignments$`));
-    await expect(page.getByRole("heading", { name: "Configurează asignările înainte de trimitere" })).toBeVisible();
-    await page.getByRole("button", { name: "Avansat" }).click();
+    await expect(page.getByRole("heading", { name: "Plan de asignări" })).toBeVisible();
+    await page.getByRole("button", { name: "Asignare individuală" }).click();
+    await expect(page.getByRole("heading", { name: "Asignare individuală" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Autoevaluare/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Persoană/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Echipă/ })).toBeVisible();
@@ -87,15 +88,12 @@ test.describe("Pilot trainer UI smoke", () => {
           response.request().method() === "GET" &&
           response.ok(),
       ),
-      page.getByRole("button", { name: "Generează plan de asignări" }).click(),
+      page.getByRole("button", { name: "Generează plan" }).click(),
     ]);
     await expect(page.getByText("Leadership", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Leadership · 3 rânduri")).toBeVisible();
     await expect(page.getByText("Echipa Mara Ionescu QA", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Echipă manager · 2 rânduri").first()).toBeVisible();
     await expect(page.getByText("Echipa Sorin Pavel QA", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Echipă manager · 1 rânduri").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Salvează asignările bifate (24)" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Salvează 24 asignări" })).toBeEnabled();
 
     await Promise.all([
       page.waitForResponse(
@@ -104,11 +102,11 @@ test.describe("Pilot trainer UI smoke", () => {
           response.request().method() === "POST" &&
           response.ok(),
       ),
-      page.getByRole("button", { name: "Salvează asignările bifate (24)" }).click(),
+      page.getByRole("button", { name: "Salvează 24 asignări" }).click(),
     ]);
-    await expect(page.getByText("Asignări totale").locator("xpath=..").getByText("24")).toBeVisible();
-    await expect(page.getByText("Persoane fără sarcini").locator("xpath=..").getByText("0")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Salvează asignările bifate (0)" })).toBeDisabled();
+    await expect(page.getByText("24 create, 0 deja existente.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Regenerează planul" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Salvează \d+ asignări/ })).toHaveCount(0);
 
     await page.getByRole("link", { exact: true, name: "Invitații" }).click();
     await expect(page).toHaveURL(new RegExp(`/trainer/projects/${seeded.projectId}/invitations$`));

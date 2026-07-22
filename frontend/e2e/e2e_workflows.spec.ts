@@ -64,8 +64,8 @@ test.describe("Complete End-to-End Workflow with Confidentiality Thresholds", ()
 
     // Fill Distress Drivers (uses dropdown selects)
     await participantPage.fillCurrentQuestionnaire();
-    // Test draft saving functionality
-    await participantPage.saveDraft();
+    // Test autosave through the Back action.
+    await participantPage.saveDraftAndExit();
     await participantPage.startFilling();
     // Submit the task resumed from draft
     await participantPage.submitResponse();
