@@ -40,10 +40,14 @@ type MailpitMessage = {
   Subject?: string;
 };
 
+const mailpitApiUrl = (
+  process.env.CODRUT_E2E_MAILPIT_API_URL ?? "http://127.0.0.1:8025"
+).replace(/\/$/, "");
+
 async function mailpitMessagesForCompany(request: APIRequestContext, companyName: string) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
-    const response = await request.get("http://localhost:8025/api/v1/messages");
+    const response = await request.get(`${mailpitApiUrl}/api/v1/messages`);
     expect(response.ok()).toBeTruthy();
     const payload = await response.json();
     const messages: MailpitMessage[] = (payload.messages ?? []).filter((message: MailpitMessage) =>
@@ -61,7 +65,7 @@ async function secureInvitePath(request: APIRequestContext, messages: MailpitMes
   const taskMessage = messages.find((message) => message.Subject?.includes("chestionare"));
   expect(taskMessage).toBeDefined();
 
-  const response = await request.get(`http://localhost:8025/api/v1/message/${taskMessage?.ID}`);
+  const response = await request.get(`${mailpitApiUrl}/api/v1/message/${taskMessage?.ID}`);
   expect(response.ok()).toBeTruthy();
   const payload = await response.json();
   const body = `${payload.Text ?? ""}\n${payload.HTML ?? ""}`.replaceAll("&amp;", "&");
