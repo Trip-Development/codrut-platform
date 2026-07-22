@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
+    AssessmentCycleStatus,
     AssignmentAccessMode,
     AssignmentStatus,
     AssignmentTargetType,
@@ -165,12 +166,18 @@ class FormsService:
         user_id: UUID,
         assignment_id: UUID,
         *,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> QuestionnaireResponseResponse:
         repository = self._require_repository()
         assignment = await repository.get_assignment_for_user(
             assignment_id,
             user_id,
+            participant_profile_id=participant_profile_id,
+            project_id=project_id,
+            cycle_id=cycle_id,
             allowed_assignment_ids=allowed_assignment_ids,
         )
         if assignment is None:
@@ -201,12 +208,18 @@ class FormsService:
         user_id: UUID,
         assignment_id: UUID,
         *,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> QuestionnaireDefinitionResponse:
         repository = self._require_repository()
         assignment = await repository.get_assignment_for_user(
             assignment_id,
             user_id,
+            participant_profile_id=participant_profile_id,
+            project_id=project_id,
+            cycle_id=cycle_id,
             allowed_assignment_ids=allowed_assignment_ids,
         )
         if assignment is None:
@@ -221,17 +234,37 @@ class FormsService:
         key: str,
         *,
         version: int | None = None,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> QuestionnaireDefinitionResponse:
         repository = self._require_repository()
-        assignment = await repository.get_assignment_for_user_by_key(
+        assignments = await repository.list_assignments_for_user_by_key(
             user_id,
             key,
             version=version,
+            participant_profile_id=participant_profile_id,
+            project_id=project_id,
+            cycle_id=cycle_id,
             allowed_assignment_ids=allowed_assignment_ids,
         )
-        if assignment is None:
+        if not assignments:
             raise DomainError("Questionnaire definition not found.", code="definition_not_found")
+        contexts = {
+            (
+                assignment.respondent_profile_id,
+                assignment.project_id,
+                assignment.assessment_cycle_id,
+            )
+            for assignment in assignments
+        }
+        if len(contexts) != 1:
+            raise DomainError(
+                "Select a participant, project, and assessment cycle before opening this form.",
+                code="participant_context_required",
+            )
+        assignment = assignments[0]
         await _validate_assignment_response_window(repository, assignment)
         definition = await _resolve_definition(repository, assignment)
         return _to_response(definition, include_private=False)
@@ -262,12 +295,18 @@ class FormsService:
         payload: QuestionnaireResponseSaveRequest,
         *,
         submit: bool = False,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> QuestionnaireResponseResponse:
         repository = self._require_repository()
         assignment = await repository.get_assignment_for_user(
             assignment_id,
             user_id,
+            participant_profile_id=participant_profile_id,
+            project_id=project_id,
+            cycle_id=cycle_id,
             allowed_assignment_ids=allowed_assignment_ids,
         )
         if assignment is None:
@@ -294,6 +333,7 @@ class FormsService:
     ) -> QuestionnaireResponseResponse:
         repository = self._require_repository()
         assignment_id = assignment.id
+        await _validate_assignment_response_window(repository, assignment)
         response = await repository.get_response_by_assignment(assignment_id)
         if response is not None and response.status == QuestionnaireResponseStatus.submitted:
             if submit and response.answers == payload.answers:
@@ -302,7 +342,6 @@ class FormsService:
                 "Submitted responses are locked. Ask the trainer to reopen this assignment.",
                 code="response_locked",
             )
-        await _validate_assignment_response_window(repository, assignment)
         definition = await _resolve_definition(repository, assignment)
         if submit:
             _validate_submit_answers(definition.schema, payload.answers)
@@ -411,11 +450,33 @@ class FormsService:
             )
         return assignment
 
-    async def get_participant_onboarding(self, user_id: UUID) -> ParticipantOnboardingResponse:
+    async def get_participant_onboarding(
+        self,
+        user_id: UUID,
+        *,
+        participant_profile_id: UUID | None = None,
+    ) -> ParticipantOnboardingResponse:
         repository = self._require_repository()
-        profile = await repository.get_permanent_participant_for_user(user_id)
-        if profile is None:
+        profiles = await repository.list_permanent_participants_for_user(user_id)
+        if not profiles:
             return ParticipantOnboardingResponse(required=False)
+        if participant_profile_id is None:
+            if len(profiles) != 1:
+                raise DomainError(
+                    "Select a participant profile before starting onboarding.",
+                    code="participant_context_required",
+                )
+            profile = profiles[0]
+        else:
+            profile = next(
+                (candidate for candidate in profiles if candidate.id == participant_profile_id),
+                None,
+            )
+            if profile is None:
+                raise DomainError(
+                    "Participant context does not belong to this account.",
+                    code="participant_context_forbidden",
+                )
 
         if not profile.pcm_base or not profile.pcm_phase:
             assignment = await self._ensure_pcm_assignment(profile.id, "pcm_base")
@@ -635,6 +696,38 @@ async def _validate_assignment_response_window(
     assignment: QuestionnaireAssignment,
 ) -> None:
     now = datetime.now(UTC)
+    if getattr(assignment, "status", None) == AssignmentStatus.cancelled:
+        raise DomainError(
+            "This assignment has been cancelled.",
+            code="assignment_cancelled",
+        )
+    if getattr(assignment, "assessment_cycle_id", None) is not None:
+        cycle = await repository.get_assessment_cycle_for_assignment(assignment)
+        if cycle is None:
+            raise DomainError(
+                "Assessment cycle was not found for this assignment.",
+                code="assessment_cycle_not_found",
+            )
+        if cycle.status == AssessmentCycleStatus.draft:
+            raise DomainError(
+                "Assessment cycle is not open yet.",
+                code="assessment_cycle_not_open",
+            )
+        if cycle.status == AssessmentCycleStatus.closed:
+            raise DomainError(
+                "Assessment cycle is closed.",
+                code="assessment_cycle_closed",
+            )
+        if cycle.starts_at is not None and cycle.starts_at > now:
+            raise DomainError(
+                "Assessment cycle is not open yet.",
+                code="assessment_cycle_not_open",
+            )
+        if cycle.due_at is not None and cycle.due_at <= now:
+            raise DomainError(
+                "Assessment cycle is closed.",
+                code="assessment_cycle_closed",
+            )
     if assignment.due_at is not None and assignment.due_at <= now:
         raise DomainError(
             "Assignment response window has closed.",

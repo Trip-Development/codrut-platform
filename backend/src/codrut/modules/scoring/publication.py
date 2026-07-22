@@ -150,6 +150,14 @@ class ResultPublicationService:
             else statement.where(QuestionnaireAssignment.project_id == assignment.project_id)
         )
         statement = (
+            statement.where(QuestionnaireAssignment.assessment_cycle_id.is_(None))
+            if assignment.assessment_cycle_id is None
+            else statement.where(
+                QuestionnaireAssignment.assessment_cycle_id
+                == assignment.assessment_cycle_id
+            )
+        )
+        statement = (
             statement.where(QuestionnaireAssignment.questionnaire_definition_id.is_(None))
             if assignment.questionnaire_definition_id is None
             else statement.where(
@@ -157,7 +165,11 @@ class ResultPublicationService:
                 == assignment.questionnaire_definition_id
             )
         )
-        candidate_rows = list((await self.session.execute(statement)).all())
+        candidate_rows = [
+            (candidate, result)
+            for candidate, result in (await self.session.execute(statement)).all()
+            if candidate.status != AssignmentStatus.cancelled
+        ]
         rows, publication_round_id, merged_round_ids = _aggregate_cycle_rows(
             candidate_rows,
             assignment.assignment_round_id,
@@ -237,6 +249,7 @@ class ResultPublicationService:
             "company_id": assignment.company_id,
             "project_id": assignment.project_id,
             "assignment_round_id": assignment_round_id or assignment.assignment_round_id,
+            "assessment_cycle_id": assignment.assessment_cycle_id,
             "questionnaire_definition_id": assignment.questionnaire_definition_id,
             "questionnaire_key": assignment.questionnaire_key,
             "source_assignment_id": source_assignment_id,
@@ -431,6 +444,7 @@ def _aggregate_publication_key(
             "aggregate-360",
             str(assignment.target_person_id),
             str(assignment.project_id or "none"),
+            str(assignment.assessment_cycle_id or "legacy"),
             str(assignment_round_id or assignment.assignment_round_id),
             str(assignment.questionnaire_definition_id or assignment.questionnaire_key),
         )

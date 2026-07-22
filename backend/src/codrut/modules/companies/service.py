@@ -6,10 +6,12 @@ from datetime import UTC, datetime
 from typing import Literal, NoReturn
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
+from codrut.modules.assignments.models import AssessmentCycle, AssessmentCycleStatus
 from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
@@ -190,7 +192,7 @@ class CompanyService:
             payload.form_closes_at,
             "invalid_form_window",
         )
-        return await self.repository.add_project(
+        project = await self.repository.add_project(
             CompanyProject(
                 company_id=company_id,
                 name=name,
@@ -203,6 +205,20 @@ class CompanyService:
                 form_closes_at=payload.form_closes_at,
             )
         )
+        self.repository.session.add(
+            AssessmentCycle(
+                company_id=company_id,
+                project_id=project.id,
+                sequence=1,
+                name="Evaluare inițială",
+                status=AssessmentCycleStatus.draft,
+                starts_at=project.starts_at,
+                due_at=project.due_at,
+                created_by_user_id=user_id,
+            )
+        )
+        await self.repository.session.flush()
+        return project
 
     async def update_project(
         self,
@@ -490,6 +506,7 @@ class CompanyService:
             company.id,
             participants,
             payload.project_id,
+            None,
         )
         if not invite_participants:
             return RosterImportResponse(
@@ -505,6 +522,7 @@ class CompanyService:
             company=company,
             participants=invite_participants,
             project_id=payload.project_id,
+            assessment_cycle_id=None,
             mode="email",
             force_rotate=False,
             idempotency_key=idempotency_key,
@@ -529,6 +547,11 @@ class CompanyService:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, payload.project_id)
+        await self._require_invitation_assessment_cycle(
+            company_id,
+            payload.project_id,
+            payload.assessment_cycle_id,
+        )
         participants = await self.repository.list_participants(company_id)
         if payload.project_id is not None:
             project_memberships = await self.repository.list_project_memberships(
@@ -563,6 +586,7 @@ class CompanyService:
                 company.id,
                 participants,
                 payload.project_id,
+                payload.assessment_cycle_id,
             )
             if not participants and had_invite_candidates:
                 return ParticipantInviteBatchResponse(
@@ -581,6 +605,7 @@ class CompanyService:
             company=company,
             participants=participants,
             project_id=payload.project_id,
+            assessment_cycle_id=payload.assessment_cycle_id,
             mode=payload.mode,
             force_rotate=payload.force_rotate,
             idempotency_key=idempotency_key,
@@ -700,6 +725,7 @@ class CompanyService:
         company: Company,
         participants: list[ParticipantProfile],
         project_id: UUID | None,
+        assessment_cycle_id: UUID | None,
         mode: Literal["email", "secure_links"],
         force_rotate: bool,
         idempotency_key: str | None = None,
@@ -736,17 +762,46 @@ class CompanyService:
             if project_id is not None
             else None
         )
-        invite_expires_at = _project_invite_expires_at(project)
+        cycle = (
+            await self._get_assessment_cycle(
+                company.id,
+                project_id,
+                assessment_cycle_id,
+            )
+            if project_id is not None and assessment_cycle_id is not None
+            else None
+        )
+        if cycle is not None and cycle.status == AssessmentCycleStatus.closed:
+            raise DomainError(
+                "Assessment cycle is closed.",
+                code="assessment_cycle_closed",
+            )
+        invite_expires_at = _assessment_invite_expires_at(project, cycle)
         active_assignments_by_participant = await self._list_active_assignments_for_participants(
             company.id,
             participants,
             project_id,
+            assessment_cycle_id,
         )
         active_assignment_ids = {
             assignment.id
             for assignments in active_assignments_by_participant.values()
             for assignment in assignments
         }
+        cycle_was_draft = cycle is not None and cycle.status == AssessmentCycleStatus.draft
+        cycle_original_starts_at = cycle.starts_at if cycle is not None else None
+        if assessment_cycle_id is not None and active_assignment_ids:
+            assert project_id is not None
+            from codrut.modules.assignments.service import AssignmentService
+
+            cycle = await AssignmentService(
+                self.repository.session
+            ).activate_assessment_cycle_for_invitation(
+                company.id,
+                project_id,
+                assessment_cycle_id,
+            )
+            invite_expires_at = _assessment_invite_expires_at(project, cycle)
         successfully_delivered_assignment_ids = (
             await communications_repository.list_successfully_delivered_assignment_ids(
                 active_assignment_ids
@@ -847,6 +902,7 @@ class CompanyService:
                                 idempotency_key,
                                 company_id=company.id,
                                 project_id=project_id,
+                                assessment_cycle_id=assessment_cycle_id,
                                 participant_id=participant.id,
                             ),
                             assignment_ids=[assignment.id for assignment in assignments],
@@ -901,6 +957,13 @@ class CompanyService:
             for result in results
             if result.delivery_mode == "secure_links" and result.invite_url is not None
         )
+        if (
+            cycle is not None
+            and cycle_was_draft
+            and not (emails_sent or emails_queued or links_generated)
+        ):
+            cycle.status = AssessmentCycleStatus.draft
+            cycle.starts_at = cycle_original_starts_at
         return ParticipantInviteBatchResponse(
             results=results,
             total=len(results),
@@ -921,6 +984,7 @@ class CompanyService:
         company_id: UUID,
         participants: list[ParticipantProfile],
         project_id: UUID | None,
+        assessment_cycle_id: UUID | None,
     ) -> list[ParticipantProfile]:
         from sqlalchemy import select
 
@@ -949,6 +1013,8 @@ class CompanyService:
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        if assessment_cycle_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id)
         result = await self.repository.session.execute(stmt)
         sent_participant_ids = set(result.scalars().all())
         return [
@@ -962,6 +1028,7 @@ class CompanyService:
         user_id: UUID,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list[ParticipantInvitationStatusResponse]:
         from sqlalchemy import select
 
@@ -974,6 +1041,11 @@ class CompanyService:
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, project_id)
+        await self._require_invitation_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
 
         participants = await self.repository.list_participants(company_id)
         if project_id is not None:
@@ -996,6 +1068,10 @@ class CompanyService:
         )
         if project_id is not None:
             sends_stmt = sends_stmt.where(QuestionnaireAssignment.project_id == project_id)
+        if assessment_cycle_id is not None:
+            sends_stmt = sends_stmt.where(
+                QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id
+            )
         sends_result = await self.repository.session.execute(sends_stmt)
 
         latest_send_by_participant: dict[UUID, EmailSend] = {}
@@ -1008,12 +1084,17 @@ class CompanyService:
 
         project_assignment_ids_by_participant: dict[UUID, set[UUID]] = {}
         if project_id is not None:
-            assignments_result = await self.repository.session.execute(
+            assignments_stmt = (
                 select(QuestionnaireAssignment.id, QuestionnaireAssignment.respondent_profile_id)
                 .where(QuestionnaireAssignment.company_id == company_id)
                 .where(QuestionnaireAssignment.project_id == project_id)
                 .where(QuestionnaireAssignment.respondent_profile_id.in_(participant_ids))
             )
+            if assessment_cycle_id is not None:
+                assignments_stmt = assignments_stmt.where(
+                    QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id
+                )
+            assignments_result = await self.repository.session.execute(assignments_stmt)
             for assignment_id, participant_id in assignments_result.all():
                 project_assignment_ids_by_participant.setdefault(participant_id, set()).add(
                     assignment_id
@@ -1087,11 +1168,13 @@ class CompanyService:
         company_id: UUID,
         participant: ParticipantProfile,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list:
         assignments_by_participant = await self._list_active_assignments_for_participants(
             company_id,
             [participant],
             project_id,
+            assessment_cycle_id,
         )
         return assignments_by_participant.get(participant.id, [])
 
@@ -1100,6 +1183,7 @@ class CompanyService:
         company_id: UUID,
         participants: list[ParticipantProfile],
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> dict[UUID, list]:
         from codrut.modules.assignments.models import AssignmentStatus
 
@@ -1120,6 +1204,10 @@ class CompanyService:
                 and assignment.company_id == company_id
                 and assignment.status in active_statuses
                 and (project_id is None or assignment.project_id == project_id)
+                and (
+                    assessment_cycle_id is None
+                    or assignment.assessment_cycle_id == assessment_cycle_id
+                )
             ):
                 active_assignments_by_participant[assignment.respondent_profile_id].append(
                     assignment
@@ -1132,12 +1220,18 @@ class CompanyService:
         company_id: UUID,
         participant_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
         *,
         idempotency_key: str | None = None,
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
         await self._require_company_project(company_id, project_id)
+        await self._require_invitation_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
 
         participant = await self.repository.get_participant_by_id(participant_id)
         if participant is None or participant.company_id != company_id:
@@ -1148,6 +1242,7 @@ class CompanyService:
             company=company,
             participants=[participant],
             project_id=project_id,
+            assessment_cycle_id=assessment_cycle_id,
             mode="email",
             force_rotate=False,
             idempotency_key=idempotency_key,
@@ -1159,6 +1254,44 @@ class CompanyService:
             emails_sent=result.emails_sent,
             emails_queued=result.emails_queued,
             emails_failed=result.emails_failed,
+        )
+
+    async def _require_invitation_assessment_cycle(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+        assessment_cycle_id: UUID | None,
+    ) -> None:
+        if assessment_cycle_id is None:
+            return
+        if project_id is None:
+            raise DomainError(
+                "A project is required for an assessment cycle.",
+                code="assessment_cycle_project_required",
+            )
+        cycle = await self._get_assessment_cycle(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
+        if cycle is None:
+            raise DomainError(
+                "Assessment cycle not found in this project.",
+                code="assessment_cycle_not_found",
+            )
+
+    async def _get_assessment_cycle(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+        assessment_cycle_id: UUID,
+    ) -> AssessmentCycle | None:
+        return await self.repository.session.scalar(
+            select(AssessmentCycle).where(
+                AssessmentCycle.id == assessment_cycle_id,
+                AssessmentCycle.company_id == company_id,
+                AssessmentCycle.project_id == project_id,
+            )
         )
 
     async def create_access_code(
@@ -1375,6 +1508,23 @@ def _project_invite_expires_at(project: CompanyProject | None) -> datetime | Non
     return expires_at
 
 
+def _assessment_invite_expires_at(
+    project: CompanyProject | None,
+    cycle: AssessmentCycle | None,
+) -> datetime | None:
+    project_expiry = _project_invite_expires_at(project)
+    if cycle is None or cycle.due_at is None:
+        return project_expiry
+
+    now = datetime.now(UTC)
+    if cycle.due_at <= now:
+        raise DomainError(
+            "Assessment cycle questionnaire window has closed.",
+            code="assessment_cycle_closed",
+        )
+    return min(project_expiry, cycle.due_at) if project_expiry is not None else cycle.due_at
+
+
 def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
     return RosterImportRow(
         full_name=row.full_name.strip(),
@@ -1434,11 +1584,14 @@ def _participant_invite_idempotency_key(
     *,
     company_id: UUID,
     project_id: UUID | None,
+    assessment_cycle_id: UUID | None,
     participant_id: UUID,
 ) -> str | None:
     if not request_key:
         return None
-    scope = f"invite:{company_id}:{project_id or 'all'}:{participant_id}"
+    scope = (
+        f"invite:{company_id}:{project_id or 'all'}:{assessment_cycle_id or 'all'}:{participant_id}"
+    )
     return hashlib.sha256(f"{request_key}:{scope}".encode()).hexdigest()
 
 

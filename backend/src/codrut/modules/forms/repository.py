@@ -3,7 +3,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codrut.modules.assignments.models import AssignmentTargetType, QuestionnaireAssignment
+from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssignmentTargetType,
+    QuestionnaireAssignment,
+)
 from codrut.modules.companies.models import CompanyProject, ParticipantProfile
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
@@ -22,6 +26,9 @@ class FormsRepository:
         assignment_id: UUID,
         user_id: UUID,
         *,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
     ) -> QuestionnaireAssignment | None:
         statement = (
@@ -33,6 +40,14 @@ class FormsRepository:
             .where(QuestionnaireAssignment.id == assignment_id)
             .where(ParticipantProfile.user_id == user_id)
         )
+        if participant_profile_id is not None:
+            statement = statement.where(
+                QuestionnaireAssignment.respondent_profile_id == participant_profile_id
+            )
+        if project_id is not None:
+            statement = statement.where(QuestionnaireAssignment.project_id == project_id)
+        if cycle_id is not None:
+            statement = statement.where(QuestionnaireAssignment.assessment_cycle_id == cycle_id)
         if allowed_assignment_ids is not None:
             if assignment_id not in allowed_assignment_ids:
                 return None
@@ -40,14 +55,17 @@ class FormsRepository:
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def get_assignment_for_user_by_key(
+    async def list_assignments_for_user_by_key(
         self,
         user_id: UUID,
         questionnaire_key: str,
         *,
         version: int | None = None,
+        participant_profile_id: UUID | None = None,
+        project_id: UUID | None = None,
+        cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
-    ) -> QuestionnaireAssignment | None:
+    ) -> list[QuestionnaireAssignment]:
         statement = (
             select(QuestionnaireAssignment)
             .join(
@@ -58,17 +76,25 @@ class FormsRepository:
             .where(QuestionnaireAssignment.questionnaire_key == questionnaire_key)
             .order_by(QuestionnaireAssignment.created_at.desc())
         )
+        if participant_profile_id is not None:
+            statement = statement.where(
+                QuestionnaireAssignment.respondent_profile_id == participant_profile_id
+            )
+        if project_id is not None:
+            statement = statement.where(QuestionnaireAssignment.project_id == project_id)
+        if cycle_id is not None:
+            statement = statement.where(QuestionnaireAssignment.assessment_cycle_id == cycle_id)
         if allowed_assignment_ids is not None:
             if not allowed_assignment_ids:
-                return None
+                return []
             statement = statement.where(QuestionnaireAssignment.id.in_(allowed_assignment_ids))
         if version is not None:
             statement = statement.join(
                 QuestionnaireDefinition,
                 QuestionnaireDefinition.id == QuestionnaireAssignment.questionnaire_definition_id,
             ).where(QuestionnaireDefinition.version == version)
-        result = await self.session.execute(statement.limit(1))
-        return result.scalar_one_or_none()
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
     async def get_assignment_by_id(
         self,
@@ -79,20 +105,14 @@ class FormsRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_participant_for_user(self, user_id: UUID) -> ParticipantProfile | None:
-        result = await self.session.execute(
-            select(ParticipantProfile).where(ParticipantProfile.user_id == user_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def get_permanent_participant_for_user(self, user_id: UUID) -> ParticipantProfile | None:
+    async def list_permanent_participants_for_user(self, user_id: UUID) -> list[ParticipantProfile]:
         result = await self.session.execute(
             select(ParticipantProfile)
             .join(User, User.id == ParticipantProfile.user_id)
             .where(ParticipantProfile.user_id == user_id)
             .where(User.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH)
         )
-        return result.scalar_one_or_none()
+        return list(result.scalars().all())
 
     async def get_participant_by_profile_id(
         self,
@@ -116,6 +136,8 @@ class FormsRepository:
             .where(QuestionnaireAssignment.respondent_profile_id == participant_profile_id)
             .where(QuestionnaireAssignment.questionnaire_key == questionnaire_key)
             .where(QuestionnaireAssignment.target_type == AssignmentTargetType.self_assessment)
+            .order_by(QuestionnaireAssignment.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -151,6 +173,20 @@ class FormsRepository:
             select(CompanyProject)
             .where(CompanyProject.id == assignment.project_id)
             .where(CompanyProject.company_id == assignment.company_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_assessment_cycle_for_assignment(
+        self,
+        assignment: QuestionnaireAssignment,
+    ) -> AssessmentCycle | None:
+        if assignment.assessment_cycle_id is None or assignment.project_id is None:
+            return None
+        result = await self.session.execute(
+            select(AssessmentCycle)
+            .where(AssessmentCycle.id == assignment.assessment_cycle_id)
+            .where(AssessmentCycle.company_id == assignment.company_id)
+            .where(AssessmentCycle.project_id == assignment.project_id)
         )
         return result.scalar_one_or_none()
 

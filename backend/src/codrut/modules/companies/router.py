@@ -284,12 +284,14 @@ async def list_participant_invitation_statuses(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
 ) -> list[ParticipantInvitationStatusResponse]:
     require_trainer_principal(principal)
     return await CompanyService(session).list_participant_invitation_statuses(
         principal.user_id,
         company_id,
         project_id,
+        assessment_cycle_id,
     )
 
 
@@ -304,6 +306,7 @@ async def resend_participant_invite(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
     project_id: Annotated[UUID | None, Query()] = None,
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
     idempotency_key: Annotated[
         str | None,
         Header(alias="Idempotency-Key", min_length=8, max_length=128),
@@ -315,6 +318,7 @@ async def resend_participant_invite(
         company_id,
         participant_id,
         project_id,
+        assessment_cycle_id,
         idempotency_key=idempotency_key,
     )
     await session.commit()

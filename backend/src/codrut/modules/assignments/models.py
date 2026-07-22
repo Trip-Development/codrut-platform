@@ -2,7 +2,17 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, UniqueConstraint, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from codrut.core.database import Base, TimestampMixin
@@ -35,6 +45,13 @@ class AssignmentStatus(StrEnum):
     submitted = "submitted"
     validated = "validated"
     scored = "scored"
+    cancelled = "cancelled"
+
+
+class AssessmentCycleStatus(StrEnum):
+    draft = "draft"
+    active = "active"
+    closed = "closed"
 
 
 class ResponseVisibilityPolicy(StrEnum):
@@ -71,6 +88,89 @@ class TeamMembership(TimestampMixin, Base):
     role: Mapped[TeamMembershipRole] = mapped_column(Enum(TeamMembershipRole), nullable=False)
 
 
+class AssessmentCycle(TimestampMixin, Base):
+    __tablename__ = "assessment_cycles"
+    __table_args__ = (
+        UniqueConstraint("project_id", "sequence", name="uq_assessment_cycles_project_sequence"),
+        Index(
+            "uq_assessment_cycles_open_project",
+            "project_id",
+            unique=True,
+            postgresql_where=text("status in ('draft', 'active')"),
+        ),
+        CheckConstraint("sequence > 0", name="ck_assessment_cycles_sequence_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("company_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[AssessmentCycleStatus] = mapped_column(
+        Enum(AssessmentCycleStatus), nullable=False, default=AssessmentCycleStatus.draft
+    )
+    source_cycle_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assessment_cycles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+
+class AssessmentCycleQuestionnaire(TimestampMixin, Base):
+    __tablename__ = "assessment_cycle_questionnaires"
+    __table_args__ = (
+        UniqueConstraint(
+            "assessment_cycle_id",
+            "questionnaire_key",
+            name="uq_assessment_cycle_questionnaires_cycle_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    assessment_cycle_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assessment_cycles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    questionnaire_definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("questionnaire_definitions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    questionnaire_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class AssessmentCycleTeamMembership(TimestampMixin, Base):
+    __tablename__ = "assessment_cycle_team_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "assessment_cycle_id",
+            "team_id",
+            "participant_profile_id",
+            name="uq_assessment_cycle_team_memberships_member",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    assessment_cycle_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assessment_cycles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teams.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    role: Mapped[TeamMembershipRole] = mapped_column(Enum(TeamMembershipRole), nullable=False)
+
+
 class QuestionnaireAssignment(TimestampMixin, Base):
     __tablename__ = "questionnaire_assignments"
     __table_args__ = (
@@ -98,6 +198,17 @@ class QuestionnaireAssignment(TimestampMixin, Base):
             "reminder_count >= 0 and reminder_count <= 2",
             name="reminder_count_bounds",
         ),
+        Index(
+            "uq_questionnaire_assignments_cycle_shape",
+            "cycle_shape_guard",
+            "respondent_profile_id",
+            "questionnaire_key",
+            "target_type",
+            text("coalesce(target_person_id, '00000000-0000-0000-0000-000000000000'::uuid)"),
+            text("coalesce(target_team_id, '00000000-0000-0000-0000-000000000000'::uuid)"),
+            unique=True,
+            postgresql_where=text("cycle_shape_guard is not null"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -115,6 +226,12 @@ class QuestionnaireAssignment(TimestampMixin, Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
         index=True,
+    )
+    assessment_cycle_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assessment_cycles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cycle_shape_guard: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assessment_cycles.id", ondelete="SET NULL"), nullable=True
     )
     respondent_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("participant_profiles.id", ondelete="CASCADE"),

@@ -45,6 +45,7 @@ class ScoringRepository:
         self,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list[tuple[QuestionnaireAssignment, ScoringResult | None]]:
         stmt = (
             select(QuestionnaireAssignment, ScoringResult)
@@ -53,6 +54,10 @@ class ScoringRepository:
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        if assessment_cycle_id is not None:
+            stmt = stmt.where(
+                QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id
+            )
         result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
         return [(assignment, scoring_result) for assignment, scoring_result in result.all()]
 
@@ -60,6 +65,7 @@ class ScoringRepository:
         self,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list[
         tuple[
             QuestionnaireAssignment,
@@ -78,6 +84,10 @@ class ScoringRepository:
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        if assessment_cycle_id is not None:
+            stmt = stmt.where(
+                QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id
+            )
         result = await self.session.execute(stmt.order_by(QuestionnaireAssignment.created_at))
         return [
             (assignment, scoring_result, definition)
@@ -88,6 +98,7 @@ class ScoringRepository:
         self,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list[
         tuple[
             QuestionnaireAssignment,
@@ -130,6 +141,10 @@ class ScoringRepository:
         )
         if project_id is not None:
             stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        if assessment_cycle_id is not None:
+            stmt = stmt.where(
+                QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id
+            )
 
         result = await self.session.execute(
             stmt.order_by(
@@ -142,6 +157,36 @@ class ScoringRepository:
             (assignment, response, respondent_profile, target_profile, definition)
             for assignment, response, respondent_profile, target_profile, definition in result.all()
         ]
+
+    async def list_company_pcm_responses(
+        self,
+        company_id: UUID,
+        project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
+    ) -> list[tuple[QuestionnaireAssignment, QuestionnaireResponse]]:
+        stmt = (
+            select(QuestionnaireAssignment, QuestionnaireResponse)
+            .join(
+                QuestionnaireResponse,
+                QuestionnaireResponse.assignment_id == QuestionnaireAssignment.id,
+            )
+            .where(QuestionnaireAssignment.company_id == company_id)
+            .where(QuestionnaireAssignment.questionnaire_key.in_(("pcm_base", "phase")))
+            .where(QuestionnaireResponse.status == QuestionnaireResponseStatus.submitted)
+        )
+        if project_id is not None:
+            stmt = stmt.where(QuestionnaireAssignment.project_id == project_id)
+        if assessment_cycle_id is not None:
+            stmt = stmt.where(
+                QuestionnaireAssignment.assessment_cycle_id == assessment_cycle_id
+            )
+        result = await self.session.execute(
+            stmt.order_by(
+                QuestionnaireResponse.submitted_at,
+                QuestionnaireAssignment.created_at,
+            )
+        )
+        return list(result.all())
 
     async def delete_by_assignment(self, assignment_id: UUID) -> None:
         stmt = delete(ScoringResult).where(ScoringResult.assignment_id == assignment_id)

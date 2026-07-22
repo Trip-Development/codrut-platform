@@ -14,6 +14,7 @@ class ParticipantWorkspaceCard(BaseModel):
 
 class ParticipantWorkspaceResult(BaseModel):
     assignment_id: UUID
+    assessment_cycle_id: UUID | None = None
     project_id: UUID | None = None
     project_name: str | None = None
     questionnaire_key: str
@@ -34,6 +35,7 @@ class ParticipantReceivedFeedbackSummary(BaseModel):
     project_id: UUID | None = None
     project_name: str | None = None
     assignment_round_id: UUID
+    assessment_cycle_id: UUID | None = None
     questionnaire_key: str
     questionnaire_title: str
     completed_count: int
@@ -49,25 +51,55 @@ class ParticipantWorkspaceProject(BaseModel):
     name: str
     deadline_label: str
     deadline_at: datetime | None = None
+    cycles: list["ParticipantWorkspaceCycle"] = Field(default_factory=list)
+
+
+class ParticipantWorkspaceCycle(BaseModel):
+    id: UUID
+    project_id: UUID
+    sequence: int
+    name: str
+    status: str
+    starts_at: datetime | None = None
+    due_at: datetime | None = None
+    closed_at: datetime | None = None
+
+
+class ParticipantWorkspaceContext(BaseModel):
+    participant_profile_id: UUID
+    participant_full_name: str
+    participant_email: str | None = None
+    company_id: UUID
+    company_name: str
+    projects: list[ParticipantWorkspaceProject] = Field(default_factory=list)
 
 
 class ParticipantWorkspaceSummary(BaseModel):
-    participant_profile_id: UUID
-    participant_full_name: str
-    participant_email: str
+    participant_profile_id: UUID | None = None
+    participant_full_name: str | None = None
+    participant_email: str | None = None
     anonymous_name: str | None = None
     pcm_base: str | None = None
     pcm_phase: str | None = None
-    company_id: UUID
-    company_name: str
-    project_id: UUID | None
-    project_name: str
+    company_id: UUID | None = None
+    company_name: str | None = None
+    project_id: UUID | None = None
+    project_name: str | None = None
+    assessment_cycle_id: UUID | None = None
+    context_selection_required: bool = False
+    contexts: list[ParticipantWorkspaceContext] = Field(default_factory=list)
+    cycles: list[ParticipantWorkspaceCycle] = Field(default_factory=list)
     projects: list[ParticipantWorkspaceProject] = Field(default_factory=list)
-    deadline_label: str
+    deadline_label: str = "finalul evaluării"
     deadline_at: datetime | None = None
-    tasks: list[InviteTask]
+    tasks: list[InviteTask] = Field(default_factory=list)
     results: list[ParticipantWorkspaceResult] = Field(default_factory=list)
     received_feedback: ParticipantReceivedFeedbackSummary | None = None
     received_feedback_groups: list[ParticipantReceivedFeedbackSummary] = Field(default_factory=list)
-    cards: list[ParticipantWorkspaceCard]
-    empty_state: ParticipantWorkspaceCard
+    cards: list[ParticipantWorkspaceCard] = Field(default_factory=list)
+    empty_state: ParticipantWorkspaceCard = Field(
+        default_factory=lambda: ParticipantWorkspaceCard(
+            title="Selectează programul",
+            description="Alege programul în care vrei să continui.",
+        )
+    )

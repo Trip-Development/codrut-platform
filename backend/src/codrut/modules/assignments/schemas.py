@@ -1,10 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from codrut.api.schemas import StrictRequestModel
 from codrut.modules.assignments.models import (
+    AssessmentCycleStatus,
     AssignmentAccessMode,
     AssignmentStatus,
     AssignmentTargetType,
@@ -12,6 +13,52 @@ from codrut.modules.assignments.models import (
     TeamMembershipRole,
     TeamType,
 )
+
+
+class AssessmentCycleQuestionnaireResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    questionnaire_definition_id: UUID
+    questionnaire_key: str
+    display_order: int
+
+
+class AssessmentCycleCreateRequest(StrictRequestModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    source_cycle_id: UUID | None = None
+    questionnaire_keys: list[str] | None = None
+    starts_at: AwareDatetime | None = None
+    due_at: AwareDatetime | None = None
+
+
+class AssessmentCycleUpdateRequest(StrictRequestModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    starts_at: AwareDatetime | None = None
+    due_at: AwareDatetime | None = None
+
+
+class AssessmentCycleCloseRequest(StrictRequestModel):
+    cancel_unfinished: bool = False
+
+
+class AssessmentCycleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    company_id: UUID
+    project_id: UUID
+    sequence: int
+    name: str
+    status: AssessmentCycleStatus
+    source_cycle_id: UUID | None
+    starts_at: datetime | None
+    due_at: datetime | None
+    closed_at: datetime | None
+    created_by_user_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+    questionnaires: list[AssessmentCycleQuestionnaireResponse] = Field(default_factory=list)
 
 
 class TeamCreateRequest(StrictRequestModel):
@@ -44,6 +91,7 @@ class TeamMembershipResponse(BaseModel):
 
 class AssignmentCreateRequest(StrictRequestModel):
     project_id: UUID | None = None
+    assessment_cycle_id: UUID | None = None
     respondent_profile_id: UUID
     questionnaire_key: str = Field(min_length=1, max_length=120)
     target_type: AssignmentTargetType
@@ -58,6 +106,7 @@ class AssignmentResponse(BaseModel):
     id: UUID
     company_id: UUID
     project_id: UUID | None
+    assessment_cycle_id: UUID | None
     assignment_round_id: UUID
     respondent_profile_id: UUID
     questionnaire_key: str
@@ -133,6 +182,8 @@ class AssignmentPlanItemResponse(BaseModel):
 
 class AssignmentPlanResponse(BaseModel):
     project_id: UUID | None = None
+    assessment_cycle_id: UUID | None = None
+    source_cycle_id: UUID | None = None
     scopes: list[AssignmentPlanScopeResponse]
     assignments: list[AssignmentPlanItemResponse]
     suggested_count: int
@@ -171,6 +222,7 @@ class AssignmentPlanSaveItem(StrictRequestModel):
 
 class AssignmentPlanSaveRequest(StrictRequestModel):
     project_id: UUID | None = None
+    assessment_cycle_id: UUID | None = None
     assignments: list[AssignmentPlanSaveItem] = Field(default_factory=list)
 
 
