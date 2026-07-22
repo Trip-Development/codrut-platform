@@ -5,6 +5,7 @@ import {
   getSecureQuestionnaireDefinition,
   getSecureQuestionnaireResponse,
 } from "@/api/questionnaires";
+import { getServerApiRequestOptions } from "@/api/server-request";
 import { EmptyState } from "@/components/presentation/empty-state";
 import { LazyQuestionnaireRunner } from "@/components/questionnaires/lazy-questionnaire-runner";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
@@ -18,16 +19,17 @@ export default async function SecureTaskRunnerPage({
   params,
   searchParams,
 }: SecureTaskRunnerPageProps) {
-  const [{ token, taskId }, { returnTo, target }] = await Promise.all([
+  const [{ token, taskId }, { returnTo, target }, requestOptions] = await Promise.all([
     params,
     searchParams,
+    getServerApiRequestOptions("participant"),
   ]);
   const defaultReturnTo = `/invite/${encodeURIComponent(token)}`;
   const safeReturnTo = safeReturnHref(returnTo, defaultReturnTo, { secureInvite: true });
 
   const [responseRecord, definition] = await Promise.all([
-    getSecureQuestionnaireResponse(token, taskId),
-    getSecureQuestionnaireDefinition(token, taskId),
+    getSecureQuestionnaireResponse(token, taskId, requestOptions),
+    getSecureQuestionnaireDefinition(token, taskId, requestOptions),
   ]);
 
   return (
