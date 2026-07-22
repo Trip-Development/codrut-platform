@@ -1,15 +1,10 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CompanyParticipant } from "@/api/companies";
 import { CompanyParticipantsTable } from "./CompanyParticipantsTable";
 
-const navigation = vi.hoisted(() => ({
-  replace: vi.fn(),
-}));
-
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: navigation.replace, push: vi.fn() }),
   usePathname: () => "/trainer/companies/company-1/participants",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -52,6 +47,10 @@ const participants: CompanyParticipant[] = [
 ];
 
 describe("CompanyParticipantsTable", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/trainer/companies/company-1/participants");
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -66,9 +65,8 @@ describe("CompanyParticipantsTable", () => {
 
     expect(screen.getByText("Ștefan Ionescu")).toBeTruthy();
     expect(screen.queryByText("ana@example.test")).toBeNull();
-    expect(navigation.replace).toHaveBeenCalledWith(
+    expect(`${window.location.pathname}${window.location.search}`).toBe(
       "/trainer/companies/company-1/participants?q=stefan",
-      { scroll: false },
     );
   });
 

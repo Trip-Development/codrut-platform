@@ -40,7 +40,8 @@ describe("runtime safety contracts", () => {
     expect(localAuthRoleForPathname("/login")).toBeNull();
   });
 
-  it("requires an explicit bypass and a loopback host", async () => {
+  it("requires an explicit bypass and a loopback host even in an optimized build", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("CODRUT_LOCAL_AUTH_BYPASS", "true");
     const { isLocalAuthBypassEnabled } = await import("./runtime");
     expect(isLocalAuthBypassEnabled("localhost:3000")).toBe(true);

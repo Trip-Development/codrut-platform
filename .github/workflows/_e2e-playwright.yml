@@ -11,14 +11,14 @@ jobs:
     name: end-to-end / playwright
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Start Docker Compose Stack
         env:
           CODRUT_FRONTEND_DEMO_FALLBACK: "false"
           CODRUT_LOCAL_AUTH_BYPASS: "false"
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml up -d --build db redis
+          docker compose -f compose.yaml -f compose.dev.yaml up -d --build db redis mailpit
           docker compose -f compose.yaml -f compose.dev.yaml run --rm --user vscode backend uv run alembic upgrade head
           docker compose -f compose.yaml -f compose.dev.yaml up -d --build backend worker frontend
           docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest tests/test_health.py
@@ -28,12 +28,12 @@ jobs:
         run: docker compose -f compose.yaml -f compose.dev.yaml logs
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.11.0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
@@ -52,7 +52,7 @@ jobs:
         run: pnpm exec playwright test
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report

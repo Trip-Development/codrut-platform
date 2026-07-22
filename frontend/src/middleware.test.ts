@@ -31,7 +31,7 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
   it("redirects protected trainer routes without a session when demo fallback is explicitly disabled", () => {
@@ -41,19 +41,25 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
-  it("allows an explicit demo mode outside production", () => {
+  it("allows an explicit demo mode only on localhost", () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "true";
 
     const response = middleware(requestFor("/participant"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
+
+    const remoteResponse = middleware(
+      requestFor("/participant", undefined, "https://preview.example.com"),
+    );
+    expect(remoteResponse.status).toBe(307);
   });
 
-  it("allows protected localhost routes with the local auth bypass", () => {
+  it("allows protected localhost routes with the local auth bypass in an optimized build", () => {
+    vi.stubEnv("NODE_ENV", "production");
     process.env.CODRUT_LOCAL_AUTH_BYPASS = "true";
 
     const response = middleware(requestFor("/participant/results"));
@@ -62,23 +68,13 @@ describe("middleware", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("never allows the local auth bypass in production", () => {
-    vi.stubEnv("NODE_ENV", "production");
-    process.env.CODRUT_LOCAL_AUTH_BYPASS = "true";
-
-    const response = middleware(requestFor("/trainer"));
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
-  });
-
   it("does not allow the local auth bypass on a remote development host", () => {
     process.env.CODRUT_LOCAL_AUTH_BYPASS = "true";
 
     const response = middleware(requestFor("/trainer", undefined, "https://preview.example.com"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://preview.example.com/login");
+    expect(response.headers.get("location")).toBe("https://preview.example.com/trainer/login");
   });
 
   it("honors an explicit server false when the public fallback env is empty", () => {
@@ -88,7 +84,7 @@ describe("middleware", () => {
     const response = middleware(requestFor("/trainer"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
   it("allows protected routes with a session cookie", () => {
@@ -107,6 +103,16 @@ describe("middleware", () => {
     expect(policy).toContain("'strict-dynamic'");
     expect(policy).not.toContain("script-src 'self' 'unsafe-inline'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("adds HSTS only outside localhost", () => {
+    expect(middleware(requestFor("/login")).headers.get("strict-transport-security")).toBeNull();
+
+    const response = middleware(requestFor("/login", undefined, "https://app.example.com"));
+
+    expect(response.headers.get("strict-transport-security")).toBe(
+      "max-age=31536000; includeSubDomains",
+    );
   });
 
 });

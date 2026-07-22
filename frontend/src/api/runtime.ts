@@ -63,15 +63,11 @@ function readServerApiHostname(): string | null {
   }
 }
 
-function isLocalSeededDemoSurface(): boolean {
-  if (process.env.VITEST) return true;
+function isLocalApiSurface(): boolean {
+  const apiHostname = readServerApiHostname();
+  if (!apiHostname) return false;
 
   if (typeof window !== "undefined") {
-    const apiHostname = readServerApiHostname();
-    if (!apiHostname) {
-      return false;
-    }
-
     return (
       isLoopbackHost(window.location.hostname) &&
       (isLoopbackHost(apiHostname) ||
@@ -80,16 +76,17 @@ function isLocalSeededDemoSurface(): boolean {
     );
   }
 
+  return isLoopbackHost(apiHostname) || devStackHosts.has(apiHostname);
+}
+
+function isLocalSeededDemoSurface(): boolean {
+  if (process.env.VITEST) return true;
+
   if (process.env.NODE_ENV !== "development") {
     return false;
   }
 
-  const apiHostname = readServerApiHostname();
-  if (!apiHostname) {
-    return false;
-  }
-
-  return isLoopbackHost(apiHostname) || devStackHosts.has(apiHostname);
+  return isLocalApiSurface();
 }
 
 export function localAuthRoleForPathname(pathname: string): LocalAuthRole | null {
@@ -103,9 +100,8 @@ export function localAuthRoleForPathname(pathname: string): LocalAuthRole | null
 }
 
 export function isLocalAuthBypassEnabled(hostOrHostname?: string): boolean {
-  if (process.env.NODE_ENV === "production") return false;
   if (hostOrHostname && !isLoopbackHost(normalizeHostname(hostOrHostname))) return false;
-  return readExplicitLocalAuthBypassSetting() && isLocalSeededDemoSurface();
+  return readExplicitLocalAuthBypassSetting() && isLocalApiSurface();
 }
 
 export function isDemoFallbackEnabled(): boolean {

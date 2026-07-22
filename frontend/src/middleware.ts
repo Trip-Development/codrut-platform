@@ -6,13 +6,12 @@ const protectedPrefixes = ["/participant", "/trainer"];
 const publicPaths = new Set(["/trainer/login"]);
 const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 
-function isDemoFallbackEnabled(): boolean {
+function isDemoFallbackEnabled(request: NextRequest): boolean {
   const explicitSetting = [
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK,
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK,
   ].find((value): value is string => Boolean(value));
-  if (process.env.NODE_ENV === "production") return false;
-  return explicitSetting === "true";
+  return explicitSetting === "true" && localHosts.has(requestHostname(request));
 }
 
 function requestHostname(request: NextRequest): string {
@@ -33,13 +32,12 @@ function isLocalAuthBypassEnabled(request: NextRequest): boolean {
     process.env.NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS,
     process.env.CODRUT_LOCAL_AUTH_BYPASS,
   ].find((value): value is string => Boolean(value));
-  if (process.env.NODE_ENV === "production") return false;
   return explicitSetting === "true" && localHosts.has(requestHostname(request));
 }
 
-function buildContentSecurityPolicy(nonce: string): string {
-  const developmentScriptPolicy = process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
-  const upgradeInsecureRequests = process.env.NODE_ENV === "production" ? " upgrade-insecure-requests;" : "";
+function buildContentSecurityPolicy(nonce: string, isLocalRequest: boolean): string {
+  const developmentScriptPolicy = isLocalRequest ? " 'unsafe-eval'" : "";
+  const upgradeInsecureRequests = isLocalRequest ? "" : " upgrade-insecure-requests;";
 
   return [
     "default-src 'self';",
@@ -62,11 +60,18 @@ function buildContentSecurityPolicy(nonce: string): string {
     .trim();
 }
 
-function applyPageSecurityHeaders(response: NextResponse, contentSecurityPolicy: string): NextResponse {
+function applyPageSecurityHeaders(
+  response: NextResponse,
+  contentSecurityPolicy: string,
+  isLocalRequest: boolean,
+): NextResponse {
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (!isLocalRequest) {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   return response;
@@ -74,8 +79,9 @@ function applyPageSecurityHeaders(response: NextResponse, contentSecurityPolicy:
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const isLocalRequest = localHosts.has(requestHostname(request));
   const nonce = btoa(crypto.randomUUID());
-  const contentSecurityPolicy = buildContentSecurityPolicy(nonce);
+  const contentSecurityPolicy = buildContentSecurityPolicy(nonce, isLocalRequest);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-codrut-pathname", pathname);
   requestHeaders.set("x-nonce", nonce);
@@ -89,25 +95,31 @@ export function middleware(request: NextRequest) {
       request: {
         headers: requestHeaders,
       },
-    }), contentSecurityPolicy);
+    }), contentSecurityPolicy, isLocalRequest);
   }
 
   if (
     !request.cookies.has("codrut_session") &&
-    !isDemoFallbackEnabled() &&
+    !isDemoFallbackEnabled(request) &&
     !isLocalAuthBypassEnabled(request)
   ) {
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
+    loginUrl.pathname = pathname === "/trainer" || pathname.startsWith("/trainer/")
+      ? "/trainer/login"
+      : "/login";
     loginUrl.search = "";
-    return applyPageSecurityHeaders(NextResponse.redirect(loginUrl), contentSecurityPolicy);
+    return applyPageSecurityHeaders(
+      NextResponse.redirect(loginUrl),
+      contentSecurityPolicy,
+      isLocalRequest,
+    );
   }
 
   return applyPageSecurityHeaders(NextResponse.next({
     request: {
       headers: requestHeaders,
     },
-  }), contentSecurityPolicy);
+  }), contentSecurityPolicy, isLocalRequest);
 }
 
 export const config = {

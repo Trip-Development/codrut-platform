@@ -4,10 +4,12 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
+from codrut.modules.assignments.models import AssessmentCycle, AssessmentCycleStatus
 from codrut.modules.companies.models import (
     Company,
     CompanyMembership,
@@ -17,8 +19,71 @@ from codrut.modules.companies.models import (
     ParticipantProfile,
     ProjectMembership,
 )
+from codrut.modules.forms.models import QuestionnaireDefinition
 from codrut.modules.identity.models import User, UserRole
-from codrut.tools.local_preview import assert_local_preview_allowed
+from codrut.modules.protected_content.package import canonical_checksum
+from codrut.tools.local_preview import (
+    PREVIEW_DEFINITION_VERSION,
+    assert_local_preview_allowed,
+    build_preview_questionnaire_definitions,
+)
+
+
+async def _ensure_preview_questionnaire_definitions(
+    session: AsyncSession,
+) -> dict[str, QuestionnaireDefinition]:
+    previews = build_preview_questionnaire_definitions()
+    keys = [preview.key for preview in previews]
+    active_definitions = list(
+        (
+            await session.execute(
+                select(QuestionnaireDefinition).where(
+                    QuestionnaireDefinition.key.in_(keys),
+                    QuestionnaireDefinition.active.is_(True),
+                )
+            )
+        ).scalars()
+    )
+    persisted = {definition.key: definition for definition in active_definitions}
+
+    for preview in previews:
+        if preview.key in persisted:
+            continue
+        existing = (
+            await session.execute(
+                select(QuestionnaireDefinition).where(
+                    QuestionnaireDefinition.key == preview.key,
+                    QuestionnaireDefinition.version == PREVIEW_DEFINITION_VERSION,
+                )
+            )
+        ).scalar_one_or_none()
+        checksum_payload = {
+            "key": preview.key,
+            "version": PREVIEW_DEFINITION_VERSION,
+            "title": preview.title,
+            "description": preview.description,
+            "schema": preview.schema,
+            "feedback_policy": preview.feedback_policy,
+            "trainer_visibility_policy": {},
+        }
+        definition = existing or QuestionnaireDefinition(
+            id=uuid.uuid4(),
+            key=preview.key,
+            version=PREVIEW_DEFINITION_VERSION,
+        )
+        definition.title = preview.title
+        definition.description = preview.description
+        definition.schema = preview.schema
+        definition.feedback_policy = preview.feedback_policy
+        definition.trainer_visibility_policy = {}
+        definition.content_checksum = canonical_checksum(checksum_payload)
+        definition.active = True
+        if existing is None:
+            session.add(definition)
+        persisted[preview.key] = definition
+
+    await session.flush()
+    return persisted
 
 
 async def seed_pilot_ui_e2e_state() -> None:
@@ -58,6 +123,8 @@ async def seed_pilot_ui_e2e_state() -> None:
             trainer.password_hash = hash_password(trainer_password)
             trainer.role = UserRole.trainer
 
+        await _ensure_preview_questionnaire_definitions(session)
+
         company = Company(id=uuid.uuid4(), name=company_name)
         session.add(company)
         await session.flush()
@@ -76,6 +143,19 @@ async def seed_pilot_ui_e2e_state() -> None:
         )
         session.add(project)
         await session.flush()
+
+        session.add(
+            AssessmentCycle(
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Evaluare inițială",
+                status=AssessmentCycleStatus.draft,
+                starts_at=project.starts_at,
+                due_at=project.due_at,
+                created_by_user_id=trainer.id,
+            )
+        )
 
         session.add(
             CompanyMembership(

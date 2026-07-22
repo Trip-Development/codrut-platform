@@ -1,6 +1,7 @@
 import { type APIRequestContext, expect, test } from "@playwright/test";
 import { execSync } from "child_process";
 import { LoginPage } from "./pom/LoginPage";
+import { ParticipantPage } from "./pom/ParticipantPage";
 
 type SeededPilot = {
   companyId: string;
@@ -34,21 +35,44 @@ function seedPilotUiState(): SeededPilot {
   return { companyId, companyName, projectId, projectName };
 }
 
-async function mailpitSubjectsForCompany(request: APIRequestContext, companyName: string) {
+type MailpitMessage = {
+  ID: string;
+  Subject?: string;
+};
+
+const mailpitApiUrl = (
+  process.env.CODRUT_E2E_MAILPIT_API_URL ?? "http://127.0.0.1:8025"
+).replace(/\/$/, "");
+
+async function mailpitMessagesForCompany(request: APIRequestContext, companyName: string) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
-    const response = await request.get("http://localhost:8025/api/v1/messages");
+    const response = await request.get(`${mailpitApiUrl}/api/v1/messages`);
     expect(response.ok()).toBeTruthy();
     const payload = await response.json();
-    const subjects: string[] = (payload.messages ?? [])
-      .map((message: { Subject?: string }) => message.Subject ?? "")
-      .filter((subject: string) => subject.includes(companyName));
-    if (subjects.length >= 6) {
-      return subjects;
+    const messages: MailpitMessage[] = (payload.messages ?? []).filter((message: MailpitMessage) =>
+      message.Subject?.includes(companyName),
+    );
+    if (messages.length >= 6) {
+      return messages;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   return [];
+}
+
+async function secureInvitePath(request: APIRequestContext, messages: MailpitMessage[]) {
+  const taskMessage = messages.find((message) => message.Subject?.includes("chestionare"));
+  expect(taskMessage).toBeDefined();
+
+  const response = await request.get(`${mailpitApiUrl}/api/v1/message/${taskMessage?.ID}`);
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  const body = `${payload.Text ?? ""}\n${payload.HTML ?? ""}`.replaceAll("&amp;", "&");
+  const inviteUrl = body.match(/https?:\/\/[^\s"'<>]+\/invite\/[^\s"'<>]+/)?.[0];
+  expect(inviteUrl).toBeDefined();
+  const parsed = new URL(inviteUrl ?? "http://localhost/");
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 test.describe("Pilot trainer UI smoke", () => {
@@ -62,9 +86,9 @@ test.describe("Pilot trainer UI smoke", () => {
 
   test("generates assignments, saves them, and sends project invitations", async ({ page, request }) => {
     const loginPage = new LoginPage(page);
-    await loginPage.goto();
+    await loginPage.gotoTrainer();
     await loginPage.login("trainer@example.com", "replace-with-a-long-test-password");
-    await expect(page).toHaveURL(/\/trainer/);
+    await expect(page).toHaveURL(/\/trainer\/?$/);
 
     await page.goto(`/trainer/projects/${seeded.projectId}`);
     await expect(page.getByRole("heading", { name: seeded.projectName })).toBeVisible();
@@ -79,7 +103,9 @@ test.describe("Pilot trainer UI smoke", () => {
     await expect(page.getByRole("button", { name: /Autoevaluare/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Persoană/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Echipă/ })).toBeVisible();
+    await expect(page).toHaveURL(/modal=advanced-assignment/);
     await page.getByRole("button", { name: "Închide" }).click();
+    await expect(page).not.toHaveURL(/modal=advanced-assignment/);
 
     await Promise.all([
       page.waitForResponse(
@@ -110,7 +136,7 @@ test.describe("Pilot trainer UI smoke", () => {
 
     await page.getByRole("link", { exact: true, name: "Invitații" }).click();
     await expect(page).toHaveURL(new RegExp(`/trainer/projects/${seeded.projectId}/invitations$`));
-    await expect(page.getByRole("heading", { name: "Persoane invitate" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Livrare invitații" })).toBeVisible();
     await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -118,13 +144,22 @@ test.describe("Pilot trainer UI smoke", () => {
           response.request().method() === "POST" &&
           response.ok(),
       ),
-      page.getByRole("button", { name: "Trimite email tuturor" }).click(),
+      page.getByRole("button", { name: "Trimite tuturor" }).click(),
     ]);
-    await expect(page.getByText("6/6 emailuri trimise.")).toBeVisible();
+    await expect(page.getByText("0 acceptate de furnizor, 6 în coadă, 0 eșuate.")).toBeVisible();
 
-    const subjects = await mailpitSubjectsForCompany(request, seeded.companyName);
+    const messages = await mailpitMessagesForCompany(request, seeded.companyName);
+    const subjects = messages.map((message) => message.Subject ?? "");
     expect(subjects).toHaveLength(6);
     expect(subjects.filter((subject: string) => subject.includes("activează contul"))).toHaveLength(3);
     expect(subjects.filter((subject: string) => subject.includes("chestionare"))).toHaveLength(3);
+
+    const invitePath = await secureInvitePath(request, messages);
+    await page.context().clearCookies();
+    await page.goto(invitePath);
+    const participantPage = new ParticipantPage(page);
+    await participantPage.startFirstTask();
+    await participantPage.answerCurrentQuestionnaire();
+    await participantPage.submit();
   });
 });
