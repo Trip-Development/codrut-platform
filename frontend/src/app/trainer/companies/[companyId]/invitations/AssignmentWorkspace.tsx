@@ -101,7 +101,7 @@ export function AssignmentWorkspace({
   initialSelectedCycleId = null,
   onAssignmentsChange,
 }: AssignmentWorkspaceProps) {
-  const { get, searchKey, setParams } = useUrlState();
+  const { get, isPending: urlStatePending, searchKey, setParams } = useUrlState();
   const assignmentSavingRef = useRef(false);
   const planLoadingRef = useRef(false);
   const planSavingRef = useRef(false);
@@ -855,8 +855,12 @@ export function AssignmentWorkspace({
       {showAdvancedAssignmentModal ? (
         <ModalLayer
           labelledBy="advanced-assignment-title"
-          onClose={() => setAdvancedAssignmentModalOpen(false)}
+          onClose={() => {
+            if (!urlStatePending) setAdvancedAssignmentModalOpen(false);
+          }}
           panelClassName="max-w-2xl"
+          closeOnBackdrop={!urlStatePending}
+          closeOnEscape={!urlStatePending}
         >
           <div className="flex items-center justify-between gap-4">
             <h2 id="advanced-assignment-title" className="text-xl font-semibold text-foreground">
@@ -867,6 +871,7 @@ export function AssignmentWorkspace({
               variant="ghost"
               size="sm"
               onClick={() => setAdvancedAssignmentModalOpen(false)}
+              disabled={urlStatePending}
             >
               Închide
             </Button>

@@ -99,7 +99,9 @@ test.describe("Pilot trainer UI smoke", () => {
     await expect(page.getByRole("button", { name: /Autoevaluare/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Persoană/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Echipă/ })).toBeVisible();
+    await expect(page).toHaveURL(/modal=advanced-assignment/);
     await page.getByRole("button", { name: "Închide" }).click();
+    await expect(page).not.toHaveURL(/modal=advanced-assignment/);
 
     await Promise.all([
       page.waitForResponse(
