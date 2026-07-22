@@ -319,6 +319,54 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemax")).toBe("5");
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuenow")).toBe("4.5");
   });
+
+  it("treats the backend visibility decision as authoritative", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[]}
+        receivedFeedback={{
+          completedCount: 2,
+          minimumCompleted: 2,
+          visible: true,
+          overallAverage: 4.1,
+          dimensions: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("4.1")).toBeDefined();
+    expect(screen.queryByText(/Media apare după minimum/)).toBeNull();
+  });
+
+  it("merges legacy and grouped feedback without duplicating the same round", () => {
+    const feedback = {
+      assignmentRoundId: "round-shared",
+      projectId: "project-a",
+      questionnaireKey: "boss_360",
+      completedCount: 2,
+      minimumCompleted: 2,
+      visible: true,
+      overallAverage: 4,
+      dimensions: [{ id: "clarity", label: "Claritate", averageScore: 4, completedCount: 2 }],
+    };
+    render(
+      <ParticipantResultsPanel
+        results={[]}
+        receivedFeedback={feedback}
+        receivedFeedbackGroups={[
+          feedback,
+          {
+            ...feedback,
+            assignmentRoundId: "round-other",
+            projectId: "project-b",
+            projectName: "Al doilea proiect",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("Feedback primit")).toHaveLength(2);
+  });
 });
 
 describe("ParticipantTaskList", () => {

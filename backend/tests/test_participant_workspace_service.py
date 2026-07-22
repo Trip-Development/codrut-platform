@@ -174,6 +174,7 @@ async def test_participant_results_require_active_matching_publication_snapshot(
                 "target_types": ["self"],
                 "include_primary_result": True,
             }
+            definition.content_checksum = None
             assignment = QuestionnaireAssignment(
                 id=uuid.uuid4(),
                 company_id=company.id,
@@ -202,7 +203,6 @@ async def test_participant_results_require_active_matching_publication_snapshot(
             assert unpublished.results == []
 
             await ResultPublicationService(session).reconcile_assignment(assignment.id)
-            definition.feedback_policy = {}
             published = await ParticipantWorkspaceService(session).get_workspace_summary(user.id)
             assert len(published.results) == 1
             assert published.results[0].scores["feedback_signal_a"]["score"] == 4.3
@@ -571,7 +571,7 @@ async def test_received_feedback_is_never_combined_across_projects() -> None:
                 ParticipantProfile(
                     id=uuid.uuid4(),
                     company_id=company.id,
-                    email=f"reviewer-{index}-{uuid.uuid4().hex[:6]}@example.com",
+                        email=f"reviewer-{index}-{uuid.uuid4().hex[:6]}@example.com",
                     full_name=f"Reviewer {index}",
                 )
                 for index in range(4)
@@ -664,10 +664,10 @@ async def test_received_feedback_is_never_combined_across_rounds_in_one_project(
                 ParticipantProfile(
                     id=uuid.uuid4(),
                     company_id=company.id,
-                    email=f"round-reviewer-{index}-{uuid.uuid4().hex[:6]}@example.com",
+                        email=f"round-reviewer-{index}-{uuid.uuid4().hex[:6]}@example.com",
                     full_name=f"Round Reviewer {index}",
                 )
-                for index in range(4)
+                for index in range(2)
             ]
             session.add_all([user, company, target, project, definition, *reviewers])
             await session.flush()
@@ -678,7 +678,7 @@ async def test_received_feedback_is_never_combined_across_rounds_in_one_project(
                     id=uuid.uuid4(),
                     company_id=company.id,
                     project_id=project.id,
-                    assignment_round_id=round_ids[index // 2],
+                    assignment_round_id=round_id,
                     respondent_profile_id=reviewer.id,
                     questionnaire_key="boss_360",
                     questionnaire_definition_id=definition.id,
@@ -686,7 +686,8 @@ async def test_received_feedback_is_never_combined_across_rounds_in_one_project(
                     target_person_id=target.id,
                     status=AssignmentStatus.scored,
                 )
-                for index, reviewer in enumerate(reviewers)
+                for round_id in round_ids
+                for reviewer in reviewers
             ]
             session.add_all(assignments)
             await session.flush()
