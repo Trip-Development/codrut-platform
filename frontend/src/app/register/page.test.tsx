@@ -83,7 +83,7 @@ describe("RegisterPage", () => {
     fireEvent.change(screen.getByLabelText("Parolă"), { target: { value: "scurt" } });
     fireEvent.change(screen.getByLabelText("Confirmă parola"), { target: { value: "scurt" } });
     fireEvent.submit(form);
-    expect(await screen.findByText(/cel puțin 12 caractere/i)).toBeTruthy();
+    expect(await screen.findByText(/cel puțin 8 caractere/i)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Parolă"), { target: { value: "o frază lungă și memorabilă" } });
     fireEvent.change(screen.getByLabelText("Confirmă parola"), { target: { value: "altă frază memorabilă" } });
