@@ -61,10 +61,10 @@ export default function ResetPasswordPage() {
             <div className="rounded-lg border bg-surface p-6 shadow-sm">
               <CheckCircle2Icon className="size-9 text-primary" aria-hidden="true" />
               <h1 className="mt-6 text-3xl font-semibold leading-tight tracking-normal">
-                Verifică emailul.
+                Solicitarea a fost primită.
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Am trimis instrucțiunile către <strong className="text-foreground">{email}</strong>.
+                Dacă există un cont permanent pentru <strong className="text-foreground">{email}</strong>, vei primi instrucțiunile de resetare.
               </p>
               <Button asChild variant="outline" size="lg" className="mt-8 w-full">
                 <Link href="/login">
@@ -104,8 +104,10 @@ export default function ResetPasswordPage() {
 
                 {error ? (
                   <Alert variant="destructive">
-                    <AlertTitle>Emailul nu a fost trimis</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertTitle>Solicitarea nu a putut fi trimisă</AlertTitle>
+                    <AlertDescription>
+                      {error} Adresa introdusă a fost păstrată, astfel încât să poți reîncerca.
+                    </AlertDescription>
                   </Alert>
                 ) : null}
 

@@ -2609,6 +2609,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Shadow Account
+             * @default false
+             */
+            is_shadow_account: boolean;
             /** Location */
             location: string | null;
             /** Pcm Base */
@@ -2783,6 +2788,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Shadow Account
+             * @default false
+             */
+            is_shadow_account: boolean;
             /** Location */
             location: string | null;
             /** Pcm Base */

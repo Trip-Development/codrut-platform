@@ -523,6 +523,7 @@ async def test_verify_invite_token_success() -> None:
     assert result.token_status == "active"  # noqa: S105
     assert len(result.tasks) == 1
     assert result.tasks[0].id == str(mock_assignment.id)
+    assert result.tasks[0].targetLabel == "Echipa ta"
     assert result.tasks[0].href.endswith(
         f"/participant/tasks/{mock_assignment.id}?access=secure&returnTo=%2Finvite%2F{token}"
     )
@@ -1098,6 +1099,88 @@ async def test_register_success() -> None:
     assert acceptance.terms_version == CURRENT_TERMS_VERSION
     assert acceptance.source == "secure_invite"
     assert acceptance.accepted_at == auth_result.response.terms_accepted_at
+
+
+@pytest.mark.asyncio
+async def test_register_promotes_existing_shadow_user() -> None:
+    claims = TaskLinkClaims(
+        company_id=uuid.uuid4(),
+        respondent_profile_id=uuid.uuid4(),
+        assignment_ids=(uuid.uuid4(),),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    token = create_task_token(claims, get_settings())
+    shadow_user = User(
+        id=uuid.uuid4(),
+        email="shadow@example.com",
+        password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+        role=UserRole.participant,
+    )
+    profile = ParticipantProfile(
+        id=claims.respondent_profile_id,
+        company_id=claims.company_id,
+        user_id=shadow_user.id,
+        email=shadow_user.email,
+        full_name="Shadow Leader",
+    )
+    invite = AssignmentInvite(
+        id=uuid.uuid4(),
+        company_id=claims.company_id,
+        respondent_profile_id=profile.id,
+        token=token,
+        status="active",
+        expires_at=claims.expires_at,
+    )
+    profile_result = MagicMock()
+    profile_result.scalar_one_or_none.return_value = profile
+    session = AsyncMock()
+    session.execute.return_value = profile_result
+    repository = MagicMock()
+    repository.session = session
+    repository.get_user_by_email = AsyncMock(return_value=shadow_user)
+    repository.add_user = AsyncMock()
+    active_session = Session(
+        id=uuid.uuid4(),
+        user_id=shadow_user.id,
+        token_hash=hash_session_token("promoted-session"),
+        expires_at=claims.expires_at,
+        assignment_invite_id=invite.id,
+    )
+    repository.get_session_by_token = AsyncMock(return_value=active_session)
+    repository.add_consent_acceptance = AsyncMock()
+    service = IdentityService(session)
+    service.repository = repository
+    service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
+        return_value=(
+            InviteVerifyResponse(
+                email=profile.email,
+                full_name=profile.full_name,
+                is_leadership=True,
+                already_registered=False,
+                project_name="Leadership pilot",
+                expires_at=claims.expires_at,
+                token_status="active",
+                tasks=[],
+            ),
+            invite,
+        )
+    )
+    service._create_session = AsyncMock(return_value="promoted-session")  # type: ignore[method-assign]
+
+    result = await service.register(
+        RegisterRequest(
+            email=shadow_user.email,
+            password="Securepassword123!",
+            token=token,
+            terms_accepted=True,
+        )
+    )
+
+    repository.add_user.assert_not_awaited()
+    assert verify_password("Securepassword123!", shadow_user.password_hash)
+    assert shadow_user.terms_version == CURRENT_TERMS_VERSION
+    assert profile.user_id == shadow_user.id
+    assert result.response.email == shadow_user.email
 
 
 @pytest.mark.asyncio

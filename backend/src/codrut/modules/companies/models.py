@@ -156,7 +156,10 @@ class ParticipantProfile(TimestampMixin, Base):
     anonymous_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     company: Mapped[Company] = relationship(back_populates="participants")
-    user: Mapped[User | None] = relationship(back_populates="participant_profile")
+    user: Mapped[User | None] = relationship(
+        back_populates="participant_profile",
+        lazy="selectin",
+    )
     direct_reports: Mapped[list[ParticipantReportingRelationship]] = relationship(
         back_populates="manager",
         cascade="all, delete-orphan",
@@ -173,6 +176,15 @@ class ParticipantProfile(TimestampMixin, Base):
         cascade="all, delete-orphan",
         overlaps="company,project_memberships",
     )
+
+    @property
+    def is_shadow_account(self) -> bool:
+        from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH
+
+        return bool(
+            self.user is not None
+            and self.user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
+        )
 
 
 class ProjectMembership(TimestampMixin, Base):

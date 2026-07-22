@@ -1047,7 +1047,11 @@ class CommunicationsService:
                 )
                 continue
 
-            unsubscribe_url = _campaign_unsubscribe_url(recipient, settings)
+            unsubscribe_url = _campaign_unsubscribe_url(
+                recipient,
+                settings,
+                owner_id=delivery_owner_id,
+            )
             require_campaign_send_allowed(
                 recipient,
                 unsubscribe_url=unsubscribe_url,
@@ -1685,8 +1689,12 @@ def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
     return "ready"
 
 
-def _campaign_unsubscribe_url(recipient: CampaignRecipient, settings: Settings) -> str:
-    owner_id = _campaign_recipient_owner_id(recipient)
+def _campaign_unsubscribe_url(
+    recipient: CampaignRecipient,
+    settings: Settings,
+    *,
+    owner_id: UUID,
+) -> str:
     token = create_campaign_recipient_action_token(
         CampaignRecipientActionClaims(
             recipient_id=recipient.id,
@@ -1928,7 +1936,7 @@ def _campaign_tracking_url(
     target_url: str,
     event_type: str,
 ) -> str:
-    owner_id = _campaign_recipient_owner_id(recipient)
+    owner_id = _require_delivery_owner_id(campaign.owner_id)
     token = create_campaign_tracking_token(
         CampaignTrackingClaims(
             recipient_id=recipient.id,
@@ -1941,15 +1949,6 @@ def _campaign_tracking_url(
         settings,
     )
     return build_campaign_tracking_url(token, settings, event_type=event_type)
-
-
-def _campaign_recipient_owner_id(recipient: CampaignRecipient) -> UUID:
-    if recipient.owner_id is None:
-        raise DomainError(
-            "Campaign recipient owner is required.",
-            code="campaign_recipient_owner_required",
-        )
-    return recipient.owner_id
 
 
 def _render_campaign_template(template: str, context: dict[str, str]) -> str:

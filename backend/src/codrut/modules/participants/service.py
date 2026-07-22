@@ -532,7 +532,9 @@ class ParticipantWorkspaceService:
     ) -> InviteTask:
         title, detail, estimated_minutes = _invite_task_copy(assignment.questionnaire_key)
         target_label = "Autoevaluare"
-        if assignment.target_type == AssignmentTargetType.team and assignment.target_team_id:
+        if assignment.questionnaire_key in {"lencioni", "lencioni_en"}:
+            target_label = "Echipa ta"
+        elif assignment.target_type == AssignmentTargetType.team and assignment.target_team_id:
             team = teams.get(assignment.target_team_id)
             target_label = team.name if team is not None else "Echipă"
         elif assignment.target_type == AssignmentTargetType.person and assignment.target_person_id:

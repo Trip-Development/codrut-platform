@@ -6,6 +6,7 @@ import {
   type ApiRequestOptions,
   type CompanyAssignment,
   type CompanyDetail,
+  hasPermanentParticipantAccount,
   type CompanyParticipant,
 } from "./companies";
 
@@ -482,7 +483,7 @@ function deriveInviteStatus(
   participant: CompanyParticipant,
   assignments: CompanyAssignment[],
 ): TrainerRosterMember["inviteStatus"] {
-  if (participant.user_id) return "account_active";
+  if (hasPermanentParticipantAccount(participant)) return "account_active";
   if (assignments.length === 0) return "not_sent";
   return "link_sent";
 }

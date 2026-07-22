@@ -280,6 +280,9 @@ function InviteTaskQueue({
 }
 
 function safeInviteTarget(task: InviteTask): string {
+  if (task.questionnaireKey === "lencioni" || task.questionnaireKey === "lencioni_en") {
+    return "Echipa ta";
+  }
   const isReview = task.questionnaireKey === "boss_360" || task.questionnaireKey === "boss_360_en" || task.questionnaireKey === "icare";
   if (!isReview) return task.targetLabel;
 

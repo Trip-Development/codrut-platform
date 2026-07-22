@@ -85,10 +85,10 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
         for index in Base.metadata.tables["campaign_recipients"].indexes
         if index.unique
     }
-    owner_email_index = unique_indexes["uq_campaign_recipients_owner_normalized_email"]
+    email_index = unique_indexes["uq_campaign_recipients_owner_normalized_email"]
 
     assert ("email",) not in unique_columns
-    assert [str(expression) for expression in owner_email_index.expressions] == [
+    assert [str(expression) for expression in email_index.expressions] == [
         "campaign_recipients.owner_id",
         "lower(campaign_recipients.email)",
     ]

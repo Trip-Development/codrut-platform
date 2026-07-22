@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   CompanyAssignment,
+  CompanyAssignmentPlan,
   CompanyParticipant,
   CompanyProject,
   CompanyTeam,
@@ -156,6 +157,23 @@ describe("buildInvitationRows", () => {
       signedUp: false,
       nextAction: "Trimite invitația",
     });
+  });
+
+  it("does not treat a secure-link shadow user as signed up", () => {
+    const shadowParticipant: CompanyParticipant = {
+      ...participants[1],
+      user_id: "shadow-user",
+      is_shadow_account: true,
+    };
+
+    const rows = buildInvitationRows(
+      [shadowParticipant],
+      assignments.filter((assignment) => assignment.respondent_profile_id === shadowParticipant.id),
+      invitationStatuses,
+      new Map(),
+    );
+
+    expect(rows[0]).toMatchObject({ signedUp: false });
   });
 
   it("uses fresh delivery results when an invite action runs in the current session", () => {
@@ -528,7 +546,12 @@ describe("buildInvitationRows", () => {
 
     const leadershipGroup = await screen.findByRole("region", { name: "Leadership" });
     expect(within(leadershipGroup).getByText("Echipă de leadership")).toBeTruthy();
-    expect(within(leadershipGroup).getByText("2 asignări")).toBeTruthy();
+    expect(within(leadershipGroup).getAllByText("2 asignări")).toHaveLength(2);
+    const leadershipTarget = within(leadershipGroup).getByRole("region", {
+      name: "Țintă Echipă: Leadership",
+    });
+    expect(within(leadershipTarget).getByText("Andrei Manager")).toBeTruthy();
+    expect(within(leadershipTarget).getByText("Ana Pop")).toBeTruthy();
     expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledWith("company-1", {}, { projectId: "project-1" });
     expect(screen.getByText("Andrei Manager")).toBeTruthy();
     expect(screen.getByText("Ana Pop")).toBeTruthy();
@@ -554,6 +577,118 @@ describe("buildInvitationRows", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Regenerează planul" }));
     await waitFor(() => expect(getCompanyDefaultAssignmentPlan).toHaveBeenCalledTimes(2));
+  });
+
+  it("separates self and person targets inside the same plan scope", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    const groupedPlan: CompanyAssignmentPlan = {
+      project_id: "project-1",
+      scopes: [
+        {
+          id: "manager-andrei",
+          name: "Andrei Manager",
+          type: "manager",
+          participant_ids: ["andrei", "ana"],
+        },
+      ],
+      assignments: [
+        {
+          key: "manager-andrei:andrei:distress:self",
+          scope_id: "manager-andrei",
+          scope_name: "Andrei Manager",
+          scope_type: "manager",
+          respondent_profile_id: "andrei",
+          respondent_name: "Andrei Manager",
+          questionnaire_key: "distress_drivers",
+          target_type: "self",
+          target_person_id: null,
+          target_person_name: null,
+          target_team_id: null,
+          target_team_name: null,
+          target_team_type: null,
+          target_team_member_ids: [],
+          target_team_leader_id: null,
+          visibility_policy: "trainer_raw_review",
+          selected: true,
+          existing_assignment_id: "saved-distress",
+        },
+        {
+          key: "manager-andrei:andrei:pcm:self",
+          scope_id: "manager-andrei",
+          scope_name: "Andrei Manager",
+          scope_type: "manager",
+          respondent_profile_id: "andrei",
+          respondent_name: "Andrei Manager",
+          questionnaire_key: "pcm_base",
+          target_type: "self",
+          target_person_id: null,
+          target_person_name: null,
+          target_team_id: null,
+          target_team_name: null,
+          target_team_type: null,
+          target_team_member_ids: [],
+          target_team_leader_id: null,
+          visibility_policy: "trainer_raw_review",
+          selected: true,
+          existing_assignment_id: null,
+        },
+        {
+          key: "manager-andrei:ana:boss-360:person:andrei",
+          scope_id: "manager-andrei",
+          scope_name: "Andrei Manager",
+          scope_type: "manager",
+          respondent_profile_id: "ana",
+          respondent_name: "Ana Pop",
+          questionnaire_key: "boss_360",
+          target_type: "person",
+          target_person_id: "andrei",
+          target_person_name: "Andrei Manager",
+          target_team_id: null,
+          target_team_name: null,
+          target_team_type: null,
+          target_team_member_ids: [],
+          target_team_leader_id: null,
+          visibility_policy: "trainer_raw_review",
+          selected: true,
+          existing_assignment_id: null,
+        },
+      ],
+      suggested_count: 2,
+      existing_count: 1,
+    };
+    vi.mocked(getCompanyDefaultAssignmentPlan).mockResolvedValue(groupedPlan);
+
+    render(
+      <AssignmentWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments.slice(0, 1)}
+        teams={teams}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerează planul" }));
+
+    const managerScope = await screen.findByRole("region", { name: "Andrei Manager" });
+    const selfTarget = within(managerScope).getByRole("region", {
+      name: "Țintă Autoevaluare: Andrei Manager",
+    });
+    const personTarget = within(managerScope).getByRole("region", {
+      name: "Țintă Persoană: Andrei Manager",
+    });
+
+    expect(within(selfTarget).getByText("Driveri de stres TA")).toBeTruthy();
+    expect(within(selfTarget).getByText("Baza și faza PCM")).toBeTruthy();
+    expect(within(personTarget).getByText("Ana Pop")).toBeTruthy();
+    expect(within(personTarget).getByText("iCARE 360 pentru manager")).toBeTruthy();
+    expect(within(selfTarget).getAllByText("Grup").length).toBeGreaterThan(0);
+    expect(within(selfTarget).getAllByLabelText("Selectează asignarea pentru Andrei Manager")[0]?.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(within(personTarget).getByLabelText("Selectează asignarea pentru Ana Pop"));
+    expect(screen.getByRole("button", { name: "Salvează 1 asignare" })).toBeTruthy();
   });
 
   it("generates secure links, updates participant rows, and copies the active link", async () => {

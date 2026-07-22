@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import {
+  hasPermanentParticipantAccount,
   resendParticipantInvitation,
   sendParticipantInvitations,
   type CompanyAssignment,
@@ -173,7 +174,7 @@ export function buildInvitationRows(
       completedStatuses.has(assignment.status),
     ).length;
     const totalTasks = participantAssignments.length;
-    const signedUp = Boolean(participant.user_id);
+    const signedUp = hasPermanentParticipantAccount(participant);
     const secureLinkUrl = result?.invite_url ?? persistedStatus?.active_secure_link_url ?? null;
     const secureLinkExpiresAt = persistedStatus?.active_secure_link_expires_at ?? null;
     let deliveryError = result
