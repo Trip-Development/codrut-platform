@@ -195,8 +195,200 @@ if [[ "${rollback_output}" != *"Cannot restore global campaign contact email uni
 fi
 printf '\nRollback boundary: Pass (unsafe 0035 downgrade blocked).\n'
 
+run_alembic upgrade 0044_communications_hardening
+run_psql -c "
+insert into questionnaire_definitions (
+    id, key, version, title, schema, active,
+    feedback_policy, trainer_visibility_policy, system_managed
+) values (
+    '20000000-0000-4000-8000-000000000001',
+    'lencioni', 1, 'Synthetic Lencioni', '{}'::jsonb, true,
+    '{}'::jsonb, '{}'::jsonb, false
+);
+
+insert into teams (id, company_id, name, type)
+values (
+    '21000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000100',
+    'Synthetic Leadership',
+    'leadership'
+);
+
+insert into team_memberships (id, team_id, participant_profile_id, role)
+values
+    (
+        '21100000-0000-4000-8000-000000000001',
+        '21000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000001',
+        'leader'
+    ),
+    (
+        '21100000-0000-4000-8000-000000000002',
+        '21000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000002',
+        'member'
+    );
+
+insert into questionnaire_assignments (
+    id, company_id, project_id, assignment_round_id,
+    respondent_profile_id, questionnaire_key, questionnaire_definition_id,
+    target_type, target_team_id, access_mode, status, visibility_policy,
+    reminder_count
+) values
+    (
+        '22000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000100',
+        '00000000-0000-4000-8000-000000000200',
+        '23000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000001',
+        'lencioni', '20000000-0000-4000-8000-000000000001',
+        'team', '21000000-0000-4000-8000-000000000001',
+        'account_link', 'scored', 'trainer_raw_review', 0
+    ),
+    (
+        '22000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000100',
+        '00000000-0000-4000-8000-000000000200',
+        '23000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000002',
+        'lencioni', '20000000-0000-4000-8000-000000000001',
+        'team', '21000000-0000-4000-8000-000000000001',
+        'account_link', 'scored', 'trainer_raw_review', 0
+    );
+
+insert into result_publications (
+    id, publication_key, participant_profile_id, company_id, project_id,
+    assignment_round_id, questionnaire_definition_id, questionnaire_key,
+    source_assignment_id, kind, source_count, policy_snapshot, published_at
+) values
+    (
+        '24000000-0000-4000-8000-000000000001',
+        'individual:22000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000100',
+        '00000000-0000-4000-8000-000000000200',
+        '23000000-0000-4000-8000-000000000001',
+        '20000000-0000-4000-8000-000000000001',
+        'lencioni', '22000000-0000-4000-8000-000000000001',
+        'individual', 1, '{}'::jsonb, now()
+    ),
+    (
+        '24000000-0000-4000-8000-000000000002',
+        concat_ws(
+            ':',
+            'aggregate-360',
+            '10000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000200',
+            '23000000-0000-4000-8000-000000000001',
+            '20000000-0000-4000-8000-000000000001'
+        ),
+        '10000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000100',
+        '00000000-0000-4000-8000-000000000200',
+        '23000000-0000-4000-8000-000000000001',
+        '20000000-0000-4000-8000-000000000001',
+        'lencioni', null, 'aggregate_360', 2, '{}'::jsonb, now()
+    );
+"
+
 run_alembic upgrade head
 run_alembic check
+
+run_psql -c "
+do \$\$
+declare
+    project_count integer;
+    initial_cycle_count integer;
+    unscoped_project_assignments integer;
+    duplicate_cycle_questionnaires integer;
+    retained_assignments integer;
+    unscoped_publications integer;
+    rewritten_aggregate_keys integer;
+    cycle_team_members integer;
+    guarded_assignments integer;
+begin
+    select count(*) into project_count from company_projects;
+    select count(*) into initial_cycle_count
+    from assessment_cycles
+    where sequence = 1 and name = 'Evaluare inițială';
+    select count(*) into unscoped_project_assignments
+    from questionnaire_assignments
+    where project_id is not null and assessment_cycle_id is null;
+    select count(*) into duplicate_cycle_questionnaires
+    from (
+        select assessment_cycle_id, questionnaire_key
+        from assessment_cycle_questionnaires
+        group by assessment_cycle_id, questionnaire_key
+        having count(*) > 1
+    ) duplicates;
+    select count(*) into retained_assignments
+    from questionnaire_assignments
+    where id in (
+        '22000000-0000-4000-8000-000000000001',
+        '22000000-0000-4000-8000-000000000002'
+    )
+      and questionnaire_definition_id = '20000000-0000-4000-8000-000000000001';
+    select count(*) into unscoped_publications
+    from result_publications
+    where id in (
+        '24000000-0000-4000-8000-000000000001',
+        '24000000-0000-4000-8000-000000000002'
+    )
+      and assessment_cycle_id is null;
+    select count(*) into rewritten_aggregate_keys
+    from result_publications publication
+    where publication.id = '24000000-0000-4000-8000-000000000002'
+      and publication.publication_key = concat_ws(
+          ':',
+          'aggregate-360',
+          publication.participant_profile_id::text,
+          publication.project_id::text,
+          publication.assessment_cycle_id::text,
+          publication.assignment_round_id::text,
+          publication.questionnaire_definition_id::text
+      );
+    select count(*) into cycle_team_members
+    from assessment_cycle_team_memberships
+    where team_id = '21000000-0000-4000-8000-000000000001';
+    select count(*) into guarded_assignments
+    from questionnaire_assignments
+    where id in (
+        '22000000-0000-4000-8000-000000000001',
+        '22000000-0000-4000-8000-000000000002'
+    )
+      and cycle_shape_guard = assessment_cycle_id;
+
+    if initial_cycle_count <> project_count then
+        raise exception 'cycle backfill mismatch: projects %, initial cycles %',
+            project_count, initial_cycle_count;
+    end if;
+    if unscoped_project_assignments <> 0 then
+        raise exception 'cycle backfill left % project assignments unscoped',
+            unscoped_project_assignments;
+    end if;
+    if duplicate_cycle_questionnaires <> 0 then
+        raise exception 'cycle questionnaire backfill left % duplicate keys',
+            duplicate_cycle_questionnaires;
+    end if;
+    if retained_assignments <> 2 then
+        raise exception 'cycle migration retained only % of 2 synthetic assignments',
+            retained_assignments;
+    end if;
+    if unscoped_publications <> 0 or rewritten_aggregate_keys <> 1 then
+        raise exception 'publication backfill mismatch: unscoped %, rewritten keys %',
+            unscoped_publications, rewritten_aggregate_keys;
+    end if;
+    if cycle_team_members <> 2 then
+        raise exception 'team snapshot backfill expected 2 members, found %',
+            cycle_team_members;
+    end if;
+    if guarded_assignments <> 2 then
+        raise exception 'assignment guard backfill expected 2 rows, found %',
+            guarded_assignments;
+    end if;
+end
+\$\$;
+"
 
 printf '\nFinal revision and retained row counts:\n'
 run_alembic current

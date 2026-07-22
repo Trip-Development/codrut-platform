@@ -46,9 +46,8 @@ class User(TimestampMixin, Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    participant_profile: Mapped[ParticipantProfile | None] = relationship(
+    participant_profiles: Mapped[list[ParticipantProfile]] = relationship(
         back_populates="user",
-        uselist=False,
     )
 
 

@@ -81,6 +81,7 @@ class IcareAnswerReviewResponse(BaseModel):
 
 
 class CompanyReportAggregateResponse(BaseModel):
+    assessment_cycle_id: UUID | None = None
     total_assigned: int
     total_completed: int
     completion_rate: int
@@ -99,3 +100,18 @@ class CompanyReportAggregateResponse(BaseModel):
     hierarchy_ambiguity_message: str | None = None
     hierarchy_issues: list[ReportHierarchyIssueResponse]
     results: list[ScoringResultResponse]
+
+
+class CycleQuestionnaireCompatibilityResponse(BaseModel):
+    questionnaire_key: str
+    baseline_definition_id: UUID | None
+    comparison_definition_id: UUID | None
+    compatible: bool
+
+
+class CompanyReportComparisonResponse(BaseModel):
+    baseline_cycle_id: UUID
+    comparison_cycle_id: UUID
+    definition_compatibility: list[CycleQuestionnaireCompatibilityResponse]
+    baseline: CompanyReportAggregateResponse
+    comparison: CompanyReportAggregateResponse

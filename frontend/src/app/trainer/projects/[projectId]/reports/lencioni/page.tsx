@@ -3,18 +3,26 @@ import { adaptReportTeamLenses } from "@/app/trainer/companies/[companyId]/repor
 import { EmptyState } from "@/components/presentation/empty-state";
 import { getProjectReportAggregateData } from "../../project-data";
 import { LencioniTeamBreakdown } from "../report-detail-sections";
+import { buildProjectReportQuery, type ProjectReportSearchParams } from "../report-cycle";
 
 export default async function ProjectLencioniReportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<ProjectReportSearchParams>;
 }) {
-  const [{ projectId }, requestOptions] = await Promise.all([
+  const [{ projectId }, query, requestOptions] = await Promise.all([
     params,
+    searchParams,
     getServerApiRequestOptions(),
   ]);
-  const { aggregate } = await getProjectReportAggregateData(projectId, requestOptions);
-  const overviewHref = `/trainer/projects/${projectId}/reports`;
+  const { aggregate } = await getProjectReportAggregateData(
+    projectId,
+    requestOptions,
+    { assessmentCycleId: query.cycle },
+  );
+  const overviewHref = `/trainer/projects/${projectId}/reports${buildProjectReportQuery(query)}`;
 
   if (aggregate.hierarchy_ambiguous) {
     return (

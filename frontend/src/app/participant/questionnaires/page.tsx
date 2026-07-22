@@ -1,15 +1,33 @@
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems } from "@/components/shell/nav";
 import { ParticipantCompletionState } from "../ParticipantCompletionState";
+import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import { ParticipantTaskList } from "../ParticipantTaskList";
+import {
+  participantActiveHref,
+  participantScopeParams,
+  participantScopedHref,
+  participantScopedNavItems,
+  participantWorkspaceRequestOptions,
+  type ParticipantRouteSearchParams,
+} from "../participant-context";
 import { countAvailableParticipantResults } from "../result-state";
 import { groupParticipantTasks } from "../task-display";
 
-export default async function ParticipantQuestionnairesPage() {
+export default async function ParticipantQuestionnairesPage({
+  searchParams,
+}: {
+  searchParams: Promise<ParticipantRouteSearchParams>;
+}) {
+  const routeParams = await searchParams;
   const requestOptions = await getServerApiRequestOptions();
-  const summary = await getParticipantWorkspaceSummary(requestOptions);
+  const summary = await getParticipantWorkspaceSummary(
+    participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
+  );
+  const scopeParams = participantScopeParams(summary);
+  const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
+  const resultsHref = participantScopedHref("/participant/results", scopeParams);
   const taskGroups = groupParticipantTasks(summary.tasks);
   const hasTasks = summary.tasks.length > 0;
   const allTasksComplete = hasTasks && summary.tasks.every((task) => task.status === "completed");
@@ -21,19 +39,24 @@ export default async function ParticipantQuestionnairesPage() {
       eyebrow=""
       title="Chestionare"
       description=""
-      navItems={participantNavItems}
-      activeHref="/participant/questionnaires"
+      navItems={participantScopedNavItems(scopeParams)}
+      activeHref={participantActiveHref("/participant/questionnaires", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
     >
+      <ParticipantContextSelector
+        contexts={summary.contexts}
+        selectedProfileId={summary.participantProfileId}
+        selectedProjectId={summary.projectId}
+      />
       {allTasksComplete ? (
         <div className="mb-8">
-          <ParticipantCompletionState resultCount={resultCount} />
+          <ParticipantCompletionState resultCount={resultCount} resultsHref={resultsHref} />
         </div>
       ) : null}
       {taskGroups.length > 0 ? (
         <ParticipantTaskList
           groups={taskGroups}
-          returnTo="/participant/questionnaires"
+          returnTo={questionnairesHref}
           emptyTitle={summary.emptyState.title}
           emptyDescription={summary.emptyState.description}
         />

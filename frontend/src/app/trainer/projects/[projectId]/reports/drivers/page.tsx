@@ -4,21 +4,29 @@ import { adaptReportTeamLenses } from "@/app/trainer/companies/[companyId]/repor
 import { EmptyState } from "@/components/presentation/empty-state";
 import { getProjectReportWorkspaceData } from "../../project-data";
 import { buildDriverIndividualResults, DriverDetailBreakdown } from "../report-detail-sections";
+import { buildProjectReportQuery, type ProjectReportSearchParams } from "../report-cycle";
 
 export default async function ProjectDriversReportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<ProjectReportSearchParams>;
 }) {
-  const [{ projectId }, requestOptions] = await Promise.all([
+  const [{ projectId }, query, requestOptions] = await Promise.all([
     params,
+    searchParams,
     getServerApiRequestOptions(),
   ]);
-  const { participants, assignments, aggregate } = await getProjectReportWorkspaceData(projectId, requestOptions);
+  const { participants, assignments, aggregate } = await getProjectReportWorkspaceData(
+    projectId,
+    requestOptions,
+    { assessmentCycleId: query.cycle },
+  );
   const resultMap = new Map(
     aggregate.results.map((result) => [result.assignment_id, result as ScoringResultRecord]),
   );
-  const overviewHref = `/trainer/projects/${projectId}/reports`;
+  const overviewHref = `/trainer/projects/${projectId}/reports${buildProjectReportQuery(query)}`;
 
   if (aggregate.hierarchy_ambiguous) {
     return (

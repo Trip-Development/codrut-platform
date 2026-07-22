@@ -17,6 +17,8 @@ from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleStatus,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -79,8 +81,11 @@ def build_default_assignment_definitions(questionnaire_definition_factory):
 
 
 class FakeSession:
-    def add(self, _obj: Any) -> None:
-        return None
+    def __init__(self) -> None:
+        self.added_objects: list[Any] = []
+
+    def add(self, obj: Any) -> None:
+        self.added_objects.append(obj)
 
     async def flush(self) -> None:
         return None
@@ -505,6 +510,12 @@ async def test_get_project_by_id_can_return_unscoped_project_for_internal_caller
     assert result.id == project.id
     assert result.company_id == company.id
     assert result.company_name == "Client"
+    cycle = next(
+        item for item in repository.session.added_objects if isinstance(item, AssessmentCycle)
+    )
+    assert cycle.project_id == project.id
+    assert cycle.name == "Evaluare inițială"
+    assert cycle.status == AssessmentCycleStatus.draft
 
 
 async def test_get_project_by_id_can_still_filter_by_membership_for_future_tenancy() -> None:
@@ -1941,7 +1952,10 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         membership_result = await session.execute(
             select(TeamMembership).where(TeamMembership.team_id == leadership_team.id)
         )
-        assert len(membership_result.scalars().all()) == 2
+        leadership_memberships = membership_result.scalars().all()
+        assert {
+            membership.participant_profile_id for membership in leadership_memberships
+        } == {participant.id for participant in participants}
 
         repeated_roster = await service.import_roster(
             trainer.id,
@@ -2575,6 +2589,280 @@ async def test_resend_invite_enqueue_preserves_existing_active_link(
             assert invites[0].token == existing_invite.token
             assert invites[0].status == "active"
 
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cycle_scoped_invites_send_resend_and_statuses(
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name=f"Cycle invite {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership cycle scope",
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                email=f"participant-{uuid.uuid4().hex[:8]}@example.com",
+                full_name="Cycle Participant",
+                anonymous_name="Participant 1",
+            )
+            baseline_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Baseline",
+                status=AssessmentCycleStatus.closed,
+                closed_at=datetime.now(UTC),
+                created_by_user_id=trainer.id,
+            )
+            active_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=2,
+                name="Follow-up",
+                status=AssessmentCycleStatus.draft,
+                due_at=datetime.now(UTC) + timedelta(days=4),
+                created_by_user_id=trainer.id,
+            )
+            definition = questionnaire_definition_factory("lencioni")
+            session.add_all([trainer, company, definition])
+            await session.flush()
+            session.add_all([project, participant])
+            await session.flush()
+            session.add_all([baseline_cycle, active_cycle])
+            await session.flush()
+            baseline_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=baseline_cycle.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.invited,
+            )
+            active_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=active_cycle.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.assigned,
+            )
+            session.add_all(
+                [
+                    CompanyMembership(
+                        company_id=company.id,
+                        user_id=trainer.id,
+                        role=CompanyMembershipRole.owner,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant.id,
+                    ),
+                    baseline_assignment,
+                    active_assignment,
+                    EmailSend(
+                        assignment_id=baseline_assignment.id,
+                        recipient_email=participant.email,
+                        template_key="assignment_bundle",
+                        template_version=1,
+                        provider="test",
+                        provider_message_id="baseline-message",
+                        idempotency_key=f"baseline-{uuid.uuid4().hex}",
+                        payload_fingerprint=uuid.uuid4().hex,
+                        message_payload=None,
+                        attempt_count=1,
+                        max_attempts=5,
+                        next_attempt_at=None,
+                        status=EmailSendStatus.accepted,
+                        last_event_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            await session.flush()
+
+            service = CompanyService(session)
+            send_result = await service.send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(
+                    project_id=project.id,
+                    assessment_cycle_id=active_cycle.id,
+                    mode="secure_links",
+                    target_mode="selected",
+                    participant_ids=[participant.id],
+                ),
+            )
+
+            assert send_result.links_generated == 1
+            assert active_cycle.status == AssessmentCycleStatus.active
+            assert active_assignment.status == AssignmentStatus.invited
+            invite_rows = await session.execute(
+                select(AssignmentInvite).where(
+                    AssignmentInvite.respondent_profile_id == participant.id,
+                    AssignmentInvite.project_id == project.id,
+                )
+            )
+            active_invite = invite_rows.scalar_one()
+            assert int(active_invite.expires_at.timestamp()) == int(active_cycle.due_at.timestamp())
+
+            resend_result = await service.resend_invite(
+                trainer.id,
+                company.id,
+                participant.id,
+                project.id,
+                active_cycle.id,
+            )
+
+            assert resend_result.emails_queued == 1
+            send_rows = await session.execute(
+                select(EmailSend).where(EmailSend.assignment_id == active_assignment.id)
+            )
+            assert len(send_rows.scalars().all()) == 1
+
+            baseline_status = await service.list_participant_invitation_statuses(
+                trainer.id,
+                company.id,
+                project.id,
+                baseline_cycle.id,
+            )
+            active_status = await service.list_participant_invitation_statuses(
+                trainer.id,
+                company.id,
+                project.id,
+                active_cycle.id,
+            )
+
+            assert baseline_status[0].email_send_count == 1
+            assert baseline_status[0].has_active_secure_link is False
+            assert active_status[0].email_send_count == 1
+            assert active_status[0].has_active_secure_link is True
+
+            active_cycle.status = AssessmentCycleStatus.closed
+            active_cycle.closed_at = datetime.now(UTC)
+            with pytest.raises(DomainError, match="Assessment cycle is closed"):
+                await service.send_participant_invites(
+                    trainer.id,
+                    company.id,
+                    ParticipantInviteBatchRequest(
+                        project_id=project.id,
+                        assessment_cycle_id=active_cycle.id,
+                        mode="secure_links",
+                        target_mode="selected",
+                        participant_ids=[participant.id],
+                        force_rotate=True,
+                    ),
+                )
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cycle_stays_draft_when_every_invitation_fails(
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            company = Company(id=uuid.uuid4(), name=f"Draft cycle {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Failure scope",
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                email=None,
+                full_name="No Email Participant",
+                anonymous_name="Participant 1",
+            )
+            cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Draft",
+                status=AssessmentCycleStatus.draft,
+                created_by_user_id=trainer.id,
+            )
+            definition = questionnaire_definition_factory("lencioni")
+            session.add_all([trainer, company, definition])
+            await session.flush()
+            session.add_all([project, participant])
+            await session.flush()
+            session.add(cycle)
+            await session.flush()
+            session.add_all(
+                [
+                    CompanyMembership(
+                        company_id=company.id,
+                        user_id=trainer.id,
+                        role=CompanyMembershipRole.owner,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant.id,
+                    ),
+                    QuestionnaireAssignment(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        assessment_cycle_id=cycle.id,
+                        respondent_profile_id=participant.id,
+                        questionnaire_key="lencioni",
+                        questionnaire_definition_id=definition.id,
+                        target_type=AssignmentTargetType.self_assessment,
+                        status=AssignmentStatus.assigned,
+                    ),
+                ]
+            )
+            await session.flush()
+
+            result = await CompanyService(session).send_participant_invites(
+                trainer.id,
+                company.id,
+                ParticipantInviteBatchRequest(
+                    project_id=project.id,
+                    assessment_cycle_id=cycle.id,
+                    mode="email",
+                    target_mode="selected",
+                    participant_ids=[participant.id],
+                ),
+            )
+
+            assert result.emails_failed == 1
+            assert cycle.status == AssessmentCycleStatus.draft
             await session.rollback()
     finally:
         await engine.dispose()

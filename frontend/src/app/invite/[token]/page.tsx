@@ -3,7 +3,6 @@ import {
   AlertTriangleIcon,
   ArrowRightIcon,
   CheckIcon,
-  CheckCircle2Icon,
 } from "lucide-react";
 
 import {
@@ -56,10 +55,6 @@ export default async function InvitePage({ params }: InvitePageProps) {
     return <InvalidInviteState message={data.message} />;
   }
 
-  if (data.alreadyRegistered && data.isLeadership) {
-    return <ExistingLeadershipAccountState data={data} />;
-  }
-
   if (data.isLeadership && !data.alreadyRegistered) {
     return <LeadershipRegistrationState token={token} data={data} />;
   }
@@ -92,31 +87,6 @@ function InvalidInviteState({ message }: { message: string }) {
           Mergi la Cody
           <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
         </Link>
-      </InvitePanel>
-    </InviteFrame>
-  );
-}
-
-function ExistingLeadershipAccountState({ data }: { data: ValidInviteBundle }) {
-  return (
-    <InviteFrame width="sm">
-      <InvitePanel>
-        <CheckCircle2Icon className="mx-auto size-10 text-primary" aria-hidden="true" />
-        <h1 className="mt-6 text-center text-3xl font-semibold leading-tight tracking-normal">
-          Cont deja existent
-        </h1>
-        <p className="mt-3 text-center text-sm leading-6 text-muted-foreground">
-          Ai creat deja un cont de Leadership pentru adresa de e-mail{" "}
-          <strong className="text-foreground">{data.participantEmail}</strong>.
-        </p>
-        <div className="mt-8 flex flex-col gap-3">
-          <Link href="/login" className={serverLinkButtonClassName({ size: "lg" })}>
-            Autentifică-te aici
-          </Link>
-          <Link href="/" className={serverLinkButtonClassName({ variant: "outline", size: "lg" })}>
-            Pagina principală
-          </Link>
-        </div>
       </InvitePanel>
     </InviteFrame>
   );
@@ -204,7 +174,9 @@ function InviteTasksView({
         <InviteTaskQueue tasks={data.tasks} returnTo={returnTo} inviteToken={token} />
 
         <div className="mt-7 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
-          {data.isLeadership ? <InviteRegisterPrimaryAction token={token} bundle={data} /> : null}
+          {data.isLeadership && !data.alreadyRegistered ? (
+            <InviteRegisterPrimaryAction token={token} bundle={data} />
+          ) : null}
           <Link href="/" className={serverLinkButtonClassName({ variant: "ghost", className: "sm:ml-auto" })}>
             Pagina principală
           </Link>

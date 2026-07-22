@@ -3,10 +3,17 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
-from codrut.modules.assignments.models import AssignmentStatus, QuestionnaireAssignment
+from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleQuestionnaire,
+    AssessmentCycleStatus,
+    AssignmentStatus,
+    QuestionnaireAssignment,
+)
 from codrut.modules.companies.hierarchy import (
     HierarchyIssue,
     HierarchyParticipant,
@@ -27,6 +34,8 @@ from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
 from codrut.modules.scoring.schemas import (
     CompanyReportAggregateResponse,
+    CompanyReportComparisonResponse,
+    CycleQuestionnaireCompatibilityResponse,
     IcareAnswerReviewResponse,
     IcareAnswerReviewRowResponse,
     ReportAverageResponse,
@@ -145,6 +154,7 @@ class ScoringService:
         self,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> CompanyReportAggregateResponse:
         company = await self.company_repository.get_company(company_id)
         if company is None:
@@ -153,12 +163,29 @@ class ScoringService:
             project = await self.company_repository.get_project(company_id, project_id)
             if project is None:
                 raise DomainError("Project not found in this company.", code="project_not_found")
+        project_id, assessment_cycle_id = await self._resolve_report_scope(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
 
         assignment_results = await self.repository.list_company_assignment_results_with_definitions(
             company_id,
             project_id,
+            assessment_cycle_id,
         )
         participants = await self._list_report_participants(company_id, project_id)
+        pcm_values = (
+            _pcm_values_from_responses(
+                await self.repository.list_company_pcm_responses(
+                    company_id,
+                    project_id,
+                    assessment_cycle_id,
+                )
+            )
+            if assessment_cycle_id is not None
+            else None
+        )
         assignments = [assignment for assignment, _result, _definition in assignment_results]
         total_assigned = len(assignment_results)
         total_completed = sum(
@@ -178,15 +205,22 @@ class ScoringService:
             participants,
             assignments,
             "pcm_base",
+            pcm_values,
         )
         pcm_phase_distribution = _distribution_from_completed_pcm_assignments(
             participants,
             assignments,
             "pcm_phase",
+            pcm_values,
         )
-        team_lens_result = _build_team_lenses(participants, assignment_results)
+        team_lens_result = _build_team_lenses(
+            participants,
+            assignment_results,
+            pcm_values,
+        )
 
         return CompanyReportAggregateResponse(
+            assessment_cycle_id=assessment_cycle_id,
             total_assigned=total_assigned,
             total_completed=total_completed,
             completion_rate=round((total_completed / total_assigned) * 100)
@@ -213,6 +247,7 @@ class ScoringService:
         self,
         company_id: UUID,
         project_id: UUID | None = None,
+        assessment_cycle_id: UUID | None = None,
     ) -> IcareAnswerReviewResponse:
         company = await self.company_repository.get_company(company_id)
         if company is None:
@@ -221,11 +256,17 @@ class ScoringService:
             project = await self.company_repository.get_project(company_id, project_id)
             if project is None:
                 raise DomainError("Project not found in this company.", code="project_not_found")
+        project_id, assessment_cycle_id = await self._resolve_report_scope(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
 
         rows: list[IcareAnswerReviewRowResponse] = []
         answer_responses = await self.repository.list_company_icare_answer_responses(
             company_id,
             project_id,
+            assessment_cycle_id,
         )
 
         for assignment, response, respondent, target, definition in answer_responses:
@@ -244,6 +285,137 @@ class ScoringService:
             )
 
         return IcareAnswerReviewResponse(rows=rows, row_count=len(rows))
+
+    async def get_company_report_comparison(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+        baseline_cycle_id: UUID,
+        comparison_cycle_id: UUID,
+    ) -> CompanyReportComparisonResponse:
+        if baseline_cycle_id == comparison_cycle_id:
+            raise DomainError(
+                "Select two different assessment cycles.",
+                code="comparison_cycles_must_differ",
+            )
+        compatibility = await self._get_cycle_definition_compatibility(
+            baseline_cycle_id,
+            comparison_cycle_id,
+        )
+        incompatible_questionnaire_keys = {
+            item.questionnaire_key for item in compatibility if not item.compatible
+        }
+        baseline = await self.get_company_report_aggregate(
+            company_id,
+            project_id,
+            baseline_cycle_id,
+        )
+        comparison = await self.get_company_report_aggregate(
+            company_id,
+            project_id,
+            comparison_cycle_id,
+        )
+        return CompanyReportComparisonResponse(
+            baseline_cycle_id=baseline_cycle_id,
+            comparison_cycle_id=comparison_cycle_id,
+            definition_compatibility=compatibility,
+            baseline=_without_incompatible_overlay_dimensions(
+                baseline,
+                incompatible_questionnaire_keys,
+            ),
+            comparison=comparison,
+        )
+
+    async def _resolve_report_scope(
+        self,
+        company_id: UUID,
+        project_id: UUID | None,
+        assessment_cycle_id: UUID | None,
+    ) -> tuple[UUID | None, UUID | None]:
+        if assessment_cycle_id is None:
+            if project_id is None:
+                return None, None
+            cycle = (
+                await self.session.execute(
+                    select(AssessmentCycle)
+                    .where(
+                        AssessmentCycle.company_id == company_id,
+                        AssessmentCycle.project_id == project_id,
+                        AssessmentCycle.status != AssessmentCycleStatus.draft,
+                    )
+                    .order_by(AssessmentCycle.sequence.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if cycle is None:
+                cycle = (
+                    await self.session.execute(
+                        select(AssessmentCycle)
+                        .where(
+                            AssessmentCycle.company_id == company_id,
+                            AssessmentCycle.project_id == project_id,
+                        )
+                        .order_by(AssessmentCycle.sequence.desc())
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+            return project_id, cycle.id if cycle is not None else None
+        cycle = (
+            await self.session.execute(
+                select(AssessmentCycle).where(
+                    AssessmentCycle.id == assessment_cycle_id,
+                    AssessmentCycle.company_id == company_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if cycle is None or (project_id is not None and cycle.project_id != project_id):
+            raise DomainError(
+                "Assessment cycle not found in this project.",
+                code="assessment_cycle_not_found",
+            )
+        return cycle.project_id, cycle.id
+
+    async def _get_cycle_definition_compatibility(
+        self,
+        baseline_cycle_id: UUID,
+        comparison_cycle_id: UUID,
+    ) -> list[CycleQuestionnaireCompatibilityResponse]:
+        result = await self.session.execute(
+            select(
+                AssessmentCycleQuestionnaire.assessment_cycle_id,
+                AssessmentCycleQuestionnaire.questionnaire_key,
+                AssessmentCycleQuestionnaire.questionnaire_definition_id,
+            ).where(
+                AssessmentCycleQuestionnaire.assessment_cycle_id.in_(
+                    (baseline_cycle_id, comparison_cycle_id)
+                )
+            )
+        )
+        definitions_by_cycle: dict[UUID, dict[str, UUID]] = {
+            baseline_cycle_id: {},
+            comparison_cycle_id: {},
+        }
+        for cycle_id, questionnaire_key, definition_id in result.all():
+            definitions_by_cycle[cycle_id][questionnaire_key] = definition_id
+
+        baseline_definitions = definitions_by_cycle[baseline_cycle_id]
+        comparison_definitions = definitions_by_cycle[comparison_cycle_id]
+        return [
+            CycleQuestionnaireCompatibilityResponse(
+                questionnaire_key=questionnaire_key,
+                baseline_definition_id=baseline_definitions.get(questionnaire_key),
+                comparison_definition_id=comparison_definitions.get(questionnaire_key),
+                compatible=(
+                    baseline_definitions.get(questionnaire_key)
+                    == comparison_definitions.get(questionnaire_key)
+                    and questionnaire_key in baseline_definitions
+                    and questionnaire_key in comparison_definitions
+                ),
+            )
+            for questionnaire_key in sorted(
+                baseline_definitions.keys() | comparison_definitions.keys()
+            )
+        ]
 
     async def _list_report_participants(
         self,
@@ -785,10 +957,29 @@ def _build_score_summary(
     )
 
 
+def _without_incompatible_overlay_dimensions(
+    report: CompanyReportAggregateResponse,
+    incompatible_questionnaire_keys: set[str],
+) -> CompanyReportAggregateResponse:
+    updates: dict[str, list[ReportAverageResponse] | list[ReportDistributionResponse]] = {}
+    if incompatible_questionnaire_keys & LENCIONI_REPORT_KEYS:
+        updates["lencioni_averages"] = []
+    if incompatible_questionnaire_keys & DISTRESS_DRIVER_REPORT_KEYS:
+        updates["driver_averages"] = []
+    if incompatible_questionnaire_keys & BOSS_360_REPORT_KEYS:
+        updates["boss_360_averages"] = []
+    if QuestionnaireKey.pcm_base.value in incompatible_questionnaire_keys:
+        updates["pcm_base_distribution"] = []
+    if {QuestionnaireKey.phase.value, "pcm_phase"} & incompatible_questionnaire_keys:
+        updates["pcm_phase_distribution"] = []
+    return report.model_copy(update=updates) if updates else report
+
+
 def _distribution_from_completed_pcm_assignments(
     participants: list[ReportParticipant],
     assignments: list[QuestionnaireAssignment],
     field: str,
+    cycle_values: dict[UUID, dict[str, str]] | None = None,
 ) -> list[ReportDistributionResponse]:
     counts: dict[str, int] = {}
     participants_by_id = {participant.id: participant for participant in participants}
@@ -803,7 +994,9 @@ def _distribution_from_completed_pcm_assignments(
         participant = participants_by_id.get(participant_id)
         if participant is None:
             continue
-        value = getattr(participant, field)
+        value = (cycle_values or {}).get(participant_id, {}).get(field)
+        if value is None and cycle_values is None:
+            value = getattr(participant, field)
         if not isinstance(value, str) or not value.strip():
             continue
         cleaned = value.strip()
@@ -823,6 +1016,19 @@ def _distribution_from_completed_pcm_assignments(
     )
 
 
+def _pcm_values_from_responses(
+    responses: list[tuple[QuestionnaireAssignment, QuestionnaireResponse]],
+) -> dict[UUID, dict[str, str]]:
+    values: dict[UUID, dict[str, str]] = {}
+    for assignment, response in responses:
+        profile_values = values.setdefault(assignment.respondent_profile_id, {})
+        for field in ("pcm_base", "pcm_phase"):
+            value = response.answers.get(field)
+            if isinstance(value, str) and value.strip():
+                profile_values[field] = value.strip()
+    return values
+
+
 def _distribution_count(distribution: list[ReportDistributionResponse]) -> int:
     return sum(item.value for item in distribution)
 
@@ -830,6 +1036,7 @@ def _distribution_count(distribution: list[ReportDistributionResponse]) -> int:
 def _build_team_lenses(
     participants: list[ReportParticipant],
     assignment_results: list[AssignmentResultWithDefinition],
+    pcm_values: dict[UUID, dict[str, str]] | None = None,
 ) -> TeamLensBuildResult:
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
@@ -887,7 +1094,14 @@ def _build_team_lenses(
         teams_by_id["leadership"] = ("Leadership", leadership_ids)
 
     team_lenses = [
-        _build_team_lens(team_id, name, member_ids, participants, assignment_results)
+        _build_team_lens(
+            team_id,
+            name,
+            member_ids,
+            participants,
+            assignment_results,
+            pcm_values,
+        )
         for team_id, (name, member_ids) in teams_by_id.items()
     ]
     team_lenses.sort(
@@ -912,6 +1126,7 @@ def _build_team_lens(
     member_ids: set[UUID],
     participants: list[ReportParticipant],
     assignment_results: list[AssignmentResultWithDefinition],
+    pcm_values: dict[UUID, dict[str, str]] | None = None,
 ) -> ReportTeamLensResponse:
     team_assignment_results = [
         (assignment, result, definition)
@@ -931,11 +1146,13 @@ def _build_team_lens(
         team_participants,
         team_assignments,
         "pcm_base",
+        pcm_values,
     )
     pcm_phase_distribution = _distribution_from_completed_pcm_assignments(
         team_participants,
         team_assignments,
         "pcm_phase",
+        pcm_values,
     )
 
     return ReportTeamLensResponse(

@@ -8,6 +8,9 @@ import pytest
 from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleQuestionnaire,
+    AssessmentCycleStatus,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -860,6 +863,295 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
                 driver_assignment.id,
                 boss_360_assignment.id,
             }
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_cycle_report_derives_and_enforces_its_project_scope(
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Cycle scope {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership cycle",
+            )
+            other_project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Other project",
+            )
+            leader = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Ana Leader",
+                email=f"ana-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            direct_report = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Bogdan Direct",
+                email=f"bogdan-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            outside_participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Carmen Outside",
+                email=f"carmen-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            session.add(company)
+            await session.flush()
+            session.add_all([project, other_project, leader, direct_report, outside_participant])
+            await session.flush()
+            session.add_all(
+                [
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=leader.id,
+                        reports_to_name=None,
+                        role_group="leadership",
+                        active=True,
+                    ),
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=direct_report.id,
+                        reports_to_name=leader.full_name,
+                        role_group="individual",
+                        active=True,
+                    ),
+                ]
+            )
+            definition = questionnaire_definition_factory("lencioni")
+            cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Initial assessment",
+                status=AssessmentCycleStatus.closed,
+            )
+            session.add_all([definition, cycle])
+            await session.flush()
+            session.add(
+                AssessmentCycleQuestionnaire(
+                    assessment_cycle_id=cycle.id,
+                    questionnaire_definition_id=definition.id,
+                    questionnaire_key="lencioni",
+                    display_order=0,
+                )
+            )
+
+            aggregate = await ScoringService(session).get_company_report_aggregate(
+                company.id,
+                assessment_cycle_id=cycle.id,
+            )
+
+            assert aggregate.assessment_cycle_id == cycle.id
+            leadership_lens = next(
+                team for team in aggregate.team_lenses if team.id == "leadership"
+            )
+            assert leadership_lens.member_count == 2
+            with pytest.raises(DomainError) as wrong_project:
+                await ScoringService(session).get_company_report_aggregate(
+                    company.id,
+                    other_project.id,
+                    cycle.id,
+                )
+            assert wrong_project.value.code == "assessment_cycle_not_found"
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hides_invalid_overlays(
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Cycle compare {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Leadership cycle",
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Dana Compare",
+                email=f"dana-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            baseline_lencioni = questionnaire_definition_factory("lencioni")
+            comparison_lencioni = questionnaire_definition_factory("lencioni")
+            shared_drivers = questionnaire_definition_factory("distress_drivers")
+            baseline_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Baseline",
+                status=AssessmentCycleStatus.closed,
+            )
+            comparison_cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=2,
+                name="Comparison",
+                status=AssessmentCycleStatus.closed,
+            )
+            session.add(company)
+            await session.flush()
+            session.add_all([project, participant])
+            await session.flush()
+            session.add_all(
+                [
+                    baseline_lencioni,
+                    comparison_lencioni,
+                    shared_drivers,
+                    baseline_cycle,
+                    comparison_cycle,
+                ]
+            )
+            await session.flush()
+            session.add(
+                ProjectMembership(
+                    company_id=company.id,
+                    project_id=project.id,
+                    participant_profile_id=participant.id,
+                    reports_to_name=None,
+                    role_group="leadership",
+                    active=True,
+                )
+            )
+            session.add_all(
+                [
+                    AssessmentCycleQuestionnaire(
+                        assessment_cycle_id=baseline_cycle.id,
+                        questionnaire_definition_id=baseline_lencioni.id,
+                        questionnaire_key="lencioni",
+                        display_order=0,
+                    ),
+                    AssessmentCycleQuestionnaire(
+                        assessment_cycle_id=baseline_cycle.id,
+                        questionnaire_definition_id=shared_drivers.id,
+                        questionnaire_key="distress_drivers",
+                        display_order=1,
+                    ),
+                    AssessmentCycleQuestionnaire(
+                        assessment_cycle_id=comparison_cycle.id,
+                        questionnaire_definition_id=comparison_lencioni.id,
+                        questionnaire_key="lencioni",
+                        display_order=0,
+                    ),
+                    AssessmentCycleQuestionnaire(
+                        assessment_cycle_id=comparison_cycle.id,
+                        questionnaire_definition_id=shared_drivers.id,
+                        questionnaire_key="distress_drivers",
+                        display_order=1,
+                    ),
+                ]
+            )
+            baseline_lencioni_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=baseline_cycle.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=baseline_lencioni.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            comparison_lencioni_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=comparison_cycle.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=comparison_lencioni.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            baseline_drivers_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=baseline_cycle.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="distress_drivers",
+                questionnaire_definition_id=shared_drivers.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            comparison_drivers_assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                assessment_cycle_id=comparison_cycle.id,
+                respondent_profile_id=participant.id,
+                questionnaire_key="distress_drivers",
+                questionnaire_definition_id=shared_drivers.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.scored,
+            )
+            session.add_all(
+                [
+                    baseline_lencioni_assignment,
+                    comparison_lencioni_assignment,
+                    baseline_drivers_assignment,
+                    comparison_drivers_assignment,
+                ]
+            )
+            await session.flush()
+            session.add_all(
+                [
+                    ScoringResult(
+                        assignment_id=baseline_lencioni_assignment.id,
+                        scores={"team_signal_a": {"score": 4}},
+                    ),
+                    ScoringResult(
+                        assignment_id=comparison_lencioni_assignment.id,
+                        scores={"team_signal_a": {"score": 7}},
+                    ),
+                    ScoringResult(
+                        assignment_id=baseline_drivers_assignment.id,
+                        scores={"work_signal_a": 10},
+                    ),
+                    ScoringResult(
+                        assignment_id=comparison_drivers_assignment.id,
+                        scores={"work_signal_a": 20},
+                    ),
+                ]
+            )
+
+            report = await ScoringService(session).get_company_report_comparison(
+                company.id,
+                project.id,
+                baseline_cycle.id,
+                comparison_cycle.id,
+            )
+
+            compatibility = {
+                item.questionnaire_key: item for item in report.definition_compatibility
+            }
+            assert compatibility["lencioni"].compatible is False
+            assert compatibility["lencioni"].baseline_definition_id == baseline_lencioni.id
+            assert compatibility["lencioni"].comparison_definition_id == comparison_lencioni.id
+            assert compatibility["distress_drivers"].compatible is True
+            assert report.baseline.lencioni_averages == []
+            assert [item.id for item in report.comparison.lencioni_averages] == ["team_signal_a"]
+            assert [item.id for item in report.baseline.driver_averages] == ["work_signal_a"]
+            assert [item.id for item in report.comparison.driver_averages] == ["work_signal_a"]
 
             await session.rollback()
     finally:

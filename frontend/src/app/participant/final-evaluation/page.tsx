@@ -3,12 +3,30 @@ import Link from "next/link";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems } from "@/components/shell/nav";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
+import { ParticipantContextSelector } from "../ParticipantContextSelector";
+import {
+  participantActiveHref,
+  participantScopeParams,
+  participantScopedHref,
+  participantScopedNavItems,
+  participantWorkspaceRequestOptions,
+  type ParticipantRouteSearchParams,
+} from "../participant-context";
 
-export default async function ParticipantFinalEvaluationPage() {
+export default async function ParticipantFinalEvaluationPage({
+  searchParams,
+}: {
+  searchParams: Promise<ParticipantRouteSearchParams>;
+}) {
+  const routeParams = await searchParams;
   const requestOptions = await getServerApiRequestOptions();
-  const summary = await getParticipantWorkspaceSummary(requestOptions);
+  const summary = await getParticipantWorkspaceSummary(
+    participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
+  );
+  const scopeParams = participantScopeParams(summary);
+  const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
+  const resultsHref = participantScopedHref("/participant/results", scopeParams);
   const completed = summary.tasks.filter((task) => task.status === "completed").length;
   const total = summary.tasks.length;
   const openTasks = summary.tasks.filter((task) => task.status !== "completed");
@@ -20,17 +38,22 @@ export default async function ParticipantFinalEvaluationPage() {
       eyebrow=""
       title={hasOpenTasks ? "Mai ai sarcini de completat" : "Ai finalizat partea ta"}
       description=""
-      navItems={participantNavItems}
-      activeHref="/participant"
+      navItems={participantScopedNavItems(scopeParams)}
+      activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
     >
+      <ParticipantContextSelector
+        contexts={summary.contexts}
+        selectedProfileId={summary.participantProfileId}
+        selectedProjectId={summary.projectId}
+      />
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
         <section>
           {hasOpenTasks ? (
             <>
               <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
                 <h2 className="text-xl font-semibold text-foreground">Sarcini rămase</h2>
-                <Link href="/participant/questionnaires" className={serverLinkButtonClassName()}>Continuă</Link>
+                <Link href={questionnairesHref} className={serverLinkButtonClassName()}>Continuă</Link>
               </div>
               <div className="divide-y divide-border">
                 {openTasks.map((task) => (
@@ -48,7 +71,7 @@ export default async function ParticipantFinalEvaluationPage() {
             <div className="border-y border-border py-8">
               <h2 className="text-xl font-semibold text-foreground">Răspunsurile au fost trimise</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">Rezultatele apar după procesarea chestionarelor eligibile.</p>
-              <Link href="/participant/results" className={serverLinkButtonClassName({ className: "mt-5" })}>Vezi rezultatele</Link>
+              <Link href={resultsHref} className={serverLinkButtonClassName({ className: "mt-5" })}>Vezi rezultatele</Link>
             </div>
           )}
         </section>
