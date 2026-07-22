@@ -52,4 +52,16 @@ jobs:
         if: inputs.mode == 'both'
         run: docker compose -f compose.yaml -f compose.dev.yaml config >/dev/null
       - name: Validate Production Compose Config
-        run: docker compose -f compose.yaml -f compose.prod.yaml config >/dev/null
+        run: |
+          docker compose -f compose.yaml -f compose.prod.yaml config --format json > /tmp/compose-prod.json
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/compose-prod.json", encoding="utf-8") as config_file:
+              services = json.load(config_file)["services"]
+
+          backend_origin = services["backend"]["environment"]["CODRUT_CORS_ORIGINS"]
+          worker_origin = services["worker"]["environment"]["CODRUT_CORS_ORIGINS"]
+          if worker_origin != backend_origin:
+              raise SystemExit("Worker and backend production CORS origins must match.")
+          PY

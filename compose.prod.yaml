@@ -64,6 +64,7 @@ services:
       CODRUT_SESSION_SECRET: ${CODRUT_SESSION_SECRET:?Set CODRUT_SESSION_SECRET to a unique secret of at least 32 characters}
       CODRUT_TASK_LINK_SECRET: ${CODRUT_TASK_LINK_SECRET:?Set CODRUT_TASK_LINK_SECRET to a stable separate signing secret}
       CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET:?Set CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET to a stable dedicated signing secret}
+      CODRUT_CORS_ORIGINS: ${CODRUT_CORS_ORIGINS:?Set CODRUT_CORS_ORIGINS to a JSON array of production HTTPS origins}
       CODRUT_PUBLIC_APP_URL: ${CODRUT_PUBLIC_APP_URL:?Set CODRUT_PUBLIC_APP_URL to the public app origin, for example https://codrut.andreivacaru.ro}
       CODRUT_EMAIL_PROVIDER: ${CODRUT_EMAIL_PROVIDER:?Set CODRUT_EMAIL_PROVIDER to brevo}
       CODRUT_EMAIL_FROM_ADDRESS: ${CODRUT_EMAIL_FROM_ADDRESS:?Set CODRUT_EMAIL_FROM_ADDRESS to the verified sender email address}
