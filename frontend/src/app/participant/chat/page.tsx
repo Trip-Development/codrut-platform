@@ -4,11 +4,27 @@ import { ArrowRightIcon } from "lucide-react";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
-import { participantNavItems } from "@/components/shell/nav";
+import { ParticipantContextSelector } from "../ParticipantContextSelector";
+import {
+  participantActiveHref,
+  participantScopeParams,
+  participantScopedHref,
+  participantScopedNavItems,
+  participantWorkspaceRequestOptions,
+  type ParticipantRouteSearchParams,
+} from "../participant-context";
 
-export default async function ParticipantChatPage() {
+export default async function ParticipantChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<ParticipantRouteSearchParams>;
+}) {
+  const routeParams = await searchParams;
   const requestOptions = await getServerApiRequestOptions();
-  const summary = await getParticipantWorkspaceSummary(requestOptions);
+  const summary = await getParticipantWorkspaceSummary(
+    participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
+  );
+  const scopeParams = participantScopeParams(summary);
   const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
   const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
 
@@ -18,10 +34,15 @@ export default async function ParticipantChatPage() {
       eyebrow=""
       title="Suport"
       description=""
-      navItems={participantNavItems}
-      activeHref="/participant/chat"
+      navItems={participantScopedNavItems(scopeParams)}
+      activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
     >
+      <ParticipantContextSelector
+        contexts={summary.contexts}
+        selectedProfileId={summary.participantProfileId}
+        selectedProjectId={summary.projectId}
+      />
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
         <section>
           <div className="border-b border-border pb-6">
@@ -31,8 +52,8 @@ export default async function ParticipantChatPage() {
             </p>
           </div>
           <nav className="divide-y divide-border" aria-label="Acțiuni de suport">
-            <SupportLink href="/participant/questionnaires" label="Chestionare" detail={openTasks > 0 ? `${openTasks} sarcini deschise` : "Nicio sarcină deschisă"} />
-            <SupportLink href="/participant/results" label="Rezultate" detail="Scoruri și interpretări disponibile" />
+            <SupportLink href={participantScopedHref("/participant/questionnaires", scopeParams)} label="Chestionare" detail={openTasks > 0 ? `${openTasks} sarcini deschise` : "Nicio sarcină deschisă"} />
+            <SupportLink href={participantScopedHref("/participant/results", scopeParams)} label="Rezultate" detail="Scoruri și interpretări disponibile" />
           </nav>
         </section>
 

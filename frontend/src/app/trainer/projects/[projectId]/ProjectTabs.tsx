@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 const projectTabs = [
   { key: "", label: "Sumar" },
@@ -22,16 +22,28 @@ export function ProjectTabs({
   locked?: boolean;
 }) {
   const activePath = normalizePathname(usePathname());
+  const searchParams = useSearchParams();
   const normalizedBasePath = normalizePathname(basePath);
+  const cycleId = searchParams.get("cycle");
+  const baselineId = searchParams.get("baseline");
+  const compareId = searchParams.get("compare");
 
   return (
-    <nav className="mb-6 rounded-lg bg-surface p-2 shadow-sm ring-1 ring-border" aria-label="Navigare proiect">
+    <nav className="mb-6 border-b border-border" aria-label="Navigare proiect">
       <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {projectTabs.map((tab) => {
-          const href = `${normalizedBasePath}${tab.key}`;
+          const baseHref = `${normalizedBasePath}${tab.key}`;
+          const targetParams = new URLSearchParams();
+          if (cycleId) targetParams.set("cycle", cycleId);
+          if (tab.key === "/reports") {
+            if (baselineId) targetParams.set("baseline", baselineId);
+            if (compareId) targetParams.set("compare", compareId);
+          }
+          const query = targetParams.toString();
+          const href = query ? `${baseHref}?${query}` : baseHref;
           const isActive = tab.key === ""
             ? activePath === normalizedBasePath
-            : activePath === href || activePath.startsWith(`${href}/`);
+            : activePath === baseHref || activePath.startsWith(`${baseHref}/`);
           const disabled = locked && !["", "/participants", "/settings"].includes(tab.key);
 
           if (disabled) {
@@ -39,7 +51,7 @@ export function ProjectTabs({
               <span
                 key={tab.key}
                 title="Importă rosterul proiectului înainte de a folosi acest instrument."
-                className="inline-flex h-9 shrink-0 cursor-not-allowed items-center justify-center rounded-lg px-3 text-sm font-semibold text-muted-foreground/55 sm:px-4"
+                className="inline-flex h-11 shrink-0 cursor-not-allowed items-center justify-center border-b-2 border-transparent px-3 text-sm font-semibold text-muted-foreground/55 sm:px-4"
               >
                 {tab.label}
               </span>
@@ -52,10 +64,10 @@ export function ProjectTabs({
               href={href}
               aria-current={isActive ? "page" : undefined}
               className={[
-                "inline-flex h-9 shrink-0 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors sm:px-4",
+                "inline-flex h-11 shrink-0 items-center justify-center border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4",
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  ? "border-burgundy text-burgundy"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >
               {tab.label}
@@ -63,11 +75,6 @@ export function ProjectTabs({
           );
         })}
       </div>
-      {locked ? (
-        <p className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs font-semibold leading-5 text-muted-foreground">
-          După ce adaugi participanți, asignările, invitațiile, organigrama și rezultatele devin disponibile.
-        </p>
-      ) : null}
     </nav>
   );
 }

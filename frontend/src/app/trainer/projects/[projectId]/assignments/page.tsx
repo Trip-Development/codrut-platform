@@ -4,14 +4,19 @@ import { getProjectAssignmentWorkspaceData } from "../project-data";
 
 export default async function ProjectAssignmentsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ cycle?: string }>;
 }) {
-  const [{ projectId }, requestOptions] = await Promise.all([
+  const [{ projectId }, query, requestOptions] = await Promise.all([
     params,
+    searchParams,
     getServerApiRequestOptions(),
   ]);
-  const data = await getProjectAssignmentWorkspaceData(projectId, requestOptions);
+  const data = await getProjectAssignmentWorkspaceData(projectId, requestOptions, {
+    assessmentCycleId: query.cycle,
+  });
 
   return (
     <LazyAssignmentWorkspace
@@ -22,6 +27,8 @@ export default async function ProjectAssignmentsPage({
       participants={data.participants}
       assignments={data.assignments}
       teams={data.teams}
+      initialAssessmentCycles={data.assessmentCycles}
+      initialSelectedCycleId={data.selectedAssessmentCycleId}
       showProjectSelector={false}
     />
   );

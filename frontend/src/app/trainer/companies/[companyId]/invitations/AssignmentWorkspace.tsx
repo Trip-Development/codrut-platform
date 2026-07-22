@@ -1,18 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CalendarDaysIcon,
   CheckCircle2Icon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   ClipboardListIcon,
   Loader2Icon,
   PlusIcon,
   RefreshCwIcon,
+  Trash2Icon,
+  XIcon,
 } from "lucide-react";
 
 import {
+  closeAssessmentCycle,
+  CompanyMutationError,
+  createAssessmentCycle,
   createCompanyAssignment,
+  deleteAssessmentCycle,
+  getAssessmentCycles,
+  getCompanyAssignments,
   getCompanyDefaultAssignmentPlan,
   saveCompanyDefaultAssignmentPlan,
+  type AssessmentCycle,
   type CompanyAssignment,
   type CompanyAssignmentPlan,
   type CompanyAssignmentPlanItem,
@@ -29,8 +41,12 @@ import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { ModalLayer } from "@/components/ui/modal-layer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SelectControl } from "@/components/ui/select-control";
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { useUrlState } from "@/hooks/use-url-state";
 import { cn } from "@/utils/cn";
 
@@ -44,6 +60,12 @@ type AssignmentFormState = {
   targetTeamId: string;
 };
 
+type CycleCreateForm = {
+  name: string;
+  dueDate: string;
+  sourceCycleId: string;
+};
+
 export type AssignmentWorkspaceProps = {
   companyId: string;
   companyName: string;
@@ -52,6 +74,8 @@ export type AssignmentWorkspaceProps = {
   participants: CompanyParticipant[];
   assignments: CompanyAssignment[];
   teams: CompanyTeam[];
+  initialAssessmentCycles?: AssessmentCycle[];
+  initialSelectedCycleId?: string | null;
   showProjectSelector?: boolean;
   onAssignmentsChange?: (assignments: CompanyAssignment[]) => void;
 };
@@ -73,13 +97,46 @@ export function AssignmentWorkspace({
   participants,
   assignments,
   teams,
+  initialAssessmentCycles = [],
+  initialSelectedCycleId = null,
   onAssignmentsChange,
 }: AssignmentWorkspaceProps) {
   const { get, searchKey, setParams } = useUrlState();
   const assignmentSavingRef = useRef(false);
   const planLoadingRef = useRef(false);
   const planSavingRef = useRef(false);
+  const cycleMutationRef = useRef(false);
+  const assignmentErrorRef = useRef<HTMLDivElement | null>(null);
+  const cycleErrorRef = useRef<HTMLDivElement | null>(null);
+  const initialCycleId = initialSelectedCycleId ?? assignments[0]?.assessment_cycle_id ?? null;
   const [assignmentState, setAssignmentState] = useState(assignments);
+  const [assessmentCycles, setAssessmentCycles] = useState<AssessmentCycle[]>(initialAssessmentCycles);
+  const [loadedCyclesProjectId, setLoadedCyclesProjectId] = useState<string | null>(
+    selectedProjectId && initialAssessmentCycles.every((cycle) => cycle.project_id === selectedProjectId)
+      ? selectedProjectId
+      : null,
+  );
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(
+    initialCycleId ?? get("cycle"),
+  );
+  const [loadedCycleScope, setLoadedCycleScope] = useState<string | null>(
+    selectedProjectId && initialCycleId && initialAssessmentCycles.some((cycle) => cycle.id === initialCycleId)
+      ? `${selectedProjectId}:${initialCycleId}`
+      : null,
+  );
+  const [cyclesLoading, setCyclesLoading] = useState(false);
+  const [cycleAssignmentsLoading, setCycleAssignmentsLoading] = useState(false);
+  const [cycleMessage, setCycleMessage] = useState<string | null>(null);
+  const [cycleSheetOpen, setCycleSheetOpen] = useState(false);
+  const [cycleStep, setCycleStep] = useState(1);
+  const [cycleCreating, setCycleCreating] = useState(false);
+  const [cyclePreviewLoading, setCyclePreviewLoading] = useState(false);
+  const [cyclePreviewPlan, setCyclePreviewPlan] = useState<CompanyAssignmentPlan | null>(null);
+  const [cycleForm, setCycleForm] = useState<CycleCreateForm>({
+    name: "",
+    dueDate: "",
+    sourceCycleId: "",
+  });
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireDefinitionStub[]>([]);
   const [questionnaireMessage, setQuestionnaireMessage] = useState<string | null>(null);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
@@ -88,6 +145,7 @@ export function AssignmentWorkspace({
   const [planLoading, setPlanLoading] = useState(false);
   const [planSaving, setPlanSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [assignmentModalMessage, setAssignmentModalMessage] = useState<string | null>(null);
   const [showAdvancedAssignmentModal, setShowAdvancedAssignmentModal] = useState(
     get("modal") === "advanced-assignment",
   );
@@ -124,10 +182,134 @@ export function AssignmentWorkspace({
   const allPlanItemsSelected =
     selectablePlanItems.length > 0 &&
     selectablePlanItems.every((assignment) => selectedPlanKeys.has(assignment.key));
+  const selectedCycle = useMemo(
+    () => assessmentCycles.find((cycle) => cycle.id === selectedCycleId) ?? null,
+    [assessmentCycles, selectedCycleId],
+  );
+  const cycleIsEditable = !selectedProjectId || selectedCycle?.status !== "closed";
+  const sourceCycle = useMemo(
+    () => assessmentCycles.find((cycle) => cycle.id === cycleForm.sourceCycleId) ?? null,
+    [assessmentCycles, cycleForm.sourceCycleId],
+  );
+  const previewPlan = cyclePreviewPlan ?? emptyAssignmentPlan(selectedProjectId);
+  const previewQuestionnaireKeys = useMemo(() => {
+    const pinnedKeys = sourceCycle?.questionnaires.map((item) => item.questionnaire_key) ?? [];
+    return pinnedKeys.length > 0
+      ? Array.from(new Set(pinnedKeys))
+      : Array.from(new Set(previewPlan.assignments.map((assignment) => assignment.questionnaire_key)));
+  }, [previewPlan.assignments, sourceCycle]);
+  const openCycle = useMemo(
+    () => assessmentCycles.find((cycle) => cycle.status === "draft" || cycle.status === "active") ?? null,
+    [assessmentCycles],
+  );
+  const cycleScopeKey = `${selectedProjectId ?? "company"}:${selectedCycleId ?? "legacy"}`;
+  const cycleScopeReady = !selectedProjectId || Boolean(
+    selectedCycleId &&
+    loadedCycleScope === cycleScopeKey &&
+    !cyclesLoading &&
+    !cycleAssignmentsLoading,
+  );
+  const publishAssignments = useCallback((next: CompanyAssignment[]) => {
+    setAssignmentState(next);
+    onAssignmentsChange?.(next);
+  }, [onAssignmentsChange]);
 
   useEffect(() => {
     setAssignmentState(assignments);
   }, [assignments]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedProjectId) {
+      setAssessmentCycles([]);
+      setSelectedCycleId(null);
+      setLoadedCyclesProjectId(null);
+      setLoadedCycleScope(null);
+      return;
+    }
+    if (loadedCyclesProjectId === selectedProjectId) return;
+
+    setCyclesLoading(true);
+    getAssessmentCycles(companyId, selectedProjectId)
+      .then((cycles) => {
+        if (cancelled) return;
+        const sorted = [...cycles].sort((left, right) => left.sequence - right.sequence);
+        setAssessmentCycles(sorted);
+        setLoadedCyclesProjectId(selectedProjectId);
+        const requestedId = get("cycle");
+        const requested = sorted.find((cycle) => cycle.id === requestedId);
+        const preferred = requested
+          ?? [...sorted].reverse().find((cycle) => cycle.status !== "closed")
+          ?? sorted.at(-1)
+          ?? null;
+        setSelectedCycleId(preferred?.id ?? null);
+        if (preferred && requestedId !== preferred.id) {
+          setParams({ cycle: preferred.id }, "replace");
+        }
+        setCycleMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setAssessmentCycles([]);
+        setSelectedCycleId(null);
+        setLoadedCycleScope(null);
+        setCycleMessage(
+          error instanceof Error ? error.message : "Evaluările nu au putut fi încărcate.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setCyclesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, get, loadedCyclesProjectId, selectedProjectId, setParams]);
+
+  useEffect(() => {
+    const requestedId = get("cycle");
+    if (!requestedId || !assessmentCycles.some((cycle) => cycle.id === requestedId)) return;
+    setSelectedCycleId(requestedId);
+  }, [assessmentCycles, get, searchKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedProjectId || !selectedCycleId) {
+      setLoadedCycleScope(null);
+      return;
+    }
+
+    const requestedScope = `${selectedProjectId}:${selectedCycleId}`;
+    if (loadedCycleScope === requestedScope) return;
+
+    setLoadedCycleScope(null);
+    publishAssignments([]);
+    setCycleAssignmentsLoading(true);
+    getCompanyAssignments(companyId, {}, {
+      projectId: selectedProjectId,
+      assessmentCycleId: selectedCycleId,
+    })
+      .then((nextAssignments) => {
+        if (cancelled) return;
+        publishAssignments(nextAssignments);
+        setLoadedCycleScope(requestedScope);
+        setCycleMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setCycleMessage(
+            error instanceof Error ? error.message : "Asignările evaluării nu au putut fi încărcate.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCycleAssignmentsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, loadedCycleScope, publishAssignments, selectedProjectId, selectedCycleId]);
 
   useEffect(() => {
     setShowAdvancedAssignmentModal(get("modal") === "advanced-assignment");
@@ -137,7 +319,7 @@ export function AssignmentWorkspace({
     setPlan(null);
     setSelectedPlanKeys(new Set());
     setMessage(null);
-  }, [selectedProjectId]);
+  }, [cycleScopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,7 +370,61 @@ export function AssignmentWorkspace({
     }));
   }, [assignmentForm.questionnaireKey, questionnaires]);
 
+  useEffect(() => {
+    if (assignmentModalMessage && showAdvancedAssignmentModal) {
+      assignmentErrorRef.current?.focus({ preventScroll: true });
+    }
+  }, [assignmentModalMessage, showAdvancedAssignmentModal]);
+
+  useEffect(() => {
+    if (cycleMessage && cycleSheetOpen) {
+      cycleErrorRef.current?.focus({ preventScroll: true });
+    }
+  }, [cycleMessage, cycleSheetOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!cycleSheetOpen || cycleStep !== 2 || !selectedProjectId || !cycleForm.sourceCycleId) {
+      return;
+    }
+
+    setCyclePreviewLoading(true);
+    setCyclePreviewPlan(null);
+    getCompanyDefaultAssignmentPlan(companyId, {}, {
+      projectId: selectedProjectId,
+      sourceCycleId: cycleForm.sourceCycleId,
+    })
+      .then((nextPlan) => {
+        if (!cancelled) {
+          setCyclePreviewPlan(nextPlan);
+          setCycleMessage(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setCycleMessage(
+            error instanceof Error ? error.message : "Previzualizarea nu a putut fi încărcată.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCyclePreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    companyId,
+    cycleForm.sourceCycleId,
+    cycleSheetOpen,
+    cycleStep,
+    selectedProjectId,
+  ]);
+
   const canCreateAssignment =
+    cycleIsEditable &&
+    cycleScopeReady &&
     canUseProjectActions &&
     participants.length > 0 &&
     questionnaires.length > 0 &&
@@ -199,8 +435,18 @@ export function AssignmentWorkspace({
         Boolean(assignmentForm.targetPersonId) &&
         assignmentForm.targetPersonId !== assignmentForm.respondentProfileId) ||
       (assignmentForm.targetType === "team" && Boolean(assignmentForm.targetTeamId)));
-  const canSavePlan = canUseProjectActions && selectedPlanItems.length > 0 && !planSaving;
-  const currentOperation = planLoading
+  const canSavePlan = cycleIsEditable && cycleScopeReady && canUseProjectActions && selectedPlanItems.length > 0 && !planSaving;
+  const canCreateCycle = Boolean(
+    cycleScopeReady &&
+    selectedProjectId &&
+    cycleForm.name.trim() &&
+    cycleForm.sourceCycleId &&
+    previewQuestionnaireKeys.length > 0 &&
+    previewPlan.assignments.length > 0,
+  );
+  const currentOperation = cyclesLoading || cycleAssignmentsLoading
+    ? { title: "Încărcăm evaluarea", detail: "Sincronizăm asignările selectate." }
+    : planLoading
     ? { title: "Generăm planul", detail: "Pregătim propunerile pentru proiect." }
     : planSaving
       ? { title: "Salvăm asignările", detail: `${selectedPlanItems.length} selectate.` }
@@ -208,9 +454,114 @@ export function AssignmentWorkspace({
         ? { title: "Creăm asignarea", detail: "Salvăm excepția în proiect." }
         : null;
 
-  function publishAssignments(next: CompanyAssignment[]) {
-    setAssignmentState(next);
-    onAssignmentsChange?.(next);
+  function selectAssessmentCycle(assessmentCycleId: string) {
+    if (assessmentCycleId === selectedCycleId) return;
+    setCycleMessage(null);
+    setLoadedCycleScope(null);
+    publishAssignments([]);
+    setSelectedCycleId(assessmentCycleId);
+    setParams({ cycle: assessmentCycleId }, "push");
+  }
+
+  function openCycleCreation() {
+    const source = selectedCycle ?? assessmentCycles.at(-1) ?? null;
+    const nextSequence = Math.max(1, ...assessmentCycles.map((cycle) => cycle.sequence + 1));
+    setCycleForm({
+      name: `Reevaluare ${Math.max(1, nextSequence - 1)}`,
+      dueDate: "",
+      sourceCycleId: source?.id ?? "",
+    });
+    setCyclePreviewPlan(null);
+    setCycleStep(1);
+    setCycleMessage(null);
+    setCycleSheetOpen(true);
+  }
+
+  async function handleCreateCycle() {
+    if (!selectedProjectId || !canCreateCycle || cycleMutationRef.current) return;
+    cycleMutationRef.current = true;
+    setCycleCreating(true);
+    setCycleMessage(null);
+    try {
+      const created = await createAssessmentCycle(companyId, selectedProjectId, {
+        name: cycleForm.name.trim(),
+        sourceCycleId: cycleForm.sourceCycleId,
+        dueAt: cycleForm.dueDate ? new Date(`${cycleForm.dueDate}T23:59:59`).toISOString() : null,
+      });
+      setAssessmentCycles((current) => [...current, created].sort((left, right) => left.sequence - right.sequence));
+      publishAssignments([]);
+      setLoadedCycleScope(`${selectedProjectId}:${created.id}`);
+      setSelectedCycleId(created.id);
+      setParams({ cycle: created.id }, "replace");
+      setCycleSheetOpen(false);
+      setCycleMessage(`${created.name} a fost creată ca draft.`);
+    } catch (error) {
+      setCycleMessage(error instanceof Error ? error.message : "Reevaluarea nu a putut fi creată.");
+    } finally {
+      cycleMutationRef.current = false;
+      setCycleCreating(false);
+    }
+  }
+
+  async function handleCloseCycle() {
+    if (!cycleScopeReady || !selectedProjectId || !selectedCycle || selectedCycle.status !== "active" || cycleMutationRef.current) return;
+    cycleMutationRef.current = true;
+    setCycleMessage(null);
+    try {
+      const closed = await closeAssessmentCycle(companyId, selectedProjectId, selectedCycle.id);
+      setAssessmentCycles((current) => current.map((cycle) => cycle.id === closed.id ? closed : cycle));
+      setCycleMessage(`${closed.name} a fost închisă.`);
+    } catch (error) {
+      if (
+        error instanceof CompanyMutationError &&
+        error.code === "assessment_cycle_has_unfinished_assignments" &&
+        window.confirm(
+          "Evaluarea are asignări nefinalizate. Le anulezi și închizi evaluarea?",
+        )
+      ) {
+        try {
+          const closed = await closeAssessmentCycle(
+            companyId,
+            selectedProjectId,
+            selectedCycle.id,
+            true,
+          );
+          setAssessmentCycles((current) =>
+            current.map((cycle) => cycle.id === closed.id ? closed : cycle),
+          );
+          setCycleMessage(`${closed.name} a fost închisă.`);
+          return;
+        } catch (retryError) {
+          setCycleMessage(
+            retryError instanceof Error ? retryError.message : "Evaluarea nu a putut fi închisă.",
+          );
+          return;
+        }
+      }
+      setCycleMessage(error instanceof Error ? error.message : "Evaluarea nu a putut fi închisă.");
+    } finally {
+      cycleMutationRef.current = false;
+    }
+  }
+
+  async function handleDeleteDraft() {
+    if (!cycleScopeReady || !selectedProjectId || !selectedCycle || selectedCycle.status !== "draft" || cycleMutationRef.current) return;
+    if (!window.confirm(`Ștergi draftul „${selectedCycle.name}”?`)) return;
+    cycleMutationRef.current = true;
+    setCycleMessage(null);
+    try {
+      await deleteAssessmentCycle(companyId, selectedProjectId, selectedCycle.id);
+      const remaining = assessmentCycles.filter((cycle) => cycle.id !== selectedCycle.id);
+      const fallback = remaining.at(-1) ?? null;
+      setAssessmentCycles(remaining);
+      setSelectedCycleId(fallback?.id ?? null);
+      setParams({ cycle: fallback?.id ?? null }, "replace");
+      setCycleMessage("Draftul a fost șters.");
+    } catch (error) {
+      setCycleMessage(error instanceof Error ? error.message : "Draftul nu a putut fi șters.");
+    } finally {
+      cycleMutationRef.current = false;
+    }
   }
 
   function updateAssignmentForm(patch: Partial<AssignmentFormState>) {
@@ -229,6 +580,7 @@ export function AssignmentWorkspace({
   }
 
   function setAdvancedAssignmentModalOpen(open: boolean) {
+    if (open) setAssignmentModalMessage(null);
     setShowAdvancedAssignmentModal(open);
     setParams({ modal: open ? "advanced-assignment" : null }, open ? "push" : "replace");
   }
@@ -238,9 +590,11 @@ export function AssignmentWorkspace({
     assignmentSavingRef.current = true;
     setAssignmentSaving(true);
     setMessage(null);
+    setAssignmentModalMessage(null);
 
     const payload: CreateCompanyAssignmentPayload = {
       projectId: selectedProjectId,
+      ...(selectedProjectId && selectedCycleId ? { assessmentCycleId: selectedCycleId } : {}),
       respondentProfileId: assignmentForm.respondentProfileId,
       questionnaireKey: assignmentForm.questionnaireKey,
       targetType: assignmentForm.targetType,
@@ -257,7 +611,9 @@ export function AssignmentWorkspace({
       setMessage(`Asignare creată pentru ${respondentName}.`);
       setAdvancedAssignmentModalOpen(false);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Asignarea nu a putut fi creată.");
+      setAssignmentModalMessage(
+        error instanceof Error ? error.message : "Asignarea nu a putut fi creată.",
+      );
     } finally {
       assignmentSavingRef.current = false;
       setAssignmentSaving(false);
@@ -266,8 +622,12 @@ export function AssignmentWorkspace({
 
   async function handleGeneratePlan() {
     if (planLoadingRef.current || planSavingRef.current) return;
-    if (!canUseProjectActions) {
-      setMessage("Alege un proiect înainte de a genera planul.");
+    if (!canUseProjectActions || !cycleScopeReady || !selectedCycleId) {
+      setMessage("Evaluarea selectată nu este încă disponibilă.");
+      return;
+    }
+    if (!cycleIsEditable) {
+      setMessage("Evaluările închise sunt disponibile doar pentru consultare.");
       return;
     }
 
@@ -278,7 +638,10 @@ export function AssignmentWorkspace({
       const generated = await getCompanyDefaultAssignmentPlan(
         companyId,
         {},
-        { projectId: selectedProjectId },
+        {
+          projectId: selectedProjectId,
+          assessmentCycleId: selectedCycleId,
+        },
       );
       setPlan(generated);
       setSelectedPlanKeys(
@@ -307,10 +670,15 @@ export function AssignmentWorkspace({
     setPlanSaving(true);
     setMessage(null);
     try {
+      if (!selectedCycleId || !cycleScopeReady) {
+        setMessage("Evaluarea selectată nu este încă disponibilă.");
+        return;
+      }
       const result = await saveCompanyDefaultAssignmentPlan(
         companyId,
         selectedPlanItems,
         selectedProjectId,
+        selectedCycleId,
       );
       const savedIdsByPlanKey = new Map(
         selectedPlanItems.map((assignment, index) => [
@@ -369,6 +737,33 @@ export function AssignmentWorkspace({
         <OperationFeedback title={currentOperation.title} detail={currentOperation.detail} />
       ) : null}
       {message ? <InlineFeedback>{message}</InlineFeedback> : null}
+      {cycleMessage && !cycleSheetOpen ? <InlineFeedback>{cycleMessage}</InlineFeedback> : null}
+
+      {assessmentCycles.length > 0 ? (
+        <AssessmentCycleToolbar
+          cycles={assessmentCycles}
+          selectedCycleId={selectedCycleId}
+          loading={cyclesLoading || cycleAssignmentsLoading}
+          onSelect={selectAssessmentCycle}
+          action={
+            selectedCycle?.status === "active" ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => void handleCloseCycle()} disabled={!cycleScopeReady}>
+                Închide evaluarea
+              </Button>
+            ) : selectedCycle?.status === "draft" ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => void handleDeleteDraft()} disabled={!cycleScopeReady}>
+                <Trash2Icon data-icon="inline-start" aria-hidden="true" />
+                Șterge draftul
+              </Button>
+            ) : !openCycle ? (
+              <Button type="button" size="sm" onClick={openCycleCreation} disabled={!cycleScopeReady}>
+                <PlusIcon data-icon="inline-start" aria-hidden="true" />
+                Reevaluare nouă
+              </Button>
+            ) : null
+          }
+        />
+      ) : null}
 
       <section className="overflow-hidden rounded-lg border border-border bg-surface">
         <header className="flex flex-col gap-3 border-b border-border px-4 py-4 md:flex-row md:items-center md:justify-between md:px-5">
@@ -384,7 +779,7 @@ export function AssignmentWorkspace({
               variant="outline"
               size="sm"
               onClick={() => setAdvancedAssignmentModalOpen(true)}
-              disabled={participants.length === 0}
+              disabled={!cycleIsEditable || !cycleScopeReady || participants.length === 0}
             >
               <PlusIcon data-icon="inline-start" aria-hidden="true" />
               Asignare individuală
@@ -394,7 +789,7 @@ export function AssignmentWorkspace({
                 type="button"
                 size="sm"
                 onClick={() => void handleGeneratePlan()}
-                disabled={!canUseProjectActions || planLoading || participants.length === 0}
+                disabled={!cycleIsEditable || !cycleScopeReady || !canUseProjectActions || planLoading || participants.length === 0}
               >
                 {planLoading ? (
                   <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" />
@@ -409,7 +804,7 @@ export function AssignmentWorkspace({
                 variant="outline"
                 size="sm"
                 onClick={() => void handleGeneratePlan()}
-                disabled={!canUseProjectActions || planLoading || participants.length === 0}
+                disabled={!cycleIsEditable || !cycleScopeReady || !canUseProjectActions || planLoading || participants.length === 0}
                 title={participants.length === 0 ? "Adaugă participanți înainte de regenerare." : undefined}
               >
                 {planLoading ? (
@@ -453,6 +848,7 @@ export function AssignmentWorkspace({
           allSelected={allPlanItemsSelected}
           onToggleAll={toggleAllPlanItems}
           onToggleItem={togglePlanItem}
+          readOnly={!cycleIsEditable}
         />
       </section>
 
@@ -555,6 +951,12 @@ export function AssignmentWorkspace({
             </div>
           ) : null}
 
+          {assignmentModalMessage ? (
+            <div ref={assignmentErrorRef} tabIndex={-1} className="mt-4 outline-none">
+              <InlineFeedback tone="danger">{assignmentModalMessage}</InlineFeedback>
+            </div>
+          ) : null}
+
           <div className="mt-6 flex justify-end border-t border-border pt-5">
             <Button
               type="button"
@@ -572,8 +974,252 @@ export function AssignmentWorkspace({
           </div>
         </ModalLayer>
       ) : null}
+
+      <Sheet
+        open={cycleSheetOpen}
+        onOpenChange={setCycleSheetOpen}
+        labelledBy="assessment-cycle-sheet-title"
+        closeOnBackdrop={!cycleCreating}
+        closeOnEscape={!cycleCreating}
+        panelClassName="!flex !flex-col"
+      >
+        <SheetHeader className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Pasul {cycleStep} din 3</p>
+            <h2 id="assessment-cycle-sheet-title" className="mt-1 text-xl font-semibold text-foreground">
+              Reevaluare nouă
+            </h2>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Închide"
+            onClick={() => setCycleSheetOpen(false)}
+            disabled={cycleCreating}
+          >
+            <XIcon aria-hidden="true" />
+          </Button>
+        </SheetHeader>
+
+        <SheetBody className="flex flex-col gap-5">
+          {cycleMessage ? (
+            <div ref={cycleErrorRef} tabIndex={-1} className="outline-none">
+              <InlineFeedback tone="danger">{cycleMessage}</InlineFeedback>
+            </div>
+          ) : null}
+          <CycleStepIndicator step={cycleStep} />
+          {cycleStep === 1 ? (
+            <div className="grid gap-4">
+              <Field>
+                <FieldLabel htmlFor="cycle-name">Nume</FieldLabel>
+                <Input
+                  id="cycle-name"
+                  value={cycleForm.name}
+                  onChange={(event) => setCycleForm((current) => ({ ...current, name: event.target.value }))}
+                  maxLength={120}
+                  autoFocus
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Sursă</FieldLabel>
+                <Select
+                  value={cycleForm.sourceCycleId}
+                  onValueChange={(sourceCycleId) => setCycleForm((current) => ({ ...current, sourceCycleId }))}
+                >
+                  <SelectTrigger aria-label="Evaluare sursă">
+                    <SelectValue placeholder="Alege evaluarea sursă" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assessmentCycles.filter((cycle) => cycle.status !== "draft").map((cycle) => (
+                      <SelectItem key={cycle.id} value={cycle.id}>{cycle.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="cycle-due-date">Termen</FieldLabel>
+                <Input
+                  id="cycle-due-date"
+                  type="date"
+                  value={cycleForm.dueDate}
+                  onChange={(event) => setCycleForm((current) => ({ ...current, dueDate: event.target.value }))}
+                />
+              </Field>
+            </div>
+          ) : cycleStep === 2 ? (
+            <div className="grid gap-5">
+              <section aria-labelledby="cycle-questionnaires-title">
+                <h3 id="cycle-questionnaires-title" className="text-sm font-semibold text-foreground">
+                  Chestionare repetate
+                </h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {previewQuestionnaireKeys.map((key) => (
+                    <span key={key} className="inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground">
+                      <CheckCircle2Icon className="size-4 text-success-ink" aria-hidden="true" />
+                      {formatQuestionnaireLabel(key)}
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <section aria-labelledby="cycle-preview-title" className="overflow-hidden rounded-lg border border-border">
+                <header className="border-b border-border px-4 py-3">
+                  <h3 id="cycle-preview-title" className="text-sm font-semibold text-foreground">
+                    Previzualizare grupată
+                  </h3>
+                </header>
+                {cyclePreviewLoading ? (
+                  <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                    <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                    Încărcăm structura
+                  </div>
+                ) : (
+                  <AssignmentPlanGroups
+                    plan={previewPlan}
+                    selectedKeys={new Set(previewPlan.assignments.map((item) => item.key))}
+                    allSelected
+                    onToggleAll={() => undefined}
+                    onToggleItem={() => undefined}
+                    readOnly
+                  />
+                )}
+              </section>
+            </div>
+          ) : (
+            <div className="grid gap-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Evaluare</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{cycleForm.name}</p>
+              </div>
+              <dl className="grid gap-4 border-y border-border py-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-semibold text-muted-foreground">Sursă</dt>
+                  <dd className="mt-1 font-medium text-foreground">{sourceCycle?.name ?? "Evaluare anterioară"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-muted-foreground">Termen</dt>
+                  <dd className="mt-1 font-medium text-foreground">{cycleForm.dueDate || "Fără termen"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-muted-foreground">Chestionare</dt>
+                  <dd className="mt-1 font-medium text-foreground">{previewQuestionnaireKeys.length}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-muted-foreground">Asignări propuse</dt>
+                  <dd className="mt-1 font-medium text-foreground">{previewPlan.assignments.length}</dd>
+                </div>
+              </dl>
+              <InlineFeedback>Draftul nu trimite invitații până când salvezi planul și pornești livrarea.</InlineFeedback>
+            </div>
+          )}
+        </SheetBody>
+
+        <SheetFooter className="flex items-center justify-between gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => cycleStep === 1 ? setCycleSheetOpen(false) : setCycleStep((step) => step - 1)}
+            disabled={cycleCreating}
+          >
+            <ChevronLeftIcon data-icon="inline-start" aria-hidden="true" />
+            {cycleStep === 1 ? "Anulează" : "Înapoi"}
+          </Button>
+          {cycleStep < 3 ? (
+            <Button
+              type="button"
+              onClick={() => setCycleStep((step) => step + 1)}
+              disabled={
+                (cycleStep === 1 && (!cycleForm.name.trim() || !cycleForm.sourceCycleId))
+                || (cycleStep === 2 && (cyclePreviewLoading || previewPlan.assignments.length === 0))
+              }
+            >
+              Continuă
+              <ChevronRightIcon data-icon="inline-end" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button type="button" onClick={() => void handleCreateCycle()} disabled={!canCreateCycle || cycleCreating}>
+              {cycleCreating ? <Loader2Icon className="animate-spin" data-icon="inline-start" aria-hidden="true" /> : null}
+              {cycleCreating ? "Creăm draftul" : "Creează draftul"}
+            </Button>
+          )}
+        </SheetFooter>
+      </Sheet>
     </div>
   );
+}
+
+export function AssessmentCycleToolbar({
+  cycles,
+  selectedCycleId,
+  loading,
+  onSelect,
+  action,
+}: {
+  cycles: AssessmentCycle[];
+  selectedCycleId: string | null;
+  loading: boolean;
+  onSelect: (assessmentCycleId: string) => void;
+  action?: React.ReactNode;
+}) {
+  const selected = cycles.find((cycle) => cycle.id === selectedCycleId) ?? null;
+
+  return (
+    <section className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center" aria-label="Evaluare selectată">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Select value={selectedCycleId ?? undefined} onValueChange={onSelect} disabled={loading}>
+          <SelectTrigger className="h-9 w-full max-w-72 bg-surface" aria-label="Evaluare">
+            <SelectValue placeholder={loading ? "Încărcăm evaluările" : "Alege evaluarea"} />
+          </SelectTrigger>
+          <SelectContent>
+            {cycles.map((cycle) => (
+              <SelectItem key={cycle.id} value={cycle.id}>
+                {cycle.name} · {formatCycleStatus(cycle.status)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selected ? (
+          <span className="hidden text-xs font-semibold text-muted-foreground md:inline">
+            {formatCycleStatus(selected.status)}
+          </span>
+        ) : null}
+      </div>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </section>
+  );
+}
+
+function CycleStepIndicator({ step }: { step: number }) {
+  return (
+    <ol className="grid grid-cols-3 gap-2" aria-label="Pașii reevaluării">
+      {["Detalii", "Plan", "Confirmare"].map((label, index) => {
+        const value = index + 1;
+        const active = value === step;
+        const complete = value < step;
+        return (
+          <li key={label} className="min-w-0">
+            <span
+              className={cn(
+                "block h-1 rounded-full",
+                active || complete ? "bg-burgundy" : "bg-muted",
+              )}
+              aria-hidden="true"
+            />
+            <span className={cn("mt-2 block truncate text-xs font-semibold", active ? "text-foreground" : "text-muted-foreground")}>
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function formatCycleStatus(status: AssessmentCycle["status"]): string {
+  if (status === "draft") return "Draft";
+  if (status === "active") return "Activă";
+  return "Închisă";
 }
 
 function AssignmentTable({
@@ -585,6 +1231,7 @@ function AssignmentTable({
   allSelected,
   onToggleAll,
   onToggleItem,
+  readOnly = false,
 }: {
   assignments: CompanyAssignment[];
   plan: CompanyAssignmentPlan | null;
@@ -594,6 +1241,7 @@ function AssignmentTable({
   allSelected: boolean;
   onToggleAll: (checked: boolean) => void;
   onToggleItem: (key: string) => void;
+  readOnly?: boolean;
 }) {
   if (plan) {
     return (
@@ -603,6 +1251,7 @@ function AssignmentTable({
         allSelected={allSelected}
         onToggleAll={onToggleAll}
         onToggleItem={onToggleItem}
+        readOnly={readOnly}
       />
     );
   }
@@ -664,12 +1313,14 @@ function AssignmentPlanGroups({
   allSelected,
   onToggleAll,
   onToggleItem,
+  readOnly = false,
 }: {
   plan: CompanyAssignmentPlan;
   selectedKeys: Set<string>;
   allSelected: boolean;
   onToggleAll: (checked: boolean) => void;
   onToggleItem: (key: string) => void;
+  readOnly?: boolean;
 }) {
   const groups = buildAssignmentPlanGroups(plan);
   const selectableCount = plan.assignments.filter((assignment) => !assignment.existing_assignment_id).length;
@@ -685,18 +1336,20 @@ function AssignmentPlanGroups({
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 md:px-5">
-        <Checkbox
-          aria-label="Selectează toate asignările propuse"
-          checked={allSelected}
-          disabled={selectableCount === 0}
-          onCheckedChange={(checked) => onToggleAll(checked === true)}
-        />
-        <span className="text-sm font-semibold text-foreground">Selectează toate propunerile</span>
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-          {selectedKeys.size} selectate din {selectableCount}
-        </span>
-      </div>
+      {!readOnly ? (
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 md:px-5">
+          <Checkbox
+            aria-label="Selectează toate asignările propuse"
+            checked={allSelected}
+            disabled={selectableCount === 0}
+            onCheckedChange={(checked) => onToggleAll(checked === true)}
+          />
+          <span className="text-sm font-semibold text-foreground">Selectează toate propunerile</span>
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+            {selectedKeys.size} selectate din {selectableCount}
+          </span>
+        </div>
+      ) : null}
 
       <div className="divide-y divide-border">
         {groups.map(({ scope, assignments: scopeAssignments }) => (
@@ -759,7 +1412,7 @@ function AssignmentPlanGroups({
                             <Checkbox
                               aria-label={`Selectează asignarea pentru ${assignment.respondent_name}`}
                               checked={saved || selected}
-                              disabled={saved}
+                              disabled={saved || readOnly}
                               onCheckedChange={() => onToggleItem(assignment.key)}
                             />
                           </div>
@@ -870,6 +1523,90 @@ function buildAssignmentPlanGroups(plan: CompanyAssignmentPlan) {
   }
 
   return groups;
+}
+
+function emptyAssignmentPlan(projectId: string | null): CompanyAssignmentPlan {
+  return {
+    project_id: projectId,
+    assessment_cycle_id: null,
+    source_cycle_id: null,
+    scopes: [],
+    assignments: [],
+    suggested_count: 0,
+    existing_count: 0,
+  };
+}
+
+export function buildCyclePreviewPlan(
+  assignments: CompanyAssignment[],
+  participantsById: Map<string, CompanyParticipant>,
+  teamsById: Map<string, CompanyTeam>,
+): CompanyAssignmentPlan {
+  const scopes = new Map<string, CompanyAssignmentPlan["scopes"][number]>();
+  const items = assignments.map((assignment) => {
+    const respondent = participantsById.get(assignment.respondent_profile_id);
+    const targetPerson = assignment.target_person_id
+      ? participantsById.get(assignment.target_person_id)
+      : null;
+    const targetTeam = assignment.target_team_id ? teamsById.get(assignment.target_team_id) : null;
+    const scopeId = assignment.target_type === "person"
+      ? `manager:${assignment.target_person_id ?? assignment.id}`
+      : assignment.target_type === "team"
+        ? `team:${assignment.target_team_id ?? assignment.id}`
+        : `self:${assignment.respondent_profile_id}`;
+    const scopeName = targetPerson?.full_name
+      ?? targetTeam?.name
+      ?? respondent?.full_name
+      ?? "Grup de evaluare";
+    const scopeType = assignment.target_type === "person"
+      ? "manager"
+      : assignment.target_type === "team"
+        ? (targetTeam?.type === "leadership" ? "leadership_team" : "manager_team")
+        : "member";
+
+    if (!scopes.has(scopeId)) {
+      scopes.set(scopeId, {
+        id: scopeId,
+        name: scopeName,
+        type: scopeType,
+        participant_ids: [],
+      });
+    }
+    const scope = scopes.get(scopeId)!;
+    if (!scope.participant_ids.includes(assignment.respondent_profile_id)) {
+      scope.participant_ids.push(assignment.respondent_profile_id);
+    }
+
+    return {
+      key: `preview:${assignment.id}`,
+      scope_id: scopeId,
+      scope_name: scopeName,
+      scope_type: scopeType,
+      respondent_profile_id: assignment.respondent_profile_id,
+      respondent_name: respondent?.full_name ?? "Participant",
+      questionnaire_key: assignment.questionnaire_key,
+      target_type: assignment.target_type,
+      target_person_id: assignment.target_person_id,
+      target_person_name: targetPerson?.full_name ?? null,
+      target_team_id: assignment.target_team_id,
+      target_team_name: targetTeam?.name ?? null,
+      target_team_type: targetTeam?.type ?? null,
+      target_team_member_ids: [],
+      target_team_leader_id: null,
+      visibility_policy: assignment.visibility_policy ?? "trainer_raw_review",
+      selected: true,
+      existing_assignment_id: null,
+    } satisfies CompanyAssignmentPlanItem;
+  });
+
+  return {
+    project_id: assignments[0]?.project_id ?? null,
+    assessment_cycle_id: assignments[0]?.assessment_cycle_id ?? null,
+    scopes: Array.from(scopes.values()),
+    assignments: items,
+    suggested_count: items.length,
+    existing_count: 0,
+  };
 }
 
 function formatScopeType(type: string): string {

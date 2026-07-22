@@ -6,8 +6,10 @@ import {
 } from "lucide-react";
 
 import {
+  getCompanyReportComparison,
   getIcareAnswerReview,
   type IcareAnswerReviewRow,
+  type ReportDistribution,
   type ReportHierarchyIssue,
 } from "@/api/companies";
 import { inviteQuestionnaireLabel } from "@/api/invites";
@@ -21,8 +23,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/utils/cn";
 import { formatRomanianDate } from "@/utils/date-format";
-import { getProjectReportWorkspaceData } from "../project-data";
+import { getProjectAssessmentCyclesData, getProjectReportWorkspaceData } from "../project-data";
+import { CycleComparisonControls } from "./CycleComparisonControls";
 import { ReportPrintButton } from "./ReportPrintButton";
+import { buildProjectReportQuery, loadOptionalComparison } from "./report-cycle";
 
 const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
   assigned: "Asignat",
@@ -31,19 +35,59 @@ const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
   started: "Început",
   submitted: "Trimis",
   validated: "Validat",
+  cancelled: "Anulat",
 };
 
 export default async function ProjectReportsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ baseline?: string; cycle?: string }>;
 }) {
-  const [{ projectId }, requestOptions] = await Promise.all([
+  const [{ projectId }, query, requestOptions] = await Promise.all([
     params,
+    searchParams,
     getServerApiRequestOptions(),
   ]);
-  const { project, participants, assignments, aggregate } = await getProjectReportWorkspaceData(projectId, requestOptions);
-  const icareReview = await getIcareAnswerReview(project.company_id, requestOptions, { projectId: project.id });
+  const cycleData = await getProjectAssessmentCyclesData(projectId, requestOptions);
+  const cycles = [...cycleData.assessmentCycles].sort((left, right) => left.sequence - right.sequence);
+  const comparisonCycle = cycles.find((cycle) => cycle.id === query.cycle)
+    ?? cycles.at(-1)
+    ?? null;
+  const comparisonIndex = comparisonCycle
+    ? cycles.findIndex((cycle) => cycle.id === comparisonCycle.id)
+    : -1;
+  const requestedBaseline = cycles.find((cycle) => cycle.id === query.baseline);
+  const baselineCycle = requestedBaseline && comparisonCycle
+    && requestedBaseline.sequence < comparisonCycle.sequence
+    ? requestedBaseline
+    : comparisonIndex > 0
+      ? cycles[comparisonIndex - 1]
+      : null;
+  const scope = { assessmentCycleId: comparisonCycle?.id };
+  const { project, participants, assignments, aggregate } = await getProjectReportWorkspaceData(
+    projectId,
+    requestOptions,
+    scope,
+  );
+  const icareReview = await getIcareAnswerReview(project.company_id, requestOptions, {
+    projectId: project.id,
+    assessmentCycleId: comparisonCycle?.id,
+  });
+  const comparisonResult = await loadOptionalComparison(
+    baselineCycle && comparisonCycle
+      ? () => getCompanyReportComparison(
+          project.company_id,
+          project.id,
+          baselineCycle.id,
+          comparisonCycle.id,
+          requestOptions,
+        )
+      : null,
+  );
+  const comparison = comparisonResult.comparison;
+  const baselineAggregate = comparison?.baseline ?? null;
   const totalAssigned = aggregate.total_assigned;
   const totalCompleted = aggregate.total_completed;
   const completionRate = aggregate.completion_rate;
@@ -67,6 +111,10 @@ export default async function ProjectReportsPage({
   const pcmBaseDistribution = aggregate.pcm_base_distribution.map((item) => ({ ...item, color: item.color ?? undefined }));
   const pcmPhaseDistribution = aggregate.pcm_phase_distribution.map((item) => ({ ...item, color: item.color ?? undefined }));
   const commonDriverResults = driverAverages.filter((item) => item.avg > 50);
+  const reportQuery = buildProjectReportQuery({
+    cycle: comparisonCycle?.id,
+    baseline: baselineCycle?.id,
+  });
   const reportsPath = `/trainer/projects/${projectId}/reports`;
 
   if (aggregate.hierarchy_ambiguous) {
@@ -80,6 +128,21 @@ export default async function ProjectReportsPage({
 
   return (
     <div className="flex flex-col gap-5">
+      {baselineCycle && comparisonCycle ? (
+        <CycleComparisonControls
+          cycles={cycles}
+          baselineCycleId={baselineCycle.id}
+          comparisonCycleId={comparisonCycle.id}
+        />
+      ) : null}
+      {comparisonResult.failed ? (
+        <Alert className="status-warning px-4 py-3">
+          <AlertTitle>Comparația nu s-a încărcat.</AlertTitle>
+          <AlertDescription>
+            Rezultatele evaluării selectate sunt disponibile. <Link href={`${reportsPath}${reportQuery}`}>Reîncearcă comparația.</Link>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <section className="flex flex-col gap-5 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <dl className="flex flex-wrap gap-x-9 gap-y-3" aria-label="Sumar rezultate">
@@ -101,16 +164,22 @@ export default async function ProjectReportsPage({
           title="Lencioni"
           count={lencioniCount}
           items={lencioniAverages}
+          baselineItems={baselineAggregate?.lencioni_averages}
+          baselineLabel={baselineCycle?.name}
+          comparisonLabel={comparisonCycle?.name}
           max={10}
           valueLabel="0-10"
           legend={lencioniLegend}
-          actionHref={`${reportsPath}/lencioni`}
+          actionHref={`${reportsPath}/lencioni${reportQuery}`}
           actionLabel="Detalii"
         />
         <ReportPanel
           title="Feedback 360 iCARE"
           count={boss360Count}
           items={boss360Averages}
+          baselineItems={baselineAggregate?.boss_360_averages}
+          baselineLabel={baselineCycle?.name}
+          comparisonLabel={comparisonCycle?.name}
           suffix="%"
           max={100}
         />
@@ -118,14 +187,28 @@ export default async function ProjectReportsPage({
           title="Driveri de distres"
           count={driverCount}
           items={driverAverages}
+          baselineItems={baselineAggregate?.driver_averages}
+          baselineLabel={baselineCycle?.name}
+          comparisonLabel={comparisonCycle?.name}
           suffix="%"
           max={100}
-          actionHref={`${reportsPath}/drivers`}
+          actionHref={`${reportsPath}/drivers${reportQuery}`}
           actionLabel="Detalii"
         />
       </section>
 
       <IcareAnswerReviewPanel rows={icareReview.rows} />
+
+      {baselineAggregate && baselineCycle && comparisonCycle ? (
+        <PcmCycleComparison
+          baselineLabel={baselineCycle.name}
+          comparisonLabel={comparisonCycle.name}
+          baselineBase={baselineAggregate.pcm_base_distribution}
+          comparisonBase={pcmBaseDistribution}
+          baselinePhase={baselineAggregate.pcm_phase_distribution}
+          comparisonPhase={pcmPhaseDistribution}
+        />
+      ) : null}
 
       {(pcmBaseDistribution.length > 0 ||
         pcmPhaseDistribution.length > 0 ||
@@ -245,6 +328,9 @@ function ReportPanel({
   title,
   count,
   items,
+  baselineItems,
+  baselineLabel,
+  comparisonLabel,
   suffix = "",
   max,
   valueLabel,
@@ -256,6 +342,9 @@ function ReportPanel({
   title: string;
   count: number;
   items: ReportAverage[];
+  baselineItems?: ReportAverage[];
+  baselineLabel?: string;
+  comparisonLabel?: string;
   suffix?: string;
   max: number;
   valueLabel?: string;
@@ -283,7 +372,7 @@ function ReportPanel({
       <Separator />
       <div className={cn(reportContentClassName(), "py-4")}>
         {description ? <p className="text-xs leading-5 text-muted-foreground">{description}</p> : null}
-        {items.length === 0 ? (
+        {items.length === 0 && (!baselineItems || baselineItems.length === 0) ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Rezultatele apar după completare și scorare.</p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -296,14 +385,15 @@ function ReportPanel({
                 ))}
               </div>
             ) : null}
-            {items.map((item) => (
+            {mergeReportAverages(items, baselineItems).map(({ current, baseline }) => {
+              const item = current ?? baseline;
+              if (!item) return null;
+              return (
               <div key={item.id}>
                 <div className="flex justify-between text-xs font-semibold text-muted-foreground">
                   <span>{item.label}</span>
                   <span>
-                    {item.avg}
-                    {suffix}
-                    {valueLabel ? ` / ${valueLabel}` : ""}
+                    {current ? `${current.avg}${suffix}${valueLabel ? ` / ${valueLabel}` : ""}` : "În așteptare"}
                   </span>
                 </div>
                 {item.interpretation ? (
@@ -312,9 +402,29 @@ function ReportPanel({
                     {item.interpretation}
                   </p>
                 ) : null}
-                <ScaledBar value={item.avg} max={max} />
+                {baselineItems ? (
+                  <div className="mt-2 grid gap-1.5">
+                    <ComparisonBar
+                      label={baselineLabel ?? "Referință"}
+                      value={baseline?.avg}
+                      max={max}
+                      tone="baseline"
+                      suffix={suffix}
+                    />
+                    <ComparisonBar
+                      label={comparisonLabel ?? "Comparație"}
+                      value={current?.avg}
+                      max={max}
+                      tone="comparison"
+                      suffix={suffix}
+                    />
+                  </div>
+                ) : (
+                  <ScaledBar value={item.avg} max={max} />
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -334,6 +444,154 @@ function ReportPanel({
       {content}
     </section>
   );
+}
+
+function mergeReportAverages(
+  currentItems: ReportAverage[],
+  baselineItems: ReportAverage[] = [],
+): Array<{ current?: ReportAverage; baseline?: ReportAverage }> {
+  const ids = [...new Set([...baselineItems.map((item) => item.id), ...currentItems.map((item) => item.id)])];
+  const currentById = new Map(currentItems.map((item) => [item.id, item]));
+  const baselineById = new Map(baselineItems.map((item) => [item.id, item]));
+  return ids.map((id) => ({ current: currentById.get(id), baseline: baselineById.get(id) }));
+}
+
+function ComparisonBar({
+  label,
+  value,
+  max,
+  tone,
+  suffix,
+}: {
+  label: string;
+  value?: number;
+  max: number;
+  tone: "baseline" | "comparison";
+  suffix: string;
+}) {
+  const width = value === undefined ? 0 : Math.min(100, Math.max(0, (value / max) * 100));
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      <span className="truncate">{label}</span>
+      <span className="tabular-nums">{value === undefined ? "În așteptare" : `${value}${suffix}`}</span>
+      <div className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div
+          className={cn("h-full rounded-full", tone === "baseline" ? "bg-zinc-500" : "bg-burgundy")}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PcmCycleComparison({
+  baselineLabel,
+  comparisonLabel,
+  baselineBase,
+  comparisonBase,
+  baselinePhase,
+  comparisonPhase,
+}: {
+  baselineLabel: string;
+  comparisonLabel: string;
+  baselineBase: ReportDistribution[];
+  comparisonBase: ReportDistribution[];
+  baselinePhase: ReportDistribution[];
+  comparisonPhase: ReportDistribution[];
+}) {
+  return (
+    <section className={reportSurfaceClassName({ gapless: true })}>
+      <div className={reportHeaderClassName({ className: "py-4" })}>
+        <h2 className={reportTitleClassName()}>Evoluție PCM</h2>
+      </div>
+      <Separator />
+      <div className="grid gap-6 px-4 py-5 lg:grid-cols-2">
+        <PcmDistributionComparison
+          title="Bază PCM"
+          baselineLabel={baselineLabel}
+          comparisonLabel={comparisonLabel}
+          baseline={baselineBase}
+          comparison={comparisonBase}
+        />
+        <PcmDistributionComparison
+          title="Fază PCM"
+          baselineLabel={baselineLabel}
+          comparisonLabel={comparisonLabel}
+          baseline={baselinePhase}
+          comparison={comparisonPhase}
+        />
+      </div>
+    </section>
+  );
+}
+
+function PcmDistributionComparison({
+  title,
+  baselineLabel,
+  comparisonLabel,
+  baseline,
+  comparison,
+}: {
+  title: string;
+  baselineLabel: string;
+  comparisonLabel: string;
+  baseline: ReportDistribution[];
+  comparison: ReportDistribution[];
+}) {
+  const rows = mergeDistributions(baseline, comparison);
+  const max = Math.max(1, ...rows.flatMap((row) => [row.baseline?.value ?? 0, row.comparison?.value ?? 0]));
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">În așteptarea rezultatelor.</p>
+      ) : (
+        <div className="mt-3 grid gap-4">
+          {rows.map((row) => (
+            <div key={row.id}>
+              <p className="mb-2 text-xs font-semibold text-foreground">{row.label}</p>
+              <div className="grid gap-1.5">
+                <ComparisonBar
+                  label={baselineLabel}
+                  value={row.baseline?.value}
+                  max={max}
+                  tone="baseline"
+                  suffix=""
+                />
+                <ComparisonBar
+                  label={comparisonLabel}
+                  value={row.comparison?.value}
+                  max={max}
+                  tone="comparison"
+                  suffix=""
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function mergeDistributions(
+  baseline: ReportDistribution[],
+  comparison: ReportDistribution[],
+): Array<{ id: string; label: string; baseline?: ReportDistribution; comparison?: ReportDistribution }> {
+  const ids = [...new Set([...baseline.map((item) => item.id), ...comparison.map((item) => item.id)])];
+  const baselineById = new Map(baseline.map((item) => [item.id, item]));
+  const comparisonById = new Map(comparison.map((item) => [item.id, item]));
+  return ids.map((id) => {
+    const baselineItem = baselineById.get(id);
+    const comparisonItem = comparisonById.get(id);
+    return {
+      id,
+      label: comparisonItem?.label ?? baselineItem?.label ?? id,
+      baseline: baselineItem,
+      comparison: comparisonItem,
+    };
+  });
 }
 
 function ChartPanel({ title, children }: { title: string; children: ReactNode }) {

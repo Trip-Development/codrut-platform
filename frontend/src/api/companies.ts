@@ -4,11 +4,23 @@ import { getApiBaseUrl, isDemoFallbackEnabled, isLocalSeededDemoFallbackEnabled 
 
 type ApiErrorPayload = {
   error?: {
+    code?: unknown;
     message?: unknown;
     details?: unknown;
   };
   detail?: unknown;
 };
+
+export class CompanyMutationError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = "CompanyMutationError";
+  }
+}
 
 function formatApiErrorDetails(details: unknown): string | null {
   if (!Array.isArray(details)) {
@@ -148,13 +160,15 @@ export type CompanyAssignment = {
   id: string;
   company_id: string;
   project_id: string | null;
+  assessment_cycle_id?: string | null;
+  assignment_round_id?: string;
   respondent_profile_id: string;
   questionnaire_key: string;
   target_type: "self" | "person" | "team";
   target_person_id: string | null;
   target_team_id: string | null;
   access_mode?: "account_link";
-  status: "assigned" | "invited" | "started" | "submitted" | "validated" | "scored";
+  status: "assigned" | "invited" | "started" | "submitted" | "validated" | "scored" | "cancelled";
   visibility_policy?: "trainer_raw_review" | "reviewed_anonymized";
   due_at?: string | null;
   invited_at?: string | null;
@@ -168,6 +182,7 @@ export type CompanyAssignment = {
 
 export type CreateCompanyAssignmentPayload = {
   projectId?: string | null;
+  assessmentCycleId?: string | null;
   respondentProfileId: string;
   questionnaireKey: string;
   targetType: CompanyAssignment["target_type"];
@@ -206,6 +221,8 @@ export type CompanyAssignmentPlanItem = {
 
 export type CompanyAssignmentPlan = {
   project_id: string | null;
+  assessment_cycle_id?: string | null;
+  source_cycle_id?: string | null;
   scopes: CompanyAssignmentPlanScope[];
   assignments: CompanyAssignmentPlanItem[];
   suggested_count: number;
@@ -231,6 +248,7 @@ export type RosterInviteResult = {
 
 export type ParticipantInvitationStatus = {
   participant_id: string;
+  assessment_cycle_id?: string | null;
   latest_delivery_mode: "email" | "secure_links" | null;
   latest_email_status: string | null;
   latest_email_error: string | null;
@@ -298,6 +316,47 @@ export type ApiRequestOptions = Pick<RequestInit, "headers">;
 
 export type ProjectScopeOptions = {
   projectId?: string | null;
+  assessmentCycleId?: string | null;
+  sourceCycleId?: string | null;
+};
+
+export type AssessmentCycleStatus = "draft" | "active" | "closed";
+
+export type AssessmentCycleQuestionnaire = {
+  id: string;
+  questionnaire_definition_id: string;
+  questionnaire_key: string;
+  display_order: number;
+};
+
+export type AssessmentCycle = {
+  id: string;
+  company_id: string;
+  project_id: string;
+  sequence: number;
+  name: string;
+  status: AssessmentCycleStatus;
+  source_cycle_id: string | null;
+  starts_at: string | null;
+  due_at: string | null;
+  closed_at: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  questionnaires: AssessmentCycleQuestionnaire[];
+};
+
+export type CreateAssessmentCyclePayload = {
+  name?: string | null;
+  sourceCycleId?: string | null;
+  startsAt?: string | null;
+  dueAt?: string | null;
+};
+
+export type UpdateAssessmentCyclePayload = {
+  name?: string | null;
+  startsAt?: string | null;
+  dueAt?: string | null;
 };
 
 export type ReportAverage = {
@@ -370,6 +429,13 @@ export type CompanyReportAggregate = {
   results: CompanyScoringResult[];
 };
 
+export type CompanyReportComparison = {
+  baseline_cycle_id: string;
+  comparison_cycle_id: string;
+  baseline: CompanyReportAggregate;
+  comparison: CompanyReportAggregate;
+};
+
 export type IcareAnswerReviewRow = {
   assignment_id: string;
   response_id: string;
@@ -415,7 +481,12 @@ function errorMessage(error: unknown): string {
 }
 
 function projectQuery(scope: ProjectScopeOptions = {}): string {
-  return scope.projectId ? `?project_id=${encodeURIComponent(scope.projectId)}` : "";
+  const params = new URLSearchParams();
+  if (scope.projectId) params.set("project_id", scope.projectId);
+  if (scope.assessmentCycleId) params.set("assessment_cycle_id", scope.assessmentCycleId);
+  if (scope.sourceCycleId) params.set("source_cycle_id", scope.sourceCycleId);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 function hasBrowserSessionCookie(): boolean {
@@ -1077,6 +1148,29 @@ export async function getCompanyReportAggregate(
   }
 }
 
+export async function getCompanyReportComparison(
+  companyId: string,
+  projectId: string,
+  baselineCycleId: string,
+  comparisonCycleId: string,
+  options: ApiRequestOptions = {},
+): Promise<CompanyReportComparison> {
+  const params = new URLSearchParams({
+    project_id: projectId,
+    baseline_cycle_id: baselineCycleId,
+    comparison_cycle_id: comparisonCycleId,
+  });
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/reports/comparison?${params.toString()}`,
+    { cache: "no-store", credentials: "include", ...options },
+  );
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(formatApiError(data, `Backend refuzat (${response.status})`));
+  }
+  return (await response.json()) as CompanyReportComparison;
+}
+
 export async function getIcareAnswerReview(
   companyId: string,
   options: ApiRequestOptions = {},
@@ -1113,6 +1207,7 @@ export async function createCompanyAssignment(
     body: JSON.stringify({
       respondent_profile_id: payload.respondentProfileId,
       project_id: payload.projectId ?? null,
+      ...(payload.assessmentCycleId ? { assessment_cycle_id: payload.assessmentCycleId } : {}),
       questionnaire_key: payload.questionnaireKey,
       target_type: payload.targetType,
       target_person_id: payload.targetPersonId ?? null,
@@ -1122,8 +1217,12 @@ export async function createCompanyAssignment(
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new CompanyMutationError(
+      formatApiError(data, `Backend refuzat (${response.status})`),
+      typeof data?.error?.code === "string" ? data.error.code : undefined,
+      data?.error?.details,
+    );
   }
 
   return (await response.json()) as CompanyAssignment;
@@ -1152,13 +1251,15 @@ export async function saveCompanyDefaultAssignmentPlan(
   companyId: string,
   assignments: CompanyAssignmentPlanItem[],
   projectId?: string | null,
+  assessmentCycleId?: string | null,
 ): Promise<CompanyAssignmentPlanSaveResponse> {
-  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery({ projectId })}`, {
+  const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/assignments/default-plan${projectQuery({ projectId, assessmentCycleId })}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({
       project_id: projectId ?? null,
+      ...(assessmentCycleId ? { assessment_cycle_id: assessmentCycleId } : {}),
       assignments: assignments.map((assignment) => ({
         respondent_profile_id: assignment.respondent_profile_id,
         questionnaire_key: assignment.questionnaire_key,
@@ -1332,6 +1433,125 @@ export async function deleteCompanyProject(companyId: string, projectId: string)
     const data = await response.json().catch(() => null);
     throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
   }
+}
+
+function assessmentCyclePayloadToApi(
+  payload: CreateAssessmentCyclePayload | UpdateAssessmentCyclePayload,
+) {
+  return {
+    ...(payload.name !== undefined ? { name: payload.name } : {}),
+    ...("sourceCycleId" in payload && payload.sourceCycleId !== undefined
+      ? { source_cycle_id: payload.sourceCycleId }
+      : {}),
+    ...(payload.startsAt !== undefined ? { starts_at: payload.startsAt } : {}),
+    ...(payload.dueAt !== undefined ? { due_at: payload.dueAt } : {}),
+  };
+}
+
+function assessmentCycleBaseUrl(companyId: string, projectId: string): string {
+  return `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/assessment-cycles`;
+}
+
+export async function getAssessmentCycles(
+  companyId: string,
+  projectId: string,
+  options: ApiRequestOptions = {},
+): Promise<AssessmentCycle[]> {
+  const response = await apiFetch(assessmentCycleBaseUrl(companyId, projectId), {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as AssessmentCycle[];
+}
+
+export async function createAssessmentCycle(
+  companyId: string,
+  projectId: string,
+  payload: CreateAssessmentCyclePayload,
+): Promise<AssessmentCycle> {
+  const response = await apiFetch(assessmentCycleBaseUrl(companyId, projectId), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(assessmentCyclePayloadToApi(payload)),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as AssessmentCycle;
+}
+
+export async function updateAssessmentCycle(
+  companyId: string,
+  projectId: string,
+  assessmentCycleId: string,
+  payload: UpdateAssessmentCyclePayload,
+): Promise<AssessmentCycle> {
+  const response = await apiFetch(
+    `${assessmentCycleBaseUrl(companyId, projectId)}/${assessmentCycleId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(assessmentCyclePayloadToApi(payload)),
+    },
+  );
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new CompanyMutationError(
+      formatApiError(data, `Backend refuzat (${response.status})`),
+      typeof data?.error?.code === "string" ? data.error.code : undefined,
+      data?.error?.details,
+    );
+  }
+  return (await response.json()) as AssessmentCycle;
+}
+
+export async function deleteAssessmentCycle(
+  companyId: string,
+  projectId: string,
+  assessmentCycleId: string,
+): Promise<void> {
+  const response = await apiFetch(
+    `${assessmentCycleBaseUrl(companyId, projectId)}/${assessmentCycleId}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+}
+
+export async function closeAssessmentCycle(
+  companyId: string,
+  projectId: string,
+  assessmentCycleId: string,
+  cancelUnfinished = false,
+): Promise<AssessmentCycle> {
+  const response = await apiFetch(
+    `${assessmentCycleBaseUrl(companyId, projectId)}/${assessmentCycleId}/close`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ cancel_unfinished: cancelUnfinished }),
+    },
+  );
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new CompanyMutationError(
+      formatApiError(data, `Backend refuzat (${response.status})`),
+      typeof data?.error?.code === "string" ? data.error.code : undefined,
+      data?.error?.details,
+    );
+  }
+  return (await response.json()) as AssessmentCycle;
 }
 
 // ---------------------------------------------------------------------------
@@ -1549,6 +1769,7 @@ export async function sendParticipantInvitations(
   payload: {
     participantIds?: string[];
     projectId?: string | null;
+    assessmentCycleId?: string | null;
     mode: ParticipantInvitationMode;
     targetMode?: "unsent" | "selected" | "all";
     forceRotate?: boolean;
@@ -1565,6 +1786,7 @@ export async function sendParticipantInvitations(
     body: JSON.stringify({
       participant_ids: payload.participantIds,
       project_id: payload.projectId ?? null,
+      ...(payload.assessmentCycleId ? { assessment_cycle_id: payload.assessmentCycleId } : {}),
       mode: payload.mode,
       target_mode: payload.targetMode ?? (payload.participantIds?.length ? "selected" : "unsent"),
       force_rotate: payload.forceRotate ?? false,
@@ -1583,10 +1805,14 @@ export async function resendParticipantInvitation(
   companyId: string,
   participantId: string,
   projectId?: string | null,
-  idempotencyKey = createIdempotencyKey("invite-resend"),
+  options: string | { assessmentCycleId?: string | null; idempotencyKey?: string } = {},
 ): Promise<RosterInviteResult | null> {
+  const assessmentCycleId = typeof options === "string" ? null : options.assessmentCycleId;
+  const idempotencyKey = typeof options === "string"
+    ? options
+    : (options.idempotencyKey ?? createIdempotencyKey("invite-resend"));
   const response = await apiFetch(
-    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite${projectQuery({ projectId })}`,
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/resend-invite${projectQuery({ projectId, assessmentCycleId })}`,
     {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
