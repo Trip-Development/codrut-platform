@@ -1,6 +1,6 @@
 FROM restic/restic:0.18.1 AS restic
 
-FROM postgres:17-bookworm
+FROM postgres:18-bookworm
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
