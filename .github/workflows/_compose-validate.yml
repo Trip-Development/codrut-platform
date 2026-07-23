@@ -24,6 +24,7 @@ jobs:
   compose:
     name: infra / compose-config
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       FRONTEND_IMAGE: ${{ inputs.frontend_image }}
       BACKEND_IMAGE: ${{ inputs.backend_image }}
@@ -47,7 +48,7 @@ jobs:
       CODRUT_EMAIL_WEBHOOK_TOKEN: compose-webhook-token-with-at-least-32-characters
       CODRUT_DB_VOLUME_PATH: /tmp/codrut-postgres-data
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Validate Development Compose Config
         if: inputs.mode == 'both'
         run: |
@@ -115,4 +116,23 @@ jobs:
           ):
               if labels.get(f"traefik.http.routers.{router}.middlewares") != "codrut-hsts":
                   raise SystemExit(f"Production router {router} must use the HSTS middleware.")
+          PY
+      - name: Validate E2E Runtime Compose Config
+        run: |
+          docker compose -f compose.yaml -f compose.e2e.yaml config --format json > /tmp/compose-e2e.json
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/compose-e2e.json", encoding="utf-8") as config_file:
+              services = json.load(config_file)["services"]
+
+          for service_name in ("backend", "worker"):
+              environment = services[service_name]["environment"]
+              if environment.get("CODRUT_ENV") != "test":
+                  raise SystemExit(f"E2E {service_name} must use the isolated test environment.")
+              if environment.get("CODRUT_EMAIL_PROVIDER") != "mailpit":
+                  raise SystemExit(f"E2E {service_name} must use Mailpit.")
+          frontend = services["frontend"]["environment"]
+          if frontend.get("NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS") != "false":
+              raise SystemExit("E2E frontend must exercise real authentication.")
           PY

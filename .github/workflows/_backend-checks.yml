@@ -8,8 +8,9 @@ permissions:
 
 jobs:
   backend:
-    name: backend / lint-test
+    name: backend / lint-migrate-test
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:17-bookworm
@@ -21,18 +22,18 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U codrut -d codrut"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
       redis:
         image: redis:7-bookworm
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -41,29 +42,66 @@ jobs:
       CODRUT_REDIS_URL: redis://localhost:6379/0
       CODRUT_SESSION_SECRET: ci-session-secret
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "0.7.8"
-      - uses: actions/setup-python@v7
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
-      - uses: pnpm/action-setup@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests migrations
+      - run: uv run alembic upgrade head
+      - run: uv run alembic check
+      - name: Run backend tests with branch coverage
+        run: >-
+          uv run pytest
+          --cov=codrut
+          --cov-branch
+          --cov-fail-under=85
+          --cov-report=term
+          --cov-report=json:coverage.json
+      - name: Upload backend coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: backend-coverage
+          path: backend/coverage.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  api-contract:
+    name: backend / api-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CODRUT_SESSION_SECRET: ci-session-secret
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.7.8"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with:
           version: 10.11.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "22"
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: uv sync --frozen
+        working-directory: backend
       - run: pnpm install --frozen-lockfile
         working-directory: frontend
-      - run: uv sync
-      - run: uv run ruff check src tests migrations
-      - run: uv run alembic upgrade head
-      - run: uv run alembic check
-      - run: uv run pytest
       - name: Check committed OpenAPI snapshot
+        working-directory: backend
         run: uv run python -m codrut.tools.export_openapi --check --output ../docs/api/openapi.json
       - name: Check generated frontend API types
         working-directory: frontend

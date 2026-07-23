@@ -7,8 +7,8 @@ WORKDIR /workspace/frontend
 RUN chown -R node:node /workspace/frontend
 RUN npm install -g pnpm@10.11.0
 
-COPY --chown=node:node frontend/package.json frontend/pnpm-lock.yaml* ./
-RUN pnpm install
+COPY --chown=node:node frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY --chown=node:node frontend ./
 USER node

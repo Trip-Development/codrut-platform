@@ -8,30 +8,58 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: app-ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: app-ci / scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+      infra: ${{ steps.scope.outputs.infra }}
+      e2e: ${{ steps.scope.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Test CI scope rules
+        working-directory: .github/scripts
+        run: python3 -m unittest test_detect_ci_scope.py
+      - name: Detect affected checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" | python3 .github/scripts/detect_ci_scope.py >> "${GITHUB_OUTPUT}"
+
   backend:
-    name: backend / lint-test
-    if: github.base_ref == 'dev' || startsWith(github.head_ref, 'hotfix/')
+    name: backend / checks
+    needs: changes
+    if: startsWith(github.head_ref, 'hotfix/') || (github.base_ref == 'dev' && needs.changes.outputs.backend == 'true')
     uses: ./.github/workflows/_backend-checks.yml
 
   frontend:
-    name: frontend / lint-typecheck-test-build
-    if: github.base_ref == 'dev' || startsWith(github.head_ref, 'hotfix/')
+    name: frontend / checks
+    needs: changes
+    if: startsWith(github.head_ref, 'hotfix/') || (github.base_ref == 'dev' && needs.changes.outputs.frontend == 'true')
     uses: ./.github/workflows/_frontend-checks.yml
 
   e2e:
-    name: end-to-end / playwright
-    if: github.base_ref == 'prod' && !contains(github.event.pull_request.labels.*.name, 'skip-release-e2e')
+    name: end-to-end / representative
+    needs: changes
+    if: startsWith(github.head_ref, 'hotfix/') || (github.base_ref == 'dev' && needs.changes.outputs.e2e == 'true')
     uses: ./.github/workflows/_e2e-playwright.yml
 
   infra:
     name: infra / compose-config
-    if: github.base_ref == 'dev' || startsWith(github.head_ref, 'hotfix/')
+    needs: changes
+    if: startsWith(github.head_ref, 'hotfix/') || (github.base_ref == 'dev' && needs.changes.outputs.infra == 'true')
     uses: ./.github/workflows/_compose-validate.yml
     with:
       mode: both
@@ -39,68 +67,63 @@ jobs:
   required:
     name: app-ci / required
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     if: always()
     needs:
+      - changes
       - backend
       - frontend
       - e2e
       - infra
     steps:
-      - name: Verify required app checks
+      - name: Verify affected checks
         shell: bash
         env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          BACKEND_REQUIRED: ${{ needs.changes.outputs.backend }}
           BACKEND_RESULT: ${{ needs.backend.result }}
-          BASE_REF: ${{ github.base_ref }}
+          FRONTEND_REQUIRED: ${{ needs.changes.outputs.frontend }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
+          E2E_REQUIRED: ${{ needs.changes.outputs.e2e }}
           E2E_RESULT: ${{ needs.e2e.result }}
-          HEAD_REF: ${{ github.head_ref }}
+          INFRA_REQUIRED: ${{ needs.changes.outputs.infra }}
           INFRA_RESULT: ${{ needs.infra.result }}
-          SKIP_RELEASE_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'skip-release-e2e') }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
 
-          if [[ "${BASE_REF}" == "dev" ]]; then
-            for check in BACKEND_RESULT FRONTEND_RESULT INFRA_RESULT; do
-              if [[ "${!check}" != "success" ]]; then
-                echo "${check}=${!check}; expected success for dev PR."
+          if [[ "${SCOPE_RESULT}" != "success" ]]; then
+            echo "SCOPE_RESULT=${SCOPE_RESULT}; expected success."
+            exit 1
+          fi
+
+          if [[ "${BASE_REF}" == "prod" && "${HEAD_REF}" != hotfix/* ]]; then
+            for result in "${BACKEND_RESULT}" "${FRONTEND_RESULT}" "${E2E_RESULT}" "${INFRA_RESULT}"; do
+              [[ "${result}" == "skipped" ]] || {
+                echo "Normal dev-to-prod promotion must reuse the validated candidate; received ${result}."
                 exit 1
-              fi
+              }
             done
-
-            if [[ "${E2E_RESULT}" != "success" && "${E2E_RESULT}" != "skipped" ]]; then
-              echo "E2E_RESULT=${E2E_RESULT}; expected success or skipped for dev PR."
-              exit 1
-            fi
-
             exit 0
           fi
 
-          if [[ "${BASE_REF}" == "prod" ]]; then
-            if [[ "${HEAD_REF}" == hotfix/* ]]; then
-              for check in BACKEND_RESULT FRONTEND_RESULT E2E_RESULT INFRA_RESULT; do
-                if [[ "${!check}" != "success" ]]; then
-                  echo "${check}=${!check}; expected success for hotfix production PR."
-                  exit 1
-                fi
-              done
-
-              exit 0
-            fi
-
-            for check in BACKEND_RESULT FRONTEND_RESULT INFRA_RESULT; do
-              if [[ "${!check}" != "success" && "${!check}" != "skipped" ]]; then
-                echo "${check}=${!check}; expected success or skipped for prod PR."
+          verify_check() {
+            local name="$1"
+            local required="$2"
+            local result="$3"
+            if [[ "${HEAD_REF}" == hotfix/* || "${required}" == "true" ]]; then
+              [[ "${result}" == "success" ]] || {
+                echo "${name}=${result}; expected success."
                 exit 1
-              fi
-            done
-
-            if [[ "${E2E_RESULT}" != "success" && !( "${SKIP_RELEASE_E2E}" == "true" && "${E2E_RESULT}" == "skipped" ) ]]; then
-              echo "E2E_RESULT=${E2E_RESULT}; expected success for prod PR."
+              }
+            elif [[ "${result}" != "skipped" ]]; then
+              echo "${name}=${result}; expected skipped for an unaffected surface."
               exit 1
             fi
+          }
 
-            exit 0
-          fi
-
-          echo "Unsupported base ref: ${BASE_REF}"
-          exit 1
+          verify_check BACKEND_RESULT "${BACKEND_REQUIRED}" "${BACKEND_RESULT}"
+          verify_check FRONTEND_RESULT "${FRONTEND_REQUIRED}" "${FRONTEND_RESULT}"
+          verify_check E2E_RESULT "${E2E_REQUIRED}" "${E2E_RESULT}"
+          verify_check INFRA_RESULT "${INFRA_REQUIRED}" "${INFRA_RESULT}"

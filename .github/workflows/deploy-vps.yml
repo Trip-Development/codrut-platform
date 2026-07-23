@@ -23,6 +23,7 @@ jobs:
   guard-prod-ref:
     name: Guard Production Ref
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Require prod ref before image push
         shell: bash
@@ -48,12 +49,13 @@ jobs:
       - deploy-preflight
       - resolve-release-source
       - resolve-images
-    if: needs.resolve-images.outputs.images-exist != 'true'
+    if: needs.resolve-images.outputs.images-exist != 'true' && needs.resolve-release-source.outputs.deployment-kind == 'hotfix'
     uses: ./.github/workflows/_image-build.yml
     with:
       push: true
       tag: sha-${{ needs.resolve-release-source.outputs.source-sha }}
       ref: ${{ needs.resolve-release-source.outputs.source-sha }}
+      cache_scope: trusted-hotfix
     secrets: inherit
 
   deploy-preflight:
@@ -68,16 +70,21 @@ jobs:
     name: Resolve Release Source
     needs: guard-prod-ref
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       source-sha: ${{ steps.source.outputs.source-sha }}
+      deployment-kind: ${{ steps.source.outputs.deployment-kind }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Select source SHA
         id: source
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --no-tags origin dev:refs/remotes/origin/dev
 
           read -r -a commit_line <<< "$(git rev-list --parents -n 1 "${GITHUB_SHA}")"
           source_sha="${GITHUB_SHA}"
@@ -85,8 +92,14 @@ jobs:
             source_sha="${commit_line[2]}"
           fi
 
+          deployment_kind="hotfix"
+          if git merge-base --is-ancestor "${source_sha}" refs/remotes/origin/dev; then
+            deployment_kind="candidate"
+          fi
+
           echo "source-sha=${source_sha}" >> "$GITHUB_OUTPUT"
-          echo "Using ${source_sha} as the immutable deployment source."
+          echo "deployment-kind=${deployment_kind}" >> "$GITHUB_OUTPUT"
+          echo "Using ${source_sha} as the immutable ${deployment_kind} deployment source."
 
   resolve-images:
     name: Resolve Candidate Images
@@ -94,13 +107,14 @@ jobs:
       - guard-prod-ref
       - resolve-release-source
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       backend-image: ${{ steps.images.outputs.backend }}
       frontend-image: ${{ steps.images.outputs.frontend }}
       images-exist: ${{ steps.check.outputs.images-exist }}
     steps:
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -131,6 +145,7 @@ jobs:
         env:
           BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
           FRONTEND_IMAGE: ${{ steps.images.outputs.frontend }}
+          DEPLOYMENT_KIND: ${{ needs.resolve-release-source.outputs.deployment-kind }}
         run: |
           set -euo pipefail
 
@@ -141,7 +156,11 @@ jobs:
           fi
 
           echo "images-exist=false" >> "$GITHUB_OUTPUT"
-          echo "Candidate images are missing; production will build them before deployment."
+          if [[ "${DEPLOYMENT_KIND}" == "candidate" ]]; then
+            echo "Validated candidate images are missing; refusing to rebuild during production promotion."
+            exit 1
+          fi
+          echo "Hotfix images are missing; production will build the reviewed hotfix source."
 
   deploy-vps:
     name: Deploy to Hetzner VPS

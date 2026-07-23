@@ -14,6 +14,7 @@ jobs:
   preflight:
     name: deploy / preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     environment: ${{ inputs.environment }}
     env:
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
