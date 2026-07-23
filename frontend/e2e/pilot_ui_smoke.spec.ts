@@ -1,5 +1,12 @@
-import { type APIRequestContext, expect, test } from "@playwright/test";
-import { execSync } from "child_process";
+import {
+  type APIRequestContext,
+  expect,
+  type Page,
+  type Response,
+  test,
+} from "@playwright/test";
+import { execFileSync } from "child_process";
+import { randomUUID } from "crypto";
 import { LoginPage } from "./pom/LoginPage";
 import { ParticipantPage } from "./pom/ParticipantPage";
 
@@ -11,11 +18,25 @@ type SeededPilot = {
 };
 
 function seedPilotUiState(): SeededPilot {
-  const runId = Date.now().toString(36);
-  const stdout = execSync(
-    "docker compose -f ../compose.yaml -f ../compose.dev.yaml exec -T backend uv run python -m codrut.tools.seed_pilot_ui_e2e_state",
+  const runId = randomUUID();
+  const stdout = execFileSync(
+    "docker",
+    [
+      "compose",
+      "-f",
+      "../compose.yaml",
+      "-f",
+      "../compose.e2e.yaml",
+      "exec",
+      "-T",
+      "backend",
+      "python",
+      "-m",
+      "codrut.tools.seed_pilot_ui_e2e_state",
+    ],
     {
       encoding: "utf8",
+      timeout: 60_000,
       env: {
         ...process.env,
         CODRUT_E2E_PILOT_RUN_ID: runId,
@@ -23,16 +44,15 @@ function seedPilotUiState(): SeededPilot {
     },
   );
 
-  const companyId = stdout.match(/Company ID:\s*([0-9a-f-]+)/i)?.[1];
-  const companyName = stdout.match(/Company Name:\s*(.+)/)?.[1]?.trim();
-  const projectId = stdout.match(/Project ID:\s*([0-9a-f-]+)/i)?.[1];
-  const projectName = stdout.match(/Project Name:\s*(.+)/)?.[1]?.trim();
-
-  if (!companyId || !companyName || !projectId || !projectName) {
+  const outputLine = stdout
+    .trim()
+    .split("\n")
+    .reverse()
+    .find((line: string) => line.trim().startsWith("{"));
+  if (!outputLine) {
     throw new Error(`Could not parse pilot UI seed output:\n${stdout}`);
   }
-
-  return { companyId, companyName, projectId, projectName };
+  return JSON.parse(outputLine) as SeededPilot;
 }
 
 type MailpitMessage = {
@@ -45,20 +65,25 @@ const mailpitApiUrl = (
 ).replace(/\/$/, "");
 
 async function mailpitMessagesForCompany(request: APIRequestContext, companyName: string) {
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    const response = await request.get(`${mailpitApiUrl}/api/v1/messages`);
-    expect(response.ok()).toBeTruthy();
-    const payload = await response.json();
-    const messages: MailpitMessage[] = (payload.messages ?? []).filter((message: MailpitMessage) =>
-      message.Subject?.includes(companyName),
-    );
-    if (messages.length >= 6) {
-      return messages;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return [];
+  let messages: MailpitMessage[] = [];
+  await expect
+    .poll(
+      async () => {
+        const response = await request.get(`${mailpitApiUrl}/api/v1/messages`);
+        expect(response.ok()).toBeTruthy();
+        const payload = await response.json();
+        messages = (payload.messages ?? []).filter((message: MailpitMessage) =>
+          message.Subject?.includes(companyName),
+        );
+        return messages.length;
+      },
+      {
+        message: `Expected six invitation messages for ${companyName}`,
+        timeout: 10_000,
+      },
+    )
+    .toBe(6);
+  return messages;
 }
 
 async function secureInvitePath(request: APIRequestContext, messages: MailpitMessage[]) {
@@ -75,16 +100,29 @@ async function secureInvitePath(request: APIRequestContext, messages: MailpitMes
   return `${parsed.pathname}${parsed.search}`;
 }
 
-test.describe("Pilot trainer UI smoke", () => {
+async function expectApiMutation(
+  page: Page,
+  matches: (response: Response) => boolean,
+  action: () => Promise<void>,
+) {
+  const [response] = await Promise.all([page.waitForResponse(matches), action()]);
+  expect(
+    response.ok(),
+    `API mutation failed with ${response.status()}: ${await response.text()}`,
+  ).toBe(true);
+}
+
+test.describe.serial("Pilot delivery and completion journey", () => {
   test.setTimeout(90_000);
 
   let seeded: SeededPilot;
+  let invitePath: string;
 
   test.beforeAll(() => {
     seeded = seedPilotUiState();
   });
 
-  test("generates assignments, saves them, and sends project invitations", async ({ page, request }) => {
+  test("trainer generates assignments and queues project invitations", async ({ page, request }) => {
     const loginPage = new LoginPage(page);
     await loginPage.gotoTrainer();
     await loginPage.login("trainer@example.com", "replace-with-a-long-test-password");
@@ -107,29 +145,25 @@ test.describe("Pilot trainer UI smoke", () => {
     await page.getByRole("button", { name: "Închide" }).click();
     await expect(page).not.toHaveURL(/modal=advanced-assignment/);
 
-    await Promise.all([
-      page.waitForResponse(
-        (response) =>
-          response.url().includes(`/api/companies/${seeded.companyId}/assignments/default-plan`) &&
-          response.request().method() === "GET" &&
-          response.ok(),
-      ),
-      page.getByRole("button", { name: "Generează plan" }).click(),
-    ]);
+    await expectApiMutation(
+      page,
+      (response) =>
+        response.url().includes(`/api/companies/${seeded.companyId}/assignments/default-plan`) &&
+        response.request().method() === "GET",
+      () => page.getByRole("button", { name: "Generează plan" }).click(),
+    );
     await expect(page.getByText("Leadership", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Echipa Mara Ionescu QA", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Echipa Sorin Pavel QA", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Salvează 24 asignări" })).toBeEnabled();
 
-    await Promise.all([
-      page.waitForResponse(
-        (response) =>
-          response.url().includes(`/api/companies/${seeded.companyId}/assignments/default-plan`) &&
-          response.request().method() === "POST" &&
-          response.ok(),
-      ),
-      page.getByRole("button", { name: "Salvează 24 asignări" }).click(),
-    ]);
+    await expectApiMutation(
+      page,
+      (response) =>
+        response.url().includes(`/api/companies/${seeded.companyId}/assignments/default-plan`) &&
+        response.request().method() === "POST",
+      () => page.getByRole("button", { name: "Salvează 24 asignări" }).click(),
+    );
     await expect(page.getByText("24 create, 0 deja existente.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Regenerează planul" })).toBeEnabled();
     await expect(page.getByRole("button", { name: /Salvează \d+ asignări/ })).toHaveCount(0);
@@ -137,15 +171,13 @@ test.describe("Pilot trainer UI smoke", () => {
     await page.getByRole("link", { exact: true, name: "Invitații" }).click();
     await expect(page).toHaveURL(new RegExp(`/trainer/projects/${seeded.projectId}/invitations$`));
     await expect(page.getByRole("heading", { name: "Livrare invitații" })).toBeVisible();
-    await Promise.all([
-      page.waitForResponse(
-        (response) =>
-          response.url().includes(`/api/companies/${seeded.companyId}/participants/invitations`) &&
-          response.request().method() === "POST" &&
-          response.ok(),
-      ),
-      page.getByRole("button", { name: "Trimite tuturor" }).click(),
-    ]);
+    await expectApiMutation(
+      page,
+      (response) =>
+        response.url().includes(`/api/companies/${seeded.companyId}/participants/invitations`) &&
+        response.request().method() === "POST",
+      () => page.getByRole("button", { name: "Trimite tuturor" }).click(),
+    );
     await expect(page.getByText("0 acceptate de furnizor, 6 în coadă, 0 eșuate.")).toBeVisible();
 
     const messages = await mailpitMessagesForCompany(request, seeded.companyName);
@@ -154,7 +186,13 @@ test.describe("Pilot trainer UI smoke", () => {
     expect(subjects.filter((subject: string) => subject.includes("activează contul"))).toHaveLength(3);
     expect(subjects.filter((subject: string) => subject.includes("chestionare"))).toHaveLength(3);
 
-    const invitePath = await secureInvitePath(request, messages);
+    invitePath = await secureInvitePath(request, messages);
+  });
+
+  test("secure-link participant consents, completes, and submits a questionnaire", async ({
+    page,
+  }) => {
+    expect(invitePath).toBeTruthy();
     await page.context().clearCookies();
     await page.goto(invitePath);
     const participantPage = new ParticipantPage(page);

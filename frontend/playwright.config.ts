@@ -4,12 +4,22 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   workers: 1, // Run sequentially to avoid database state collision in tests
-  reporter: process.env.CI ? "github" : "list",
+  timeout: 45_000,
+  expect: {
+    timeout: 10_000,
+  },
+  reporter: process.env.CI
+    ? [
+        ["github"],
+        ["html", { open: "never" }],
+        ["junit", { outputFile: "test-results/junit.xml" }],
+      ]
+    : "list",
   use: {
     baseURL: "http://localhost:3000",
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [

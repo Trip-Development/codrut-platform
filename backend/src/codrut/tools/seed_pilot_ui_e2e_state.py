@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import uuid
 from datetime import UTC, datetime
@@ -217,11 +218,17 @@ async def seed_pilot_ui_e2e_state() -> None:
 
         await session.commit()
 
-    print(f"Run ID: {run_id}")
-    print(f"Company ID: {company.id}")
-    print(f"Company Name: {company_name}")
-    print(f"Project ID: {project.id}")
-    print(f"Project Name: {project_name}")
+    print(
+        json.dumps(
+            {
+                "runId": run_id,
+                "companyId": str(company.id),
+                "companyName": company_name,
+                "projectId": str(project.id),
+                "projectName": project_name,
+            }
+        )
+    )
 
 
 def main() -> None:
