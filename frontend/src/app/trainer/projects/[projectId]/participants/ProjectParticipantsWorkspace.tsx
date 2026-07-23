@@ -357,110 +357,118 @@ export function ProjectParticipantsWorkspace({
 
   return (
     <section className="min-w-0 max-w-full text-foreground" aria-busy={query !== deferredQuery}>
-      <header className="mb-3">
-        <h2 className="text-lg font-semibold text-foreground">Participanți</h2>
-        <p
-          aria-label="Rezumat participanți"
-          className="mt-1 text-sm leading-6 text-muted-foreground"
-        >
-          <span className="font-semibold tabular-nums text-foreground">{participants.length}</span>{" "}
-          {participants.length === 1 ? "participant" : "participanți"}
-          <span aria-hidden="true"> · </span>
-          <span className="tabular-nums">{permanentCount}</span>{" "}
-          {permanentCount === 1 ? "permanent" : "permanente"}
-          <span aria-hidden="true"> · </span>
-          <span className="tabular-nums">{temporaryCount}</span>{" "}
-          {temporaryCount === 1 ? "temporar" : "temporare"}
-          <span aria-hidden="true"> · </span>
-          <span className="tabular-nums">{activeSecureLinkCount}</span>{" "}
-          {activeSecureLinkCount === 1 ? "link activ" : "linkuri active"}
-          <span aria-hidden="true"> · </span>
-          <span className="tabular-nums">{activeAccountCount}</span>{" "}
-          {activeAccountCount === 1 ? "cont creat" : "conturi create"}
-        </p>
-      </header>
-
-      <div
-        role="group"
-        aria-label="Instrumente participanți"
-        className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+      <section
+        data-slot="participants-workspace"
+        aria-label="Registru participanți"
+        className="overflow-hidden rounded-lg border border-border bg-surface"
       >
-        <WorkspaceSearchInput
-          id="project-participants-search"
-          label="Caută participant"
-          value={query}
-          onValueChange={updateQuery}
-          placeholder="Caută după nume, email, rol sau manager"
-          className="min-w-[min(100%,16rem)] flex-1 basis-64"
-        />
-        <SelectControl
-          label="Filtrează după acces"
-          icon={FilterIcon}
-          value={accessFilter}
-          onChange={(event) => setAccessFilter(normalizeAccessFilter(event.target.value))}
-          disabled={mutationLocked}
-          wrapperClassName="w-full sm:w-48"
-          className="h-11 bg-background"
-        >
-          <option value="all">Toate tipurile</option>
-          <option value="permanent">Acces permanent</option>
-          <option value="temporary">Acces temporar</option>
-        </SelectControl>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-          <Button
-            type="button"
-            onClick={() => setImportModalOpen(true)}
-            disabled={mutationLocked}
-            variant="outline"
-            className={secondaryButtonClass}
+        <header className="border-b border-border px-4 py-4 md:px-5">
+          <h2 className="text-lg font-semibold text-foreground">Participanți</h2>
+          <p
+            aria-label="Rezumat participanți"
+            className="mt-1 text-sm leading-6 text-muted-foreground"
           >
-            <UploadIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
-            Importă
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setAddPanelOpen(!showAddPanel)}
-            disabled={mutationLocked}
+            <span className="font-semibold tabular-nums text-foreground">{participants.length}</span>{" "}
+            {participants.length === 1 ? "participant" : "participanți"}
+            <span aria-hidden="true"> · </span>
+            <span className="tabular-nums">{permanentCount}</span>{" "}
+            {permanentCount === 1 ? "permanent" : "permanente"}
+            <span aria-hidden="true"> · </span>
+            <span className="tabular-nums">{temporaryCount}</span>{" "}
+            {temporaryCount === 1 ? "temporar" : "temporare"}
+            <span aria-hidden="true"> · </span>
+            <span className="tabular-nums">{activeSecureLinkCount}</span>{" "}
+            {activeSecureLinkCount === 1 ? "link activ" : "linkuri active"}
+            <span aria-hidden="true"> · </span>
+            <span className="tabular-nums">{activeAccountCount}</span>{" "}
+            {activeAccountCount === 1 ? "cont creat" : "conturi create"}
+          </p>
+
+          <div
+            role="group"
+            aria-label="Instrumente participanți"
+            className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
           >
-            {showAddPanel ? <XIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} /> : <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
-            {showAddPanel ? "Ascunde" : "Adaugă"}
-          </Button>
-        </div>
-      </div>
-      <span className="sr-only" role="status" aria-live="polite">
-        {query !== deferredQuery ? "Se actualizează lista" : ""}
-      </span>
+            <WorkspaceSearchInput
+              id="project-participants-search"
+              label="Caută participant"
+              value={query}
+              onValueChange={updateQuery}
+              placeholder="Caută după nume, email, rol sau manager"
+              className="min-w-[min(100%,16rem)] flex-1 basis-64"
+            />
+            <SelectControl
+              label="Filtrează după acces"
+              icon={FilterIcon}
+              value={accessFilter}
+              onChange={(event) => setAccessFilter(normalizeAccessFilter(event.target.value))}
+              disabled={mutationLocked}
+              wrapperClassName="w-full sm:w-48"
+              className="h-11 bg-background"
+            >
+              <option value="all">Toate tipurile</option>
+              <option value="permanent">Acces permanent</option>
+              <option value="temporary">Acces temporar</option>
+            </SelectControl>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+              <Button
+                type="button"
+                onClick={() => setImportModalOpen(true)}
+                disabled={mutationLocked}
+                variant="outline"
+                className={secondaryButtonClass}
+              >
+                <UploadIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                Importă
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setAddPanelOpen(!showAddPanel)}
+                disabled={mutationLocked}
+              >
+                {showAddPanel ? <XIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} /> : <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
+                {showAddPanel ? "Ascunde" : "Adaugă"}
+              </Button>
+            </div>
+          </div>
+          <span className="sr-only" role="status" aria-live="polite">
+            {query !== deferredQuery ? "Se actualizează lista" : ""}
+          </span>
+        </header>
 
-      {error && !editingId ? (
-        <InlineFeedback
-          tone="danger"
-          className="mb-3 px-4 py-3"
-          descriptionClassName="text-sm leading-6"
-        >
-          {error}
-        </InlineFeedback>
-      ) : null}
+        {error && !editingId ? (
+          <InlineFeedback
+            tone="danger"
+            className="mx-4 my-3 px-4 py-3 md:mx-5"
+            descriptionClassName="text-sm leading-6"
+          >
+            {error}
+          </InlineFeedback>
+        ) : null}
 
-      {showAddPanel ? (
-        <ManualAddPanel
-          form={manualForm}
-          pasteText={pasteText}
-          adding={adding}
+        {showAddPanel ? (
+          <div className="border-b border-border px-4 py-4 md:px-5">
+            <ManualAddPanel
+              form={manualForm}
+              pasteText={pasteText}
+              adding={adding}
+              operationLocked={mutationLocked}
+              onUpdateForm={(field, value) => setManualForm((current) => ({ ...current, [field]: value }))}
+              onPasteText={setPasteText}
+              onAdd={() => void addManualRows()}
+            />
+          </div>
+        ) : null}
+        <RosterTable
+          rows={visibleRows}
+          projectId={projectId}
           operationLocked={mutationLocked}
-          onUpdateForm={(field, value) => setManualForm((current) => ({ ...current, [field]: value }))}
-          onPasteText={setPasteText}
-          onAdd={() => void addManualRows()}
+          onEdit={startEdit}
+          emptyMessage={participants.length === 0
+            ? "Nu există participanți. Adaugă manual sau importă rosterul."
+            : "Niciun participant pentru filtrele curente."}
         />
-      ) : null}
-      <RosterTable
-        rows={visibleRows}
-        projectId={projectId}
-        operationLocked={mutationLocked}
-        onEdit={startEdit}
-        emptyMessage={participants.length === 0
-          ? "Nu există participanți. Adaugă manual sau importă rosterul."
-          : "Niciun participant pentru filtrele curente."}
-      />
+      </section>
 
       <Sheet
         open={Boolean(editingParticipant && editingAccessRow && form)}
@@ -660,7 +668,7 @@ function RosterTable({
   return (
     <div
       data-slot="participants-table-scroll"
-      className="min-w-0 max-w-full overflow-x-auto border-y border-border bg-surface"
+      className="min-w-0 max-w-full overflow-x-auto"
     >
       <table
         aria-label="Roster participanți"
