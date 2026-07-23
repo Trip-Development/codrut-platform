@@ -1,4 +1,4 @@
-name: VPS Staging Deployment
+name: Dev Candidate
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       allow_non_dev_ref:
-        description: Allow a manual staging deploy from a non-dev ref.
+        description: Allow a manual candidate build from a non-dev ref.
         required: false
         default: false
         type: boolean
@@ -17,65 +17,124 @@ permissions:
   packages: write
 
 concurrency:
-  group: staging-vps-deploy
+  group: dev-candidate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  guard-staging-ref:
-    name: Guard Staging Ref
+  guard:
+    name: candidate / guard
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Require dev ref unless explicitly overridden
         shell: bash
         env:
-          ALLOW_NON_DEV_REF: ${{ github.event.inputs.allow_non_dev_ref || 'false' }}
+          ALLOW_NON_DEV_REF: ${{ inputs.allow_non_dev_ref || false }}
         run: |
           set -euo pipefail
-
           if [[ "${GITHUB_REF}" == "refs/heads/dev" ]]; then
             exit 0
           fi
-
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${ALLOW_NON_DEV_REF}" == "true" ]]; then
-            echo "Manual staging deploy override accepted for ${GITHUB_REF}."
             exit 0
           fi
-
-          echo "Staging deployments run from refs/heads/dev unless allow_non_dev_ref=true is set for manual dispatch; received ${GITHUB_REF}."
+          echo "Candidate builds require dev or an explicit manual override; received ${GITHUB_REF}."
           exit 1
 
-  build-images:
-    name: Build Staging Images
-    needs:
-      - guard-staging-ref
-      - deploy-preflight
-    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
+  images:
+    name: candidate / immutable-images
+    needs: guard
     uses: ./.github/workflows/_image-build.yml
     with:
       push: true
       tag: sha-${{ github.sha }}
+      ref: ${{ github.sha }}
+      cache_scope: trusted-dev
     secrets: inherit
 
+  e2e:
+    name: candidate / representative-e2e
+    needs:
+      - guard
+      - images
+    uses: ./.github/workflows/_e2e-playwright.yml
+    with:
+      backend_image: ${{ needs.images.outputs.backend-image }}
+      frontend_image: ${{ needs.images.outputs.frontend-image }}
+
+  compose:
+    name: candidate / prod-compose
+    needs: images
+    uses: ./.github/workflows/_compose-validate.yml
+    with:
+      mode: prod
+      backend_image: ${{ needs.images.outputs.backend-image }}
+      frontend_image: ${{ needs.images.outputs.frontend-image }}
+
   deploy-preflight:
-    name: Validate Staging Deploy Config
-    needs: guard-staging-ref
-    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
+    name: candidate / staging-preflight
+    needs: guard
+    if: vars.ENABLE_STAGING_DEPLOY == 'true'
     uses: ./.github/workflows/_deploy-preflight.yml
     with:
       environment: staging
     secrets: inherit
 
   deploy-vps:
-    name: Deploy to Staging VPS
-    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_STAGING_DEPLOY == 'true'
+    name: candidate / staging-deploy
+    if: vars.ENABLE_STAGING_DEPLOY == 'true'
     needs:
-      - build-images
+      - images
       - deploy-preflight
+      - e2e
+      - compose
     uses: ./.github/workflows/_deploy-vps.yml
     with:
       environment: staging
-      backend_image: ${{ needs.build-images.outputs.backend-image }}
-      frontend_image: ${{ needs.build-images.outputs.frontend-image }}
-      release_sha: ${{ needs.build-images.outputs.release-sha }}
+      backend_image: ${{ needs.images.outputs.backend-image }}
+      frontend_image: ${{ needs.images.outputs.frontend-image }}
+      release_sha: ${{ needs.images.outputs.release-sha }}
       app_environment: staging
     secrets: inherit
+
+  required:
+    name: candidate / required
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    if: always()
+    needs:
+      - guard
+      - images
+      - e2e
+      - compose
+      - deploy-preflight
+      - deploy-vps
+    steps:
+      - name: Verify candidate
+        env:
+          GUARD_RESULT: ${{ needs.guard.result }}
+          IMAGES_RESULT: ${{ needs.images.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          COMPOSE_RESULT: ${{ needs.compose.result }}
+          PREFLIGHT_RESULT: ${{ needs.deploy-preflight.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-vps.result }}
+          STAGING_ENABLED: ${{ vars.ENABLE_STAGING_DEPLOY == 'true' }}
+        run: |
+          set -euo pipefail
+          for check in GUARD_RESULT IMAGES_RESULT E2E_RESULT COMPOSE_RESULT; do
+            [[ "${!check}" == "success" ]] || {
+              echo "${check}=${!check}; expected success."
+              exit 1
+            }
+          done
+          if [[ "${STAGING_ENABLED}" == "true" ]]; then
+            [[ "${PREFLIGHT_RESULT}" == "success" && "${DEPLOY_RESULT}" == "success" ]] || {
+              echo "Staging is enabled, but preflight=${PREFLIGHT_RESULT}, deploy=${DEPLOY_RESULT}."
+              exit 1
+            }
+          else
+            [[ "${PREFLIGHT_RESULT}" == "skipped" && "${DEPLOY_RESULT}" == "skipped" ]] || {
+              echo "Disabled staging jobs must be skipped."
+              exit 1
+            }
+          fi

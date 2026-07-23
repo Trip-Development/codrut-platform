@@ -2,65 +2,119 @@ name: Reusable Playwright E2E
 
 on:
   workflow_call:
+    inputs:
+      backend_image:
+        description: Exact backend runtime image to test. Builds locally when omitted.
+        required: false
+        type: string
+        default: ""
+      frontend_image:
+        description: Exact frontend runtime image to test. Builds locally when omitted.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   e2e:
     name: end-to-end / playwright
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BACKEND_IMAGE: ${{ inputs.backend_image }}
+      FRONTEND_IMAGE: ${{ inputs.frontend_image }}
+      CODRUT_FRONTEND_DEMO_FALLBACK: "false"
+      CODRUT_LOCAL_AUTH_BYPASS: "false"
+      COMPOSE_PROJECT_NAME: codrut-e2e-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Start Docker Compose Stack
-        env:
-          CODRUT_FRONTEND_DEMO_FALLBACK: "false"
-          CODRUT_LOCAL_AUTH_BYPASS: "false"
+      - name: Log in to GitHub Container Registry
+        if: inputs.backend_image != ''
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Resolve runtime images
+        shell: bash
         run: |
-          docker compose -f compose.yaml -f compose.dev.yaml up -d --build db redis mailpit
-          docker compose -f compose.yaml -f compose.dev.yaml run --rm --user vscode backend uv run alembic upgrade head
-          docker compose -f compose.yaml -f compose.dev.yaml up -d --build backend worker frontend
-          docker compose -f compose.yaml -f compose.dev.yaml exec -T backend uv run pytest tests/test_health.py
+          set -euo pipefail
+          compose=(docker compose -f compose.yaml -f compose.e2e.yaml)
+          if [[ -n "${BACKEND_IMAGE}" || -n "${FRONTEND_IMAGE}" ]]; then
+            [[ -n "${BACKEND_IMAGE}" && -n "${FRONTEND_IMAGE}" ]] || {
+              echo "Both runtime images must be provided together."
+              exit 1
+            }
+            docker pull "${BACKEND_IMAGE}"
+            docker pull "${FRONTEND_IMAGE}"
+          else
+            "${compose[@]}" build backend frontend
+          fi
 
-      - name: Print Docker logs on failure
-        if: failure()
-        run: docker compose -f compose.yaml -f compose.dev.yaml logs
+      - name: Start dependencies and migrate database
+        run: |
+          set -euo pipefail
+          compose=(docker compose -f compose.yaml -f compose.e2e.yaml)
+          "${compose[@]}" up -d --wait db redis mailpit
+          "${compose[@]}" run --rm backend alembic upgrade head
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
+      - name: Start application and wait for readiness
+        run: |
+          set -euo pipefail
+          docker compose -f compose.yaml -f compose.e2e.yaml up -d --no-build --wait backend worker frontend
+          curl --fail --retry 20 --retry-delay 1 --retry-all-errors http://127.0.0.1:8025/api/v1/info >/dev/null
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with:
           version: 10.11.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "22"
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install dependencies
+      - run: pnpm install --frozen-lockfile
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Browsers
+      - name: Restore Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+
+      - name: Install Chromium system dependencies
         working-directory: frontend
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install-deps chromium
 
-      - name: Run Playwright E2E tests
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: pnpm exec playwright install chromium
+
+      - name: Run representative browser journeys
         working-directory: frontend
         run: pnpm exec playwright test
 
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v7
-        if: always()
+      - name: Print Docker logs on failure
+        if: failure()
+        run: docker compose -f compose.yaml -f compose.e2e.yaml logs --no-color --tail=300
+
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report
+          name: playwright-diagnostics-${{ github.run_attempt }}
           path: |
             frontend/playwright-report/
             frontend/test-results/
-          retention-days: 30
+          if-no-files-found: ignore
+          retention-days: 14
 
-      - name: Stop Docker Compose Stack
+      - name: Stop isolated Docker Compose stack
         if: always()
-        run: docker compose -f compose.yaml -f compose.dev.yaml down
+        run: docker compose -f compose.yaml -f compose.e2e.yaml down --volumes --remove-orphans

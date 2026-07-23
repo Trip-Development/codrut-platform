@@ -30,8 +30,12 @@ def test_local_preview_is_blocked_in_production() -> None:
         assert_local_preview_allowed(settings)
 
 
-def test_local_preview_is_blocked_outside_development() -> None:
-    with pytest.raises(RuntimeError, match="only be seeded in development"):
+def test_local_preview_is_allowed_in_test() -> None:
+    assert_local_preview_allowed(Settings(env="test"))
+
+
+def test_local_preview_is_blocked_outside_development_and_test() -> None:
+    with pytest.raises(RuntimeError, match="only be seeded in development or test"):
         assert_local_preview_allowed(Settings(env="staging"))
 
 

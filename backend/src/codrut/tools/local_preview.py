@@ -33,8 +33,8 @@ class PreviewEmailTemplate:
 def assert_local_preview_allowed(settings: Settings) -> None:
     if settings.is_production:
         raise RuntimeError("Local preview data cannot be seeded in production.")
-    if settings.env != "development":
-        raise RuntimeError("Local preview data can only be seeded in development.")
+    if settings.env not in {"development", "test"}:
+        raise RuntimeError("Local preview data can only be seeded in development or test.")
 
 
 def build_preview_questionnaire_definitions() -> list[PreviewQuestionnaireDefinition]:

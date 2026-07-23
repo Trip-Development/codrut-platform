@@ -45,7 +45,7 @@ WORKDIR /workspace/backend
 USER ${USERNAME}
 
 COPY --chown=${USERNAME}:${USERNAME} backend/pyproject.toml backend/uv.lock backend/README.md ./
-RUN uv sync --no-install-project
+RUN uv sync --frozen --no-install-project
 
 COPY --chown=${USERNAME}:${USERNAME} backend ./
 CMD ["uv", "run", "uvicorn", "codrut.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload"]
