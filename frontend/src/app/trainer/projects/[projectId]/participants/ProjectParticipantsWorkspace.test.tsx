@@ -169,10 +169,14 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Link activ")).toBeTruthy();
   });
 
-  it("uses a semantic table with a stable width inside its own horizontal scroller", () => {
+  it("uses a bounded roster surface with a stable-width table and horizontal scroller", () => {
     renderWorkspace();
 
+    const rosterSurface = screen.getByRole("region", { name: "Registru participanți" });
     const roster = screen.getByRole("table", { name: "Roster participanți" });
+    expect(rosterSurface.className).toContain("rounded-lg");
+    expect(rosterSurface.className).toContain("overflow-hidden");
+    expect(rosterSurface.contains(roster)).toBe(true);
     expect(roster.tagName).toBe("TABLE");
     expect(roster.className).toContain("min-w-[960px]");
     expect(roster.parentElement?.className).toContain("overflow-x-auto");
