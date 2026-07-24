@@ -69,7 +69,11 @@ export default async function InvitePage({ params }: InvitePageProps) {
     );
   }
 
-  return <InviteSessionExchange token={token}>{tasksView}</InviteSessionExchange>;
+  return (
+    <InviteSessionExchange token={token} bundle={data}>
+      {tasksView}
+    </InviteSessionExchange>
+  );
 }
 
 function InvalidInviteState({ message }: { message: string }) {

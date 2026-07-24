@@ -84,6 +84,83 @@ class FakeSession:
         self.flushed = True
 
 
+async def test_invite_bound_trainer_account_has_participant_only_effective_role() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Trainer Invite {uuid.uuid4().hex[:8]}")
+            user = User(
+                id=uuid.uuid4(),
+                email=f"trainer-invite-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash="registered-password-hash",  # noqa: S106
+                role=UserRole.trainer,
+            )
+            profile = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                email=user.email,
+                full_name="Trainer As Participant",
+            )
+            session.add_all([company, user])
+            await session.flush()
+            session.add(profile)
+            await session.flush()
+            expires_at = datetime.now(UTC) + timedelta(hours=1)
+            invite_token = create_task_token(
+                TaskLinkClaims(
+                    company_id=company.id,
+                    respondent_profile_id=profile.id,
+                    assignment_ids=(uuid.uuid4(),),
+                    expires_at=expires_at,
+                ),
+                get_settings(),
+            )
+            invite = AssignmentInvite(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=profile.id,
+                token=invite_token,
+                status="active",
+                expires_at=expires_at,
+            )
+            session.add(invite)
+            await session.flush()
+            session.add_all(
+                [
+                    Session(
+                        user_id=user.id,
+                        token_hash=hash_session_token("normal-trainer-session"),
+                        expires_at=expires_at,
+                    ),
+                    Session(
+                        user_id=user.id,
+                        token_hash=hash_session_token("invite-bound-session"),
+                        expires_at=expires_at,
+                        assignment_invite_id=invite.id,
+                    ),
+                ]
+            )
+            await session.flush()
+
+            service = IdentityService(session)
+            normal_principal = await service.principal_from_session_token(
+                "normal-trainer-session"
+            )
+            invite_principal = await service.principal_from_session_token(
+                "invite-bound-session"
+            )
+
+            assert normal_principal is not None
+            assert normal_principal.role == UserRole.trainer
+            assert invite_principal is not None
+            assert invite_principal.role == UserRole.participant
+            assert invite_principal.assignment_ids is not None
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
 async def test_project_scoped_invites_and_sessions_are_independent(
     questionnaire_definition_factory,
 ) -> None:

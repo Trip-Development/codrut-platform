@@ -11,6 +11,7 @@ import {
   getCompanyDetail,
   getCompanyProjectById,
   getCompanyReportAggregate,
+  getParticipantAccountLinkStatus,
   getProjectParticipants,
 } from "@/api/companies";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
@@ -24,6 +25,7 @@ import {
   countPrivateFeedbackGiven,
   countPrivateFeedbackReceived,
 } from "./participant-profile-data";
+import { AccountLinkRepairPanel } from "./AccountLinkRepairPanel";
 
 type TrainerParticipantReportPageProps = {
   params: Promise<{ projectId: string; participantId: string }>;
@@ -43,11 +45,12 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
     notFound();
   }
 
-  const [participants, projectAssignments, companyDetail, aggregate] = await Promise.all([
+  const [participants, projectAssignments, companyDetail, aggregate, accountLinkStatus] = await Promise.all([
     getProjectParticipants(project.company_id, project.id, requestOptions),
     getCompanyAssignments(project.company_id, requestOptions, { projectId: project.id }),
     getCompanyDetail(project.company_id, requestOptions),
     getCompanyReportAggregate(project.company_id, requestOptions),
+    getParticipantAccountLinkStatus(project.company_id, participantId, requestOptions).catch(() => null),
   ]);
   const participant = participants.find((item) => item.id === participantId);
 
@@ -115,6 +118,12 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
           </div>
         </aside>
       </section>
+
+      <AccountLinkRepairPanel
+        companyId={project.company_id}
+        participantId={participant.id}
+        initialStatus={accountLinkStatus}
+      />
 
       <section className="flex flex-wrap gap-x-10 gap-y-4 border-b border-border pb-5">
         <SummaryMetric label="Asignări" value={currentAssignments.length} detail={`${completedCount} completate`} />

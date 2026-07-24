@@ -507,7 +507,7 @@ class IdentityService:
         user = bound_user or email_user
         if user is None:
             return None
-        if user.role != UserRole.participant or user.email.lower() != email:
+        if user.role not in {UserRole.participant, UserRole.trainer} or user.email.lower() != email:
             raise DomainError(
                 "Invite profile is linked to an incompatible account.",
                 code="invite_profile_account_conflict",
@@ -521,6 +521,7 @@ class IdentityService:
         token: str,
         *,
         existing_session_token: str | None = None,
+        replace_existing_session: bool = False,
     ) -> InviteVerifyResult:
         verify_result, invite = await self._verify_invite_token(token, lock_invite=True)
 
@@ -535,13 +536,14 @@ class IdentityService:
             existing_session is not None
             and profile.user_id is not None
             and existing_session.user_id != profile.user_id
+            and not replace_existing_session
         ):
             raise DomainError(
                 "The invitation belongs to a different authenticated user.",
                 code="invite_session_conflict",
             )
         user = await self._resolve_invited_participant_user(profile)
-        if existing_session is not None and user is None:
+        if existing_session is not None and user is None and not replace_existing_session:
             raise DomainError(
                 "The invitation belongs to a different authenticated user.",
                 code="invite_session_conflict",
@@ -564,16 +566,33 @@ class IdentityService:
         # Existing participant accounts use the signed invitation as passwordless
         # proof for the newly linked profile, including leadership accounts.
         if user is not None:
-            if existing_session is not None and existing_session.user_id != user.id:
+            current_invite_id = invite.id if invite is not None else None
+            session_switch_required = existing_session is not None and (
+                existing_session.user_id != user.id
+                or (
+                    existing_session.assignment_invite_id is not None
+                    and existing_session.assignment_invite_id != current_invite_id
+                )
+                or (
+                    user.role == UserRole.trainer
+                    and existing_session.assignment_invite_id != current_invite_id
+                )
+            )
+            if session_switch_required and not replace_existing_session:
                 raise DomainError(
                     "The invitation belongs to a different authenticated user.",
                     code="invite_session_conflict",
                 )
 
-            current_invite_id = invite.id if invite is not None else None
             can_preserve_existing_session = existing_session is not None and (
-                existing_session.assignment_invite_id is None
-                or existing_session.assignment_invite_id == current_invite_id
+                existing_session.user_id == user.id
+                and (
+                    (
+                        user.role == UserRole.participant
+                        and existing_session.assignment_invite_id is None
+                    )
+                    or existing_session.assignment_invite_id == current_invite_id
+                )
             )
             if not can_preserve_existing_session:
                 session_token = await self._create_session(
@@ -581,6 +600,8 @@ class IdentityService:
                     expires_at=verify_result.expires_at,
                     assignment_invite_id=current_invite_id,
                 )
+                if existing_session_token and replace_existing_session:
+                    await self.repository.delete_session_by_token(existing_session_token)
 
         return InviteVerifyResult(
             response=verify_result,
@@ -906,7 +927,11 @@ class IdentityService:
         return SessionPrincipal(
             user_id=user.id,
             email=user.email,
-            role=user.role,
+            role=(
+                UserRole.participant
+                if active_session.assignment_invite_id is not None
+                else user.role
+            ),
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
             session_token=token,

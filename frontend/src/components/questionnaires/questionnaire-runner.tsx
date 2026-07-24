@@ -403,6 +403,11 @@ export function QuestionnaireRunner({
               ) : null}
             </h2>
             <p className="mt-3 text-sm font-semibold text-muted-foreground">{definition.title}</p>
+            {targetCopy.description ? (
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                {targetCopy.description}
+              </p>
+            ) : null}
           </div>
 
           {hasQuestionnaireDetails ? (
@@ -582,11 +587,19 @@ export function QuestionnaireRunner({
 function evaluationTargetCopy(
   targetLabel: string | undefined,
   questionnaireKey: string,
-): { eyebrow: string; title: string; targetName?: string } {
+): { eyebrow: string; title: string; targetName?: string; description?: string } {
   if (questionnaireKey === "lencioni" || questionnaireKey === "lencioni_en") {
     return {
       eyebrow: "Feedback pentru echipă",
       title: "Răspunzi despre echipa ta",
+    };
+  }
+  if (isDistressQuestionnaire(questionnaireKey)) {
+    return {
+      eyebrow: "Driveri de distres",
+      title: "Răspunde sincer și fără să te gândești prea mult.",
+      description:
+        "Nu există răspuns greșit sau corect. Citește, te rog, instrucțiunile de completare de mai jos.",
     };
   }
   const isReview360 = isReview360Questionnaire(questionnaireKey);

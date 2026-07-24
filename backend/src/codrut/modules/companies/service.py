@@ -23,6 +23,7 @@ from codrut.modules.companies.models import (
     CompanyMembership,
     CompanyMembershipRole,
     CompanyProject,
+    ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
     ProjectMembership,
@@ -37,6 +38,9 @@ from codrut.modules.companies.schemas import (
     CompanyProjectListItemResponse,
     CompanyProjectUpdateRequest,
     CompanySummaryResponse,
+    ParticipantAccountLinkRepairRequest,
+    ParticipantAccountLinkStatusResponse,
+    ParticipantAccountSummary,
     ParticipantCreateRequest,
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
@@ -50,6 +54,7 @@ from codrut.modules.companies.schemas import (
     RosterImportResponse,
     RosterImportRow,
 )
+from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User
 from codrut.modules.identity.repository import IdentityRepository
 
 logger = logging.getLogger(__name__)
@@ -298,6 +303,129 @@ class CompanyService:
             _project_participant_response(membership, participant)
             for membership, participant in memberships
         ]
+
+    async def get_participant_account_link_status(
+        self,
+        company_id: UUID,
+        participant_id: UUID,
+    ) -> ParticipantAccountLinkStatusResponse:
+        await self._require_company(company_id)
+        participant = await self.repository.get_participant(company_id, participant_id)
+        if participant is None:
+            raise DomainError("Participant not found.", code="participant_not_found")
+        if participant.email is None:
+            raise DomainError(
+                "Participant has no email address.",
+                code="participant_email_missing",
+            )
+
+        linked_account = (
+            await self.identity_repository.get_user_by_id(participant.user_id)
+            if participant.user_id is not None
+            else None
+        )
+        matching_account = await self.identity_repository.get_user_by_email(
+            participant.email.lower()
+        )
+        return _participant_account_link_status(
+            participant,
+            linked_account,
+            matching_account,
+        )
+
+    async def repair_participant_account_link(
+        self,
+        actor_user_id: UUID,
+        company_id: UUID,
+        participant_id: UUID,
+        payload: ParticipantAccountLinkRepairRequest,
+    ) -> ParticipantAccountLinkStatusResponse:
+        # This operation is intentionally platform-trainer scoped. The router
+        # authenticates the actor as a trainer; exact email confirmation, a
+        # reason, row locking, and an immutable audit record constrain the edit.
+        await self._require_company(company_id)
+        participant = await self.repository.get_participant_for_update(
+            company_id,
+            participant_id,
+        )
+        if participant is None:
+            raise DomainError("Participant not found.", code="participant_not_found")
+        if participant.email is None:
+            raise DomainError(
+                "Participant has no email address.",
+                code="participant_email_missing",
+            )
+
+        participant_email = participant.email.lower()
+        if str(payload.confirmation_email).lower() != participant_email:
+            raise DomainError(
+                "Confirmation email does not match the participant.",
+                code="account_link_confirmation_mismatch",
+            )
+        reason = payload.reason.strip()
+        if len(reason) < 10:
+            raise DomainError(
+                "Repair reason must contain at least 10 characters.",
+                code="account_link_reason_too_short",
+            )
+
+        previous_user_id = participant.user_id
+        previous_user = (
+            await self.identity_repository.get_user_by_id(participant.user_id)
+            if participant.user_id is not None
+            else None
+        )
+        matching_user = await self.identity_repository.get_user_by_email(participant_email)
+        new_user: User | None
+
+        if payload.action == "link_matching_email":
+            if matching_user is None:
+                raise DomainError(
+                    "No platform account uses the participant email.",
+                    code="matching_account_not_found",
+                )
+            if participant.user_id == matching_user.id:
+                raise DomainError(
+                    "Participant is already linked to the matching account.",
+                    code="account_already_linked",
+                )
+            participant.user_id = matching_user.id
+            new_user = matching_user
+        else:
+            if participant.user_id is None:
+                raise DomainError(
+                    "Participant is not linked to an account.",
+                    code="account_not_linked",
+                )
+            participant.user_id = None
+            new_user = None
+
+        await self.repository.add_participant_account_link_audit(
+            ParticipantAccountLinkAudit(
+                company_id=company_id,
+                participant_profile_id=participant.id,
+                actor_user_id=actor_user_id,
+                action=payload.action,
+                previous_user_id=previous_user_id,
+                previous_user_email=previous_user.email if previous_user is not None else None,
+                new_user_id=new_user.id if new_user is not None else None,
+                new_user_email=new_user.email if new_user is not None else None,
+                reason=reason,
+            )
+        )
+        invites = await self.identity_repository.list_invites_for_respondent(
+            company_id,
+            participant.id,
+        )
+        await self.identity_repository.delete_sessions_for_invites(
+            [invite.id for invite in invites]
+        )
+
+        return _participant_account_link_status(
+            participant,
+            new_user,
+            matching_user,
+        )
 
     async def create_participant(
         self,
@@ -1440,6 +1568,37 @@ def _clean_optional(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _participant_account_summary(user: User | None) -> ParticipantAccountSummary | None:
+    if user is None:
+        return None
+    return ParticipantAccountSummary(
+        user_id=user.id,
+        email=user.email,
+        role=user.role.value,
+        is_shadow_account=user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH,
+    )
+
+
+def _participant_account_link_status(
+    participant: ParticipantProfile,
+    linked_account: User | None,
+    matching_account: User | None,
+) -> ParticipantAccountLinkStatusResponse:
+    if participant.email is None:
+        raise ValueError("Participant email is required for account-link status.")
+    return ParticipantAccountLinkStatusResponse(
+        participant_id=participant.id,
+        participant_email=participant.email,
+        linked_account=_participant_account_summary(linked_account),
+        matching_email_account=_participant_account_summary(matching_account),
+        matching_account_is_linked=bool(
+            linked_account is not None
+            and matching_account is not None
+            and linked_account.id == matching_account.id
+        ),
+    )
 
 
 def _project_participant_response(

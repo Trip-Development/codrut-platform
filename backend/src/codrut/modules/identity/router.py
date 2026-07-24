@@ -51,6 +51,7 @@ async def exchange_invite(
         result = await IdentityService(session).verify_invite_token_and_create_session(
             payload.token,
             existing_session_token=request.cookies.get(SESSION_COOKIE_NAME),
+            replace_existing_session=payload.replace_existing_session,
         )
     except DomainError as exc:
         if exc.code != "invite_session_conflict":

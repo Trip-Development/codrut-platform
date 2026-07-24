@@ -1,7 +1,7 @@
 import uuid
 from types import SimpleNamespace
 
-from codrut.modules.assignments.models import AssignmentStatus
+from codrut.modules.assignments.models import AssignmentStatus, AssignmentTargetType
 from codrut.modules.companies.hierarchy import HierarchyIssue
 from codrut.modules.scoring.service import (
     ReportDimensionAccumulator,
@@ -37,11 +37,16 @@ def _assignment(
     *,
     status: AssignmentStatus = AssignmentStatus.scored,
     respondent_profile_id: uuid.UUID | None = None,
+    target_person_id: uuid.UUID | None = None,
+    target_type: AssignmentTargetType = AssignmentTargetType.person,
 ) -> SimpleNamespace:
+    respondent_id = respondent_profile_id or uuid.uuid4()
     return SimpleNamespace(
         questionnaire_key=questionnaire_key,
         status=status,
-        respondent_profile_id=respondent_profile_id or uuid.uuid4(),
+        respondent_profile_id=respondent_id,
+        target_person_id=target_person_id or uuid.uuid4(),
+        target_type=target_type,
     )
 
 
@@ -210,6 +215,36 @@ def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
         1,
         1,
     )
+
+
+def test_score_summary_excludes_icare_self_evaluation_from_external_aggregate() -> None:
+    manager_id = uuid.uuid4()
+    reviewer_id = uuid.uuid4()
+    rows = [
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=manager_id,
+                target_person_id=manager_id,
+            ),
+            _result({"clarity": 20}),
+            None,
+        ),
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=reviewer_id,
+                target_person_id=manager_id,
+            ),
+            _result({"clarity": 80}),
+            None,
+        ),
+    ]
+
+    summary = _build_score_summary(rows)  # type: ignore[arg-type]
+
+    assert summary.boss_360_count == 1
+    assert summary.boss_360_averages[0].avg == 80
 
 
 def test_pcm_distribution_requires_completed_known_profiles() -> None:

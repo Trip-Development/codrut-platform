@@ -1360,7 +1360,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setEmailConfirmDialog({
       title: "Trimiți campania?",
       description: mode === "selected"
-        ? `Campania „${campaign.name}” va fi trimisă către ${selectedRecipientCount} destinatari netrimiși din lista campaniei.`
+        ? `Campania „${campaign.name}” va fi trimisă către ${selectedRecipientCount} ${
+            selectedRecipientCount === 1 ? "destinatar netrimis" : "destinatari netrimiși"
+          } din lista campaniei.`
         : mode === "all"
         ? `Campania „${campaign.name}” va fi trimisă către toți destinatarii salvați ai campaniei, inclusiv cei care au mai primit-o.`
         : `Campania „${campaign.name}” va fi trimisă doar către destinatarii salvați care nu au primit-o încă.`,

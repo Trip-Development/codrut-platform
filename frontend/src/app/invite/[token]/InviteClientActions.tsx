@@ -4,8 +4,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, Loader2Icon } from "lucide-react";
 
-import { acceptCurrentTerms } from "@/api/auth";
-import { exchangeInviteSession, type InviteBundle } from "@/api/invites";
+import { acceptCurrentTerms, getAuthenticatedSession } from "@/api/auth";
+import {
+  exchangeInviteSession,
+  isInviteSessionConflictError,
+  type InviteBundle,
+} from "@/api/invites";
 import { CURRENT_TERMS_VERSION } from "@/api/terms";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
@@ -93,14 +97,17 @@ export function InviteRegistrationLink({
 
 export function InviteSessionExchange({
   token,
+  bundle,
   children,
 }: {
   token: string;
+  bundle: ValidInviteBundle;
   children: ReactNode;
 }) {
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<"pending" | "ready" | "error">("pending");
+  const [state, setState] = useState<"pending" | "ready" | "conflict" | "error">("pending");
   const [error, setError] = useState<string | null>(null);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -111,8 +118,16 @@ export function InviteSessionExchange({
       .then(() => {
         if (active) setState("ready");
       })
-      .catch((exchangeError: unknown) => {
+      .catch(async (exchangeError: unknown) => {
         if (!active) return;
+        if (isInviteSessionConflictError(exchangeError)) {
+          const session = await getAuthenticatedSession();
+          if (!active) return;
+          setCurrentEmail(session?.user.email ?? null);
+          setError(exchangeError.message);
+          setState("conflict");
+          return;
+        }
         setError(
           exchangeError instanceof Error
             ? exchangeError.message
@@ -128,6 +143,22 @@ export function InviteSessionExchange({
 
   if (state === "ready") return <>{children}</>;
 
+  const replaceSession = async () => {
+    setState("pending");
+    setError(null);
+    try {
+      await exchangeInviteSession(token, { replaceExistingSession: true });
+      setState("ready");
+    } catch (exchangeError) {
+      setError(
+        exchangeError instanceof Error
+          ? exchangeError.message
+          : "Nu am putut schimba sesiunea activă.",
+      );
+      setState("error");
+    }
+  };
+
   return (
     <InviteFrame width="sm">
       <InvitePanel>
@@ -136,12 +167,25 @@ export function InviteSessionExchange({
             title="Pregătim accesul securizat"
             detail="Verificăm invitația înainte de a deschide chestionarele."
           />
+        ) : state === "conflict" ? (
+          <Alert>
+            <AlertTitle>Schimbă sesiunea activă?</AlertTitle>
+            <AlertDescription>
+              Ești autentificat{currentEmail ? ` ca ${currentEmail}` : ""}. Invitația este pentru{" "}
+              {bundle.participantEmail}. Continuarea va deschide doar sarcinile acestei invitații.
+            </AlertDescription>
+          </Alert>
         ) : (
           <Alert variant="destructive">
             <AlertTitle>Accesul nu a putut fi pregătit</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+        {state === "conflict" ? (
+          <Button type="button" onClick={() => void replaceSession()} className="mt-5 w-full">
+            Schimbă sesiunea și continuă
+          </Button>
+        ) : null}
         {state === "error" ? (
           <Button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-5 w-full">
             Reîncearcă
@@ -165,6 +209,8 @@ export function InviteConsentGate({
   const [consentSaved, setConsentSaved] = useState(false);
   const [consentSubmitting, setConsentSubmitting] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [sessionConflict, setSessionConflict] = useState(false);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
   const consentSubmittingRef = useRef(false);
 
   useEffect(() => {
@@ -172,7 +218,7 @@ export function InviteConsentGate({
     storeInviteForRegistration(token, bundle);
   }, [bundle, token]);
 
-  const handleAcceptTerms = async () => {
+  const handleAcceptTerms = async (replaceExistingSession = false) => {
     if (consentSubmittingRef.current) return;
 
     consentSubmittingRef.current = true;
@@ -180,12 +226,21 @@ export function InviteConsentGate({
     setConsentSubmitting(true);
     try {
       const minimumFeedback = waitForConsentFeedback();
-      await exchangeInviteSession(token);
+      if (replaceExistingSession) {
+        await exchangeInviteSession(token, { replaceExistingSession: true });
+      } else {
+        await exchangeInviteSession(token);
+      }
       await acceptCurrentTerms();
       await minimumFeedback;
       storeConsent(token);
       setConsentSaved(true);
     } catch (err) {
+      if (isInviteSessionConflictError(err)) {
+        const session = await getAuthenticatedSession();
+        setCurrentEmail(session?.user.email ?? null);
+        setSessionConflict(true);
+      }
       setConsentError(err instanceof Error ? err.message : "Nu am putut salva acordul de confidențialitate.");
     } finally {
       consentSubmittingRef.current = false;
@@ -233,8 +288,12 @@ export function InviteConsentGate({
 
         {consentError ? (
           <Alert variant="destructive" className="mt-5">
-            <AlertTitle>Acordul nu a fost salvat</AlertTitle>
-            <AlertDescription>{consentError}</AlertDescription>
+            <AlertTitle>{sessionConflict ? "Schimbă sesiunea activă?" : "Acordul nu a fost salvat"}</AlertTitle>
+            <AlertDescription>
+              {sessionConflict
+                ? `Ești autentificat${currentEmail ? ` ca ${currentEmail}` : ""}. Invitația este pentru ${bundle.participantEmail}.`
+                : consentError}
+            </AlertDescription>
           </Alert>
         ) : null}
 
@@ -248,13 +307,17 @@ export function InviteConsentGate({
 
         <Button
           type="button"
-          onClick={handleAcceptTerms}
+          onClick={() => void handleAcceptTerms(sessionConflict)}
           disabled={!termsChecked || consentSubmitting}
           size="lg"
           className="mt-5 w-full"
         >
           {consentSubmitting ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
-          {consentSubmitting ? "Pregătim accesul" : "Continuă la chestionare"}
+          {consentSubmitting
+            ? "Pregătim accesul"
+            : sessionConflict
+              ? "Schimbă sesiunea și continuă"
+              : "Continuă la chestionare"}
         </Button>
       </InvitePanel>
     </InviteFrame>

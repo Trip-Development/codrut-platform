@@ -2,12 +2,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { InviteBundle } from "@/api/invites";
-import { acceptCurrentTerms } from "@/api/auth";
-import { exchangeInviteSession, resolveInviteBundle } from "@/api/invites";
+import { acceptCurrentTerms, getAuthenticatedSession } from "@/api/auth";
+import {
+  exchangeInviteSession,
+  InviteSessionConflictError,
+  resolveInviteBundle,
+  type InviteBundle,
+} from "@/api/invites";
 import InvitePage from "./page";
 
-vi.mock("@/api/auth", () => ({ acceptCurrentTerms: vi.fn() }));
+vi.mock("@/api/auth", () => ({
+  acceptCurrentTerms: vi.fn(),
+  getAuthenticatedSession: vi.fn(),
+}));
 
 vi.mock("@/api/invites", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/invites")>();
@@ -59,6 +66,15 @@ describe("InvitePage", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.mocked(acceptCurrentTerms).mockResolvedValue();
+    vi.mocked(getAuthenticatedSession).mockResolvedValue({
+      state: "authenticated",
+      user: {
+        id: "trainer-1",
+        name: "trainer",
+        email: "trainer@example.com",
+        role: "trainer",
+      },
+    });
     vi.mocked(exchangeInviteSession).mockResolvedValue();
     vi.mocked(resolveInviteBundle).mockResolvedValue(validBundle);
   });
@@ -97,6 +113,30 @@ describe("InvitePage", () => {
     expect(screen.queryByText("Confirmă confidențialitatea înainte de chestionare")).toBeNull();
     await waitFor(() => {
       expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+    });
+  });
+
+  it("requires explicit confirmation before replacing another authenticated session", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      termsAcceptedAt: "2026-06-27T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+    });
+    vi.mocked(exchangeInviteSession)
+      .mockRejectedValueOnce(new InviteSessionConflictError("Sesiunea activă este diferită."))
+      .mockResolvedValueOnce();
+
+    await renderInvitePage();
+
+    expect(await screen.findByText("Schimbă sesiunea activă?")).toBeTruthy();
+    expect(screen.getByText(/trainer@example\.com/)).toBeTruthy();
+    expect(screen.getByText(/participant\.demo@example\.com/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Schimbă sesiunea și continuă" }));
+
+    expect(await screen.findByRole("heading", { name: "Chestionarele tale" })).toBeTruthy();
+    expect(exchangeInviteSession).toHaveBeenNthCalledWith(1, "demo-token");
+    expect(exchangeInviteSession).toHaveBeenNthCalledWith(2, "demo-token", {
+      replaceExistingSession: true,
     });
   });
 

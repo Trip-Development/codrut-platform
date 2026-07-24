@@ -85,6 +85,7 @@ describe("TrainerLoginPage", () => {
 
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith("/trainer");
+      expect(router.refresh).toHaveBeenCalled();
     });
   });
 

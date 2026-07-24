@@ -631,6 +631,7 @@ async def test_icare_answer_review_returns_project_scoped_source_answers() -> No
             assert row.assignment_id == assignment.id
             assert row.respondent_name == "Respondent One"
             assert row.target_name == "Target Leader"
+            assert row.response_kind == "external_feedback"
             assert row.section_label == "Dezvoltare"
             assert row.measurement_label == "Dezvoltare"
             assert row.statement_label == "Comportament sintetic pentru dezvoltare"
@@ -660,13 +661,19 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
                 full_name="Ana Aggregate",
                 email=f"ana-{uuid.uuid4().hex[:8]}@example.com",
             )
+            manager = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Manager Aggregate",
+                email=f"manager-{uuid.uuid4().hex[:8]}@example.com",
+            )
             other_participant = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=other_company.id,
                 full_name="Other Aggregate",
                 email=f"other-{uuid.uuid4().hex[:8]}@example.com",
             )
-            session.add_all([participant, other_participant])
+            session.add_all([participant, manager, other_participant])
             await session.flush()
 
             project = CompanyProject(
@@ -727,7 +734,7 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
                 questionnaire_key="boss_360",
                 questionnaire_definition_id=definitions["boss_360"].id,
                 target_type=AssignmentTargetType.person,
-                target_person_id=participant.id,
+                target_person_id=manager.id,
                 status=AssignmentStatus.scored,
             )
             other_company_assignment = QuestionnaireAssignment(
@@ -851,6 +858,10 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
             boss_scores = {item.id: item.avg for item in aggregate.boss_360_averages}
             assert boss_scores["feedback_signal_c"] == 60
             assert boss_scores["feedback_signal_d"] == 90
+            assert len(aggregate.icare_target_summaries) == 1
+            assert aggregate.icare_target_summaries[0].target_profile_id == manager.id
+            assert aggregate.icare_target_summaries[0].external_response_count == 1
+            assert aggregate.icare_target_summaries[0].self_response_count == 0
 
             project_aggregate = await ScoringService(session).get_company_report_aggregate(
                 company.id,

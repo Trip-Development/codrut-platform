@@ -195,6 +195,27 @@ class ParticipantResponse(BaseModel):
     anonymous_name: str | None = None
 
 
+class ParticipantAccountSummary(BaseModel):
+    user_id: UUID
+    email: EmailStr
+    role: Literal["trainer", "participant"]
+    is_shadow_account: bool
+
+
+class ParticipantAccountLinkStatusResponse(BaseModel):
+    participant_id: UUID
+    participant_email: EmailStr
+    linked_account: ParticipantAccountSummary | None
+    matching_email_account: ParticipantAccountSummary | None
+    matching_account_is_linked: bool
+
+
+class ParticipantAccountLinkRepairRequest(StrictRequestModel):
+    action: Literal["link_matching_email", "unlink"]
+    confirmation_email: EmailStr
+    reason: str = Field(min_length=10, max_length=1000)
+
+
 class ProjectMembershipResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

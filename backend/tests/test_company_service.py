@@ -39,6 +39,7 @@ from codrut.modules.companies.models import (
     CompanyMembershipRole,
     CompanyProject,
     CompanyProjectStatus,
+    ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
     ProjectMembership,
@@ -50,6 +51,7 @@ from codrut.modules.companies.schemas import (
     CompanyCreateRequest,
     CompanyProjectCreateRequest,
     CompanyProjectUpdateRequest,
+    ParticipantAccountLinkRepairRequest,
     ParticipantCreateRequest,
     ParticipantInviteBatchRequest,
     ParticipantUpdateRequest,
@@ -107,6 +109,7 @@ class FakeCompanyRepository:
         self.project_memberships: list[ProjectMembership] = []
         self.reporting_relationships: list[ParticipantReportingRelationship] = []
         self.assignments: list[QuestionnaireAssignment] = []
+        self.account_link_audits: list[ParticipantAccountLinkAudit] = []
 
     async def list_companies_for_user(self, user_id: uuid.UUID) -> list[Company]:
         company_ids = {
@@ -273,6 +276,21 @@ class FakeCompanyRepository:
                 return participant
         return None
 
+    async def get_participant_for_update(
+        self,
+        company_id: uuid.UUID,
+        participant_id: uuid.UUID,
+    ) -> ParticipantProfile | None:
+        return await self.get_participant(company_id, participant_id)
+
+    async def add_participant_account_link_audit(
+        self,
+        audit: ParticipantAccountLinkAudit,
+    ) -> ParticipantAccountLinkAudit:
+        audit.id = uuid.uuid4()
+        self.account_link_audits.append(audit)
+        return audit
+
     async def list_project_memberships(
         self,
         company_id: uuid.UUID,
@@ -421,6 +439,8 @@ class FakeIdentityRepository:
         self.sessions: list[Session] = []
         self.users_by_email: dict[str, User] = {}
         self.users_by_id: dict[uuid.UUID, User] = {}
+        self.invites: list[AssignmentInvite] = []
+        self.deleted_session_invite_ids: list[uuid.UUID] = []
 
     async def get_user_by_email(self, email: str) -> User | None:
         return self.users_by_email.get(email.lower())
@@ -438,6 +458,21 @@ class FakeIdentityRepository:
         session.id = uuid.uuid4()
         self.sessions.append(session)
         return session
+
+    async def list_invites_for_respondent(
+        self,
+        company_id: uuid.UUID,
+        respondent_profile_id: uuid.UUID,
+    ) -> list[AssignmentInvite]:
+        return [
+            invite
+            for invite in self.invites
+            if invite.company_id == company_id
+            and invite.respondent_profile_id == respondent_profile_id
+        ]
+
+    async def delete_sessions_for_invites(self, invite_ids: list[uuid.UUID]) -> None:
+        self.deleted_session_invite_ids.extend(invite_ids)
 
 
 def make_service(
@@ -462,6 +497,100 @@ async def test_create_company_strips_name_and_rejects_duplicates() -> None:
     assert repository.memberships[0].user_id == owner_id
     with pytest.raises(DomainError, match="already exists"):
         await service.create_company(owner_id, CompanyCreateRequest(name="Acme"))
+
+
+async def test_platform_trainer_can_repair_participant_account_link_with_audit() -> None:
+    repository = FakeCompanyRepository()
+    identity_repository = FakeIdentityRepository()
+    service = make_service(repository, identity_repository)
+    company = Company(id=uuid.uuid4(), name="Repair Company")
+    repository.companies_by_id[company.id] = company
+    repository.companies_by_name[company.name] = company
+    actor_id = uuid.uuid4()
+    old_user = User(
+        id=uuid.uuid4(),
+        email="wrong@example.com",
+        password_hash="permanent-password",  # noqa: S106
+        role=UserRole.participant,
+    )
+    matching_user = User(
+        id=uuid.uuid4(),
+        email="person@example.com",
+        password_hash="permanent-password",  # noqa: S106
+        role=UserRole.trainer,
+    )
+    participant = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=company.id,
+        user_id=old_user.id,
+        full_name="Person Repair",
+        email=matching_user.email,
+    )
+    repository.participants.append(participant)
+    identity_repository.users_by_id[old_user.id] = old_user
+    identity_repository.users_by_id[matching_user.id] = matching_user
+    identity_repository.users_by_email[matching_user.email] = matching_user
+    invite = AssignmentInvite(
+        id=uuid.uuid4(),
+        company_id=company.id,
+        respondent_profile_id=participant.id,
+        token="repair-invite",  # noqa: S106
+        status="active",
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    identity_repository.invites.append(invite)
+
+    result = await service.repair_participant_account_link(
+        actor_id,
+        company.id,
+        participant.id,
+        ParticipantAccountLinkRepairRequest(
+            action="link_matching_email",
+            confirmation_email=participant.email,
+            reason="Verified duplicate account conflict.",
+        ),
+    )
+
+    assert participant.user_id == matching_user.id
+    assert result.linked_account is not None
+    assert result.linked_account.role == "trainer"
+    assert result.matching_account_is_linked is True
+    assert identity_repository.deleted_session_invite_ids == [invite.id]
+    assert len(repository.account_link_audits) == 1
+    audit = repository.account_link_audits[0]
+    assert audit.actor_user_id == actor_id
+    assert audit.previous_user_id == old_user.id
+    assert audit.new_user_id == matching_user.id
+
+
+async def test_account_link_repair_rejects_confirmation_email_mismatch() -> None:
+    repository = FakeCompanyRepository()
+    identity_repository = FakeIdentityRepository()
+    service = make_service(repository, identity_repository)
+    company = Company(id=uuid.uuid4(), name="Protected Repair")
+    repository.companies_by_id[company.id] = company
+    participant = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=company.id,
+        full_name="Protected Person",
+        email="protected@example.com",
+    )
+    repository.participants.append(participant)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.repair_participant_account_link(
+            uuid.uuid4(),
+            company.id,
+            participant.id,
+            ParticipantAccountLinkRepairRequest(
+                action="unlink",
+                confirmation_email="other@example.com",
+                reason="Attempted repair with wrong confirmation.",
+            ),
+        )
+
+    assert exc_info.value.code == "account_link_confirmation_mismatch"
+    assert repository.account_link_audits == []
 
 
 async def test_list_companies_returns_only_membership_companies() -> None:
