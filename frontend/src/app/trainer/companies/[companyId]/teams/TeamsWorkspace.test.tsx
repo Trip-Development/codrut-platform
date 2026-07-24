@@ -1,7 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addCompanyTeamMembership, createCompanyTeam, type CompanyParticipant } from "@/api/companies";
+import {
+  addCompanyTeamMembership,
+  createCompanyTeam,
+  removeCompanyTeamMembership,
+  type CompanyParticipant,
+} from "@/api/companies";
 import { deriveOrganizationTeams, TeamsWorkspace } from "./TeamsWorkspace";
 
 vi.mock("@/api/companies", async (importOriginal) => {
@@ -10,6 +15,7 @@ vi.mock("@/api/companies", async (importOriginal) => {
     ...original,
     addCompanyTeamMembership: vi.fn(),
     createCompanyTeam: vi.fn(),
+    removeCompanyTeamMembership: vi.fn(),
   };
 });
 
@@ -146,6 +152,60 @@ describe("TeamsWorkspace", () => {
     });
 
     expect(await screen.findByText('Echipa "Leadership septembrie" a fost creată.')).toBeTruthy();
+  });
+
+  it("requires confirmation before removing a saved team member", async () => {
+    vi.mocked(removeCompanyTeamMembership).mockResolvedValue();
+    render(
+      <TeamsWorkspace
+        companyId="company-1"
+        initialTeams={[
+          {
+            id: "team-1",
+            company_id: "company-1",
+            name: "Leadership",
+            type: "leadership",
+          },
+        ]}
+        participants={[
+          {
+            id: "participant-1",
+            full_name: "Ana Pop",
+            email: "ana@example.com",
+            reports_to_name: null,
+            position: "Manager",
+            location: "București",
+            role_group: "leadership",
+            pcm_profile: null,
+            user_id: null,
+          },
+        ]}
+        initialMembershipsByTeam={{
+          "team-1": [
+            {
+              id: "membership-1",
+              team_id: "team-1",
+              participant_profile_id: "participant-1",
+              role: "leader",
+            },
+          ],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Elimină Ana Pop din Leadership" }));
+    expect(removeCompanyTeamMembership).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirmă" }));
+    await waitFor(() =>
+      expect(removeCompanyTeamMembership).toHaveBeenCalledWith(
+        "company-1",
+        "team-1",
+        "membership-1",
+      ),
+    );
+    expect(await screen.findByText("Membrul a fost eliminat din echipă.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Elimină Ana Pop din Leadership" })).toBeNull();
   });
 
   it("derives leadership and manager teams from roster relationships", () => {

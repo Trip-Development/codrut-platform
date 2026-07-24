@@ -1,11 +1,12 @@
 "use client";
 
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { Loader2Icon, PlusIcon } from "lucide-react";
+import { Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import {
   addCompanyTeamMembership,
   createCompanyTeam,
+  removeCompanyTeamMembership,
   type CompanyParticipant,
   type CompanyTeam,
   type CompanyTeamMembership,
@@ -204,6 +205,27 @@ export function TeamsWorkspace({
     }
   }
 
+  async function handleRemoveMember(
+    teamId: string,
+    membershipId: string,
+  ) {
+    setMessage(null);
+    try {
+      await removeCompanyTeamMembership(companyId, teamId, membershipId);
+      setMembershipsByTeam((current) => ({
+        ...current,
+        [teamId]: (current[teamId] ?? []).filter(
+          (membership) => membership.id !== membershipId,
+        ),
+      }));
+      setMessage("Membrul a fost eliminat din echipă.");
+      setMessageTone("neutral");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Membrul nu a putut fi eliminat.");
+      setMessageTone("danger");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-7">
       <section className="grid gap-6 border-b border-border pb-6 lg:grid-cols-[minmax(0,1fr)_34rem] lg:items-end">
@@ -304,6 +326,7 @@ export function TeamsWorkspace({
                           Boolean(entry.participant),
                       )}
                     onAddMember={handleAddMember}
+                    onRemoveMember={handleRemoveMember}
                   />
                 ))}
               </div>
@@ -400,6 +423,7 @@ function TeamCard({
   participants,
   members,
   onAddMember,
+  onRemoveMember,
 }: {
   team: CompanyTeam;
   participants: CompanyParticipant[];
@@ -409,6 +433,10 @@ function TeamCard({
     participantProfileId: string,
     role: CompanyTeamMembership["role"],
   ) => Promise<void>;
+  onRemoveMember: (
+    teamId: string,
+    membershipId: string,
+  ) => Promise<void>;
 }) {
   const availableParticipants = useMemo(() => {
     const memberIds = new Set(members.map((entry) => entry.participant.id));
@@ -417,6 +445,8 @@ function TeamCard({
   const [selectedParticipantId, setSelectedParticipantId] = useState(availableParticipants[0]?.id ?? "");
   const [selectedRole, setSelectedRole] = useState<CompanyTeamMembership["role"]>("member");
   const [isAdding, setIsAdding] = useState(false);
+  const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
+  const [confirmingMembershipId, setConfirmingMembershipId] = useState<string | null>(null);
   const addingRef = useRef(false);
   const participantSelectId = useId();
   const roleSelectId = useId();
@@ -437,6 +467,17 @@ function TeamCard({
     } finally {
       addingRef.current = false;
       setIsAdding(false);
+    }
+  }
+
+  async function handleRemove(membershipId: string) {
+    if (removingMembershipId) return;
+    setRemovingMembershipId(membershipId);
+    try {
+      await onRemoveMember(team.id, membershipId);
+      setConfirmingMembershipId(null);
+    } finally {
+      setRemovingMembershipId(null);
     }
   }
 
@@ -469,7 +510,42 @@ function TeamCard({
                   <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
                   <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
                 </span>
-                <RoleBadge role={membership.role} />
+                {confirmingMembershipId === membership.id ? (
+                  <span className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="destructive"
+                      disabled={removingMembershipId === membership.id}
+                      onClick={() => void handleRemove(membership.id)}
+                    >
+                      {removingMembershipId === membership.id ? "Eliminăm" : "Confirmă"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      disabled={removingMembershipId === membership.id}
+                      onClick={() => setConfirmingMembershipId(null)}
+                    >
+                      Anulează
+                    </Button>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <RoleBadge role={membership.role} />
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={`Elimină ${participant.full_name} din ${team.name}`}
+                      disabled={Boolean(removingMembershipId)}
+                      onClick={() => setConfirmingMembershipId(membership.id)}
+                    >
+                      <Trash2Icon aria-hidden="true" strokeWidth={1.8} />
+                    </Button>
+                  </span>
+                )}
               </li>
             ))}
           </ol>

@@ -65,6 +65,7 @@ class InviteVerifyResponse(BaseModel):
 
 class InviteExchangeRequest(StrictRequestModel):
     token: str = Field(min_length=1, max_length=2048)
+    replace_existing_session: bool = False
 
 
 class LoginRequest(StrictRequestModel):

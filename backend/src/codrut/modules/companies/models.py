@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -184,6 +185,44 @@ class ParticipantProfile(TimestampMixin, Base):
             self.user is not None
             and self.user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
         )
+
+
+class ParticipantAccountLinkAudit(Base):
+    __tablename__ = "participant_account_link_audits"
+    __table_args__ = (
+        CheckConstraint(
+            "action in ('link_matching_email', 'unlink')",
+            name="participant_account_link_audit_action",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    participant_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("participant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    previous_user_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    previous_user_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    new_user_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    new_user_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class ProjectMembership(TimestampMixin, Base):

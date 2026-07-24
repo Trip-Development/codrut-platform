@@ -8,6 +8,7 @@ import {
 import {
   getCompanyReportComparison,
   getIcareAnswerReview,
+  type CompanyReportAggregate,
   type IcareAnswerReviewRow,
   type ReportDistribution,
   type ReportHierarchyIssue,
@@ -197,6 +198,7 @@ export default async function ProjectReportsPage({
         />
       </section>
 
+      <IcareTargetSummaries summaries={aggregate.icare_target_summaries ?? []} />
       <IcareAnswerReviewPanel rows={icareReview.rows} />
 
       {baselineAggregate && baselineCycle && comparisonCycle ? (
@@ -605,6 +607,66 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
   );
 }
 
+function IcareTargetSummaries({
+  summaries,
+}: {
+  summaries: CompanyReportAggregate["icare_target_summaries"];
+}) {
+  if (summaries.length === 0) return null;
+
+  return (
+    <section className="overflow-hidden border-y border-border bg-surface">
+      <div className="border-b border-[var(--border)] px-5 py-4">
+        <h2 className="text-xl font-semibold text-foreground">Rezultate iCARE pe manager</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Feedbackul extern și autoevaluarea sunt calculate separat.
+        </p>
+      </div>
+      <div className="grid gap-px bg-border md:grid-cols-2">
+        {summaries.map((summary) => (
+          <article key={summary.target_profile_id} className="bg-surface px-5 py-4">
+            <h3 className="font-semibold text-foreground">{summary.target_name}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {formatResponseCount(summary.external_response_count)} externe ·{" "}
+              {formatResponseCount(summary.self_response_count)} de autoevaluare
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <IcareSummaryColumn title="Feedback extern" items={summary.external_averages} />
+              <IcareSummaryColumn title="Autoevaluare" items={summary.self_averages} />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function IcareSummaryColumn({
+  title,
+  items,
+}: {
+  title: string;
+  items: CompanyReportAggregate["boss_360_averages"];
+}) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wider text-foreground/52">{title}</p>
+      {items.length === 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">Fără răspunsuri</p>
+      ) : (
+        <dl className="mt-2 space-y-1.5 text-xs">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-baseline justify-between gap-3">
+              <dt className="truncate text-foreground/68">{item.label}</dt>
+              <dd className="font-semibold tabular-nums text-foreground">{item.avg}%</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
 function IcareAnswerReviewPanel({ rows }: { rows: IcareAnswerReviewRow[] }) {
   const csvHref = buildIcareReviewCsvHref(rows);
   return (
@@ -643,7 +705,12 @@ function IcareAnswerReviewPanel({ rows }: { rows: IcareAnswerReviewRow[] }) {
               rows.map((row) => (
                 <tr key={`${row.assignment_id}-${row.measurement_id}-${row.statement_id}`}>
                   <td className="px-5 py-4 font-semibold text-foreground">{row.respondent_name}</td>
-                  <td className="px-5 py-4 text-foreground/68">{row.target_name ?? "-"}</td>
+                  <td className="px-5 py-4 text-foreground/68">
+                    <p>{row.target_name ?? "-"}</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-foreground/45">
+                      {row.response_kind === "self_assessment" ? "Autoevaluare" : "Feedback extern"}
+                    </p>
+                  </td>
                   <td className="px-5 py-4 text-foreground/72">{row.statement_label}</td>
                   <td className="px-5 py-4">
                     <p className="font-bold text-foreground">{row.answer_label}</p>

@@ -28,6 +28,7 @@ import ProjectReportsPage from "./page";
 const emptyAggregate = {
   boss_360_averages: [],
   boss_360_count: 0,
+  icare_target_summaries: [],
   completion_rate: 0,
   driver_averages: [],
   driver_count: 0,
@@ -48,6 +49,14 @@ const richAggregate = {
   ...emptyAggregate,
   boss_360_averages: [{ id: "clarity", label: "Claritate", avg: 74 }],
   boss_360_count: 2,
+  icare_target_summaries: [{
+    target_profile_id: "manager-1",
+    target_name: "Manager Exemplu",
+    external_response_count: 2,
+    self_response_count: 1,
+    external_averages: [{ id: "clarity", label: "Claritate", avg: 74 }],
+    self_averages: [{ id: "clarity", label: "Claritate", avg: 62 }],
+  }],
   completion_rate: 67,
   driver_averages: [
     { id: "perfect", label: "Fii perfect", avg: 64 },
@@ -166,6 +175,7 @@ describe("project report overview", () => {
         target_profile_id: null,
         target_name: null,
         target_type: "person",
+        response_kind: "external_feedback",
         section_id: "section-1",
         section_label: "Sprijin",
         measurement_id: "clarity",
@@ -194,6 +204,11 @@ describe("project report overview", () => {
     expect(screen.getByRole("heading", { name: "Evoluție PCM" })).toBeTruthy();
     expect(screen.getByText("Încă 1 diagnostice sunt disponibile în datele raportului.")).toBeTruthy();
     expect(screen.getByText("Comportamentul este observabil.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Rezultate iCARE pe manager" })).toBeTruthy();
+    expect(screen.getByText("Manager Exemplu")).toBeTruthy();
+    expect(screen.getByText("2 răspunsuri externe · 1 răspuns de autoevaluare")).toBeTruthy();
+    expect(screen.getAllByText("Feedback extern").length).toBeGreaterThan(0);
+    expect(screen.getByText("Autoevaluare")).toBeTruthy();
     expect(screen.getAllByText("În așteptare").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Export CSV/ }).getAttribute("href")).toContain("Ana%2C%20Pop");
     expect(api.getCompanyReportComparison).toHaveBeenCalledWith(

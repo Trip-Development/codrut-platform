@@ -59,7 +59,10 @@ import {
   getCompanyReportAggregate,
   getCompanyTeamMemberships,
   getProjectParticipants,
+  getParticipantAccountLinkStatus,
   importCompanyRoster,
+  repairParticipantAccountLink,
+  removeCompanyTeamMembership,
   resendParticipantInvitation,
   saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
@@ -1182,6 +1185,24 @@ describe("frontend API adapter stubs", () => {
     );
   });
 
+  it("marks invite session replacement only after explicit confirmation", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await exchangeInviteSession("real-token", { replaceExistingSession: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/invite/exchange"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          token: "real-token",
+          replace_existing_session: true,
+        }),
+      }),
+    );
+  });
+
   it("resolves real secure invite links through the backend when access is marked secure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
@@ -1606,6 +1627,56 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({
         method: "DELETE",
         credentials: "include",
+      }),
+    );
+  });
+
+  it("reads and repairs participant account links with an explicit audit reason", async () => {
+    const status = {
+      participant_id: "participant-1",
+      participant_email: "person@example.com",
+      linked_account: null,
+      matching_email_account: {
+        user_id: "user-1",
+        email: "person@example.com",
+        role: "trainer",
+        is_shadow_account: false,
+      },
+      matching_account_is_linked: false,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(status)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ...status,
+        linked_account: status.matching_email_account,
+        matching_account_is_linked: true,
+      })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getParticipantAccountLinkStatus("company-1", "participant-1"),
+    ).resolves.toMatchObject(status);
+    await expect(
+      repairParticipantAccountLink("company-1", "participant-1", {
+        action: "link_matching_email",
+        confirmationEmail: "person@example.com",
+        reason: "Conflict verified with the account owner.",
+      }),
+    ).resolves.toMatchObject({ matching_account_is_linked: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(
+        "/companies/company-1/participants/participant-1/account-link/repair",
+      ),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          action: "link_matching_email",
+          confirmation_email: "person@example.com",
+          reason: "Conflict verified with the account owner.",
+        }),
       }),
     );
   });
@@ -2326,7 +2397,8 @@ describe("frontend API adapter stubs", () => {
           participant_profile_id: "participant-2",
           role: "member",
         }),
-      } as Response);
+      } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
 
     await expect(
       createCompanyTeam("company-1", { name: "Leadership", type: "leadership" }),
@@ -2338,6 +2410,9 @@ describe("frontend API adapter stubs", () => {
         role: "member",
       }),
     ).resolves.toMatchObject({ participant_profile_id: "participant-2" });
+    await expect(
+      removeCompanyTeamMembership("company-1", "team-1", "membership-2"),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -2366,6 +2441,16 @@ describe("frontend API adapter stubs", () => {
           participant_profile_id: "participant-2",
           role: "member",
         }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining(
+        "/companies/company-1/teams/team-1/memberships/membership-2",
+      ),
+      expect.objectContaining({
+        method: "DELETE",
+        credentials: "include",
       }),
     );
   });

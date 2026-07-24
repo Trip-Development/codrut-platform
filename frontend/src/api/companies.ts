@@ -117,6 +117,23 @@ export function hasPermanentParticipantAccount(participant: CompanyParticipant):
   return Boolean(participant.user_id) && participant.is_shadow_account !== true;
 }
 
+export type ParticipantAccountSummary = {
+  user_id: string;
+  email: string;
+  role: "trainer" | "participant";
+  is_shadow_account: boolean;
+};
+
+export type ParticipantAccountLinkStatus = {
+  participant_id: string;
+  participant_email: string;
+  linked_account: ParticipantAccountSummary | null;
+  matching_email_account: ParticipantAccountSummary | null;
+  matching_account_is_linked: boolean;
+};
+
+export type ParticipantAccountLinkRepairAction = "link_matching_email" | "unlink";
+
 export type UpdateCompanyParticipantPayload = {
   projectId?: string | null;
   fullName?: string;
@@ -420,6 +437,7 @@ export type CompanyReportAggregate = {
   lencioni_averages: ReportAverage[];
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
+  icare_target_summaries: IcareTargetSummary[];
   pcm_base_distribution: ReportDistribution[];
   pcm_phase_distribution: ReportDistribution[];
   team_lenses: ReportTeamLens[];
@@ -427,6 +445,15 @@ export type CompanyReportAggregate = {
   hierarchy_ambiguity_message: string | null;
   hierarchy_issues: ReportHierarchyIssue[];
   results: CompanyScoringResult[];
+};
+
+export type IcareTargetSummary = {
+  target_profile_id: string;
+  target_name: string;
+  external_response_count: number;
+  self_response_count: number;
+  external_averages: ReportAverage[];
+  self_averages: ReportAverage[];
 };
 
 export type CompanyReportComparison = {
@@ -446,6 +473,7 @@ export type IcareAnswerReviewRow = {
   target_profile_id?: string | null;
   target_name?: string | null;
   target_type: string;
+  response_kind: "self_assessment" | "external_feedback";
   section_id: string;
   section_label: string;
   measurement_id: string;
@@ -857,6 +885,7 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
     lencioni_averages: lencioniAverages,
     driver_averages: driverAverages,
     boss_360_averages: boss360Averages,
+    icare_target_summaries: [],
     pcm_base_distribution: pcmBaseDistribution,
     pcm_phase_distribution: pcmPhaseDistribution,
     team_lenses: fallbackReportTeamLenses({
@@ -1088,6 +1117,60 @@ export async function getProjectParticipants(
     }
     return fallbackCompanyParticipants(companyId);
   }
+}
+
+export async function getParticipantAccountLinkStatus(
+  companyId: string,
+  participantId: string,
+  options: ApiRequestOptions = {},
+): Promise<ParticipantAccountLinkStatus | null> {
+  if (shouldUseSeededCompanyFallback(companyId)) return null;
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/account-link`,
+    { cache: "no-store", credentials: "include", ...options },
+  );
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new CompanyMutationError(
+      formatApiError(payload, "Starea contului nu a putut fi verificată."),
+      typeof payload?.error?.code === "string" ? payload.error.code : undefined,
+      payload?.error?.details,
+    );
+  }
+  return (await response.json()) as ParticipantAccountLinkStatus;
+}
+
+export async function repairParticipantAccountLink(
+  companyId: string,
+  participantId: string,
+  payload: {
+    action: ParticipantAccountLinkRepairAction;
+    confirmationEmail: string;
+    reason: string;
+  },
+): Promise<ParticipantAccountLinkStatus> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}/account-link/repair`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: payload.action,
+        confirmation_email: payload.confirmationEmail,
+        reason: payload.reason,
+      }),
+    },
+  );
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new CompanyMutationError(
+      formatApiError(errorPayload, "Legătura contului nu a putut fi reparată."),
+      typeof errorPayload?.error?.code === "string" ? errorPayload.error.code : undefined,
+      errorPayload?.error?.details,
+    );
+  }
+  return (await response.json()) as ParticipantAccountLinkStatus;
 }
 
 export async function getCompanyAssignments(
@@ -1919,6 +2002,24 @@ export async function addCompanyTeamMembership(
   }
 
   return (await response.json()) as CompanyTeamMembership;
+}
+
+export async function removeCompanyTeamMembership(
+  companyId: string,
+  teamId: string,
+  membershipId: string,
+): Promise<void> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/teams/${teamId}/memberships/${membershipId}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
 }
 
 export async function getCompanyDetail(

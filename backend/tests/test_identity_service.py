@@ -1463,6 +1463,62 @@ async def test_invite_exchange_rejects_another_authenticated_user_session() -> N
 
 
 @pytest.mark.asyncio
+async def test_invite_exchange_replaces_another_session_only_when_explicitly_requested() -> None:
+    expires_at = datetime.now(UTC) + timedelta(days=5)
+    user = User(
+        id=uuid.uuid4(),
+        email="invite@example.com",
+        password_hash="registered-password-hash",  # noqa: S106
+        role=UserRole.participant,
+    )
+    profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=user.id,
+        email=user.email,
+        full_name="Invite Participant",
+    )
+    invite = AssignmentInvite(
+        id=uuid.uuid4(),
+        company_id=profile.company_id,
+        respondent_profile_id=profile.id,
+        token="signed-invite",
+        status="active",
+        expires_at=expires_at,
+    )
+    existing_session = Session(
+        user_id=uuid.uuid4(),
+        token_hash="other-session-hash",  # noqa: S106
+        expires_at=expires_at,
+    )
+    service = IdentityService(AsyncMock())
+    service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
+        return_value=(_invite_verify_response(profile.email, expires_at), invite)
+    )
+    service._load_invited_profile = AsyncMock(return_value=profile)  # type: ignore[method-assign]
+    service._resolve_invited_participant_user = AsyncMock(return_value=user)  # type: ignore[method-assign]
+    service.repository.get_session_by_token = AsyncMock(return_value=existing_session)
+    service.repository.delete_session_by_token = AsyncMock()
+    service._create_session = AsyncMock(return_value="replacement-session")  # type: ignore[method-assign]
+
+    result = await service.verify_invite_token_and_create_session(
+        "signed-invite",
+        existing_session_token="existing-session",
+        replace_existing_session=True,
+    )
+
+    assert result.session_token == "replacement-session"  # noqa: S105
+    service._create_session.assert_awaited_once_with(
+        user,
+        expires_at=expires_at,
+        assignment_invite_id=invite.id,
+    )
+    service.repository.delete_session_by_token.assert_awaited_once_with(
+        "existing-session"
+    )
+
+
+@pytest.mark.asyncio
 async def test_invite_exchange_preserves_same_user_authenticated_session() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
@@ -1528,9 +1584,18 @@ async def test_invite_exchange_preserves_same_user_authenticated_session() -> No
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("is_leadership", [False, True])
-async def test_invite_exchange_links_same_email_profile_to_existing_participant(
+@pytest.mark.parametrize(
+    ("is_leadership", "role"),
+    [
+        (False, UserRole.participant),
+        (True, UserRole.participant),
+        (False, UserRole.trainer),
+        (True, UserRole.trainer),
+    ],
+)
+async def test_invite_exchange_links_same_email_profile_to_existing_account(
     is_leadership: bool,
+    role: UserRole,
 ) -> None:
     expires_at = datetime.now(UTC) + timedelta(days=5)
     profile = ParticipantProfile(
@@ -1544,7 +1609,7 @@ async def test_invite_exchange_links_same_email_profile_to_existing_participant(
         id=uuid.uuid4(),
         email=profile.email,
         password_hash="registered-password-hash",  # noqa: S106
-        role=UserRole.participant,
+        role=role,
     )
     invite = AssignmentInvite(
         id=uuid.uuid4(),

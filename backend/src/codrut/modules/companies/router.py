@@ -17,6 +17,8 @@ from codrut.modules.companies.schemas import (
     CompanyProjectUpdateRequest,
     CompanyResponse,
     CompanySummaryResponse,
+    ParticipantAccountLinkRepairRequest,
+    ParticipantAccountLinkStatusResponse,
     ParticipantCreateRequest,
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
@@ -163,6 +165,45 @@ async def list_company_participants(
 ) -> list[ParticipantResponse]:
     require_trainer_principal(principal)
     return await CompanyService(session).list_participants(principal.user_id, company_id)
+
+
+@router.get(
+    "/{company_id}/participants/{participant_id}/account-link",
+    response_model=ParticipantAccountLinkStatusResponse,
+)
+async def get_participant_account_link_status(
+    company_id: UUID,
+    participant_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> ParticipantAccountLinkStatusResponse:
+    require_trainer_principal(principal)
+    return await CompanyService(session).get_participant_account_link_status(
+        company_id,
+        participant_id,
+    )
+
+
+@router.post(
+    "/{company_id}/participants/{participant_id}/account-link/repair",
+    response_model=ParticipantAccountLinkStatusResponse,
+)
+async def repair_participant_account_link(
+    company_id: UUID,
+    participant_id: UUID,
+    payload: ParticipantAccountLinkRepairRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> ParticipantAccountLinkStatusResponse:
+    require_trainer_principal(principal)
+    result = await CompanyService(session).repair_participant_account_link(
+        principal.user_id,
+        company_id,
+        participant_id,
+        payload,
+    )
+    await session.commit()
+    return result
 
 
 @router.get(

@@ -2842,6 +2842,13 @@
             "title": "Hierarchy Issues",
             "type": "array"
           },
+          "icare_target_summaries": {
+            "items": {
+              "$ref": "#/components/schemas/IcareTargetSummaryResponse"
+            },
+            "title": "Icare Target Summaries",
+            "type": "array"
+          },
           "lencioni_averages": {
             "items": {
               "$ref": "#/components/schemas/ReportAverageResponse"
@@ -2910,6 +2917,7 @@
           "lencioni_averages",
           "driver_averages",
           "boss_360_averages",
+          "icare_target_summaries",
           "pcm_base_distribution",
           "pcm_phase_distribution",
           "team_lenses",
@@ -3654,6 +3662,10 @@
             "title": "Response Id",
             "type": "string"
           },
+          "response_kind": {
+            "title": "Response Kind",
+            "type": "string"
+          },
           "section_id": {
             "title": "Section Id",
             "type": "string"
@@ -3715,6 +3727,7 @@
           "respondent_profile_id",
           "respondent_name",
           "target_type",
+          "response_kind",
           "section_id",
           "section_label",
           "measurement_id",
@@ -3725,6 +3738,51 @@
           "answer_label"
         ],
         "title": "IcareAnswerReviewRowResponse",
+        "type": "object"
+      },
+      "IcareTargetSummaryResponse": {
+        "properties": {
+          "external_averages": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAverageResponse"
+            },
+            "title": "External Averages",
+            "type": "array"
+          },
+          "external_response_count": {
+            "title": "External Response Count",
+            "type": "integer"
+          },
+          "self_averages": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAverageResponse"
+            },
+            "title": "Self Averages",
+            "type": "array"
+          },
+          "self_response_count": {
+            "title": "Self Response Count",
+            "type": "integer"
+          },
+          "target_name": {
+            "title": "Target Name",
+            "type": "string"
+          },
+          "target_profile_id": {
+            "format": "uuid",
+            "title": "Target Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_profile_id",
+          "target_name",
+          "external_response_count",
+          "self_response_count",
+          "external_averages",
+          "self_averages"
+        ],
+        "title": "IcareTargetSummaryResponse",
         "type": "object"
       },
       "InvitationCreateRequest": {
@@ -3842,6 +3900,11 @@
       "InviteExchangeRequest": {
         "additionalProperties": false,
         "properties": {
+          "replace_existing_session": {
+            "default": false,
+            "title": "Replace Existing Session",
+            "type": "boolean"
+          },
           "token": {
             "maxLength": 2048,
             "minLength": 1,
@@ -4075,6 +4138,118 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "ParticipantAccountLinkRepairRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "link_matching_email",
+              "unlink"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "confirmation_email": {
+            "format": "email",
+            "title": "Confirmation Email",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "confirmation_email",
+          "reason"
+        ],
+        "title": "ParticipantAccountLinkRepairRequest",
+        "type": "object"
+      },
+      "ParticipantAccountLinkStatusResponse": {
+        "properties": {
+          "linked_account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticipantAccountSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "matching_account_is_linked": {
+            "title": "Matching Account Is Linked",
+            "type": "boolean"
+          },
+          "matching_email_account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticipantAccountSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "participant_email": {
+            "format": "email",
+            "title": "Participant Email",
+            "type": "string"
+          },
+          "participant_id": {
+            "format": "uuid",
+            "title": "Participant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "participant_id",
+          "participant_email",
+          "linked_account",
+          "matching_email_account",
+          "matching_account_is_linked"
+        ],
+        "title": "ParticipantAccountLinkStatusResponse",
+        "type": "object"
+      },
+      "ParticipantAccountSummary": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "is_shadow_account": {
+            "title": "Is Shadow Account",
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "trainer",
+              "participant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "role",
+          "is_shadow_account"
+        ],
+        "title": "ParticipantAccountSummary",
         "type": "object"
       },
       "ParticipantCreateRequest": {
@@ -12565,6 +12740,222 @@
         ]
       }
     },
+    "/api/companies/{company_id}/participants/{participant_id}/account-link": {
+      "get": {
+        "operationId": "get_participant_account_link_status_api_companies__company_id__participants__participant_id__account_link_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "participant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Participant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantAccountLinkStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Participant Account Link Status",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
+    "/api/companies/{company_id}/participants/{participant_id}/account-link/repair": {
+      "post": {
+        "operationId": "repair_participant_account_link_api_companies__company_id__participants__participant_id__account_link_repair_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "participant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Participant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParticipantAccountLinkRepairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantAccountLinkStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Repair Participant Account Link",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
     "/api/companies/{company_id}/participants/{participant_id}/resend-invite": {
       "post": {
         "operationId": "resend_participant_invite_api_companies__company_id__participants__participant_id__resend_invite_post",
@@ -14588,6 +14979,112 @@
           }
         },
         "summary": "Create Team Membership",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/companies/{company_id}/teams/{team_id}/memberships/{membership_id}": {
+      "delete": {
+        "operationId": "delete_team_membership_api_companies__company_id__teams__team_id__memberships__membership_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Team Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Delete Team Membership",
         "tags": [
           "assignments"
         ]

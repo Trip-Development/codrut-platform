@@ -523,13 +523,21 @@ function CompanyTableRow({
         {pending}
       </td>
       <td className="px-4 py-3 align-middle">
-        <Link
-          href={`/trainer/companies/${company.id}`}
-          className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
-        >
-          {companyNextAction(company)}
-          <ArrowRightIcon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
-        </Link>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Link
+            href={`/trainer/companies/${company.id}`}
+            className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+          >
+            {companyNextAction(company)}
+            <ArrowRightIcon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
+          </Link>
+          <Link
+            href={`/trainer/companies/${company.id}/settings`}
+            className="font-semibold text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+          >
+            Setări
+          </Link>
+        </span>
         {company.dataError ? <span className="mt-1 block text-xs text-destructive">{company.dataError}</span> : null}
       </td>
     </tr>

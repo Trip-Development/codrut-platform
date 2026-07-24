@@ -193,6 +193,19 @@ class IdentityRepository:
         result = await self.session.execute(statement)
         return result.scalars().first()
 
+    async def list_invites_for_respondent(
+        self,
+        company_id: UUID,
+        respondent_profile_id: UUID,
+    ) -> list[AssignmentInvite]:
+        result = await self.session.execute(
+            select(AssignmentInvite).where(
+                AssignmentInvite.company_id == company_id,
+                AssignmentInvite.respondent_profile_id == respondent_profile_id,
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_invite_by_token(
         self,
         token: str,

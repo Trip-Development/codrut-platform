@@ -389,6 +389,25 @@ class AssignmentService:
             raise DomainError("Team not found.", code="team_not_found")
         return await self.assignment_repository.list_team_memberships(team_id)
 
+    async def remove_team_membership(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        team_id: UUID,
+        membership_id: UUID,
+    ) -> None:
+        await self._require_company_manager(user_id, company_id)
+        team = await self.assignment_repository.get_team(company_id, team_id)
+        if team is None:
+            raise DomainError("Team not found.", code="team_not_found")
+        membership = await self.assignment_repository.get_team_membership_by_id(
+            team_id,
+            membership_id,
+        )
+        if membership is None:
+            raise DomainError("Team membership not found.", code="team_membership_not_found")
+        await self.assignment_repository.delete_team_membership(membership)
+
     async def create_assignment(
         self,
         user_id: UUID,
