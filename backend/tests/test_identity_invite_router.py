@@ -27,7 +27,7 @@ class FakeDatabaseSession:
 
 class StubIdentityService:
     verify_calls: list[str] = []
-    exchange_calls: list[tuple[str, str | None]] = []
+    exchange_calls: list[tuple[str, str | None, bool]] = []
     logout_calls: list[str] = []
     exchange_session_token: str | None = "new-session-token"  # noqa: S105
     reject_exchange = False
@@ -44,8 +44,9 @@ class StubIdentityService:
         token: str,
         *,
         existing_session_token: str | None = None,
+        replace_existing_session: bool = False,
     ) -> InviteVerifyResult:
-        self.exchange_calls.append((token, existing_session_token))
+        self.exchange_calls.append((token, existing_session_token, replace_existing_session))
         if self.reject_exchange:
             raise DomainError(
                 "The invitation belongs to a different authenticated user.",
@@ -178,7 +179,7 @@ def test_invite_post_exchanges_session_without_overwriting_another_user(
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "invite_session_conflict"
     assert database_session.commit_count == 0
-    assert StubIdentityService.exchange_calls == [("invite-token", "existing-session")]
+    assert StubIdentityService.exchange_calls == [("invite-token", "existing-session", False)]
     assert SESSION_COOKIE_NAME not in response.headers.get("set-cookie", "")
 
 
@@ -194,6 +195,25 @@ def test_invite_exchange_post_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -
     assert second.status_code == 429
     assert second.headers["Retry-After"] == "30"
     assert limiter.count == 2
+
+
+def test_invite_exchange_can_explicitly_replace_the_existing_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_session = FakeDatabaseSession()
+    client = TestClient(create_test_app(monkeypatch, database_session))
+    client.cookies.set(SESSION_COOKIE_NAME, "existing-session")
+
+    response = client.post(
+        "/api/auth/invite/exchange",
+        json={"token": "invite-token", "replace_existing_session": True},
+    )
+
+    assert response.status_code == 200
+    assert StubIdentityService.exchange_calls == [
+        ("invite-token", "existing-session", True),
+    ]
+    assert response.cookies[SESSION_COOKIE_NAME] == "new-session-token"
 
 
 def test_invite_exchange_requires_csrf_when_a_session_cookie_exists(
@@ -226,5 +246,5 @@ def test_invite_exchange_allows_unauthenticated_public_use(
 
     assert response.status_code == 200
     assert database_session.commit_count == 1
-    assert StubIdentityService.exchange_calls == [("invite-token", None)]
+    assert StubIdentityService.exchange_calls == [("invite-token", None, False)]
     assert response.cookies[SESSION_COOKIE_NAME] == "new-session-token"

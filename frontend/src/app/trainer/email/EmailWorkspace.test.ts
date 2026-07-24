@@ -1346,6 +1346,12 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(campaignCard).not.toBeNull();
     expect(within(campaignCard as HTMLElement).getByText("Destinatari (2/2, 1 netrimis)")).toBeTruthy();
     openCampaignControls(campaignCard as HTMLElement);
+    expect(within(campaignCard as HTMLElement).getByText("În lista de trimitere")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).getByText("Pregătiți de trimis")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).getByText("Afișați de filtre")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).getByText(
+      "Filtrele schimbă doar contactele afișate, nu lista de trimitere.",
+    )).toBeTruthy();
 
     const sentCheckbox = within(campaignCard as HTMLElement).getByLabelText(
       "Include ana.sent@example.com în Campanie cu marker",
@@ -1361,6 +1367,9 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(within(campaignCard as HTMLElement).getByText("Netrimis")).toBeTruthy();
 
     fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Trimite campania" }));
+    expect(await screen.findByText(
+      "Campania „Campanie cu marker” va fi trimisă către 1 destinatar netrimis din lista campaniei.",
+    )).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Trimite" }));
 
     await waitFor(() => {

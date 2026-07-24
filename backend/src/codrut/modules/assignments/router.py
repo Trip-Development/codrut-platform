@@ -215,6 +215,28 @@ async def list_team_memberships(
     )
 
 
+@router.delete(
+    "/companies/{company_id}/teams/{team_id}/memberships/{membership_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_team_membership(
+    company_id: UUID,
+    team_id: UUID,
+    membership_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await AssignmentService(session).remove_team_membership(
+        principal.user_id,
+        company_id,
+        team_id,
+        membership_id,
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/companies/{company_id}/assignments", response_model=list[AssignmentResponse])
 async def list_company_assignments(
     company_id: UUID,

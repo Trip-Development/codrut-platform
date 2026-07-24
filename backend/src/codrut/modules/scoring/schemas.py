@@ -64,6 +64,7 @@ class IcareAnswerReviewRowResponse(BaseModel):
     target_profile_id: UUID | None = None
     target_name: str | None = None
     target_type: str
+    response_kind: str
     section_id: str
     section_label: str
     measurement_id: str
@@ -80,6 +81,15 @@ class IcareAnswerReviewResponse(BaseModel):
     row_count: int
 
 
+class IcareTargetSummaryResponse(BaseModel):
+    target_profile_id: UUID
+    target_name: str
+    external_response_count: int
+    self_response_count: int
+    external_averages: list[ReportAverageResponse]
+    self_averages: list[ReportAverageResponse]
+
+
 class CompanyReportAggregateResponse(BaseModel):
     assessment_cycle_id: UUID | None = None
     total_assigned: int
@@ -93,6 +103,7 @@ class CompanyReportAggregateResponse(BaseModel):
     lencioni_averages: list[ReportAverageResponse]
     driver_averages: list[ReportAverageResponse]
     boss_360_averages: list[ReportAverageResponse]
+    icare_target_summaries: list[IcareTargetSummaryResponse]
     pcm_base_distribution: list[ReportDistributionResponse]
     pcm_phase_distribution: list[ReportDistributionResponse]
     team_lenses: list[ReportTeamLensResponse]

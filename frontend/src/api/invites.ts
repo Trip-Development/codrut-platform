@@ -81,6 +81,16 @@ type BackendErrorResponse = {
   };
 };
 
+export class InviteSessionConflictError extends Error {
+  readonly code = "invite_session_conflict";
+}
+
+export function isInviteSessionConflictError(
+  error: unknown,
+): error is InviteSessionConflictError {
+  return error instanceof InviteSessionConflictError;
+}
+
 export async function resolveInviteBundle(token: string): Promise<InviteBundle> {
   const demoFallbackEnabled = isDemoFallbackEnabled();
 
@@ -173,7 +183,10 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
   return resolveBackendInviteBundle(token);
 }
 
-export async function exchangeInviteSession(token: string): Promise<void> {
+export async function exchangeInviteSession(
+  token: string,
+  options: { replaceExistingSession?: boolean } = {},
+): Promise<void> {
   if (token === "demo-token" && isDemoFallbackEnabled()) return;
 
   const response = await apiFetch(`${getApiBaseUrl()}/auth/invite/exchange`, {
@@ -181,7 +194,10 @@ export async function exchangeInviteSession(token: string): Promise<void> {
     cache: "no-store",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({
+      token,
+      ...(options.replaceExistingSession ? { replace_existing_session: true } : {}),
+    }),
   });
 
   if (!response.ok) {
@@ -189,6 +205,9 @@ export async function exchangeInviteSession(token: string): Promise<void> {
     const message =
       payload?.error?.message ??
       "Nu am putut pregăti sesiunea invitației. Reîncearcă sau deschide linkul într-o fereastră privată.";
+    if (payload?.error?.code === "invite_session_conflict") {
+      throw new InviteSessionConflictError(message);
+    }
     throw new Error(message);
   }
 }

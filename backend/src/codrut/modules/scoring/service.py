@@ -38,6 +38,7 @@ from codrut.modules.scoring.schemas import (
     CycleQuestionnaireCompatibilityResponse,
     IcareAnswerReviewResponse,
     IcareAnswerReviewRowResponse,
+    IcareTargetSummaryResponse,
     ReportAverageResponse,
     ReportDistributionResponse,
     ReportHierarchyIssueResponse,
@@ -201,6 +202,10 @@ class ScoringService:
 
             results.append(ScoringResultResponse.model_validate(result))
         score_summary = _build_score_summary(assignment_results)
+        icare_target_summaries = _build_icare_target_summaries(
+            assignment_results,
+            participants,
+        )
         pcm_base_distribution = _distribution_from_completed_pcm_assignments(
             participants,
             assignments,
@@ -234,6 +239,7 @@ class ScoringService:
             lencioni_averages=score_summary.lencioni_averages,
             driver_averages=score_summary.driver_averages,
             boss_360_averages=score_summary.boss_360_averages,
+            icare_target_summaries=icare_target_summaries,
             pcm_base_distribution=pcm_base_distribution,
             pcm_phase_distribution=pcm_phase_distribution,
             team_lenses=team_lens_result.team_lenses,
@@ -693,6 +699,11 @@ def _icare_answer_review_rows(
                         target_profile_id=target_profile_id,
                         target_name=target_name,
                         target_type=target_type,
+                        response_kind=(
+                            "self_assessment"
+                            if _is_self_boss_assignment(assignment)
+                            else "external_feedback"
+                        ),
                         section_id=section_id,
                         section_label=section_label,
                         measurement_id=question_id,
@@ -944,6 +955,8 @@ def _build_score_summary(
             if _accumulate_scores(driver_dimensions, result, definition):
                 driver_count += 1
         elif assignment.questionnaire_key in BOSS_360_REPORT_KEYS:
+            if _is_self_boss_assignment(assignment):
+                continue
             if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
 
@@ -957,17 +970,102 @@ def _build_score_summary(
     )
 
 
+def _is_self_boss_assignment(assignment: QuestionnaireAssignment) -> bool:
+    if assignment.questionnaire_key not in BOSS_360_REPORT_KEYS:
+        return False
+    target_type = _enum_value(assignment.target_type)
+    if target_type == "self":
+        return True
+    return (
+        target_type == "person"
+        and assignment.target_person_id is not None
+        and assignment.target_person_id == assignment.respondent_profile_id
+    )
+
+
+def _icare_target_id(assignment: QuestionnaireAssignment) -> UUID | None:
+    target_type = _enum_value(assignment.target_type)
+    if target_type == "self":
+        return assignment.respondent_profile_id
+    if target_type == "person":
+        return assignment.target_person_id
+    return None
+
+
+def _build_icare_target_summaries(
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+    participants: list[ReportParticipant],
+) -> list[IcareTargetSummaryResponse]:
+    participant_names = {participant.id: participant.full_name for participant in participants}
+    grouped: dict[
+        UUID,
+        tuple[
+            dict[str, ReportDimensionAccumulator],
+            dict[str, ReportDimensionAccumulator],
+            int,
+            int,
+        ],
+    ] = {}
+
+    for assignment, result, definition in assignment_results:
+        if (
+            assignment.questionnaire_key not in BOSS_360_REPORT_KEYS
+            or assignment.status not in COMPLETED_STATUSES
+            or result is None
+        ):
+            continue
+        target_id = _icare_target_id(assignment)
+        if target_id is None:
+            continue
+        external_dimensions, self_dimensions, external_count, self_count = grouped.setdefault(
+            target_id,
+            ({}, {}, 0, 0),
+        )
+        if _is_self_boss_assignment(assignment):
+            if _accumulate_scores(self_dimensions, result, definition):
+                self_count += 1
+        elif _accumulate_scores(external_dimensions, result, definition):
+            external_count += 1
+        grouped[target_id] = (
+            external_dimensions,
+            self_dimensions,
+            external_count,
+            self_count,
+        )
+
+    return [
+        IcareTargetSummaryResponse(
+            target_profile_id=target_id,
+            target_name=participant_names.get(target_id, "Participant"),
+            external_response_count=external_count,
+            self_response_count=self_count,
+            external_averages=_averages_from_accumulators(external_dimensions),
+            self_averages=_averages_from_accumulators(self_dimensions),
+        )
+        for target_id, (
+            external_dimensions,
+            self_dimensions,
+            external_count,
+            self_count,
+        ) in sorted(
+            grouped.items(),
+            key=lambda item: participant_names.get(item[0], "").casefold(),
+        )
+    ]
+
+
 def _without_incompatible_overlay_dimensions(
     report: CompanyReportAggregateResponse,
     incompatible_questionnaire_keys: set[str],
 ) -> CompanyReportAggregateResponse:
-    updates: dict[str, list[ReportAverageResponse] | list[ReportDistributionResponse]] = {}
+    updates: dict[str, object] = {}
     if incompatible_questionnaire_keys & LENCIONI_REPORT_KEYS:
         updates["lencioni_averages"] = []
     if incompatible_questionnaire_keys & DISTRESS_DRIVER_REPORT_KEYS:
         updates["driver_averages"] = []
     if incompatible_questionnaire_keys & BOSS_360_REPORT_KEYS:
         updates["boss_360_averages"] = []
+        updates["icare_target_summaries"] = []
     if QuestionnaireKey.pcm_base.value in incompatible_questionnaire_keys:
         updates["pcm_base_distribution"] = []
     if {QuestionnaireKey.phase.value, "pcm_phase"} & incompatible_questionnaire_keys:

@@ -70,6 +70,9 @@ describe("CompaniesWorkspace", () => {
     expect(screen.getByRole("link", { name: /Michelin/i }).getAttribute("href")).toBe(
       "/trainer/companies/backend-company",
     );
+    expect(screen.getByRole("link", { name: "Setări" }).getAttribute("href")).toBe(
+      "/trainer/companies/backend-company/settings",
+    );
   });
 
   it("matches company search without requiring Romanian diacritics", async () => {

@@ -245,6 +245,22 @@ class AssignmentRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_team_membership_by_id(
+        self,
+        team_id: UUID,
+        membership_id: UUID,
+    ) -> TeamMembership | None:
+        result = await self.session.execute(
+            select(TeamMembership)
+            .where(TeamMembership.team_id == team_id)
+            .where(TeamMembership.id == membership_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_team_membership(self, membership: TeamMembership) -> None:
+        await self.session.delete(membership)
+        await self.session.flush()
+
     async def list_team_memberships(self, team_id: UUID) -> list[TeamMembership]:
         result = await self.session.execute(
             select(TeamMembership)

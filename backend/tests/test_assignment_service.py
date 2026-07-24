@@ -264,6 +264,23 @@ class FakeAssignmentRepository:
                 return membership
         return None
 
+    async def get_team_membership_by_id(
+        self,
+        team_id: uuid.UUID,
+        membership_id: uuid.UUID,
+    ) -> TeamMembership | None:
+        return next(
+            (
+                membership
+                for membership in self.memberships
+                if membership.team_id == team_id and membership.id == membership_id
+            ),
+            None,
+        )
+
+    async def delete_team_membership(self, membership: TeamMembership) -> None:
+        self.memberships.remove(membership)
+
     async def list_team_memberships(self, team_id: uuid.UUID) -> list[TeamMembership]:
         return [membership for membership in self.memberships if membership.team_id == team_id]
 
@@ -626,6 +643,13 @@ async def test_team_membership_requires_participant_in_company_and_rejects_dupli
                 role=TeamMembershipRole.member,
             ),
         )
+
+    await service.remove_team_membership(user_id, company_id, team_id, membership.id)
+    assert await service.list_team_memberships(user_id, company_id, team_id) == []
+
+    with pytest.raises(DomainError) as missing_membership:
+        await service.remove_team_membership(user_id, company_id, team_id, membership.id)
+    assert missing_membership.value.code == "team_membership_not_found"
 
 
 async def test_create_assignment_requires_respondent_and_person_target_in_company() -> None:

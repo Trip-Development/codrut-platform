@@ -220,6 +220,13 @@ describe("QuestionnaireRunner", () => {
 
     render(<QuestionnaireRunner definition={distressDefinition} assignmentId="drivers-assignment" />);
 
+    expect(screen.getByText("Driveri de distres")).toBeTruthy();
+    expect(screen.getByRole("heading", {
+      name: "Răspunde sincer și fără să te gândești prea mult.",
+    })).toBeTruthy();
+    expect(screen.getByText(
+      "Nu există răspuns greșit sau corect. Citește, te rog, instrucțiunile de completare de mai jos.",
+    )).toBeTruthy();
     const group = screen.getByRole("radiogroup", { name: "Lucrez sub presiunea timpului" });
     expect(within(group).getAllByRole("radio")).toHaveLength(3);
     expect(screen.getByText("Ritmul de lucru")).toBeTruthy();
@@ -406,6 +413,45 @@ describe("QuestionnaireRunner", () => {
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("ten-point-assignment", {
       q1: 7,
     });
+  });
+
+  it("renders 1-10 distress statement scales without a horizontally scrolling choice row", () => {
+    const distressDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "distress_drivers",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [
+          {
+            id: "drivers",
+            title: "Driveri",
+            questions: [
+              {
+                id: "driver_set",
+                code: "D1",
+                type: "statement_score_set",
+                label: "Ritmul de lucru",
+                required: true,
+                scale: Array.from({ length: 10 }, (_, index) => ({
+                  value: index + 1,
+                  label: String(index + 1),
+                })),
+                statements: [
+                  { id: "driver_a", code: "D1-A", label: "Lucrez sub presiunea timpului" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    render(<QuestionnaireRunner definition={distressDefinition} assignmentId="drivers-assignment" />);
+
+    const slider = screen.getByRole("slider", { name: "Lucrez sub presiunea timpului" });
+    expect(slider.getAttribute("aria-valuemin")).toBe("1");
+    expect(slider.getAttribute("aria-valuemax")).toBe("10");
+    expect(screen.queryByRole("radiogroup", { name: "Lucrez sub presiunea timpului" })).toBeNull();
   });
 
   it("debounces auto-save and only sends the latest changed answer", async () => {
