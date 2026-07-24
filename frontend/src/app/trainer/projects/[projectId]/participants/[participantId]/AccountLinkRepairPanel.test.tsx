@@ -77,4 +77,87 @@ describe("AccountLinkRepairPanel", () => {
     });
     expect(await screen.findByText("Legătura contului a fost actualizată și înregistrată în audit.")).toBeTruthy();
   });
+
+  it("renders a safe unavailable state when account status cannot be loaded", () => {
+    render(
+      <AccountLinkRepairPanel
+        companyId="company-1"
+        participantId="participant-1"
+        initialStatus={null}
+      />,
+    );
+
+    expect(
+      screen.getByText("Starea contului nu este disponibilă pentru acest participant."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Administrare legătură cont")).toBeNull();
+  });
+
+  it("unlinks the current account after explicit confirmation", async () => {
+    vi.mocked(repairParticipantAccountLink).mockResolvedValue({
+      ...initialStatus,
+      linked_account: null,
+      matching_email_account: null,
+      matching_account_is_linked: false,
+    });
+    render(
+      <AccountLinkRepairPanel
+        companyId="company-1"
+        participantId="participant-1"
+        initialStatus={initialStatus}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Administrare legătură cont"));
+    fireEvent.click(screen.getByRole("button", { name: "Deconectează contul" }));
+    fireEvent.change(screen.getByLabelText("Scrie exact emailul participantului pentru confirmare"), {
+      target: { value: "PERSON@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Motivul intervenției"), {
+      target: { value: "Legătura greșită a fost verificată." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmă repararea" }));
+
+    await waitFor(() => {
+      expect(repairParticipantAccountLink).toHaveBeenCalledWith(
+        "company-1",
+        "participant-1",
+        {
+          action: "unlink",
+          confirmationEmail: "PERSON@example.com",
+          reason: "Legătura greșită a fost verificată.",
+        },
+      );
+    });
+    expect(
+      await screen.findByText("Nu există încă un cont platformă cu emailul person@example.com."),
+    ).toBeTruthy();
+  });
+
+  it("keeps the repair form open and shows a backend failure", async () => {
+    vi.mocked(repairParticipantAccountLink).mockRejectedValue(
+      new Error("Conflictul nu mai este actual."),
+    );
+    render(
+      <AccountLinkRepairPanel
+        companyId="company-1"
+        participantId="participant-1"
+        initialStatus={initialStatus}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Administrare legătură cont"));
+    fireEvent.click(screen.getByRole("button", { name: "Leagă contul cu același email" }));
+    fireEvent.change(screen.getByLabelText("Scrie exact emailul participantului pentru confirmare"), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Motivul intervenției"), {
+      target: { value: "Conflict verificat înainte de intervenție." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmă repararea" }));
+
+    expect(await screen.findByText("Repararea a eșuat")).toBeTruthy();
+    expect(screen.getByText("Conflictul nu mai este actual.")).toBeTruthy();
+    expect(screen.getByLabelText("Motivul intervenției")).toBeTruthy();
+  });
 });
