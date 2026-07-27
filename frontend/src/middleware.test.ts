@@ -34,6 +34,15 @@ describe("middleware", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3000/trainer/login");
   });
 
+  it("preserves a protected trainer destination across authentication", () => {
+    const response = middleware(requestFor("/trainer/projects/project-1?tab=results"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/trainer/login?returnTo=%2Ftrainer%2Fprojects%2Fproject-1%3Ftab%3Dresults",
+    );
+  });
+
   it("redirects protected trainer routes without a session when demo fallback is explicitly disabled", () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";

@@ -227,16 +227,20 @@ describe("InvitePage", () => {
     expect(screen.getByRole("link", { name: /Deschide/i }).getAttribute("href")).not.toContain("bianca.pavel");
   });
 
-  it("renders structured and unexpected invite lookup failures safely", async () => {
+  it("uses recovery copy instead of exposing unexpected invite lookup failures", async () => {
     vi.mocked(resolveInviteBundle).mockRejectedValueOnce(new Error("Invitația a expirat."));
     await renderInvitePage("expired-token");
     expect(await screen.findByRole("heading", { name: "Invitație nevalidă" })).toBeTruthy();
-    expect(screen.getByText("Invitația a expirat.")).toBeTruthy();
+    expect(
+      screen.getByText("Nu am putut verifica invitația. Reîncearcă sau cere un link nou de la trainer."),
+    ).toBeTruthy();
 
     cleanup();
     vi.mocked(resolveInviteBundle).mockRejectedValueOnce({ reason: "unknown" });
     await renderInvitePage("unknown-token");
-    expect(await screen.findByText("A apărut o eroare la verificarea invitației.")).toBeTruthy();
+    expect(
+      await screen.findByText("Nu am putut verifica invitația. Reîncearcă sau cere un link nou de la trainer."),
+    ).toBeTruthy();
   });
 
   it("shows a recovery action for an invalid invite with empty backend copy", async () => {
