@@ -405,9 +405,9 @@ describe("QuestionnaireRunner", () => {
     fireEvent.keyDown(slider, { key: "ArrowRight" });
 
     expect(screen.getByText("100% completat")).toBeTruthy();
-    expect(screen.getByText("Scor selectat: 7")).toBeTruthy();
+    expect(screen.getByText("Scor selectat: 7/10")).toBeTruthy();
     expect(slider.getAttribute("aria-valuenow")).toBe("7");
-    expect(slider.getAttribute("aria-valuetext")).toBe("7: 7");
+    expect(slider.getAttribute("aria-valuetext")).toBe("7 din 10");
 
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("ten-point-assignment", {
@@ -452,6 +452,48 @@ describe("QuestionnaireRunner", () => {
     expect(slider.getAttribute("aria-valuemin")).toBe("1");
     expect(slider.getAttribute("aria-valuemax")).toBe("10");
     expect(screen.queryByRole("radiogroup", { name: "Lucrez sub presiunea timpului" })).toBeNull();
+  });
+
+  it("shows 1-10 slider ticks while preserving a stored 0-9 distress scale", async () => {
+    vi.useFakeTimers();
+    const distressDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "distress_drivers",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          id: "drivers",
+          title: "Driveri",
+          questions: [{
+            id: "driver_set",
+            code: "D1",
+            type: "statement_score_set",
+            label: "Ritmul de lucru",
+            required: true,
+            scale: Array.from({ length: 10 }, (_, index) => ({
+              value: index,
+              label: String(index),
+            })),
+            statements: [
+              { id: "driver_a", code: "D1-A", label: "Lucrez sub presiunea timpului" },
+            ],
+          }],
+        }],
+      },
+    };
+
+    render(<QuestionnaireRunner definition={distressDefinition} assignmentId="drivers-assignment" />);
+
+    const slider = screen.getByRole("slider", { name: "Lucrez sub presiunea timpului" });
+    slider.focus();
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(slider.getAttribute("aria-valuenow")).toBe("6");
+    expect(screen.getByText("Scor selectat: 6/10")).toBeTruthy();
+
+    await vi.advanceTimersByTimeAsync(450);
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith("drivers-assignment", {
+      "driver_set:driver_a": 5,
+    });
   });
 
   it("debounces auto-save and only sends the latest changed answer", async () => {
@@ -580,7 +622,7 @@ describe("QuestionnaireRunner", () => {
     });
   });
 
-  it("submits completed answers and exits to the return destination", async () => {
+  it("submits completed answers and shows the completion view", async () => {
     render(
       <QuestionnaireRunner
         definition={mockDefinition}
@@ -596,9 +638,10 @@ describe("QuestionnaireRunner", () => {
 
     await waitFor(() => {
       expect(submitQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 2 });
-      expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
       expect(routerRefresh).toHaveBeenCalled();
+      expect(screen.getByText("Răspunsurile au fost trimise")).toBeTruthy();
     });
+    expect(routerPush).not.toHaveBeenCalled();
   });
 
   it("shows final-submit progress on the submit control and locks answers while pending", async () => {
@@ -634,8 +677,29 @@ describe("QuestionnaireRunner", () => {
     });
 
     await waitFor(() => {
-      expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
+      expect(screen.getByText("Răspunsurile au fost trimise")).toBeTruthy();
     });
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it("offers the next 360 review before returning to the task list", () => {
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        initialStatus="submitted"
+        returnHref="/participant/questionnaires"
+        nextTaskHref="/participant/questionnaires/boss_360?assignmentId=next-review"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: /Continuă cu următorul review/ }).getAttribute("href"),
+    ).toBe("/participant/questionnaires/boss_360?assignmentId=next-review");
+    expect(
+      screen.getByRole("link", { name: "Înapoi la chestionare" }).getAttribute("href"),
+    ).toBe("/participant/questionnaires");
   });
 
   it("shows a stale-session message when another tab changes the active account", async () => {

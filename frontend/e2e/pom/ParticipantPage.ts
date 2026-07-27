@@ -66,6 +66,8 @@ export class ParticipantPage {
       `Questionnaire submission failed with ${submitResponse.status()}: ${await submitResponse.text()}`,
     ).toBe(true);
 
-    await expect(this.page.getByRole("heading", { name: "Chestionarele tale" })).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Răspunsurile au fost trimise" }),
+    ).toBeVisible();
   }
 }

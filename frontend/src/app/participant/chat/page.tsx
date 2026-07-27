@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
 
+import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
@@ -21,9 +22,12 @@ export default async function ParticipantChatPage({
 }) {
   const routeParams = await searchParams;
   const requestOptions = await getServerApiRequestOptions();
-  const summary = await getParticipantWorkspaceSummary(
-    participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
-  );
+  const [participant, summary] = await Promise.all([
+    getParticipantSession(),
+    getParticipantWorkspaceSummary(
+      participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
+    ),
+  ]);
   const scopeParams = participantScopeParams(summary);
   const identity = summary.participantFullName.trim() || summary.anonymousName?.trim() || "Participant";
   const openTasks = summary.tasks.filter((task) => task.status !== "completed").length;
@@ -37,6 +41,7 @@ export default async function ParticipantChatPage({
       navItems={participantScopedNavItems(scopeParams)}
       activeHref={participantActiveHref("/participant/chat", scopeParams)}
       userLabel={identity.split(/\s+/)[0]}
+      session={participant}
     >
       <ParticipantContextSelector
         contexts={summary.contexts}

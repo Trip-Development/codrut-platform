@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeftIcon, CheckIcon, Loader2Icon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from "lucide-react";
 
 import {
   isQuestionnaireSessionError,
@@ -37,6 +37,8 @@ export type QuestionnaireRunnerProps = {
   returnLabel?: string;
   targetLabel?: string;
   secureInviteToken?: string;
+  nextTaskHref?: string;
+  nextTaskLabel?: string;
 };
 
 function answerKey(question: QuestionnaireQuestion, statementId?: string): string {
@@ -57,7 +59,9 @@ function isTenPointScale(scale: QuestionnaireScaleOption[]): boolean {
   if (scale.length !== 10) return false;
   const values = scale.map(numericScaleOptionValue);
   if (values.some((value) => value === null)) return false;
-  return values.every((value, index) => value === index + 1);
+  const firstValue = values[0];
+  if (firstValue !== 0 && firstValue !== 1) return false;
+  return values.every((value, index) => value === firstValue + index);
 }
 
 type DiscreteScaleSliderProps = {
@@ -70,14 +74,16 @@ type DiscreteScaleSliderProps = {
 
 function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }: DiscreteScaleSliderProps) {
   const selectedDescriptionId = useId();
-  const selectedOption = scale.find((option) => option.value === selectedValue);
-  const hasSelectedOption = selectedOption !== undefined;
-  const selectedNumber = typeof selectedValue === "number" ? selectedValue : Number(selectedValue);
-  const sliderValue = hasSelectedOption && Number.isInteger(selectedNumber) && selectedNumber >= 1 && selectedNumber <= 10
-    ? selectedNumber
-    : 5;
+  const selectedIndex = scale.findIndex((option) => option.value === selectedValue);
+  const selectedOption = selectedIndex >= 0 ? scale[selectedIndex] : undefined;
+  const hasSelectedOption = selectedIndex >= 0;
+  const sliderValue = hasSelectedOption ? selectedIndex + 1 : 5;
+  const selectedSemanticLabel =
+    selectedOption && !/^\d+$/.test(selectedOption.label.trim())
+      ? selectedOption.label
+      : null;
   const valueText = selectedOption
-    ? `${sliderValue}: ${selectedOption.label}${selectedOption.description ? `. ${selectedOption.description}` : ""}`
+    ? `${sliderValue} din 10${selectedSemanticLabel ? `: ${selectedSemanticLabel}` : ""}${selectedOption.description ? `. ${selectedOption.description}` : ""}`
     : "Neselectat. Alege un scor de la 1 la 10.";
 
   return (
@@ -93,9 +99,9 @@ function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }
         value={[sliderValue]}
         disabled={disabled}
         onValueChange={(value) => {
-          const numericValue = value[0] ?? sliderValue;
-          const option = scale.find((scaleOption) => numericScaleOptionValue(scaleOption) === numericValue);
-          onChange(option?.value ?? numericValue);
+          const ordinalValue = value[0] ?? sliderValue;
+          const option = scale[ordinalValue - 1];
+          if (option) onChange(option.value);
         }}
         thumbLabel={label}
         thumbDescriptionId={selectedDescriptionId}
@@ -103,14 +109,17 @@ function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }
         className="py-2"
       />
       <div className="mt-2 grid grid-cols-10 text-center text-[11px] font-bold text-muted-foreground">
-        {scale.map((option) => (
-          <span key={String(option.value)}>{numericScaleOptionValue(option)}</span>
+        {scale.map((option, index) => (
+          <span key={String(option.value)}>{index + 1}</span>
         ))}
       </div>
       <div id={selectedDescriptionId} className="mt-3 min-h-10 rounded-lg border border-border bg-muted px-3 py-2 text-sm">
         {selectedOption ? (
           <>
-            <p className="font-bold text-foreground">Scor selectat: {selectedOption.label}</p>
+            <p className="font-bold text-foreground">
+              Scor selectat: {sliderValue}/10
+              {selectedSemanticLabel ? ` · ${selectedSemanticLabel}` : ""}
+            </p>
             {selectedOption.description ? (
               <p className="mt-1 text-xs font-medium leading-5 text-muted-foreground">{selectedOption.description}</p>
             ) : null}
@@ -132,6 +141,8 @@ export function QuestionnaireRunner({
   returnLabel = "Înapoi la chestionare",
   targetLabel,
   secureInviteToken,
+  nextTaskHref,
+  nextTaskLabel = "Continuă cu următorul review",
 }: QuestionnaireRunnerProps) {
   const router = useRouter();
   const [answers, setAnswers] = useState<AnswerState>(initialAnswers ?? {});
@@ -356,7 +367,6 @@ export function QuestionnaireRunner({
       setSaveState("submitted");
       setActiveOperation(null);
       setSaveError(null);
-      router.push(returnHref);
       router.refresh();
     } catch (error) {
       finalSubmittingRef.current = false;
@@ -468,6 +478,8 @@ export function QuestionnaireRunner({
             total={requiredAnswerKeys.length}
             returnHref={returnHref}
             returnLabel={returnLabel}
+            nextTaskHref={nextTaskHref}
+            nextTaskLabel={nextTaskLabel}
           />
         ) : (
           definition.schema.sections.map((section) => (
@@ -690,11 +702,15 @@ function CompletionPanel({
   total,
   returnHref,
   returnLabel,
+  nextTaskHref,
+  nextTaskLabel,
 }: {
   answeredCount: number;
   total: number;
   returnHref: string;
   returnLabel: string;
+  nextTaskHref?: string;
+  nextTaskLabel: string;
 }) {
   return (
     <section className="px-5 py-10 text-center md:px-6">
@@ -707,9 +723,23 @@ function CompletionPanel({
         individuale; trainerul lucrează cu raportarea configurată pentru proiect.
       </p>
       <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <Button asChild size="lg">
-          <Link href={returnHref}>{returnLabel}</Link>
-        </Button>
+        {nextTaskHref ? (
+          <>
+            <Button asChild size="lg">
+              <Link href={nextTaskHref}>
+                {nextTaskLabel}
+                <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link href={returnHref}>{returnLabel}</Link>
+            </Button>
+          </>
+        ) : (
+          <Button asChild size="lg">
+            <Link href={returnHref}>{returnLabel}</Link>
+          </Button>
+        )}
       </div>
     </section>
   );

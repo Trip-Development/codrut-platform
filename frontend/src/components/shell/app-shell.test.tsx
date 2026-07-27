@@ -117,6 +117,103 @@ describe("AppShell", () => {
     expect(screen.getAllByRole("combobox", { name: "Temă" })[0]?.className).toContain("w-full");
   });
 
+  it("keeps the generated avatar stable when page copy changes and varies it by account id", () => {
+    const session = {
+      state: "authenticated" as const,
+      user: {
+        id: "participant-1",
+        name: "Andrei",
+        role: "participant" as const,
+      },
+    };
+    const view = render(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        userLabel="Andrei"
+        session={session}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+    const initialAvatarStyle = document.querySelector("[data-profile-avatar]")?.getAttribute("style");
+
+    view.rerender(
+      <AppShell
+        audience="participant"
+        title="Chestionare"
+        activeHref="/participant"
+        userLabel="Participant"
+        session={session}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+    expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).toBe(initialAvatarStyle);
+
+    view.rerender(
+      <AppShell
+        audience="participant"
+        title="Chestionare"
+        activeHref="/participant"
+        userLabel="Participant"
+        session={{
+          ...session,
+          user: { ...session.user, id: "participant-2" },
+        }}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+    expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).not.toBe(initialAvatarStyle);
+  });
+
+  it("uses the session identity and renders neutral placeholders while it is pending", () => {
+    const view = render(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Andrei din sesiune",
+            role: "participant",
+          },
+        }}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("button", { name: "Andrei din sesiune" })).toBeTruthy();
+
+    view.rerender(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        accountIdentityPending
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Se încarcă identitatea contului" }));
+    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Deschide meniul de navigare" }));
+    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(3);
+    expect(document.querySelector("[data-profile-avatar]")).toBeNull();
+  });
+
   it("locks logout while the request is pending without adding explanatory copy", async () => {
     const logoutRequest = createDeferred<Awaited<ReturnType<typeof apiFetchType>>>();
     vi.mocked(apiFetch).mockReturnValue(logoutRequest.promise);

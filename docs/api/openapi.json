@@ -4020,6 +4020,11 @@
       },
       "InviteVerifyResponse": {
         "properties": {
+          "account_dashboard_available": {
+            "default": false,
+            "title": "Account Dashboard Available",
+            "type": "boolean"
+          },
           "already_registered": {
             "title": "Already Registered",
             "type": "boolean"
@@ -6568,6 +6573,15 @@
       },
       "SessionPrincipal": {
         "properties": {
+          "access_mode": {
+            "default": "account",
+            "enum": [
+              "account",
+              "secure_link"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
           "email": {
             "format": "email",
             "title": "Email",

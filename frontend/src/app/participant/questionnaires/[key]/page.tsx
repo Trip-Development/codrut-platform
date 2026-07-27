@@ -9,11 +9,17 @@ import {
   type QuestionnaireDefinition,
   type QuestionnaireResponseRecord,
 } from "@/api/questionnaires";
+import { inviteTaskHref } from "@/api/invites";
+import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { EmptyState } from "@/components/presentation/empty-state";
 import { LazyQuestionnaireRunner } from "@/components/questionnaires/lazy-questionnaire-runner";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { safeReturnHref } from "./return-href";
+import {
+  nextPendingReviewTask,
+  safeReviewTargetLabel,
+} from "../../task-display";
 
 type ParticipantQuestionnaireRunPageProps = {
   params: Promise<{ key: string }>;
@@ -34,13 +40,33 @@ export default async function ParticipantQuestionnaireRunPage({
   });
   let responseRecord: QuestionnaireResponseRecord | null = null;
   let definition: QuestionnaireDefinition | null = null;
+  let nextTaskHref: string | undefined;
   let loadError: unknown = null;
   if (assignmentId) {
     try {
-      [responseRecord, definition] = await Promise.all([
+      const [loadedResponse, loadedDefinition, workspace] = await Promise.all([
         getQuestionnaireResponse(assignmentId, requestOptions),
         getAssignedQuestionnaireDefinition(assignmentId, requestOptions),
+        access === "secure"
+          ? Promise.resolve(null)
+          : getParticipantWorkspaceSummary(
+              workspaceOptionsFromReturnTo(requestOptions.headers, returnTo),
+            ),
       ]);
+      responseRecord = loadedResponse;
+      definition = loadedDefinition;
+      const nextTask = workspace
+        ? nextPendingReviewTask(workspace.tasks, assignmentId)
+        : undefined;
+      nextTaskHref = nextTask
+        ? inviteTaskHref(
+            {
+              ...nextTask,
+              targetLabel: safeReviewTargetLabel(nextTask.targetLabel),
+            },
+            { returnTo: safeReturnTo },
+          )
+        : undefined;
     } catch (error) {
       loadError = error;
     }
@@ -91,6 +117,7 @@ export default async function ParticipantQuestionnaireRunPage({
           returnHref={safeReturnTo}
           returnLabel="Înapoi la chestionare"
           targetLabel={target}
+          nextTaskHref={nextTaskHref}
         />
       ) : (
         <EmptyState
@@ -104,6 +131,20 @@ export default async function ParticipantQuestionnaireRunPage({
       )}
     </QuestionnaireFocusShell>
   );
+}
+
+function workspaceOptionsFromReturnTo(
+  headers: HeadersInit | undefined,
+  returnTo: string | undefined,
+) {
+  const query = new URL(returnTo ?? "/participant/questionnaires", "http://codrut.local")
+    .searchParams;
+  return {
+    headers,
+    participantProfileId: query.get("profile"),
+    projectId: query.get("project"),
+    cycleId: query.get("cycle"),
+  };
 }
 
 function QuestionnaireLoadFailure({

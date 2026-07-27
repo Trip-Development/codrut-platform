@@ -23,6 +23,7 @@ type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
   terms_version?: string | null;
 };
@@ -82,6 +83,7 @@ const getSessionFromApi = cache(async function getSessionFromApi(
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
       termsVersion: user.terms_version,
     },

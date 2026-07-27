@@ -100,7 +100,8 @@ class IdentityService:
                 code="terms_version_outdated",
             )
 
-        # Lock the invitation so account, scoped session, and consent are one transaction.
+        # Lock the invitation so account activation, account session, and consent
+        # are one transaction.
         verify_result, invite = await self._verify_invite_token(
             payload.token,
             lock_invite=True,
@@ -149,8 +150,8 @@ class IdentityService:
             raise DomainError("Task link is no longer active.", code="task_link_revoked")
         token = await self._create_session(
             user,
-            expires_at=verify_result.expires_at,
-            assignment_invite_id=invite.id,
+            expires_at=None,
+            assignment_invite_id=None,
         )
         active_session = await self.repository.get_session_by_token(token)
         if active_session is None:
@@ -380,6 +381,9 @@ class IdentityService:
         already_registered = bool(
             user is not None and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
         )
+        account_dashboard_available = bool(
+            already_registered and user is not None and user.role == UserRole.participant
+        )
 
         return (
             InviteVerifyResponse(
@@ -388,6 +392,7 @@ class IdentityService:
                 anonymous_name=profile.anonymous_name,
                 is_leadership=is_leadership,
                 already_registered=already_registered,
+                account_dashboard_available=account_dashboard_available,
                 project_id=project_id,
                 project_name=project_name,
                 expires_at=effective_expires_at,
@@ -567,15 +572,21 @@ class IdentityService:
         # proof for the newly linked profile, including leadership accounts.
         if user is not None:
             current_invite_id = invite.id if invite is not None else None
+            permanent_participant = (
+                user.role == UserRole.participant
+                and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
+            )
+            session_invite_id = None if permanent_participant else current_invite_id
             session_switch_required = existing_session is not None and (
                 existing_session.user_id != user.id
                 or (
-                    existing_session.assignment_invite_id is not None
-                    and existing_session.assignment_invite_id != current_invite_id
+                    not permanent_participant
+                    and existing_session.assignment_invite_id is not None
+                    and existing_session.assignment_invite_id != session_invite_id
                 )
                 or (
                     user.role == UserRole.trainer
-                    and existing_session.assignment_invite_id != current_invite_id
+                    and existing_session.assignment_invite_id != session_invite_id
                 )
             )
             if session_switch_required and not replace_existing_session:
@@ -591,14 +602,14 @@ class IdentityService:
                         user.role == UserRole.participant
                         and existing_session.assignment_invite_id is None
                     )
-                    or existing_session.assignment_invite_id == current_invite_id
+                    or existing_session.assignment_invite_id == session_invite_id
                 )
             )
             if not can_preserve_existing_session:
                 session_token = await self._create_session(
                     user,
-                    expires_at=verify_result.expires_at,
-                    assignment_invite_id=current_invite_id,
+                    expires_at=None if permanent_participant else verify_result.expires_at,
+                    assignment_invite_id=session_invite_id,
                 )
                 if existing_session_token and replace_existing_session:
                     await self.repository.delete_session_by_token(existing_session_token)
@@ -938,6 +949,9 @@ class IdentityService:
             assignment_invite_id=active_session.assignment_invite_id,
             assignment_ids=assignment_ids,
             project_id=project_id,
+            access_mode=(
+                "secure_link" if active_session.assignment_invite_id is not None else "account"
+            ),
         )
 
     async def principal_for_local_user(

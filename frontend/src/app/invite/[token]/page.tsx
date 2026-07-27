@@ -7,13 +7,16 @@ import {
 
 import {
   inviteStatusLabel,
-  inviteTaskHref,
   inviteTaskProgress,
   participantTaskTypeLabel,
   resolveInviteBundle,
   type InviteBundle,
   type InviteTask,
 } from "@/api/invites";
+import {
+  groupParticipantTasks,
+  participantTaskGroupHref,
+} from "@/app/participant/task-display";
 import { CURRENT_TERMS_VERSION } from "@/api/terms";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
@@ -208,18 +211,21 @@ function InviteTaskQueue({
     );
   }
 
+  const groups = groupParticipantTasks(tasks);
+
   return (
     <section className="divide-y divide-border" aria-label="Chestionare disponibile">
-      {tasks.map((task) => {
-        const isComplete = task.status === "completed";
-        const targetLabel = safeInviteTarget(task);
-        const href = inviteTaskHref(
-          { ...task, targetLabel },
-          { returnTo, inviteToken },
-        );
+      {groups.map((group) => {
+        const isComplete = group.status === "completed";
+        const task = group.actionTask ?? group.tasks[0];
+        const href = participantTaskGroupHref(group, { returnTo, inviteToken });
+        const targetLabel =
+          group.kind === "review360"
+            ? group.targetSummary
+            : safeInviteTarget(task);
 
         return (
-          <article key={task.id} className="grid gap-4 py-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <article key={group.id} className="grid gap-4 py-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <div className="flex min-w-0 items-start gap-3">
               <span
                 aria-hidden="true"
@@ -227,14 +233,19 @@ function InviteTaskQueue({
               />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h2 className="text-base font-semibold text-foreground">{task.title}</h2>
+                  <h2 className="text-base font-semibold text-foreground">{group.title}</h2>
                   <span className={isComplete ? "text-xs font-semibold text-success" : "text-xs font-semibold text-burgundy"}>
-                    {inviteStatusLabel(task.status)}
+                    {inviteStatusLabel(group.status)}
                   </span>
                 </div>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                  {targetLabel || participantTaskTypeLabel(task.questionnaireKey)} · {task.estimatedMinutes} min
+                  {targetLabel || participantTaskTypeLabel(task.questionnaireKey)} · {group.estimatedMinutes} min
                 </p>
+                {group.kind === "review360" ? (
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                    {group.completedCount}/{group.totalCount} review-uri finalizate
+                  </p>
+                ) : null}
               </div>
             </div>
             {isComplete ? (
@@ -242,12 +253,12 @@ function InviteTaskQueue({
                 <CheckIcon aria-hidden="true" className="size-4" strokeWidth={2.2} />
                 Finalizat
               </span>
-            ) : (
+            ) : href ? (
               <Link href={href} className={serverLinkButtonClassName({ variant: "outline", className: "w-fit" })}>
-                Deschide
+                {group.kind === "review360" && group.status === "in_progress" ? "Continuă" : "Deschide"}
                 <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
               </Link>
-            )}
+            ) : null}
           </article>
         );
       })}

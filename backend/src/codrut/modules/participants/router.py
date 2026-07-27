@@ -25,6 +25,13 @@ async def get_my_workspace(
         from codrut.core.errors import DomainError
 
         raise DomainError("Participant account required.", code="participant_required")
+    if principal.access_mode == "secure_link":
+        from codrut.core.errors import DomainError
+
+        raise DomainError(
+            "Secure invitation sessions cannot open the participant dashboard.",
+            code="secure_invite_dashboard_forbidden",
+        )
     require_current_terms(principal)
     return await ParticipantWorkspaceService(session).get_workspace_summary(
         principal.user_id,
