@@ -11,6 +11,7 @@ from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import AssessmentCycle, AssessmentCycleStatus
+from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import (
     Company,
     CompanyMembership,
@@ -198,6 +199,7 @@ async def seed_pilot_ui_e2e_state() -> None:
                 pcm_profile=None,
                 pcm_base=None,
                 pcm_phase=None,
+                anonymous_name=new_anonymous_name(),
             )
             session.add(profile)
             await session.flush()

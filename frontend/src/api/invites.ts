@@ -81,6 +81,22 @@ type BackendErrorResponse = {
   };
 };
 
+const inviteFailureMessages: Record<string, string> = {
+  task_link_expired: "Linkul a expirat. Cere un link nou de la trainer.",
+  task_link_invalid: "Linkul de invitație nu este valid. Cere un link nou de la trainer.",
+  task_link_revoked: "Trainerul a înlocuit acest link. Folosește cea mai recentă invitație.",
+};
+
+function inviteFailureMessage(
+  code: string | undefined,
+  fallback = "Nu am găsit o invitație activă pentru acest link.",
+): string {
+  if (code && inviteFailureMessages[code]) {
+    return inviteFailureMessages[code];
+  }
+  return fallback;
+}
+
 export class InviteSessionConflictError extends Error {
   readonly code = "invite_session_conflict";
 }
@@ -202,13 +218,14 @@ export async function exchangeInviteSession(
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as BackendErrorResponse | null;
-    const message =
-      payload?.error?.message ??
-      "Nu am putut pregăti sesiunea invitației. Reîncearcă sau deschide linkul într-o fereastră privată.";
     if (payload?.error?.code === "invite_session_conflict") {
-      throw new InviteSessionConflictError(message);
+      throw new InviteSessionConflictError("Invitația aparține unei alte sesiuni active.");
     }
-    throw new Error(message);
+    const localizedMessage = inviteFailureMessage(
+      payload?.error?.code,
+      "Nu am putut pregăti sesiunea invitației. Reîncearcă sau deschide linkul într-o fereastră privată.",
+    );
+    throw new Error(localizedMessage);
   }
 }
 
@@ -221,7 +238,7 @@ async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> 
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => null)) as BackendErrorResponse | null;
     const code = errorBody?.error?.code;
-    const message = errorBody?.error?.message ?? "Nu am găsit o invitație activă pentru acest link.";
+    const message = inviteFailureMessage(code);
 
     if (code === "task_link_expired" || code === "task_link_revoked") {
       return {

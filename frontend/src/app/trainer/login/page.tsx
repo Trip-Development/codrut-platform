@@ -20,6 +20,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { safeTrainerReturnTo } from "@/lib/auth-return";
+
+function requestedTrainerRoute(): string {
+  if (typeof window === "undefined") return "/trainer";
+  return safeTrainerReturnTo(new URLSearchParams(window.location.search).get("returnTo"));
+}
 
 export default function TrainerLoginPage() {
   const router = useRouter();
@@ -38,7 +44,11 @@ export default function TrainerLoginPage() {
       setRememberedUser(session.user);
       redirectTimer = window.setTimeout(() => {
         if (cancelled) return;
-        router.replace(dashboardHrefForRole(session.user.role));
+        router.replace(
+          session.user.role === "trainer"
+            ? requestedTrainerRoute()
+            : dashboardHrefForRole(session.user.role),
+        );
         router.refresh();
       }, REMEMBERED_SESSION_DELAY_MS);
     });
@@ -63,7 +73,7 @@ export default function TrainerLoginPage() {
       if (session.user.role !== "trainer") {
         throw new Error("Acest cont nu are acces la portalul de trainer.");
       }
-      router.push("/trainer");
+      router.push(requestedTrainerRoute());
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");

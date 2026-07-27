@@ -395,7 +395,7 @@ export function ProjectParticipantsWorkspace({
               value={query}
               onValueChange={updateQuery}
               placeholder="Caută după nume, email, rol sau manager"
-              className="min-w-[min(100%,16rem)] flex-1 basis-64"
+              className="min-w-[min(100%,16rem)] flex-1 basis-auto sm:basis-64"
             />
             <SelectControl
               label="Filtrează după acces"

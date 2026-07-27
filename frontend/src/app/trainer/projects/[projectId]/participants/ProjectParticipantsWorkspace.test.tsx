@@ -180,6 +180,12 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(roster.tagName).toBe("TABLE");
     expect(roster.className).toContain("min-w-[960px]");
     expect(roster.parentElement?.className).toContain("overflow-x-auto");
+    expect(screen.getByLabelText("Caută participant").parentElement?.className).toContain(
+      "basis-auto",
+    );
+    expect(screen.getByLabelText("Caută participant").parentElement?.className).toContain(
+      "sm:basis-64",
+    );
     expect(within(roster).getByRole("columnheader", { name: "Participant" })).toBeTruthy();
     expect(within(roster).getByRole("columnheader", { name: "Email" })).toBeTruthy();
     expect(within(roster).getByRole("columnheader", { name: "Acces" })).toBeTruthy();
