@@ -76,6 +76,7 @@ export function TrainerRouteError({
       description=""
       navItems={trainerNavItems}
       activeHref="/trainer"
+      accountIdentityPending
       showHeader={false}
     >
       <section className="grid min-h-[calc(100dvh-6rem)] items-center gap-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(18rem,0.36fr)]">

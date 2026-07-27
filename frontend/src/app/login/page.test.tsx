@@ -128,4 +128,23 @@ describe("LoginPage", () => {
     expect(router.replace).toHaveBeenCalledWith("/trainer");
     expect(router.refresh).toHaveBeenCalled();
   });
+
+  it("keeps account login available when a secure-link cookie is present", async () => {
+    vi.mocked(getAuthenticatedSession).mockResolvedValue({
+      state: "authenticated",
+      user: {
+        id: "participant-1",
+        name: "Bianca",
+        email: "bianca@example.com",
+        role: "participant",
+        accessMode: "secure_link",
+      },
+    });
+
+    render(<LoginPage />);
+
+    expect(await screen.findByRole("heading", { name: "Bine ai revenit." })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Intră în cont" })).toBeTruthy();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });

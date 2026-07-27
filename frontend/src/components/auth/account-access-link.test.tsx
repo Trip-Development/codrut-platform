@@ -84,4 +84,25 @@ describe("AccountAccessLink", () => {
       expect(getAuthenticatedSession).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("does not offer dashboard access for a secure-link session", async () => {
+    vi.mocked(getAuthenticatedSession).mockResolvedValue({
+      state: "authenticated",
+      user: {
+        id: "participant-1",
+        name: "Bianca",
+        email: "bianca@example.com",
+        role: "participant",
+        accessMode: "secure_link",
+      },
+    });
+
+    render(<AccountAccessLink>Intră în cont</AccountAccessLink>);
+
+    await waitFor(() => {
+      expect(getAuthenticatedSession).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole("link", { name: "Intră în cont" }).getAttribute("href")).toBe("/login");
+    expect(screen.queryByRole("link", { name: "Continuă în cont" })).toBeNull();
+  });
 });
