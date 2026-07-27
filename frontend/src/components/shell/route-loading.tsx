@@ -60,7 +60,7 @@ export function ParticipantRouteLoading({
       description=""
       navItems={participantNavItems}
       activeHref={activeHref}
-      userLabel="Participant"
+      accountIdentityPending
     >
       <LoadingStatus label={loadingLabel ?? `Pregătim ${title.toLowerCase()}`} />
       {kind === "home" ? <ParticipantHomeSkeleton /> : null}

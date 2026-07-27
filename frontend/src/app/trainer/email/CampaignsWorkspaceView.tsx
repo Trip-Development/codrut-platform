@@ -46,6 +46,7 @@ export type CampaignsWorkspaceViewProps = {
   openCampaignId: string | null;
   sendingCampaignId: string | null;
   sendingMode: CampaignSendMode | null;
+  resendingRecipientId: string | null;
   deletingCampaignId: string | null;
   savingMembershipId: string | null;
   getActiveMemberIds: (campaign: EmailCampaign) => string[];
@@ -61,6 +62,7 @@ export type CampaignsWorkspaceViewProps = {
   toggleMembershipRecipient: (campaign: EmailCampaign, recipientId: string) => void;
   toggleMembershipCompany: (campaign: EmailCampaign, companyKey: string, mode: "select" | "deselect") => void;
   sendCampaign: (campaign: EmailCampaign, mode: CampaignSendMode) => void;
+  resendRecipient: (campaign: EmailCampaign, recipient: CampaignRecipientRow) => void;
   editCampaign: (campaign: EmailCampaign) => void;
   deleteCampaign: (campaign: EmailCampaign) => void;
 };
@@ -112,7 +114,9 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
             : sentMemberCount > 0
               ? `${sentMemberCount} trimise`
               : "Netrimisă";
-          const sendFeedbackDetail = props.sendingMode === "selected"
+          const sendFeedbackDetail = props.resendingRecipientId
+            ? `Retrimitem campania către destinatarul selectat pentru ${campaign.name}.`
+            : props.sendingMode === "selected"
             ? `Trimitem campania către ${sendableMemberIds.length} destinatari netrimiși pentru ${campaign.name}.`
             : props.sendingMode === "all"
               ? `Retrimitem campania către toți destinatarii salvați pentru ${campaign.name}.`
@@ -180,7 +184,7 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                     ) : null}
 
                     <div className="mt-4 overflow-hidden rounded-md border border-[var(--border)] bg-surface" role="region" aria-label={`Destinatari pentru ${campaign.name}`}>
-                      <div className="grid grid-cols-[2rem_minmax(12rem,1fr)_minmax(13rem,1fr)_6rem] gap-3 border-b border-[var(--border)] bg-surface-muted px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground"><span aria-hidden="true" /><span>Contact</span><span>Email</span><span>Status</span></div>
+                      <div className="grid grid-cols-[2rem_minmax(12rem,1fr)_minmax(13rem,1fr)_7rem] gap-3 border-b border-[var(--border)] bg-surface-muted px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground"><span aria-hidden="true" /><span>Contact</span><span>Email</span><span>Status</span></div>
                       <div className="max-h-80 overflow-y-hidden pr-1 [scrollbar-gutter:stable] hover:overflow-y-auto focus:overflow-y-auto focus-within:overflow-y-auto" tabIndex={0}>
                         {visibleEligibleRecipients.length > 0 ? (
                           <div className="divide-y divide-[var(--border)]">
@@ -189,13 +193,31 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                               const delivery = props.getRecipientDelivery(campaign, recipient.id);
                               const deliveryLocked = props.isDeliveryLocked(delivery);
                               return (
-                                <Field key={recipient.id} orientation="horizontal" className={cn("grid grid-cols-[2rem_minmax(12rem,1fr)_minmax(13rem,1fr)_6rem] items-center gap-3 rounded-none px-3 py-2.5 text-xs hover:bg-surface-muted", deliveryLocked && "text-foreground/48")}>
+                                <Field key={recipient.id} orientation="horizontal" className={cn("group grid grid-cols-[2rem_minmax(12rem,1fr)_minmax(13rem,1fr)_7rem] items-center gap-3 rounded-none px-3 py-2.5 text-xs hover:bg-surface-muted", deliveryLocked && "text-foreground/48")}>
                                   <Checkbox id={checkboxId} checked={memberIds.includes(recipient.id) || deliveryLocked} disabled={deliveryLocked || props.savingMembershipId === campaign.id} onCheckedChange={() => props.toggleMembershipRecipient(campaign, recipient.id)} className="mt-0.5" aria-label={`Include ${recipient.email} în ${campaign.name}`} />
                                   <FieldLabel htmlFor={checkboxId} className="contents cursor-pointer font-normal">
                                     <span className="min-w-0"><span className="block truncate font-semibold text-foreground">{campaignRecipientName(recipient) || recipient.email}</span><span className="mt-0.5 block truncate text-foreground/52">{recipient.company}</span></span>
                                     <span className="truncate font-mono text-[11px] text-foreground/45">{recipient.email}</span>
-                                    <span className={cn("w-fit rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider", delivery === "sent" && "border-emerald-200 bg-emerald-50 text-emerald-700", delivery === "failed" && "border-red-200 bg-red-50 text-red-700", delivery === "queued" && "border-amber-200 bg-amber-50 text-amber-700", delivery === "not_sent" && "border-[var(--border)] bg-surface-muted text-foreground/45")}>{campaignDeliveryLabel(delivery)}</span>
                                   </FieldLabel>
+                                  <span className="relative flex h-7 items-center justify-end">
+                                    <span className={cn("w-fit rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-opacity", delivery === "sent" && "border-emerald-200 bg-emerald-50 text-emerald-700 group-hover:opacity-0 group-focus-within:opacity-0", delivery === "failed" && "border-red-200 bg-red-50 text-red-700", delivery === "queued" && "border-amber-200 bg-amber-50 text-amber-700", delivery === "not_sent" && "border-[var(--border)] bg-surface-muted text-foreground/45")}>{campaignDeliveryLabel(delivery)}</span>
+                                    {delivery === "sent" ? (
+                                      <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="outline"
+                                        disabled={isSending}
+                                        onClick={() => props.resendRecipient(campaign, recipient)}
+                                        className="absolute right-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                                        aria-label={`Retrimite campania ${campaign.name} către ${recipient.email}`}
+                                      >
+                                        {props.resendingRecipientId === recipient.id ? (
+                                          <Loader2Icon aria-hidden="true" className="size-3 animate-spin" />
+                                        ) : null}
+                                        Retrimite
+                                      </Button>
+                                    ) : null}
+                                  </span>
                                 </Field>
                               );
                             })}

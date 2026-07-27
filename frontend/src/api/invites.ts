@@ -40,6 +40,7 @@ export type InviteBundle =
       anonymousName?: string | null;
       isLeadership: boolean;
       alreadyRegistered: boolean;
+      accountDashboardAvailable?: boolean;
       deadlineLabel: string;
       expiresAt?: string;
       termsAcceptedAt?: string | null;
@@ -65,6 +66,7 @@ type BackendInviteVerifyResponse = {
   anonymous_name?: string | null;
   is_leadership: boolean;
   already_registered: boolean;
+  account_dashboard_available?: boolean;
   project_id?: string;
   project_name: string;
   expires_at?: string;
@@ -130,6 +132,7 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
       anonymousName: "SignalHarbor5271",
       isLeadership: false,
       alreadyRegistered: false,
+      accountDashboardAvailable: false,
       deadlineLabel: "deadline-ul proiectului",
       tasks: normalizeInviteTasks([
         {
@@ -250,6 +253,7 @@ async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> 
     anonymousName: data.anonymous_name,
     isLeadership: data.is_leadership,
     alreadyRegistered: data.already_registered,
+    accountDashboardAvailable: data.account_dashboard_available ?? false,
     deadlineLabel: data.expires_at ? formatInviteDeadline(data.expires_at) : "finalul evaluării",
     expiresAt: data.expires_at,
     termsAcceptedAt: data.terms_accepted_at,

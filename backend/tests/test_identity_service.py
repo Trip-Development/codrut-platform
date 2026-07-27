@@ -527,6 +527,7 @@ async def test_verify_invite_token_success() -> None:
     assert result.full_name == "Test User"
     assert result.is_leadership is True
     assert result.already_registered is True
+    assert result.account_dashboard_available is True
     assert result.project_id is None
     assert result.project_name == "Intake Iunie"
     assert result.expires_at.timestamp() == int(claims.expires_at.timestamp())
@@ -1061,7 +1062,7 @@ async def test_register_success() -> None:
         user_id=uuid.uuid4(),
         token_hash=hash_session_token("registered-session"),
         expires_at=claims.expires_at,
-        assignment_invite_id=invite.id,
+        assignment_invite_id=None,
     )
     repository.get_session_by_token = AsyncMock(return_value=active_session)
     repository.add_consent_acceptance = AsyncMock()
@@ -1102,8 +1103,8 @@ async def test_register_success() -> None:
     assert "participant_profiles.company_id" in where_text
     service._create_session.assert_awaited_once_with(
         repository.add_user.await_args.args[0],
-        expires_at=claims.expires_at,
-        assignment_invite_id=invite.id,
+        expires_at=None,
+        assignment_invite_id=None,
     )
     acceptance = repository.add_consent_acceptance.await_args.args[0]
     assert acceptance.user_id == mock_profile.user_id
@@ -1510,12 +1511,10 @@ async def test_invite_exchange_replaces_another_session_only_when_explicitly_req
     assert result.session_token == "replacement-session"  # noqa: S105
     service._create_session.assert_awaited_once_with(
         user,
-        expires_at=expires_at,
-        assignment_invite_id=invite.id,
+        expires_at=None,
+        assignment_invite_id=None,
     )
-    service.repository.delete_session_by_token.assert_awaited_once_with(
-        "existing-session"
-    )
+    service.repository.delete_session_by_token.assert_awaited_once_with("existing-session")
 
 
 @pytest.mark.asyncio
@@ -1646,8 +1645,8 @@ async def test_invite_exchange_links_same_email_profile_to_existing_account(
     assert result.session_token == "linked-session"  # noqa: S105
     service._create_session.assert_awaited_once_with(
         user,
-        expires_at=expires_at,
-        assignment_invite_id=invite.id,
+        expires_at=None if role == UserRole.participant else expires_at,
+        assignment_invite_id=None if role == UserRole.participant else invite.id,
     )
 
 

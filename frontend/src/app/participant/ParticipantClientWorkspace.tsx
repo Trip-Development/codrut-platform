@@ -55,7 +55,7 @@ type ParticipantClientWorkspaceProps = {
   };
 };
 
-export function ParticipantClientWorkspace({ summaryData }: ParticipantClientWorkspaceProps) {
+export function ParticipantClientWorkspace({ session, summaryData }: ParticipantClientWorkspaceProps) {
   const participantIdentity =
     summaryData.participantFullName?.trim() || summaryData.anonymousName?.trim() || "Participant";
   const participantFirstName = participantIdentity.split(/\s+/)[0];
@@ -85,6 +85,7 @@ export function ParticipantClientWorkspace({ summaryData }: ParticipantClientWor
       navItems={navItems}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={participantFirstName}
+      session={session}
     >
       <ParticipantContextSelector
         contexts={contexts}

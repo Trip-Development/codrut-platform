@@ -1699,6 +1699,8 @@ export interface components {
             terms_accepted_at?: string | null;
             /** Terms Version */
             terms_version?: string | null;
+            /** @default account */
+            access_mode?: "account" | "secure_link";
             /**
              * User Id
              * Format: uuid
@@ -2690,6 +2692,8 @@ export interface components {
         InviteVerifyResponse: {
             /** Already Registered */
             already_registered: boolean;
+            /** Account Dashboard Available */
+            account_dashboard_available?: boolean;
             /** Anonymous Name */
             anonymous_name?: string | null;
             /**

@@ -117,6 +117,61 @@ describe("AppShell", () => {
     expect(screen.getAllByRole("combobox", { name: "Temă" })[0]?.className).toContain("w-full");
   });
 
+  it("keeps the generated avatar stable when page copy changes and varies it by account id", () => {
+    const session = {
+      state: "authenticated" as const,
+      user: {
+        id: "participant-1",
+        name: "Andrei",
+        role: "participant" as const,
+      },
+    };
+    const view = render(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        userLabel="Andrei"
+        session={session}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+    const initialAvatarStyle = document.querySelector("[data-profile-avatar]")?.getAttribute("style");
+
+    view.rerender(
+      <AppShell
+        audience="participant"
+        title="Chestionare"
+        activeHref="/participant"
+        userLabel="Participant"
+        session={session}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+    expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).toBe(initialAvatarStyle);
+
+    view.rerender(
+      <AppShell
+        audience="participant"
+        title="Chestionare"
+        activeHref="/participant"
+        userLabel="Participant"
+        session={{
+          ...session,
+          user: { ...session.user, id: "participant-2" },
+        }}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+    expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).not.toBe(initialAvatarStyle);
+  });
+
   it("locks logout while the request is pending without adding explanatory copy", async () => {
     const logoutRequest = createDeferred<Awaited<ReturnType<typeof apiFetchType>>>();
     vi.mocked(apiFetch).mockReturnValue(logoutRequest.promise);

@@ -7,6 +7,7 @@ import {
   QuestionnaireRequestError,
   type QuestionnaireDefinition,
 } from "@/api/questionnaires";
+import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import ParticipantQuestionnaireRunPage from "./page";
 
@@ -23,19 +24,30 @@ vi.mock("@/api/server-request", () => ({
   getServerApiRequestOptions: vi.fn().mockResolvedValue({ headers: { cookie: "session=test" } }),
 }));
 
+vi.mock("@/api/participants", () => ({
+  getParticipantWorkspaceSummary: vi.fn(),
+}));
+
 vi.mock("@/components/questionnaires/lazy-questionnaire-runner", () => ({
   LazyQuestionnaireRunner: ({
     assignmentId,
     returnHref,
     returnLabel,
     targetLabel,
+    nextTaskHref,
   }: {
     assignmentId?: string;
     returnHref?: string;
     returnLabel?: string;
     targetLabel?: string;
+    nextTaskHref?: string;
   }) => (
-    <div data-testid="questionnaire-runner" data-assignment-id={assignmentId} data-return-href={returnHref}>
+    <div
+      data-testid="questionnaire-runner"
+      data-assignment-id={assignmentId}
+      data-return-href={returnHref}
+      data-next-task-href={nextTaskHref}
+    >
       <span>{returnLabel}</span>
       <span>{targetLabel}</span>
     </div>
@@ -65,6 +77,50 @@ describe("ParticipantQuestionnaireRunPage", () => {
       status: "draft",
       answers: { q1: 4 },
     });
+    vi.mocked(getParticipantWorkspaceSummary).mockResolvedValue({
+      participantFullName: "Participant Pilot",
+      participantEmail: "participant@example.com",
+      projectName: "Pilot",
+      deadlineLabel: "31 iulie",
+      tasks: [
+        {
+          id: "assignment-1",
+          assignmentId: "assignment-1",
+          title: "Feedback confidențial",
+          status: "in_progress",
+          detail: "",
+          href: "/participant/questionnaires/boss_360?assignmentId=assignment-1",
+          targetLabel: "Bianca Pavel",
+          estimatedMinutes: 10,
+          questionnaireKey: "boss_360",
+          projectId: "project-1",
+          assignmentRoundId: "round-1",
+        },
+        {
+          id: "assignment-2",
+          assignmentId: "assignment-2",
+          title: "Feedback confidențial",
+          status: "not_started",
+          detail: "",
+          href: "/participant/questionnaires/boss_360?assignmentId=assignment-2",
+          targetLabel: "Darius Neagu",
+          estimatedMinutes: 10,
+          questionnaireKey: "boss_360",
+          projectId: "project-1",
+          assignmentRoundId: "round-1",
+        },
+      ],
+      results: [],
+      receivedFeedback: null,
+      receivedFeedbackGroups: [],
+      cards: [],
+      contexts: [],
+      cycles: [],
+      projects: [],
+      contextSelectionRequired: false,
+      companyName: "",
+      emptyState: { title: "", description: "" },
+    });
   });
 
   afterEach(() => {
@@ -87,6 +143,9 @@ describe("ParticipantQuestionnaireRunPage", () => {
     const runner = screen.getByTestId("questionnaire-runner");
     expect(runner.getAttribute("data-assignment-id")).toBe("assignment-1");
     expect(runner.getAttribute("data-return-href")).toBe("/participant/questionnaires");
+    expect(runner.getAttribute("data-next-task-href")).toContain(
+      "assignmentId=assignment-2",
+    );
     expect(screen.getByText("Înapoi la chestionare")).toBeDefined();
     expect(screen.getByText("Bianca Pavel")).toBeDefined();
     expect(screen.queryByLabelText("Navigare principală")).toBeNull();

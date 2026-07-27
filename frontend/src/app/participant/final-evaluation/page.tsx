@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getParticipantSession } from "@/api/auth-server";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
@@ -21,9 +22,12 @@ export default async function ParticipantFinalEvaluationPage({
 }) {
   const routeParams = await searchParams;
   const requestOptions = await getServerApiRequestOptions();
-  const summary = await getParticipantWorkspaceSummary(
-    participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
-  );
+  const [participant, summary] = await Promise.all([
+    getParticipantSession(),
+    getParticipantWorkspaceSummary(
+      participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
+    ),
+  ]);
   const scopeParams = participantScopeParams(summary);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantScopedHref("/participant/results", scopeParams);
@@ -41,6 +45,7 @@ export default async function ParticipantFinalEvaluationPage({
       navItems={participantScopedNavItems(scopeParams)}
       activeHref={participantActiveHref("/participant", scopeParams)}
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
+      session={participant}
     >
       <ParticipantContextSelector
         contexts={summary.contexts}
