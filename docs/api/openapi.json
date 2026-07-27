@@ -1096,6 +1096,17 @@
       },
       "AuthResponse": {
         "properties": {
+          "avatar_palette_key": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Palette Key"
+          },
           "email": {
             "format": "email",
             "title": "Email",
@@ -6760,6 +6771,17 @@
             ],
             "title": "Access Mode",
             "type": "string"
+          },
+          "avatar_palette_key": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Palette Key"
           },
           "email": {
             "format": "email",
