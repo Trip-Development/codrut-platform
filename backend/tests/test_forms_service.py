@@ -287,6 +287,23 @@ async def test_assignment_response_window_rejects_due_and_project_boundaries() -
         open_assignment,
     )
 
+    with pytest.raises(DomainError) as project_archived:
+        await _validate_assignment_response_window(
+            cast(
+                Any,
+                WindowRepository(
+                    SimpleNamespace(
+                        status="archived",
+                        form_opens_at=None,
+                        form_closes_at=None,
+                        due_at=None,
+                    )
+                ),
+            ),
+            open_assignment,
+        )
+    assert project_archived.value.code == "project_archived"
+
     with pytest.raises(DomainError) as not_open:
         await _validate_assignment_response_window(
             cast(

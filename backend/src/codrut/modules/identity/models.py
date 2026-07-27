@@ -5,7 +5,17 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from codrut.core.database import Base, TimestampMixin
@@ -14,6 +24,10 @@ if TYPE_CHECKING:
     from codrut.modules.companies.models import CompanyMembership, ParticipantProfile
 
 SHADOW_ACCOUNT_PASSWORD_HASH = "shadow_account_no_password"  # noqa: S105
+AVATAR_PALETTE_SPACE = 55_520_640
+AVATAR_PALETTE_SERVER_DEFAULT = (
+    "mod(nextval('user_avatar_palette_key_seq') * 16777619 + 2166136261, 55520640)"
+)
 
 
 class UserRole(StrEnum):
@@ -23,6 +37,13 @@ class UserRole(StrEnum):
 
 class User(TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("avatar_palette_key"),
+        CheckConstraint(
+            f"avatar_palette_key >= 0 and avatar_palette_key < {AVATAR_PALETTE_SPACE}",
+            name="user_avatar_palette_key_range",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
@@ -31,6 +52,11 @@ class User(TimestampMixin, Base):
         Enum(UserRole),
         nullable=False,
         default=UserRole.participant,
+    )
+    avatar_palette_key: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=False,
+        server_default=text(AVATAR_PALETTE_SERVER_DEFAULT),
     )
     terms_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

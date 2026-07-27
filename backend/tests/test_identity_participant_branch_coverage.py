@@ -327,6 +327,18 @@ def test_identity_copy_and_project_window_fallbacks_are_explicit() -> None:
         _min_datetime(None, None)
 
     now = datetime.now(UTC)
+    with pytest.raises(DomainError, match="archived") as archived:
+        _validate_project_access_window(
+            SimpleNamespace(
+                status="archived",
+                form_opens_at=None,
+                form_closes_at=None,
+                due_at=None,
+            ),
+            now=now,
+        )
+    assert archived.value.code == "project_archived"
+
     with pytest.raises(DomainError, match="not open yet") as not_open:
         _validate_project_access_window(
             SimpleNamespace(

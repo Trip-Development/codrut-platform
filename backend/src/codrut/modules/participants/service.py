@@ -17,6 +17,7 @@ from codrut.modules.companies.anonymous import new_anonymous_name
 from codrut.modules.companies.models import (
     Company,
     CompanyProject,
+    CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
 )
@@ -264,7 +265,9 @@ class ParticipantWorkspaceService:
         projects: dict[UUID, CompanyProject] = {}
         if project_ids:
             project_result = await self.session.execute(
-                select(CompanyProject).where(CompanyProject.id.in_(project_ids))
+                select(CompanyProject)
+                .where(CompanyProject.id.in_(project_ids))
+                .where(CompanyProject.status != CompanyProjectStatus.archived)
             )
             projects = {project.id: project for project in project_result.scalars().all()}
 
@@ -780,9 +783,19 @@ class ParticipantWorkspaceService:
     ) -> list[QuestionnaireAssignment]:
         statement = (
             select(QuestionnaireAssignment)
+            .outerjoin(
+                CompanyProject,
+                CompanyProject.id == QuestionnaireAssignment.project_id,
+            )
             .where(QuestionnaireAssignment.company_id == profile.company_id)
             .where(QuestionnaireAssignment.respondent_profile_id == profile.id)
             .where(QuestionnaireAssignment.status != AssignmentStatus.cancelled)
+            .where(
+                or_(
+                    QuestionnaireAssignment.project_id.is_(None),
+                    CompanyProject.status != CompanyProjectStatus.archived,
+                )
+            )
             .order_by(
                 QuestionnaireAssignment.due_at.asc().nulls_last(),
                 QuestionnaireAssignment.created_at.asc(),
@@ -814,7 +827,9 @@ class ParticipantWorkspaceService:
         if not project_ids:
             return {}
         result = await self.session.execute(
-            select(CompanyProject).where(CompanyProject.id.in_(project_ids))
+            select(CompanyProject)
+            .where(CompanyProject.id.in_(project_ids))
+            .where(CompanyProject.status != CompanyProjectStatus.archived)
         )
         return {project.id: project for project in result.scalars().all()}
 

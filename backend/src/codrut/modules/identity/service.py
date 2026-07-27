@@ -943,6 +943,7 @@ class IdentityService:
                 if active_session.assignment_invite_id is not None
                 else user.role
             ),
+            avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
             session_token=token,
@@ -967,6 +968,7 @@ class IdentityService:
             user_id=user.id,
             email=user.email,
             role=user.role,
+            avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
             session_token=f"local-development:{role.value}",
@@ -997,6 +999,7 @@ class IdentityService:
             user_id=user.id,
             email=user.email,
             role=user.role,
+            avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
         )
@@ -1193,6 +1196,11 @@ def _min_datetime(*values: datetime | None) -> datetime:
 
 
 def _validate_project_access_window(project: "CompanyProject", *, now: datetime) -> None:
+    if getattr(project, "status", None) == "archived":
+        raise DomainError(
+            "Project is archived.",
+            code="project_archived",
+        )
     if project.form_opens_at is not None and project.form_opens_at > now:
         raise DomainError(
             "Project questionnaires are not open yet.",

@@ -445,6 +445,7 @@ async def test_principal_for_local_user_requires_matching_seeded_role() -> None:
         email="trainer@example.com",
         password_hash=hash_password("local-development-password"),
         role=UserRole.trainer,
+        avatar_palette_key=12_345,
     )
     repository = MagicMock()
     repository.get_user_by_email = AsyncMock(return_value=user)
@@ -463,6 +464,7 @@ async def test_principal_for_local_user_requires_matching_seeded_role() -> None:
     assert principal is not None
     assert principal.user_id == user.id
     assert principal.role == UserRole.trainer
+    assert principal.avatar_palette_key == 12_345
     assert principal.session_token == "local-development:trainer"  # noqa: S105
     assert mismatched is None
 

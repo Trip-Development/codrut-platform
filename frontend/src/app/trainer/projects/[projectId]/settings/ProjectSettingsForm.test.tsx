@@ -1,7 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { deleteCompanyProject, updateCompanyProject } from "@/api/companies";
+import {
+  archiveCompanyProject,
+  permanentlyDeleteCompanyProject,
+  restoreCompanyProject,
+  updateCompanyProject,
+} from "@/api/companies";
 import { ProjectSettingsForm } from "./ProjectSettingsForm";
 
 const routerPush = vi.fn();
@@ -18,7 +23,9 @@ vi.mock("@/api/companies", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/companies")>();
   return {
     ...original,
-    deleteCompanyProject: vi.fn().mockResolvedValue(undefined),
+    archiveCompanyProject: vi.fn().mockResolvedValue(undefined),
+    permanentlyDeleteCompanyProject: vi.fn().mockResolvedValue(undefined),
+    restoreCompanyProject: vi.fn().mockResolvedValue(undefined),
     updateCompanyProject: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -30,11 +37,10 @@ describe("ProjectSettingsForm", () => {
     vi.clearAllMocks();
   });
 
-  it("requires typed confirmation before deleting a project", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm");
-    let finishDelete: () => void = () => undefined;
-    vi.mocked(deleteCompanyProject).mockReturnValueOnce(new Promise((resolve) => {
-      finishDelete = () => resolve(undefined);
+  it("archives a project without asking for destructive confirmation", async () => {
+    let finishArchive: () => void = () => undefined;
+    vi.mocked(archiveCompanyProject).mockReturnValueOnce(new Promise((resolve) => {
+      finishArchive = () => resolve(undefined);
     }));
 
     render(
@@ -59,31 +65,148 @@ describe("ProjectSettingsForm", () => {
     expect(screen.getByLabelText("Status").getAttribute("data-slot")).toBe("select");
     expect(screen.getByLabelText("Notițe").getAttribute("data-slot")).toBe("textarea");
 
-    const deleteButton = screen.getByRole("button", { name: "Șterge proiectul" }) as HTMLButtonElement;
-    expect(deleteButton.disabled).toBe(true);
+    const archiveButton = screen.getByRole("button", { name: "Arhivează proiectul" });
+    fireEvent.click(archiveButton);
+    fireEvent.click(archiveButton);
 
-    fireEvent.change(screen.getByPlaceholderText("Leadership Septembrie"), {
-      target: { value: "Leadership Septembrie" },
-    });
-    const deleteForm = deleteButton.closest("form");
-    expect(deleteForm).not.toBeNull();
-
-    fireEvent.submit(deleteForm!);
-    fireEvent.submit(deleteForm!);
-
-    expect(await screen.findAllByText("Ștergem proiectul")).toHaveLength(2);
-    expect(deleteCompanyProject).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText("Scrie numele proiectului pentru confirmare")).toHaveProperty("disabled", true);
+    expect(await screen.findByRole("button", { name: "Arhivăm proiectul" })).toBeTruthy();
+    expect(archiveCompanyProject).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Salvează setările" })).toHaveProperty("disabled", true);
 
     await act(async () => {
-      finishDelete();
+      finishArchive();
     });
 
-    await waitFor(() => expect(deleteCompanyProject).toHaveBeenCalledWith("company-1", "project-1"));
-    expect(confirmSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(archiveCompanyProject).toHaveBeenCalledWith("company-1", "project-1"));
     expect(routerPush).toHaveBeenCalledWith("/trainer/projects");
     expect(routerRefresh).toHaveBeenCalled();
+  });
+
+  it("restores an archived project and guards permanent deletion with its exact name", async () => {
+    render(
+      <ProjectSettingsForm
+        project={{
+          id: "project-1",
+          company_id: "company-1",
+          name: "Leadership Septembrie",
+          description: null,
+          project_type: "team_coaching",
+          status: "archived",
+          starts_at: null,
+          due_at: null,
+          form_opens_at: null,
+          form_closes_at: null,
+          archived_at: "2026-07-27T09:00:00Z",
+          archived_by_user_id: "owner-1",
+          archived_from_status: "active",
+          created_at: "2026-06-11T09:00:00Z",
+          updated_at: "2026-07-27T09:00:00Z",
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/toate datele proiectului sunt păstrate/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Salvează setările" })).toHaveProperty("disabled", true);
+    const permanentDeleteButton = screen.getByRole("button", { name: "Șterge definitiv" });
+    expect(permanentDeleteButton).toHaveProperty("disabled", true);
+
+    fireEvent.change(screen.getByLabelText("Scrie numele proiectului pentru confirmare"), {
+      target: { value: "Leadership Septembrie" },
+    });
+    expect(permanentDeleteButton).toHaveProperty("disabled", false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Restaurează proiectul" }));
+    await waitFor(() => {
+      expect(restoreCompanyProject).toHaveBeenCalledWith("company-1", "project-1");
+    });
+    expect(permanentlyDeleteCompanyProject).not.toHaveBeenCalled();
+    expect(routerPush).toHaveBeenCalledWith("/trainer/projects/project-1");
+  });
+
+  it("permanently deletes an archived project only after exact-name confirmation", async () => {
+    render(
+      <ProjectSettingsForm
+        project={{
+          id: "project-1",
+          company_id: "company-1",
+          name: "Leadership Septembrie",
+          description: null,
+          project_type: "team_coaching",
+          status: "archived",
+          starts_at: null,
+          due_at: null,
+          form_opens_at: null,
+          form_closes_at: null,
+          archived_at: "2026-07-27T09:00:00Z",
+          archived_by_user_id: "owner-1",
+          archived_from_status: "active",
+          created_at: "2026-06-11T09:00:00Z",
+          updated_at: "2026-07-27T09:00:00Z",
+        }}
+        lifecycleEvents={[
+          {
+            id: "event-1",
+            company_id: "company-1",
+            project_id: "project-1",
+            actor_user_id: "owner-1",
+            actor_email: "owner@example.com",
+            action: "archived",
+            project_name: "Leadership Septembrie",
+            previous_status: "active",
+            next_status: "archived",
+            created_at: "2026-07-27T09:00:00Z",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Istoric proiect" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Proiect arhivat" })).toBeTruthy();
+    expect(screen.getByText("owner@example.com")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Scrie numele proiectului pentru confirmare"), {
+      target: { value: "Leadership Septembrie" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Șterge definitiv" }));
+
+    await waitFor(() => {
+      expect(permanentlyDeleteCompanyProject).toHaveBeenCalledWith(
+        "company-1",
+        "project-1",
+        "Leadership Septembrie",
+      );
+    });
+    expect(routerPush).toHaveBeenCalledWith("/trainer/projects?view=archived");
+    expect(routerRefresh).toHaveBeenCalled();
+  });
+
+  it("reports an archive failure without navigating away", async () => {
+    vi.mocked(archiveCompanyProject).mockRejectedValueOnce(new Error("Arhivarea a eșuat."));
+
+    render(
+      <ProjectSettingsForm
+        project={{
+          id: "project-1",
+          company_id: "company-1",
+          name: "Leadership Septembrie",
+          description: null,
+          project_type: "team_coaching",
+          status: "active",
+          starts_at: null,
+          due_at: null,
+          form_opens_at: null,
+          form_closes_at: null,
+          created_at: "2026-06-11T09:00:00Z",
+          updated_at: "2026-06-11T09:00:00Z",
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Arhivează proiectul" }));
+
+    expect(await screen.findByText("Arhivarea a eșuat.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Arhivează proiectul" })).toHaveProperty("disabled", false);
+    expect(routerPush).not.toHaveBeenCalled();
   });
 
   it("formats project dates in the app timezone before hydration", () => {
@@ -161,8 +284,7 @@ describe("ProjectSettingsForm", () => {
     expect(screen.getByLabelText("Nume proiect")).toHaveProperty("disabled", true);
     expect(screen.getByLabelText("Status")).toHaveProperty("disabled", true);
     expect(screen.getByLabelText("Notițe")).toHaveProperty("disabled", true);
-    expect(screen.getByLabelText("Scrie numele proiectului pentru confirmare")).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Șterge proiectul" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Arhivează proiectul" })).toHaveProperty("disabled", true);
 
     await act(async () => {
       finishSave();

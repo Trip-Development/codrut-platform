@@ -23,9 +23,12 @@ from codrut.modules.companies.models import (
     CompanyMembership,
     CompanyMembershipRole,
     CompanyProject,
+    CompanyProjectStatus,
     ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectLifecycleAction,
+    ProjectLifecycleEvent,
     ProjectMembership,
 )
 from codrut.modules.companies.repository import CompanyRepository
@@ -46,7 +49,9 @@ from codrut.modules.companies.schemas import (
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
     ParticipantUpdateRequest,
+    ProjectLifecycleEventResponse,
     ProjectParticipantResponse,
+    ProjectPermanentDeleteRequest,
     ReportingRelationshipImportResponse,
     ReportingRelationshipIssue,
     RosterImportEmailResult,
@@ -119,6 +124,8 @@ class CompanyService:
     async def list_all_projects(
         self,
         user_id: UUID | None = None,
+        *,
+        include_archived: bool = False,
     ) -> list[CompanyProjectListItemResponse]:
         return [
             CompanyProjectListItemResponse(
@@ -133,11 +140,15 @@ class CompanyService:
                 due_at=project.due_at,
                 form_opens_at=project.form_opens_at,
                 form_closes_at=project.form_closes_at,
+                archived_at=project.archived_at,
+                archived_by_user_id=project.archived_by_user_id,
+                archived_from_status=project.archived_from_status,
                 created_at=project.created_at,
                 updated_at=project.updated_at,
             )
             for project, company_name in await self.repository.list_projects_with_company(
-                user_id=user_id
+                user_id=user_id,
+                include_archived=include_archived,
             )
         ]
 
@@ -163,6 +174,9 @@ class CompanyService:
             due_at=project.due_at,
             form_opens_at=project.form_opens_at,
             form_closes_at=project.form_closes_at,
+            archived_at=project.archived_at,
+            archived_by_user_id=project.archived_by_user_id,
+            archived_from_status=project.archived_from_status,
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
@@ -171,10 +185,15 @@ class CompanyService:
         self,
         user_id: UUID,
         company_id: UUID,
+        *,
+        include_archived: bool = False,
     ) -> list[CompanyProject]:
         await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
-        return await self.repository.list_projects(company_id)
+        return await self.repository.list_projects(
+            company_id,
+            include_archived=include_archived,
+        )
 
     async def create_project(
         self,
@@ -190,6 +209,11 @@ class CompanyService:
             raise DomainError(
                 "A project with this name already exists for this company.",
                 code="project_exists",
+            )
+        if payload.status == CompanyProjectStatus.archived:
+            raise DomainError(
+                "Create the project before archiving it.",
+                code="project_archive_action_required",
             )
         _validate_date_window(payload.starts_at, payload.due_at, "invalid_project_dates")
         _validate_date_window(
@@ -237,6 +261,11 @@ class CompanyService:
         project = await self.repository.get_project(company_id, project_id)
         if project is None:
             raise DomainError("Project not found.", code="project_not_found")
+        if project.status == CompanyProjectStatus.archived:
+            raise DomainError(
+                "Restore the project before changing its settings.",
+                code="project_restore_required",
+            )
 
         if "name" in payload.model_fields_set and payload.name is not None:
             name = payload.name.strip()
@@ -252,6 +281,11 @@ class CompanyService:
         if "project_type" in payload.model_fields_set:
             project.project_type = _clean_optional(payload.project_type)
         if "status" in payload.model_fields_set and payload.status is not None:
+            if payload.status == CompanyProjectStatus.archived:
+                raise DomainError(
+                    "Archive projects using the archive action.",
+                    code="project_archive_action_required",
+                )
             project.status = payload.status
         if "starts_at" in payload.model_fields_set:
             project.starts_at = payload.starts_at
@@ -278,7 +312,127 @@ class CompanyService:
         project = await self.repository.get_project(company_id, project_id)
         if project is None:
             raise DomainError("Project not found.", code="project_not_found")
+        if project.status == CompanyProjectStatus.archived:
+            return
+
+        previous_status = project.status
+        project.status = CompanyProjectStatus.archived
+        project.archived_at = datetime.now(UTC)
+        project.archived_by_user_id = user_id
+        project.archived_from_status = previous_status
+        await self.repository.add_project_lifecycle_event(
+            ProjectLifecycleEvent(
+                company_id=company_id,
+                project_id=project.id,
+                actor_user_id=user_id,
+                action=ProjectLifecycleAction.archived.value,
+                project_name=project.name,
+                previous_status=previous_status.value,
+                next_status=CompanyProjectStatus.archived.value,
+            )
+        )
+        await self.repository.session.flush()
+
+    async def restore_project(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> CompanyProject:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        project = await self.repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError("Project not found.", code="project_not_found")
+        if project.status != CompanyProjectStatus.archived:
+            raise DomainError("Project is not archived.", code="project_not_archived")
+
+        restored_status = project.archived_from_status or CompanyProjectStatus.draft
+        if restored_status == CompanyProjectStatus.archived:
+            restored_status = CompanyProjectStatus.draft
+        project.status = restored_status
+        project.archived_at = None
+        project.archived_by_user_id = None
+        project.archived_from_status = None
+        await self.repository.add_project_lifecycle_event(
+            ProjectLifecycleEvent(
+                company_id=company_id,
+                project_id=project.id,
+                actor_user_id=user_id,
+                action=ProjectLifecycleAction.restored.value,
+                project_name=project.name,
+                previous_status=CompanyProjectStatus.archived.value,
+                next_status=restored_status.value,
+            )
+        )
+        await self.repository.session.flush()
+        return project
+
+    async def permanently_delete_project(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        payload: ProjectPermanentDeleteRequest,
+    ) -> None:
+        await self._require_company(company_id)
+        await self._require_company_owner(user_id, company_id)
+        project = await self.repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError("Project not found.", code="project_not_found")
+        if project.status != CompanyProjectStatus.archived:
+            raise DomainError(
+                "Archive the project before permanently deleting it.",
+                code="project_archive_required",
+            )
+        if payload.project_name.strip() != project.name:
+            raise DomainError(
+                "Project name confirmation does not match.",
+                code="project_name_confirmation_mismatch",
+            )
+
+        await self.repository.add_project_lifecycle_event(
+            ProjectLifecycleEvent(
+                company_id=company_id,
+                project_id=project.id,
+                actor_user_id=user_id,
+                action=ProjectLifecycleAction.permanently_deleted.value,
+                project_name=project.name,
+                previous_status=CompanyProjectStatus.archived.value,
+                next_status=None,
+            )
+        )
         await self.repository.delete_project(project)
+
+    async def list_project_lifecycle_events(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> list[ProjectLifecycleEventResponse]:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        project = await self.repository.get_project(company_id, project_id)
+        if project is None:
+            raise DomainError("Project not found.", code="project_not_found")
+        return [
+            ProjectLifecycleEventResponse(
+                id=event.id,
+                company_id=event.company_id,
+                project_id=event.project_id,
+                actor_user_id=event.actor_user_id,
+                actor_email=actor_email,
+                action=event.action,
+                project_name=event.project_name,
+                previous_status=event.previous_status,
+                next_status=event.next_status,
+                created_at=event.created_at,
+            )
+            for event, actor_email in await self.repository.list_project_lifecycle_events(
+                company_id,
+                project_id,
+            )
+        ]
 
     async def list_participants(self, user_id: UUID, company_id: UUID) -> list[ParticipantProfile]:
         await self._require_company(company_id)
@@ -474,7 +628,11 @@ class CompanyService:
             raise DomainError("Participant not found.", code="participant_not_found")
 
         if payload.project_id is not None:
-            await self._require_company_project(company_id, payload.project_id)
+            await self._require_company_project(
+                company_id,
+                payload.project_id,
+                allow_archived=False,
+            )
 
         fields_set = payload.model_fields_set
         if "email" in fields_set and payload.email is not None:
@@ -544,7 +702,11 @@ class CompanyService:
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
-        await self._require_company_project(company_id, payload.project_id)
+        await self._require_company_project(
+            company_id,
+            payload.project_id,
+            allow_archived=False,
+        )
         rows = [_normalize_roster_row(row) for row in payload.rows]
         manager_names = {
             manager_key
@@ -674,7 +836,11 @@ class CompanyService:
     ) -> ParticipantInviteBatchResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
-        await self._require_company_project(company_id, payload.project_id)
+        await self._require_company_project(
+            company_id,
+            payload.project_id,
+            allow_archived=False,
+        )
         await self._require_invitation_assessment_cycle(
             company_id,
             payload.project_id,
@@ -1354,7 +1520,11 @@ class CompanyService:
     ) -> RosterImportResponse:
         company = await self._require_company(company_id)
         await self._require_company_manager(user_id, company_id)
-        await self._require_company_project(company_id, project_id)
+        await self._require_company_project(
+            company_id,
+            project_id,
+            allow_archived=False,
+        )
         await self._require_invitation_assessment_cycle(
             company_id,
             project_id,
@@ -1542,12 +1712,19 @@ class CompanyService:
         self,
         company_id: UUID,
         project_id: UUID | None,
+        *,
+        allow_archived: bool = True,
     ) -> None:
         if project_id is None:
             return
         project = await self.repository.get_project(company_id, project_id)
         if project is None:
             raise DomainError("Project not found in this company.", code="project_not_found")
+        if not allow_archived and project.status == CompanyProjectStatus.archived:
+            raise DomainError(
+                "Restore the project before changing its data.",
+                code="project_restore_required",
+            )
 
     async def _require_company_manager(self, user_id: UUID, company_id: UUID) -> None:
         membership = await self.repository.get_membership(company_id, user_id)
@@ -1560,6 +1737,16 @@ class CompanyService:
         raise DomainError(
             "You do not have access to manage this company.",
             code="company_access_denied",
+        )
+
+    async def _require_company_owner(self, user_id: UUID, company_id: UUID) -> None:
+        membership = await self.repository.get_membership(company_id, user_id)
+        if membership is not None and membership.role == CompanyMembershipRole.owner:
+            return
+
+        raise DomainError(
+            "Only a company owner can permanently delete a project.",
+            code="company_owner_required",
         )
 
 

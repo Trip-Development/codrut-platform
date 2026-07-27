@@ -989,6 +989,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/companies/{company_id}/projects/{project_id}/lifecycle-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Company Project Lifecycle Events */
+        get: operations["list_company_project_lifecycle_events_api_companies__company_id__projects__project_id__lifecycle_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{company_id}/projects/{project_id}/participants": {
         parameters: {
             query?: never;
@@ -1000,6 +1017,40 @@ export interface paths {
         get: operations["list_project_participants_api_companies__company_id__projects__project_id__participants_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/permanent-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Permanently Delete Company Project */
+        post: operations["permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Company Project */
+        post: operations["restore_company_project_api_companies__company_id__projects__project_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1689,6 +1740,8 @@ export interface components {
         AssignmentTargetType: "self" | "person" | "team";
         /** AuthResponse */
         AuthResponse: {
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
             /**
              * Email
              * Format: email
@@ -2122,6 +2175,11 @@ export interface components {
         };
         /** CompanyProjectListItemResponse */
         CompanyProjectListItemResponse: {
+            /** Archived At */
+            archived_at?: string | null;
+            /** Archived By User Id */
+            archived_by_user_id?: string | null;
+            archived_from_status?: components["schemas"]["CompanyProjectStatus"] | null;
             /**
              * Company Id
              * Format: uuid
@@ -2162,6 +2220,11 @@ export interface components {
         };
         /** CompanyProjectResponse */
         CompanyProjectResponse: {
+            /** Archived At */
+            archived_at?: string | null;
+            /** Archived By User Id */
+            archived_by_user_id?: string | null;
+            archived_from_status?: components["schemas"]["CompanyProjectStatus"] | null;
             /**
              * Company Id
              * Format: uuid
@@ -3176,6 +3239,42 @@ export interface components {
              */
             ok: boolean;
         };
+        /** ProjectLifecycleEventResponse */
+        ProjectLifecycleEventResponse: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "archived" | "restored" | "permanently_deleted";
+            /** Actor Email */
+            actor_email: string | null;
+            /** Actor User Id */
+            actor_user_id: string | null;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            next_status: components["schemas"]["CompanyProjectStatus"] | null;
+            previous_status: components["schemas"]["CompanyProjectStatus"] | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Project Name */
+            project_name: string;
+        };
         /** ProjectParticipantResponse */
         ProjectParticipantResponse: {
             /** Anonymous Name */
@@ -3220,6 +3319,11 @@ export interface components {
             role_group: string | null;
             /** User Id */
             user_id: string | null;
+        };
+        /** ProjectPermanentDeleteRequest */
+        ProjectPermanentDeleteRequest: {
+            /** Project Name */
+            project_name: string;
         };
         /** QuestionnaireDefinitionCreateRequest */
         QuestionnaireDefinitionCreateRequest: {
@@ -3549,6 +3653,8 @@ export interface components {
              * @enum {string}
              */
             access_mode: "account" | "secure_link";
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
             /**
              * Email
              * Format: email
@@ -6886,7 +6992,9 @@ export interface operations {
     };
     list_all_company_projects_api_companies_projects_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8618,7 +8726,9 @@ export interface operations {
     };
     list_company_projects_api_companies__company_id__projects_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_archived?: boolean;
+            };
             header?: never;
             path: {
                 company_id: string;
@@ -9326,6 +9436,83 @@ export interface operations {
             };
         };
     };
+    list_company_project_lifecycle_events_api_companies__company_id__projects__project_id__lifecycle_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectLifecycleEventResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_project_participants_api_companies__company_id__projects__project_id__participants_get: {
         parameters: {
             query?: never;
@@ -9345,6 +9532,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectParticipantResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectPermanentDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_company_project_api_companies__company_id__projects__project_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectResponse"];
                 };
             };
             /** @description Bad Request */

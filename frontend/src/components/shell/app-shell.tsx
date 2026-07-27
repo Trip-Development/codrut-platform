@@ -72,6 +72,22 @@ const NAV_ICON_BY_MATCH: Array<[string, LucideIcon]> = [
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "codrut_sidebar_collapsed";
 
 let globalIsSidebarCollapsed = false;
+type AccountIdentitySnapshot = {
+  label: string;
+  avatarSeed: string;
+  avatarPaletteKey?: number | null;
+};
+
+const accountIdentitySnapshots: Partial<Record<AppShellProps["audience"], AccountIdentitySnapshot>> = {};
+
+export function clearAppShellIdentityCache(audience?: AppShellProps["audience"]) {
+  if (audience) {
+    delete accountIdentitySnapshots[audience];
+    return;
+  }
+  delete accountIdentitySnapshots.trainer;
+  delete accountIdentitySnapshots.participant;
+}
 
 function syncSidebarCollapsedDataset(collapsed: boolean) {
   if (typeof document === "undefined") {
@@ -145,12 +161,24 @@ export function AppShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSidebarWidthTransitioning, setIsSidebarWidthTransitioning] = useState(false);
   const [optimisticHref, setOptimisticHref] = useState<string | null>(null);
+  const [retainedIdentity, setRetainedIdentity] = useState<AccountIdentitySnapshot | null>(
+    () => accountIdentitySnapshots[audience] ?? null,
+  );
   const sidebarTransitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutSubmittingRef = useRef(false);
 
   const isTrainer = audience === "trainer";
   const label = userLabel ?? session?.user.name ?? (isTrainer ? "Trainer" : "Participant");
   const avatarSeed = session?.user.id ?? `${audience}:${label}`;
+  const avatarPaletteKey = session?.user.avatarPaletteKey;
+  const currentIdentity = session?.user.id
+    ? { label, avatarSeed, avatarPaletteKey }
+    : null;
+  const displayedIdentity = currentIdentity ?? (accountIdentityPending ? retainedIdentity : null);
+  const displayedLabel = displayedIdentity?.label ?? label;
+  const displayedAvatarSeed = displayedIdentity?.avatarSeed ?? avatarSeed;
+  const displayedAvatarPaletteKey = displayedIdentity?.avatarPaletteKey ?? avatarPaletteKey;
+  const identityIsPending = accountIdentityPending && displayedIdentity === null;
   const accountHref = isTrainer ? "/trainer/settings" : "/participant/account";
   const currentNavHref = optimisticHref ?? getPathnameActiveHref(pathname, navItems, activeHref);
 
@@ -159,6 +187,19 @@ export function AppShell({
     setIsSidebarCollapsed(collapsed);
     syncSidebarCollapsedDataset(collapsed);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!session?.user.id) return;
+    const nextIdentity = { label, avatarSeed, avatarPaletteKey };
+    accountIdentitySnapshots[audience] = nextIdentity;
+    setRetainedIdentity((previous) => (
+      previous?.label === nextIdentity.label
+        && previous.avatarSeed === nextIdentity.avatarSeed
+        && previous.avatarPaletteKey === nextIdentity.avatarPaletteKey
+        ? previous
+        : nextIdentity
+    ));
+  }, [audience, avatarPaletteKey, avatarSeed, label, session?.user.id]);
 
   useEffect(() => {
     return () => {
@@ -219,6 +260,7 @@ export function AppShell({
         setLogoutError("Deconectarea nu a reușit. Încearcă din nou.");
         return;
       }
+      clearAppShellIdentityCache(audience);
       window.location.href = "/";
     } catch {
       logoutSubmittingRef.current = false;
@@ -341,12 +383,18 @@ export function AppShell({
                 className="absolute bottom-[4.75rem] left-3 z-50 flex w-64 flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
               >
                 <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
-                  <ProfileMark className="size-10" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
+                  <ProfileMark
+                    className="size-10"
+                    audience={audience}
+                    seed={displayedAvatarSeed}
+                    paletteKey={displayedAvatarPaletteKey}
+                    pending={identityIsPending}
+                  />
                   <div className="min-w-0">
-                    {accountIdentityPending ? (
+                    {identityIsPending ? (
                       <span className="block h-4 w-24 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
                     ) : (
-                      <p className="truncate text-sm font-semibold">{label}</p>
+                      <p className="truncate text-sm font-semibold">{displayedLabel}</p>
                     )}
                   </div>
                 </div>
@@ -396,14 +444,20 @@ export function AppShell({
               isSidebarCollapsed ? "mx-auto size-10 justify-center" : "w-full gap-3 p-1.5 pr-2",
             )}
           >
-            <ProfileMark className="size-8" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
+            <ProfileMark
+              className="size-8"
+              audience={audience}
+              seed={displayedAvatarSeed}
+              paletteKey={displayedAvatarPaletteKey}
+              pending={identityIsPending}
+            />
             {!isSidebarCollapsed ? (
               <>
                 <span data-sidebar-account-label className="min-w-0 flex-1">
-                  {accountIdentityPending ? (
+                  {identityIsPending ? (
                     <span className="block h-3.5 w-20 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
                   ) : (
-                    <span className="block truncate text-sm font-semibold leading-tight">{label}</span>
+                    <span className="block truncate text-sm font-semibold leading-tight">{displayedLabel}</span>
                   )}
                 </span>
                 <ChevronDownIcon
@@ -414,7 +468,7 @@ export function AppShell({
                 />
               </>
             ) : (
-              <span className="sr-only">{label}</span>
+              <span className="sr-only">{displayedLabel}</span>
             )}
           </Button>
         </div>
@@ -469,12 +523,18 @@ export function AppShell({
             <div className="mt-auto flex flex-col gap-3 pt-5">
               <Separator />
               <div className="flex items-center gap-3 rounded-lg border bg-muted p-2">
-                <ProfileMark className="size-9" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
+                <ProfileMark
+                  className="size-9"
+                  audience={audience}
+                  seed={displayedAvatarSeed}
+                  paletteKey={displayedAvatarPaletteKey}
+                  pending={identityIsPending}
+                />
                 <div className="min-w-0 flex-1">
-                  {accountIdentityPending ? (
+                  {identityIsPending ? (
                     <span className="block h-4 w-24 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
                   ) : (
-                    <p className="truncate text-sm font-semibold">{label}</p>
+                    <p className="truncate text-sm font-semibold">{displayedLabel}</p>
                   )}
                 </div>
               </div>
@@ -533,11 +593,13 @@ export function AppShell({
 function ProfileMark({
   audience,
   seed,
+  paletteKey,
   className,
   pending = false,
 }: {
   audience: AppShellProps["audience"];
   seed: string;
+  paletteKey?: number | null;
   className?: string;
   pending?: boolean;
 }) {
@@ -549,12 +611,13 @@ function ProfileMark({
       />
     );
   }
-  const palette = profilePalette(`${audience}:${seed}`);
+  const palette = profilePalette(`${audience}:${seed}`, paletteKey);
 
   return (
     <span
       aria-hidden="true"
       data-profile-avatar
+      data-avatar-palette-key={paletteKey ?? undefined}
       style={palette.base}
       className={cn(
         "relative inline-flex shrink-0 overflow-hidden rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.56),0_10px_24px_-16px_rgba(0,0,0,0.55)]",
@@ -574,17 +637,23 @@ function ProfileMark({
   );
 }
 
-export function profilePalette(seed: string): {
+const AVATAR_PALETTE_SPACE = 55_520_640;
+
+export function profilePalette(seed: string, paletteKey?: number | null): {
   base: CSSProperties;
   first: CSSProperties;
   second: CSSProperties;
 } {
+  const persistedPalette = decodeAvatarPaletteKey(paletteKey);
   const primaryHash = unsignedHash(seed);
   const secondaryHash = unsignedHash(`${seed}:secondary`);
-  const primaryHue = primaryHash % 360;
-  const highlightHue = (primaryHue + 24 + (secondaryHash % 68)) % 360;
-  const depthHue = (primaryHue + 154 + (primaryHash % 54)) % 360;
-  const angle = 22 + (secondaryHash % 42);
+  const primaryHue = persistedPalette?.primaryHue ?? (primaryHash % 360);
+  const highlightOffset = persistedPalette?.highlightOffset ?? (secondaryHash % 68);
+  const depthOffset = persistedPalette?.depthOffset ?? (primaryHash % 54);
+  const angleOffset = persistedPalette?.angleOffset ?? (secondaryHash % 42);
+  const highlightHue = (primaryHue + 24 + highlightOffset) % 360;
+  const depthHue = (primaryHue + 154 + depthOffset) % 360;
+  const angle = 22 + angleOffset;
   const base = `hsl(${primaryHue} 52% 31%)`;
   const first = `hsl(${highlightHue} 76% 68%)`;
   const second = `hsl(${depthHue} 48% 22%)`;
@@ -597,6 +666,33 @@ export function profilePalette(seed: string): {
     first: { backgroundColor: first },
     second: { backgroundColor: second },
   };
+}
+
+function decodeAvatarPaletteKey(paletteKey?: number | null): {
+  primaryHue: number;
+  highlightOffset: number;
+  depthOffset: number;
+  angleOffset: number;
+} | null {
+  if (
+    paletteKey === null
+    || paletteKey === undefined
+    || !Number.isSafeInteger(paletteKey)
+    || paletteKey < 0
+    || paletteKey >= AVATAR_PALETTE_SPACE
+  ) {
+    return null;
+  }
+
+  let remaining = paletteKey;
+  const primaryHue = remaining % 360;
+  remaining = Math.floor(remaining / 360);
+  const highlightOffset = remaining % 68;
+  remaining = Math.floor(remaining / 68);
+  const depthOffset = remaining % 54;
+  remaining = Math.floor(remaining / 54);
+  const angleOffset = remaining % 42;
+  return { primaryHue, highlightOffset, depthOffset, angleOffset };
 }
 
 function unsignedHash(value: string): number {
