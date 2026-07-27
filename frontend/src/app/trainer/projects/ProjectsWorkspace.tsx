@@ -7,13 +7,18 @@ import {
   Building2Icon,
   CalendarDaysIcon,
   FilterIcon,
+  FolderArchiveIcon,
   FolderPlusIcon,
+  FolderOpenIcon,
+  Loader2Icon,
+  RotateCcwIcon,
   SearchIcon,
   XIcon,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
-import type { CompanyProject } from "@/api/companies";
+import { restoreCompanyProject, type CompanyProject } from "@/api/companies";
 import {
   formatProjectDate,
   formatProjectDateRange,
@@ -22,6 +27,7 @@ import {
   statusRank,
 } from "@/components/projects/project-display";
 import { Button } from "@/components/ui/button";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import {
   Empty,
   EmptyContent,
@@ -50,16 +56,26 @@ export type ProjectsWorkspaceProps = {
   initialFilters: ProjectFilters;
   companies: Array<[string, string]>;
   projectTypes: string[];
+  archivedMode?: boolean;
 };
 
-export function ProjectsWorkspace({ projects, initialFilters, companies, projectTypes }: ProjectsWorkspaceProps) {
+export function ProjectsWorkspace({
+  projects,
+  initialFilters,
+  companies,
+  projectTypes,
+  archivedMode = false,
+}: ProjectsWorkspaceProps) {
+  const router = useRouter();
   const { get, searchKey, isPending: isUrlPending, setParam, setParams } = useUrlState();
   const [values, setValues] = useState({
     q: initialFilters.q ?? "",
     company: initialFilters.company ?? "",
-    status: initialFilters.status ?? "",
+    status: archivedMode ? "" : (initialFilters.status ?? ""),
     type: initialFilters.type ?? "",
   });
+  const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(values.q);
   const isFilterPending = isUrlPending || values.q !== deferredQuery;
 
@@ -67,15 +83,20 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
     setValues({
       q: get("q") ?? "",
       company: get("company") ?? "",
-      status: get("status") ?? "",
+      status: archivedMode ? "" : (get("status") ?? ""),
       type: get("type") ?? "",
     });
-  }, [get, searchKey]);
+  }, [archivedMode, get, searchKey]);
 
   const filteredProjects = useMemo(() => {
     const query = normalizeWorkspaceSearch(deferredQuery);
 
     return projects
+      .filter((project) =>
+        archivedMode
+          ? project.status === "archived"
+          : project.status !== "archived",
+      )
       .filter((project) => {
         if (!query) return true;
         return normalizeWorkspaceSearch(
@@ -90,7 +111,7 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
         if (rankDifference !== 0) return rankDifference;
         return (second.updated_at ?? "").localeCompare(first.updated_at ?? "");
       });
-  }, [deferredQuery, projects, values.company, values.status, values.type]);
+  }, [archivedMode, deferredQuery, projects, values.company, values.status, values.type]);
 
   const activeCount = filteredProjects.filter((project) => project.status === "active").length;
   const draftCount = filteredProjects.filter((project) => project.status === "draft").length;
@@ -104,13 +125,59 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
 
   function resetFilters() {
     setValues({ q: "", company: "", status: "", type: "" });
-    setParams({ q: null, company: null, status: null, type: null }, "replace");
+    setParams(
+      {
+        q: null,
+        company: null,
+        status: null,
+        type: null,
+        view: archivedMode ? "archived" : null,
+      },
+      "replace",
+    );
+  }
+
+  async function restoreProject(project: CompanyProject) {
+    if (restoringProjectId) return;
+    setRestoringProjectId(project.id);
+    setRestoreError(null);
+    try {
+      await restoreCompanyProject(project.company_id, project.id);
+      router.refresh();
+    } catch (error) {
+      setRestoreError(
+        error instanceof Error ? error.message : "Proiectul nu a putut fi restaurat.",
+      );
+      setRestoringProjectId(null);
+    }
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
+      <nav className="flex flex-wrap items-center gap-2" aria-label="Vizualizare proiecte">
+        <Button asChild variant={archivedMode ? "ghost" : "secondary"} size="sm">
+          <Link href="/trainer/projects">
+            <FolderOpenIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Proiecte curente
+          </Link>
+        </Button>
+        <Button asChild variant={archivedMode ? "secondary" : "ghost"} size="sm">
+          <Link href="/trainer/projects?view=archived">
+            <FolderArchiveIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Arhivă
+          </Link>
+        </Button>
+      </nav>
+
+      {restoreError ? <InlineFeedback tone="danger">{restoreError}</InlineFeedback> : null}
+
       <section
-        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
+        className={cn(
+          "grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2",
+          archivedMode
+            ? "xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)]"
+            : "xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]",
+        )}
         aria-label="Filtre proiecte"
       >
         <WorkspaceSearchInput
@@ -129,19 +196,20 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
           options={companies.map(([value, label]) => ({ value, label }))}
           onValueChange={(value) => updateValue("company", value)}
         />
-        <SearchableProjectFilter
-          icon={FilterIcon}
-          label="Status"
-          value={values.status}
-          allLabel="Toate statusurile"
-          options={[
-            { value: "active", label: "Active" },
-            { value: "draft", label: "În pregătire" },
-            { value: "completed", label: "Finalizate" },
-            { value: "archived", label: "Arhivate" },
-          ]}
-          onValueChange={(value) => updateValue("status", value)}
-        />
+        {!archivedMode ? (
+          <SearchableProjectFilter
+            icon={FilterIcon}
+            label="Status"
+            value={values.status}
+            allLabel="Toate statusurile"
+            options={[
+              { value: "active", label: "Active" },
+              { value: "draft", label: "În pregătire" },
+              { value: "completed", label: "Finalizate" },
+            ]}
+            onValueChange={(value) => updateValue("status", value)}
+          />
+        ) : null}
         <SearchableProjectFilter
           icon={BriefcaseBusinessIcon}
           label="Tip proiect"
@@ -162,13 +230,23 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
             <EmptyMedia variant="icon">
               <FolderPlusIcon aria-hidden="true" strokeWidth={1.8} />
             </EmptyMedia>
-            <EmptyTitle>Nu există proiecte încă</EmptyTitle>
-            <EmptyDescription>Creează primul proiect din spațiul unei companii.</EmptyDescription>
+            <EmptyTitle>{archivedMode ? "Arhiva este goală" : "Nu există proiecte încă"}</EmptyTitle>
+            <EmptyDescription>
+              {archivedMode
+                ? "Proiectele arhivate vor apărea aici și pot fi restaurate."
+                : "Creează primul proiect din spațiul unei companii."}
+            </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button asChild>
-              <Link href="/trainer/companies">Deschide companii</Link>
-            </Button>
+            {archivedMode ? (
+              <Button asChild variant="outline">
+                <Link href="/trainer/projects">Vezi proiectele curente</Link>
+              </Button>
+            ) : (
+              <Button asChild>
+                <Link href="/trainer/companies">Deschide companii</Link>
+              </Button>
+            )}
           </EmptyContent>
         </Empty>
       ) : filteredProjects.length === 0 ? (
@@ -199,9 +277,15 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
           <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{filteredProjects.length}</span> {filteredProjects.length === 1 ? "proiect" : "proiecte"}
-              <span aria-hidden="true"> · </span>{activeCount} {activeCount === 1 ? "activ" : "active"}
-              <span aria-hidden="true"> · </span>{draftCount} de configurat
-              <span aria-hidden="true"> · </span>{completedCount} {completedCount === 1 ? "finalizat" : "finalizate"}
+              {archivedMode ? (
+                <span> în arhivă</span>
+              ) : (
+                <>
+                  <span aria-hidden="true"> · </span>{activeCount} {activeCount === 1 ? "activ" : "active"}
+                  <span aria-hidden="true"> · </span>{draftCount} de configurat
+                  <span aria-hidden="true"> · </span>{completedCount} {completedCount === 1 ? "finalizat" : "finalizate"}
+                </>
+              )}
             </p>
             {hasActiveFilters ? (
               <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
@@ -251,13 +335,38 @@ export function ProjectsWorkspace({ projects, initialFilters, companies, project
                     </td>
                     <td className="px-4 py-4 text-muted-foreground">{formatProjectDate(project.updated_at)}</td>
                     <td className="px-4 py-4">
-                      <Link
-                        href={`/trainer/projects/${project.id}`}
-                        className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
-                      >
-                        {projectActionLabel(project)}
-                        <ArrowRightIcon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-                      </Link>
+                      {archivedMode ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={Boolean(restoringProjectId)}
+                            onClick={() => restoreProject(project)}
+                          >
+                            {restoringProjectId === project.id ? (
+                              <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" />
+                            ) : (
+                              <RotateCcwIcon data-icon="inline-start" aria-hidden="true" />
+                            )}
+                            Restaurează
+                          </Button>
+                          <Link
+                            href={`/trainer/projects/${project.id}/settings`}
+                            className="font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+                          >
+                            Detalii
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link
+                          href={`/trainer/projects/${project.id}`}
+                          className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+                        >
+                          {projectActionLabel(project)}
+                          <ArrowRightIcon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

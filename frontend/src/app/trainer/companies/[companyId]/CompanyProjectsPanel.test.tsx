@@ -9,7 +9,7 @@ vi.mock("@/api/companies", async (importOriginal) => {
   return {
     ...original,
     createCompanyProject: vi.fn(),
-    deleteCompanyProject: vi.fn(),
+    archiveCompanyProject: vi.fn(),
     updateCompanyProject: vi.fn(),
   };
 });

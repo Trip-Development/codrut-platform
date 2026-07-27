@@ -158,8 +158,24 @@ export type CompanyProject = {
   due_at: string | null;
   form_opens_at: string | null;
   form_closes_at: string | null;
+  archived_at?: string | null;
+  archived_by_user_id?: string | null;
+  archived_from_status?: CompanyProjectStatus | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ProjectLifecycleEvent = {
+  id: string;
+  company_id: string;
+  project_id: string;
+  actor_user_id: string | null;
+  actor_email: string | null;
+  action: "archived" | "restored" | "permanently_deleted";
+  project_name: string;
+  previous_status: CompanyProjectStatus | null;
+  next_status: CompanyProjectStatus | null;
+  created_at: string;
 };
 
 export type CompanyProjectPayload = {
@@ -1397,13 +1413,15 @@ export async function getCompanyTeams(
 export async function getCompanyProjects(
   companyId: string,
   options: ApiRequestOptions = {},
+  includeArchived = false,
 ): Promise<CompanyProject[]> {
   if (shouldUseSeededCompanyFallback(companyId)) {
     return fallbackCompanyProjects(companyId);
   }
 
   try {
-    const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects`, {
+    const suffix = includeArchived ? "?include_archived=true" : "";
+    const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects${suffix}`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -1425,9 +1443,11 @@ export async function getCompanyProjects(
 
 export async function getAllCompanyProjects(
   options: ApiRequestOptions = {},
+  includeArchived = false,
 ): Promise<CompanyProject[]> {
   try {
-    const response = await apiFetch(`${getApiBaseUrl()}/companies/projects`, {
+    const suffix = includeArchived ? "?include_archived=true" : "";
+    const response = await apiFetch(`${getApiBaseUrl()}/companies/projects${suffix}`, {
       cache: "no-store",
       credentials: "include",
       ...options,
@@ -1507,7 +1527,7 @@ export async function updateCompanyProject(
   return (await response.json()) as CompanyProject;
 }
 
-export async function deleteCompanyProject(companyId: string, projectId: string): Promise<void> {
+export async function archiveCompanyProject(companyId: string, projectId: string): Promise<void> {
   const response = await apiFetch(`${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}`, {
     method: "DELETE",
     credentials: "include",
@@ -1516,6 +1536,63 @@ export async function deleteCompanyProject(companyId: string, projectId: string)
     const data = await response.json().catch(() => null);
     throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
   }
+}
+
+export async function restoreCompanyProject(
+  companyId: string,
+  projectId: string,
+): Promise<CompanyProject> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/restore`,
+    {
+      method: "POST",
+      credentials: "include",
+    },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+  return (await response.json()) as CompanyProject;
+}
+
+export async function permanentlyDeleteCompanyProject(
+  companyId: string,
+  projectId: string,
+  projectName: string,
+): Promise<void> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/permanent-delete`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ project_name: projectName }),
+    },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error?.message ?? `Backend refuzat (${response.status})`);
+  }
+}
+
+export async function getProjectLifecycleEvents(
+  companyId: string,
+  projectId: string,
+  options: ApiRequestOptions = {},
+): Promise<ProjectLifecycleEvent[]> {
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/lifecycle-events`,
+    {
+      cache: "no-store",
+      credentials: "include",
+      ...options,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Eroare server (${response.status}): Nu s-a putut obține istoricul proiectului.`);
+  }
+  return (await response.json()) as ProjectLifecycleEvent[];
 }
 
 function assessmentCyclePayloadToApi(

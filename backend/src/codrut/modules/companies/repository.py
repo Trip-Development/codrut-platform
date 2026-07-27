@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.companies.models import (
@@ -8,11 +8,14 @@ from codrut.modules.companies.models import (
     CompanyAccessCode,
     CompanyMembership,
     CompanyProject,
+    CompanyProjectStatus,
     ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectLifecycleEvent,
     ProjectMembership,
 )
+from codrut.modules.identity.models import User
 
 
 class CompanyRepository:
@@ -68,6 +71,16 @@ class CompanyRepository:
                     )
                 ).label("scored_count"),
             )
+            .outerjoin(
+                CompanyProject,
+                CompanyProject.id == QuestionnaireAssignment.project_id,
+            )
+            .where(
+                or_(
+                    QuestionnaireAssignment.project_id.is_(None),
+                    CompanyProject.status != CompanyProjectStatus.archived,
+                )
+            )
             .group_by(QuestionnaireAssignment.company_id)
             .subquery()
         )
@@ -76,6 +89,7 @@ class CompanyRepository:
                 CompanyProject.company_id.label("company_id"),
                 func.count(CompanyProject.id).label("project_count"),
             )
+            .where(CompanyProject.status != CompanyProjectStatus.archived)
             .group_by(CompanyProject.company_id)
             .subquery()
         )
@@ -135,11 +149,17 @@ class CompanyRepository:
         await self.session.delete(company)
         await self.session.flush()
 
-    async def list_projects(self, company_id: UUID) -> list[CompanyProject]:
+    async def list_projects(
+        self,
+        company_id: UUID,
+        *,
+        include_archived: bool = False,
+    ) -> list[CompanyProject]:
+        stmt = select(CompanyProject).where(CompanyProject.company_id == company_id)
+        if not include_archived:
+            stmt = stmt.where(CompanyProject.status != CompanyProjectStatus.archived)
         result = await self.session.execute(
-            select(CompanyProject)
-            .where(CompanyProject.company_id == company_id)
-            .order_by(CompanyProject.created_at.desc(), CompanyProject.name)
+            stmt.order_by(CompanyProject.created_at.desc(), CompanyProject.name)
         )
         return list(result.scalars().all())
 
@@ -147,12 +167,15 @@ class CompanyRepository:
         self,
         *,
         user_id: UUID | None = None,
+        include_archived: bool = False,
     ) -> list[tuple[CompanyProject, str]]:
         stmt = (
             select(CompanyProject, Company.name)
             .join(Company, Company.id == CompanyProject.company_id)
             .order_by(CompanyProject.created_at.desc(), CompanyProject.name)
         )
+        if not include_archived:
+            stmt = stmt.where(CompanyProject.status != CompanyProjectStatus.archived)
         if user_id is not None:
             stmt = stmt.join(
                 CompanyMembership,
@@ -212,6 +235,28 @@ class CompanyRepository:
     async def delete_project(self, project: CompanyProject) -> None:
         await self.session.delete(project)
         await self.session.flush()
+
+    async def add_project_lifecycle_event(
+        self,
+        event: ProjectLifecycleEvent,
+    ) -> ProjectLifecycleEvent:
+        self.session.add(event)
+        await self.session.flush()
+        return event
+
+    async def list_project_lifecycle_events(
+        self,
+        company_id: UUID,
+        project_id: UUID,
+    ) -> list[tuple[ProjectLifecycleEvent, str | None]]:
+        result = await self.session.execute(
+            select(ProjectLifecycleEvent, User.email)
+            .outerjoin(User, User.id == ProjectLifecycleEvent.actor_user_id)
+            .where(ProjectLifecycleEvent.company_id == company_id)
+            .where(ProjectLifecycleEvent.project_id == project_id)
+            .order_by(ProjectLifecycleEvent.created_at.desc())
+        )
+        return [(event, actor_email) for event, actor_email in result.all()]
 
     async def add_membership(self, membership: CompanyMembership) -> CompanyMembership:
         self.session.add(membership)

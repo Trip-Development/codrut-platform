@@ -38,6 +38,12 @@ class CompanyProjectStatus(StrEnum):
     archived = "archived"
 
 
+class ProjectLifecycleAction(StrEnum):
+    archived = "archived"
+    restored = "restored"
+    permanently_deleted = "permanently_deleted"
+
+
 class Company(TimestampMixin, Base):
     __tablename__ = "companies"
 
@@ -92,11 +98,54 @@ class CompanyProject(TimestampMixin, Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     form_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     form_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    archived_from_status: Mapped[CompanyProjectStatus | None] = mapped_column(
+        Enum(CompanyProjectStatus),
+        nullable=True,
+    )
 
     company: Mapped[Company] = relationship(back_populates="projects")
     memberships: Mapped[list[ProjectMembership]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
+    )
+
+
+class ProjectLifecycleEvent(Base):
+    __tablename__ = "project_lifecycle_events"
+    __table_args__ = (
+        CheckConstraint(
+            "action in ('archived', 'restored', 'permanently_deleted')",
+            name="project_lifecycle_event_action",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # This is intentionally not a foreign key so the audit survives a permanent deletion.
+    project_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    project_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    previous_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    next_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
 

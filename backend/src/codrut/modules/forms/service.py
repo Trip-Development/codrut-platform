@@ -736,6 +736,11 @@ async def _validate_assignment_response_window(
     project = await repository.get_project_for_assignment(assignment)
     if project is None:
         return
+    if getattr(project, "status", None) == "archived":
+        raise DomainError(
+            "Project is archived.",
+            code="project_archived",
+        )
     if project.form_opens_at is not None and project.form_opens_at > now:
         raise DomainError(
             "Project questionnaires are not open yet.",

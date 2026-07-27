@@ -7,7 +7,7 @@ import {
   createCompanyProject,
   deleteAssessmentCycle,
   deleteCompany,
-  deleteCompanyProject,
+  archiveCompanyProject,
   getAssessmentCycles,
   getCompanyDefaultAssignmentPlan,
   importCompanyRoster,
@@ -158,7 +158,7 @@ describe("company mutation contracts", () => {
     await expect(updateCompanyProject("company-synthetic", "project-1", { status: "active" })).rejects.toThrow(
       "Backend refuzat (403)",
     );
-    await expect(deleteCompanyProject("company-synthetic", "project-1")).rejects.toThrow(
+    await expect(archiveCompanyProject("company-synthetic", "project-1")).rejects.toThrow(
       "Proiectul are asignări active.",
     );
   });
