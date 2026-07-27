@@ -172,6 +172,48 @@ describe("AppShell", () => {
     expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).not.toBe(initialAvatarStyle);
   });
 
+  it("uses the session identity and renders neutral placeholders while it is pending", () => {
+    const view = render(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        session={{
+          state: "authenticated",
+          user: {
+            id: "participant-1",
+            name: "Andrei din sesiune",
+            role: "participant",
+          },
+        }}
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("button", { name: "Andrei din sesiune" })).toBeTruthy();
+
+    view.rerender(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        accountIdentityPending
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Se încarcă identitatea contului" }));
+    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Deschide meniul de navigare" }));
+    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(3);
+    expect(document.querySelector("[data-profile-avatar]")).toBeNull();
+  });
+
   it("locks logout while the request is pending without adding explanatory copy", async () => {
     const logoutRequest = createDeferred<Awaited<ReturnType<typeof apiFetchType>>>();
     vi.mocked(apiFetch).mockReturnValue(logoutRequest.promise);
