@@ -1,9 +1,7 @@
 import { getParticipantSession } from "@/api/auth-server";
-import { getParticipantOnboardingState } from "@/api/participant-onboarding";
 import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
-import { redirect } from "next/navigation";
 import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
@@ -25,11 +23,6 @@ export default async function ParticipantAccountPage({
     getParticipantSession(),
     getParticipantWorkspaceSummary(participantWorkspaceRequestOptions(requestOptions.headers, routeParams)),
   ]);
-  const onboarding = await getParticipantOnboardingState(summary.participantProfileId);
-
-  if (onboarding.required && onboarding.href) {
-    redirect(onboarding.href);
-  }
 
   const name = summary.participantFullName || participant.user.name || participant.user.id;
   const scopeParams = participantScopeParams(summary);
