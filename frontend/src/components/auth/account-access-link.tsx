@@ -34,7 +34,7 @@ export function AccountAccessLink({
   useEffect(() => {
     let cancelled = false;
     void getAccountAccessSession().then((session) => {
-      if (cancelled || !session) return;
+      if (cancelled || !session || session.user.accessMode === "secure_link") return;
       setHref(dashboardHrefForRole(session.user.role));
       setLabel(authenticatedLabel);
     });

@@ -151,4 +151,23 @@ describe("TrainerLoginPage", () => {
     act(() => { vi.runAllTimers(); });
     expect(router.replace).toHaveBeenCalledWith("/participant");
   });
+
+  it("keeps trainer login available when a secure-link cookie is present", async () => {
+    vi.mocked(getAuthenticatedSession).mockResolvedValue({
+      state: "authenticated",
+      user: {
+        id: "participant-1",
+        name: "Bianca",
+        email: "bianca@example.com",
+        role: "participant",
+        accessMode: "secure_link",
+      },
+    });
+
+    render(<TrainerLoginPage />);
+
+    expect(await screen.findByRole("heading", { name: "Intră în portal." })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Intră în portal" })).toBeTruthy();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });

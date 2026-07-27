@@ -40,7 +40,7 @@ export default function TrainerLoginPage() {
     let cancelled = false;
     let redirectTimer: number | undefined;
     void getAuthenticatedSession().then((session) => {
-      if (cancelled || !session) return;
+      if (cancelled || !session || session.user.accessMode === "secure_link") return;
       setRememberedUser(session.user);
       redirectTimer = window.setTimeout(() => {
         if (cancelled) return;
