@@ -123,6 +123,92 @@ describe("ProjectSettingsForm", () => {
     expect(routerPush).toHaveBeenCalledWith("/trainer/projects/project-1");
   });
 
+  it("permanently deletes an archived project only after exact-name confirmation", async () => {
+    render(
+      <ProjectSettingsForm
+        project={{
+          id: "project-1",
+          company_id: "company-1",
+          name: "Leadership Septembrie",
+          description: null,
+          project_type: "team_coaching",
+          status: "archived",
+          starts_at: null,
+          due_at: null,
+          form_opens_at: null,
+          form_closes_at: null,
+          archived_at: "2026-07-27T09:00:00Z",
+          archived_by_user_id: "owner-1",
+          archived_from_status: "active",
+          created_at: "2026-06-11T09:00:00Z",
+          updated_at: "2026-07-27T09:00:00Z",
+        }}
+        lifecycleEvents={[
+          {
+            id: "event-1",
+            company_id: "company-1",
+            project_id: "project-1",
+            actor_user_id: "owner-1",
+            actor_email: "owner@example.com",
+            action: "archived",
+            project_name: "Leadership Septembrie",
+            previous_status: "active",
+            next_status: "archived",
+            created_at: "2026-07-27T09:00:00Z",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Istoric proiect" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Proiect arhivat" })).toBeTruthy();
+    expect(screen.getByText("owner@example.com")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Scrie numele proiectului pentru confirmare"), {
+      target: { value: "Leadership Septembrie" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Șterge definitiv" }));
+
+    await waitFor(() => {
+      expect(permanentlyDeleteCompanyProject).toHaveBeenCalledWith(
+        "company-1",
+        "project-1",
+        "Leadership Septembrie",
+      );
+    });
+    expect(routerPush).toHaveBeenCalledWith("/trainer/projects?view=archived");
+    expect(routerRefresh).toHaveBeenCalled();
+  });
+
+  it("reports an archive failure without navigating away", async () => {
+    vi.mocked(archiveCompanyProject).mockRejectedValueOnce(new Error("Arhivarea a eșuat."));
+
+    render(
+      <ProjectSettingsForm
+        project={{
+          id: "project-1",
+          company_id: "company-1",
+          name: "Leadership Septembrie",
+          description: null,
+          project_type: "team_coaching",
+          status: "active",
+          starts_at: null,
+          due_at: null,
+          form_opens_at: null,
+          form_closes_at: null,
+          created_at: "2026-06-11T09:00:00Z",
+          updated_at: "2026-06-11T09:00:00Z",
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Arhivează proiectul" }));
+
+    expect(await screen.findByText("Arhivarea a eșuat.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Arhivează proiectul" })).toHaveProperty("disabled", false);
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
   it("formats project dates in the app timezone before hydration", () => {
     render(
       <ProjectSettingsForm
