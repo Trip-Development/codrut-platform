@@ -9,8 +9,12 @@ import {
   TabBarSkeleton,
   TrainerRouteLoading,
 } from "./route-loading";
+import { clearAppShellIdentityCache } from "./app-shell";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  clearAppShellIdentityCache();
+});
 
 describe("route loading", () => {
   it("announces workspace preparation as a busy status", () => {

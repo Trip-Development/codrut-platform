@@ -72,6 +72,21 @@ const NAV_ICON_BY_MATCH: Array<[string, LucideIcon]> = [
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "codrut_sidebar_collapsed";
 
 let globalIsSidebarCollapsed = false;
+type AccountIdentitySnapshot = {
+  label: string;
+  avatarSeed: string;
+};
+
+const accountIdentitySnapshots: Partial<Record<AppShellProps["audience"], AccountIdentitySnapshot>> = {};
+
+export function clearAppShellIdentityCache(audience?: AppShellProps["audience"]) {
+  if (audience) {
+    delete accountIdentitySnapshots[audience];
+    return;
+  }
+  delete accountIdentitySnapshots.trainer;
+  delete accountIdentitySnapshots.participant;
+}
 
 function syncSidebarCollapsedDataset(collapsed: boolean) {
   if (typeof document === "undefined") {
@@ -145,12 +160,22 @@ export function AppShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSidebarWidthTransitioning, setIsSidebarWidthTransitioning] = useState(false);
   const [optimisticHref, setOptimisticHref] = useState<string | null>(null);
+  const [retainedIdentity, setRetainedIdentity] = useState<AccountIdentitySnapshot | null>(
+    () => accountIdentitySnapshots[audience] ?? null,
+  );
   const sidebarTransitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutSubmittingRef = useRef(false);
 
   const isTrainer = audience === "trainer";
   const label = userLabel ?? session?.user.name ?? (isTrainer ? "Trainer" : "Participant");
   const avatarSeed = session?.user.id ?? `${audience}:${label}`;
+  const currentIdentity = session?.user.id
+    ? { label, avatarSeed }
+    : null;
+  const displayedIdentity = currentIdentity ?? (accountIdentityPending ? retainedIdentity : null);
+  const displayedLabel = displayedIdentity?.label ?? label;
+  const displayedAvatarSeed = displayedIdentity?.avatarSeed ?? avatarSeed;
+  const identityIsPending = accountIdentityPending && displayedIdentity === null;
   const accountHref = isTrainer ? "/trainer/settings" : "/participant/account";
   const currentNavHref = optimisticHref ?? getPathnameActiveHref(pathname, navItems, activeHref);
 
@@ -159,6 +184,17 @@ export function AppShell({
     setIsSidebarCollapsed(collapsed);
     syncSidebarCollapsedDataset(collapsed);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!session?.user.id) return;
+    const nextIdentity = { label, avatarSeed };
+    accountIdentitySnapshots[audience] = nextIdentity;
+    setRetainedIdentity((previous) => (
+      previous?.label === nextIdentity.label && previous.avatarSeed === nextIdentity.avatarSeed
+        ? previous
+        : nextIdentity
+    ));
+  }, [audience, avatarSeed, label, session?.user.id]);
 
   useEffect(() => {
     return () => {
@@ -219,6 +255,7 @@ export function AppShell({
         setLogoutError("Deconectarea nu a reușit. Încearcă din nou.");
         return;
       }
+      clearAppShellIdentityCache(audience);
       window.location.href = "/";
     } catch {
       logoutSubmittingRef.current = false;
@@ -341,12 +378,12 @@ export function AppShell({
                 className="absolute bottom-[4.75rem] left-3 z-50 flex w-64 flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
               >
                 <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
-                  <ProfileMark className="size-10" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
+                  <ProfileMark className="size-10" audience={audience} seed={displayedAvatarSeed} pending={identityIsPending} />
                   <div className="min-w-0">
-                    {accountIdentityPending ? (
+                    {identityIsPending ? (
                       <span className="block h-4 w-24 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
                     ) : (
-                      <p className="truncate text-sm font-semibold">{label}</p>
+                      <p className="truncate text-sm font-semibold">{displayedLabel}</p>
                     )}
                   </div>
                 </div>
@@ -396,14 +433,14 @@ export function AppShell({
               isSidebarCollapsed ? "mx-auto size-10 justify-center" : "w-full gap-3 p-1.5 pr-2",
             )}
           >
-            <ProfileMark className="size-8" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
+            <ProfileMark className="size-8" audience={audience} seed={displayedAvatarSeed} pending={identityIsPending} />
             {!isSidebarCollapsed ? (
               <>
                 <span data-sidebar-account-label className="min-w-0 flex-1">
-                  {accountIdentityPending ? (
+                  {identityIsPending ? (
                     <span className="block h-3.5 w-20 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
                   ) : (
-                    <span className="block truncate text-sm font-semibold leading-tight">{label}</span>
+                    <span className="block truncate text-sm font-semibold leading-tight">{displayedLabel}</span>
                   )}
                 </span>
                 <ChevronDownIcon
@@ -414,7 +451,7 @@ export function AppShell({
                 />
               </>
             ) : (
-              <span className="sr-only">{label}</span>
+              <span className="sr-only">{displayedLabel}</span>
             )}
           </Button>
         </div>
@@ -469,12 +506,12 @@ export function AppShell({
             <div className="mt-auto flex flex-col gap-3 pt-5">
               <Separator />
               <div className="flex items-center gap-3 rounded-lg border bg-muted p-2">
-                <ProfileMark className="size-9" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
+                <ProfileMark className="size-9" audience={audience} seed={displayedAvatarSeed} pending={identityIsPending} />
                 <div className="min-w-0 flex-1">
-                  {accountIdentityPending ? (
+                  {identityIsPending ? (
                     <span className="block h-4 w-24 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
                   ) : (
-                    <p className="truncate text-sm font-semibold">{label}</p>
+                    <p className="truncate text-sm font-semibold">{displayedLabel}</p>
                   )}
                 </div>
               </div>
