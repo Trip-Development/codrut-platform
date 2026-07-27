@@ -110,6 +110,7 @@ class SessionPrincipal(BaseModel):
     user_id: UUID
     email: EmailStr
     role: UserRole
+    avatar_palette_key: int | None = None
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None
     session_token: str = Field(exclude=True)
@@ -123,5 +124,6 @@ class AuthResponse(BaseModel):
     user_id: UUID
     email: EmailStr
     role: UserRole
+    avatar_palette_key: int | None = None
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None

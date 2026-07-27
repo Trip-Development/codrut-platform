@@ -1740,6 +1740,8 @@ export interface components {
         AssignmentTargetType: "self" | "person" | "team";
         /** AuthResponse */
         AuthResponse: {
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
             /**
              * Email
              * Format: email
@@ -3651,6 +3653,8 @@ export interface components {
              * @enum {string}
              */
             access_mode: "account" | "secure_link";
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
             /**
              * Email
              * Format: email
