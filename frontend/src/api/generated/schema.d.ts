@@ -1699,8 +1699,6 @@ export interface components {
             terms_accepted_at?: string | null;
             /** Terms Version */
             terms_version?: string | null;
-            /** @default account */
-            access_mode?: "account" | "secure_link";
             /**
              * User Id
              * Format: uuid
@@ -2690,10 +2688,13 @@ export interface components {
         };
         /** InviteVerifyResponse */
         InviteVerifyResponse: {
+            /**
+             * Account Dashboard Available
+             * @default false
+             */
+            account_dashboard_available: boolean;
             /** Already Registered */
             already_registered: boolean;
-            /** Account Dashboard Available */
-            account_dashboard_available?: boolean;
             /** Anonymous Name */
             anonymous_name?: string | null;
             /**
@@ -3542,6 +3543,12 @@ export interface components {
         };
         /** SessionPrincipal */
         SessionPrincipal: {
+            /**
+             * Access Mode
+             * @default account
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
             /**
              * Email
              * Format: email
