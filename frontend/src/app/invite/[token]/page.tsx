@@ -41,11 +41,11 @@ function hasServerConsent(bundle: ValidInviteBundle): boolean {
 async function resolveInviteSafely(token: string): Promise<InviteBundle> {
   try {
     return await resolveInviteBundle(token);
-  } catch (error) {
+  } catch {
     return {
       state: "not_found",
       token,
-      message: error instanceof Error ? error.message : "A apărut o eroare la verificarea invitației.",
+      message: "Nu am putut verifica invitația. Reîncearcă sau cere un link nou de la trainer.",
     };
   }
 }

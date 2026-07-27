@@ -217,7 +217,7 @@ describe("invite and participant adapter contracts", () => {
       token: "revoked-token",
       projectName: "Proiect",
       deadlineLabel: "deadline-ul proiectului",
-      message: "Trainerul a înlocuit acest link.",
+      message: "Trainerul a înlocuit acest link. Folosește cea mai recentă invitație.",
     });
   });
 

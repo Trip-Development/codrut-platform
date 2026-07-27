@@ -1,6 +1,7 @@
 import { dashboardHrefForRole, isAuthRoleMismatchError, isAuthSessionUnavailableError } from "@/api/auth";
 import { getTrainerSession } from "@/api/auth-server";
 import { SessionUnavailableNotice } from "@/components/auth/session-unavailable-notice";
+import { trainerLoginHref } from "@/lib/auth-return";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -10,15 +11,15 @@ export default async function TrainerLayout({
   children: React.ReactNode;
 }) {
   const requestHeaders = await headers();
-  if (requestHeaders.get("x-codrut-pathname") === "/trainer/login") {
+  const pathname = requestHeaders.get("x-codrut-pathname") ?? "/trainer";
+  const requestedRoute = `${pathname}${requestHeaders.get("x-codrut-search") ?? ""}`;
+  if (pathname === "/trainer/login") {
     return <>{children}</>;
   }
 
+  let session: Awaited<ReturnType<typeof getTrainerSession>>;
   try {
-    const session = await getTrainerSession();
-    if (!session || session.user.role !== "trainer") {
-      redirect("/login");
-    }
+    session = await getTrainerSession();
   } catch (error) {
     if (isAuthRoleMismatchError(error)) {
       redirect(dashboardHrefForRole(error.context.actualRole));
@@ -26,7 +27,11 @@ export default async function TrainerLayout({
     if (isAuthSessionUnavailableError(error)) {
       return <SessionUnavailableNotice audience="trainer" />;
     }
-    redirect("/login");
+    redirect(trainerLoginHref(requestedRoute));
+  }
+
+  if (!session || session.user.role !== "trainer") {
+    redirect(trainerLoginHref(requestedRoute));
   }
 
   return <>{children}</>;
