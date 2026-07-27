@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { apiFetch as apiFetchType } from "@/api/http";
 import { apiFetch, ensureCsrfToken } from "@/api/http";
-import { AppShell } from "./app-shell";
+import { AppShell, clearAppShellIdentityCache } from "./app-shell";
 
 const navigationState = vi.hoisted(() => ({ pathname: "/trainer" }));
 
@@ -42,6 +42,7 @@ vi.mock("@/api/runtime", () => ({
 }));
 
 beforeEach(() => {
+  clearAppShellIdentityCache();
   navigationState.pathname = "/trainer";
   vi.mocked(apiFetch).mockReset();
   vi.mocked(ensureCsrfToken).mockReset();
@@ -172,7 +173,7 @@ describe("AppShell", () => {
     expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).not.toBe(initialAvatarStyle);
   });
 
-  it("uses the session identity and renders neutral placeholders while it is pending", () => {
+  it("retains the session identity when a route loading shell replaces the page shell", () => {
     const view = render(
       <AppShell
         audience="participant"
@@ -193,8 +194,32 @@ describe("AppShell", () => {
     );
 
     expect(screen.getByRole("button", { name: "Andrei din sesiune" })).toBeTruthy();
+    const initialAvatarStyle = document.querySelector("[data-profile-avatar]")?.getAttribute("style");
+    view.unmount();
 
-    view.rerender(
+    render(
+      <AppShell
+        audience="participant"
+        title="Acasă"
+        activeHref="/participant"
+        accountIdentityPending
+        navItems={[{ href: "/participant", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    expect(screen.queryByLabelText("Se încarcă identitatea contului")).toBeNull();
+    expect(screen.getByRole("button", { name: "Andrei din sesiune" })).toBeTruthy();
+    expect(document.querySelector("[data-profile-avatar]")?.getAttribute("style")).toBe(initialAvatarStyle);
+    fireEvent.click(screen.getByRole("button", { name: "Andrei din sesiune" }));
+    expect(screen.getAllByText("Andrei din sesiune")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Deschide meniul de navigare" }));
+    expect(screen.getAllByText("Andrei din sesiune")).toHaveLength(3);
+  });
+
+  it("renders neutral identity placeholders when no authenticated identity is known", () => {
+    render(
       <AppShell
         audience="participant"
         title="Acasă"
@@ -207,10 +232,6 @@ describe("AppShell", () => {
     );
 
     expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Se încarcă identitatea contului" }));
-    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Deschide meniul de navigare" }));
-    expect(screen.getAllByLabelText("Se încarcă identitatea contului")).toHaveLength(3);
     expect(document.querySelector("[data-profile-avatar]")).toBeNull();
   });
 
