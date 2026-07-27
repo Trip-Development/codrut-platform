@@ -30,6 +30,8 @@ describe("route loading", () => {
 
       expect(screen.getByRole("status").textContent).toContain("Pregătim proiecte");
       expect(screen.getByRole("heading", { name: "Proiecte" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Se încarcă identitatea contului" })).toBeTruthy();
+      expect(document.querySelector("[data-profile-avatar]")).toBeNull();
     },
   );
 
@@ -47,6 +49,8 @@ describe("route loading", () => {
 
       expect(screen.getByRole("status").textContent).toContain("Sincronizăm rezultatele");
       expect(screen.getByRole("heading", { name: "Rezultate" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Se încarcă identitatea contului" })).toBeTruthy();
+      expect(document.querySelector("[data-profile-avatar]")).toBeNull();
     },
   );
 

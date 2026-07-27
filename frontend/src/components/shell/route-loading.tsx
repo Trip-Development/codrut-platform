@@ -30,6 +30,7 @@ export function TrainerRouteLoading({
       description=""
       navItems={trainerNavItems}
       activeHref={activeHref}
+      accountIdentityPending
     >
       <LoadingStatus label={loadingLabel ?? `Pregătim ${title.toLowerCase()}`} />
       {kind === "dashboard" ? <DashboardSkeleton /> : null}
