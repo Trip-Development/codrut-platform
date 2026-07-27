@@ -11,6 +11,12 @@ import {
 } from "@/api/invites";
 import InvitePage from "./page";
 
+const routerReplace = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: routerReplace }),
+}));
+
 vi.mock("@/api/auth", () => ({
   acceptCurrentTerms: vi.fn(),
   getAuthenticatedSession: vi.fn(),
@@ -77,6 +83,7 @@ describe("InvitePage", () => {
     });
     vi.mocked(exchangeInviteSession).mockResolvedValue();
     vi.mocked(resolveInviteBundle).mockResolvedValue(validBundle);
+    routerReplace.mockReset();
   });
 
   afterEach(() => {
@@ -171,6 +178,29 @@ describe("InvitePage", () => {
     expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBe("accepted");
   });
 
+  it("routes a permanent participant to the dashboard after saving invite consent", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      alreadyRegistered: true,
+      accountDashboardAvailable: true,
+    });
+    await renderInvitePage();
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Continuă la chestionare" }));
+    await act(async () => {
+      await Promise.resolve();
+      vi.advanceTimersByTime(450);
+    });
+    vi.useRealTimers();
+
+    await waitFor(() => {
+      expect(routerReplace).toHaveBeenCalledWith("/participant");
+    });
+    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+  });
+
   it("keeps the consent screen and exposes retry when persistence fails", async () => {
     vi.mocked(acceptCurrentTerms).mockRejectedValueOnce(new Error("Conexiunea a fost întreruptă."));
 
@@ -222,21 +252,25 @@ describe("InvitePage", () => {
 
     await renderInvitePage();
 
-    expect(await screen.findByText("Persoana indicată · 12 min")).toBeDefined();
+    expect(await screen.findByText("1 persoană de evaluat · 12 min")).toBeDefined();
     expect(screen.queryByText(/bianca\.pavel@example\.com/i)).toBeNull();
     expect(screen.getByRole("link", { name: /Deschide/i }).getAttribute("href")).not.toContain("bianca.pavel");
   });
 
-  it("renders structured and unexpected invite lookup failures safely", async () => {
+  it("uses recovery copy instead of exposing unexpected invite lookup failures", async () => {
     vi.mocked(resolveInviteBundle).mockRejectedValueOnce(new Error("Invitația a expirat."));
     await renderInvitePage("expired-token");
     expect(await screen.findByRole("heading", { name: "Invitație nevalidă" })).toBeTruthy();
-    expect(screen.getByText("Invitația a expirat.")).toBeTruthy();
+    expect(
+      screen.getByText("Nu am putut verifica invitația. Reîncearcă sau cere un link nou de la trainer."),
+    ).toBeTruthy();
 
     cleanup();
     vi.mocked(resolveInviteBundle).mockRejectedValueOnce({ reason: "unknown" });
     await renderInvitePage("unknown-token");
-    expect(await screen.findByText("A apărut o eroare la verificarea invitației.")).toBeTruthy();
+    expect(
+      await screen.findByText("Nu am putut verifica invitația. Reîncearcă sau cere un link nou de la trainer."),
+    ).toBeTruthy();
   });
 
   it("shows a recovery action for an invalid invite with empty backend copy", async () => {
@@ -253,11 +287,29 @@ describe("InvitePage", () => {
     expect(screen.getByRole("link", { name: /Mergi la Cody/ }).getAttribute("href")).toBe("/");
   });
 
-  it("uses the signed invite as passwordless proof for an existing leadership account", async () => {
+  it("routes an existing participant account to its dashboard after passwordless exchange", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       isLeadership: true,
       alreadyRegistered: true,
+      accountDashboardAvailable: true,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+    });
+    await renderInvitePage();
+
+    await waitFor(() => {
+      expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+      expect(routerReplace).toHaveBeenCalledWith("/participant");
+    });
+    expect(screen.queryByRole("link", { name: /Înregistrează cont Leadership/ })).toBeNull();
+  });
+
+  it("keeps a non-participant account inside the secure invite flow", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      alreadyRegistered: true,
+      accountDashboardAvailable: false,
       termsAcceptedAt: "2026-07-16T10:00:00Z",
       termsVersion: "privacy-2026-07-16",
     });
@@ -265,7 +317,7 @@ describe("InvitePage", () => {
 
     expect(await screen.findByRole("heading", { name: "Chestionarele tale" })).toBeTruthy();
     expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
-    expect(screen.queryByRole("link", { name: /Înregistrează cont Leadership/ })).toBeNull();
+    expect(routerReplace).not.toHaveBeenCalled();
   });
 
   it("renders the empty secure queue after current server consent", async () => {
@@ -301,8 +353,33 @@ describe("InvitePage", () => {
     expect(screen.getAllByText(/Echipa ta · 12 min/)).toHaveLength(2);
     expect(screen.queryByText(/Echipa Nord/)).toBeNull();
     expect(screen.getByRole("heading", { name: "Evaluare regulată" }).closest("article")?.textContent).toContain("12 min");
-    expect(screen.getByText(/Bianca Pavel · 12 min/)).toBeTruthy();
-    expect(screen.getByText(/Persoana indicată · 12 min/)).toBeTruthy();
-    expect(screen.getAllByRole("link", { name: /Deschide/i })).toHaveLength(3);
+    expect(screen.getByRole("heading", { name: "Review 360" })).toBeTruthy();
+    expect(screen.getByText(/2 persoane de evaluat · 24 min/)).toBeTruthy();
+    expect(screen.getByText("0/2 review-uri finalizate")).toBeTruthy();
+    expect(screen.queryByText(/Bianca Pavel/)).toBeNull();
+    expect(screen.queryByText(/94620fe8/)).toBeNull();
+    expect(screen.getAllByRole("link", { name: /Deschide/i })).toHaveLength(2);
+  });
+
+  it("groups several 360 assignments into one review queue", async () => {
+    vi.mocked(resolveInviteBundle).mockResolvedValue({
+      ...validBundle,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
+      tasks: ["Ana", "Bogdan", "Corina"].map((targetLabel, index) => ({
+        ...validBundle.tasks[0],
+        id: `review-${index}`,
+        assignmentId: `review-${index}`,
+        questionnaireKey: "boss_360",
+        targetLabel,
+      })),
+    });
+
+    await renderInvitePage();
+
+    expect(await screen.findAllByRole("heading", { name: "Review 360" })).toHaveLength(1);
+    expect(screen.getByText("3 persoane de evaluat · 36 min")).toBeTruthy();
+    expect(screen.getByText("0/3 review-uri finalizate")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /Deschide/i })).toHaveLength(1);
   });
 });

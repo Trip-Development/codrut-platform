@@ -43,6 +43,7 @@ type AppShellProps = {
   activeHref: string;
   userLabel?: string;
   session?: SessionState;
+  accountIdentityPending?: boolean;
   accessNote?: string;
   showHeader?: boolean;
   headerActions?: React.ReactNode;
@@ -129,6 +130,7 @@ export function AppShell({
   activeHref,
   userLabel,
   session,
+  accountIdentityPending = false,
   accessNote,
   showHeader = true,
   headerActions,
@@ -147,7 +149,8 @@ export function AppShell({
   const logoutSubmittingRef = useRef(false);
 
   const isTrainer = audience === "trainer";
-  const label = userLabel ?? (isTrainer ? "Trainer" : "Participant");
+  const label = userLabel ?? session?.user.name ?? (isTrainer ? "Trainer" : "Participant");
+  const avatarSeed = session?.user.id ?? `${audience}:${label}`;
   const accountHref = isTrainer ? "/trainer/settings" : "/participant/account";
   const currentNavHref = optimisticHref ?? getPathnameActiveHref(pathname, navItems, activeHref);
 
@@ -338,9 +341,13 @@ export function AppShell({
                 className="absolute bottom-[4.75rem] left-3 z-50 flex w-64 flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
               >
                 <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
-                  <ProfileMark className="size-10" audience={audience} seed={label} />
+                  <ProfileMark className="size-10" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{label}</p>
+                    {accountIdentityPending ? (
+                      <span className="block h-4 w-24 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
+                    ) : (
+                      <p className="truncate text-sm font-semibold">{label}</p>
+                    )}
                   </div>
                 </div>
 
@@ -389,11 +396,15 @@ export function AppShell({
               isSidebarCollapsed ? "mx-auto size-10 justify-center" : "w-full gap-3 p-1.5 pr-2",
             )}
           >
-            <ProfileMark className="size-8" audience={audience} seed={label} />
+            <ProfileMark className="size-8" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
             {!isSidebarCollapsed ? (
               <>
                 <span data-sidebar-account-label className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold leading-tight">{label}</span>
+                  {accountIdentityPending ? (
+                    <span className="block h-3.5 w-20 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
+                  ) : (
+                    <span className="block truncate text-sm font-semibold leading-tight">{label}</span>
+                  )}
                 </span>
                 <ChevronDownIcon
                   data-sidebar-account-chevron
@@ -458,9 +469,13 @@ export function AppShell({
             <div className="mt-auto flex flex-col gap-3 pt-5">
               <Separator />
               <div className="flex items-center gap-3 rounded-lg border bg-muted p-2">
-                <ProfileMark className="size-9" audience={audience} seed={label} />
+                <ProfileMark className="size-9" audience={audience} seed={avatarSeed} pending={accountIdentityPending} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{label}</p>
+                  {accountIdentityPending ? (
+                    <span className="block h-4 w-24 animate-pulse rounded bg-foreground/10" aria-label="Se încarcă identitatea contului" />
+                  ) : (
+                    <p className="truncate text-sm font-semibold">{label}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -519,16 +534,27 @@ function ProfileMark({
   audience,
   seed,
   className,
+  pending = false,
 }: {
   audience: AppShellProps["audience"];
   seed: string;
   className?: string;
+  pending?: boolean;
 }) {
+  if (pending) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn("inline-flex shrink-0 animate-pulse rounded-full bg-foreground/10", className)}
+      />
+    );
+  }
   const palette = profilePalette(`${audience}:${seed}`);
 
   return (
     <span
       aria-hidden="true"
+      data-profile-avatar
       style={palette.base}
       className={cn(
         "relative inline-flex shrink-0 overflow-hidden rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.56),0_10px_24px_-16px_rgba(0,0,0,0.55)]",
@@ -548,40 +574,36 @@ function ProfileMark({
   );
 }
 
-const PROFILE_PALETTES: Array<{
-  base: string;
-  first: string;
-  second: string;
-}> = [
-  { base: "#7f1d1d", first: "#fb7185", second: "#27272a" },
-  { base: "#164e63", first: "#67e8f9", second: "#881337" },
-  { base: "#365314", first: "#bef264", second: "#3f3f46" },
-  { base: "#581c87", first: "#c084fc", second: "#0f766e" },
-  { base: "#713f12", first: "#facc15", second: "#44403c" },
-  { base: "#0f172a", first: "#38bdf8", second: "#be123c" },
-];
-
-function profilePalette(seed: string): {
+export function profilePalette(seed: string): {
   base: CSSProperties;
   first: CSSProperties;
   second: CSSProperties;
 } {
-  const palette = PROFILE_PALETTES[Math.abs(hashSeed(seed)) % PROFILE_PALETTES.length];
+  const primaryHash = unsignedHash(seed);
+  const secondaryHash = unsignedHash(`${seed}:secondary`);
+  const primaryHue = primaryHash % 360;
+  const highlightHue = (primaryHue + 24 + (secondaryHash % 68)) % 360;
+  const depthHue = (primaryHue + 154 + (primaryHash % 54)) % 360;
+  const angle = 22 + (secondaryHash % 42);
+  const base = `hsl(${primaryHue} 52% 31%)`;
+  const first = `hsl(${highlightHue} 76% 68%)`;
+  const second = `hsl(${depthHue} 48% 22%)`;
 
   return {
     base: {
-      backgroundColor: palette.base,
-      backgroundImage: `radial-gradient(circle at 34% 22%, ${palette.first} 0, transparent 36%), radial-gradient(circle at 72% 78%, ${palette.second} 0, transparent 46%)`,
+      backgroundColor: base,
+      backgroundImage: `linear-gradient(${angle}deg, transparent 12%, hsl(${highlightHue} 78% 72% / 0.18) 48%, transparent 72%), radial-gradient(circle at 32% 22%, ${first} 0, transparent 38%), radial-gradient(circle at 74% 80%, ${second} 0, transparent 48%)`,
     },
-    first: { backgroundColor: palette.first },
-    second: { backgroundColor: palette.second },
+    first: { backgroundColor: first },
+    second: { backgroundColor: second },
   };
 }
 
-function hashSeed(value: string): number {
-  let hash = 0;
+function unsignedHash(value: string): number {
+  let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  return hash;
+  return hash >>> 0;
 }

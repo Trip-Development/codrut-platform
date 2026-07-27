@@ -24,6 +24,7 @@ vi.mock("@/api/auth", () => ({
 
 describe("TrainerLoginPage", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/trainer/login");
     vi.mocked(getAuthenticatedSession).mockResolvedValue(null);
     vi.mocked(loginWithPassword).mockResolvedValue({
       state: "authenticated",
@@ -86,6 +87,27 @@ describe("TrainerLoginPage", () => {
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith("/trainer");
       expect(router.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("returns the trainer to a safe requested route after signing in", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/trainer/login?returnTo=%2Ftrainer%2Fprojects%2Fproject-1%3Ftab%3Dresults",
+    );
+    render(<TrainerLoginPage />);
+
+    fireEvent.change(screen.getByLabelText("Email trainer"), {
+      target: { value: "andreea@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Parolă"), {
+      target: { value: "Aa12345!" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Intră în portal" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(router.push).toHaveBeenCalledWith("/trainer/projects/project-1?tab=results");
     });
   });
 

@@ -25,6 +25,9 @@ export default async function ParticipantLayout({
 
   const pathname = (await headers()).get("x-codrut-pathname") ?? "";
   if (session.state === "authenticated") {
+    if (session.user.accessMode === "secure_link") {
+      redirect("/");
+    }
     const currentTermsAccepted = hasCurrentTerms(session.user);
     if (!currentTermsAccepted && pathname !== "/participant/consent") {
       redirect("/participant/consent");

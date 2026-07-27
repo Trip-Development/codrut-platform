@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRightIcon, Loader2Icon } from "lucide-react";
 
 import { acceptCurrentTerms, getAuthenticatedSession } from "@/api/auth";
@@ -104,6 +105,7 @@ export function InviteSessionExchange({
   bundle: ValidInviteBundle;
   children: ReactNode;
 }) {
+  const { replace } = useRouter();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<"pending" | "ready" | "conflict" | "error">("pending");
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +118,12 @@ export function InviteSessionExchange({
 
     void exchangeInviteSession(token)
       .then(() => {
-        if (active) setState("ready");
+        if (!active) return;
+        if (bundle.accountDashboardAvailable) {
+          replace("/participant");
+          return;
+        }
+        setState("ready");
       })
       .catch(async (exchangeError: unknown) => {
         if (!active) return;
@@ -139,7 +146,7 @@ export function InviteSessionExchange({
     return () => {
       active = false;
     };
-  }, [attempt, token]);
+  }, [attempt, bundle.accountDashboardAvailable, replace, token]);
 
   if (state === "ready") return <>{children}</>;
 
@@ -148,6 +155,10 @@ export function InviteSessionExchange({
     setError(null);
     try {
       await exchangeInviteSession(token, { replaceExistingSession: true });
+      if (bundle.accountDashboardAvailable) {
+        replace("/participant");
+        return;
+      }
       setState("ready");
     } catch (exchangeError) {
       setError(
@@ -205,6 +216,7 @@ export function InviteConsentGate({
   bundle: ValidInviteBundle;
   children: ReactNode;
 }) {
+  const { replace } = useRouter();
   const [termsChecked, setTermsChecked] = useState(false);
   const [consentSaved, setConsentSaved] = useState(false);
   const [consentSubmitting, setConsentSubmitting] = useState(false);
@@ -234,6 +246,10 @@ export function InviteConsentGate({
       await acceptCurrentTerms();
       await minimumFeedback;
       storeConsent(token);
+      if (bundle.accountDashboardAvailable) {
+        replace("/participant");
+        return;
+      }
       setConsentSaved(true);
     } catch (err) {
       if (isInviteSessionConflictError(err)) {

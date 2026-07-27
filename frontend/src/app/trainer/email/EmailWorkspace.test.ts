@@ -1336,6 +1336,9 @@ describe("EmailWorkspace campaign contacts", () => {
       dry_run: false,
       results: [],
     });
+    emailApiMocks.getEmailOpsSummary.mockResolvedValue(
+      makeEmailSummary("ready", recipients),
+    );
     navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
 
     render(React.createElement(EmailWorkspace, {
@@ -1365,6 +1368,31 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(unsentCheckbox.disabled).toBe(false);
     expect(within(campaignCard as HTMLElement).getByText("Trimis")).toBeTruthy();
     expect(within(campaignCard as HTMLElement).getByText("Netrimis")).toBeTruthy();
+
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", {
+      name: "Retrimite campania Campanie cu marker către ana.sent@example.com",
+    }));
+    expect(await screen.findByText(/trece explicit peste marcajul „Trimis”/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Retrimite" }));
+    await waitFor(() => {
+      expect(emailApiMocks.sendCampaignOnServer).toHaveBeenCalledWith(
+        "campaign-markers",
+        expect.objectContaining({
+          mode: "selected",
+          recipientIds: ["recipient-sent"],
+          idempotencyKey: expect.stringMatching(/^campaign-ui-/),
+        }),
+      );
+    });
+    expect(await screen.findByText("Retrimiterea către Ana Sent a fost procesată.")).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        (within(campaignCard as HTMLElement).getByRole("button", {
+          name: "Trimite campania",
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+    });
+    emailApiMocks.sendCampaignOnServer.mockClear();
 
     fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", { name: "Trimite campania" }));
     expect(await screen.findByText(

@@ -1181,7 +1181,7 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(exchangeInviteSession("real-token")).rejects.toThrow(
-      "Invitația aparține unui alt participant autentificat.",
+      "Invitația aparține unei alte sesiuni active.",
     );
   });
 
@@ -1252,9 +1252,26 @@ describe("frontend API adapter stubs", () => {
 
     await expect(resolveInviteBundle("expired-real")).resolves.toMatchObject({
       state: "expired",
-      message: "Linkul a expirat.",
+      message: "Linkul a expirat. Cere un link nou de la trainer.",
     });
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("localizes invalid invite errors by backend code", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: {
+          code: "task_link_invalid",
+          message: "Invalid task link.",
+        },
+      }),
+    } as Response));
+
+    await expect(resolveInviteBundle("invalid-real")).resolves.toMatchObject({
+      state: "not_found",
+      message: "Linkul de invitație nu este valid. Cere un link nou de la trainer.",
+    });
   });
 
   it("keeps demo invite tokens unavailable when demo fallback is disabled", async () => {

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { trainerLoginHref } from "@/lib/auth-return";
 import { THEME_PREPAINT_CSP_HASH } from "@/lib/theme-prepaint";
 
 const protectedPrefixes = ["/participant", "/trainer"];
@@ -84,6 +85,7 @@ export function middleware(request: NextRequest) {
   const contentSecurityPolicy = buildContentSecurityPolicy(nonce, isLocalRequest);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-codrut-pathname", pathname);
+  requestHeaders.set("x-codrut-search", request.nextUrl.search);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
 
@@ -104,10 +106,16 @@ export function middleware(request: NextRequest) {
     !isLocalAuthBypassEnabled(request)
   ) {
     const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = pathname === "/trainer" || pathname.startsWith("/trainer/")
-      ? "/trainer/login"
-      : "/login";
-    loginUrl.search = "";
+    const isTrainerRoute = pathname === "/trainer" || pathname.startsWith("/trainer/");
+    if (isTrainerRoute) {
+      const loginHref = trainerLoginHref(`${pathname}${request.nextUrl.search}`);
+      const [loginPathname, loginSearch = ""] = loginHref.split("?");
+      loginUrl.pathname = loginPathname;
+      loginUrl.search = loginSearch ? `?${loginSearch}` : "";
+    } else {
+      loginUrl.pathname = "/login";
+      loginUrl.search = "";
+    }
     return applyPageSecurityHeaders(
       NextResponse.redirect(loginUrl),
       contentSecurityPolicy,

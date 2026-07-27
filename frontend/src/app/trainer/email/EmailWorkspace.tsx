@@ -233,6 +233,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignAssetPreviewUrl, setCampaignAssetPreviewUrl] = useState<string | null>(null);
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const [sendingCampaignMode, setSendingCampaignMode] = useState<CampaignSendMode | null>(null);
+  const [resendingCampaignRecipientId, setResendingCampaignRecipientId] = useState<string | null>(null);
   const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
   const [campaignMemberships, setCampaignMemberships] = useState<Record<string, string[]>>({});
@@ -1428,6 +1429,57 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
   };
 
+  const handleResendCampaignRecipient = (
+    campaign: EmailCampaign,
+    recipient: CampaignRecipientRow,
+  ) => {
+    const readinessError = campaignSendReadinessError(campaign);
+    if (readinessError) {
+      setCampaignMessage(readinessError);
+      return;
+    }
+    const recipientLabel = campaignRecipientName(recipient) || recipient.email;
+    setEmailConfirmDialog({
+      title: "Retrimiți acest email?",
+      description: `Campania „${campaign.name}” va fi retrimisă doar către ${recipientLabel}. Această acțiune trece explicit peste marcajul „Trimis”.`,
+      confirmLabel: "Retrimite",
+      onConfirm: async () => {
+        if (campaignSendingRef.current) return;
+        campaignSendingRef.current = campaign.id;
+        setSendingCampaignId(campaign.id);
+        setSendingCampaignMode("selected");
+        setResendingCampaignRecipientId(recipient.id);
+        setCampaignMessage(null);
+        try {
+          const result = await sendCampaignOnServer(campaign.id, {
+            mode: "selected",
+            recipientIds: [recipient.id],
+            idempotencyKey: createCampaignSendIdempotencyKey(),
+          });
+          setCampaignSendResults((previousResults) => ({
+            ...previousResults,
+            [campaign.id]: result,
+          }));
+          setCampaignMessage(
+            `Retrimiterea către ${recipientLabel} a fost procesată.`,
+          );
+          await Promise.all([loadCampaigns(), refreshSummary()]);
+        } catch (error) {
+          setCampaignMessage(
+            error instanceof Error
+              ? error.message
+              : "Emailul nu a putut fi retrimis.",
+          );
+        } finally {
+          campaignSendingRef.current = null;
+          setSendingCampaignId(null);
+          setSendingCampaignMode(null);
+          setResendingCampaignRecipientId(null);
+        }
+      },
+    });
+  };
+
   const handleDeleteCampaign = (campaign: EmailCampaign) => {
     setEmailConfirmDialog({
       title: "Ștergi campania?",
@@ -1836,6 +1888,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                 openCampaignId={openCampaignId}
                 sendingCampaignId={sendingCampaignId}
                 sendingMode={sendingCampaignMode}
+                resendingRecipientId={resendingCampaignRecipientId}
                 deletingCampaignId={deletingCampaignId}
                 savingMembershipId={savingCampaignMembershipId}
                 getActiveMemberIds={activeCampaignMembershipIds}
@@ -1851,6 +1904,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                 toggleMembershipRecipient={(campaign, recipientId) => void toggleCampaignMembershipRecipient(campaign, recipientId)}
                 toggleMembershipCompany={toggleCampaignMembershipCompany}
                 sendCampaign={(campaign, mode) => void handleSendCampaign(campaign, mode)}
+                resendRecipient={handleResendCampaignRecipient}
                 editCampaign={openEditCampaignModal}
                 deleteCampaign={handleDeleteCampaign}
               />

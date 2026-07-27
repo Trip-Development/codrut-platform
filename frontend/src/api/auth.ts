@@ -8,6 +8,7 @@ export type CurrentUser = {
   name: string;
   email?: string;
   role: "trainer" | "participant";
+  accessMode?: "account" | "secure_link";
   termsAcceptedAt?: string | null;
   termsVersion?: string | null;
 };
@@ -22,6 +23,7 @@ type AuthApiResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
   terms_version?: string | null;
 };
@@ -30,6 +32,7 @@ type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
   terms_version?: string | null;
 };
@@ -99,6 +102,7 @@ export async function loginWithPassword(email: string, password: string): Promis
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
       termsVersion: user.terms_version,
     },
@@ -113,6 +117,7 @@ function sessionStateFromPrincipal(user: SessionPrincipalResponse): SessionState
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
       termsVersion: user.terms_version,
     },

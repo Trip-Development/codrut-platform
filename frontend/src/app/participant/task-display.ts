@@ -64,7 +64,7 @@ export function groupParticipantTasks(tasks: InviteTask[]): ParticipantTaskGroup
 
 export function participantTaskGroupHref(
   group: ParticipantTaskGroup,
-  options: { returnTo?: string } = {},
+  options: { returnTo?: string; inviteToken?: string } = {},
 ): string | null {
   if (!group.actionTask) return null;
   if (group.kind !== "review360") return inviteTaskHref(group.actionTask, options);
@@ -75,6 +75,35 @@ export function participantTaskGroupHref(
 
 export function isReview360Task(task: InviteTask): boolean {
   return review360Keys.has(task.questionnaireKey);
+}
+
+export function nextPendingReviewTask(
+  tasks: InviteTask[],
+  currentAssignmentId: string,
+): InviteTask | undefined {
+  const group = groupParticipantTasks(tasks).find(
+    (candidate) =>
+      candidate.kind === "review360" &&
+      candidate.tasks.some((task) => task.assignmentId === currentAssignmentId),
+  );
+  if (!group) return undefined;
+
+  const currentIndex = group.tasks.findIndex(
+    (task) => task.assignmentId === currentAssignmentId,
+  );
+  const pending = group.tasks.filter(
+    (task) =>
+      task.assignmentId !== currentAssignmentId &&
+      task.status !== "completed",
+  );
+  return (
+    pending.find(
+      (task) =>
+        group.tasks.findIndex(
+          (candidate) => candidate.assignmentId === task.assignmentId,
+        ) > currentIndex,
+    ) ?? pending[0]
+  );
 }
 
 function singleTaskGroup(task: InviteTask): ParticipantTaskGroup {
@@ -129,7 +158,7 @@ function groupStatus(tasks: InviteTask[]): InviteTaskStatus {
   return "not_started";
 }
 
-function safeReviewTargetLabel(value: string): string {
+export function safeReviewTargetLabel(value: string): string {
   const cleaned = value.trim().replace(/\s+/g, " ");
   if (!cleaned || cleaned.toLocaleLowerCase("ro-RO") === "autoevaluare") return "";
   if (cleaned.includes("@")) return "";

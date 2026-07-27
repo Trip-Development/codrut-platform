@@ -1,4 +1,5 @@
 import { getParticipantOnboardingState } from "@/api/participant-onboarding";
+import { getParticipantSession } from "@/api/auth-server";
 import {
   getParticipantWorkspaceSummary,
   type ParticipantWorkspaceSummary,
@@ -32,10 +33,13 @@ export default async function ParticipantResultsPage({
   const requestOptions = await getServerApiRequestOptions();
   const requestedComparisonId = firstValue(routeParams.compare);
   const requestedCycleId = requestedComparisonId ?? firstValue(routeParams.cycle);
-  const selectedSummary = await getParticipantWorkspaceSummary({
-      ...participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
-      cycleId: requestedCycleId,
-  });
+  const [participant, selectedSummary] = await Promise.all([
+    getParticipantSession(),
+    getParticipantWorkspaceSummary({
+        ...participantWorkspaceRequestOptions(requestOptions.headers, routeParams),
+        cycleId: requestedCycleId,
+    }),
+  ]);
   const onboarding = await getParticipantOnboardingState(
     selectedSummary.participantProfileId,
   );
@@ -100,6 +104,7 @@ export default async function ParticipantResultsPage({
       navItems={participantScopedNavItems(scopeParams)}
       activeHref={participantActiveHref("/participant/results", scopeParams)}
       userLabel={displaySummary.participantFullName.split(/\s+/)[0] || "Participant"}
+      session={participant}
     >
       <ParticipantContextSelector
         contexts={displaySummary.contexts}

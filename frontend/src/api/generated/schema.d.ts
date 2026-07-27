@@ -2688,6 +2688,11 @@ export interface components {
         };
         /** InviteVerifyResponse */
         InviteVerifyResponse: {
+            /**
+             * Account Dashboard Available
+             * @default false
+             */
+            account_dashboard_available: boolean;
             /** Already Registered */
             already_registered: boolean;
             /** Anonymous Name */
@@ -3538,6 +3543,12 @@ export interface components {
         };
         /** SessionPrincipal */
         SessionPrincipal: {
+            /**
+             * Access Mode
+             * @default account
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
             /**
              * Email
              * Format: email

@@ -54,6 +54,7 @@ class InviteVerifyResponse(BaseModel):
     anonymous_name: str | None = None
     is_leadership: bool
     already_registered: bool
+    account_dashboard_available: bool = False
     project_id: UUID | None = None
     project_name: str
     expires_at: datetime
@@ -115,6 +116,7 @@ class SessionPrincipal(BaseModel):
     assignment_invite_id: UUID | None = Field(default=None, exclude=True)
     assignment_ids: tuple[UUID, ...] | None = Field(default=None, exclude=True)
     project_id: UUID | None = Field(default=None, exclude=True)
+    access_mode: Literal["account", "secure_link"] = "account"
 
 
 class AuthResponse(BaseModel):

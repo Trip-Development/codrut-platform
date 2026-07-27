@@ -2,6 +2,11 @@ import Link from "next/link";
 
 import { safeReturnHref } from "@/app/participant/questionnaires/[key]/return-href";
 import {
+  nextPendingReviewTask,
+  safeReviewTargetLabel,
+} from "@/app/participant/task-display";
+import { inviteTaskHref, resolveInviteBundle } from "@/api/invites";
+import {
   getSecureQuestionnaireDefinition,
   getSecureQuestionnaireResponse,
 } from "@/api/questionnaires";
@@ -27,10 +32,24 @@ export default async function SecureTaskRunnerPage({
   const defaultReturnTo = `/invite/${encodeURIComponent(token)}`;
   const safeReturnTo = safeReturnHref(returnTo, defaultReturnTo, { secureInvite: true });
 
-  const [responseRecord, definition] = await Promise.all([
+  const [responseRecord, definition, inviteBundle] = await Promise.all([
     getSecureQuestionnaireResponse(token, taskId, requestOptions),
     getSecureQuestionnaireDefinition(token, taskId, requestOptions),
+    resolveInviteBundle(token),
   ]);
+  const nextTask =
+    inviteBundle.state === "valid"
+      ? nextPendingReviewTask(inviteBundle.tasks, taskId)
+      : undefined;
+  const nextTaskHref = nextTask
+    ? inviteTaskHref(
+        {
+          ...nextTask,
+          targetLabel: safeReviewTargetLabel(nextTask.targetLabel),
+        },
+        { returnTo: safeReturnTo, inviteToken: token },
+      )
+    : undefined;
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-8 text-foreground md:px-6">
@@ -46,6 +65,7 @@ export default async function SecureTaskRunnerPage({
             returnLabel="Înapoi la invitație"
             targetLabel={target}
             secureInviteToken={token}
+            nextTaskHref={nextTaskHref}
           />
         ) : (
           <EmptyState
