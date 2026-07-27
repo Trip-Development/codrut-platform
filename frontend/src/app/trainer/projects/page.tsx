@@ -8,16 +8,24 @@ import { LazyProjectsWorkspace } from "./LazyProjectsWorkspace";
 export default async function TrainerProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; company?: string; status?: string; type?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    company?: string;
+    status?: string;
+    type?: string;
+    view?: string;
+  }>;
 }) {
-  const projectsPromise = getServerApiRequestOptions().then((requestOptions) =>
-    getAllCompanyProjects(requestOptions),
-  );
-  const [filters, projects, trainer] = await Promise.all([
+  const [filters, requestOptions, trainer] = await Promise.all([
     searchParams,
-    projectsPromise,
+    getServerApiRequestOptions(),
     getTrainerSession(),
   ]);
+  const archivedMode = filters.view === "archived";
+  const loadedProjects = await getAllCompanyProjects(requestOptions, archivedMode);
+  const projects = archivedMode
+    ? loadedProjects.filter((project) => project.status === "archived")
+    : loadedProjects;
   const companies = Array.from(
     new Map(projects.map((project) => [project.company_id, project.company_name ?? "Companie"])).entries(),
   ).sort((first, second) => first[1].localeCompare(second[1]));
@@ -41,6 +49,7 @@ export default async function TrainerProjectsPage({
         initialFilters={filters}
         companies={companies}
         projectTypes={projectTypes}
+        archivedMode={archivedMode}
       />
     </AppShell>
   );

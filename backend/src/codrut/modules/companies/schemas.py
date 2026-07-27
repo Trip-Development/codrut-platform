@@ -78,12 +78,32 @@ class CompanyProjectResponse(BaseModel):
     due_at: datetime | None
     form_opens_at: datetime | None
     form_closes_at: datetime | None
+    archived_at: datetime | None = None
+    archived_by_user_id: UUID | None = None
+    archived_from_status: CompanyProjectStatus | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class CompanyProjectListItemResponse(CompanyProjectResponse):
     company_name: str
+
+
+class ProjectPermanentDeleteRequest(StrictRequestModel):
+    project_name: str = Field(min_length=1, max_length=255)
+
+
+class ProjectLifecycleEventResponse(BaseModel):
+    id: UUID
+    company_id: UUID
+    project_id: UUID
+    actor_user_id: UUID | None
+    actor_email: EmailStr | None
+    action: Literal["archived", "restored", "permanently_deleted"]
+    project_name: str
+    previous_status: CompanyProjectStatus | None
+    next_status: CompanyProjectStatus | None
+    created_at: datetime
 
 
 class CompanyAccessCodeCreateRequest(StrictRequestModel):

@@ -42,6 +42,7 @@ from codrut.modules.companies.models import (
     ParticipantAccountLinkAudit,
     ParticipantProfile,
     ParticipantReportingRelationship,
+    ProjectLifecycleEvent,
     ProjectMembership,
 )
 from codrut.modules.companies.policies import require_trainer_principal
@@ -55,6 +56,7 @@ from codrut.modules.companies.schemas import (
     ParticipantCreateRequest,
     ParticipantInviteBatchRequest,
     ParticipantUpdateRequest,
+    ProjectPermanentDeleteRequest,
     RosterImportRequest,
 )
 from codrut.modules.companies.service import CompanyService, hash_company_access_code
@@ -110,6 +112,7 @@ class FakeCompanyRepository:
         self.reporting_relationships: list[ParticipantReportingRelationship] = []
         self.assignments: list[QuestionnaireAssignment] = []
         self.account_link_audits: list[ParticipantAccountLinkAudit] = []
+        self.project_lifecycle_events: list[ProjectLifecycleEvent] = []
 
     async def list_companies_for_user(self, user_id: uuid.UUID) -> list[Company]:
         company_ids = {
@@ -135,7 +138,14 @@ class FakeCompanyRepository:
             (
                 company,
                 4,
-                len([project for project in self.projects if project.company_id == company.id]),
+                len(
+                    [
+                        project
+                        for project in self.projects
+                        if project.company_id == company.id
+                        and project.status != CompanyProjectStatus.archived
+                    ]
+                ),
                 6,
                 3,
                 1,
@@ -177,20 +187,41 @@ class FakeCompanyRepository:
             if membership.company_id != company.id
         ]
 
-    async def list_projects(self, company_id: uuid.UUID) -> list[CompanyProject]:
-        return [project for project in self.projects if project.company_id == company_id]
+    async def list_projects(
+        self,
+        company_id: uuid.UUID,
+        *,
+        include_archived: bool = False,
+    ) -> list[CompanyProject]:
+        return [
+            project
+            for project in self.projects
+            if project.company_id == company_id
+            and (include_archived or project.status != CompanyProjectStatus.archived)
+        ]
 
-    async def list_projects_for_user(self, user_id: uuid.UUID) -> list[tuple[CompanyProject, str]]:
+    async def list_projects_with_company(
+        self,
+        *,
+        user_id: uuid.UUID | None = None,
+        include_archived: bool = False,
+    ) -> list[tuple[CompanyProject, str]]:
         companies = self.companies_by_id
-        company_ids = {
-            membership.company_id
-            for membership in self.memberships
-            if membership.user_id == user_id
-        }
+        company_ids = (
+            {
+                membership.company_id
+                for membership in self.memberships
+                if membership.user_id == user_id
+            }
+            if user_id is not None
+            else set(companies)
+        )
         return [
             (project, companies[project.company_id].name)
             for project in self.projects
-            if project.company_id in companies and project.company_id in company_ids
+            if project.company_id in companies
+            and project.company_id in company_ids
+            and (include_archived or project.status != CompanyProjectStatus.archived)
         ]
 
     async def get_project_by_id(
@@ -245,6 +276,26 @@ class FakeCompanyRepository:
 
     async def delete_project(self, project: CompanyProject) -> None:
         self.projects = [existing for existing in self.projects if existing.id != project.id]
+
+    async def add_project_lifecycle_event(
+        self,
+        event: ProjectLifecycleEvent,
+    ) -> ProjectLifecycleEvent:
+        event.id = uuid.uuid4()
+        event.created_at = datetime.now(UTC)
+        self.project_lifecycle_events.append(event)
+        return event
+
+    async def list_project_lifecycle_events(
+        self,
+        company_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> list[tuple[ProjectLifecycleEvent, str | None]]:
+        return [
+            (event, None)
+            for event in reversed(self.project_lifecycle_events)
+            if event.company_id == company_id and event.project_id == project_id
+        ]
 
     async def add_membership(self, membership: CompanyMembership) -> CompanyMembership:
         membership.id = uuid.uuid4()
@@ -874,15 +925,25 @@ async def test_update_project_rejects_invalid_dates() -> None:
         )
 
 
-async def test_delete_project_removes_only_that_project() -> None:
+async def test_delete_project_archives_without_removing_project_or_company_roster() -> None:
     repository = FakeCompanyRepository()
     service = make_service(repository)
     owner_id = uuid.uuid4()
     company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    participant = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=company.id,
+        full_name="Ana Participant",
+        email="ana@example.com",
+    )
+    repository.participants.append(participant)
     first = await service.create_project(
         owner_id,
         company.id,
-        CompanyProjectCreateRequest(name="Leadership"),
+        CompanyProjectCreateRequest(
+            name="Leadership",
+            status=CompanyProjectStatus.active,
+        ),
     )
     second = await service.create_project(
         owner_id,
@@ -893,6 +954,104 @@ async def test_delete_project_removes_only_that_project() -> None:
     await service.delete_project(owner_id, company.id, first.id)
 
     assert await service.list_projects(owner_id, company.id) == [second]
+    assert await service.list_projects(
+        owner_id,
+        company.id,
+        include_archived=True,
+    ) == [first, second]
+    assert first.status == CompanyProjectStatus.archived
+    assert first.archived_from_status == CompanyProjectStatus.active
+    assert first.archived_by_user_id == owner_id
+    assert first.archived_at is not None
+    assert repository.participants == [participant]
+    assert repository.project_lifecycle_events[0].action == "archived"
+
+
+async def test_restore_project_recovers_previous_status_and_records_audit() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(
+            name="Leadership",
+            status=CompanyProjectStatus.completed,
+        ),
+    )
+    await service.delete_project(owner_id, company.id, project.id)
+
+    restored = await service.restore_project(owner_id, company.id, project.id)
+
+    assert restored.status == CompanyProjectStatus.completed
+    assert restored.archived_at is None
+    assert restored.archived_by_user_id is None
+    assert restored.archived_from_status is None
+    assert [event.action for event in repository.project_lifecycle_events] == [
+        "archived",
+        "restored",
+    ]
+
+
+async def test_permanent_delete_requires_archived_project_owner_and_exact_name() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    trainer_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    repository.memberships.append(
+        CompanyMembership(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            user_id=trainer_id,
+            role=CompanyMembershipRole.trainer,
+        )
+    )
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Leadership"),
+    )
+
+    with pytest.raises(DomainError) as active_error:
+        await service.permanently_delete_project(
+            owner_id,
+            company.id,
+            project.id,
+            ProjectPermanentDeleteRequest(project_name=project.name),
+        )
+    assert active_error.value.code == "project_archive_required"
+
+    await service.delete_project(owner_id, company.id, project.id)
+
+    with pytest.raises(DomainError) as trainer_error:
+        await service.permanently_delete_project(
+            trainer_id,
+            company.id,
+            project.id,
+            ProjectPermanentDeleteRequest(project_name=project.name),
+        )
+    assert trainer_error.value.code == "company_owner_required"
+
+    with pytest.raises(DomainError) as name_error:
+        await service.permanently_delete_project(
+            owner_id,
+            company.id,
+            project.id,
+            ProjectPermanentDeleteRequest(project_name="Wrong name"),
+        )
+    assert name_error.value.code == "project_name_confirmation_mismatch"
+
+    await service.permanently_delete_project(
+        owner_id,
+        company.id,
+        project.id,
+        ProjectPermanentDeleteRequest(project_name=project.name),
+    )
+
+    assert project not in repository.projects
+    assert repository.project_lifecycle_events[-1].action == "permanently_deleted"
 
 
 async def test_trainer_without_company_membership_cannot_manage_projects() -> None:

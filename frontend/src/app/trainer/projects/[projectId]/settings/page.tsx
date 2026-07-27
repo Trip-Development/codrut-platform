@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getCompanyProjectById } from "@/api/companies";
+import { getCompanyProjectById, getProjectLifecycleEvents } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { LazyProjectSettingsForm } from "./LazyProjectSettingsForm";
 
@@ -19,5 +19,11 @@ export default async function ProjectSettingsPage({
     notFound();
   }
 
-  return <LazyProjectSettingsForm project={project} />;
+  const lifecycleEvents = await getProjectLifecycleEvents(
+    project.company_id,
+    project.id,
+    requestOptions,
+  );
+
+  return <LazyProjectSettingsForm project={project} lifecycleEvents={lifecycleEvents} />;
 }

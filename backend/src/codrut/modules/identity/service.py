@@ -1193,6 +1193,11 @@ def _min_datetime(*values: datetime | None) -> datetime:
 
 
 def _validate_project_access_window(project: "CompanyProject", *, now: datetime) -> None:
+    if getattr(project, "status", None) == "archived":
+        raise DomainError(
+            "Project is archived.",
+            code="project_archived",
+        )
     if project.form_opens_at is not None and project.form_opens_at > now:
         raise DomainError(
             "Project questionnaires are not open yet.",

@@ -61,7 +61,6 @@ const statusFilters: Array<{ value: ProjectStatusFilter; label: string }> = [
   { value: "active", label: "Active" },
   { value: "draft", label: "În pregătire" },
   { value: "completed", label: "Finalizate" },
-  { value: "archived", label: "Arhivate" },
 ];
 
 const statusFilterValues = new Set<ProjectStatusFilter>(statusFilters.map((filter) => filter.value));

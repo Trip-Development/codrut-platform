@@ -25,7 +25,9 @@ from codrut.modules.companies.schemas import (
     ParticipantInviteBatchResponse,
     ParticipantResponse,
     ParticipantUpdateRequest,
+    ProjectLifecycleEventResponse,
     ProjectParticipantResponse,
+    ProjectPermanentDeleteRequest,
     ReportingRelationshipImportResponse,
     RosterImportRequest,
     RosterImportResponse,
@@ -59,9 +61,13 @@ async def list_company_summaries(
 async def list_all_company_projects(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    include_archived: Annotated[bool, Query()] = False,
 ) -> list[CompanyProjectListItemResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_all_projects(principal.user_id)
+    return await CompanyService(session).list_all_projects(
+        principal.user_id,
+        include_archived=include_archived,
+    )
 
 
 @router.get("/projects/{project_id}", response_model=CompanyProjectListItemResponse)
@@ -103,9 +109,14 @@ async def list_company_projects(
     company_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    include_archived: Annotated[bool, Query()] = False,
 ) -> list[CompanyProjectResponse]:
     require_trainer_principal(principal)
-    return await CompanyService(session).list_projects(principal.user_id, company_id)
+    return await CompanyService(session).list_projects(
+        principal.user_id,
+        company_id,
+        include_archived=include_archived,
+    )
 
 
 @router.post(
@@ -155,6 +166,66 @@ async def delete_company_project(
     await CompanyService(session).delete_project(principal.user_id, company_id, project_id)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{company_id}/projects/{project_id}/restore",
+    response_model=CompanyProjectResponse,
+)
+async def restore_company_project(
+    company_id: UUID,
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CompanyProjectResponse:
+    require_trainer_principal(principal)
+    project = await CompanyService(session).restore_project(
+        principal.user_id,
+        company_id,
+        project_id,
+    )
+    await session.commit()
+    return project
+
+
+@router.post(
+    "/{company_id}/projects/{project_id}/permanent-delete",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def permanently_delete_company_project(
+    company_id: UUID,
+    project_id: UUID,
+    payload: ProjectPermanentDeleteRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await CompanyService(session).permanently_delete_project(
+        principal.user_id,
+        company_id,
+        project_id,
+        payload,
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{company_id}/projects/{project_id}/lifecycle-events",
+    response_model=list[ProjectLifecycleEventResponse],
+)
+async def list_company_project_lifecycle_events(
+    company_id: UUID,
+    project_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> list[ProjectLifecycleEventResponse]:
+    require_trainer_principal(principal)
+    return await CompanyService(session).list_project_lifecycle_events(
+        principal.user_id,
+        company_id,
+        project_id,
+    )
 
 
 @router.get("/{company_id}/participants", response_model=list[ParticipantResponse])

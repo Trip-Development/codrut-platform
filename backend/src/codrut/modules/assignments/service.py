@@ -44,6 +44,7 @@ from codrut.modules.companies.hierarchy import (
 )
 from codrut.modules.companies.models import (
     CompanyMembershipRole,
+    CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
 )
@@ -112,7 +113,11 @@ class AssignmentService:
         payload: AssessmentCycleCreateRequest,
     ) -> AssessmentCycleResponse:
         await self._require_company_manager(user_id, company_id)
-        await self._require_company_project(company_id, project_id)
+        await self._require_company_project(
+            company_id,
+            project_id,
+            allow_archived=False,
+        )
         if await self.assignment_repository.get_open_assessment_cycle(company_id, project_id):
             raise DomainError(
                 "Close the current assessment cycle before creating another one.",
@@ -415,7 +420,11 @@ class AssignmentService:
         payload: AssignmentCreateRequest,
     ) -> QuestionnaireAssignment:
         await self._require_company_manager(user_id, company_id)
-        await self._require_company_project(company_id, payload.project_id)
+        await self._require_company_project(
+            company_id,
+            payload.project_id,
+            allow_archived=False,
+        )
         cycle = await self._cycle_for_assignment_write(
             company_id,
             payload.project_id,
@@ -812,7 +821,11 @@ class AssignmentService:
         payload: AssignmentPlanSaveRequest,
     ) -> AssignmentPlanSaveResponse:
         await self._require_company_manager(user_id, company_id)
-        await self._require_company_project(company_id, payload.project_id)
+        await self._require_company_project(
+            company_id,
+            payload.project_id,
+            allow_archived=False,
+        )
         cycle = await self._cycle_for_assignment_write(
             company_id,
             payload.project_id,
@@ -1166,6 +1179,8 @@ class AssignmentService:
         self,
         company_id: UUID,
         project_id: UUID | None,
+        *,
+        allow_archived: bool = True,
     ) -> None:
         if project_id is None:
             return
@@ -1174,6 +1189,11 @@ class AssignmentService:
             raise DomainError(
                 "Project not found in this company.",
                 code="project_not_found",
+            )
+        if not allow_archived and project.status == CompanyProjectStatus.archived:
+            raise DomainError(
+                "Restore the project before changing its data.",
+                code="project_restore_required",
             )
 
     async def _require_project_participant(
@@ -1320,6 +1340,12 @@ class AssignmentService:
         *,
         for_update: bool = False,
     ) -> AssessmentCycle:
+        if for_update:
+            await self._require_company_project(
+                company_id,
+                project_id,
+                allow_archived=False,
+            )
         cycle = await self.assignment_repository.get_assessment_cycle(
             company_id,
             project_id,
