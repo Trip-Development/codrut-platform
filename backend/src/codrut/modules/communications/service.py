@@ -1727,6 +1727,11 @@ def _render_campaign_message(
     if not campaign.video_url and not campaign.thumbnail_url:
         html_body = _remove_empty_campaign_video_blocks(html_body)
         text_body = _remove_empty_campaign_video_lines(text_body)
+    html_body = _remove_redundant_campaign_rich_action_links(
+        html_body,
+        campaign,
+        calendly_tracking_url,
+    )
     if not _campaign_message_has_calendly_link(html_body, calendly_tracking_url):
         html_body = _append_campaign_calendly_cta(html_body, calendly_tracking_url)
     html_body = _rewrite_campaign_tracking_links(
@@ -1765,6 +1770,8 @@ _EMPTY_CAMPAIGN_VIDEO_LINE_RE = re.compile(r"(?m)^[^\n]*(?:Video|video)[^\n]*:\s
 _CAMPAIGN_HREF_RE = re.compile(r'href=(["\'])([^"\']+)\1', re.IGNORECASE)
 _CAMPAIGN_TEXT_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 _CAMPAIGN_BODY_CLOSE_RE = re.compile(r"</body\s*>", re.IGNORECASE)
+_CAMPAIGN_PARAGRAPH_RE = re.compile(r"<p\b[^>]*>.*?</p>", re.IGNORECASE | re.DOTALL)
+_CAMPAIGN_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _remove_empty_campaign_video_blocks(html_body: str) -> str:
@@ -1773,6 +1780,40 @@ def _remove_empty_campaign_video_blocks(html_body: str) -> str:
 
 def _remove_empty_campaign_video_lines(text_body: str) -> str:
     return _EMPTY_CAMPAIGN_VIDEO_LINE_RE.sub("", text_body)
+
+
+def _remove_redundant_campaign_rich_action_links(
+    html_body: str,
+    campaign: Campaign,
+    calendly_tracking_url: str,
+) -> str:
+    video_targets = {
+        target
+        for target in (campaign.video_url, campaign.landing_page_url or campaign.video_url)
+        if target and campaign.thumbnail_url
+    }
+    redundant_paragraphs = {
+        f"{label}: {target}"
+        for label, targets in (
+            ("Link platformă", video_targets | {calendly_tracking_url}),
+            ("Material video", video_targets),
+            ("Video", video_targets),
+            ("Alege un slot", {calendly_tracking_url}),
+            ("Alege un slot în Calendly", {calendly_tracking_url}),
+        )
+        for target in targets
+    }
+
+    def remove_redundant_paragraph(match: re.Match[str]) -> str:
+        visible_text = html_unescape(
+            _CAMPAIGN_HTML_TAG_RE.sub("", match.group(0))
+        )
+        normalized_text = " ".join(visible_text.split())
+        if normalized_text in redundant_paragraphs:
+            return ""
+        return match.group(0)
+
+    return _CAMPAIGN_PARAGRAPH_RE.sub(remove_redundant_paragraph, html_body)
 
 
 def _campaign_message_has_calendly_link(body: str, calendly_tracking_url: str) -> bool:

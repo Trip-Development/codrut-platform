@@ -115,10 +115,16 @@ function emailParagraphHtml(value: string): string {
   return `<p style="${EMAIL_PARAGRAPH_STYLE}">${emailInlineMarkdownToHtml(value).replace(/\r?\n/g, "<br />")}</p>`;
 }
 
-function emailButtonHtml(label: string, href: string): string {
+function emailButtonHtml(
+  label: string,
+  href: string,
+  { includeFallbackLink }: { includeFallbackLink: boolean },
+): string {
   const safeHref = escapeHtmlAttribute(sanitizePreviewHref(href));
   const safeLabel = escapeHtml(label.trim() || "Deschide linkul");
-  return `<p style="margin:24px 0;"><a href="${safeHref}" style="${EMAIL_BUTTON_STYLE}">${safeLabel}</a></p><p style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;">Link platformă: <a href="${safeHref}" style="color:#890505;text-decoration:underline;">${safeHref}</a></p>`;
+  const button = `<p style="margin:24px 0;"><a href="${safeHref}" style="${EMAIL_BUTTON_STYLE}">${safeLabel}</a></p>`;
+  if (!includeFallbackLink) return button;
+  return `${button}<p style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;">Link platformă: <a href="${safeHref}" style="color:#890505;text-decoration:underline;">${safeHref}</a></p>`;
 }
 
 function emailVideoBlockHtml(): string {
@@ -135,7 +141,11 @@ function emailBulletTableHtml(lines: string[]): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 18px;font-size:15px;line-height:1.65;border-collapse:collapse;">${rows}</table>`;
 }
 
-function friendlyEmailBlocksToHtml(body: string): string {
+function friendlyEmailBlocksToHtml(
+  body: string,
+  lane: "transactional" | "campaign",
+): string {
+  const buttonOptions = { includeFallbackLink: lane === "transactional" };
   return body
     .split(/\n{2,}/)
     .map((block) => block.trim())
@@ -143,9 +153,11 @@ function friendlyEmailBlocksToHtml(body: string): string {
     .map((block) => {
       if (block === DEFAULT_VIDEO_TOKEN) return emailVideoBlockHtml();
       const actionMatch = block.match(/^\{action_button:([^|]+)\|(.+)\}$/);
-      if (actionMatch) return emailButtonHtml(actionMatch[1], actionMatch[2]);
+      if (actionMatch) return emailButtonHtml(actionMatch[1], actionMatch[2], buttonOptions);
       const calendlyMatch = block.match(/^\{calendly_button:([^}]+)\}$/);
-      if (calendlyMatch) return emailButtonHtml(calendlyMatch[1], "{calendly_url}");
+      if (calendlyMatch) {
+        return emailButtonHtml(calendlyMatch[1], "{calendly_url}", buttonOptions);
+      }
       const lines = block.split(/\r?\n/);
       if (lines.every((line) => /^\s*[•✓✗*-]\s+/.test(line))) {
         return emailBulletTableHtml(lines);
@@ -168,7 +180,7 @@ export function buildStyledEmailTemplateBody({
     ? `<h1 style="${EMAIL_HEADING_STYLE}">${emailInlineMarkdownToHtml(heading.trim())}</h1>`
     : "";
   const shellClose = lane === "campaign" ? PROMOTIONAL_EMAIL_PREVIEW_SHELL_CLOSE : EMAIL_PREVIEW_SHELL_CLOSE;
-  return `${EMAIL_PREVIEW_SHELL_OPEN}${headingHtml}${friendlyEmailBlocksToHtml(body)}${shellClose}`;
+  return `${EMAIL_PREVIEW_SHELL_OPEN}${headingHtml}${friendlyEmailBlocksToHtml(body, lane)}${shellClose}`;
 }
 
 export function parseEmailTemplateEditorDraft(body: string, fallbackHeading: string): { heading: string; body: string } {

@@ -910,7 +910,52 @@ async def test_send_campaign_repairs_plain_video_and_calendly_content() -> None:
     assert "/api/communications/campaigns/track/video_viewed/" in message.html_body
     assert 'data-codrut-cta="calendly"' in message.html_body
     assert message.html_body.count("Alege un slot în Calendly") == 1
+    assert "Material video:" not in message.html_body
+    assert "Alege un slot:" not in message.html_body
+    assert "Material video:" in message.text_body
     assert message.text_body.count("Alege un slot:") == 1
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_removes_styled_fallback_links_from_html() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.video_url = "https://vimeo.com/123456789"
+    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = "https://codrut.andreivacaru.ro/campanii/demo"
+    campaign.html_body = (
+        '<p><a href="${landing_page_url}">'
+        '<img src="${thumbnail_url}" alt="Video" />'
+        "</a></p>"
+        '<p>Link platformă: <a href="${landing_page_url}">${landing_page_url}</a></p>'
+        '<p><a href="${calendly_url}" data-codrut-cta="calendly">'
+        "Alege un slot"
+        "</a></p>"
+        '<p>Link platformă: <a href="${calendly_url}">${calendly_url}</a></p>'
+    )
+    campaign.text_body = (
+        "Material video: ${landing_page_url}\n"
+        "Alege un slot: ${calendly_url}"
+    )
+    active = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(active)
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id]),
+        provider=FakeEmailProvider(),
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    message = queued_messages(repository)[0]
+    assert response.queued == 1
+    assert "Link platformă:" not in message.html_body
+    assert "/api/communications/campaigns/track/video_viewed/" in message.html_body
+    assert 'data-codrut-cta="calendly"' in message.html_body
+    assert "Material video:" in message.text_body
+    assert "Alege un slot:" in message.text_body
 
 
 @pytest.mark.asyncio
