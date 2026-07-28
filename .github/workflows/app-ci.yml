@@ -5,6 +5,11 @@ on:
     branches:
       - dev
       - prod
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 permissions:
   contents: read
@@ -17,6 +22,7 @@ concurrency:
 jobs:
   changes:
     name: app-ci / scope
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
@@ -68,7 +74,7 @@ jobs:
     name: app-ci / required
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    if: always()
+    if: always() && github.event.pull_request.draft == false
     needs:
       - changes
       - backend
