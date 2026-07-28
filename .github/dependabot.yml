@@ -79,6 +79,9 @@ updates:
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
+      - dependency-name: python
+        versions:
+          - ">= 3.13"
 
   - package-ecosystem: docker
     directory: /infra/backup
@@ -100,3 +103,6 @@ updates:
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
+      - dependency-name: restic/restic
+        versions:
+          - ">= 0.19"
