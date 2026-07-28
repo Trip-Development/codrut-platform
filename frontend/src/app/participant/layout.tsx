@@ -28,6 +28,9 @@ export default async function ParticipantLayout({
     if (session.user.accessMode === "secure_link") {
       redirect("/");
     }
+    if (session.user.accountType === "guest") {
+      redirect("/");
+    }
     const currentTermsAccepted = hasCurrentTerms(session.user);
     if (!currentTermsAccepted && pathname !== "/participant/consent") {
       redirect("/participant/consent");

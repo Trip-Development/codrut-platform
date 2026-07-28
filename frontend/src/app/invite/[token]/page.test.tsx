@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acceptCurrentTerms, getAuthenticatedSession } from "@/api/auth";
 import {
   exchangeInviteSession,
-  InviteSessionConflictError,
   resolveInviteBundle,
   type InviteBundle,
 } from "@/api/invites";
@@ -81,7 +80,11 @@ describe("InvitePage", () => {
         role: "trainer",
       },
     });
-    vi.mocked(exchangeInviteSession).mockResolvedValue();
+    vi.mocked(exchangeInviteSession).mockResolvedValue({
+      action: "secure_link_ready",
+      destination: "/invite/demo-token",
+      participantProfileId: "participant-1",
+    });
     vi.mocked(resolveInviteBundle).mockResolvedValue(validBundle);
     routerReplace.mockReset();
   });
@@ -123,28 +126,26 @@ describe("InvitePage", () => {
     });
   });
 
-  it("requires explicit confirmation before replacing another authenticated session", async () => {
+  it("requires explicit account switching without replacing the active session", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       termsAcceptedAt: "2026-06-27T10:00:00Z",
       termsVersion: "privacy-2026-07-16",
     });
-    vi.mocked(exchangeInviteSession)
-      .mockRejectedValueOnce(new InviteSessionConflictError("Sesiunea activă este diferită."))
-      .mockResolvedValueOnce();
+    vi.mocked(exchangeInviteSession).mockResolvedValueOnce({
+      action: "account_switch_required",
+      destination: "/login?returnTo=%2Finvite%2Fdemo-token",
+      participantProfileId: "participant-1",
+    });
 
     await renderInvitePage();
 
     expect(await screen.findByText("Schimbă sesiunea activă?")).toBeTruthy();
     expect(screen.getByText(/trainer@example\.com/)).toBeTruthy();
     expect(screen.getByText(/participant\.demo@example\.com/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Schimbă sesiunea și continuă" }));
-
-    expect(await screen.findByRole("heading", { name: "Chestionarele tale" })).toBeTruthy();
-    expect(exchangeInviteSession).toHaveBeenNthCalledWith(1, "demo-token");
-    expect(exchangeInviteSession).toHaveBeenNthCalledWith(2, "demo-token", {
-      replaceExistingSession: true,
-    });
+    expect(screen.getByRole("button", { name: "Intră cu contul invitat" })).toBeTruthy();
+    expect(exchangeInviteSession).toHaveBeenCalledTimes(1);
+    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
   });
 
   it("persists anonymous invite consent before showing secure tasks", async () => {
@@ -178,26 +179,28 @@ describe("InvitePage", () => {
     expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBe("accepted");
   });
 
-  it("routes a permanent participant to the dashboard after saving invite consent", async () => {
+  it("routes a matching permanent participant directly to the invited dashboard context", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       alreadyRegistered: true,
       accountDashboardAvailable: true,
     });
+    vi.mocked(exchangeInviteSession).mockResolvedValue({
+      action: "dashboard_ready",
+      destination: "/participant?profile=participant-1&project=project-1&cycle=cycle-1",
+      participantProfileId: "participant-1",
+      projectId: "project-1",
+      assessmentCycleId: "cycle-1",
+    });
     await renderInvitePage();
 
-    vi.useFakeTimers();
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Continuă la chestionare" }));
-    await act(async () => {
-      await Promise.resolve();
-      vi.advanceTimersByTime(450);
-    });
-    vi.useRealTimers();
-
     await waitFor(() => {
-      expect(routerReplace).toHaveBeenCalledWith("/participant");
+      expect(routerReplace).toHaveBeenCalledWith(
+        "/participant?profile=participant-1&project=project-1&cycle=cycle-1",
+      );
     });
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(acceptCurrentTerms).not.toHaveBeenCalled();
     expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
   });
 
@@ -216,22 +219,22 @@ describe("InvitePage", () => {
     expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBeNull();
   });
 
-  it("stores leadership invite context before registration", async () => {
+  it("lets an invite-only leadership participant stay guest and optionally register", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       isLeadership: true,
+      termsAcceptedAt: "2026-07-16T10:00:00Z",
+      termsVersion: "privacy-2026-07-16",
     });
 
     await renderInvitePage();
 
-    await screen.findByText("Activează contul înainte de chestionare");
+    await screen.findByRole("heading", { name: "Chestionarele tale" });
     await waitFor(() => {
       expect(window.sessionStorage.getItem("codrut_invite")).toContain("participant.demo@example.com");
     });
-    expect(screen.getByRole("link", { name: /Înregistrează cont Leadership/ }).getAttribute("href")).toBe(
-      "/register",
-    );
-    expect(exchangeInviteSession).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: /Creează cont permanent/ }).getAttribute("href")).toBe("/register");
+    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
   });
 
   it("does not expose an account-like review target in the secure task list or link", async () => {
@@ -287,7 +290,7 @@ describe("InvitePage", () => {
     expect(screen.getByRole("link", { name: /Mergi la Cody/ }).getAttribute("href")).toBe("/");
   });
 
-  it("routes an existing participant account to its dashboard after passwordless exchange", async () => {
+  it("requires login before a logged-out registered account can claim the invite", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       isLeadership: true,
@@ -296,16 +299,25 @@ describe("InvitePage", () => {
       termsAcceptedAt: "2026-07-16T10:00:00Z",
       termsVersion: "privacy-2026-07-16",
     });
+    vi.mocked(exchangeInviteSession).mockResolvedValue({
+      action: "login_required",
+      destination: "/login?returnTo=%2Finvite%2Fdemo-token&email=participant.demo%40example.com",
+      participantProfileId: "participant-1",
+      projectId: "project-1",
+      assessmentCycleId: "cycle-1",
+    });
     await renderInvitePage();
 
     await waitFor(() => {
       expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
-      expect(routerReplace).toHaveBeenCalledWith("/participant");
+      expect(routerReplace).toHaveBeenCalledWith(
+        "/login?returnTo=%2Finvite%2Fdemo-token&email=participant.demo%40example.com",
+      );
     });
-    expect(screen.queryByRole("link", { name: /Înregistrează cont Leadership/ })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
-  it("keeps a non-participant account inside the secure invite flow", async () => {
+  it("adds participant access to a matching trainer account instead of using a guest flow", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       alreadyRegistered: true,
@@ -313,11 +325,18 @@ describe("InvitePage", () => {
       termsAcceptedAt: "2026-07-16T10:00:00Z",
       termsVersion: "privacy-2026-07-16",
     });
+    vi.mocked(exchangeInviteSession).mockResolvedValue({
+      action: "dashboard_ready",
+      destination: "/participant?profile=participant-1&project=project-1",
+      participantProfileId: "participant-1",
+      projectId: "project-1",
+    });
     await renderInvitePage();
 
-    expect(await screen.findByRole("heading", { name: "Chestionarele tale" })).toBeTruthy();
-    expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
-    expect(routerReplace).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(routerReplace).toHaveBeenCalledWith("/participant?profile=participant-1&project=project-1");
+    });
+    expect(screen.queryByRole("heading", { name: "Chestionarele tale" })).toBeNull();
   });
 
   it("renders the empty secure queue after current server consent", async () => {

@@ -202,6 +202,7 @@ class ParticipantResponse(BaseModel):
     id: UUID
     company_id: UUID
     user_id: UUID | None
+    account_type: Literal["guest", "registered"] | None = None
     is_shadow_account: bool = False
     full_name: str
     email: EmailStr | None
@@ -219,6 +220,7 @@ class ParticipantAccountSummary(BaseModel):
     user_id: UUID
     email: EmailStr
     role: Literal["trainer", "participant"]
+    account_type: Literal["guest", "registered"]
     is_shadow_account: bool
 
 

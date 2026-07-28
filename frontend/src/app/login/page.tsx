@@ -20,6 +20,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { safeParticipantReturnTo } from "@/lib/auth-return";
+
+function requestedParticipantRoute(): string {
+  if (typeof window === "undefined") return "/participant";
+  return safeParticipantReturnTo(
+    new URLSearchParams(window.location.search).get("returnTo"),
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,6 +39,8 @@ export default function LoginPage() {
   const submittingRef = useRef(false);
 
   useEffect(() => {
+    const requestedEmail = new URLSearchParams(window.location.search).get("email");
+    if (requestedEmail) setEmail(requestedEmail);
     let cancelled = false;
     let redirectTimer: number | undefined;
     void getAuthenticatedSession().then((session) => {
@@ -38,7 +48,11 @@ export default function LoginPage() {
       setRememberedUser(session.user);
       redirectTimer = window.setTimeout(() => {
         if (cancelled) return;
-        router.replace(dashboardHrefForRole(session.user.role));
+        router.replace(
+          requestedParticipantRoute() === "/participant"
+            ? dashboardHrefForRole(session.user.defaultWorkspace ?? session.user.role)
+            : requestedParticipantRoute(),
+        );
         router.refresh();
       }, REMEMBERED_SESSION_DELAY_MS);
     });
@@ -60,7 +74,11 @@ export default function LoginPage() {
 
     try {
       const session = await loginWithPassword(email, password);
-      router.push(dashboardHrefForRole(session.user.role));
+      router.push(
+        requestedParticipantRoute() === "/participant"
+          ? dashboardHrefForRole(session.user.defaultWorkspace ?? session.user.role)
+          : requestedParticipantRoute(),
+      );
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");

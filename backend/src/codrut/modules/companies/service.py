@@ -59,7 +59,7 @@ from codrut.modules.companies.schemas import (
     RosterImportResponse,
     RosterImportRow,
 )
-from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User
+from codrut.modules.identity.models import User
 from codrut.modules.identity.repository import IdentityRepository
 
 logger = logging.getLogger(__name__)
@@ -1764,7 +1764,8 @@ def _participant_account_summary(user: User | None) -> ParticipantAccountSummary
         user_id=user.id,
         email=user.email,
         role=user.role.value,
-        is_shadow_account=user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH,
+        account_type="registered" if user.is_registered else "guest",
+        is_shadow_account=not user.is_registered,
     )
 
 
@@ -1796,6 +1797,7 @@ def _project_participant_response(
         id=participant.id,
         company_id=participant.company_id,
         user_id=participant.user_id,
+        account_type=participant.account_type,
         is_shadow_account=participant.is_shadow_account,
         full_name=participant.full_name,
         email=participant.email,

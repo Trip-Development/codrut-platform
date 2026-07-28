@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2Icon } from "lucide-react";
 
-import { dashboardHrefForRole, getAuthenticatedSession, loginWithPassword, type CurrentUser } from "@/api/auth";
+import { canAccessWorkspace, dashboardHrefForRole, getAuthenticatedSession, loginWithPassword, type CurrentUser } from "@/api/auth";
 import {
   AuthQuotePanel,
   AuthTextLink,
@@ -45,7 +45,7 @@ export default function TrainerLoginPage() {
       redirectTimer = window.setTimeout(() => {
         if (cancelled) return;
         router.replace(
-          session.user.role === "trainer"
+          canAccessWorkspace(session.user, "trainer")
             ? requestedTrainerRoute()
             : dashboardHrefForRole(session.user.role),
         );
@@ -70,7 +70,7 @@ export default function TrainerLoginPage() {
 
     try {
       const session = await loginWithPassword(email, password);
-      if (session.user.role !== "trainer") {
+      if (!canAccessWorkspace(session.user, "trainer")) {
         throw new Error("Acest cont nu are acces la portalul de trainer.");
       }
       router.push(requestedTrainerRoute());

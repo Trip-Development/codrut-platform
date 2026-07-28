@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { safeTrainerReturnTo, trainerLoginHref } from "./auth-return";
+import { safeParticipantReturnTo, safeTrainerReturnTo, trainerLoginHref } from "./auth-return";
 
 describe("trainer auth return paths", () => {
   it("keeps internal trainer destinations and their query parameters", () => {
@@ -23,5 +23,27 @@ describe("trainer auth return paths", () => {
   ])("falls back to trainer home for unsafe destination %s", (value) => {
     expect(safeTrainerReturnTo(value)).toBe("/trainer");
     expect(trainerLoginHref(value)).toBe("/trainer/login");
+  });
+});
+
+describe("participant auth return paths", () => {
+  it("keeps participant and invite destinations", () => {
+    expect(safeParticipantReturnTo("/participant?project=one")).toBe(
+      "/participant?project=one",
+    );
+    expect(safeParticipantReturnTo("/invite/signed-token")).toBe(
+      "/invite/signed-token",
+    );
+  });
+
+  it.each([
+    null,
+    "",
+    "/trainer",
+    "/login",
+    "//example.com/invite/token",
+    "https://example.com/participant",
+  ])("falls back for unsafe participant destination %s", (value) => {
+    expect(safeParticipantReturnTo(value)).toBe("/participant");
   });
 });

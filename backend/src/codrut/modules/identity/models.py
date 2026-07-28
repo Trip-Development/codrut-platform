@@ -35,6 +35,11 @@ class UserRole(StrEnum):
     participant = "participant"
 
 
+class UserAccountType(StrEnum):
+    guest = "guest"
+    registered = "registered"
+
+
 class User(TimestampMixin, Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -52,6 +57,12 @@ class User(TimestampMixin, Base):
         Enum(UserRole),
         nullable=False,
         default=UserRole.participant,
+    )
+    account_type: Mapped[UserAccountType] = mapped_column(
+        Enum(UserAccountType),
+        nullable=False,
+        default=UserAccountType.registered,
+        server_default=UserAccountType.registered.value,
     )
     avatar_palette_key: Mapped[int | None] = mapped_column(
         BigInteger,
@@ -75,6 +86,12 @@ class User(TimestampMixin, Base):
     participant_profiles: Mapped[list[ParticipantProfile]] = relationship(
         back_populates="user",
     )
+
+    @property
+    def is_registered(self) -> bool:
+        # SQLAlchemy applies the registered default at flush time. Treat an
+        # unflushed model without an explicit value as that same default.
+        return self.account_type is not UserAccountType.guest
 
 
 class Session(TimestampMixin, Base):

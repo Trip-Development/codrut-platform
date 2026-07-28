@@ -92,12 +92,27 @@ class ParticipantWorkspaceService:
             cycle.id
             for cycle in self._selected_cycles(contexts, profile.id, project_id)
         }
+        selected_project = next(
+            (
+                project
+                for context in contexts
+                if context.participant_profile_id == profile.id
+                for project in context.projects
+                if project.id == project_id
+            ),
+            None,
+        )
+        history_only = bool(
+            selected_project is not None
+            and selected_project.history_bucket == "history"
+        )
         assignments = await self._list_assignments(
             profile,
             project_id=project_id,
             cycle_id=cycle_id,
             allowed_assignment_ids=allowed_assignment_ids,
             visible_cycle_ids=visible_cycle_ids,
+            history_only=history_only,
         )
         pcm_base, pcm_phase = (
             await self._get_cycle_pcm_values(assignments)
@@ -166,6 +181,8 @@ class ParticipantWorkspaceService:
             project = projects.get(project_id)
             if project is not None:
                 project_name = project.name
+            elif selected_project is not None:
+                project_name = selected_project.name
         deadline_at = self._workspace_deadline(assignments, projects)
         completed = sum(1 for task in tasks if task.status == "completed")
         pending = len(tasks) - completed
@@ -265,9 +282,7 @@ class ParticipantWorkspaceService:
         projects: dict[UUID, CompanyProject] = {}
         if project_ids:
             project_result = await self.session.execute(
-                select(CompanyProject)
-                .where(CompanyProject.id.in_(project_ids))
-                .where(CompanyProject.status != CompanyProjectStatus.archived)
+                select(CompanyProject).where(CompanyProject.id.in_(project_ids))
             )
             projects = {project.id: project for project in project_result.scalars().all()}
 
@@ -549,7 +564,7 @@ class ParticipantWorkspaceService:
                 key=lambda value: projects[value].name if value in projects else str(value),
             ):
                 project = projects.get(context_project_id)
-                if project is None:
+                if project is None or project.status == CompanyProjectStatus.draft:
                     continue
                 project_assignments = [
                     assignment
@@ -561,6 +576,12 @@ class ParticipantWorkspaceService:
                     ParticipantWorkspaceProject(
                         id=project.id,
                         name=project.name,
+                        status=project.status.value,
+                        history_bucket=(
+                            "current"
+                            if project.status == CompanyProjectStatus.active
+                            else "history"
+                        ),
                         deadline_label=_format_deadline(
                             self._workspace_deadline(project_assignments, {project.id: project})
                         ),
@@ -780,6 +801,7 @@ class ParticipantWorkspaceService:
         cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
         visible_cycle_ids: set[UUID] | None = None,
+        history_only: bool = False,
     ) -> list[QuestionnaireAssignment]:
         statement = (
             select(QuestionnaireAssignment)
@@ -790,17 +812,22 @@ class ParticipantWorkspaceService:
             .where(QuestionnaireAssignment.company_id == profile.company_id)
             .where(QuestionnaireAssignment.respondent_profile_id == profile.id)
             .where(QuestionnaireAssignment.status != AssignmentStatus.cancelled)
-            .where(
-                or_(
-                    QuestionnaireAssignment.project_id.is_(None),
-                    CompanyProject.status != CompanyProjectStatus.archived,
-                )
-            )
             .order_by(
                 QuestionnaireAssignment.due_at.asc().nulls_last(),
                 QuestionnaireAssignment.created_at.asc(),
             )
         )
+        if history_only:
+            statement = statement.where(
+                QuestionnaireAssignment.status.in_(COMPLETED_ASSIGNMENT_STATUSES)
+            )
+        else:
+            statement = statement.where(
+                or_(
+                    QuestionnaireAssignment.project_id.is_(None),
+                    CompanyProject.status == CompanyProjectStatus.active,
+                )
+            )
         if allowed_assignment_ids is not None:
             if not allowed_assignment_ids:
                 return []
@@ -827,9 +854,7 @@ class ParticipantWorkspaceService:
         if not project_ids:
             return {}
         result = await self.session.execute(
-            select(CompanyProject)
-            .where(CompanyProject.id.in_(project_ids))
-            .where(CompanyProject.status != CompanyProjectStatus.archived)
+            select(CompanyProject).where(CompanyProject.id.in_(project_ids))
         )
         return {project.id: project for project in result.scalars().all()}
 
@@ -1158,6 +1183,12 @@ class ParticipantWorkspaceService:
                 ParticipantWorkspaceProject(
                     id=project.id,
                     name=project.name,
+                    status=project.status.value,
+                    history_bucket=(
+                        "current"
+                        if project.status == CompanyProjectStatus.active
+                        else "history"
+                    ),
                     deadline_label=_format_deadline(deadline_at),
                     deadline_at=deadline_at,
                     cycles=cycles_by_project.get(project.id, []),

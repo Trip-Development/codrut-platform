@@ -1096,6 +1096,18 @@
       },
       "AuthResponse": {
         "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/UserAccountType",
+            "default": "registered"
+          },
+          "available_workspaces": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UserRole"
+            },
+            "title": "Available Workspaces",
+            "type": "array"
+          },
           "avatar_palette_key": {
             "anyOf": [
               {
@@ -1106,6 +1118,16 @@
               }
             ],
             "title": "Avatar Palette Key"
+          },
+          "default_workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "email": {
             "format": "email",
@@ -3997,6 +4019,66 @@
         "title": "InviteExchangeRequest",
         "type": "object"
       },
+      "InviteExchangeResponse": {
+        "properties": {
+          "action": {
+            "enum": [
+              "secure_link_ready",
+              "login_required",
+              "dashboard_ready",
+              "account_switch_required"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "required": [
+          "action",
+          "participant_profile_id"
+        ],
+        "title": "InviteExchangeResponse",
+        "type": "object"
+      },
       "InviteTask": {
         "properties": {
           "assessmentCycleId": {
@@ -4304,6 +4386,14 @@
       },
       "ParticipantAccountSummary": {
         "properties": {
+          "account_type": {
+            "enum": [
+              "guest",
+              "registered"
+            ],
+            "title": "Account Type",
+            "type": "string"
+          },
           "email": {
             "format": "email",
             "title": "Email",
@@ -4331,6 +4421,7 @@
           "user_id",
           "email",
           "role",
+          "account_type",
           "is_shadow_account"
         ],
         "title": "ParticipantAccountSummary",
@@ -4825,6 +4916,21 @@
       },
       "ParticipantResponse": {
         "properties": {
+          "account_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "guest",
+                  "registered"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Type"
+          },
           "anonymous_name": {
             "anyOf": [
               {
@@ -5237,6 +5343,11 @@
             "title": "Deadline Label",
             "type": "string"
           },
+          "history_bucket": {
+            "default": "current",
+            "title": "History Bucket",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5244,6 +5355,11 @@
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
             "type": "string"
           }
         },
@@ -5720,6 +5836,21 @@
       },
       "ProjectParticipantResponse": {
         "properties": {
+          "account_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "guest",
+                  "registered"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Type"
+          },
           "anonymous_name": {
             "anyOf": [
               {
@@ -6772,6 +6903,18 @@
             "title": "Access Mode",
             "type": "string"
           },
+          "account_type": {
+            "$ref": "#/components/schemas/UserAccountType",
+            "default": "registered"
+          },
+          "available_workspaces": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UserRole"
+            },
+            "title": "Available Workspaces",
+            "type": "array"
+          },
           "avatar_palette_key": {
             "anyOf": [
               {
@@ -6782,6 +6925,16 @@
               }
             ],
             "title": "Avatar Palette Key"
+          },
+          "default_workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "email": {
             "format": "email",
@@ -6940,6 +7093,14 @@
           "functional"
         ],
         "title": "TeamType",
+        "type": "string"
+      },
+      "UserAccountType": {
+        "enum": [
+          "guest",
+          "registered"
+        ],
+        "title": "UserAccountType",
         "type": "string"
       },
       "UserRole": {
@@ -7245,7 +7406,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InviteVerifyResponse"
+                  "$ref": "#/components/schemas/InviteExchangeResponse"
                 }
               }
             },

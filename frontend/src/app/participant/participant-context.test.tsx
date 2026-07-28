@@ -176,6 +176,49 @@ describe("participant workspace context", () => {
     expect(destination).not.toContain("compare=");
   });
 
+  it("groups current programs separately from read-only history", async () => {
+    render(
+      <ParticipantContextSelector
+        contexts={[{
+          participantProfileId: "profile-1",
+          participantFullName: "Ana Participant",
+          companyId: "company-1",
+          companyName: "Atlas",
+          projects: [
+            {
+              id: "history-project",
+              name: "Program finalizat",
+              status: "completed",
+              historyBucket: "history",
+              deadlineLabel: "",
+              cycles: [],
+            },
+            {
+              id: "current-project",
+              name: "Program curent",
+              status: "active",
+              historyBucket: "current",
+              deadlineLabel: "",
+              cycles: [],
+            },
+          ],
+        }]}
+        selectedProfileId="profile-1"
+        selectedProjectId="current-project"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Program" }));
+
+    expect(await screen.findByText("În desfășurare")).toBeDefined();
+    expect(screen.getByText("Istoric")).toBeDefined();
+    const options = screen.getAllByRole("option");
+    expect(options[1]?.textContent).toContain("Program curent");
+    expect(options[2]?.textContent).toContain("Program finalizat");
+    fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
+  });
+
   it("enters, changes, and closes a two-cycle comparison", async () => {
     navigation.search = "profile=profile-1&project=project-1";
     const cycles = [

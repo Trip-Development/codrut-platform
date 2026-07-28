@@ -8,6 +8,9 @@ export type CurrentUser = {
   name: string;
   email?: string;
   role: "trainer" | "participant";
+  accountType?: "guest" | "registered";
+  availableWorkspaces?: Array<"trainer" | "participant">;
+  defaultWorkspace?: "trainer" | "participant";
   avatarPaletteKey?: number | null;
   accessMode?: "account" | "secure_link";
   termsAcceptedAt?: string | null;
@@ -24,6 +27,9 @@ type AuthApiResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  account_type?: "guest" | "registered";
+  available_workspaces?: Array<"trainer" | "participant">;
+  default_workspace?: "trainer" | "participant";
   avatar_palette_key?: number | null;
   access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
@@ -34,6 +40,9 @@ type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  account_type?: "guest" | "registered";
+  available_workspaces?: Array<"trainer" | "participant">;
+  default_workspace?: "trainer" | "participant";
   avatar_palette_key?: number | null;
   access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
@@ -105,6 +114,9 @@ export async function loginWithPassword(email: string, password: string): Promis
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      accountType: user.account_type ?? "registered",
+      availableWorkspaces: user.available_workspaces ?? [user.role],
+      defaultWorkspace: user.default_workspace ?? user.role,
       avatarPaletteKey: user.avatar_palette_key,
       accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
@@ -121,6 +133,9 @@ function sessionStateFromPrincipal(user: SessionPrincipalResponse): SessionState
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      accountType: user.account_type ?? "registered",
+      availableWorkspaces: user.available_workspaces ?? [user.role],
+      defaultWorkspace: user.default_workspace ?? user.role,
       avatarPaletteKey: user.avatar_palette_key,
       accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
@@ -131,6 +146,13 @@ function sessionStateFromPrincipal(user: SessionPrincipalResponse): SessionState
 
 export function dashboardHrefForRole(role: CurrentUser["role"]): "/trainer" | "/participant" {
   return role === "trainer" ? "/trainer" : "/participant";
+}
+
+export function canAccessWorkspace(
+  user: CurrentUser,
+  workspace: "trainer" | "participant",
+): boolean {
+  return (user.availableWorkspaces ?? [user.role]).includes(workspace);
 }
 
 export async function getAuthenticatedSession(): Promise<SessionState | null> {
@@ -245,7 +267,8 @@ async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promi
       logSessionUnavailable(context);
       throw new AuthSessionUnavailableError(context);
     }
-    if (user.role !== expectedRole) {
+    const availableWorkspaces = user.available_workspaces ?? [user.role];
+    if (!availableWorkspaces.includes(expectedRole)) {
       throw new AuthRoleMismatchError({ expectedRole, actualRole: user.role });
     }
     return sessionStateFromPrincipal(user);

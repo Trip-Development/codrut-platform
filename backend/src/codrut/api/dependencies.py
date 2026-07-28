@@ -83,7 +83,7 @@ async def secure_link_principal(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> SessionPrincipal:
-    if principal.role != UserRole.participant:
+    if not principal.can_access_workspace(UserRole.participant):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Participant access is required.",
@@ -94,7 +94,7 @@ async def secure_link_principal(
 
 
 def require_current_terms(principal: SessionPrincipal) -> None:
-    if principal.role != UserRole.participant:
+    if not principal.can_access_workspace(UserRole.participant):
         return
     if principal.terms_accepted_at is None or principal.terms_version != CURRENT_TERMS_VERSION:
         raise DomainError(

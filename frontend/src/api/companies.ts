@@ -110,17 +110,21 @@ export type CompanyParticipant = {
   pcm_phase?: string | null;
   anonymous_name?: string | null;
   user_id: string | null;
+  account_type?: "guest" | "registered" | null;
   is_shadow_account?: boolean;
 };
 
 export function hasPermanentParticipantAccount(participant: CompanyParticipant): boolean {
-  return Boolean(participant.user_id) && participant.is_shadow_account !== true;
+  if (!participant.user_id) return false;
+  if (participant.account_type) return participant.account_type === "registered";
+  return participant.is_shadow_account !== true;
 }
 
 export type ParticipantAccountSummary = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  account_type?: "guest" | "registered";
   is_shadow_account: boolean;
 };
 

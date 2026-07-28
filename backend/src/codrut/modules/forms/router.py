@@ -32,7 +32,10 @@ async def get_participant_onboarding(
     session: Annotated[AsyncSession, Depends(db_session)],
     participant_profile_id: UUID | None = None,
 ) -> ParticipantOnboardingResponse:
-    if principal.role != UserRole.participant:
+    if (
+        not principal.can_access_workspace(UserRole.participant)
+        or principal.access_mode == "secure_link"
+    ):
         return ParticipantOnboardingResponse(required=False)
     require_current_terms(principal)
     if principal.assignment_ids is not None:
@@ -54,7 +57,7 @@ async def list_questionnaire_definitions(
     _require_trainer(principal)
     definitions = await FormsService(session).list_persisted_definitions(
         active_only=not include_retired,
-        include_private=principal.role == UserRole.trainer,
+        include_private=principal.can_access_workspace(UserRole.trainer),
     )
     await session.commit()
     return definitions
@@ -70,7 +73,15 @@ async def get_questionnaire_definition(
     project_id: UUID | None = None,
     cycle_id: UUID | None = None,
 ) -> QuestionnaireDefinitionResponse:
-    if principal.role == UserRole.participant:
+    participant_context_requested = any(
+        value is not None for value in (participant_profile_id, project_id, cycle_id)
+    )
+    if (
+        principal.access_mode == "secure_link"
+        or participant_context_requested
+        or not principal.can_access_workspace(UserRole.trainer)
+    ):
+        _require_participant(principal)
         require_current_terms(principal)
         definition = await FormsService(session).get_participant_definition_by_key(
             principal.user_id,
@@ -320,7 +331,7 @@ async def submit_secure_assignment_response(
 
 
 def _require_participant(principal: SessionPrincipal) -> None:
-    if principal.role != UserRole.participant:
+    if not principal.can_access_workspace(UserRole.participant):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Sesiunea activă nu este un cont de participant.",
@@ -328,7 +339,7 @@ def _require_participant(principal: SessionPrincipal) -> None:
 
 
 def _require_trainer(principal: SessionPrincipal) -> None:
-    if principal.role != UserRole.trainer:
+    if not principal.can_access_workspace(UserRole.trainer):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Trainer access is required.",

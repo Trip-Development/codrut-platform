@@ -228,19 +228,20 @@ class ParticipantProfile(TimestampMixin, Base):
 
     @property
     def is_shadow_account(self) -> bool:
-        from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH
+        return bool(self.user is not None and not self.user.is_registered)
 
-        return bool(
-            self.user is not None
-            and self.user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
-        )
+    @property
+    def account_type(self) -> str | None:
+        if self.user is None:
+            return None
+        return "registered" if self.user.is_registered else "guest"
 
 
 class ParticipantAccountLinkAudit(Base):
     __tablename__ = "participant_account_link_audits"
     __table_args__ = (
         CheckConstraint(
-            "action in ('link_matching_email', 'unlink')",
+            "action in ('link_matching_email', 'unlink', 'invite_claim', 'registration_claim')",
             name="participant_account_link_audit_action",
         ),
     )

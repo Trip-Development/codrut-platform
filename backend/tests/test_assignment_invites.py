@@ -14,13 +14,19 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
 )
 from codrut.modules.communications.task_links import TaskLinkClaims, create_task_token
-from codrut.modules.companies.models import Company, CompanyProject, ParticipantProfile
+from codrut.modules.companies.models import (
+    Company,
+    CompanyProject,
+    CompanyProjectStatus,
+    ParticipantProfile,
+)
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity.models import (
     SHADOW_ACCOUNT_PASSWORD_HASH,
     AssignmentInvite,
     Session,
     User,
+    UserAccountType,
     UserRole,
 )
 from codrut.modules.identity.repository import hash_session_token
@@ -173,6 +179,7 @@ async def test_project_scoped_invites_and_sessions_are_independent(
                 email=f"multi-project-{uuid.uuid4().hex[:8]}@example.com",
                 password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
                 role=UserRole.participant,
+                account_type=UserAccountType.guest,
             )
             profile = ParticipantProfile(
                 id=uuid.uuid4(),
@@ -185,11 +192,13 @@ async def test_project_scoped_invites_and_sessions_are_independent(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Project Alpha",
+                status=CompanyProjectStatus.active,
             )
             project_b = CompanyProject(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Project Beta",
+                status=CompanyProjectStatus.active,
             )
             lencioni_definition = questionnaire_definition_factory("lencioni")
             distress_definition = questionnaire_definition_factory("distress_drivers")
@@ -517,7 +526,7 @@ async def test_create_invite_force_rotate_invalidates_previous_invites() -> None
         str(query) for query in session.executed_queries if "DELETE FROM sessions" in str(query)
     ]
     assert any("sessions.assignment_invite_id" in query for query in delete_queries)
-    assert any("users.password_hash" in query for query in delete_queries)
+    assert any("users.account_type" in query for query in delete_queries)
 
 
 @pytest.mark.asyncio
@@ -708,10 +717,9 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)
 
-    assert result.response.email == profile.email
-    assert result.response.is_leadership is False
+    assert result.response.action == "secure_link_ready"
+    assert result.response.participant_profile_id == profile.id
     assert result.session_token
-    assert len(result.response.tasks) == 1
     assert profile.user_id is not None
     assert any(isinstance(model, User) for model in session.added_models)
     assert any(isinstance(model, Session) for model in session.added_models)
@@ -783,7 +791,8 @@ async def test_verify_invite_for_project_uses_project_close_as_effective_expiry(
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)
 
-    assert result.response.expires_at == project_closes_at
+    assert result.response.action == "secure_link_ready"
+    assert result.response.project_id == project_id
     created_session = next(model for model in session.added_models if isinstance(model, Session))
     assert created_session.assignment_invite_id == invite.id
     assert created_session.expires_at == project_closes_at
@@ -853,7 +862,7 @@ async def test_verify_invite_rejects_closed_project_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_verify_invite_for_non_leadership_links_unlinked_existing_email_user() -> None:
+async def test_registered_user_must_log_in_before_claiming_unlinked_profile() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
     assignment_id = uuid.uuid4()
@@ -913,14 +922,15 @@ async def test_verify_invite_for_non_leadership_links_unlinked_existing_email_us
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)
 
-    assert result.session_token is not None
-    assert profile.user_id == existing_user.id
+    assert result.response.action == "login_required"
+    assert result.session_token is None
+    assert profile.user_id is None
     assert not any(isinstance(model, User) for model in session.added_models)
-    assert any(isinstance(model, Session) for model in session.added_models)
+    assert not any(isinstance(model, Session) for model in session.added_models)
 
 
 @pytest.mark.asyncio
-async def test_verify_invite_for_non_leadership_reuses_profile_linked_user() -> None:
+async def test_registered_linked_user_must_log_in_before_dashboard_access() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
     assignment_id = uuid.uuid4()
@@ -981,10 +991,11 @@ async def test_verify_invite_for_non_leadership_reuses_profile_linked_user() -> 
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)
 
-    assert result.session_token
+    assert result.response.action == "login_required"
+    assert result.session_token is None
     assert profile.user_id == user_id
     assert not any(isinstance(model, User) for model in session.added_models)
-    assert any(isinstance(model, Session) for model in session.added_models)
+    assert not any(isinstance(model, Session) for model in session.added_models)
 
 
 @pytest.mark.asyncio
@@ -1022,7 +1033,7 @@ async def test_revoke_invite_revokes_lineage_and_legacy_shadow_sessions() -> Non
         str(query) for query in session.executed_queries if "DELETE FROM sessions" in str(query)
     ]
     assert any("sessions.assignment_invite_id" in query for query in delete_queries)
-    assert any("users.password_hash" in query for query in delete_queries)
+    assert any("users.account_type" in query for query in delete_queries)
 
 
 @pytest.mark.asyncio
@@ -1042,12 +1053,13 @@ async def test_revoke_invite_deletes_only_invite_and_shadow_sessions_in_database
             session.add_all(
                 [
                     Company(id=company_id, name=f"Invite revoke {uuid.uuid4().hex}"),
-                    User(
-                        id=shadow_user_id,
-                        email=f"shadow-{uuid.uuid4().hex}@example.com",
-                        password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
-                        role=UserRole.participant,
-                    ),
+                        User(
+                            id=shadow_user_id,
+                            email=f"shadow-{uuid.uuid4().hex}@example.com",
+                            password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+                            role=UserRole.participant,
+                            account_type=UserAccountType.guest,
+                        ),
                     User(
                         id=regular_user_id,
                         email=f"regular-{uuid.uuid4().hex}@example.com",

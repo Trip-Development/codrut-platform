@@ -1740,8 +1740,16 @@ export interface components {
         AssignmentTargetType: "self" | "person" | "team";
         /** AuthResponse */
         AuthResponse: {
+            /** @default registered */
+            account_type: components["schemas"]["UserAccountType"];
+            /**
+             * Available Workspaces
+             * @default []
+             */
+            available_workspaces: components["schemas"]["UserRole"][];
             /** Avatar Palette Key */
             avatar_palette_key?: number | null;
+            default_workspace?: components["schemas"]["UserRole"] | null;
             /**
              * Email
              * Format: email
@@ -2720,6 +2728,25 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** InviteExchangeResponse */
+        InviteExchangeResponse: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "secure_link_ready" | "login_required" | "dashboard_ready" | "account_switch_required";
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
+            /** Destination */
+            destination?: string | null;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /** Project Id */
+            project_id?: string | null;
+        };
         /** InviteTask */
         InviteTask: {
             /** Assessmentcycleid */
@@ -2834,6 +2861,11 @@ export interface components {
         };
         /** ParticipantAccountSummary */
         ParticipantAccountSummary: {
+            /**
+             * Account Type
+             * @enum {string}
+             */
+            account_type: "guest" | "registered";
             /**
              * Email
              * Format: email
@@ -3004,6 +3036,8 @@ export interface components {
         };
         /** ParticipantResponse */
         ParticipantResponse: {
+            /** Account Type */
+            account_type?: ("guest" | "registered") | null;
             /** Anonymous Name */
             anonymous_name?: string | null;
             /**
@@ -3123,12 +3157,22 @@ export interface components {
             /** Deadline Label */
             deadline_label: string;
             /**
+             * History Bucket
+             * @default current
+             */
+            history_bucket: string;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
             /** Name */
             name: string;
+            /**
+             * Status
+             * @default active
+             */
+            status: string;
         };
         /** ParticipantWorkspaceResult */
         ParticipantWorkspaceResult: {
@@ -3277,6 +3321,8 @@ export interface components {
         };
         /** ProjectParticipantResponse */
         ProjectParticipantResponse: {
+            /** Account Type */
+            account_type?: ("guest" | "registered") | null;
             /** Anonymous Name */
             anonymous_name?: string | null;
             /**
@@ -3653,8 +3699,16 @@ export interface components {
              * @enum {string}
              */
             access_mode: "account" | "secure_link";
+            /** @default registered */
+            account_type: components["schemas"]["UserAccountType"];
+            /**
+             * Available Workspaces
+             * @default []
+             */
+            available_workspaces: components["schemas"]["UserRole"][];
             /** Avatar Palette Key */
             avatar_palette_key?: number | null;
+            default_workspace?: components["schemas"]["UserRole"] | null;
             /**
              * Email
              * Format: email
@@ -3731,6 +3785,11 @@ export interface components {
          * @enum {string}
          */
         TeamType: "leadership" | "functional";
+        /**
+         * UserAccountType
+         * @enum {string}
+         */
+        UserAccountType: "guest" | "registered";
         /**
          * UserRole
          * @enum {string}
@@ -3994,7 +4053,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InviteVerifyResponse"];
+                    "application/json": components["schemas"]["InviteExchangeResponse"];
                 };
             };
             /** @description Bad Request */

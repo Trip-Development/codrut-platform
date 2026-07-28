@@ -1,4 +1,4 @@
-import { dashboardHrefForRole, isAuthRoleMismatchError, isAuthSessionUnavailableError } from "@/api/auth";
+import { canAccessWorkspace, dashboardHrefForRole, isAuthRoleMismatchError, isAuthSessionUnavailableError } from "@/api/auth";
 import { getTrainerSession } from "@/api/auth-server";
 import { SessionUnavailableNotice } from "@/components/auth/session-unavailable-notice";
 import { trainerLoginHref } from "@/lib/auth-return";
@@ -30,7 +30,7 @@ export default async function TrainerLayout({
     redirect(trainerLoginHref(requestedRoute));
   }
 
-  if (!session || session.user.role !== "trainer") {
+  if (!session || !canAccessWorkspace(session.user, "trainer")) {
     redirect(trainerLoginHref(requestedRoute));
   }
 

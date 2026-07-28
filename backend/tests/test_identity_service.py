@@ -29,6 +29,7 @@ from codrut.modules.identity.models import (
     PasswordResetToken,
     Session,
     User,
+    UserAccountType,
     UserRole,
 )
 from codrut.modules.identity.repository import hash_session_token
@@ -52,6 +53,7 @@ async def test_accept_terms_records_secure_invite_audit_context() -> None:
         email="participant@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     invite = AssignmentInvite(
         id=uuid.uuid4(),
@@ -103,6 +105,7 @@ async def test_accept_terms_reuses_existing_audit_record_for_same_session() -> N
         email="participant@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     active_session = Session(
         id=uuid.uuid4(),
@@ -449,6 +452,7 @@ async def test_principal_for_local_user_requires_matching_seeded_role() -> None:
     )
     repository = MagicMock()
     repository.get_user_by_email = AsyncMock(return_value=user)
+    repository.has_participant_profile = AsyncMock(return_value=False)
     service = IdentityService(AsyncMock())
     service.repository = repository
 
@@ -467,6 +471,27 @@ async def test_principal_for_local_user_requires_matching_seeded_role() -> None:
     assert principal.avatar_palette_key == 12_345
     assert principal.session_token == "local-development:trainer"  # noqa: S105
     assert mismatched is None
+
+
+@pytest.mark.asyncio
+async def test_registered_trainer_with_participant_profile_has_both_workspaces() -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="dual@example.com",
+        password_hash="registered-password-hash",
+        role=UserRole.trainer,
+        account_type=UserAccountType.registered,
+    )
+    service = IdentityService(AsyncMock())
+    service.repository.has_participant_profile = AsyncMock(return_value=True)
+
+    response = await service._response(user)
+
+    assert response.available_workspaces == (
+        UserRole.trainer,
+        UserRole.participant,
+    )
+    assert response.default_workspace == UserRole.trainer
 
 
 @pytest.mark.asyncio
@@ -639,6 +664,7 @@ async def test_password_reset_request_sends_link_for_shadow_user(
         email="shadow@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     repository = FakeResetRepository(user)
     provider = FakeAcceptedEmailProvider()
@@ -672,6 +698,7 @@ async def test_password_reset_request_skips_shadow_user_after_access_window(
         email="shadow@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     repository = FakeResetRepository(user)
     provider = FakeAcceptedEmailProvider()
@@ -804,6 +831,7 @@ async def test_password_reset_confirm_rejects_temporary_shadow_user() -> None:
         email="shadow@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     repository = FakeResetRepository(user)
     raw_token = "reset-token-" + uuid.uuid4().hex
@@ -1054,10 +1082,14 @@ async def test_register_success() -> None:
     mock_result_profile_link = MagicMock()
     mock_result_profile_link.scalar_one_or_none.return_value = mock_profile
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute.return_value = mock_result_profile_link
     repository = MagicMock()
     repository.session = mock_session
     repository.get_user_by_email = AsyncMock(return_value=None)
+    repository.list_participant_profiles_by_email_for_update = AsyncMock(
+        return_value=[mock_profile]
+    )
     repository.add_user = AsyncMock(side_effect=lambda user: user)
     active_session = Session(
         id=uuid.uuid4(),
@@ -1132,6 +1164,7 @@ async def test_register_promotes_existing_shadow_user() -> None:
         email="shadow@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     profile = ParticipantProfile(
         id=claims.respondent_profile_id,
@@ -1151,10 +1184,14 @@ async def test_register_promotes_existing_shadow_user() -> None:
     profile_result = MagicMock()
     profile_result.scalar_one_or_none.return_value = profile
     session = AsyncMock()
+    session.add = MagicMock()
     session.execute.return_value = profile_result
     repository = MagicMock()
     repository.session = session
     repository.get_user_by_email = AsyncMock(return_value=shadow_user)
+    repository.list_participant_profiles_by_email_for_update = AsyncMock(
+        return_value=[profile]
+    )
     repository.add_user = AsyncMock()
     active_session = Session(
         id=uuid.uuid4(),
@@ -1218,7 +1255,7 @@ async def test_register_requires_terms_acceptance() -> None:
 
 
 @pytest.mark.asyncio
-async def test_register_forbidden_for_non_leadership() -> None:
+async def test_register_allows_non_leadership_participant() -> None:
     settings = get_settings()
     claims = TaskLinkClaims(
         company_id=uuid.uuid4(),
@@ -1255,18 +1292,47 @@ async def test_register_forbidden_for_non_leadership() -> None:
     )
     mock_result_assignments = MagicMock()
     mock_result_assignments.scalars.return_value.all.return_value = [mock_assignment]
-    mock_result_existing_user = MagicMock()
-    mock_result_existing_user.scalar_one_or_none.return_value = None
-
-    mock_session.execute.side_effect = [
-        mock_result_profile,
-        _company_result(claims.company_id),
-        mock_result_leadership,
-        mock_result_assignments,
-        mock_result_existing_user,
-    ]
-
     service = IdentityService(mock_session)
+    service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
+        return_value=(
+            InviteVerifyResponse(
+                email=mock_profile.email,
+                full_name=mock_profile.full_name,
+                is_leadership=False,
+                already_registered=False,
+                project_name="Participant project",
+                expires_at=claims.expires_at,
+                token_status="active",
+                tasks=[],
+            ),
+            AssignmentInvite(
+                id=uuid.uuid4(),
+                company_id=claims.company_id,
+                respondent_profile_id=claims.respondent_profile_id,
+                token=token,
+                status="active",
+                expires_at=claims.expires_at,
+            ),
+        )
+    )
+    service._load_invited_profile = AsyncMock(return_value=mock_profile)  # type: ignore[method-assign]
+    service._resolve_invited_participant_user = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    service._claim_participant_profiles = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda user, **_kwargs: (
+            setattr(mock_profile, "user_id", user.id) or [mock_profile]
+        )
+    )
+    service._create_session = AsyncMock(return_value="registered-session")  # type: ignore[method-assign]
+    service.repository.add_user = AsyncMock(side_effect=lambda user: user)
+    service.repository.get_session_by_token = AsyncMock(
+        return_value=Session(
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            token_hash="registered-session-hash",  # noqa: S106
+            expires_at=claims.expires_at,
+        )
+    )
+    service.repository.add_consent_acceptance = AsyncMock()
     payload = RegisterRequest(
         email="test@example.com",
         password="Securepassword123!",
@@ -1274,9 +1340,10 @@ async def test_register_forbidden_for_non_leadership() -> None:
         terms_accepted=True,
     )
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.register(payload)
-    assert exc_info.value.code == "registration_forbidden"
+    result = await service.register(payload)
+
+    assert result.response.account_type == UserAccountType.registered
+    assert mock_profile.user_id is not None
 
 
 @pytest.mark.asyncio
@@ -1402,14 +1469,14 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
     service = IdentityService(mock_session)
     result = await service.verify_invite_token_and_create_session(token)
 
-    assert result.response.email == "guest@example.com"
-    assert result.response.is_leadership is False
+    assert result.response.action == "secure_link_ready"
+    assert result.response.participant_profile_id == mock_profile.id
     assert result.session_token is not None  # Generates a temporary session
     assert mock_profile.user_id is not None  # Shadow user linked
 
 
 @pytest.mark.asyncio
-async def test_invite_exchange_rejects_another_authenticated_user_session() -> None:
+async def test_invite_exchange_requires_switching_another_authenticated_session() -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
     assignment_id = uuid.uuid4()
@@ -1452,21 +1519,32 @@ async def test_invite_exchange_rejects_another_authenticated_user_session() -> N
     service._verify_invite_token = AsyncMock(  # type: ignore[method-assign]
         return_value=(_invite_verify_response(profile.email, expires_at), invite)
     )
+    target_user = User(
+        id=target_user_id,
+        email=profile.email,
+        password_hash="registered-password-hash",  # noqa: S106
+        role=UserRole.participant,
+    )
     service.repository.get_session_by_token = AsyncMock(return_value=other_session)
+    service.repository.get_user_by_email = AsyncMock(return_value=target_user)
+    service.repository.get_user_by_id = AsyncMock(return_value=target_user)
     service.repository.add_session = AsyncMock()
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.verify_invite_token_and_create_session(
-            token,
-            existing_session_token="other-session",
-        )
+    result = await service.verify_invite_token_and_create_session(
+        token,
+        existing_session_token="other-session",
+    )
 
-    assert exc_info.value.code == "invite_session_conflict"
+    assert result.response.action == "account_switch_required"
+    assert result.response.destination is not None
+    assert result.response.destination.startswith("/login?returnTo=")
+    assert "email=invite%40example.com" in result.response.destination
+    assert result.session_token is None
     service.repository.add_session.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_invite_exchange_replaces_another_session_only_when_explicitly_requested() -> None:
+async def test_invite_exchange_never_replaces_another_session() -> None:
     expires_at = datetime.now(UTC) + timedelta(days=5)
     user = User(
         id=uuid.uuid4(),
@@ -1510,17 +1588,17 @@ async def test_invite_exchange_replaces_another_session_only_when_explicitly_req
         replace_existing_session=True,
     )
 
-    assert result.session_token == "replacement-session"  # noqa: S105
-    service._create_session.assert_awaited_once_with(
-        user,
-        expires_at=None,
-        assignment_invite_id=None,
-    )
-    service.repository.delete_session_by_token.assert_awaited_once_with("existing-session")
+    assert result.response.action == "account_switch_required"
+    assert result.session_token is None
+    service._create_session.assert_not_awaited()
+    service.repository.delete_session_by_token.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_invite_exchange_preserves_same_user_authenticated_session() -> None:
+@pytest.mark.parametrize("role", [UserRole.participant, UserRole.trainer])
+async def test_invite_exchange_preserves_same_user_authenticated_session(
+    role: UserRole,
+) -> None:
     company_id = uuid.uuid4()
     respondent_id = uuid.uuid4()
     assignment_id = uuid.uuid4()
@@ -1554,7 +1632,7 @@ async def test_invite_exchange_preserves_same_user_authenticated_session() -> No
         id=user_id,
         email=profile.email,
         password_hash="registered-password-hash",  # noqa: S106
-        role=UserRole.participant,
+        role=role,
     )
     existing_session = Session(
         user_id=user_id,
@@ -1573,6 +1651,9 @@ async def test_invite_exchange_preserves_same_user_authenticated_session() -> No
         return_value=(_invite_verify_response(profile.email, expires_at), invite)
     )
     service.repository.get_session_by_token = AsyncMock(return_value=existing_session)
+    service.repository.list_participant_profiles_by_email_for_update = AsyncMock(
+        return_value=[profile]
+    )
     service.repository.add_session = AsyncMock()
 
     result = await service.verify_invite_token_and_create_session(
@@ -1581,6 +1662,7 @@ async def test_invite_exchange_preserves_same_user_authenticated_session() -> No
     )
 
     assert result.session_token is None
+    assert result.response.action == "dashboard_ready"
     service.repository.add_session.assert_not_awaited()
 
 
@@ -1643,13 +1725,10 @@ async def test_invite_exchange_links_same_email_profile_to_existing_account(
 
     result = await service.verify_invite_token_and_create_session("signed-invite")
 
-    assert profile.user_id == user.id
-    assert result.session_token == "linked-session"  # noqa: S105
-    service._create_session.assert_awaited_once_with(
-        user,
-        expires_at=None if role == UserRole.participant else expires_at,
-        assignment_invite_id=None if role == UserRole.participant else invite.id,
-    )
+    assert profile.user_id is None
+    assert result.response.action == "login_required"
+    assert result.session_token is None
+    service._create_session.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1681,15 +1760,54 @@ async def test_invite_exchange_never_merges_a_different_authenticated_email() ->
     service.repository.get_user_by_email = AsyncMock(return_value=None)
     service.repository.add_user = AsyncMock()
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.verify_invite_token_and_create_session(
-            "signed-invite",
-            existing_session_token="different-email-session",
-        )
+    result = await service.verify_invite_token_and_create_session(
+        "signed-invite",
+        existing_session_token="different-email-session",
+    )
 
-    assert exc_info.value.code == "invite_session_conflict"
+    assert result.response.action == "account_switch_required"
+    assert result.session_token is None
     assert profile.user_id is None
     service.repository.add_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_profile_claim_conflict_makes_no_partial_link_changes() -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email="shared@example.com",
+        password_hash="registered-password-hash",
+        role=UserRole.participant,
+    )
+    unbound_profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=None,
+        email="Shared@Example.com",
+        full_name="Unbound Profile",
+    )
+    conflicting_profile = ParticipantProfile(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        email="shared@example.com",
+        full_name="Conflicting Profile",
+    )
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    service = IdentityService(mock_session)
+    service.repository.list_participant_profiles_by_email_for_update = AsyncMock(
+        return_value=[unbound_profile, conflicting_profile]
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service._claim_participant_profiles(user, action="invite_claim")
+
+    assert exc_info.value.code == "invite_profile_account_conflict"
+    assert unbound_profile.user_id is None
+    assert conflicting_profile.user_id is not None
+    mock_session.add.assert_not_called()
+    mock_session.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1752,18 +1870,18 @@ async def test_register_links_existing_participant_without_replacing_password() 
     )
     service.repository.add_consent_acceptance = AsyncMock()
 
-    result = await service.register(
-        RegisterRequest(
-            email=profile.email,
-            password="Different-valid-password-123",  # noqa: S106
-            token=token,
-            terms_accepted=True,
+    with pytest.raises(DomainError) as exc_info:
+        await service.register(
+            RegisterRequest(
+                email=profile.email,
+                password="Different-valid-password-123",  # noqa: S106
+                token=token,
+                terms_accepted=True,
+            )
         )
-    )
 
+    assert exc_info.value.code == "account_already_registered"
     assert user.password_hash == "existing-password-hash"  # noqa: S105
-    assert profile.user_id == user.id
-    assert result.session_token == "linked-session"  # noqa: S105
 
 
 @pytest.mark.asyncio
@@ -1778,6 +1896,7 @@ async def test_verify_invite_token_and_create_session_for_leadership() -> None:
     token = create_task_token(claims, settings)
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     # 1. verify_invite_token - ParticipantProfile check
     mock_profile = ParticipantProfile(
@@ -1827,6 +1946,6 @@ async def test_verify_invite_token_and_create_session_for_leadership() -> None:
     service = IdentityService(mock_session)
     result = await service.verify_invite_token_and_create_session(token)
 
-    assert result.response.email == "leader@example.com"
-    assert result.response.is_leadership is True
-    assert result.session_token is None  # Leadership must register manually to get a session
+    assert result.response.action == "secure_link_ready"
+    assert result.response.participant_profile_id == mock_profile.id
+    assert result.session_token is not None

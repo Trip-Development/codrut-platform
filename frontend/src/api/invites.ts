@@ -83,6 +83,26 @@ type BackendErrorResponse = {
   };
 };
 
+export type InviteExchangeResult = {
+  action:
+    | "secure_link_ready"
+    | "login_required"
+    | "dashboard_ready"
+    | "account_switch_required";
+  destination?: string | null;
+  participantProfileId: string;
+  projectId?: string | null;
+  assessmentCycleId?: string | null;
+};
+
+type BackendInviteExchangeResponse = {
+  action: InviteExchangeResult["action"];
+  destination?: string | null;
+  participant_profile_id: string;
+  project_id?: string | null;
+  assessment_cycle_id?: string | null;
+};
+
 const inviteFailureMessages: Record<string, string> = {
   task_link_expired: "Linkul a expirat. Cere un link nou de la trainer.",
   task_link_invalid: "Linkul de invitație nu este valid. Cere un link nou de la trainer.",
@@ -205,8 +225,14 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
 export async function exchangeInviteSession(
   token: string,
   options: { replaceExistingSession?: boolean } = {},
-): Promise<void> {
-  if (token === "demo-token" && isDemoFallbackEnabled()) return;
+): Promise<InviteExchangeResult> {
+  if (token === "demo-token" && isDemoFallbackEnabled()) {
+    return {
+      action: "secure_link_ready",
+      destination: `/invite/${token}`,
+      participantProfileId: "demo-participant",
+    };
+  }
 
   const response = await apiFetch(`${getApiBaseUrl()}/auth/invite/exchange`, {
     method: "POST",
@@ -230,6 +256,26 @@ export async function exchangeInviteSession(
     );
     throw new Error(localizedMessage);
   }
+
+  const data = (await response.json()) as BackendInviteExchangeResponse;
+  if (
+    !data.participant_profile_id
+    || ![
+      "secure_link_ready",
+      "login_required",
+      "dashboard_ready",
+      "account_switch_required",
+    ].includes(data.action)
+  ) {
+    throw new Error("Nu am putut pregăti sesiunea invitației.");
+  }
+  return {
+    action: data.action,
+    destination: data.destination,
+    participantProfileId: data.participant_profile_id,
+    projectId: data.project_id,
+    assessmentCycleId: data.assessment_cycle_id,
+  };
 }
 
 async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> {
