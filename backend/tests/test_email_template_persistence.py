@@ -736,7 +736,7 @@ def persisted_campaign_recipient(
 
 
 @pytest.mark.asyncio
-async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscribe_link() -> None:
+async def test_send_campaign_sends_active_members_across_segments_with_unsubscribe_link() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     active = persisted_campaign_recipient()
@@ -764,9 +764,9 @@ async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscr
         settings=settings,
     )
 
-    assert response.queued == 1
+    assert response.queued == 2
     assert response.sent == 0
-    assert response.skipped == 2
+    assert response.skipped == 1
     assert campaign.status == CampaignStatus.ready
     assert provider.sent == []
     message = queued_messages(repository)[0]
@@ -787,9 +787,12 @@ async def test_send_campaign_sends_only_active_matching_recipients_with_unsubscr
     )
     assert "Ai primit acest email deoarece" in message.html_body
     assert settings.email_legal_address in message.html_body
-    assert len(repository.sends) == 1
-    assert repository.sends[0].assignment_id is None
-    assert repository.sends[0].template_key == "campaign"
+    assert {send.recipient_email for send in repository.sends} == {
+        active.email,
+        other_segment.email,
+    }
+    assert all(send.assignment_id is None for send in repository.sends)
+    assert all(send.template_key == "campaign" for send in repository.sends)
 
 
 @pytest.mark.asyncio
@@ -871,6 +874,43 @@ async def test_send_campaign_adds_open_click_and_video_tracking() -> None:
     )
     assert target_url == "https://example.com/articol"
     assert repository.campaign_recipient_events[-1].event_type == "clicked"
+
+
+@pytest.mark.asyncio
+async def test_send_campaign_repairs_plain_video_and_calendly_content() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.video_url = "https://vimeo.com/123456789"
+    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = "https://codrut.andreivacaru.ro/campanii/demo"
+    campaign.html_body = (
+        "<p>Material video: ${landing_page_url}</p>"
+        "<p>Alege un slot: ${calendly_url}</p>"
+    )
+    campaign.text_body = (
+        "Material video: ${landing_page_url}\n"
+        "Alege un slot: ${calendly_url}"
+    )
+    active = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(active)
+    provider = FakeEmailProvider()
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id]),
+        provider=provider,
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    message = queued_messages(repository)[0]
+    assert response.queued == 1
+    assert campaign.thumbnail_url in message.html_body
+    assert "/api/communications/campaigns/track/video_viewed/" in message.html_body
+    assert 'data-codrut-cta="calendly"' in message.html_body
+    assert message.html_body.count("Alege un slot în Calendly") == 1
+    assert message.text_body.count("Alege un slot:") == 1
 
 
 @pytest.mark.asyncio

@@ -182,11 +182,22 @@ export function parseEmailTemplateEditorDraft(body: string, fallbackHeading: str
   const heading = headingNode?.textContent?.trim() || fallbackHeading;
   const blocks: string[] = [];
   const skipTexts = ["Andrei Văcaru", "Ai primit acest email deoarece", "Str. Exemplu Nr. 10"];
+  const promotionalFooter = Array.from(document.body.querySelectorAll("div")).find(
+    (node) => node.firstElementChild?.textContent?.includes(
+      "Ai primit acest email deoarece",
+    ),
+  );
 
   Array.from(document.body.querySelectorAll("h1,h2,h3,p,table")).forEach((node) => {
     if (node === headingNode) return;
     const text = node.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    if (!text || skipTexts.some((skipText) => text.includes(skipText)) || text.startsWith("Link platformă:") || text === "Dezabonare") {
+    if (
+      !text
+      || promotionalFooter?.contains(node)
+      || skipTexts.some((skipText) => text.includes(skipText))
+      || text.startsWith("Link platformă:")
+      || text === "Dezabonare"
+    ) {
       return;
     }
     if (node.tagName === "TABLE") {

@@ -351,7 +351,7 @@ async def test_campaign_send_requires_matching_recipients() -> None:
     assert_domain_code(exc_info, "campaign_no_recipients")
 
 
-async def test_campaign_dry_run_explains_ineligible_recipients_without_enqueuing() -> None:
+async def test_campaign_dry_run_allows_mixed_segments_and_explains_suppression() -> None:
     current_campaign = campaign()
     wrong_segment = recipient(segment=CampaignRecipientSegment.past_customer)
     suppressed = recipient(status=CampaignRecipientStatus.suppressed)
@@ -376,9 +376,8 @@ async def test_campaign_dry_run_explains_ineligible_recipients_without_enqueuing
         owner_id=OWNER_ID,
     )
 
-    assert [item.status for item in result.results] == ["skipped", "skipped", "dry_run"]
+    assert [item.status for item in result.results] == ["dry_run", "skipped", "dry_run"]
     assert result.skipped == 3
-    assert "segment" in cast(str, result.results[0].error).lower()
     assert "suppressed" in cast(str, result.results[1].error).lower()
 
 

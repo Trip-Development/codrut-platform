@@ -838,6 +838,19 @@ function normalizeHttpUrl(value: string | undefined): string | null {
   }
 }
 
+function appendCampaignHtmlBlock(htmlBody: string, block: string): string {
+  const footerMarker = '</div><div style="margin-top:24px;padding-top:24px;border-top:1px solid #eadfdb;';
+  if (htmlBody.includes(footerMarker)) {
+    return htmlBody.replace(footerMarker, `${block}${footerMarker}`);
+  }
+  const shellClose = "</div></div>";
+  const trimmedBody = htmlBody.trimEnd();
+  if (trimmedBody.endsWith(shellClose)) {
+    return `${trimmedBody.slice(0, -shellClose.length)}${block}${shellClose}`;
+  }
+  return `${htmlBody}${block}`;
+}
+
 export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): CampaignCreate | null {
   const trimmedName = draft.name.trim();
   const hasVideoInput = Boolean(draft.videoUrl?.trim());
@@ -855,28 +868,42 @@ export function buildVideoCampaignCreatePayload(draft: CampaignVideoDraft): Camp
   if (hasLandingInput && !normalizeHttpUrl(draft.landingUrl)) return null;
   if (hasVideoInput && !thumbnailUrl) return null;
 
-  const htmlBody = draft.htmlBody?.trim()
-    ? draft.htmlBody
-        .replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
-    : hasVideoBlock
-      ? [
+  const videoMediaBlockHtml = hasVideoBlock
+    ? [
+        '<p><a href="${landing_page_url}" style="display:block;text-decoration:none;color:inherit;">',
+        `<span style="display:block;position:relative;max-width:420px;border-radius:14px;overflow:hidden;background:#2b211f;">`,
+        '<img src="${thumbnail_url}" alt="Previzualizare video" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" />',
+        `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
+        "</span>",
+        "</a></p>",
+      ].join("")
+    : "";
+  const videoDefaultHtml = hasVideoBlock
+    ? [
         "<p>Bună, ${first_name}.</p>",
         "<p>Am pregătit un material video scurt pentru contextul echipei tale.</p>",
-        [
-          '<p><a href="${landing_page_url}" style="display:block;text-decoration:none;color:inherit;">',
-          `<span style="display:block;position:relative;max-width:420px;border-radius:14px;overflow:hidden;background:#2b211f;">`,
-          '<img src="${thumbnail_url}" alt="Previzualizare video" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" />',
-          `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(0,0,0,.22);text-align:center;line-height:64px;color:#890505;font-size:28px;font-weight:700;">&#9654;</span>`,
-          "</span>",
-          "</a></p>",
-        ].join(""),
+        videoMediaBlockHtml,
       ].join("")
+    : "";
+  const imageBlockHtml = hasImageBlock
+    ? '<p><img src="${thumbnail_url}" alt="Imagine campanie" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" /></p>'
+    : "";
+  const authoredHtmlBody = draft.htmlBody?.trim()
+    ? draft.htmlBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
+    : "";
+  const hasAuthoredThumbnail = /<img\b[^>]*\bsrc=(["'])[^"']*\$\{thumbnail_url\}[^"']*\1/i
+    .test(authoredHtmlBody);
+  const htmlBody = authoredHtmlBody
+    ? hasVideoBlock && !hasAuthoredThumbnail
+      ? appendCampaignHtmlBlock(authoredHtmlBody, videoMediaBlockHtml)
+      : hasImageBlock && !hasAuthoredThumbnail
+        ? appendCampaignHtmlBlock(authoredHtmlBody, imageBlockHtml)
+        : authoredHtmlBody
+    : hasVideoBlock
+      ? videoDefaultHtml
       : hasImageBlock
-        ? [
-          "<p>Bună, ${first_name}.</p>",
-          '<p><img src="${thumbnail_url}" alt="Imagine campanie" style="display:block;width:100%;max-width:420px;height:auto;border:0;border-radius:14px;" /></p>',
-        ].join("")
-      : "<p>Bună, ${first_name}.</p><p>Dacă vrei, alege un slot în Calendly și stabilim o conversație.</p>";
+        ? `<p>Bună, \${first_name}.</p>${imageBlockHtml}`
+        : "<p>Bună, ${first_name}.</p><p>Dacă vrei, alege un slot în Calendly și stabilim o conversație.</p>";
   const textBody = draft.textBody?.trim()
     ? draft.textBody.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, "$${$1}")
     : hasVideoBlock
@@ -1276,6 +1303,7 @@ export type CampaignSendRecipientResult = {
 export type CampaignSendResponse = {
   campaign_id: string;
   total: number;
+  queued?: number;
   sent: number;
   failed: number;
   skipped: number;

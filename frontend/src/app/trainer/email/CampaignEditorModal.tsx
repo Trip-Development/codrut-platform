@@ -4,7 +4,7 @@ import Image from "next/image";
 import type React from "react";
 import { ChevronDownIcon, Loader2Icon, UploadIcon } from "lucide-react";
 
-import { htmlToPlainText, type EmailCampaign, type EmailTemplate } from "@/api/email";
+import type { EmailCampaign, EmailTemplate } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,11 @@ import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
 import type { CampaignSegmentKey, CampaignTargetSegment } from "./campaign-domain";
 import type { CampaignFieldErrors, CampaignFieldName, CampaignSaveFailure } from "./campaign-validation";
-import { MOCK_REPLACEMENTS, plainCampaignContentToHtml } from "./email-template-domain";
+import {
+  buildStyledEmailTemplateBody,
+  MOCK_REPLACEMENTS,
+  parseEmailTemplateEditorDraft,
+} from "./email-template-domain";
 
 type CampaignPreview = { subject: string; bodyHtml: string };
 
@@ -194,10 +198,11 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                       const nextTemplate = campaignTemplates.find((template) => template.id === event.target.value);
                       props.setCampaignTemplateId(event.target.value);
                       if (nextTemplate) {
+                        const editorDraft = parseEmailTemplateEditorDraft(nextTemplate.body, "");
                         props.setCampaignSubject(nextTemplate.subject);
                         props.clearFieldError("subject");
                         props.setCampaignBody(nextTemplate.body);
-                        props.setCampaignPlainBody(htmlToPlainText(nextTemplate.body));
+                        props.setCampaignPlainBody(editorDraft.body);
                       }
                     }}
                     disabled={isSaving}
@@ -236,8 +241,13 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                       id="campaign-plain-body"
                       value={campaignPlainBody}
                       onChange={(event) => {
+                        const editorDraft = parseEmailTemplateEditorDraft(campaignBody, "");
                         props.setCampaignPlainBody(event.target.value);
-                        props.setCampaignBody(plainCampaignContentToHtml(event.target.value));
+                        props.setCampaignBody(buildStyledEmailTemplateBody({
+                          heading: editorDraft.heading,
+                          body: event.target.value,
+                          lane: "campaign",
+                        }));
                         props.clearFieldError("body");
                       }}
                       disabled={isSaving}
@@ -261,7 +271,9 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                         value={campaignBody}
                         onChange={(event) => {
                           props.setCampaignBody(event.target.value);
-                          props.setCampaignPlainBody(htmlToPlainText(event.target.value));
+                          props.setCampaignPlainBody(
+                            parseEmailTemplateEditorDraft(event.target.value, "").body,
+                          );
                           props.clearFieldError("body");
                         }}
                         disabled={isSaving}

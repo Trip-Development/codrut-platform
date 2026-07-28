@@ -1026,16 +1026,6 @@ class CommunicationsService:
         results: list[CampaignSendRecipientResult] = []
         remaining_sends = await _remaining_email_sends_today(repository, settings)
         for recipient in recipients:
-            if campaign.segment is not None and recipient.segment != campaign.segment:
-                results.append(
-                    CampaignSendRecipientResult(
-                        recipient_id=recipient.id,
-                        email=recipient.email or "",
-                        status="skipped",
-                        error="Recipient segment does not match campaign segment.",
-                    )
-                )
-                continue
             if recipient.status != CampaignRecipientStatus.active or not recipient.email:
                 results.append(
                     CampaignSendRecipientResult(
@@ -1732,6 +1722,8 @@ def _render_campaign_message(
     subject = _render_campaign_template(campaign.subject, context)
     html_body = _render_campaign_template(campaign.html_body, context)
     text_body = _render_campaign_template(campaign.text_body, context)
+    if campaign.video_url and campaign.thumbnail_url:
+        html_body = _ensure_campaign_video_block(html_body, campaign)
     if not campaign.video_url and not campaign.thumbnail_url:
         html_body = _remove_empty_campaign_video_blocks(html_body)
         text_body = _remove_empty_campaign_video_lines(text_body)
@@ -1753,7 +1745,7 @@ def _render_campaign_message(
     html_body = _ensure_campaign_html_unsubscribe(html_body, unsubscribe_url)
     html_body = sanitize_email_html(html_body)
     html_body = _append_campaign_open_pixel(html_body, campaign, recipient, settings)
-    if not _campaign_message_has_calendly_link(text_body, calendly_tracking_url):
+    if not _campaign_text_has_calendly_link(text_body, calendly_tracking_url):
         text_body = f"{text_body}\n\nAlege un slot în Calendly: {calendly_tracking_url}"
     if unsubscribe_url not in text_body:
         text_body = f"{text_body}\n\nDezabonare: {unsubscribe_url}"
@@ -1783,12 +1775,54 @@ def _remove_empty_campaign_video_lines(text_body: str) -> str:
 
 
 def _campaign_message_has_calendly_link(body: str, calendly_tracking_url: str) -> bool:
-    normalized = body.lower()
-    return (
-        bool(calendly_tracking_url and calendly_tracking_url in body)
-        or 'data-codrut-cta="calendly"' in normalized
-        or "calendly.com" in normalized
+    for match in _CAMPAIGN_HREF_RE.finditer(body):
+        href = html_unescape(match.group(2)).strip()
+        if href == calendly_tracking_url or _is_calendly_target(href):
+            return True
+    return False
+
+
+def _campaign_text_has_calendly_link(body: str, calendly_tracking_url: str) -> bool:
+    has_tracking_url = bool(calendly_tracking_url and calendly_tracking_url in body)
+    return has_tracking_url or "calendly.com" in body.lower()
+
+
+def _ensure_campaign_video_block(html_body: str, campaign: Campaign) -> str:
+    if not campaign.video_url or not campaign.thumbnail_url:
+        return html_body
+
+    escaped_thumbnail_url = html_escape(campaign.thumbnail_url, quote=True)
+    if (
+        f'src="{escaped_thumbnail_url}"' in html_body
+        or f"src='{escaped_thumbnail_url}'" in html_body
+    ):
+        return html_body
+
+    target_url = html_escape(
+        campaign.landing_page_url or campaign.video_url,
+        quote=True,
     )
+    video_block = (
+        '<p style="margin:24px 0;">'
+        f'<a href="{target_url}" style="display:block;text-decoration:none;color:inherit;">'
+        '<span style="display:block;max-width:420px;border-radius:14px;'
+        'overflow:hidden;background:#2b211f;">'
+        f'<img src="{escaped_thumbnail_url}" alt="Previzualizare video" '
+        'style="display:block;width:100%;max-width:420px;height:auto;'
+        'border:0;border-radius:14px;" />'
+        "</span></a></p>"
+    )
+    footer_marker = (
+        '</div><div style="margin-top:24px;padding-top:24px;'
+        'border-top:1px solid #eadfdb;'
+    )
+    if footer_marker in html_body:
+        return html_body.replace(footer_marker, video_block + footer_marker, 1)
+    shell_close = "</div></div>"
+    stripped = html_body.rstrip()
+    if stripped.endswith(shell_close):
+        return stripped[: -len(shell_close)] + video_block + shell_close
+    return html_body + video_block
 
 
 def _append_campaign_calendly_cta(html_body: str, calendly_url: str) -> str:

@@ -335,6 +335,23 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(html).toContain('href="{action_url}"');
     expect(html).toContain("Andrei Văcaru");
   });
+
+  it("keeps legacy campaign content when the footer shares its wrapper", () => {
+    const draft = parseEmailTemplateEditorDraft(
+      [
+        "<div>",
+        "<p>Mesajul important rămâne.</p>",
+        "<p>Ai primit acest email deoarece ești abonat.</p>",
+        "<p><a href=\"{unsubscribe_url}\">Dezabonare</a></p>",
+        "</div>",
+      ].join(""),
+      "",
+    );
+
+    expect(draft.body).toContain("Mesajul important rămâne.");
+    expect(draft.body).not.toContain("Ai primit acest email deoarece");
+    expect(draft.body).not.toContain("Dezabonare");
+  });
 });
 
 describe("EmailWorkspace campaign contacts", () => {
@@ -492,6 +509,59 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.change(bodyInput, { target: { value: "Primul rând" } });
     fireEvent.change(bodyInput, { target: { value: "Primul rând\nAl doilea rând" } });
     expect((bodyInput as HTMLTextAreaElement).value).toBe("Primul rând\nAl doilea rând");
+  });
+
+  it("preserves campaign video and Calendly blocks when editing friendly text", async () => {
+    const template = makeTemplate({
+      id: "campaign-rich@1",
+      baseKey: "campaign-rich",
+      name: "Campanie cu video",
+      audience: "potential_customer",
+      body: buildStyledEmailTemplateBody({
+        heading: "Material pentru echipă",
+        body: [
+          "Salut {first_name}.",
+          "{video_block}",
+          "{calendly_button:Programează o discuție}",
+        ].join("\n\n"),
+        lane: "campaign",
+      }),
+    });
+    const savedCampaign = makeCampaign({
+      id: "campaign-rich",
+      name: "Campanie video leadership",
+    });
+    navigationMocks.searchParams = new URLSearchParams("tab=campaigns&modal=new-campaign");
+    emailApiMocks.listEmailTemplatesOnServer.mockResolvedValue([template]);
+    emailApiMocks.buildVideoCampaignCreatePayload.mockImplementation((draft) => ({
+      name: draft.name,
+      segment: draft.segment,
+      subject: draft.subject,
+      html_body: draft.htmlBody ?? "",
+      text_body: draft.textBody ?? "",
+    }));
+    emailApiMocks.createCampaignOnServer.mockResolvedValue(savedCampaign);
+
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+
+    const templateSelect = await screen.findByLabelText("Șablon email");
+    fireEvent.change(templateSelect, { target: { value: template.id } });
+    const messageInput = screen.getByLabelText("Mesaj email") as HTMLTextAreaElement;
+    expect(messageInput.value).toContain("{video_block}");
+    expect(messageInput.value).toContain("{calendly_button:Programează o discuție}");
+
+    fireEvent.change(messageInput, {
+      target: { value: `${messageInput.value}\n\nText ajustat pentru campanie.` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează campania" }));
+
+    await waitFor(() => expect(emailApiMocks.buildVideoCampaignCreatePayload).toHaveBeenCalled());
+    const draft = emailApiMocks.buildVideoCampaignCreatePayload.mock.calls[0]?.[0];
+    expect(draft.htmlBody).toContain('src="{thumbnail_url}"');
+    expect(draft.htmlBody).toContain('href="{landing_page_url}"');
+    expect(draft.htmlBody).toContain('href="{calendly_url}"');
+    expect(draft.htmlBody).toContain("Text ajustat pentru campanie.");
+    expect(draft.htmlBody).not.toContain("{legal_address}</p><p");
   });
 
   it("shows a newly created campaign after saving from the contacts view", async () => {
@@ -1370,6 +1440,28 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(within(campaignCard as HTMLElement).getByText("Netrimis")).toBeTruthy();
 
     fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", {
+      name: "Trimite campania Campanie cu marker către mara.unsent@example.com",
+    }));
+    expect(await screen.findByText(
+      /Ceilalți destinatari selectați rămân netrimiși/,
+    )).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Trimite" }));
+    await waitFor(() => {
+      expect(emailApiMocks.sendCampaignOnServer).toHaveBeenCalledWith(
+        "campaign-markers",
+        expect.objectContaining({
+          mode: "selected",
+          recipientIds: ["recipient-unsent"],
+          idempotencyKey: expect.stringMatching(/^campaign-ui-/),
+        }),
+      );
+    });
+    expect(await screen.findByText(
+      "Trimiterea către Mara Unsent a fost procesată: 1 trimise.",
+    )).toBeTruthy();
+    emailApiMocks.sendCampaignOnServer.mockClear();
+
+    fireEvent.click(within(campaignCard as HTMLElement).getByRole("button", {
       name: "Retrimite campania Campanie cu marker către ana.sent@example.com",
     }));
     expect(await screen.findByText(/trece explicit peste marcajul „Trimis”/)).toBeTruthy();
@@ -1384,7 +1476,9 @@ describe("EmailWorkspace campaign contacts", () => {
         }),
       );
     });
-    expect(await screen.findByText("Retrimiterea către Ana Sent a fost procesată.")).toBeTruthy();
+    expect(await screen.findByText(
+      "Retrimiterea către Ana Sent a fost procesată: 1 trimise.",
+    )).toBeTruthy();
     await waitFor(() => {
       expect(
         (within(campaignCard as HTMLElement).getByRole("button", {
@@ -1612,7 +1706,7 @@ describe("EmailWorkspace campaign contacts", () => {
     const saveRequest = createDeferred<CampaignRecipient[]>();
 
     emailApiMocks.listCampaignsOnServer.mockResolvedValue([campaign]);
-    emailApiMocks.listCampaignRecipientMembershipOnServer.mockResolvedValue([recipient]);
+    emailApiMocks.listCampaignRecipientMembershipOnServer.mockResolvedValue([]);
     emailApiMocks.replaceCampaignRecipientMembershipOnServer.mockReturnValueOnce(saveRequest.promise);
     navigationMocks.searchParams = new URLSearchParams("tab=campaigns&view=campaigns");
 
@@ -1630,6 +1724,9 @@ describe("EmailWorkspace campaign contacts", () => {
 
     expect(await screen.findByText("Se salvează")).toBeTruthy();
     expect(emailApiMocks.replaceCampaignRecipientMembershipOnServer).toHaveBeenCalledTimes(1);
+    expect((within(campaignCard as HTMLElement).getByRole("button", {
+      name: "Trimite campania Campanie feedback către ana@alpha.example",
+    }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText(/salvează automat/i)).toBeNull();
 
     saveRequest.resolve([recipient]);
