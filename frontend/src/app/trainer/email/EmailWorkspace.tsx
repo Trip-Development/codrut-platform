@@ -49,6 +49,8 @@ import {
   campaignRecipientName,
   campaignRecipientSegment,
   campaignRecipientSortKey,
+  campaignSendFailureDetail,
+  campaignSendResultSummary,
   createCampaignSendIdempotencyKey,
   isCampaignRecipientEffectivelyActive,
   splitContactName,
@@ -233,7 +235,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [campaignAssetPreviewUrl, setCampaignAssetPreviewUrl] = useState<string | null>(null);
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const [sendingCampaignMode, setSendingCampaignMode] = useState<CampaignSendMode | null>(null);
-  const [resendingCampaignRecipientId, setResendingCampaignRecipientId] = useState<string | null>(null);
+  const [sendingCampaignRecipientId, setSendingCampaignRecipientId] = useState<string | null>(null);
   const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
   const [campaignSendResults, setCampaignSendResults] = useState<Record<string, CampaignSendResponse>>({});
   const [campaignMemberships, setCampaignMemberships] = useState<Record<string, string[]>>({});
@@ -447,7 +449,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     const editableBody = renderEditableCampaignBody(campaign);
     setCampaignSubject(renderEditablePlaceholders(campaign.subject));
     setCampaignBody(editableBody);
-    setCampaignPlainBody(htmlToPlainText(editableBody));
+    setCampaignPlainBody(parseEmailTemplateEditorDraft(editableBody, "").body);
     setCampaignVideoUrl(campaign.video_url ?? "");
     setCampaignThumbnailUrl(campaign.thumbnail_url ?? "");
     setCampaignLandingUrl(campaign.landing_page_url ?? "");
@@ -1414,8 +1416,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
             ...previousResults,
             [campaign.id]: result,
           }));
+          const failureDetail = campaignSendFailureDetail(result);
           setCampaignMessage(
-            `Campania a fost procesată: ${result.sent} trimise, ${result.failed} eșuate, ${result.skipped} omise.`,
+            `Campania a fost procesată: ${campaignSendResultSummary(result)}${
+              failureDetail ? `. ${failureDetail}` : ""
+            }.`,
           );
           await Promise.all([loadCampaigns(), refreshSummary()]);
         } catch (error) {
@@ -1429,9 +1434,10 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     });
   };
 
-  const handleResendCampaignRecipient = (
+  const handleSendCampaignRecipient = (
     campaign: EmailCampaign,
     recipient: CampaignRecipientRow,
+    action: "send" | "resend",
   ) => {
     const readinessError = campaignSendReadinessError(campaign);
     if (readinessError) {
@@ -1439,16 +1445,19 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       return;
     }
     const recipientLabel = campaignRecipientName(recipient) || recipient.email;
+    const isResend = action === "resend";
     setEmailConfirmDialog({
-      title: "Retrimiți acest email?",
-      description: `Campania „${campaign.name}” va fi retrimisă doar către ${recipientLabel}. Această acțiune trece explicit peste marcajul „Trimis”.`,
-      confirmLabel: "Retrimite",
+      title: isResend ? "Retrimiți acest email?" : "Trimiți acest email de test?",
+      description: isResend
+        ? `Campania „${campaign.name}” va fi retrimisă doar către ${recipientLabel}. Această acțiune trece explicit peste marcajul „Trimis”.`
+        : `Campania „${campaign.name}” va fi trimisă doar către ${recipientLabel}. Ceilalți destinatari selectați rămân netrimiși.`,
+      confirmLabel: isResend ? "Retrimite" : "Trimite",
       onConfirm: async () => {
         if (campaignSendingRef.current) return;
         campaignSendingRef.current = campaign.id;
         setSendingCampaignId(campaign.id);
         setSendingCampaignMode("selected");
-        setResendingCampaignRecipientId(recipient.id);
+        setSendingCampaignRecipientId(recipient.id);
         setCampaignMessage(null);
         try {
           const result = await sendCampaignOnServer(campaign.id, {
@@ -1460,21 +1469,22 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
             ...previousResults,
             [campaign.id]: result,
           }));
-          setCampaignMessage(
-            `Retrimiterea către ${recipientLabel} a fost procesată.`,
-          );
+          const failureDetail = campaignSendFailureDetail(result);
+          setCampaignMessage(failureDetail
+            ? `Emailul către ${recipientLabel} nu a fost trimis. ${failureDetail}`
+            : `${isResend ? "Retrimiterea" : "Trimiterea"} către ${recipientLabel} a fost procesată: ${campaignSendResultSummary(result)}.`);
           await Promise.all([loadCampaigns(), refreshSummary()]);
         } catch (error) {
           setCampaignMessage(
             error instanceof Error
               ? error.message
-              : "Emailul nu a putut fi retrimis.",
+              : "Emailul nu a putut fi trimis.",
           );
         } finally {
           campaignSendingRef.current = null;
           setSendingCampaignId(null);
           setSendingCampaignMode(null);
-          setResendingCampaignRecipientId(null);
+          setSendingCampaignRecipientId(null);
         }
       },
     });
@@ -1888,7 +1898,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                 openCampaignId={openCampaignId}
                 sendingCampaignId={sendingCampaignId}
                 sendingMode={sendingCampaignMode}
-                resendingRecipientId={resendingCampaignRecipientId}
+                sendingRecipientId={sendingCampaignRecipientId}
                 deletingCampaignId={deletingCampaignId}
                 savingMembershipId={savingCampaignMembershipId}
                 getActiveMemberIds={activeCampaignMembershipIds}
@@ -1904,7 +1914,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                 toggleMembershipRecipient={(campaign, recipientId) => void toggleCampaignMembershipRecipient(campaign, recipientId)}
                 toggleMembershipCompany={toggleCampaignMembershipCompany}
                 sendCampaign={(campaign, mode) => void handleSendCampaign(campaign, mode)}
-                resendRecipient={handleResendCampaignRecipient}
+                sendRecipient={handleSendCampaignRecipient}
                 editCampaign={openEditCampaignModal}
                 deleteCampaign={handleDeleteCampaign}
               />

@@ -26,6 +26,8 @@ import {
   campaignDeliveryLabel,
   campaignMembershipCompanyGroups,
   campaignRecipientName,
+  campaignSendFailureDetail,
+  campaignSendResultSummary,
   campaignSegmentLabel,
   type CampaignContactTypeFilter,
   type CampaignDeliveryState,
@@ -46,7 +48,7 @@ export type CampaignsWorkspaceViewProps = {
   openCampaignId: string | null;
   sendingCampaignId: string | null;
   sendingMode: CampaignSendMode | null;
-  resendingRecipientId: string | null;
+  sendingRecipientId: string | null;
   deletingCampaignId: string | null;
   savingMembershipId: string | null;
   getActiveMemberIds: (campaign: EmailCampaign) => string[];
@@ -62,7 +64,11 @@ export type CampaignsWorkspaceViewProps = {
   toggleMembershipRecipient: (campaign: EmailCampaign, recipientId: string) => void;
   toggleMembershipCompany: (campaign: EmailCampaign, companyKey: string, mode: "select" | "deselect") => void;
   sendCampaign: (campaign: EmailCampaign, mode: CampaignSendMode) => void;
-  resendRecipient: (campaign: EmailCampaign, recipient: CampaignRecipientRow) => void;
+  sendRecipient: (
+    campaign: EmailCampaign,
+    recipient: CampaignRecipientRow,
+    action: "send" | "resend",
+  ) => void;
   editCampaign: (campaign: EmailCampaign) => void;
   deleteCampaign: (campaign: EmailCampaign) => void;
 };
@@ -110,12 +116,15 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
           const sendBlockedReasonId = `campaign-${campaign.id}-send-blocked-reason`;
           const latestSendResult = props.sendResults[campaign.id];
           const deliverySummary = latestSendResult
-            ? `${latestSendResult.sent} trimise acum`
+            ? campaignSendResultSummary(latestSendResult)
             : sentMemberCount > 0
               ? `${sentMemberCount} trimise`
               : "Netrimisă";
-          const sendFeedbackDetail = props.resendingRecipientId
-            ? `Retrimitem campania către destinatarul selectat pentru ${campaign.name}.`
+          const latestSendFailure = latestSendResult
+            ? campaignSendFailureDetail(latestSendResult)
+            : null;
+          const sendFeedbackDetail = props.sendingRecipientId
+            ? `Trimitem campania către un singur destinatar pentru ${campaign.name}.`
             : props.sendingMode === "selected"
             ? `Trimitem campania către ${sendableMemberIds.length} destinatari netrimiși pentru ${campaign.name}.`
             : props.sendingMode === "all"
@@ -192,6 +201,15 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                               const checkboxId = `campaign-${campaign.id}-recipient-${recipient.id}`;
                               const delivery = props.getRecipientDelivery(campaign, recipient.id);
                               const deliveryLocked = props.isDeliveryLocked(delivery);
+                              const isMember = memberIds.includes(recipient.id);
+                              const recipientAction = delivery === "sent"
+                                ? "resend"
+                                : isMember && (delivery === "not_sent" || delivery === "failed")
+                                  ? "send"
+                                  : null;
+                              const recipientActionLabel = recipientAction === "resend"
+                                ? "Retrimite"
+                                : "Trimite";
                               return (
                                 <Field key={recipient.id} orientation="horizontal" className={cn("group grid grid-cols-[2rem_minmax(12rem,1fr)_minmax(13rem,1fr)_7rem] items-center gap-3 rounded-none px-3 py-2.5 text-xs hover:bg-surface-muted", deliveryLocked && "text-foreground/48")}>
                                   <Checkbox id={checkboxId} checked={memberIds.includes(recipient.id) || deliveryLocked} disabled={deliveryLocked || props.savingMembershipId === campaign.id} onCheckedChange={() => props.toggleMembershipRecipient(campaign, recipient.id)} className="mt-0.5" aria-label={`Include ${recipient.email} în ${campaign.name}`} />
@@ -200,21 +218,21 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                                     <span className="truncate font-mono text-[11px] text-foreground/45">{recipient.email}</span>
                                   </FieldLabel>
                                   <span className="relative flex h-7 items-center justify-end">
-                                    <span className={cn("w-fit rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-opacity", delivery === "sent" && "border-emerald-200 bg-emerald-50 text-emerald-700 group-hover:opacity-0 group-focus-within:opacity-0", delivery === "failed" && "border-red-200 bg-red-50 text-red-700", delivery === "queued" && "border-amber-200 bg-amber-50 text-amber-700", delivery === "not_sent" && "border-[var(--border)] bg-surface-muted text-foreground/45")}>{campaignDeliveryLabel(delivery)}</span>
-                                    {delivery === "sent" ? (
+                                    <span className={cn("w-fit rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-opacity", recipientAction && "group-hover:opacity-0 group-focus-within:opacity-0", delivery === "sent" && "border-emerald-200 bg-emerald-50 text-emerald-700", delivery === "failed" && "border-red-200 bg-red-50 text-red-700", delivery === "queued" && "border-amber-200 bg-amber-50 text-amber-700", delivery === "not_sent" && "border-[var(--border)] bg-surface-muted text-foreground/45")}>{campaignDeliveryLabel(delivery)}</span>
+                                    {recipientAction ? (
                                       <Button
                                         type="button"
                                         size="xs"
                                         variant="outline"
-                                        disabled={isSending}
-                                        onClick={() => props.resendRecipient(campaign, recipient)}
+                                        disabled={isSending || props.savingMembershipId === campaign.id}
+                                        onClick={() => props.sendRecipient(campaign, recipient, recipientAction)}
                                         className="absolute right-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
-                                        aria-label={`Retrimite campania ${campaign.name} către ${recipient.email}`}
+                                        aria-label={`${recipientActionLabel} campania ${campaign.name} către ${recipient.email}`}
                                       >
-                                        {props.resendingRecipientId === recipient.id ? (
+                                        {props.sendingRecipientId === recipient.id ? (
                                           <Loader2Icon aria-hidden="true" className="size-3 animate-spin" />
                                         ) : null}
-                                        Retrimite
+                                        {recipientActionLabel}
                                       </Button>
                                     ) : null}
                                   </span>
@@ -233,7 +251,7 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                     <div className="space-y-3">
                       <dl className="divide-y divide-[var(--border)] text-xs"><div className="flex items-baseline justify-between gap-3 py-2"><dt className="font-semibold text-muted-foreground">În lista de trimitere</dt><dd className="text-xl font-semibold tabular-nums text-foreground">{activeMemberIds.length}</dd></div><div className="flex items-baseline justify-between gap-3 py-2"><dt className="font-semibold text-muted-foreground">Pregătiți de trimis</dt><dd className="text-xl font-semibold tabular-nums text-foreground">{sendableMemberIds.length}</dd></div><div className="flex items-baseline justify-between gap-3 py-2"><dt className="font-semibold text-muted-foreground">Afișați de filtre</dt><dd className="text-xl font-semibold tabular-nums text-foreground">{visibleEligibleRecipients.length}</dd></div></dl>
                       <p className="text-[11px] leading-5 text-muted-foreground">Filtrele schimbă doar contactele afișate, nu lista de trimitere.</p>
-                      {props.sendResults[campaign.id] ? <p className="rounded-md border border-burgundy/15 bg-burgundy/5 px-3 py-2 text-[11px] font-semibold leading-5 text-burgundy">{props.sendResults[campaign.id].sent} trimise, {props.sendResults[campaign.id].failed} eșuate, {props.sendResults[campaign.id].skipped} omise</p> : null}
+                      {latestSendResult ? <p className="rounded-md border border-burgundy/15 bg-burgundy/5 px-3 py-2 text-[11px] font-semibold leading-5 text-burgundy">{campaignSendResultSummary(latestSendResult)}{latestSendFailure ? ` — ${latestSendFailure}` : ""}</p> : null}
                       {readinessError ? <InlineFeedback tone="danger" className="px-3 py-2" descriptionClassName="text-xs leading-5">{readinessError}</InlineFeedback> : null}
                       {sendBlockedReason && !readinessError && !isSending ? <p id={sendBlockedReasonId} className="text-xs font-medium leading-5 text-muted-foreground">{sendBlockedReason}</p> : null}
                       {isSending ? <OperationFeedback title="Trimitem campania" detail={sendFeedbackDetail} /> : null}

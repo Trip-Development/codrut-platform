@@ -1,4 +1,4 @@
-import type { EmailCampaign, EmailTemplate } from "@/api/email";
+import { htmlToPlainText, type EmailCampaign, type EmailTemplate } from "@/api/email";
 
 export const MOCK_REPLACEMENTS: Record<string, string> = {
   "{first_name}": "Ioana",
@@ -172,54 +172,83 @@ export function buildStyledEmailTemplateBody({
 }
 
 export function parseEmailTemplateEditorDraft(body: string, fallbackHeading: string): { heading: string; body: string } {
-  if (!looksLikeHtml(body) || typeof DOMParser === "undefined") {
+  if (!looksLikeHtml(body)) {
     return { heading: fallbackHeading, body };
   }
 
-  const parser = new DOMParser();
-  const document = parser.parseFromString(body, "text/html");
-  const headingNode = document.body.querySelector("h1,h2,h3");
-  const heading = headingNode?.textContent?.trim() || fallbackHeading;
-  const blocks: string[] = [];
-  const skipTexts = ["Andrei Văcaru", "Ai primit acest email deoarece", "Str. Exemplu Nr. 10"];
+  const blockBreak = "__CODRUT_EDITOR_BLOCK_BREAK__";
+  const headingMatch = body.match(/<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/i);
+  const heading = headingMatch
+    ? htmlToPlainText(headingMatch[1]).trim() || fallbackHeading
+    : fallbackHeading;
+  let editableBody = headingMatch ? body.replace(headingMatch[0], "") : body;
 
-  Array.from(document.body.querySelectorAll("h1,h2,h3,p,table")).forEach((node) => {
-    if (node === headingNode) return;
-    const text = node.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    if (!text || skipTexts.some((skipText) => text.includes(skipText)) || text.startsWith("Link platformă:") || text === "Dezabonare") {
-      return;
-    }
-    if (node.tagName === "TABLE") {
-      const rows = Array.from(node.querySelectorAll("tr"))
+  editableBody = editableBody.replace(
+    /<table\b[^>]*>[\s\S]*?<\/table>/gi,
+    (table) => {
+      const rows = Array.from(table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi))
         .map((row) => {
-          const cells = Array.from(row.querySelectorAll("td,th"));
-          const marker = cells[0]?.textContent?.trim() || "•";
-          const value = cells.slice(1).map((cell) => cell.textContent?.trim() ?? "").join(" ").trim();
+          const cells = Array.from(row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi))
+            .map((cell) => htmlToPlainText(cell[1]).trim());
+          const marker = cells[0] || "•";
+          const value = cells.slice(1).filter(Boolean).join(" ");
           return value ? `${marker} ${value}` : "";
         })
         .filter(Boolean);
-      if (rows.length > 0) blocks.push(rows.join("\n"));
-      return;
-    }
-    if (node.querySelector("img")) {
-      blocks.push(DEFAULT_VIDEO_TOKEN);
-      return;
-    }
-    const link = node.querySelector("a[href]");
-    if (link) {
-      const href = link.getAttribute("href") ?? "";
-      const label = link.textContent?.trim() || "Deschide linkul";
-      if (href.includes("calendly_url")) {
-        blocks.push(`{calendly_button:${label}}`);
-      } else if (href.includes("action_url") || href.includes("landing_page_url") || link.getAttribute("style")?.includes("background")) {
-        blocks.push(`{action_button:${label}|${href}}`);
-      } else {
-        blocks.push(text);
+      return rows.length > 0 ? `${blockBreak}${rows.join("\n")}${blockBreak}` : "";
+    },
+  );
+
+  editableBody = editableBody.replace(
+    /<p\b[^>]*>[\s\S]*?<\/p>/gi,
+    (paragraph) => {
+      const text = htmlToPlainText(paragraph).replace(/\s+/g, " ").trim();
+      if (
+        !text
+        || text === "Andrei Văcaru"
+        || text.startsWith("Ai primit acest email deoarece")
+        || text.startsWith("Link platformă:")
+        || text === "Dezabonare"
+        || text.startsWith("Dezabonare ")
+        || text === "{legal_address}"
+        || text === "București, România"
+        || text === "Str. Exemplu Nr. 10"
+      ) {
+        return blockBreak;
       }
-      return;
-    }
-    blocks.push(text);
-  });
+      if (/<img\b/i.test(paragraph)) {
+        return `${blockBreak}${DEFAULT_VIDEO_TOKEN}${blockBreak}`;
+      }
+
+      const link = paragraph.match(
+        /<a\b([^>]*?)href=(["'])(.*?)\2([^>]*)>([\s\S]*?)<\/a>/i,
+      );
+      if (!link) return paragraph;
+      const href = htmlToPlainText(link[3]).trim();
+      const label = htmlToPlainText(link[5]).trim() || "Deschide linkul";
+      const attributes = `${link[1]} ${link[4]}`;
+      if (
+        href.includes("calendly_url")
+        || /^https?:\/\/(?:[^./]+\.)*calendly\.com(?:[/?#]|$)/i.test(href)
+      ) {
+        return `${blockBreak}{calendly_button:${label}}${blockBreak}`;
+      }
+      if (
+        href.includes("action_url")
+        || href.includes("landing_page_url")
+        || /style\s*=\s*(["'])[^"']*background/i.test(attributes)
+      ) {
+        return `${blockBreak}{action_button:${label}|${href}}${blockBreak}`;
+      }
+      return paragraph;
+    },
+  );
+
+  const blocks = editableBody
+    .replace(/<\/(?:div|h[1-6]|li|tr|ul|ol)>/gi, (closingTag) => `${closingTag}${blockBreak}`)
+    .split(blockBreak)
+    .map((block) => htmlToPlainText(block).trim())
+    .filter(Boolean);
 
   return { heading, body: blocks.join("\n\n") };
 }

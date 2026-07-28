@@ -942,6 +942,24 @@ describe("frontend API adapter stubs", () => {
     expect(payload?.text_body).toContain("${landing_page_url}");
   });
 
+  it("adds the video block when authored campaign text has no media markup", () => {
+    const payload = buildVideoCampaignCreatePayload({
+      name: "Campanie editată",
+      segment: "potential_customer",
+      subject: "Salut",
+      htmlBody: "<p>Mesaj personalizat.</p>",
+      textBody: "Mesaj personalizat.",
+      videoUrl: "https://vimeo.com/123456789",
+      thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
+      landingUrl: "",
+    });
+
+    expect(payload?.html_body).toContain("<p>Mesaj personalizat.</p>");
+    expect(payload?.html_body).toContain('href="${landing_page_url}"');
+    expect(payload?.html_body).toContain('<img src="${thumbnail_url}"');
+    expect(payload?.html_body.match(/\$\{thumbnail_url\}/g)).toHaveLength(1);
+  });
+
   it("uses the video url as the campaign destination when landing page is empty", () => {
     const payload = buildVideoCampaignCreatePayload({
       name: "Campanie Vimeo",
