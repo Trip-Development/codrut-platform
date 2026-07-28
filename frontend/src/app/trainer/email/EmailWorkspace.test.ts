@@ -336,6 +336,25 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(html).toContain("Andrei Văcaru");
   });
 
+  it("uses rich actions without redundant links in campaign HTML", () => {
+    const campaignHtml = buildStyledEmailTemplateBody({
+      heading: "Mesaj pentru lideri",
+      body: "{video_block}\n\n{calendly_button:Alege un slot}",
+      lane: "campaign",
+    });
+    const transactionalHtml = buildStyledEmailTemplateBody({
+      heading: "Activează contul",
+      body: "{action_button:Activează|{action_url}}",
+      lane: "transactional",
+    });
+
+    expect(campaignHtml).toContain('href="{landing_page_url}"');
+    expect(campaignHtml).toContain('src="{thumbnail_url}"');
+    expect(campaignHtml).toContain('href="{calendly_url}"');
+    expect(campaignHtml).not.toContain("Link platformă:");
+    expect(transactionalHtml).toContain("Link platformă:");
+  });
+
   it("keeps legacy campaign content when the footer shares its wrapper", () => {
     const draft = parseEmailTemplateEditorDraft(
       [
