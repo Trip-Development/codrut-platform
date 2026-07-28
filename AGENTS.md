@@ -52,6 +52,12 @@ user explicitly asks for delegation or parallel agent work.
 - Deliver changes to `dev` through a pull request.
 - Feature PRs into `dev` use squash merge. Promotions from `dev` to `prod` use
   merge commits.
+- After a production merge, synchronize its merge-commit ancestry back into
+  `dev` through a temporary branch created from current `origin/dev`: merge
+  `origin/prod` into that branch, verify the merge tree still matches `dev`
+  before any intentional edits, and normal-merge its protected PR into `dev`.
+  Do not use a direct `prod` to `dev` PR or GitHub's update-branch operation;
+  strict up-to-date and code-scanning rules make those heads non-mergeable.
 - Keep iterative PRs in draft while running targeted devcontainer checks. Mark
   a PR ready only after its diff and focused proof are ready for the full
   GitHub gate.
