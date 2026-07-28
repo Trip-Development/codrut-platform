@@ -1,16 +1,10 @@
-name: CodeQL
+name: Dependabot CodeQL
 
 on:
   pull_request:
     branches:
       - dev
       - prod
-  push:
-    branches:
-      - dev
-      - prod
-  schedule:
-    - cron: "17 3 * * 1"
 
 permissions:
   contents: read
@@ -18,12 +12,13 @@ permissions:
   security-events: write
 
 concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  group: dependabot-codeql-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: dependabot-codeql / ${{ matrix.language }}
+    if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
