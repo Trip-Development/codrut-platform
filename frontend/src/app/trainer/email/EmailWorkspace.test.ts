@@ -341,6 +341,7 @@ describe("renderEmailTemplatePreviewBody", () => {
       [
         "<div>",
         "<p>Mesajul important rămâne.</p>",
+        "<script>alert('xss')</script>",
         "<p>Ai primit acest email deoarece ești abonat.</p>",
         "<p><a href=\"{unsubscribe_url}\">Dezabonare</a></p>",
         "</div>",
@@ -351,6 +352,7 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(draft.body).toContain("Mesajul important rămâne.");
     expect(draft.body).not.toContain("Ai primit acest email deoarece");
     expect(draft.body).not.toContain("Dezabonare");
+    expect(draft.body).not.toContain("alert");
   });
 });
 

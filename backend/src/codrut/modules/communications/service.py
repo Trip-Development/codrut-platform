@@ -1763,6 +1763,7 @@ _EMPTY_CAMPAIGN_VIDEO_BLOCK_RE = re.compile(
 )
 _EMPTY_CAMPAIGN_VIDEO_LINE_RE = re.compile(r"(?m)^[^\n]*(?:Video|video)[^\n]*:\s*$\n?")
 _CAMPAIGN_HREF_RE = re.compile(r'href=(["\'])([^"\']+)\1', re.IGNORECASE)
+_CAMPAIGN_TEXT_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 _CAMPAIGN_BODY_CLOSE_RE = re.compile(r"</body\s*>", re.IGNORECASE)
 
 
@@ -1783,8 +1784,12 @@ def _campaign_message_has_calendly_link(body: str, calendly_tracking_url: str) -
 
 
 def _campaign_text_has_calendly_link(body: str, calendly_tracking_url: str) -> bool:
-    has_tracking_url = bool(calendly_tracking_url and calendly_tracking_url in body)
-    return has_tracking_url or "calendly.com" in body.lower()
+    if calendly_tracking_url and calendly_tracking_url in body:
+        return True
+    return any(
+        _is_calendly_target(match.group(0).rstrip(".,;:!?)]}"))
+        for match in _CAMPAIGN_TEXT_URL_RE.finditer(body)
+    )
 
 
 def _ensure_campaign_video_block(html_body: str, campaign: Campaign) -> str:

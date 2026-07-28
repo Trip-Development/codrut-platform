@@ -914,6 +914,30 @@ async def test_send_campaign_repairs_plain_video_and_calendly_content() -> None:
 
 
 @pytest.mark.asyncio
+async def test_send_campaign_rejects_calendly_substring_as_existing_text_link() -> None:
+    repository = FakeCommunicationsRepository()
+    campaign = persisted_campaign()
+    campaign.html_body = "<p>Link extern: https://calendly.com.evil.example/demo</p>"
+    campaign.text_body = "Link extern: https://calendly.com.evil.example/demo"
+    active = persisted_campaign_recipient()
+    repository.campaigns.append(campaign)
+    repository.campaign_recipients.append(active)
+    service = make_service(repository)
+
+    response = await service.send_campaign(
+        campaign.id,
+        CampaignSendRequest(recipient_ids=[active.id]),
+        provider=FakeEmailProvider(),
+        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+    )
+
+    message = queued_messages(repository)[0]
+    assert response.queued == 1
+    assert 'data-codrut-cta="calendly"' in message.html_body
+    assert "Alege un slot în Calendly:" in message.text_body
+
+
+@pytest.mark.asyncio
 async def test_send_campaign_without_video_removes_empty_video_blocks() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
