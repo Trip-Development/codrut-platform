@@ -66,6 +66,10 @@ user explicitly asks for delegation or parallel agent work.
 - Dependabot version updates are grouped weekly for patch/minor changes. Treat
   major upgrades as planned issues with compatibility and rollback evidence;
   triage security alerts immediately.
+- GitHub CodeQL default setup scans Actions, JavaScript/TypeScript, and Python.
+  A native code-scanning ruleset protects `dev` and `prod`; keep classic branch
+  protection tied to the stable aggregate CI, policy, security, and release
+  checks rather than dynamic language-specific check names.
 - Do not merge, deploy, weaken branch protection, or delete active work unless
   the user has authorized that action.
 - Before deleting a squash-merged branch, verify its PR state and exact head or
