@@ -71,7 +71,7 @@ describe("RegisterPage", () => {
     });
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith("/participant");
+      expect(router.push).toHaveBeenCalledWith("/invite/demo-token");
     });
   });
 
@@ -134,7 +134,7 @@ describe("RegisterPage", () => {
     fireEvent.click(screen.getByLabelText("Accept termenii și politica de confidențialitate."));
     fireEvent.submit(screen.getByRole("button", { name: "Finalizează înregistrarea" }).closest("form")!);
 
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/participant"));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/invite/invite-token"));
     const request = vi.mocked(apiFetch).mock.calls[0][1] as RequestInit;
     expect(JSON.parse(String(request.body))).toMatchObject({
       email: "lead@example.com",

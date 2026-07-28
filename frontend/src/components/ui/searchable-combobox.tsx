@@ -1,7 +1,15 @@
 "use client";
 
 import { CheckIcon, ChevronDownIcon, SearchIcon, type LucideIcon } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -10,6 +18,7 @@ import { cn } from "@/utils/cn";
 export type SearchableComboboxOption = {
   value: string;
   label: string;
+  group?: string;
 };
 
 export function SearchableCombobox({
@@ -172,26 +181,41 @@ export function SearchableCombobox({
                 Nicio opțiune găsită
               </p>
             ) : (
-              visibleOptions.map((option, index) => (
-                <button
-                  key={option.value || "all"}
-                  id={`${listboxId}-option-${index}`}
-                  type="button"
-                  role="option"
-                  aria-selected={option.value === value}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => selectOption(option)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm font-medium outline-none",
-                    index === highlightedIndex && "bg-muted text-foreground",
-                  )}
-                >
-                  <span className="flex size-4 shrink-0 items-center justify-center">
-                    {option.value === value ? <CheckIcon aria-hidden="true" className="size-3.5" strokeWidth={2} /> : null}
-                  </span>
-                  <span className="truncate">{option.label}</span>
-                </button>
-              ))
+              visibleOptions.map((option, index) => {
+                const showGroup = Boolean(
+                  option.group
+                  && option.group !== visibleOptions[index - 1]?.group,
+                );
+                return (
+                  <Fragment key={option.value || "all"}>
+                    {showGroup ? (
+                      <p
+                        role="presentation"
+                        className="px-2.5 pb-1 pt-2 text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        {option.group}
+                      </p>
+                    ) : null}
+                    <button
+                      id={`${listboxId}-option-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={option.value === value}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      onClick={() => selectOption(option)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm font-medium outline-none",
+                        index === highlightedIndex && "bg-muted text-foreground",
+                      )}
+                    >
+                      <span className="flex size-4 shrink-0 items-center justify-center">
+                        {option.value === value ? <CheckIcon aria-hidden="true" className="size-3.5" strokeWidth={2} /> : null}
+                      </span>
+                      <span className="truncate">{option.label}</span>
+                    </button>
+                  </Fragment>
+                );
+              })
             )}
           </div>
         </PopoverContent>

@@ -2,10 +2,10 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from codrut.api.schemas import StrictRequestModel
-from codrut.modules.identity.models import UserRole
+from codrut.modules.identity.models import UserAccountType, UserRole
 from codrut.modules.identity.password_policy import (
     PASSWORD_MAX_LENGTH,
     PASSWORD_MIN_LENGTH,
@@ -66,7 +66,21 @@ class InviteVerifyResponse(BaseModel):
 
 class InviteExchangeRequest(StrictRequestModel):
     token: str = Field(min_length=1, max_length=2048)
+    # Compatibility-only. A link must never replace an authenticated account.
     replace_existing_session: bool = False
+
+
+class InviteExchangeResponse(BaseModel):
+    action: Literal[
+        "secure_link_ready",
+        "login_required",
+        "dashboard_ready",
+        "account_switch_required",
+    ]
+    destination: str | None = None
+    participant_profile_id: UUID
+    project_id: UUID | None = None
+    assessment_cycle_id: UUID | None = None
 
 
 class LoginRequest(StrictRequestModel):
@@ -110,6 +124,9 @@ class SessionPrincipal(BaseModel):
     user_id: UUID
     email: EmailStr
     role: UserRole
+    account_type: UserAccountType = UserAccountType.registered
+    available_workspaces: tuple[UserRole, ...] = ()
+    default_workspace: UserRole | None = None
     avatar_palette_key: int | None = None
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None
@@ -119,11 +136,28 @@ class SessionPrincipal(BaseModel):
     project_id: UUID | None = Field(default=None, exclude=True)
     access_mode: Literal["account", "secure_link"] = "account"
 
+    @model_validator(mode="after")
+    def normalize_workspace_context(self) -> "SessionPrincipal":
+        if not self.available_workspaces:
+            self.available_workspaces = (self.role,)
+        if self.default_workspace is None:
+            self.default_workspace = self.role
+        if self.assignment_invite_id is not None:
+            self.access_mode = "secure_link"
+        return self
+
+    def can_access_workspace(self, workspace: UserRole) -> bool:
+        workspaces = self.available_workspaces or (self.role,)
+        return workspace in workspaces
+
 
 class AuthResponse(BaseModel):
     user_id: UUID
     email: EmailStr
     role: UserRole
+    account_type: UserAccountType = UserAccountType.registered
+    available_workspaces: tuple[UserRole, ...] = ()
+    default_workspace: UserRole | None = None
     avatar_palette_key: int | None = None
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None

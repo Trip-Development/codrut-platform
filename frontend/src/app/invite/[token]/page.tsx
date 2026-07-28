@@ -24,7 +24,6 @@ import { cn } from "@/utils/cn";
 import {
   InviteConsentGate,
   InviteRegisterPrimaryAction,
-  InviteRegistrationLink,
   InviteSessionExchange,
 } from "./InviteClientActions";
 
@@ -58,11 +57,15 @@ export default async function InvitePage({ params }: InvitePageProps) {
     return <InvalidInviteState message={data.message} />;
   }
 
-  if (data.isLeadership && !data.alreadyRegistered) {
-    return <LeadershipRegistrationState token={token} data={data} />;
-  }
-
   const tasksView = <InviteTasksView token={token} data={data} />;
+
+  if (data.alreadyRegistered) {
+    return (
+      <InviteSessionExchange token={token} bundle={data}>
+        {tasksView}
+      </InviteSessionExchange>
+    );
+  }
 
   if (!hasServerConsent(data)) {
     return (
@@ -94,40 +97,6 @@ function InvalidInviteState({ message }: { message: string }) {
           Mergi la Cody
           <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
         </Link>
-      </InvitePanel>
-    </InviteFrame>
-  );
-}
-
-function LeadershipRegistrationState({
-  token,
-  data,
-}: {
-  token: string;
-  data: ValidInviteBundle;
-}) {
-  return (
-    <InviteFrame width="sm">
-      <InvitePanel>
-        <span className="mx-auto inline-flex h-5 w-fit items-center rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
-          Cont Leadership
-        </span>
-        <h1 className="mt-6 text-center text-3xl font-semibold leading-tight tracking-normal">
-          Activează contul înainte de chestionare
-        </h1>
-        <p className="mt-3 text-center text-sm leading-6 text-muted-foreground">
-          Invitația pentru <strong className="text-foreground">{data.participantEmail}</strong> este pregătită.
-          Creează contul ca să vezi spațiul tău de participant și sarcinile proiectului.
-        </p>
-        <div className="mt-8 flex flex-col gap-3">
-          <InviteRegistrationLink token={token} bundle={data}>
-            Înregistrează cont Leadership
-            <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
-          </InviteRegistrationLink>
-          <Link href="/" className={serverLinkButtonClassName({ variant: "outline", size: "lg" })}>
-            Pagina principală
-          </Link>
-        </div>
       </InvitePanel>
     </InviteFrame>
   );
@@ -181,7 +150,7 @@ function InviteTasksView({
         <InviteTaskQueue tasks={data.tasks} returnTo={returnTo} inviteToken={token} />
 
         <div className="mt-7 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
-          {data.isLeadership && !data.alreadyRegistered ? (
+          {!data.alreadyRegistered ? (
             <InviteRegisterPrimaryAction token={token} bundle={data} />
           ) : null}
           <Link href="/" className={serverLinkButtonClassName({ variant: "ghost", className: "sm:ml-auto" })}>

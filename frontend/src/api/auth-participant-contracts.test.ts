@@ -90,6 +90,9 @@ describe("auth adapter contracts", () => {
         name: "andrei",
         email: "andrei@example.com",
         role: "trainer",
+        accountType: "registered",
+        availableWorkspaces: ["trainer"],
+        defaultWorkspace: "trainer",
         avatarPaletteKey: 12345,
         accessMode: "account",
         termsAcceptedAt: "2026-07-17T08:00:00Z",
@@ -247,11 +250,24 @@ describe("invite and participant adapter contracts", () => {
   it("exchanges real invite tokens and falls back to an actionable error message", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response({ ok: true, payload: {} }))
+      .mockResolvedValueOnce(response({
+        ok: true,
+        payload: {
+          action: "secure_link_ready",
+          destination: "/invite/real-token",
+          participant_profile_id: "participant-1",
+        },
+      }))
       .mockResolvedValueOnce(response({ ok: false, status: 503, jsonError: new Error("invalid json") }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(exchangeInviteSession("real-token")).resolves.toBeUndefined();
+    await expect(exchangeInviteSession("real-token")).resolves.toEqual({
+      action: "secure_link_ready",
+      destination: "/invite/real-token",
+      participantProfileId: "participant-1",
+      projectId: undefined,
+      assessmentCycleId: undefined,
+    });
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ token: "real-token" });
     await expect(exchangeInviteSession("real-token")).rejects.toThrow(
       "Nu am putut pregăti sesiunea invitației.",

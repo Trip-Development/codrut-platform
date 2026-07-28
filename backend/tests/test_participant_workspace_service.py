@@ -19,6 +19,7 @@ from codrut.modules.assignments.models import (
 from codrut.modules.companies.models import (
     Company,
     CompanyProject,
+    CompanyProjectStatus,
     ParticipantProfile,
     ProjectMembership,
 )
@@ -205,11 +206,13 @@ async def test_workspace_requires_context_for_multi_profile_account_and_scopes_c
                 id=uuid.uuid4(),
                 company_id=company_a.id,
                 name="Program A",
+                status=CompanyProjectStatus.active,
             )
             project_b = CompanyProject(
                 id=uuid.uuid4(),
                 company_id=company_b.id,
                 name="Program B",
+                status=CompanyProjectStatus.active,
             )
             session.add_all([profile_a, profile_b, project_a, project_b])
             await session.flush()
@@ -345,6 +348,94 @@ async def test_workspace_requires_context_for_multi_profile_account_and_scopes_c
         await engine.dispose()
 
 
+async def test_workspace_groups_active_and_historical_projects_and_hides_drafts() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            user = User(
+                id=uuid.uuid4(),
+                email=f"project-history-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = Company(id=uuid.uuid4(), name=f"History Company {uuid.uuid4()}")
+            profile = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=user.id,
+                full_name="History Participant",
+                email=user.email,
+            )
+            projects = [
+                CompanyProject(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    name="Current Program",
+                    status=CompanyProjectStatus.active,
+                ),
+                CompanyProject(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    name="Completed Program",
+                    status=CompanyProjectStatus.completed,
+                ),
+                CompanyProject(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    name="Archived Program",
+                    status=CompanyProjectStatus.archived,
+                ),
+                CompanyProject(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    name="Draft Program",
+                    status=CompanyProjectStatus.draft,
+                ),
+            ]
+            session.add_all([user, company, profile, *projects])
+            await session.flush()
+            session.add_all(
+                [
+                    ProjectMembership(
+                        id=uuid.uuid4(),
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=profile.id,
+                        active=True,
+                    )
+                    for project in projects
+                ]
+            )
+            await session.flush()
+
+            selection = await ParticipantWorkspaceService(session).get_workspace_summary(
+                user.id
+            )
+            visible_projects = selection.contexts[0].projects
+
+            assert {
+                project.name: (project.status, project.history_bucket)
+                for project in visible_projects
+            } == {
+                "Archived Program": ("archived", "history"),
+                "Completed Program": ("completed", "history"),
+                "Current Program": ("active", "current"),
+            }
+
+            completed = await ParticipantWorkspaceService(session).get_workspace_summary(
+                user.id,
+                participant_profile_id=profile.id,
+                project_id=projects[1].id,
+            )
+            assert completed.project_id == projects[1].id
+            assert completed.project_name == "Completed Program"
+            assert completed.tasks == []
+
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
 async def test_workspace_rejects_draft_cycles_and_hides_cancelled_tasks() -> None:
     await engine.dispose()
     try:
@@ -367,6 +458,7 @@ async def test_workspace_rejects_draft_cycles_and_hides_cancelled_tasks() -> Non
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Program visibility",
+                status=CompanyProjectStatus.active,
             )
             definition = QuestionnaireDefinition(
                 id=uuid.uuid4(),
@@ -475,6 +567,7 @@ async def test_workspace_pcm_values_are_scoped_to_selected_cycle() -> None:
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Program PCM",
+                status=CompanyProjectStatus.active,
             )
             definition = QuestionnaireDefinition(
                 id=uuid.uuid4(),
@@ -726,6 +819,7 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Leadership septembrie",
+                status=CompanyProjectStatus.active,
                 due_at=datetime.now(UTC) + timedelta(days=21),
             )
             team = Team(
@@ -1006,11 +1100,13 @@ async def test_received_feedback_is_never_combined_across_projects() -> None:
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Project Alpha",
+                status=CompanyProjectStatus.active,
             )
             project_b = CompanyProject(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Project Beta",
+                status=CompanyProjectStatus.active,
             )
             definition = _feedback_definition()
             reviewers = [
@@ -1104,6 +1200,7 @@ async def test_received_feedback_is_never_combined_across_rounds_in_one_project(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 name="Repeated Feedback Project",
+                status=CompanyProjectStatus.active,
             )
             definition = _feedback_definition()
             reviewers = [

@@ -2,16 +2,16 @@ import hashlib
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.identity.models import (
-    SHADOW_ACCOUNT_PASSWORD_HASH,
     AssignmentInvite,
     ConsentAcceptance,
     PasswordResetToken,
     Session,
     User,
+    UserAccountType,
 )
 
 
@@ -30,6 +30,31 @@ class IdentityRepository:
     async def get_user_by_id(self, user_id: UUID) -> User | None:
         result = await self.session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+    async def has_participant_profile(self, user_id: UUID) -> bool:
+        from codrut.modules.companies.models import ParticipantProfile
+
+        result = await self.session.execute(
+            select(
+                exists(
+                    select(ParticipantProfile.id).where(
+                        ParticipantProfile.user_id == user_id
+                    )
+                )
+            )
+        )
+        return bool(result.scalar())
+
+    async def list_participant_profiles_by_email_for_update(self, email: str):
+        from codrut.modules.companies.models import ParticipantProfile
+
+        result = await self.session.execute(
+            select(ParticipantProfile)
+            .where(func.lower(ParticipantProfile.email) == email.strip().lower())
+            .order_by(ParticipantProfile.created_at, ParticipantProfile.id)
+            .with_for_update()
+        )
+        return list(result.scalars().all())
 
     async def get_user_by_session_token(self, token: str) -> User | None:
         result = await self.session.execute(
@@ -131,7 +156,7 @@ class IdentityRepository:
         is_shadow_user = exists(
             select(User.id).where(
                 User.id == user_id,
-                User.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH,
+                User.account_type == UserAccountType.guest,
             )
         )
         await self.session.execute(

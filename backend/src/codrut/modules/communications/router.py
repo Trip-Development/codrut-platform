@@ -51,7 +51,7 @@ TRANSPARENT_GIF_BYTES = (
 
 
 def _require_trainer(principal: SessionPrincipal) -> None:
-    if principal.role != UserRole.trainer:
+    if not principal.can_access_workspace(UserRole.trainer):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Trainer access is required.",

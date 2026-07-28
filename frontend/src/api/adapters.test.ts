@@ -806,8 +806,22 @@ describe("frontend API adapter stubs", () => {
     const summary = await getParticipantWorkspaceSummary({ headers: { "X-Test": "true" } });
 
     expect(summary.projects).toEqual([
-      { id: "project-1", name: "Leadership de bază", deadlineLabel: "1 august" },
-      { id: "project-2", name: "Leadership avansat", deadlineLabel: "15 august", deadlineAt: "2026-08-15" },
+      {
+        id: "project-1",
+        name: "Leadership de bază",
+        status: "active",
+        historyBucket: "current",
+        deadlineLabel: "1 august",
+        deadlineAt: undefined,
+      },
+      {
+        id: "project-2",
+        name: "Leadership avansat",
+        status: "active",
+        historyBucket: "current",
+        deadlineLabel: "15 august",
+        deadlineAt: "2026-08-15",
+      },
     ]);
     expect(summary.results[0]).toMatchObject({
       assignmentId: "assignment-1",
@@ -1149,7 +1163,11 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("exchanges real invite tokens through an explicit unsafe request", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      action: "secure_link_ready",
+      destination: "/invite/real-token",
+      participant_profile_id: "participant-1",
+    })));
     vi.stubGlobal("fetch", fetchMock);
 
     await exchangeInviteSession("real-token");
@@ -1186,7 +1204,11 @@ describe("frontend API adapter stubs", () => {
   });
 
   it("marks invite session replacement only after explicit confirmation", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      action: "secure_link_ready",
+      destination: "/invite/real-token",
+      participant_profile_id: "participant-1",
+    })));
     vi.stubGlobal("fetch", fetchMock);
 
     await exchangeInviteSession("real-token", { replaceExistingSession: true });

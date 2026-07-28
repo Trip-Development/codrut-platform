@@ -92,12 +92,14 @@ export function AccountLinkRepairPanel({
               label="Cont legat acum"
               email={status.linked_account?.email}
               role={status.linked_account?.role}
+              accountType={status.linked_account?.account_type}
               isShadow={status.linked_account?.is_shadow_account}
             />
             <AccountState
               label="Cont cu același email"
               email={status.matching_email_account?.email}
               role={status.matching_email_account?.role}
+              accountType={status.matching_email_account?.account_type}
               isShadow={status.matching_email_account?.is_shadow_account}
             />
           </div>
@@ -192,11 +194,13 @@ function AccountState({
   label,
   email,
   role,
+  accountType,
   isShadow,
 }: {
   label: string;
   email?: string;
   role?: "trainer" | "participant";
+  accountType?: "guest" | "registered";
   isShadow?: boolean;
 }) {
   return (
@@ -205,7 +209,11 @@ function AccountState({
       <p className="mt-1 break-all text-sm font-semibold text-foreground">{email ?? "Niciun cont"}</p>
       {email ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          {isShadow ? "Cont temporar din invitație" : role === "trainer" ? "Cont permanent de trainer" : "Cont permanent de participant"}
+          {accountType === "guest" || (!accountType && isShadow)
+            ? "Cont temporar din invitație"
+            : role === "trainer"
+              ? "Cont permanent de trainer"
+              : "Cont permanent de participant"}
         </p>
       ) : null}
     </div>

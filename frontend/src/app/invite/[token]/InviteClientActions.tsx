@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { ArrowRightIcon, Loader2Icon } from "lucide-react";
 
 import { acceptCurrentTerms, getAuthenticatedSession } from "@/api/auth";
+import { apiFetch, ensureCsrfToken } from "@/api/http";
 import {
   exchangeInviteSession,
   isInviteSessionConflictError,
   type InviteBundle,
 } from "@/api/invites";
+import { getApiBaseUrl } from "@/api/runtime";
 import { CURRENT_TERMS_VERSION } from "@/api/terms";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
@@ -70,6 +72,27 @@ function waitForConsentFeedback(): Promise<void> {
   });
 }
 
+function safeInviteDestination(destination: string | null | undefined, fallback: string): string {
+  return destination?.startsWith("/") && !destination.startsWith("//")
+    ? destination
+    : fallback;
+}
+
+async function signOutForInviteSwitch(token: string, participantEmail: string): Promise<void> {
+  await ensureCsrfToken();
+  const response = await apiFetch(`${getApiBaseUrl()}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok && response.status !== 401) {
+    throw new Error("Nu am putut închide sesiunea curentă.");
+  }
+  const returnTo = encodeURIComponent(`/invite/${token}`);
+  window.location.assign(
+    `/login?returnTo=${returnTo}&email=${encodeURIComponent(participantEmail)}`,
+  );
+}
+
 export function InviteRegistrationLink({
   token,
   bundle,
@@ -117,10 +140,17 @@ export function InviteSessionExchange({
     setError(null);
 
     void exchangeInviteSession(token)
-      .then(() => {
+      .then(async (result) => {
         if (!active) return;
-        if (bundle.accountDashboardAvailable) {
-          replace("/participant");
+        if (result.action === "dashboard_ready" || result.action === "login_required") {
+          replace(safeInviteDestination(result.destination, "/participant"));
+          return;
+        }
+        if (result.action === "account_switch_required") {
+          const session = await getAuthenticatedSession();
+          if (!active) return;
+          setCurrentEmail(session?.user.email ?? null);
+          setState("conflict");
           return;
         }
         setState("ready");
@@ -146,20 +176,15 @@ export function InviteSessionExchange({
     return () => {
       active = false;
     };
-  }, [attempt, bundle.accountDashboardAvailable, replace, token]);
+  }, [attempt, replace, token]);
 
   if (state === "ready") return <>{children}</>;
 
-  const replaceSession = async () => {
+  const switchAccount = async () => {
     setState("pending");
     setError(null);
     try {
-      await exchangeInviteSession(token, { replaceExistingSession: true });
-      if (bundle.accountDashboardAvailable) {
-        replace("/participant");
-        return;
-      }
-      setState("ready");
+      await signOutForInviteSwitch(token, bundle.participantEmail);
     } catch (exchangeError) {
       setError(
         exchangeError instanceof Error
@@ -193,8 +218,8 @@ export function InviteSessionExchange({
           </Alert>
         )}
         {state === "conflict" ? (
-          <Button type="button" onClick={() => void replaceSession()} className="mt-5 w-full">
-            Schimbă sesiunea și continuă
+          <Button type="button" onClick={() => void switchAccount()} className="mt-5 w-full">
+            Intră cu contul invitat
           </Button>
         ) : null}
         {state === "error" ? (
@@ -230,7 +255,7 @@ export function InviteConsentGate({
     storeInviteForRegistration(token, bundle);
   }, [bundle, token]);
 
-  const handleAcceptTerms = async (replaceExistingSession = false) => {
+  const handleAcceptTerms = async () => {
     if (consentSubmittingRef.current) return;
 
     consentSubmittingRef.current = true;
@@ -238,18 +263,21 @@ export function InviteConsentGate({
     setConsentSubmitting(true);
     try {
       const minimumFeedback = waitForConsentFeedback();
-      if (replaceExistingSession) {
-        await exchangeInviteSession(token, { replaceExistingSession: true });
-      } else {
-        await exchangeInviteSession(token);
+      const exchange = await exchangeInviteSession(token);
+      if (exchange.action === "dashboard_ready" || exchange.action === "login_required") {
+        replace(safeInviteDestination(exchange.destination, "/participant"));
+        return;
+      }
+      if (exchange.action === "account_switch_required") {
+        const session = await getAuthenticatedSession();
+        setCurrentEmail(session?.user.email ?? null);
+        setSessionConflict(true);
+        setConsentError("Invitația aparține unui alt cont.");
+        return;
       }
       await acceptCurrentTerms();
       await minimumFeedback;
       storeConsent(token);
-      if (bundle.accountDashboardAvailable) {
-        replace("/participant");
-        return;
-      }
       setConsentSaved(true);
     } catch (err) {
       if (isInviteSessionConflictError(err)) {
@@ -258,6 +286,23 @@ export function InviteConsentGate({
         setSessionConflict(true);
       }
       setConsentError(err instanceof Error ? err.message : "Nu am putut salva acordul de confidențialitate.");
+    } finally {
+      consentSubmittingRef.current = false;
+      setConsentSubmitting(false);
+    }
+  };
+
+  const handleSwitchAccount = async () => {
+    consentSubmittingRef.current = true;
+    setConsentSubmitting(true);
+    setConsentError(null);
+    try {
+      await signOutForInviteSwitch(token, bundle.participantEmail);
+    } catch (err) {
+      setConsentError(
+        err instanceof Error ? err.message : "Nu am putut schimba sesiunea activă.",
+      );
+      setSessionConflict(false);
     } finally {
       consentSubmittingRef.current = false;
       setConsentSubmitting(false);
@@ -323,7 +368,13 @@ export function InviteConsentGate({
 
         <Button
           type="button"
-          onClick={() => void handleAcceptTerms(sessionConflict)}
+          onClick={() => {
+            if (sessionConflict) {
+              void handleSwitchAccount();
+              return;
+            }
+            void handleAcceptTerms();
+          }}
           disabled={!termsChecked || consentSubmitting}
           size="lg"
           className="mt-5 w-full"
@@ -332,7 +383,7 @@ export function InviteConsentGate({
           {consentSubmitting
             ? "Pregătim accesul"
             : sessionConflict
-              ? "Schimbă sesiunea și continuă"
+              ? "Intră cu contul invitat"
               : "Continuă la chestionare"}
         </Button>
       </InvitePanel>
@@ -349,7 +400,7 @@ export function InviteRegisterPrimaryAction({
 }) {
   return (
     <InviteRegistrationLink token={token} bundle={bundle}>
-      Înregistrează cont Leadership
+      Creează cont permanent
       <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
     </InviteRegistrationLink>
   );

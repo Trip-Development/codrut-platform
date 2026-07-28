@@ -21,21 +21,32 @@ export function ParticipantContextSelector({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const options = contexts.flatMap((context) =>
-    context.projects.map((project) => {
-      const projectCycles = project.cycles ?? [];
-      const preferredCycle =
-        projectCycles.find((cycle) => cycle.status === "active") ??
-        [...projectCycles].sort((left, right) => right.sequence - left.sequence)[0];
-      return {
-        value: `${context.participantProfileId}:${project.id}`,
-        label: contexts.length > 1 ? `${context.companyName} · ${project.name}` : project.name,
-        profileId: context.participantProfileId,
-        projectId: project.id,
-        cycleId: preferredCycle?.id,
-      };
-    }),
-  );
+  const options = contexts
+    .flatMap((context) =>
+      context.projects.map((project) => {
+        const projectCycles = project.cycles ?? [];
+        const preferredCycle =
+          projectCycles.find((cycle) => cycle.status === "active") ??
+          [...projectCycles].sort((left, right) => right.sequence - left.sequence)[0];
+        return {
+          value: `${context.participantProfileId}:${project.id}`,
+          label: [
+            contexts.length > 1 ? context.companyName : null,
+            project.name,
+          ].filter(Boolean).join(" · "),
+          group: project.historyBucket === "history" ? "Istoric" : "În desfășurare",
+          profileId: context.participantProfileId,
+          projectId: project.id,
+          cycleId: preferredCycle?.id,
+        };
+      }),
+    )
+    .sort((left, right) => {
+      if (left.group !== right.group) {
+        return left.group === "În desfășurare" ? -1 : 1;
+      }
+      return left.label.localeCompare(right.label, "ro");
+    });
   if (options.length <= 1) return null;
 
   const selectedValue = selectedProjectId
@@ -66,7 +77,7 @@ export function ParticipantContextSelector({
         label="Program"
         value={selectedValue}
         allLabel="Alege programul"
-        options={options.map(({ value, label }) => ({ value, label }))}
+        options={options.map(({ value, label, group }) => ({ value, label, group }))}
         onValueChange={selectProgram}
         size="sm"
       />

@@ -23,6 +23,9 @@ type SessionPrincipalResponse = {
   user_id: string;
   email: string;
   role: "trainer" | "participant";
+  account_type?: "guest" | "registered";
+  available_workspaces?: Array<"trainer" | "participant">;
+  default_workspace?: "trainer" | "participant";
   avatar_palette_key?: number | null;
   access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
@@ -73,7 +76,8 @@ const getSessionFromApi = cache(async function getSessionFromApi(
     throw new AuthSessionUnavailableError(context);
   }
 
-  if (user.role !== expectedRole) {
+  const availableWorkspaces = user.available_workspaces ?? [user.role];
+  if (!availableWorkspaces.includes(expectedRole)) {
     throw new AuthRoleMismatchError({ expectedRole, actualRole: user.role });
   }
 
@@ -84,6 +88,9 @@ const getSessionFromApi = cache(async function getSessionFromApi(
       name: user.email.split("@")[0],
       email: user.email,
       role: user.role,
+      accountType: user.account_type ?? "registered",
+      availableWorkspaces,
+      defaultWorkspace: user.default_workspace ?? user.role,
       avatarPaletteKey: user.avatar_palette_key,
       accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
