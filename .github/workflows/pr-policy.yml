@@ -23,32 +23,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - name: Checkout policy scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Test pull request policy
+        working-directory: .github/scripts
+        run: python3 -m unittest test_validate_pr_metadata.py
+
       - name: Validate title and work tracking reference
-        shell: bash
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: |
-          set -euo pipefail
-
-          title_pattern='^(feat|fix|build|docs|chore|ci|refactor|perf|test|revert)(\([a-z0-9._/-]+\))?!?: .+'
-          if [[ ! "${PR_TITLE}" =~ ${title_pattern} ]]; then
-            echo "PR title must follow Conventional Commits, for example: build(repo): add delivery checks."
-            exit 1
-          fi
-
-          if jq -e 'index("admin-exempt") != null' <<< "${PR_LABELS}" >/dev/null; then
-            echo "Administrative exemption label present."
-            exit 0
-          fi
-
-          shopt -s nocasematch
-          issue_pattern='(^|[[:space:](])(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|references?)[[:space:]]+#[0-9]+([[:space:],.)]|$)'
-          if [[ ! "${PR_BODY}" =~ ${issue_pattern} ]]; then
-            echo "PR body must include Closes #123 or Refs #123, unless labeled admin-exempt."
-            exit 1
-          fi
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: python3 .github/scripts/validate_pr_metadata.py
 
   release-source:
     name: policy / release-source

@@ -46,13 +46,26 @@ user explicitly asks for delegation or parallel agent work.
 - Never implement directly on `dev` or `prod`.
 - Start feature and fix branches from an up-to-date `origin/dev`.
 - Use descriptive branch names without a `codex/` prefix.
+- Give each concurrent agent its own branch and worktree. Keep the main checkout
+  on a clean, current `dev`; do not share a mutable worktree between agents.
 - Preserve unrelated user changes and dirty worktree content.
 - Deliver changes to `dev` through a pull request.
 - Feature PRs into `dev` use squash merge. Promotions from `dev` to `prod` use
   merge commits.
+- Keep iterative PRs in draft while running targeted devcontainer checks. Mark
+  a PR ready only after its diff and focused proof are ready for the full
+  GitHub gate.
+- For an authorized ready feature PR, prefer GitHub native auto-merge over
+  repeated check polling. Production promotion remains an explicit,
+  authorized merge after the immutable `dev` candidate passes.
+- Merged remote feature branches are deleted automatically. Do not infer
+  permission to delete local branches or worktrees.
 - PR titles follow Conventional Commits.
 - PR bodies must include an issue reference such as `Refs #123` or
   `Closes #123` unless the repository policy explicitly exempts the PR.
+- Dependabot version updates are grouped weekly for patch/minor changes. Treat
+  major upgrades as planned issues with compatibility and rollback evidence;
+  triage security alerts immediately.
 - Do not merge, deploy, weaken branch protection, or delete active work unless
   the user has authorized that action.
 - Before deleting a squash-merged branch, verify its PR state and exact head or
