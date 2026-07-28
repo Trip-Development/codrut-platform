@@ -49,6 +49,8 @@ class ParticipantReceivedFeedbackSummary(BaseModel):
 class ParticipantWorkspaceProject(BaseModel):
     id: UUID
     name: str
+    status: str = "active"
+    history_bucket: str = "current"
     deadline_label: str
     deadline_at: datetime | None = None
     cycles: list["ParticipantWorkspaceCycle"] = Field(default_factory=list)

@@ -14,7 +14,7 @@ from codrut.modules.forms.models import (
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
 )
-from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User
+from codrut.modules.identity.models import User, UserAccountType
 
 
 class FormsRepository:
@@ -110,7 +110,7 @@ class FormsRepository:
             select(ParticipantProfile)
             .join(User, User.id == ParticipantProfile.user_id)
             .where(ParticipantProfile.user_id == user_id)
-            .where(User.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH)
+            .where(User.account_type == UserAccountType.registered)
         )
         return list(result.scalars().all())
 

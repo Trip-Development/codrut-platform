@@ -284,6 +284,59 @@ describe("AppShell", () => {
     expect(document.querySelector("[data-profile-avatar]")).toBeNull();
   });
 
+  it("offers the other workspace only to dual-workspace accounts", () => {
+    const view = render(
+      <AppShell
+        audience="trainer"
+        title="Acasă"
+        activeHref="/trainer"
+        session={{
+          state: "authenticated",
+          user: {
+            id: "dual-user",
+            name: "Andrei",
+            role: "trainer",
+            accountType: "registered",
+            availableWorkspaces: ["trainer", "participant"],
+            defaultWorkspace: "trainer",
+          },
+        }}
+        navItems={[{ href: "/trainer", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Andrei" }));
+    expect(screen.getByRole("link", { name: "Spațiu participant" }).getAttribute("href")).toBe(
+      "/participant",
+    );
+
+    view.rerender(
+      <AppShell
+        audience="trainer"
+        title="Acasă"
+        activeHref="/trainer"
+        session={{
+          state: "authenticated",
+          user: {
+            id: "trainer-only",
+            name: "Ana",
+            role: "trainer",
+            accountType: "registered",
+            availableWorkspaces: ["trainer"],
+            defaultWorkspace: "trainer",
+          },
+        }}
+        navItems={[{ href: "/trainer", label: "Acasă" }]}
+      >
+        <p>Conținut</p>
+      </AppShell>,
+    );
+
+    expect(screen.queryByRole("link", { name: "Spațiu participant" })).toBeNull();
+  });
+
   it("locks logout while the request is pending without adding explanatory copy", async () => {
     const logoutRequest = createDeferred<Awaited<ReturnType<typeof apiFetchType>>>();
     vi.mocked(apiFetch).mockReturnValue(logoutRequest.promise);

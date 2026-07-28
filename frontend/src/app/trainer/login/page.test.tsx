@@ -15,6 +15,15 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/api/auth", () => ({
+  canAccessWorkspace: vi.fn(
+    (
+      user: {
+        role: "trainer" | "participant";
+        availableWorkspaces?: Array<"trainer" | "participant">;
+      },
+      workspace: "trainer" | "participant",
+    ) => (user.availableWorkspaces ?? [user.role]).includes(workspace),
+  ),
   dashboardHrefForRole: vi.fn((role: "trainer" | "participant") =>
     role === "trainer" ? "/trainer" : "/participant",
   ),

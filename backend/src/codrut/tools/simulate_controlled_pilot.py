@@ -73,10 +73,10 @@ from codrut.modules.forms.models import (
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity.models import (
-    SHADOW_ACCOUNT_PASSWORD_HASH,
     AssignmentInvite,
     Session,
     User,
+    UserAccountType,
     UserRole,
 )
 from codrut.modules.identity.schemas import RegisterRequest
@@ -764,7 +764,7 @@ async def _build_report(
 ) -> SimulationReport:
     shadow_accounts = int(
         await session.scalar(
-            select(func.count(User.id)).where(User.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH)
+            select(func.count(User.id)).where(User.account_type == UserAccountType.guest)
         )
         or 0
     )

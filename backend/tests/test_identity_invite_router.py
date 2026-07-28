@@ -12,7 +12,11 @@ from codrut.core.errors import DomainError, install_exception_handlers
 from codrut.core.rate_limit import RateLimitDecision, install_rate_limit_middleware
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.router import router
-from codrut.modules.identity.schemas import InviteVerifyResponse, SessionPrincipal
+from codrut.modules.identity.schemas import (
+    InviteExchangeResponse,
+    InviteVerifyResponse,
+    SessionPrincipal,
+)
 from codrut.modules.identity.service import InviteVerifyResult
 from codrut.modules.identity.session_cookie import SESSION_COOKIE_NAME
 
@@ -30,6 +34,7 @@ class StubIdentityService:
     exchange_calls: list[tuple[str, str | None, bool]] = []
     logout_calls: list[str] = []
     exchange_session_token: str | None = "new-session-token"  # noqa: S105
+    exchange_action = "secure_link_ready"
     reject_exchange = False
 
     def __init__(self, _session: FakeDatabaseSession) -> None:
@@ -53,7 +58,11 @@ class StubIdentityService:
                 code="invite_session_conflict",
             )
         return InviteVerifyResult(
-            response=invite_response(),
+            response=InviteExchangeResponse(
+                action=self.exchange_action,
+                destination="/invite/invite-token",
+                participant_profile_id="22222222-2222-4222-8222-222222222222",
+            ),
             session_token=self.exchange_session_token,
         )
 
@@ -97,6 +106,7 @@ def create_test_app(
     StubIdentityService.exchange_calls = []
     StubIdentityService.logout_calls = []
     StubIdentityService.exchange_session_token = "new-session-token"  # noqa: S105
+    StubIdentityService.exchange_action = "secure_link_ready"
     StubIdentityService.reject_exchange = False
     monkeypatch.setattr(identity_router, "IdentityService", StubIdentityService)
 
@@ -169,16 +179,17 @@ def test_invite_post_exchanges_session_without_overwriting_another_user(
     database_session = FakeDatabaseSession()
     client = TestClient(create_test_app(monkeypatch, database_session))
     client.cookies.set(SESSION_COOKIE_NAME, "existing-session")
-    StubIdentityService.reject_exchange = True
+    StubIdentityService.exchange_action = "account_switch_required"
+    StubIdentityService.exchange_session_token = None
 
     response = client.post(
         "/api/auth/invite/exchange",
         json={"token": "invite-token"},
     )
 
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "invite_session_conflict"
-    assert database_session.commit_count == 0
+    assert response.status_code == 200
+    assert response.json()["action"] == "account_switch_required"
+    assert database_session.commit_count == 1
     assert StubIdentityService.exchange_calls == [("invite-token", "existing-session", False)]
     assert SESSION_COOKIE_NAME not in response.headers.get("set-cookie", "")
 
@@ -197,7 +208,7 @@ def test_invite_exchange_post_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -
     assert limiter.count == 2
 
 
-def test_invite_exchange_can_explicitly_replace_the_existing_session(
+def test_invite_exchange_accepts_legacy_replace_flag_without_router_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database_session = FakeDatabaseSession()

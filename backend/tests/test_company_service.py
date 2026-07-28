@@ -2349,7 +2349,8 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
         verify_member = await identity_service.verify_invite_token_and_create_session(
             member_invite.token
         )
-        assert verify_member.response.is_leadership is False
+        assert verify_member.response.action == "secure_link_ready"
+        assert verify_member.response.participant_profile_id == participants[2].id
         assert verify_member.session_token is not None
 
         repeat_import = await service.import_roster(

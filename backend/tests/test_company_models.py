@@ -14,6 +14,7 @@ from codrut.modules.companies.schemas import ParticipantResponse
 from codrut.modules.identity.models import (
     SHADOW_ACCOUNT_PASSWORD_HASH,
     User,
+    UserAccountType,
     UserRole,
 )
 
@@ -61,6 +62,7 @@ def test_participant_response_distinguishes_shadow_and_permanent_accounts() -> N
         email="temporary@example.com",
         password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
         role=UserRole.participant,
+        account_type=UserAccountType.guest,
     )
     shadow_profile = ParticipantProfile(
         id=uuid.uuid4(),

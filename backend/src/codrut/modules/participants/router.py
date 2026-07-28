@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.api.dependencies import current_principal, db_session, require_current_terms
-from codrut.modules.identity.models import UserRole
+from codrut.modules.identity.models import UserAccountType, UserRole
 from codrut.modules.identity.schemas import SessionPrincipal
 from codrut.modules.participants.schemas import ParticipantWorkspaceSummary
 from codrut.modules.participants.service import ParticipantWorkspaceService
@@ -21,7 +21,7 @@ async def get_my_workspace(
     project_id: UUID | None = None,
     cycle_id: UUID | None = None,
 ) -> ParticipantWorkspaceSummary:
-    if principal.role != UserRole.participant:
+    if not principal.can_access_workspace(UserRole.participant):
         from codrut.core.errors import DomainError
 
         raise DomainError("Participant account required.", code="participant_required")
@@ -31,6 +31,13 @@ async def get_my_workspace(
         raise DomainError(
             "Secure invitation sessions cannot open the participant dashboard.",
             code="secure_invite_dashboard_forbidden",
+        )
+    if principal.account_type != UserAccountType.registered:
+        from codrut.core.errors import DomainError
+
+        raise DomainError(
+            "Invite-only users cannot open the participant dashboard.",
+            code="guest_dashboard_forbidden",
         )
     require_current_terms(principal)
     return await ParticipantWorkspaceService(session).get_workspace_summary(

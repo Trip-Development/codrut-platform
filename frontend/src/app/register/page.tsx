@@ -150,7 +150,7 @@ export default function RegisterPage() {
       }
 
       clearStoredInvite();
-      router.push("/participant");
+      router.push(`/invite/${token}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "A apărut o eroare la înregistrare.";
       setError(msg);

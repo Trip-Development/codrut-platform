@@ -24,7 +24,7 @@ async def get_assignment_scoring_result(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> ScoringResultResponse:
     # Participant-safe scores are exposed only through the policy-filtered workspace.
-    if principal.role != UserRole.trainer:
+    if not principal.can_access_workspace(UserRole.trainer):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Raw scoring results are available only to trainers.",

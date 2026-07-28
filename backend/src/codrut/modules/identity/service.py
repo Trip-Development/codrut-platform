@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -21,6 +22,7 @@ from codrut.modules.identity.models import (
     PasswordResetToken,
     Session,
     User,
+    UserAccountType,
     UserRole,
 )
 from codrut.modules.identity.password_breach import ensure_password_not_breached
@@ -28,6 +30,7 @@ from codrut.modules.identity.repository import IdentityRepository, hash_session_
 from codrut.modules.identity.schemas import (
     AuthResponse,
     ConsentRequest,
+    InviteExchangeResponse,
     InviteVerifyResponse,
     LoginRequest,
     PasswordChangeRequest,
@@ -51,8 +54,11 @@ class AuthResult:
 
 @dataclass(frozen=True)
 class InviteVerifyResult:
-    response: "InviteVerifyResponse"
+    response: InviteExchangeResponse
     session_token: str | None
+
+
+logger = logging.getLogger(__name__)
 
 
 def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
@@ -107,28 +113,23 @@ class IdentityService:
             lock_invite=True,
         )
 
-        # 2. Check if the user is leadership (only leadership members can sign up)
-        if not verify_result.is_leadership:
-            raise DomainError(
-                "Registration is restricted to leadership team members.",
-                code="registration_forbidden",
-            )
-
         # The signed invitation proves ownership of this exact participant context.
         if payload.email.lower() != verify_result.email.lower():
             raise DomainError("Email address does not match invitation.", code="email_mismatch")
 
         profile = await self._load_invited_profile(payload.token)
-        existing = await self._resolve_invited_participant_user(profile)
+        existing = await self._resolve_invited_participant_user(profile, link_profile=False)
 
         accepted_at = datetime.now(UTC)
-        if existing is not None and existing.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH:
+        if existing is not None and existing.is_registered:
+            raise DomainError(
+                "This email already has an account. Sign in to continue.",
+                code="account_already_registered",
+            )
+        if existing is not None:
             await ensure_password_not_breached(payload.password)
             existing.password_hash = hash_password(payload.password)
-            existing.role = UserRole.participant
-            user = existing
-        elif existing is not None:
-            # Never replace an existing account password during invite linking.
+            existing.account_type = UserAccountType.registered
             user = existing
         else:
             await ensure_password_not_breached(payload.password)
@@ -138,13 +139,17 @@ class IdentityService:
                     email=payload.email.lower(),
                     password_hash=hash_password(payload.password),
                     role=UserRole.participant,
+                    account_type=UserAccountType.registered,
                     terms_accepted_at=accepted_at,
                     terms_version=payload.terms_version,
                 )
             )
         user.terms_accepted_at = accepted_at
         user.terms_version = payload.terms_version
-        profile.user_id = user.id
+        await self._claim_participant_profiles(
+            user,
+            action="registration_claim",
+        )
 
         if invite is None:
             raise DomainError("Task link is no longer active.", code="task_link_revoked")
@@ -171,7 +176,7 @@ class IdentityService:
                 accepted_at=accepted_at,
             )
         )
-        return AuthResult(response=self._response(user), session_token=token)
+        return AuthResult(response=await self._response(user), session_token=token)
 
     async def verify_invite_token(self, token: str) -> InviteVerifyResponse:
         response, _ = await self._verify_invite_token(token, lock_invite=False)
@@ -376,13 +381,11 @@ class IdentityService:
 
         if user is None:
             matching_user = await self.repository.get_user_by_email(profile.email)
-            if matching_user is not None and matching_user.role == UserRole.participant:
+            if matching_user is not None:
                 user = matching_user
-        already_registered = bool(
-            user is not None and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
-        )
+        already_registered = bool(user is not None and user.is_registered)
         account_dashboard_available = bool(
-            already_registered and user is not None and user.role == UserRole.participant
+            already_registered and user is not None
         )
 
         return (
@@ -489,7 +492,7 @@ class IdentityService:
             )
         return profile
 
-    async def _resolve_invited_participant_user(self, profile):
+    async def _resolve_invited_participant_user(self, profile, *, link_profile: bool = True):
         email = profile.email.lower()
         email_user = await self.repository.get_user_by_email(email)
         bound_user = None
@@ -499,11 +502,17 @@ class IdentityService:
             else:
                 bound_user = await self.repository.get_user_by_id(profile.user_id)
             if bound_user is None:
+                self._log_profile_link_conflict(profile, email_user=email_user)
                 raise DomainError(
                     "Invite profile is linked to a missing account.",
                     code="invite_profile_account_conflict",
                 )
             if email_user is not None and email_user.id != bound_user.id:
+                self._log_profile_link_conflict(
+                    profile,
+                    email_user=email_user,
+                    bound_user=bound_user,
+                )
                 raise DomainError(
                     "Invite email belongs to a different account.",
                     code="invite_profile_account_conflict",
@@ -513,13 +522,123 @@ class IdentityService:
         if user is None:
             return None
         if user.role not in {UserRole.participant, UserRole.trainer} or user.email.lower() != email:
+            self._log_profile_link_conflict(
+                profile,
+                email_user=email_user,
+                bound_user=bound_user,
+            )
             raise DomainError(
                 "Invite profile is linked to an incompatible account.",
                 code="invite_profile_account_conflict",
             )
-        if profile.user_id is None:
+        if profile.user_id is None and link_profile:
             profile.user_id = user.id
         return user
+
+    @staticmethod
+    def _log_profile_link_conflict(
+        profile,
+        *,
+        email_user: User | None,
+        bound_user: User | None = None,
+    ) -> None:
+        logger.warning(
+            "Participant profile identity conflict detected.",
+            extra={
+                "auth_event": "participant_profile_claim_conflict",
+                "profile_id": str(profile.id),
+                "linked_user_id": str(profile.user_id) if profile.user_id else None,
+                "matching_email_user_id": str(email_user.id) if email_user else None,
+                "resolved_bound_user_id": str(bound_user.id) if bound_user else None,
+            },
+        )
+
+    async def _claim_participant_profiles(
+        self,
+        user: User,
+        *,
+        action: str,
+    ) -> list:
+        from codrut.modules.companies.models import ParticipantAccountLinkAudit
+
+        profiles = await self.repository.list_participant_profiles_by_email_for_update(
+            user.email
+        )
+        conflicts = [
+            profile
+            for profile in profiles
+            if profile.user_id is not None and profile.user_id != user.id
+        ]
+        if conflicts:
+            logger.warning(
+                "Participant profile claim rejected because an email is linked elsewhere.",
+                extra={
+                    "auth_event": "participant_profile_claim_conflict",
+                    "user_id": str(user.id),
+                    "profile_ids": [str(profile.id) for profile in conflicts],
+                },
+            )
+            raise DomainError(
+                "A participant profile for this email is linked to another account.",
+                code="invite_profile_account_conflict",
+            )
+
+        claimed = []
+        for profile in profiles:
+            if profile.user_id == user.id:
+                continue
+            profile.user_id = user.id
+            self.session.add(
+                ParticipantAccountLinkAudit(
+                    company_id=profile.company_id,
+                    participant_profile_id=profile.id,
+                    actor_user_id=user.id,
+                    action=action,
+                    previous_user_id=None,
+                    previous_user_email=None,
+                    new_user_id=user.id,
+                    new_user_email=user.email,
+                    reason="Exact-email identity claim from a verified invitation.",
+                )
+            )
+            claimed.append(profile)
+        await self.session.flush()
+        return claimed
+
+    @staticmethod
+    def _invite_destination(
+        profile_id: UUID,
+        verify_result: InviteVerifyResponse,
+    ) -> tuple[str, UUID | None]:
+        cycle_ids = {
+            task.assessmentCycleId
+            for task in verify_result.tasks
+            if task.assessmentCycleId is not None
+        }
+        cycle_id = next(iter(cycle_ids)) if len(cycle_ids) == 1 else None
+        params = [f"profile={profile_id}"]
+        if verify_result.project_id is not None:
+            params.append(f"project={verify_result.project_id}")
+        if cycle_id is not None:
+            params.append(f"cycle={cycle_id}")
+        return f"/participant?{'&'.join(params)}", cycle_id
+
+    @staticmethod
+    def _invite_exchange_result(
+        response: InviteExchangeResponse,
+        *,
+        session_token: str | None,
+    ) -> InviteVerifyResult:
+        logger.info(
+            "Invitation exchange resolved.",
+            extra={
+                "auth_event": "invite_exchange",
+                "action": response.action,
+                "participant_profile_id": str(response.participant_profile_id),
+                "project_id": str(response.project_id) if response.project_id else None,
+            },
+        )
+        return InviteVerifyResult(response=response, session_token=session_token)
 
     async def verify_invite_token_and_create_session(
         self,
@@ -530,6 +649,7 @@ class IdentityService:
     ) -> InviteVerifyResult:
         verify_result, invite = await self._verify_invite_token(token, lock_invite=True)
 
+        del replace_existing_session  # Accepted only for cached clients; never destructive.
         session_token = None
         profile = await self._load_invited_profile(token)
         existing_session = (
@@ -537,85 +657,95 @@ class IdentityService:
             if existing_session_token
             else None
         )
-        if (
-            existing_session is not None
-            and profile.user_id is not None
-            and existing_session.user_id != profile.user_id
-            and not replace_existing_session
+        user = await self._resolve_invited_participant_user(profile, link_profile=False)
+        if existing_session is not None and (
+            user is None or existing_session.user_id != user.id
         ):
-            raise DomainError(
-                "The invitation belongs to a different authenticated user.",
-                code="invite_session_conflict",
+            return self._invite_exchange_result(
+                InviteExchangeResponse(
+                    action="account_switch_required",
+                    destination=(
+                        f"/login?returnTo={quote(f'/invite/{token}', safe='')}"
+                        f"&email={quote(profile.email.lower(), safe='')}"
+                    ),
+                    participant_profile_id=profile.id,
+                    project_id=verify_result.project_id,
+                ),
+                session_token=None,
             )
-        user = await self._resolve_invited_participant_user(profile)
-        if existing_session is not None and user is None and not replace_existing_session:
-            raise DomainError(
-                "The invitation belongs to a different authenticated user.",
-                code="invite_session_conflict",
+
+        destination, cycle_id = self._invite_destination(profile.id, verify_result)
+        if user is not None and user.is_registered:
+            if existing_session is None:
+                return self._invite_exchange_result(
+                    InviteExchangeResponse(
+                        action="login_required",
+                        destination=(
+                            f"/login?returnTo={quote(f'/invite/{token}', safe='')}"
+                            f"&email={quote(profile.email.lower(), safe='')}"
+                        ),
+                        participant_profile_id=profile.id,
+                        project_id=verify_result.project_id,
+                        assessment_cycle_id=cycle_id,
+                    ),
+                    session_token=None,
+                )
+            await self._claim_participant_profiles(user, action="invite_claim")
+            if existing_session.assignment_invite_id is not None:
+                session_token = await self._create_session(
+                    user,
+                    expires_at=None,
+                    assignment_invite_id=None,
+                )
+            return self._invite_exchange_result(
+                InviteExchangeResponse(
+                    action="dashboard_ready",
+                    destination=destination,
+                    participant_profile_id=profile.id,
+                    project_id=verify_result.project_id,
+                    assessment_cycle_id=cycle_id,
+                ),
+                session_token=session_token,
             )
 
         if not verify_result.is_leadership:
             if not profile.anonymous_name:
                 profile.anonymous_name = new_anonymous_name()
                 verify_result.anonymous_name = profile.anonymous_name
-            if user is None:
-                user = User(
-                    id=uuid.uuid4(),
-                    email=profile.email.lower(),
-                    password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
-                    role=UserRole.participant,
-                )
-                await self.repository.add_user(user)
-                profile.user_id = user.id
+        if user is None:
+            user = User(
+                id=uuid.uuid4(),
+                email=profile.email.lower(),
+                password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+                role=UserRole.participant,
+                account_type=UserAccountType.guest,
+            )
+            await self.repository.add_user(user)
+            profile.user_id = user.id
 
-        # Existing participant accounts use the signed invitation as passwordless
-        # proof for the newly linked profile, including leadership accounts.
         if user is not None:
+            if profile.user_id is None:
+                profile.user_id = user.id
             current_invite_id = invite.id if invite is not None else None
-            permanent_participant = (
-                user.role == UserRole.participant
-                and user.password_hash != SHADOW_ACCOUNT_PASSWORD_HASH
-            )
-            session_invite_id = None if permanent_participant else current_invite_id
-            session_switch_required = existing_session is not None and (
-                existing_session.user_id != user.id
-                or (
-                    not permanent_participant
-                    and existing_session.assignment_invite_id is not None
-                    and existing_session.assignment_invite_id != session_invite_id
-                )
-                or (
-                    user.role == UserRole.trainer
-                    and existing_session.assignment_invite_id != session_invite_id
-                )
-            )
-            if session_switch_required and not replace_existing_session:
-                raise DomainError(
-                    "The invitation belongs to a different authenticated user.",
-                    code="invite_session_conflict",
-                )
-
             can_preserve_existing_session = existing_session is not None and (
                 existing_session.user_id == user.id
-                and (
-                    (
-                        user.role == UserRole.participant
-                        and existing_session.assignment_invite_id is None
-                    )
-                    or existing_session.assignment_invite_id == session_invite_id
-                )
+                and existing_session.assignment_invite_id == current_invite_id
             )
             if not can_preserve_existing_session:
                 session_token = await self._create_session(
                     user,
-                    expires_at=None if permanent_participant else verify_result.expires_at,
-                    assignment_invite_id=session_invite_id,
+                    expires_at=verify_result.expires_at,
+                    assignment_invite_id=current_invite_id,
                 )
-                if existing_session_token and replace_existing_session:
-                    await self.repository.delete_session_by_token(existing_session_token)
 
-        return InviteVerifyResult(
-            response=verify_result,
+        return self._invite_exchange_result(
+            InviteExchangeResponse(
+                action="secure_link_ready",
+                destination=f"/invite/{token}",
+                participant_profile_id=profile.id,
+                project_id=verify_result.project_id,
+                assessment_cycle_id=cycle_id,
+            ),
             session_token=session_token,
         )
 
@@ -624,15 +754,14 @@ class IdentityService:
         if user is None or not verify_password(payload.password, user.password_hash):
             raise DomainError("Invalid email or password.", code="invalid_credentials")
         token = await self._create_session(user)
-        return AuthResult(response=self._response(user), session_token=token)
+        return AuthResult(response=await self._response(user), session_token=token)
 
     async def request_password_reset(self, payload: PasswordResetRequest) -> None:
         user = await self.repository.get_user_by_email(payload.email)
         if user is None:
             return
-        if (
-            user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
-            and not await self._shadow_account_password_reset_allowed(user.id)
+        if not user.is_registered and not await self._shadow_account_password_reset_allowed(
+            user.id
         ):
             return
 
@@ -728,9 +857,8 @@ class IdentityService:
         user = await self.repository.get_user_by_id(reset_token.user_id)
         if user is None:
             raise DomainError("Contul nu mai există.", code="user_not_found")
-        if (
-            user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH
-            and not await self._shadow_account_password_reset_allowed(user.id)
+        if not user.is_registered and not await self._shadow_account_password_reset_allowed(
+            user.id
         ):
             raise DomainError(
                 "Temporary invite accounts cannot be converted through password reset.",
@@ -739,6 +867,7 @@ class IdentityService:
 
         await ensure_password_not_breached(payload.password)
         user.password_hash = hash_password(payload.password)
+        user.account_type = UserAccountType.registered
         reset_token.used_at = datetime.now(UTC)
         await self.repository.revoke_password_reset_tokens_for_user(user.id)
         await self.repository.delete_sessions_for_user(user.id)
@@ -747,7 +876,7 @@ class IdentityService:
         user = await self.repository.get_user_by_id(user_id)
         if user is None:
             raise DomainError("Contul nu mai există.", code="user_not_found")
-        if user.password_hash == SHADOW_ACCOUNT_PASSWORD_HASH or not verify_password(
+        if not user.is_registered or not verify_password(
             payload.current_password,
             user.password_hash,
         ):
@@ -824,7 +953,7 @@ class IdentityService:
 
         user.terms_accepted_at = accepted_at
         user.terms_version = payload.terms_version
-        return self._response(user)
+        return await self._response(user)
 
     async def require_secure_link_consent(
         self,
@@ -839,7 +968,7 @@ class IdentityService:
         ):
             return
         if (
-            principal.role != UserRole.participant
+            not principal.can_access_workspace(UserRole.participant)
             or principal.terms_accepted_at is None
             or principal.terms_version != CURRENT_TERMS_VERSION
         ):
@@ -935,14 +1064,23 @@ class IdentityService:
                 return None
             assignment_ids = claims.assignment_ids
             project_id = claims.project_id or invite.project_id
+        secure_link = active_session.assignment_invite_id is not None
+        available_workspaces = (
+            (UserRole.participant,)
+            if secure_link
+            else await self._available_workspaces(user)
+        )
         return SessionPrincipal(
             user_id=user.id,
             email=user.email,
             role=(
                 UserRole.participant
-                if active_session.assignment_invite_id is not None
+                if secure_link
                 else user.role
             ),
+            account_type=user.account_type or UserAccountType.registered,
+            available_workspaces=available_workspaces,
+            default_workspace=user.role,
             avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
@@ -951,7 +1089,7 @@ class IdentityService:
             assignment_ids=assignment_ids,
             project_id=project_id,
             access_mode=(
-                "secure_link" if active_session.assignment_invite_id is not None else "account"
+                "secure_link" if secure_link else "account"
             ),
         )
 
@@ -968,6 +1106,9 @@ class IdentityService:
             user_id=user.id,
             email=user.email,
             role=user.role,
+            account_type=user.account_type or UserAccountType.registered,
+            available_workspaces=await self._available_workspaces(user),
+            default_workspace=user.role,
             avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
@@ -993,12 +1134,25 @@ class IdentityService:
         )
         return token
 
-    @staticmethod
-    def _response(user: User) -> AuthResponse:
+    async def _available_workspaces(self, user: User) -> tuple[UserRole, ...]:
+        workspaces: list[UserRole] = []
+        if user.role == UserRole.trainer:
+            workspaces.append(UserRole.trainer)
+        if user.role == UserRole.participant or (
+            user.is_registered
+            and await self.repository.has_participant_profile(user.id)
+        ):
+            workspaces.append(UserRole.participant)
+        return tuple(workspaces)
+
+    async def _response(self, user: User) -> AuthResponse:
         return AuthResponse(
             user_id=user.id,
             email=user.email,
             role=user.role,
+            account_type=user.account_type or UserAccountType.registered,
+            available_workspaces=await self._available_workspaces(user),
+            default_workspace=user.role,
             avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,

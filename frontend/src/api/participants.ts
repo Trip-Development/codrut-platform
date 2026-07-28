@@ -38,6 +38,8 @@ export type ParticipantWorkspaceSummary = {
 export type ParticipantWorkspaceProject = {
   id: string;
   name: string;
+  status?: "active" | "completed" | "archived";
+  historyBucket?: "current" | "history";
   deadlineLabel: string;
   deadlineAt?: string | null;
   cycles?: ParticipantWorkspaceCycle[];
@@ -126,6 +128,8 @@ type BackendParticipantWorkspaceSummary = {
 type BackendParticipantWorkspaceProject = {
   id: string;
   name: string;
+  status?: "active" | "completed" | "archived";
+  history_bucket?: "current" | "history";
   deadline_label: string;
   deadline_at?: string | null;
   cycles?: BackendParticipantWorkspaceCycle[];
@@ -276,6 +280,8 @@ function mapParticipantWorkspaceProject(
   return {
     id: project.id,
     name: project.name,
+    status: project.status ?? "active",
+    historyBucket: project.history_bucket ?? "current",
     deadlineLabel: project.deadline_label,
     deadlineAt: project.deadline_at,
     ...(project.cycles

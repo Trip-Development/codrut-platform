@@ -27,7 +27,12 @@ from codrut.modules.forms.models import (
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
 from codrut.modules.identity import models as identity_models  # noqa: F401
-from codrut.modules.identity.models import SHADOW_ACCOUNT_PASSWORD_HASH, User, UserRole
+from codrut.modules.identity.models import (
+    SHADOW_ACCOUNT_PASSWORD_HASH,
+    User,
+    UserAccountType,
+    UserRole,
+)
 from codrut.tools.local_preview import (
     PREVIEW_DEFINITION_VERSION,
     build_preview_questionnaire_definitions,
@@ -594,6 +599,7 @@ async def test_participant_onboarding_skips_shadow_secure_link_users() -> None:
                 email=f"pcm-shadow-{uuid.uuid4().hex[:8]}@example.com",
                 password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
                 role=UserRole.participant,
+                account_type=UserAccountType.guest,
             )
             company = company_models.Company(
                 id=uuid.uuid4(),

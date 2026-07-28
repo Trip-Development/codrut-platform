@@ -16,6 +16,7 @@ import {
   MenuIcon,
   NetworkIcon,
   SettingsIcon,
+  Repeat2Icon,
   UserIcon,
   UsersIcon,
   XIcon,
@@ -180,6 +181,17 @@ export function AppShell({
   const displayedAvatarPaletteKey = displayedIdentity?.avatarPaletteKey ?? avatarPaletteKey;
   const identityIsPending = accountIdentityPending && displayedIdentity === null;
   const accountHref = isTrainer ? "/trainer/settings" : "/participant/account";
+  const availableWorkspaces = session?.user.availableWorkspaces ?? [session?.user.role ?? audience];
+  const alternateWorkspaceHref =
+    availableWorkspaces.includes("trainer")
+    && availableWorkspaces.includes("participant")
+      ? isTrainer
+        ? "/participant"
+        : "/trainer"
+      : null;
+  const alternateWorkspaceLabel = isTrainer
+    ? "Spațiu participant"
+    : "Portal trainer";
   const currentNavHref = optimisticHref ?? getPathnameActiveHref(pathname, navItems, activeHref);
 
   useLayoutEffect(() => {
@@ -406,6 +418,15 @@ export function AppShell({
 
                 <Separator />
 
+                {alternateWorkspaceHref ? (
+                  <Button asChild variant="ghost" className="justify-start">
+                    <Link href={alternateWorkspaceHref} onClick={() => setAccountMenuOpen(false)}>
+                      <Repeat2Icon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                      {alternateWorkspaceLabel}
+                    </Link>
+                  </Button>
+                ) : null}
+
                 {logoutError ? (
                   <InlineFeedback tone="danger" className="px-3 py-2" descriptionClassName="text-xs leading-5">
                     {logoutError}
@@ -542,6 +563,14 @@ export function AppShell({
                 <span className="text-sm font-medium text-muted-foreground">Temă</span>
                 <ThemeSelector className="h-10 min-w-36 bg-background px-3 font-medium" />
               </div>
+              {alternateWorkspaceHref ? (
+                <Button asChild variant="outline" className="w-full justify-start">
+                  <Link href={alternateWorkspaceHref} onClick={() => setMobileMenuOpen(false)}>
+                    <Repeat2Icon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                    {alternateWorkspaceLabel}
+                  </Link>
+                </Button>
+              ) : null}
               {logoutError ? (
                 <InlineFeedback tone="danger" className="px-3 py-2" descriptionClassName="text-xs leading-5">
                   {logoutError}

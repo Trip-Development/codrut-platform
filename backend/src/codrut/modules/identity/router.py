@@ -11,6 +11,7 @@ from codrut.modules.identity.schemas import (
     ConsentRequest,
     CsrfTokenResponse,
     InviteExchangeRequest,
+    InviteExchangeResponse,
     InviteVerifyResponse,
     LoginRequest,
     PasswordChangeRequest,
@@ -40,13 +41,13 @@ async def verify_invite(
     return await IdentityService(session).verify_invite_token(token)
 
 
-@router.post("/invite/exchange", response_model=InviteVerifyResponse)
+@router.post("/invite/exchange", response_model=InviteExchangeResponse)
 async def exchange_invite(
     payload: InviteExchangeRequest,
     request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(db_session)],
-) -> InviteVerifyResponse:
+) -> InviteExchangeResponse:
     try:
         result = await IdentityService(session).verify_invite_token_and_create_session(
             payload.token,
