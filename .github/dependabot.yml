@@ -2,18 +2,28 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    open-pull-requests-limit: 1
     schedule:
       interval: weekly
       day: monday
       time: "05:00"
       timezone: Europe/Bucharest
     groups:
-      actions:
+      actions-minor-patch:
+        applies-to: version-updates
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: npm
     directory: /frontend
+    open-pull-requests-limit: 1
     schedule:
       interval: weekly
       day: monday
@@ -21,12 +31,18 @@ updates:
       timezone: Europe/Bucharest
     groups:
       frontend-minor-patch:
+        applies-to: version-updates
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: pip
     directory: /backend
+    open-pull-requests-limit: 1
     schedule:
       interval: weekly
       day: monday
@@ -34,22 +50,59 @@ updates:
       timezone: Europe/Bucharest
     groups:
       backend-minor-patch:
+        applies-to: version-updates
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: docker
     directory: /infra/docker
+    open-pull-requests-limit: 1
     schedule:
       interval: weekly
       day: monday
       time: "05:45"
       timezone: Europe/Bucharest
+    groups:
+      runtime-images-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: python
+        versions:
+          - ">= 3.13"
 
   - package-ecosystem: docker
     directory: /infra/backup
+    open-pull-requests-limit: 1
     schedule:
       interval: weekly
       day: monday
       time: "06:00"
       timezone: Europe/Bucharest
+    groups:
+      backup-images-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: restic/restic
+        versions:
+          - ">= 0.19"
