@@ -1,4 +1,9 @@
-import type { CampaignRecipientMembershipRow, CampaignRecipientRow, EmailCampaign } from "@/api/email";
+import type {
+  CampaignRecipientMembershipRow,
+  CampaignRecipientRow,
+  CampaignSendResponse,
+  EmailCampaign,
+} from "@/api/email";
 
 export type CampaignSegmentKey = "past_customer" | "potential_customer";
 export type CampaignTargetSegment = CampaignSegmentKey | null;
@@ -40,6 +45,31 @@ export function campaignSegmentLabel(segment: CampaignTargetSegment): string {
 
 export function campaignDeliveryLabel(delivery: CampaignDeliveryState): string {
   return { failed: "Eroare", not_sent: "Netrimis", queued: "În coadă", sent: "Trimis" }[delivery];
+}
+
+function campaignSendErrorLabel(error: string): string {
+  const labels: Record<string, string> = {
+    "Daily email send cap reached.": "A fost atinsă limita zilnică de emailuri.",
+    "Recipient is suppressed or unsubscribed.": "Contactul este inactiv sau dezabonat.",
+    "Recipient segment does not match campaign segment.": "Tipul contactului nu corespunde campaniei.",
+  };
+  return labels[error] ?? error;
+}
+
+export function campaignSendResultSummary(result: CampaignSendResponse): string {
+  const parts = [
+    result.queued ? `${result.queued} în coadă` : null,
+    result.sent ? `${result.sent} trimise` : null,
+    result.failed ? `${result.failed} eșuate` : null,
+    result.skipped ? `${result.skipped} omise` : null,
+  ].filter(Boolean);
+  return parts.join(", ") || "Niciun email procesat";
+}
+
+export function campaignSendFailureDetail(result: CampaignSendResponse): string | null {
+  const failedResult = result.results.find((item) => item.error);
+  if (!failedResult?.error) return null;
+  return `${failedResult.email}: ${campaignSendErrorLabel(failedResult.error)}`;
 }
 
 export function campaignRecipientCompanyLabel(recipient: CampaignRecipientRow): string {
