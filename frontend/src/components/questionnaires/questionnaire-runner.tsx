@@ -55,13 +55,37 @@ function numericScaleOptionValue(option: QuestionnaireScaleOption): number | nul
   return null;
 }
 
-function isTenPointScale(scale: QuestionnaireScaleOption[]): boolean {
-  if (scale.length !== 10) return false;
+type DiscreteScaleLayout = {
+  sliderMin: number;
+  sliderMax: number;
+  neutralValue: number;
+  tickLabels: number[];
+};
+
+function discreteScaleLayout(scale: QuestionnaireScaleOption[]): DiscreteScaleLayout | null {
+  if (scale.length !== 10 && scale.length !== 11) return null;
   const values = scale.map(numericScaleOptionValue);
-  if (values.some((value) => value === null)) return false;
+  if (values.some((value) => value === null)) return null;
   const firstValue = values[0];
-  if (firstValue !== 0 && firstValue !== 1) return false;
-  return values.every((value, index) => value === firstValue + index);
+  if (firstValue !== 0 && firstValue !== 1) return null;
+  if (!values.every((value, index) => value === firstValue + index)) return null;
+
+  if (scale.length === 11) {
+    if (firstValue !== 0) return null;
+    return {
+      sliderMin: 0,
+      sliderMax: 10,
+      neutralValue: 5,
+      tickLabels: values as number[],
+    };
+  }
+
+  return {
+    sliderMin: 1,
+    sliderMax: 10,
+    neutralValue: 5,
+    tickLabels: scale.map((_option, index) => index + 1),
+  };
 }
 
 type DiscreteScaleSliderProps = {
@@ -70,21 +94,39 @@ type DiscreteScaleSliderProps = {
   selectedValue: QuestionnaireAnswerValue | undefined;
   onChange: (value: QuestionnaireAnswerValue) => void;
   disabled?: boolean;
+  showTaAnchors?: boolean;
 };
 
-function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }: DiscreteScaleSliderProps) {
+function DiscreteScaleSlider({
+  label,
+  scale,
+  selectedValue,
+  onChange,
+  disabled,
+  showTaAnchors = false,
+}: DiscreteScaleSliderProps) {
   const selectedDescriptionId = useId();
+  const layout = discreteScaleLayout(scale);
+  if (!layout) return null;
+
   const selectedIndex = scale.findIndex((option) => option.value === selectedValue);
   const selectedOption = selectedIndex >= 0 ? scale[selectedIndex] : undefined;
   const hasSelectedOption = selectedIndex >= 0;
-  const sliderValue = hasSelectedOption ? selectedIndex + 1 : 5;
+  const sliderValue = hasSelectedOption
+    ? layout.sliderMin + selectedIndex
+    : layout.neutralValue;
+  const displayedValue = hasSelectedOption
+    ? layout.tickLabels[selectedIndex]
+    : layout.neutralValue;
+  const displayedMinimum = layout.tickLabels[0];
+  const displayedMaximum = layout.tickLabels[layout.tickLabels.length - 1];
   const selectedSemanticLabel =
     selectedOption && !/^\d+$/.test(selectedOption.label.trim())
       ? selectedOption.label
       : null;
   const valueText = selectedOption
-    ? `${sliderValue} din 10${selectedSemanticLabel ? `: ${selectedSemanticLabel}` : ""}${selectedOption.description ? `. ${selectedOption.description}` : ""}`
-    : "Neselectat. Alege un scor de la 1 la 10.";
+    ? `${displayedValue} din ${displayedMaximum}${selectedSemanticLabel ? `: ${selectedSemanticLabel}` : ""}${selectedOption.description ? `. ${selectedOption.description}` : ""}`
+    : `Neselectat. Alege un scor de la ${displayedMinimum} la ${displayedMaximum}.`;
 
   return (
     <div
@@ -93,14 +135,14 @@ function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }
       className="mt-4 rounded-lg border border-border bg-surface px-4 py-4 shadow-[0_1px_0_rgba(24,24,27,0.04)] data-[selected=true]:border-burgundy/35"
     >
       <Slider
-        min={1}
-        max={10}
+        min={layout.sliderMin}
+        max={layout.sliderMax}
         step={1}
         value={[sliderValue]}
         disabled={disabled}
         onValueChange={(value) => {
-          const ordinalValue = value[0] ?? sliderValue;
-          const option = scale[ordinalValue - 1];
+          const scaleValue = value[0] ?? sliderValue;
+          const option = scale[scaleValue - layout.sliderMin];
           if (option) onChange(option.value);
         }}
         thumbLabel={label}
@@ -108,16 +150,26 @@ function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }
         thumbValueText={valueText}
         className="py-2"
       />
-      <div className="mt-2 grid grid-cols-10 text-center text-[11px] font-bold text-muted-foreground">
+      {showTaAnchors && layout.sliderMin === 0 && layout.sliderMax === 10 ? (
+        <div className="mt-1 grid grid-cols-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span>Cel mai puțin adevărat</span>
+          <span className="text-center">Mijloc</span>
+          <span className="text-right">Cel mai adevărat</span>
+        </div>
+      ) : null}
+      <div
+        className="mt-2 grid text-center text-[11px] font-bold text-muted-foreground"
+        style={{ gridTemplateColumns: `repeat(${layout.tickLabels.length}, minmax(0, 1fr))` }}
+      >
         {scale.map((option, index) => (
-          <span key={String(option.value)}>{index + 1}</span>
+          <span key={String(option.value)}>{layout.tickLabels[index]}</span>
         ))}
       </div>
       <div id={selectedDescriptionId} className="mt-3 min-h-10 rounded-lg border border-border bg-muted px-3 py-2 text-sm">
         {selectedOption ? (
           <>
             <p className="font-bold text-foreground">
-              Scor selectat: {sliderValue}/10
+              Scor selectat: {displayedValue}/{displayedMaximum}
               {selectedSemanticLabel ? ` · ${selectedSemanticLabel}` : ""}
             </p>
             {selectedOption.description ? (
@@ -125,7 +177,9 @@ function DiscreteScaleSlider({ label, scale, selectedValue, onChange, disabled }
             ) : null}
           </>
         ) : (
-          <p className="font-semibold text-muted-foreground">Alege un scor de la 1 la 10. Cursorul este poziționat neutru până selectezi.</p>
+          <p className="font-semibold text-muted-foreground">
+            Alege un scor de la {displayedMinimum} la {displayedMaximum}. Cursorul este poziționat neutru până selectezi.
+          </p>
         )}
       </div>
     </div>
@@ -756,7 +810,7 @@ type QuestionInputProps = {
 function LikertQuestion({ question, answers, disabled, onAnswerChange }: QuestionInputProps) {
   const key = answerKey(question);
 
-  if (isTenPointScale(question.scale)) {
+  if (discreteScaleLayout(question.scale)) {
     return (
       <DiscreteScaleSlider
         label={question.label}
@@ -865,12 +919,13 @@ function StatementSetQuestion({
             className="border-b border-border bg-surface px-4 py-4 last:border-b-0"
           >
             <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
-            {isTenPointScale(scale) ? (
+            {discreteScaleLayout(scale) ? (
               <DiscreteScaleSlider
                 label={statement.label}
                 scale={scale}
                 selectedValue={selectedValue}
                 disabled={disabled}
+                showTaAnchors={compactScale}
                 onChange={(value) => onAnswerChange(key, value)}
               />
             ) : compactScale ? (

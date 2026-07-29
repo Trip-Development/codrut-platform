@@ -1297,8 +1297,33 @@ def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
     if isinstance(explicit, (int, float)) and not isinstance(explicit, bool) and explicit > 0:
         return float(explicit)
 
+    schemas = (definition.schema, (definition.private_config or {}).get("schema"))
+    for schema in schemas:
+        if not isinstance(schema, dict):
+            continue
+        scoring = schema.get("scoring")
+        if not isinstance(scoring, dict):
+            continue
+        if scoring.get("method") == "average_statement_scores_by_section":
+            if scoring.get("score_unit") != "grade_1_to_5":
+                return 100.0
+            scale_max = scoring.get("scale_max")
+            if (
+                isinstance(scale_max, (int, float))
+                and not isinstance(scale_max, bool)
+                and scale_max > 0
+            ):
+                return float(scale_max)
+        normalize_to = scoring.get("normalize_to")
+        if (
+            isinstance(normalize_to, (int, float))
+            and not isinstance(normalize_to, bool)
+            and normalize_to > 0
+        ):
+            return float(normalize_to)
+
     numeric_values: list[float] = []
-    for schema in (definition.schema, (definition.private_config or {}).get("schema")):
+    for schema in schemas:
         if not isinstance(schema, dict):
             continue
         for section in schema.get("sections", []):
