@@ -1052,15 +1052,28 @@ class CompanyService:
         identity_service = IdentityService(self.repository.session)
         communications_repository = CommunicationsRepository(self.repository.session)
         project = (
-            await self.repository.get_project(company.id, project_id)
+            await self.repository.get_project(company.id, project_id, for_update=True)
             if project_id is not None
             else None
         )
+        if project_id is not None and project is None:
+            raise DomainError("Project not found.", code="project_not_found")
+        if project is not None and project.status == CompanyProjectStatus.archived:
+            raise DomainError(
+                "Restore the project before sending invitations.",
+                code="project_restore_required",
+            )
+        if project is not None and project.status == CompanyProjectStatus.completed:
+            raise DomainError(
+                "Completed projects cannot send invitations.",
+                code="project_completed",
+            )
         cycle = (
             await self._get_assessment_cycle(
                 company.id,
                 project_id,
                 assessment_cycle_id,
+                for_update=True,
             )
             if project_id is not None and assessment_cycle_id is not None
             else None
@@ -1082,8 +1095,13 @@ class CompanyService:
             for assignments in active_assignments_by_participant.values()
             for assignment in assignments
         }
+        project_was_draft = (
+            project is not None and project.status == CompanyProjectStatus.draft
+        )
         cycle_was_draft = cycle is not None and cycle.status == AssessmentCycleStatus.draft
         cycle_original_starts_at = cycle.starts_at if cycle is not None else None
+        if project_was_draft and active_assignment_ids:
+            project.status = CompanyProjectStatus.active
         if assessment_cycle_id is not None and active_assignment_ids:
             assert project_id is not None
             from codrut.modules.assignments.service import AssignmentService
@@ -1251,13 +1269,13 @@ class CompanyService:
             for result in results
             if result.delivery_mode == "secure_links" and result.invite_url is not None
         )
-        if (
-            cycle is not None
-            and cycle_was_draft
-            and not (emails_sent or emails_queued or links_generated)
-        ):
-            cycle.status = AssessmentCycleStatus.draft
-            cycle.starts_at = cycle_original_starts_at
+        delivery_succeeded = bool(emails_sent or emails_queued or links_generated)
+        if not delivery_succeeded:
+            if project is not None and project_was_draft:
+                project.status = CompanyProjectStatus.draft
+            if cycle is not None and cycle_was_draft:
+                cycle.status = AssessmentCycleStatus.draft
+                cycle.starts_at = cycle_original_starts_at
         return ParticipantInviteBatchResponse(
             results=results,
             total=len(results),
@@ -1583,14 +1601,17 @@ class CompanyService:
         company_id: UUID,
         project_id: UUID,
         assessment_cycle_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> AssessmentCycle | None:
-        return await self.repository.session.scalar(
-            select(AssessmentCycle).where(
-                AssessmentCycle.id == assessment_cycle_id,
-                AssessmentCycle.company_id == company_id,
-                AssessmentCycle.project_id == project_id,
-            )
+        statement = select(AssessmentCycle).where(
+            AssessmentCycle.id == assessment_cycle_id,
+            AssessmentCycle.company_id == company_id,
+            AssessmentCycle.project_id == project_id,
         )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self.repository.session.scalar(statement)
 
     async def create_access_code(
         self,

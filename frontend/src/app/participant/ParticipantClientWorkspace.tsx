@@ -464,7 +464,11 @@ function ReceivedFeedbackComparisonPanel({
       current: dimension.averageScore,
     });
   }
-  const scaleMax = Math.max(baseline?.scaleMax ?? 0, current?.scaleMax ?? 0, 5);
+  const scaleMax = Math.max(
+    baseline ? receivedFeedbackScaleMax(baseline) : 0,
+    current ? receivedFeedbackScaleMax(current) : 0,
+    5,
+  );
   return (
     <article className="border-t border-border pt-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -608,11 +612,7 @@ function ComparisonBar({ value, max, tone }: { value?: number; max: number; tone
 
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
   const visible = feedback.visible;
-  const observedMaximum = Math.max(
-    feedback.overallAverage ?? 0,
-    ...feedback.dimensions.map((dimension) => dimension.averageScore),
-  );
-  const scaleMax = feedback.scaleMax ?? (observedMaximum > 5 ? 100 : 5);
+  const scaleMax = receivedFeedbackScaleMax(feedback);
 
   return (
     <article className="border-t border-border pt-6">
@@ -655,6 +655,17 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
       ) : null}
     </article>
   );
+}
+
+function receivedFeedbackScaleMax(feedback: ParticipantReceivedFeedbackSummary): number {
+  const observedMaximum = Math.max(
+    feedback.overallAverage ?? 0,
+    ...feedback.dimensions.map((dimension) => dimension.averageScore),
+  );
+  if (observedMaximum > 5) {
+    return Math.max(100, feedback.scaleMax ?? 0);
+  }
+  return Math.max(5, feedback.scaleMax ?? 0, observedMaximum);
 }
 
 function PcmResultChip({ label, value }: { label: string; value?: string | null }) {

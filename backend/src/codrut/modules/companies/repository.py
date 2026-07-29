@@ -207,12 +207,17 @@ class CompanyRepository:
         self,
         company_id: UUID,
         project_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> CompanyProject | None:
-        result = await self.session.execute(
+        statement = (
             select(CompanyProject)
             .where(CompanyProject.company_id == company_id)
             .where(CompanyProject.id == project_id)
         )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
     async def get_project_by_name(
