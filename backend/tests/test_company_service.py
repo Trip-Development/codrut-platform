@@ -250,7 +250,10 @@ class FakeCompanyRepository:
         self,
         company_id: uuid.UUID,
         project_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> CompanyProject | None:
+        del for_update
         for project in self.projects:
             if project.company_id == company_id and project.id == project_id:
                 return project
@@ -3006,6 +3009,7 @@ async def test_cycle_scoped_invites_send_resend_and_statuses(
             )
 
             assert send_result.links_generated == 1
+            assert project.status == CompanyProjectStatus.active
             assert active_cycle.status == AssessmentCycleStatus.active
             assert active_assignment.status == AssignmentStatus.invited
             invite_rows = await session.execute(
@@ -3048,6 +3052,23 @@ async def test_cycle_scoped_invites_send_resend_and_statuses(
             assert baseline_status[0].has_active_secure_link is False
             assert active_status[0].email_send_count == 1
             assert active_status[0].has_active_secure_link is True
+
+            project.status = CompanyProjectStatus.completed
+            with pytest.raises(DomainError) as completed_error:
+                await service.send_participant_invites(
+                    trainer.id,
+                    company.id,
+                    ParticipantInviteBatchRequest(
+                        project_id=project.id,
+                        assessment_cycle_id=active_cycle.id,
+                        mode="secure_links",
+                        target_mode="selected",
+                        participant_ids=[participant.id],
+                        force_rotate=True,
+                    ),
+                )
+            assert completed_error.value.code == "project_completed"
+            project.status = CompanyProjectStatus.active
 
             active_cycle.status = AssessmentCycleStatus.closed
             active_cycle.closed_at = datetime.now(UTC)
@@ -3151,6 +3172,7 @@ async def test_cycle_stays_draft_when_every_invitation_fails(
             )
 
             assert result.emails_failed == 1
+            assert project.status == CompanyProjectStatus.draft
             assert cycle.status == AssessmentCycleStatus.draft
             await session.rollback()
     finally:
