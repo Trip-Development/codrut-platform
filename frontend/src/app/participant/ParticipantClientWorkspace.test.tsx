@@ -352,6 +352,12 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("92")).toBeDefined();
     expect(screen.getByText("68")).toBeDefined();
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemax")).toBe("100");
+    expect(
+      screen.getByRole("meter", { name: "Scor Claritate" }).firstElementChild?.getAttribute("style"),
+    ).toContain("width: 92%");
+    expect(
+      screen.getByRole("meter", { name: "Scor Sprijin" }).firstElementChild?.getAttribute("style"),
+    ).toContain("width: 68%");
     expect(screen.queryByText(/Reviewer One/i)).toBeNull();
     expect(screen.queryByText(/reviewer-one@example\.com/i)).toBeNull();
     expect(screen.queryByText("Nu există scoruri calculate încă")).toBeNull();
@@ -405,6 +411,36 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("4.5")).toBeDefined();
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemax")).toBe("5");
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuenow")).toBe("4.5");
+    expect(
+      screen.getByRole("meter", { name: "Scor Claritate" }).firstElementChild?.getAttribute("style"),
+    ).toContain("width: 90%");
+  });
+
+  it("defends against a stale raw scale when feedback scores are percentages", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase={null}
+        pcmPhase={null}
+        results={[]}
+        receivedFeedback={{
+          completedCount: 2,
+          minimumCompleted: 2,
+          scaleMax: 5,
+          visible: true,
+          overallAverage: 44.4,
+          dimensions: [
+            { id: "modesty", label: "Modestie", averageScore: 72.2, completedCount: 2 },
+            { id: "openness", label: "Deschis către lume", averageScore: 16.6, completedCount: 2 },
+          ],
+        }}
+      />,
+    );
+
+    const modesty = screen.getByRole("meter", { name: "Scor Modestie" });
+    const openness = screen.getByRole("meter", { name: "Scor Deschis către lume" });
+    expect(modesty.getAttribute("aria-valuemax")).toBe("100");
+    expect(modesty.firstElementChild?.getAttribute("style")).toContain("width: 72.2%");
+    expect(openness.firstElementChild?.getAttribute("style")).toContain("width: 16.6%");
   });
 
   it("treats the backend visibility decision as authoritative", () => {

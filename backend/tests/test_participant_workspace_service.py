@@ -31,6 +31,7 @@ from codrut.modules.forms.models import (
 from codrut.modules.identity.models import User, UserRole
 from codrut.modules.participants.service import (
     ParticipantWorkspaceService,
+    _definition_scale_max,
     _definition_score_labels,
     _required_feedback_count,
 )
@@ -51,7 +52,11 @@ def _feedback_definition() -> QuestionnaireDefinition:
         schema={"schema_version": "questionnaire.v1", "sections": []},
         private_config={
             "schema": {
-                "scoring": {"method": "average_statement_scores_by_section"},
+                "scoring": {
+                    "method": "average_statement_scores_by_section",
+                    "scale_max": 5,
+                    "score_unit": "grade_1_to_5",
+                },
                 "sections": [
                     {
                         "id": "feedback",
@@ -113,6 +118,18 @@ def test_received_feedback_threshold_requires_two_or_three_reviewers() -> None:
         )
         == 3
     )
+
+
+def test_received_feedback_scale_uses_the_scoring_output_unit() -> None:
+    definition = _feedback_definition()
+    assert definition.private_config is not None
+    scoring = definition.private_config["schema"]["scoring"]
+    scoring["score_unit"] = "percent"
+
+    assert _definition_scale_max(definition) == 100.0
+
+    scoring["score_unit"] = "grade_1_to_5"
+    assert _definition_scale_max(definition) == 5.0
 
 
 def test_result_labels_prefer_participant_schema_copy() -> None:
