@@ -454,6 +454,60 @@ describe("QuestionnaireRunner", () => {
     expect(screen.queryByRole("radiogroup", { name: "Lucrez sub presiunea timpului" })).toBeNull();
   });
 
+  it("renders the original 0-10 TA scale as a centered snapping slider", async () => {
+    vi.useFakeTimers();
+    const distressDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "distress_drivers",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          id: "drivers",
+          title: "Driveri",
+          questions: [{
+            id: "driver_set",
+            code: "D1",
+            type: "statement_score_set",
+            label: "Ritmul de lucru",
+            required: true,
+            scale: Array.from({ length: 11 }, (_, value) => ({
+              value,
+              label: String(value),
+            })),
+            statements: [
+              { id: "driver_a", code: "D1-A", label: "Lucrez sub presiunea timpului" },
+            ],
+          }],
+        }],
+      },
+    };
+
+    render(<QuestionnaireRunner definition={distressDefinition} assignmentId="drivers-assignment" />);
+
+    const slider = screen.getByRole("slider", { name: "Lucrez sub presiunea timpului" });
+    expect(slider.getAttribute("aria-valuemin")).toBe("0");
+    expect(slider.getAttribute("aria-valuemax")).toBe("10");
+    expect(slider.getAttribute("aria-valuenow")).toBe("5");
+    expect(screen.queryByRole("radiogroup", { name: "Lucrez sub presiunea timpului" })).toBeNull();
+    expect(screen.getByText("Cel mai puțin adevărat")).toBeTruthy();
+    expect(screen.getByText("Mijloc")).toBeTruthy();
+    expect(screen.getByText("Cel mai adevărat")).toBeTruthy();
+
+    const responseGroup = slider.closest("[data-testid='question-response-group']");
+    expect(responseGroup?.className).not.toContain("overflow-x-auto");
+
+    slider.focus();
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+
+    expect(slider.getAttribute("aria-valuenow")).toBe("6");
+    expect(screen.getByText("Scor selectat: 6/10")).toBeTruthy();
+
+    await vi.advanceTimersByTimeAsync(450);
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith("drivers-assignment", {
+      "driver_set:driver_a": 6,
+    });
+  });
+
   it("shows 1-10 slider ticks while preserving a stored 0-9 distress scale", async () => {
     vi.useFakeTimers();
     const distressDefinition: QuestionnaireDefinition = {
