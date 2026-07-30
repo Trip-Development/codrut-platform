@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - dev
-      - prod
     types:
       - opened
       - edited
@@ -26,9 +25,9 @@ jobs:
       - name: Checkout policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Test pull request policy
+      - name: Test repository policy scripts
         working-directory: .github/scripts
-        run: python3 -m unittest test_validate_pr_metadata.py
+        run: python3 -m unittest discover -p 'test_*.py'
 
       - name: Validate title and work tracking reference
         env:
@@ -39,21 +38,6 @@ jobs:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: python3 .github/scripts/validate_pr_metadata.py
 
-  release-source:
-    name: policy / release-source
-    if: github.base_ref == 'prod'
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - name: Require release or hotfix source
-        env:
-          SOURCE_BRANCH: ${{ github.head_ref }}
-        run: |
-          if [[ "${SOURCE_BRANCH}" != "dev" && "${SOURCE_BRANCH}" != hotfix/* ]]; then
-            echo "Production PRs must promote dev or an emergency hotfix/* branch; received ${SOURCE_BRANCH}."
-            exit 1
-          fi
-
   required:
     name: policy / required
     runs-on: ubuntu-latest
@@ -61,22 +45,15 @@ jobs:
     if: always()
     needs:
       - pr-hygiene
-      - release-source
     steps:
       - name: Verify required policy checks
         shell: bash
         env:
           PR_HYGIENE_RESULT: ${{ needs['pr-hygiene'].result }}
-          RELEASE_SOURCE_RESULT: ${{ needs['release-source'].result }}
         run: |
           set -euo pipefail
 
           if [[ "${PR_HYGIENE_RESULT}" != "success" ]]; then
             echo "PR_HYGIENE_RESULT=${PR_HYGIENE_RESULT}; expected success."
-            exit 1
-          fi
-
-          if [[ "${RELEASE_SOURCE_RESULT}" != "success" && "${RELEASE_SOURCE_RESULT}" != "skipped" ]]; then
-            echo "RELEASE_SOURCE_RESULT=${RELEASE_SOURCE_RESULT}; expected success or skipped."
             exit 1
           fi

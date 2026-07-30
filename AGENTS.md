@@ -52,12 +52,14 @@ user explicitly asks for delegation or parallel agent work.
 - Deliver changes to `dev` through a pull request.
 - Feature PRs into `dev` use squash merge. Promotions from `dev` to `prod` use
   merge commits.
-- After a production merge, synchronize its merge-commit ancestry back into
-  `dev` through a temporary branch created from current `origin/dev`: merge
-  `origin/prod` into that branch, verify the merge tree still matches `dev`
-  before any intentional edits, and normal-merge its protected PR into `dev`.
-  Do not use a direct `prod` to `dev` PR or GitHub's update-branch operation;
-  strict up-to-date and code-scanning rules make those heads non-mergeable.
+- Do not back-merge routine production merge commits into `dev`. Production
+  protection intentionally uses loose required status checks so the next
+  `dev` promotion does not need ancestry synchronization. The release gate
+  must prove that the exact `dev` SHA has a successful immutable candidate and
+  that merging it produces exactly the `dev` tree.
+- `prod` accepts normal releases only from `dev`. Route urgent fixes through a
+  focused PR into `dev` and promote them normally; a production-only hotfix
+  would reintroduce drift and require an explicit back-merge.
 - Keep iterative PRs in draft while running targeted devcontainer checks. Mark
   a PR ready only after its diff and focused proof are ready for the full
   GitHub gate.
@@ -73,9 +75,9 @@ user explicitly asks for delegation or parallel agent work.
   major upgrades as planned issues with compatibility and rollback evidence;
   triage security alerts immediately.
 - GitHub CodeQL default setup scans Actions, JavaScript/TypeScript, and Python.
-  A native code-scanning ruleset protects `dev` and `prod`; keep classic branch
-  protection tied to the stable aggregate CI, policy, security, and release
-  checks rather than dynamic language-specific check names.
+  A native code-scanning ruleset protects `dev`; `prod` reuses the exact
+  validated `dev` candidate. Keep classic branch protection tied to the stable
+  aggregate checks rather than dynamic language-specific check names.
 - Do not merge, deploy, weaken branch protection, or delete active work unless
   the user has authorized that action.
 - Before deleting a squash-merged branch, verify its PR state and exact head or

@@ -13,7 +13,6 @@ on:
 permissions:
   actions: read
   contents: read
-  packages: write
 
 concurrency:
   group: release-gate-${{ github.event.pull_request.number }}
@@ -27,23 +26,22 @@ jobs:
     with:
       release_sha: ${{ github.event.pull_request.head.sha }}
 
-  prod-compose:
-    name: release / prod-compose-config
-    uses: ./.github/workflows/_compose-validate.yml
-    with:
-      mode: prod
-      backend_image: ghcr.io/example/codrut-platform-backend:sha-${{ github.event.pull_request.head.sha }}
-      frontend_image: ghcr.io/example/codrut-platform-frontend:sha-${{ github.event.pull_request.head.sha }}
+  tree:
+    name: release / exact-dev-tree
+    if: github.head_ref == 'dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
-  hotfix-images:
-    name: release / hotfix-image-build
-    if: startsWith(github.head_ref, 'hotfix/')
-    uses: ./.github/workflows/_image-build.yml
-    with:
-      push: false
-      tag: release-gate-${{ github.event.pull_request.head.sha }}
-      ref: ${{ github.event.pull_request.head.sha }}
-      cache_scope: hotfix-pr
+      - name: Require the release merge to match dev exactly
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/verify_release_tree.py "${BASE_SHA}" "${HEAD_SHA}"
 
   required:
     name: release / required
@@ -52,33 +50,28 @@ jobs:
     if: always()
     needs:
       - candidate
-      - prod-compose
-      - hotfix-images
+      - tree
     steps:
       - name: Verify release gate
         shell: bash
         env:
           SOURCE_BRANCH: ${{ github.head_ref }}
           CANDIDATE_RESULT: ${{ needs.candidate.result }}
-          PROD_COMPOSE_RESULT: ${{ needs.prod-compose.result }}
-          HOTFIX_IMAGES_RESULT: ${{ needs.hotfix-images.result }}
+          TREE_RESULT: ${{ needs.tree.result }}
         run: |
           set -euo pipefail
-          [[ "${PROD_COMPOSE_RESULT}" == "success" ]] || {
-            echo "PROD_COMPOSE_RESULT=${PROD_COMPOSE_RESULT}; expected success."
+
+          [[ "${SOURCE_BRANCH}" == "dev" ]] || {
+            echo "Production releases must promote dev; received ${SOURCE_BRANCH}."
             exit 1
           }
-          if [[ "${SOURCE_BRANCH}" == "dev" ]]; then
-            [[ "${CANDIDATE_RESULT}" == "success" && "${HOTFIX_IMAGES_RESULT}" == "skipped" ]] || {
-              echo "Dev promotion requires its validated candidate and no rebuild."
-              exit 1
-            }
-          elif [[ "${SOURCE_BRANCH}" == hotfix/* ]]; then
-            [[ "${CANDIDATE_RESULT}" == "skipped" && "${HOTFIX_IMAGES_RESULT}" == "success" ]] || {
-              echo "Hotfix promotion requires a direct image build."
-              exit 1
-            }
-          else
-            echo "Unsupported release source ${SOURCE_BRANCH}."
+
+          [[ "${CANDIDATE_RESULT}" == "success" ]] || {
+            echo "CANDIDATE_RESULT=${CANDIDATE_RESULT}; expected success."
             exit 1
-          fi
+          }
+
+          [[ "${TREE_RESULT}" == "success" ]] || {
+            echo "TREE_RESULT=${TREE_RESULT}; expected success."
+            exit 1
+          }

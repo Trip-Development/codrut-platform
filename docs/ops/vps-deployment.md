@@ -21,10 +21,16 @@ Production releases follow the repo branch policy:
 4. Merge the `dev -> prod` PR. The `VPS Deployment` workflow deploys only from
    `refs/heads/prod`.
 
-Emergency production fixes may use a `hotfix/*` branch directly into `prod`
-when waiting for a full `dev` promotion would leave production broken. A merged
-hotfix must be back-merged into `dev` immediately after the production deploy
-passes, so `dev` remains the source of the next normal release.
+Routine production merge commits are not back-merged into `dev`. The `prod`
+branch uses loose required status checks, while `release / required` proves
+that the exact `dev` head has a successful immutable candidate and that the
+proposed merge tree is identical to the `dev` tree. This keeps both long-lived
+branches without ancestry-sync PRs.
+
+Route emergency fixes through a focused PR into `dev`, then promote `dev`
+normally. Direct `hotfix/* -> prod` releases are intentionally rejected because
+production-only content would require a back-merge and make the next release
+ambiguous.
 
 The deploy workflow also allows `workflow_dispatch`, but the run must execute
 from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
@@ -32,7 +38,7 @@ workflow from another branch fails before images are built.
 
 Treat the `prod` GitHub Environment as the final approval and secret boundary.
 Use the acceptance checklist before opening the release PR; do not use manual
-dispatch to promote unmerged feature refs or non-hotfix branches. The staging
+dispatch to promote unmerged feature refs or branches other than `dev`. The staging
 workflow exists but is optional/deferred for the current client-ready push unless
 `ENABLE_STAGING_DEPLOY=true` is intentionally enabled.
 
@@ -91,27 +97,27 @@ For PRs into `dev`, require:
 
 For PRs into `prod`, require:
 
-- `app-ci / required`
-- `policy / required`
-- `security / required`
 - `release / required`
 
-`app-ci / required` runs backend, frontend, and Compose checks for PRs into
-`dev`. For normal `dev -> prod` promotion PRs it skips those duplicated dev
-checks and requires the Playwright E2E job instead. For `hotfix/* -> prod`, it
-runs backend, frontend, Compose, and E2E checks because the change bypasses
-`dev`. `release / required` then validates the production Compose config and
-runtime image builds. `policy / required` allows production PRs only from `dev`
-or `hotfix/*`, and skips that source-branch check on non-production PRs.
+Use strict required status checks for `dev` and loose required status checks
+for `prod`. `app-ci / required`, `policy / required`, `security / required`,
+and native CodeQL run only on feature PRs into `dev`.
+
+After a change lands on `dev`, `Dev Candidate` builds SHA-tagged images once,
+runs representative Playwright E2E against those images, and validates the
+production Compose configuration. The production PR does not rerun those
+checks or rebuild images. `release / required` accepts only `dev`, locates the
+successful candidate for the exact proposed SHA, and verifies that the
+`prod + dev` merge tree equals the `dev` tree.
 
 ## Images
 
 The deployment workflows separate build and deploy work:
 
-- `_image-build.yml` builds backend/frontend images with BuildKit cache and can
-  either build-only for release gates or push SHA-tagged images for deploys.
+- `_image-build.yml` builds backend/frontend images with BuildKit cache.
+  `Dev Candidate` uses it to push the SHA-tagged release candidate once.
 - `_deploy-vps.yml` runs behind the selected GitHub Environment, consumes the exact
-  image refs from `build-images`, writes the VPS `.env`, pulls those images,
+  candidate image refs, writes the VPS `.env`, pulls those images,
   migrates, recreates app services, asserts running image refs, and checks
   health.
 - `deploy-vps.yml` is the production caller. `deploy-staging.yml` is the staging
@@ -127,8 +133,9 @@ ghcr.io/<owner>/<repo>-frontend:sha-<sha>
 The VPS `.env` stores those SHA image refs in `BACKEND_IMAGE` and
 `FRONTEND_IMAGE`. It does not deploy `latest`.
 
-Production manual dispatch validates `refs/heads/prod` before any image build or
-push occurs. The reusable deploy workflow repeats that guard before SSH deploy.
+Production manual dispatch validates `refs/heads/prod` before resolving the
+existing candidate images. The reusable deploy workflow repeats that guard
+before SSH deploy.
 
 Required GitHub secrets for the `VPS Deployment` workflow:
 
@@ -215,8 +222,9 @@ Before using real participant data, verify:
 
 ## Deployment Checks
 
-The `build-images` job validates `compose.yaml` plus `compose.prod.yaml` before
-building images. The `deploy-vps` job copies both Compose files to
+The `Dev Candidate` workflow validates `compose.yaml` plus `compose.prod.yaml`
+before an image can be promoted. The production workflow refuses to rebuild a
+missing candidate. The `deploy-vps` job copies both Compose files to
 `/opt/codrut-platform`, writes the production `.env`, validates Compose again on
 the VPS, pulls the SHA-tagged images, runs migrations, and force-recreates only
 the app services
