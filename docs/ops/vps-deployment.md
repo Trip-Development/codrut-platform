@@ -147,6 +147,7 @@ Required GitHub secrets for the `VPS Deployment` workflow:
 - `CODRUT_SESSION_SECRET`
 - `CODRUT_TASK_LINK_SECRET`
 - `CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET`
+- `CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET`
 - `CODRUT_CORS_ORIGINS`
 - `CODRUT_PUBLIC_APP_URL`
 - `CODRUT_EMAIL_PROVIDER`
@@ -165,6 +166,14 @@ Optional environment secrets:
   instead of waiting indefinitely for a conflicting database lock.
 - `CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS` defaults to `900000` and bounds the
   total execution time of any migration statement.
+- `CODRUT_CAMPAIGN_RECIPIENT_ARCHIVE_RETENTION_DAYS` defaults to `30`.
+- `CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS` defaults to `7`.
+- `CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` stays `false` for the expand
+  release and becomes `true` only after the contract migration removes the
+  rollback-only full-email suppression column.
+- `CODRUT_CAMPAIGN_DELIVERY_TOMBSTONE_RETENTION_DAYS` defaults to `365` and
+  bounds late-provider lookup receipts independently of do-not-contact review.
+- `CODRUT_EMAIL_SUPPRESSION_REVIEW_DAYS` defaults to `365`.
 
 For the current single-host Compose deployment, the workflow derives
 `CODRUT_DATABASE_URL` from the `POSTGRES_*` secrets and writes the database into a
@@ -182,10 +191,19 @@ Set `CODRUT_PUBLIC_APP_URL` to the final HTTPS origin, for example:
 https://app.example.com
 ```
 
-The session, task-link, campaign-asset, and Brevo webhook secrets must each
-contain at least 32 characters and must be different. Production accepts only
-the `brevo` email provider and fails startup when the Brevo API key or webhook
-bearer token is missing.
+The session, task-link, campaign-asset, suppression-fingerprint, and Brevo
+webhook secrets must each contain at least 32 characters and must be different.
+Generate the suppression-fingerprint secret once with a cryptographically
+secure generator, for example `openssl rand -hex 32`, store it in the production
+secret manager, and back it up with the other recovery credentials. It must be
+present before the contact-archive migration or application rollout. Do not
+replace it during a routine deploy: changing it makes existing do-not-contact
+fingerprints unreachable. Follow the controlled procedure in
+[Contact data retention and suppression](contact-data-retention.md) if
+compromise requires rotation.
+
+Production accepts only the `brevo` email provider and fails startup when the
+Brevo API key or webhook bearer token is missing.
 
 Configure the Brevo outbound webhook after the release is reachable over HTTPS:
 
@@ -328,3 +346,9 @@ Rollback is manual and image-ref based:
 
 Rollback to an older application image does not undo database migrations. Check
 the migration notes before rolling back across schema changes.
+
+For the contact-archive expand release, archived active contacts are persisted
+as `suppressed` with their prior status in the additive schema. The previous
+image may display them as inactive, but it cannot select or send to them.
+Avoid contact catalog mutations during that temporary rollback; return to the
+fingerprint-aware image before resuming campaign operations.

@@ -1098,6 +1098,8 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
             session.add(
                 CampaignRecipientEvent(
                     id=uuid.uuid4(),
+                    owner_id=trainer.id,
+                    campaign_id=completed_campaign.id,
                     recipient_id=recipient.id,
                     event_type=event_type,
                     variant_key="preview-a",

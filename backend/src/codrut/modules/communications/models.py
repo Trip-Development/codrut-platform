@@ -79,6 +79,12 @@ class EmailSend(TimestampMixin, Base):
             unique=True,
         ),
         Index(
+            "uq_email_sends_provider_message_id",
+            "provider_message_id",
+            unique=True,
+            postgresql_where=sa_text("provider_message_id is not null"),
+        ),
+        Index(
             "ix_email_sends_outbox_due",
             "status",
             "next_attempt_at",
@@ -192,6 +198,12 @@ class EmailSuppression(TimestampMixin, Base):
             sa_text("lower(email)"),
             unique=True,
         ),
+        Index(
+            "uq_email_suppressions_owner_fingerprint",
+            "owner_id",
+            "email_fingerprint",
+            unique=True,
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -200,11 +212,179 @@ class EmailSuppression(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # Kept only through the expand/contract rollback window. The application
+    # never exposes it and the follow-up contract migration removes it after
+    # the fingerprint-aware release becomes the rollback image.
+    legacy_email: Mapped[str] = mapped_column("email", String(320), nullable=False)
+    email_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str] = mapped_column(String(64), nullable=False)
     source_email_send_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("email_sends.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    review_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class EmailSuppressionReview(TimestampMixin, Base):
+    __tablename__ = "email_suppression_reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    suppression_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("email_suppressions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    tombstone_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("campaign_contact_tombstones.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(64), nullable=False)
+    basis: Mapped[str] = mapped_column(String(255), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    next_review_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class CampaignContactAggregate(TimestampMixin, Base):
+    __tablename__ = "campaign_contact_aggregates"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "scope_key",
+            "metric",
+            name="uq_campaign_contact_aggregates_owner_scope_metric",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scope_key: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        nullable=True,
+        index=True,
+    )
+    metric: Mapped[str] = mapped_column(String(80), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class CampaignContactTombstone(TimestampMixin, Base):
+    """Pseudonymous lookup retained after direct contact identifiers are erased."""
+
+    __tablename__ = "campaign_contact_tombstones"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "former_recipient_id",
+            name="uq_campaign_contact_tombstones_owner_former_recipient",
+        ),
+        Index(
+            "ix_campaign_contact_tombstones_owner_email_fingerprint",
+            "owner_id",
+            "email_fingerprint",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    former_recipient_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    email_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    do_not_contact_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    suppressed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    review_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
+    )
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class CampaignDeliveryTombstone(Base):
+    """Keyed provider-message mapping for late delivery events after erasure."""
+
+    __tablename__ = "campaign_delivery_tombstones"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_message_fingerprint",
+            name="uq_campaign_delivery_tombstones_provider_message_fingerprint",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    contact_tombstone_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaign_contact_tombstones.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    provider_message_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
+    )
+
+
+class CampaignDeliveryEventTombstone(Base):
+    """Minimal keyed receipt used to deduplicate late provider webhooks."""
+
+    __tablename__ = "campaign_delivery_event_tombstones"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_event_fingerprint",
+            name="uq_delivery_event_tombstone_provider_fingerprint",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    delivery_tombstone_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaign_delivery_tombstones.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider_event_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
     )
 
 
@@ -230,6 +410,20 @@ class CampaignRecipient(TimestampMixin, Base):
         nullable=False,
         default=CampaignRecipientStatus.active,
     )
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    purge_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    status_before_archive: Mapped[CampaignRecipientStatus | None] = mapped_column(
+        Enum(CampaignRecipientStatus),
+        nullable=True,
+    )
     __table_args__ = (
         Index(
             "uq_campaign_recipients_owner_normalized_email",
@@ -237,6 +431,12 @@ class CampaignRecipient(TimestampMixin, Base):
             func.lower(email),
             unique=True,
             postgresql_where=email.is_not(None),
+        ),
+        CheckConstraint(
+            "(archived_at is null and purge_after is null) or "
+            "(archived_at is not null and purge_after is not null "
+            "and purge_after >= archived_at)",
+            name="campaign_recipient_archive_window",
         ),
     )
 
@@ -269,9 +469,22 @@ class CampaignRecipientEvent(TimestampMixin, Base):
     __tablename__ = "campaign_recipient_events"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    recipient_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("campaign_recipients.id", ondelete="CASCADE"),
-        nullable=False,
+    # Nullable only for the expand/contract rollback window. Migration 0052
+    # backfills every existing row; the follow-up contract migration makes
+    # this non-null once the expand release is the rollback image.
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    recipient_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("campaign_recipients.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

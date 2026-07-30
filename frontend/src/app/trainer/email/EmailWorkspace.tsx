@@ -9,14 +9,16 @@ import {
   deleteEmailTemplateOnServer,
   deleteCampaignOnServer,
   deleteCampaignAssetOnServer,
-  deleteCampaignRecipientOnServer,
+  archiveCampaignRecipientOnServer,
   bulkCreateCampaignRecipientsOnServer,
   buildVideoCampaignCreatePayload,
   createCampaignOnServer,
+  getEmailOpsSummary,
   htmlToPlainText,
   listCampaignRecipientMembershipOnServer,
   listCampaignsOnServer,
   replaceCampaignRecipientMembershipOnServer,
+  restoreCampaignRecipientOnServer,
   sendCampaignOnServer,
   updateCampaignOnServer,
   updateCampaignRecipientOnServer,
@@ -37,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { useUrlState } from "@/hooks/use-url-state";
 import { readSpreadsheetFile, spreadsheetRowsToObjects } from "@/utils/spreadsheet-import";
 import { EmailWorkspaceNavigation, type EmailWorkspaceView } from "./EmailWorkspaceNavigation";
+import { ArchivedContactsWorkspaceView } from "./ArchivedContactsWorkspaceView";
 import { CampaignEditorModal } from "./CampaignEditorModal";
 import { CampaignsWorkspaceView } from "./CampaignsWorkspaceView";
 import { ContactImportModal, ManualContactModal } from "./ContactImportModals";
@@ -92,7 +95,7 @@ import {
 } from "./campaign-validation";
 
 type TabKey = "campaigns" | "templates";
-type CampaignViewKey = "contacts" | "campaigns";
+type CampaignViewKey = "contacts" | "campaigns" | "archive";
 
 const CAMPAIGN_FIELD_ELEMENT_IDS: Array<[CampaignFieldName, string]> = [
   ["name", "campaign-name"],
@@ -115,7 +118,7 @@ function normalizeEmailTab(value: string | null): TabKey {
 }
 
 function normalizeCampaignView(value: string | null): CampaignViewKey {
-  return value === "contacts" ? "contacts" : "campaigns";
+  return value === "contacts" || value === "archive" ? value : "campaigns";
 }
 
 function normalizeCampaignContactTypeFilter(value: string | null): CampaignContactTypeFilter {
@@ -147,6 +150,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const campaignMembershipSavingRef = useRef<string | null>(null);
   const campaignSendingRef = useRef<string | null>(null);
   const campaignSendIdempotencyKeysRef = useRef(new Map<string, string>());
+  const workspaceRefreshInFlightRef = useRef<Promise<void> | null>(null);
+  const workspaceRefreshQueuedRef = useRef<Promise<void> | null>(null);
+  const rapidRefreshUntilRef = useRef(0);
   const campaignDeletingRef = useRef<string | null>(null);
   const contactSavingRef = useRef<string | null>(null);
   const contactDeletingRef = useRef<string | null>(null);
@@ -177,11 +183,15 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
   }, [get, searchKey, setParams]);
 
-  const refreshSummary = async () => {
-    const { getEmailOpsSummary } = await import("@/api/email");
-    const fresh = await getEmailOpsSummary();
+  const refreshSummary = useCallback(async () => {
+    const fresh = await getEmailOpsSummary({ catalogScope: "active" });
     setSummary(fresh);
-  };
+  }, []);
+  const [archivedCampaignRecipients, setArchivedCampaignRecipients] = useState<CampaignRecipientRow[]>([]);
+  const refreshArchivedRecipients = useCallback(async () => {
+    const archivedSummary = await getEmailOpsSummary({ catalogScope: "archived" });
+    setArchivedCampaignRecipients(archivedSummary.campaign.recipients);
+  }, []);
 
   // Template Manager States
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -250,6 +260,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [selectedCampaignRecipientIds, setSelectedCampaignRecipientIds] = useState<string[]>([]);
   const [showInactiveCampaignContacts, setShowInactiveCampaignContacts] = useState(false);
   const [campaignContactSearch, setCampaignContactSearch] = useState("");
+  const [archiveContactSearch, setArchiveContactSearch] = useState("");
   const [campaignContactTypeFilter, setCampaignContactTypeFilterState] = useState<CampaignContactTypeFilter>(
     normalizeCampaignContactTypeFilter(get("contactType")),
   );
@@ -258,6 +269,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
   const [contactDrafts, setContactDrafts] = useState<Record<string, CampaignContactDraft>>({});
   const [savingContactId, setSavingContactId] = useState<string | null>(null);
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
+  const [archiveContactAction, setArchiveContactAction] = useState<{
+    recipientId: string;
+    kind: "restore";
+  } | null>(null);
+  const [rapidRefreshVersion, setRapidRefreshVersion] = useState(0);
   const [emailNoticeMessage, setEmailNoticeMessage] = useState<string | null>(null);
   const [emailConfirmDialog, setEmailConfirmDialog] = useState<EmailConfirmDialogState | null>(null);
 
@@ -275,7 +291,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     setParams(
       {
         tab: null,
-        view: view === "contacts" ? "contacts" : null,
+        view: view === "campaigns" ? null : view,
         modal: null,
         campaignId: null,
       },
@@ -367,6 +383,15 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       showInactiveCampaignContacts,
       sortedCampaignRecipients,
     ],
+  );
+  const visibleArchivedCampaignContacts = useMemo(
+    () =>
+      [...archivedCampaignRecipients]
+        .sort((first, second) =>
+          campaignRecipientSortKey(first).localeCompare(campaignRecipientSortKey(second), "ro-RO"),
+        )
+        .filter((recipient) => campaignRecipientMatchesSearch(recipient, archiveContactSearch)),
+    [archiveContactSearch, archivedCampaignRecipients],
   );
   const selectableCampaignRecipientIdSet = useMemo(
     () =>
@@ -572,7 +597,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       setManualEmail("");
       setManualName("");
       setManualCompany("");
-      await refreshSummary();
+      await refreshWorkspace();
     } catch (error) {
       setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi adăugat.");
     } finally {
@@ -659,11 +684,11 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         ? `${createdCount} noi, ${updatedCount} actualizate`
         : `${savedCount} salvate`;
       setCampaignContactMessage(
-        `S-au importat ${savedCount} contacte (${metricCopy}): ${activeUniqueDraftCount} active, ${uniqueDrafts.length - activeUniqueDraftCount} inactive.${duplicateEmailCount > 0 ? ` ${duplicateEmailCount} duplicate cu același email au fost consolidate folosind ultima apariție.` : ""}`,
+        `S-au importat ${savedCount} contacte (${metricCopy}): ${activeUniqueDraftCount} active, ${uniqueDrafts.length - activeUniqueDraftCount} cu trimiterea oprită.${duplicateEmailCount > 0 ? ` ${duplicateEmailCount} duplicate cu același email au fost consolidate folosind ultima apariție.` : ""}`,
       );
       setImportDrafts([]);
       setImportSheetName(null);
-      await refreshSummary();
+      await refreshWorkspace();
     } catch (error) {
       setCampaignContactMessage(error instanceof Error ? error.message : "Contactele nu au putut fi importate.");
     } finally {
@@ -672,8 +697,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     }
   };
 
-  const loadCampaigns = useCallback(async () => {
-    setIsLoadingCampaigns(true);
+  const loadCampaigns = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setIsLoadingCampaigns(true);
     try {
       const nextCampaigns = await listCampaignsOnServer();
       setCampaigns(nextCampaigns);
@@ -695,12 +720,23 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       const membershipEntries = membershipResults
         .filter((result): result is PromiseFulfilledResult<readonly [string, string[], Record<string, CampaignDeliveryState>]> => result.status === "fulfilled")
         .map((result) => result.value);
-      setCampaignMemberships(Object.fromEntries(
-        membershipEntries.map(([campaignId, recipientIds]) => [campaignId, recipientIds]),
-      ));
-      setCampaignMembershipDeliveries(Object.fromEntries(
-        membershipEntries.map(([campaignId, , deliveries]) => [campaignId, deliveries]),
-      ));
+      const membershipBeingSaved = campaignMembershipSavingRef.current;
+      setCampaignMemberships((currentMemberships) => ({
+        ...Object.fromEntries(
+          membershipEntries.map(([campaignId, recipientIds]) => [campaignId, recipientIds]),
+        ),
+        ...(membershipBeingSaved && currentMemberships[membershipBeingSaved]
+          ? { [membershipBeingSaved]: currentMemberships[membershipBeingSaved] }
+          : {}),
+      }));
+      setCampaignMembershipDeliveries((currentDeliveries) => ({
+        ...Object.fromEntries(
+          membershipEntries.map(([campaignId, , deliveries]) => [campaignId, deliveries]),
+        ),
+        ...(membershipBeingSaved && currentDeliveries[membershipBeingSaved]
+          ? { [membershipBeingSaved]: currentDeliveries[membershipBeingSaved] }
+          : {}),
+      }));
       const failedCount = membershipResults.length - membershipEntries.length;
       if (failedCount > 0) {
         setCampaignMessage(`${failedCount} liste de destinatari nu au putut fi încărcate. Reîncarcă pagina înainte de trimitere.`);
@@ -708,13 +744,80 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
     } catch (error) {
       setCampaignMessage(error instanceof Error ? error.message : "Campaniile nu au putut fi încărcate.");
     } finally {
-      setIsLoadingCampaigns(false);
+      if (!silent) setIsLoadingCampaigns(false);
     }
   }, []);
 
   useEffect(() => {
-    loadCampaigns();
-  }, [loadCampaigns]);
+    void loadCampaigns();
+    void refreshArchivedRecipients();
+  }, [loadCampaigns, refreshArchivedRecipients]);
+
+  const refreshWorkspace = useCallback((): Promise<void> => {
+    const startRefresh = () => {
+      const refresh = (async () => {
+        await Promise.allSettled([
+          refreshSummary(),
+          refreshArchivedRecipients(),
+          loadCampaigns({ silent: true }),
+        ]);
+      })();
+      workspaceRefreshInFlightRef.current = refresh;
+      void refresh.finally(() => {
+        if (workspaceRefreshInFlightRef.current === refresh) {
+          workspaceRefreshInFlightRef.current = null;
+        }
+      });
+      return refresh;
+    };
+
+    const inFlight = workspaceRefreshInFlightRef.current;
+    if (!inFlight) return startRefresh();
+    let queued = workspaceRefreshQueuedRef.current;
+    if (!queued) {
+      queued = inFlight.then(startRefresh, startRefresh);
+      workspaceRefreshQueuedRef.current = queued;
+      void queued.finally(() => {
+        if (workspaceRefreshQueuedRef.current === queued) {
+          workspaceRefreshQueuedRef.current = null;
+        }
+      });
+    }
+    return queued;
+  }, [loadCampaigns, refreshArchivedRecipients, refreshSummary]);
+
+  const startRapidRefresh = useCallback(() => {
+    rapidRefreshUntilRef.current = Date.now() + 60_000;
+    setRapidRefreshVersion((version) => version + 1);
+  }, []);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshWorkspace();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshWorkspace]);
+
+  useEffect(() => {
+    if (rapidRefreshVersion === 0) return;
+    let interval = 0;
+    const poll = () => {
+      if (Date.now() >= rapidRefreshUntilRef.current) {
+        window.clearInterval(interval);
+        return;
+      }
+      if (document.visibilityState === "visible") void refreshWorkspace();
+    };
+    interval = window.setInterval(poll, 2_000);
+    return () => window.clearInterval(interval);
+  }, [rapidRefreshVersion, refreshWorkspace]);
 
   const handleCampaignAssetUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -838,7 +941,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       setEditingCampaign(null);
       setCampaignModalHydrationKey(null);
       setParams({ tab: "campaigns", view: "campaigns", modal: null, campaignId: null }, "replace");
-      await loadCampaigns();
+      await refreshWorkspace();
     } catch (error) {
       const shouldDeleteUploadedAsset = Boolean(
         uploadedAsset && !campaignPersisted && error instanceof CampaignPersistenceError && error.status,
@@ -981,6 +1084,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       }));
       setCampaignContactMessage("Contactul a fost actualizat.");
       cancelEditingContact(recipient.id);
+      await refreshWorkspace();
     } catch (error) {
       setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi actualizat.");
     } finally {
@@ -991,9 +1095,9 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   const deleteContact = (recipient: CampaignRecipientRow) => {
     setEmailConfirmDialog({
-      title: "Ștergi contactul?",
-      description: `Contactul ${recipient.email} va fi eliminat din lista campaniei. Istoricul agregat de email rămâne în rapoarte.`,
-      confirmLabel: "Șterge",
+      title: "Arhivezi contactul?",
+      description: `Contactul ${recipient.email} va ieși imediat din liste și campanii. Îl poți restaura din Arhivă.`,
+      confirmLabel: "Arhivează",
       tone: "danger",
       onConfirm: async () => {
         if (contactDeletingRef.current || contactSavingRef.current || bulkContactActionRef.current) return;
@@ -1002,22 +1106,18 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         setDeletingContactId(recipient.id);
         setCampaignContactMessage(null);
         try {
-          await deleteCampaignRecipientOnServer(recipient.id);
-          setCampaignContactMessage("Contactul a fost șters.");
+          const result = await archiveCampaignRecipientOnServer(recipient.id);
+          setCampaignContactMessage(
+            result.in_flight > 0
+              ? `Contactul a fost arhivat. ${result.in_flight} ${result.in_flight === 1 ? "trimitere era deja în curs și nu mai putea fi oprită" : "trimiteri erau deja în curs și nu mai puteau fi oprite"}.`
+              : "Contactul a fost arhivat.",
+          );
           if (editingContactId === recipient.id) {
             cancelEditingContact(recipient.id);
           }
-          setSummary((currentSummary) => ({
-            ...currentSummary,
-            campaign: {
-              ...currentSummary.campaign,
-              recipients: currentSummary.campaign.recipients.filter(
-                (currentRecipient) => currentRecipient.id !== recipient.id,
-              ),
-            },
-          }));
+          await refreshWorkspace();
         } catch (error) {
-          setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi șters.");
+          setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi arhivat.");
         } finally {
           contactDeletingRef.current = null;
           setDeletingContactId(null);
@@ -1080,7 +1180,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       return nextStatus === "active" ? !isActive : isActive;
     });
     if (contactsToUpdate.length === 0) {
-      setCampaignContactMessage(nextStatus === "active" ? "Contactele selectate sunt deja active." : "Contactele selectate sunt deja inactive.");
+      setCampaignContactMessage(nextStatus === "active" ? "Contactele selectate sunt deja active." : "Trimiterea este deja oprită pentru contactele selectate.");
       return;
     }
 
@@ -1121,7 +1221,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       }));
       setSelectedCampaignRecipientIds(failedIds);
       try {
-        await refreshSummary();
+        await refreshWorkspace();
       } catch {
         // The reconciled local state remains visible; a route reload can retry the read.
       }
@@ -1133,7 +1233,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         setCampaignContactMessage(
           nextStatus === "active"
             ? `${successfulIds.size} contacte au fost activate.`
-            : `${successfulIds.size} contacte au fost dezactivate.`,
+            : `Trimiterea a fost oprită pentru ${successfulIds.size} contacte.`,
         );
       }
     } catch (error) {
@@ -1152,14 +1252,14 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       return;
     }
     if (isSelectedCampaignContactBeingEdited) {
-      setCampaignContactMessage("Salvează sau anulează editarea înainte de ștergerea în masă.");
+      setCampaignContactMessage("Salvează sau anulează editarea înainte de arhivarea în masă.");
       return;
     }
-    const recipientIdsToDelete = [...visibleSelectedCampaignRecipientIds];
+    const recipientIdsToArchive = [...visibleSelectedCampaignRecipientIds];
     setEmailConfirmDialog({
-      title: "Ștergi contactele selectate?",
-      description: `${recipientIdsToDelete.length} contacte vor fi eliminate din lista campaniei. Istoricul agregat de email rămâne în rapoarte.`,
-      confirmLabel: "Șterge",
+      title: "Arhivezi contactele selectate?",
+      description: `${recipientIdsToArchive.length} contacte vor ieși imediat din liste și campanii. Le poți restaura din Arhivă.`,
+      confirmLabel: "Arhivează",
       tone: "danger",
       onConfirm: async () => {
         if (bulkContactActionRef.current || contactSavingRef.current || contactDeletingRef.current) return;
@@ -1169,42 +1269,52 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         setCampaignContactMessage(null);
         try {
           const outcomes = await Promise.allSettled(
-            recipientIdsToDelete.map((recipientId) => deleteCampaignRecipientOnServer(recipientId)),
+            recipientIdsToArchive.map((recipientId) => archiveCampaignRecipientOnServer(recipientId)),
           );
-          const deletedIds = new Set(
-            recipientIdsToDelete.filter((_recipientId, index) => outcomes[index]?.status === "fulfilled"),
+          const archivedIds = new Set(
+            recipientIdsToArchive.filter((_recipientId, index) => outcomes[index]?.status === "fulfilled"),
           );
-          const failedIds = recipientIdsToDelete.filter(
+          const failedIds = recipientIdsToArchive.filter(
             (_recipientId, index) => outcomes[index]?.status === "rejected",
           );
-          setSummary((currentSummary) => ({
-            ...currentSummary,
-            campaign: {
-              ...currentSummary.campaign,
-              recipients: currentSummary.campaign.recipients.filter(
-                (recipient) => !deletedIds.has(recipient.id),
-              ),
-            },
-          }));
           setSelectedCampaignRecipientIds(failedIds);
-          try {
-            await refreshSummary();
-          } catch {
-            // The reconciled local state remains visible; a route reload can retry the read.
-          }
+          await refreshWorkspace();
           setCampaignContactMessage(
             failedIds.length > 0
-              ? `${deletedIds.size} șterse, ${failedIds.length} eșuate. Contactele eșuate au rămas selectate pentru reîncercare.`
-              : `${deletedIds.size} contacte au fost șterse.`,
+              ? `${archivedIds.size} arhivate, ${failedIds.length} eșuate. Contactele eșuate au rămas selectate pentru reîncercare.`
+              : `${archivedIds.size} contacte au fost arhivate.`,
           );
         } catch (error) {
-          setCampaignContactMessage(error instanceof Error ? error.message : "Contactele selectate nu au putut fi șterse.");
+          setCampaignContactMessage(error instanceof Error ? error.message : "Contactele selectate nu au putut fi arhivate.");
         } finally {
           bulkContactActionRef.current = null;
           setBulkContactAction(null);
         }
       },
     });
+  };
+
+  const restoreArchivedContact = async (recipient: CampaignRecipientRow) => {
+    if (contactDeletingRef.current) return;
+    contactDeletingRef.current = recipient.id;
+    setArchiveContactAction({ recipientId: recipient.id, kind: "restore" });
+    setCampaignContactMessage(null);
+    try {
+      const restored = await restoreCampaignRecipientOnServer(recipient.id);
+      setCampaignContactMessage(
+        restored.status === "suppressed"
+          ? "Contactul a fost restaurat, dar adresa respinsă rămâne blocată până când o corectezi și o activezi explicit."
+          : restored.status === "unsubscribed"
+            ? "Contactul a fost restaurat, dar rămâne dezabonat și nu va primi campanii."
+            : "Contactul a fost restaurat.",
+      );
+      await refreshWorkspace();
+    } catch (error) {
+      setCampaignContactMessage(error instanceof Error ? error.message : "Contactul nu a putut fi restaurat.");
+    } finally {
+      contactDeletingRef.current = null;
+      setArchiveContactAction(null);
+    }
   };
 
   const campaignEligibleRecipients = () =>
@@ -1284,6 +1394,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
           ]),
         ) as Record<string, CampaignDeliveryState>,
       }));
+      await refreshWorkspace();
     } catch (error) {
       setCampaignMemberships((currentMemberships) => ({
         ...currentMemberships,
@@ -1422,7 +1533,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
               failureDetail ? `. ${failureDetail}` : ""
             }.`,
           );
-          await Promise.all([loadCampaigns(), refreshSummary()]);
+          await refreshWorkspace();
+          startRapidRefresh();
         } catch (error) {
           setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi trimisă.");
         } finally {
@@ -1473,7 +1585,8 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
           setCampaignMessage(failureDetail
             ? `Emailul către ${recipientLabel} nu a fost trimis. ${failureDetail}`
             : `${isResend ? "Retrimiterea" : "Trimiterea"} către ${recipientLabel} a fost procesată: ${campaignSendResultSummary(result)}.`);
-          await Promise.all([loadCampaigns(), refreshSummary()]);
+          await refreshWorkspace();
+          startRapidRefresh();
         } catch (error) {
           setCampaignMessage(
             error instanceof Error
@@ -1535,7 +1648,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
             return nextFilters;
           });
           setCampaignMessage("Campania a fost ștearsă.");
-          await loadCampaigns();
+          await refreshWorkspace();
         } catch (error) {
           setCampaignMessage(error instanceof Error ? error.message : "Campania nu a putut fi ștearsă.");
         } finally {
@@ -1802,13 +1915,21 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
         <div className="flex flex-col gap-5">
           <section
             className="overflow-hidden rounded-lg border border-[var(--border)] bg-surface text-foreground shadow-sm"
-            aria-label={campaignView === "campaigns" ? "Campanii" : "Contacte"}
+            aria-label={
+              campaignView === "campaigns"
+                ? "Campanii"
+                : campaignView === "contacts"
+                  ? "Contacte"
+                  : "Arhivă contacte"
+            }
           >
             <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-medium text-muted-foreground">
                 {campaignView === "campaigns"
                   ? `${campaigns.length} ${campaigns.length === 1 ? "campanie" : "campanii"} · ${readyCampaignCount} ${readyCampaignCount === 1 ? "pregătită" : "pregătite"}`
-                  : `${activeCampaignContacts.length} contacte active`}
+                  : campaignView === "contacts"
+                    ? `${activeCampaignContacts.length} contacte active`
+                    : `${archivedCampaignRecipients.length} ${archivedCampaignRecipients.length === 1 ? "contact arhivat" : "contacte arhivate"}`}
               </p>
               <div className="flex flex-wrap gap-2 sm:justify-end">
                   {campaignView === "campaigns" ? (
@@ -1918,7 +2039,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                 editCampaign={openEditCampaignModal}
                 deleteCampaign={handleDeleteCampaign}
               />
-            ) : (
+            ) : campaignView === "contacts" ? (
               <ContactsWorkspaceView
                 message={campaignContactMessage}
                 contacts={visibleCampaignContacts}
@@ -1953,6 +2074,15 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
                   setShowManualAddModal(true);
                   setParams({ tab: "campaigns", modal: "add-contact" }, "push");
                 }}
+              />
+            ) : (
+              <ArchivedContactsWorkspaceView
+                message={campaignContactMessage}
+                contacts={visibleArchivedCampaignContacts}
+                search={archiveContactSearch}
+                action={archiveContactAction}
+                setSearch={setArchiveContactSearch}
+                restoreContact={(recipient) => void restoreArchivedContact(recipient)}
               />
             )}
           </section>

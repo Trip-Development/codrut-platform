@@ -49,7 +49,7 @@ export function ContactImportModal({
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-burgundy/80">Import contacte</p>
             <h2 id="campaign-import-title" className="mt-1 text-xl font-bold text-foreground">Previzualizare {sheetName ?? "sheet"}</h2>
             <p className="mt-1 text-xs font-semibold text-foreground/55">
-              {drafts.length} contacte · {activeCount} active · {drafts.length - activeCount} inactive · {invalidCount} emailuri de corectat{duplicateCount > 0 ? ` · ${duplicateCount} duplicate` : ""}
+              {drafts.length} contacte · {activeCount} active · {drafts.length - activeCount} cu trimiterea oprită · {invalidCount} emailuri de corectat{duplicateCount > 0 ? ` · ${duplicateCount} duplicate` : ""}
             </p>
           </div>
           <div className="flex gap-2">

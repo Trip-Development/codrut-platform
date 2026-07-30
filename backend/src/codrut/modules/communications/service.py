@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from html import escape as html_escape
 from html import unescape as html_unescape
 from string import Template
+from typing import Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -40,6 +41,7 @@ from codrut.modules.communications.html_sanitizer import sanitize_email_html
 from codrut.modules.communications.models import (
     Campaign,
     CampaignAsset,
+    CampaignContactTombstone,
     CampaignRecipient,
     CampaignRecipientEvent,
     CampaignRecipientSegment,
@@ -48,6 +50,7 @@ from codrut.modules.communications.models import (
     EmailEventType,
     EmailSend,
     EmailSendStatus,
+    EmailSuppressionReview,
     EmailTemplate,
 )
 from codrut.modules.communications.reminders import DEFAULT_REMINDER_POLICY
@@ -68,6 +71,11 @@ from codrut.modules.communications.schemas import (
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
+)
+from codrut.modules.communications.suppression import (
+    email_suppression_fingerprint,
+    provider_event_fingerprint,
+    provider_message_fingerprint,
 )
 from codrut.modules.communications.templates import (
     EMAIL_SHELL_OPEN,
@@ -195,6 +203,61 @@ class CampaignRecipientBulkCreateResult:
     recipients: list[CampaignRecipient]
     created: int
     updated: int
+
+
+@dataclass(frozen=True)
+class CampaignRecipientArchiveResult:
+    recipient: CampaignRecipient
+    memberships_removed: int
+    cancelled: int
+    in_flight: int
+
+
+@dataclass(frozen=True)
+class CampaignRecipientPurgeResult:
+    recipient_id: UUID
+    cancelled: int
+    anonymized_sends: int
+
+
+@dataclass(frozen=True)
+class CampaignRecipientPurgeBatchResult:
+    examined: int
+    purged: int
+    deferred: int
+
+
+@dataclass(frozen=True)
+class CampaignRecipientDeliveryReconciliation:
+    cancelled: int
+    provider_unresolved: list[EmailSend]
+    unsafe_unresolved: list[EmailSend]
+
+
+@dataclass(frozen=True)
+class EmailSuppressionReviewBatchResult:
+    examined: int
+    retained: int
+    needs_review: int
+    deleted: int
+
+
+@dataclass(frozen=True)
+class CampaignUnsubscribeTarget:
+    recipient: CampaignRecipient | None = None
+    tombstone: CampaignContactTombstone | None = None
+
+    @property
+    def id(self) -> UUID:
+        if self.recipient is not None:
+            return self.recipient.id
+        if self.tombstone is None:
+            raise RuntimeError("Unsubscribe target is empty.")
+        return self.tombstone.former_recipient_id
+
+    @property
+    def email(self) -> str | None:
+        return self.recipient.email if self.recipient is not None else None
 
 
 def extract_placeholders(text: str) -> set[str]:
@@ -595,10 +658,12 @@ class CommunicationsService:
         payload: CampaignRecipientBulkCreateRequest,
         *,
         owner_id: UUID | None = None,
+        settings: Settings | None = None,
     ) -> list[CampaignRecipient]:
         result = await self.bulk_create_campaign_recipients_with_result(
             payload,
             owner_id=owner_id,
+            settings=settings,
         )
         return result.recipients
 
@@ -607,6 +672,7 @@ class CommunicationsService:
         payload: CampaignRecipientBulkCreateRequest,
         *,
         owner_id: UUID | None = None,
+        settings: Settings | None = None,
     ) -> CampaignRecipientBulkCreateResult:
         repository = self._require_repository()
         delivery_owner_id = _require_delivery_owner_id(owner_id)
@@ -659,7 +725,19 @@ class CommunicationsService:
         existing = await repository.list_campaign_recipients_by_emails(
             set(recipients_by_email),
             owner_id=delivery_owner_id,
+            include_archived=True,
+            for_update=True,
         )
+        archived_emails = sorted(
+            recipient.email
+            for recipient in existing
+            if recipient.archived_at is not None and recipient.email is not None
+        )
+        if archived_emails:
+            raise DomainError(
+                "Restore archived contacts before importing them again.",
+                code="campaign_recipient_archived",
+            )
         existing_by_email = {
             recipient.email.lower(): recipient
             for recipient in existing
@@ -670,6 +748,30 @@ class CommunicationsService:
             for email, recipient in recipients_by_email.items()
             if email not in existing_by_email
         ]
+        active_email_fingerprints = {
+            email_suppression_fingerprint(
+                owner_id=delivery_owner_id,
+                email=recipient.email,
+                secret=(settings or Settings()).effective_email_suppression_fingerprint_secret,
+            )
+            for email, recipient in recipients_by_email.items()
+            if recipient.status == CampaignRecipientStatus.active
+            and recipient.email is not None
+            and (
+                email not in existing_by_email
+                or status_provided_by_email.get(email, False)
+            )
+        }
+        if active_email_fingerprints:
+            suppressions = await repository.list_email_suppressions_by_fingerprints(
+                owner_id=delivery_owner_id,
+                email_fingerprints=active_email_fingerprints,
+            )
+            if suppressions:
+                raise DomainError(
+                    "A bounced or unsubscribed address cannot be reactivated.",
+                    code="campaign_recipient_email_suppressed",
+                )
         for email, recipient in recipients_by_email.items():
             existing_recipient = existing_by_email.get(email)
             if existing_recipient is None:
@@ -701,9 +803,14 @@ class CommunicationsService:
         payload: CampaignRecipientUpdateRequest,
         *,
         owner_id: UUID | None = None,
+        settings: Settings | None = None,
     ) -> CampaignRecipient:
         repository = self._require_repository()
-        recipient = await repository.get_campaign_recipient(recipient_id, owner_id=owner_id)
+        recipient = await repository.get_campaign_recipient(
+            recipient_id,
+            owner_id=owner_id,
+            for_update=True,
+        )
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
 
@@ -747,6 +854,25 @@ class CommunicationsService:
                     "Unsubscribed campaign recipients cannot be reactivated from contact editing.",
                     code="campaign_recipient_unsubscribe_preserved",
                 )
+            if (
+                next_status == CampaignRecipientStatus.active
+                and recipient.email is not None
+                and await repository.get_email_suppression(
+                    owner_id=_require_delivery_owner_id(owner_id),
+                    email=recipient.email,
+                    email_fingerprint=email_suppression_fingerprint(
+                        owner_id=_require_delivery_owner_id(owner_id),
+                        email=recipient.email,
+                        secret=(
+                            settings or Settings()
+                        ).effective_email_suppression_fingerprint_secret,
+                    ),
+                )
+            ):
+                raise DomainError(
+                    "A bounced or unsubscribed address cannot be reactivated.",
+                    code="campaign_recipient_email_suppressed",
+                )
             recipient.status = next_status
         if recipient.status == CampaignRecipientStatus.active and not recipient.email:
             raise DomainError(
@@ -764,14 +890,491 @@ class CommunicationsService:
         recipient_id: UUID,
         *,
         owner_id: UUID | None = None,
-    ) -> None:
+        settings: Settings | None = None,
+    ) -> "CampaignRecipientArchiveResult":
+        return await self.archive_campaign_recipient(
+            recipient_id,
+            owner_id=owner_id,
+            settings=settings or Settings(),
+        )
+
+    async def archive_campaign_recipient(
+        self,
+        recipient_id: UUID,
+        *,
+        owner_id: UUID | None,
+        settings: Settings,
+    ) -> "CampaignRecipientArchiveResult":
         repository = self._require_repository()
-        recipient = await repository.get_campaign_recipient(recipient_id, owner_id=owner_id)
+        delivery_owner_id = _require_delivery_owner_id(owner_id)
+        recipient = await repository.get_campaign_recipient(
+            recipient_id,
+            owner_id=delivery_owner_id,
+            catalog_scope="any",
+            for_update=True,
+        )
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
-        if recipient.status == CampaignRecipientStatus.active:
-            recipient.status = CampaignRecipientStatus.suppressed
+        now = datetime.now(UTC)
+        if recipient.archived_at is None:
+            recipient.status_before_archive = recipient.status
+            if recipient.status == CampaignRecipientStatus.active:
+                # The previous application image does not understand archived_at.
+                # Keeping archived contacts non-sendable makes an image rollback safe.
+                recipient.status = CampaignRecipientStatus.suppressed
+            recipient.archived_at = now
+            recipient.purge_after = now + timedelta(
+                days=settings.campaign_recipient_archive_retention_days
+            )
+        memberships_removed = await repository.delete_campaign_recipient_memberships(
+            recipient.id,
+            owner_id=delivery_owner_id,
+        )
+        cancelled, in_flight = await repository.cancel_unsent_campaign_recipient_sends(
+            recipient.id,
+            owner_id=delivery_owner_id,
+            now=now,
+        )
         await repository.flush()
+        return CampaignRecipientArchiveResult(
+            recipient=recipient,
+            memberships_removed=memberships_removed,
+            cancelled=cancelled,
+            in_flight=in_flight,
+        )
+
+    async def restore_campaign_recipient(
+        self,
+        recipient_id: UUID,
+        *,
+        owner_id: UUID | None,
+        settings: Settings,
+    ) -> CampaignRecipient:
+        repository = self._require_repository()
+        recipient = await repository.get_campaign_recipient(
+            recipient_id,
+            owner_id=owner_id,
+            catalog_scope="archived",
+            for_update=True,
+        )
+        if recipient is None:
+            raise DomainError("Archived contact not found.", code="campaign_recipient_not_found")
+        restored_status = recipient.status_before_archive or recipient.status
+        if recipient.status == CampaignRecipientStatus.unsubscribed:
+            restored_status = CampaignRecipientStatus.unsubscribed
+        elif (
+            restored_status == CampaignRecipientStatus.active
+            and recipient.email is not None
+        ):
+            fingerprint = email_suppression_fingerprint(
+                owner_id=recipient.owner_id,
+                email=recipient.email,
+                secret=settings.effective_email_suppression_fingerprint_secret,
+            )
+            if await repository.get_email_suppression(
+                owner_id=recipient.owner_id,
+                email_fingerprint=fingerprint,
+                email=recipient.email,
+            ):
+                restored_status = CampaignRecipientStatus.suppressed
+        recipient.status = restored_status
+        recipient.archived_at = None
+        recipient.purge_after = None
+        recipient.status_before_archive = None
+        await repository.flush()
+        return recipient
+
+    async def permanently_delete_campaign_recipient(
+        self,
+        recipient_id: UUID,
+        *,
+        owner_id: UUID | None,
+        settings: Settings,
+    ) -> "CampaignRecipientPurgeResult":
+        repository = self._require_repository()
+        if not settings.campaign_recipient_purge_enabled:
+            raise DomainError(
+                "Permanent deletion is temporarily unavailable while the privacy "
+                "migration is being completed.",
+                code="campaign_recipient_purge_disabled",
+            )
+        delivery_owner_id = _require_delivery_owner_id(owner_id)
+        recipient = await repository.get_campaign_recipient(
+            recipient_id,
+            owner_id=delivery_owner_id,
+            catalog_scope="archived",
+            for_update=True,
+        )
+        if recipient is None:
+            raise DomainError(
+                "Permanent deletion is available only from Archive.",
+                code="campaign_recipient_archive_required",
+            )
+        delete_time = datetime.now(UTC)
+        reconciliation = await self._classify_campaign_recipient_unresolved_deliveries(
+            recipient,
+            owner_id=delivery_owner_id,
+            settings=settings,
+            now=delete_time,
+        )
+        if reconciliation.unsafe_unresolved:
+            raise DomainError(
+                "Some email deliveries have already reached the provider. "
+                "Try permanent deletion again after their reconciliation window.",
+                code="campaign_recipient_delivery_in_flight",
+            )
+        await self._create_campaign_contact_tombstones(
+            recipient,
+            settings=settings,
+        )
+        anonymized_sends = await repository.anonymize_campaign_recipient_history(
+            recipient.id,
+            owner_id=delivery_owner_id,
+            allow_provider_unresolved=bool(reconciliation.provider_unresolved),
+        )
+        await repository.delete_campaign_recipient_record(recipient)
+        return CampaignRecipientPurgeResult(
+            recipient_id=recipient_id,
+            cancelled=reconciliation.cancelled,
+            anonymized_sends=anonymized_sends,
+        )
+
+    async def purge_due_campaign_recipients(
+        self,
+        *,
+        settings: Settings,
+        now: datetime | None = None,
+        limit: int = 100,
+    ) -> "CampaignRecipientPurgeBatchResult":
+        repository = self._require_repository()
+        if not settings.campaign_recipient_purge_enabled:
+            return CampaignRecipientPurgeBatchResult(
+                examined=0,
+                purged=0,
+                deferred=0,
+            )
+        purge_time = now or datetime.now(UTC)
+        due_recipients = await repository.list_due_archived_campaign_recipients(
+            now=purge_time,
+            limit=limit,
+        )
+        purged = 0
+        deferred = 0
+        for recipient in due_recipients:
+            reconciliation = (
+                await self._classify_campaign_recipient_unresolved_deliveries(
+                    recipient,
+                    owner_id=recipient.owner_id,
+                    settings=settings,
+                    now=purge_time,
+                )
+            )
+            if reconciliation.unsafe_unresolved:
+                recipient.purge_after = purge_time + timedelta(days=1)
+                deferred += 1
+                continue
+            await self._create_campaign_contact_tombstones(
+                recipient,
+                settings=settings,
+            )
+            await repository.anonymize_campaign_recipient_history(
+                recipient.id,
+                owner_id=recipient.owner_id,
+                allow_provider_unresolved=bool(
+                    reconciliation.provider_unresolved
+                ),
+            )
+            await repository.delete_campaign_recipient_record(recipient)
+            purged += 1
+        return CampaignRecipientPurgeBatchResult(
+            examined=len(due_recipients),
+            purged=purged,
+            deferred=deferred,
+        )
+
+    async def _classify_campaign_recipient_unresolved_deliveries(
+        self,
+        recipient: CampaignRecipient,
+        *,
+        owner_id: UUID,
+        settings: Settings,
+        now: datetime,
+    ) -> CampaignRecipientDeliveryReconciliation:
+        repository = self._require_repository()
+        cancelled, _ = await repository.cancel_unsent_campaign_recipient_sends(
+            recipient.id,
+            owner_id=owner_id,
+            now=now,
+        )
+        unresolved = await repository.list_unresolved_campaign_recipient_sends(
+            recipient.id,
+            owner_id=owner_id,
+        )
+        stale_before = now - timedelta(
+            days=settings.campaign_recipient_delivery_reconciliation_days
+        )
+        provider_unresolved = [
+            send
+            for send in unresolved
+            if send.status
+            in {EmailSendStatus.accepted, EmailSendStatus.indeterminate}
+        ]
+        unsafe_unresolved = [
+            send
+            for send in unresolved
+            if send.status
+            in {EmailSendStatus.queued, EmailSendStatus.dispatching}
+            or (
+                (
+                    send.last_event_at
+                    or send.provider_request_started_at
+                    or send.updated_at
+                    or send.created_at
+                )
+                > stale_before
+            )
+        ]
+        return CampaignRecipientDeliveryReconciliation(
+            cancelled=cancelled,
+            provider_unresolved=provider_unresolved,
+            unsafe_unresolved=unsafe_unresolved,
+        )
+
+    async def _create_campaign_contact_tombstones(
+        self,
+        recipient: CampaignRecipient,
+        *,
+        settings: Settings,
+    ) -> CampaignContactTombstone | None:
+        if recipient.email is None:
+            return None
+        fingerprint = email_suppression_fingerprint(
+            owner_id=recipient.owner_id,
+            email=recipient.email,
+            secret=settings.effective_email_suppression_fingerprint_secret,
+        )
+        repository = self._require_repository()
+        sends = await repository.list_campaign_recipient_sends(
+            recipient.id,
+            owner_id=recipient.owner_id,
+        )
+        provider_event_ids = await repository.list_campaign_recipient_provider_event_ids(
+            recipient.id,
+            owner_id=recipient.owner_id,
+        )
+        suppression = await repository.get_email_suppression(
+            owner_id=recipient.owner_id,
+            email_fingerprint=fingerprint,
+            email=recipient.email,
+        )
+        suppression_reason = (
+            getattr(suppression, "reason", None)
+            or getattr(suppression, "do_not_contact_reason", None)
+        )
+        status_before_archive = (
+            recipient.status_before_archive
+            if recipient.archived_at is not None
+            and recipient.status_before_archive is not None
+            else recipient.status
+        )
+        reason: str | None = None
+        if (
+            recipient.status == CampaignRecipientStatus.unsubscribed
+            or status_before_archive == CampaignRecipientStatus.unsubscribed
+        ):
+            reason = CampaignRecipientStatus.unsubscribed.value
+        elif suppression_reason is not None:
+            reason = str(suppression_reason)
+        elif status_before_archive == CampaignRecipientStatus.suppressed:
+            reason = CampaignRecipientStatus.suppressed.value
+        delivery_fingerprints = [
+            (
+                provider_message_fingerprint(
+                    message_id=send.provider_message_id,
+                    secret=settings.effective_email_suppression_fingerprint_secret,
+                ),
+                send.campaign_id,
+            )
+            for send in sends
+            if send.provider_message_id
+        ]
+        provider_event_fingerprints = [
+            (
+                provider_message_fingerprint(
+                    message_id=provider_message_id,
+                    secret=settings.effective_email_suppression_fingerprint_secret,
+                ),
+                provider_event_fingerprint(
+                    provider_event_id=provider_event_id,
+                    secret=settings.effective_email_suppression_fingerprint_secret,
+                ),
+            )
+            for provider_message_id, provider_event_id in provider_event_ids
+        ]
+        now = datetime.now(UTC)
+        delivery_expires_at = now + timedelta(
+            days=settings.campaign_delivery_tombstone_retention_days
+        )
+        review_after = now + timedelta(days=settings.email_suppression_review_days)
+        if reason is None:
+            review_after = max(review_after, delivery_expires_at)
+        return await repository.create_campaign_contact_tombstones(
+            owner_id=recipient.owner_id,
+            email_fingerprint=fingerprint,
+            former_recipient_id=recipient.id,
+            do_not_contact_reason=reason,
+            suppressed_at=now if reason is not None else None,
+            review_after=review_after,
+            delivery_fingerprints=delivery_fingerprints,
+            delivery_expires_at=delivery_expires_at,
+            provider_event_fingerprints=provider_event_fingerprints,
+        )
+
+    async def review_due_email_suppressions(
+        self,
+        *,
+        settings: Settings,
+        now: datetime | None = None,
+        limit: int = 100,
+    ) -> "EmailSuppressionReviewBatchResult":
+        repository = self._require_repository()
+        review_time = now or datetime.now(UTC)
+        suppressions = await repository.list_due_email_suppressions(
+            now=review_time,
+            limit=limit,
+        )
+        delivery_tombstones = (
+            await repository.list_due_campaign_delivery_tombstones(
+                now=review_time,
+                limit=max(0, limit - len(suppressions)),
+            )
+            if hasattr(repository, "list_due_campaign_delivery_tombstones")
+            and len(suppressions) < limit
+            else []
+        )
+        tombstones = (
+            await repository.list_due_campaign_contact_tombstones(
+                now=review_time,
+                limit=max(
+                    0,
+                    limit - len(suppressions) - len(delivery_tombstones),
+                ),
+            )
+            if hasattr(repository, "list_due_campaign_contact_tombstones")
+            and len(suppressions) + len(delivery_tombstones) < limit
+            else []
+        )
+        retained = 0
+        needs_review = 0
+        deleted = 0
+        protected_reasons = {
+            "blocked",
+            "complained",
+            "hard_bounce",
+            "invalid_email",
+            "spam",
+            "suppressed",
+            "unsubscribed",
+        }
+        for suppression in suppressions:
+            retain = suppression.reason in protected_reasons
+            next_review_at = review_time + timedelta(
+                days=(
+                    settings.email_suppression_review_days
+                    if retain
+                    else 30
+                )
+            )
+            await repository.add_email_suppression_review(
+                EmailSuppressionReview(
+                    owner_id=suppression.owner_id,
+                    suppression_id=suppression.id,
+                    reason=suppression.reason,
+                    decision="retained" if retain else "needs_review",
+                    reviewer="system-policy",
+                    basis=(
+                        "Prevent repeat delivery after a permanent provider rejection "
+                        "or explicit do-not-contact request."
+                        if retain
+                        else "Unknown restriction reason requires an authorized "
+                        "human decision before deletion."
+                    ),
+                    reviewed_at=review_time,
+                    next_review_at=next_review_at,
+                )
+            )
+            suppression.last_reviewed_at = review_time
+            suppression.review_after = next_review_at
+            if retain:
+                retained += 1
+            else:
+                needs_review += 1
+        for delivery_tombstone in delivery_tombstones:
+            await repository.delete_campaign_delivery_tombstone(delivery_tombstone)
+            deleted += 1
+        for tombstone in tombstones:
+            reason = tombstone.do_not_contact_reason
+            retain = reason in protected_reasons
+            mapping_expired = reason is None
+            next_review_at = (
+                review_time
+                + timedelta(
+                    days=(
+                        settings.email_suppression_review_days
+                        if retain
+                        else 30
+                    )
+                )
+                if not mapping_expired
+                else None
+            )
+            await repository.add_email_suppression_review(
+                EmailSuppressionReview(
+                    owner_id=tombstone.owner_id,
+                    suppression_id=None,
+                    tombstone_id=tombstone.id,
+                    reason=reason or "token_provider_mapping",
+                    decision=(
+                        "mapping_expired"
+                        if mapping_expired
+                        else ("retained" if retain else "needs_review")
+                    ),
+                    reviewer="system-policy",
+                    basis=(
+                        "The defined late-event and unsubscribe-link mapping window ended."
+                        if mapping_expired
+                        else (
+                            "Prevent repeat delivery after a permanent provider rejection "
+                            "or explicit do-not-contact request."
+                            if retain
+                            else "Unknown restriction reason requires an authorized "
+                            "human decision before deletion."
+                        )
+                    ),
+                    reviewed_at=review_time,
+                    next_review_at=next_review_at,
+                )
+            )
+            if mapping_expired:
+                await repository.delete_campaign_contact_tombstone(tombstone)
+                deleted += 1
+            else:
+                tombstone.last_reviewed_at = review_time
+                tombstone.review_after = next_review_at or tombstone.review_after
+                if retain:
+                    retained += 1
+                else:
+                    needs_review += 1
+        return EmailSuppressionReviewBatchResult(
+            examined=(
+                len(suppressions)
+                + len(delivery_tombstones)
+                + len(tombstones)
+            ),
+            retained=retained,
+            needs_review=needs_review,
+            deleted=deleted,
+        )
 
     async def create_campaign(
         self,
@@ -980,7 +1583,7 @@ class CommunicationsService:
             raise DomainError("Campaign not found.", code="campaign_not_found")
 
         recipient_ids = list(dict.fromkeys(payload.recipient_ids))
-        recipients = await repository.list_campaign_recipients_by_ids(
+        recipients = await repository.lock_campaign_recipients_for_send(
             recipient_ids,
             owner_id=owner_id,
         )
@@ -1050,6 +1653,27 @@ class CommunicationsService:
         )
         if not recipients:
             raise DomainError("Campaign has no matching recipients.", code="campaign_no_recipients")
+        if hasattr(repository, "lock_campaign_recipients_for_send"):
+            locked_recipients = await repository.lock_campaign_recipients_for_send(
+                [recipient.id for recipient in recipients],
+                owner_id=delivery_owner_id,
+            )
+            locked_by_id = {recipient.id: recipient for recipient in locked_recipients}
+            if payload.mode == "selected" and len(locked_by_id) != len(recipients):
+                raise DomainError(
+                    "Campaign recipient not found.",
+                    code="campaign_recipient_not_found",
+                )
+            recipients = [
+                locked_by_id[recipient.id]
+                for recipient in recipients
+                if recipient.id in locked_by_id
+            ]
+            if not recipients:
+                raise DomainError(
+                    "Campaign has no matching recipients.",
+                    code="campaign_no_recipients",
+                )
 
         results: list[CampaignSendRecipientResult] = []
         remaining_sends = await _remaining_email_sends_today(repository, settings)
@@ -1066,6 +1690,26 @@ class CommunicationsService:
                         email=recipient.email or "",
                         status="skipped",
                         error="Recipient is suppressed or unsubscribed.",
+                    )
+                )
+                continue
+
+            suppression = await repository.get_email_suppression(
+                owner_id=delivery_owner_id,
+                email=recipient.email,
+                email_fingerprint=email_suppression_fingerprint(
+                    owner_id=delivery_owner_id,
+                    email=recipient.email,
+                    secret=settings.effective_email_suppression_fingerprint_secret,
+                ),
+            )
+            if suppression is not None:
+                results.append(
+                    CampaignSendRecipientResult(
+                        recipient_id=recipient.id,
+                        email=recipient.email,
+                        status="skipped",
+                        error="Recipient is protected by the do-not-contact list.",
                     )
                 )
                 continue
@@ -1214,17 +1858,49 @@ class CommunicationsService:
         self,
         token: str,
         settings: Settings,
-    ) -> CampaignRecipient:
-        recipient = await self.get_campaign_unsubscribe_recipient(token, settings)
-        recipient.status = CampaignRecipientStatus.unsubscribed
-        await self._require_repository().flush()
-        return recipient
+    ) -> CampaignUnsubscribeTarget:
+        target = await self.get_campaign_unsubscribe_recipient(
+            token,
+            settings,
+            for_update=True,
+        )
+        repository = self._require_repository()
+        if target.recipient is not None:
+            target.recipient.status = CampaignRecipientStatus.unsubscribed
+            if target.recipient.archived_at is not None:
+                target.recipient.status_before_archive = (
+                    CampaignRecipientStatus.unsubscribed
+                )
+        if target.recipient is not None and target.recipient.email is not None:
+            await repository.suppress_email(
+                owner_id=target.recipient.owner_id,
+                email=target.recipient.email,
+                email_fingerprint=email_suppression_fingerprint(
+                    owner_id=target.recipient.owner_id,
+                    email=target.recipient.email,
+                    secret=settings.effective_email_suppression_fingerprint_secret,
+                ),
+                reason="unsubscribed",
+                source_email_send_id=None,
+                review_after=datetime.now(UTC)
+                + timedelta(days=settings.email_suppression_review_days),
+            )
+        elif target.tombstone is not None:
+            target.tombstone.do_not_contact_reason = "unsubscribed"
+            target.tombstone.suppressed_at = datetime.now(UTC)
+            target.tombstone.review_after = datetime.now(UTC) + timedelta(
+                days=settings.email_suppression_review_days
+            )
+        await repository.flush()
+        return target
 
     async def get_campaign_unsubscribe_recipient(
         self,
         token: str,
         settings: Settings,
-    ) -> CampaignRecipient:
+        *,
+        for_update: bool = False,
+    ) -> CampaignUnsubscribeTarget:
         repository = self._require_repository()
         claims = parse_campaign_recipient_action_token(token, settings)
         if claims.action != "unsubscribe":
@@ -1235,10 +1911,19 @@ class CommunicationsService:
         recipient = await repository.get_campaign_recipient(
             claims.recipient_id,
             owner_id=claims.owner_id,
+            catalog_scope="any",
+            for_update=for_update,
         )
-        if recipient is None:
+        if recipient is not None:
+            return CampaignUnsubscribeTarget(recipient=recipient)
+        tombstone = await repository.get_campaign_contact_tombstone(
+            owner_id=claims.owner_id,
+            former_recipient_id=claims.recipient_id,
+            for_update=for_update,
+        )
+        if tombstone is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
-        return recipient
+        return CampaignUnsubscribeTarget(tombstone=tombstone)
 
     async def _campaign_send_recipients(
         self,
@@ -1289,13 +1974,26 @@ class CommunicationsService:
         owner_id: UUID | None = None,
     ) -> CampaignRecipientEventResponse:
         repository = self._require_repository()
-        recipient = await repository.get_campaign_recipient(recipient_id, owner_id=owner_id)
+        recipient = await repository.get_campaign_recipient(
+            recipient_id,
+            owner_id=owner_id,
+            catalog_scope="any",
+            for_update=True,
+        )
         if recipient is None:
             raise DomainError("Campaign recipient not found.", code="campaign_recipient_not_found")
 
+        campaign_id = _event_campaign_id(payload.variant_key)
+        if (
+            campaign_id is not None
+            and await repository.get_campaign(campaign_id, owner_id=owner_id) is None
+        ):
+            raise DomainError("Campaign not found.", code="campaign_not_found")
         event = await repository.add_campaign_recipient_event(
             CampaignRecipientEvent(
                 id=uuid.uuid4(),
+                owner_id=_require_delivery_owner_id(owner_id),
+                campaign_id=campaign_id,
                 recipient_id=recipient.id,
                 event_type=payload.event_type,
                 variant_key=payload.variant_key,
@@ -1343,7 +2041,12 @@ class CommunicationsService:
         )
         return claims.target_url
 
-    async def get_email_ops_summary(self, *, owner_id: UUID | None = None) -> dict:
+    async def get_email_ops_summary(
+        self,
+        *,
+        owner_id: UUID | None = None,
+        catalog_scope: Literal["active", "archived"] = "active",
+    ) -> dict:
         repository = self._require_repository()
         session = repository.session
 
@@ -1422,7 +2125,13 @@ class CommunicationsService:
             for recipient_email, send_status in latest_sends_result.all()
         }
 
-        campaign_recipients = await repository.list_campaign_recipients(owner_id=owner_id)
+        campaign_recipients = await repository.list_campaign_recipients(
+            owner_id=owner_id,
+            catalog_scope=catalog_scope,
+        )
+        retained_aggregates = await repository.list_campaign_contact_aggregates(
+            owner_id=_require_delivery_owner_id(owner_id),
+        )
         campaign_event_counts: dict[UUID, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         campaign_variant_by_recipient: dict[UUID, str] = {}
         campaign_recipient_ids = {recipient.id for recipient in campaign_recipients}
@@ -1604,6 +2313,8 @@ class CommunicationsService:
                 "source": recipient.source,
                 "emailVariant": campaign_variant_by_recipient.get(recipient.id),
                 "outcome": None,
+                "archivedAt": recipient.archived_at,
+                "purgeAfter": recipient.purge_after,
             }
             for recipient in campaign_recipients
         ]
@@ -1636,6 +2347,14 @@ class CommunicationsService:
                 ],
                 "notification": "Andrei primește email/Telegram cu link către raport.",
             },
+            "retainedAggregates": [
+                {
+                    "campaignId": aggregate.campaign_id,
+                    "metric": aggregate.metric,
+                    "count": aggregate.count,
+                }
+                for aggregate in retained_aggregates
+            ],
         }
 
         return {
@@ -1711,6 +2430,8 @@ async def _campaign_delivery_by_recipient_id(
 
 
 def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
+    if recipient.archived_at is not None:
+        return "archived"
     if recipient.status == CampaignRecipientStatus.unsubscribed:
         return "unsubscribed"
     if recipient.status == CampaignRecipientStatus.suppressed:
@@ -1718,6 +2439,15 @@ def _campaign_recipient_status(recipient: CampaignRecipient) -> str:
     if not recipient.contact_name:
         return "needs_contact_name"
     return "ready"
+
+
+def _event_campaign_id(variant_key: str | None) -> UUID | None:
+    if variant_key is None:
+        return None
+    try:
+        return UUID(variant_key)
+    except ValueError:
+        return None
 
 
 def _campaign_unsubscribe_url(
@@ -2285,9 +3015,15 @@ class EmailOutboxBatchResult:
 
 
 class EmailOutboxProcessor:
-    def __init__(self, session: AsyncSession, provider: EmailProvider) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        provider: EmailProvider,
+        settings: Settings | None = None,
+    ) -> None:
         self.session = session
         self.provider = provider
+        self.settings = settings or Settings()
         self.repository = CommunicationsRepository(session)
 
     async def process_due(self, *, limit: int = 10) -> EmailOutboxBatchResult:
@@ -2353,6 +3089,11 @@ class EmailOutboxProcessor:
         if send.owner_id is not None and await self.repository.get_email_suppression(
             owner_id=send.owner_id,
             email=send.recipient_email,
+            email_fingerprint=email_suppression_fingerprint(
+                owner_id=send.owner_id,
+                email=send.recipient_email,
+                secret=self.settings.effective_email_suppression_fingerprint_secret,
+            ),
         ):
             current = await self.repository.get_claimed_email_send(send.id, lease_token)
             if current is None:
