@@ -90,6 +90,7 @@ class DeliveryEventService:
             recipient = await self._suppress_campaign_recipient(
                 send.campaign_recipient_id,
                 event_type,
+                owner_id=send.owner_id,
             )
             owner_id = send.owner_id or (recipient.owner_id if recipient is not None else None)
             if owner_id is not None:
@@ -107,10 +108,15 @@ class DeliveryEventService:
         self,
         recipient_id: UUID | None,
         event_type: EmailEventType,
+        *,
+        owner_id: UUID | None,
     ) -> CampaignRecipient | None:
-        if recipient_id is None:
+        if recipient_id is None or owner_id is None:
             return None
-        recipient = await self.session.get(CampaignRecipient, recipient_id)
+        recipient = await self.repository.get_campaign_recipient(
+            recipient_id,
+            owner_id=owner_id,
+        )
         if recipient is None:
             return None
         recipient.status = (

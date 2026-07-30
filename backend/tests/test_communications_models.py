@@ -93,7 +93,9 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
         "lower(campaign_recipients.email)",
     ]
     assert Base.metadata.tables["campaign_recipients"].columns["email"].nullable
-    assert "owner_id" in Base.metadata.tables["campaign_recipients"].columns
+    owner_column = Base.metadata.tables["campaign_recipients"].columns["owner_id"]
+    assert not owner_column.nullable
+    assert next(iter(owner_column.foreign_keys)).ondelete == "CASCADE"
 
 
 def test_campaign_model_supports_template_and_video_link_design() -> None:

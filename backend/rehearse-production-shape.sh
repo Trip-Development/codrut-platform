@@ -42,6 +42,7 @@ cd "${repo_dir}"
 run_alembic() {
     "${compose[@]}" exec -T \
         -e CODRUT_DATABASE_URL="${database_url}" \
+        -e CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="${CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID:-}" \
         -e CODRUT_MIGRATION_LOCK_TIMEOUT_MS="${CODRUT_MIGRATION_LOCK_TIMEOUT_MS:-5000}" \
         -e CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS="${CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS:-900000}" \
         backend \
@@ -290,6 +291,308 @@ insert into result_publications (
         'lencioni', null, 'aggregate_360', 2, '{}'::jsonb, now()
     );
 "
+
+run_psql -c "
+insert into campaign_recipients (
+    id,
+    owner_id,
+    email,
+    contact_name,
+    organization_name,
+    segment,
+    source,
+    status
+)
+select
+    ('60000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,
+    null,
+    case
+        when series <= 27 then
+            'synthetic.contact.' || series || '@example.invalid'
+        else
+            'legacy.ownerless.' || series || '@example.invalid'
+    end,
+    'Legacy Ownerless ' || series,
+    'Legacy Organization',
+    'past_customer',
+    'production-owner-repair-rehearsal',
+    case
+        when series = 1 then 'suppressed'::campaignrecipientstatus
+        when series = 2 then 'unsubscribed'::campaignrecipientstatus
+        else 'active'::campaignrecipientstatus
+    end
+from generate_series(1, 865) as series;
+
+insert into campaign_recipient_memberships (
+    id,
+    campaign_id,
+    recipient_id,
+    source
+)
+select
+    gen_random_uuid(),
+    '00000000-0000-4000-8000-000000000301'::uuid,
+    ('60000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,
+    'production-owner-repair-rehearsal'
+from generate_series(1, 865) as series;
+
+insert into campaign_recipient_events (
+    id,
+    recipient_id,
+    event_type,
+    variant_key,
+    occurred_at
+)
+values
+    (
+        gen_random_uuid(),
+        '60000000-0000-4000-8000-000000000001',
+        'opened',
+        'owner-repair-conflict',
+        now()
+    ),
+    (
+        gen_random_uuid(),
+        '60000000-0000-4000-8000-000000000028',
+        'clicked',
+        'owner-repair-unique',
+        now()
+    );
+
+insert into email_sends (
+    id,
+    owner_id,
+    recipient_email,
+    template_key,
+    template_version,
+    provider,
+    status,
+    campaign_id,
+    campaign_recipient_id,
+    idempotency_key
+)
+select
+    ('70000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,
+    null,
+    case
+        when series <= 27 then
+            'synthetic.contact.' || series || '@example.invalid'
+        else
+            'legacy.ownerless.' || series || '@example.invalid'
+    end,
+    'owner_repair_rehearsal',
+    1,
+    'fake',
+    'accepted',
+    '00000000-0000-4000-8000-000000000301'::uuid,
+    ('60000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,
+    'owner-repair-rehearsal-' || series
+from generate_series(1, 195) as series;
+
+insert into email_suppressions (
+    id,
+    owner_id,
+    email,
+    reason,
+    source_email_send_id
+)
+values
+    (
+        '71000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        'synthetic.contact.1@example.invalid',
+        'hard_bounce',
+        '70000000-0000-4000-8000-000000000001'
+    ),
+    (
+        '71000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000002',
+        'synthetic.contact.2@example.invalid',
+        'unsubscribed',
+        '70000000-0000-4000-8000-000000000002'
+    ),
+    (
+        '71000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000001',
+        'synthetic.contact.2@example.invalid',
+        'hard_bounce',
+        null
+    );
+"
+
+contacts_before_owner_repair="$(run_psql -Atc 'select count(*) from campaign_recipients')"
+memberships_before_owner_repair="$(run_psql -Atc 'select count(*) from campaign_recipient_memberships')"
+events_before_owner_repair="$(run_psql -Atc 'select count(*) from campaign_recipient_events')"
+sends_before_owner_repair="$(run_psql -Atc 'select count(*) from email_sends')"
+
+printf '\nPre-0051 owner repair shape:\n'
+run_psql -P pager=off -c "
+select
+    (select count(*) from campaign_recipients where owner_id is null) as ownerless,
+    (
+        select count(*)
+        from campaign_recipients legacy
+        join campaign_recipients owned
+          on owned.owner_id = '00000000-0000-4000-8000-000000000001'
+         and lower(owned.email) = lower(legacy.email)
+        where legacy.owner_id is null
+    ) as matching_email_conflicts,
+    (
+        select count(*)
+        from email_sends
+        where campaign_recipient_id is not null
+          and owner_id is null
+    ) as ownerless_sends;
+"
+
+CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
+    run_alembic upgrade 0051_contact_owner_repair
+
+run_psql -c "
+do \$\$
+declare
+    ownerless_contacts integer;
+    duplicate_contacts integer;
+    cross_owner_memberships integer;
+    cross_owner_sends integer;
+    conflict_events integer;
+    unique_events integer;
+    repaired_suppressions integer;
+begin
+    select count(*) into ownerless_contacts
+    from campaign_recipients
+    where owner_id is null;
+
+    select count(*) into duplicate_contacts
+    from (
+        select owner_id, lower(email)
+        from campaign_recipients
+        where email is not null
+        group by owner_id, lower(email)
+        having count(*) > 1
+    ) duplicates;
+
+    select count(*) into cross_owner_memberships
+    from campaign_recipient_memberships membership
+    join campaigns campaign on campaign.id = membership.campaign_id
+    join campaign_recipients recipient on recipient.id = membership.recipient_id
+    where campaign.owner_id is distinct from recipient.owner_id;
+
+    select count(*) into cross_owner_sends
+    from email_sends send
+    join campaigns campaign on campaign.id = send.campaign_id
+    join campaign_recipients recipient on recipient.id = send.campaign_recipient_id
+    where send.owner_id is distinct from campaign.owner_id
+       or send.owner_id is distinct from recipient.owner_id;
+
+    select count(*) into conflict_events
+    from campaign_recipient_events event
+    join campaign_recipients recipient on recipient.id = event.recipient_id
+    where event.variant_key = 'owner-repair-conflict'
+      and recipient.email = 'synthetic.contact.1@example.invalid'
+      and recipient.status = 'suppressed';
+
+    select count(*) into unique_events
+    from campaign_recipient_events event
+    join campaign_recipients recipient on recipient.id = event.recipient_id
+    where event.variant_key = 'owner-repair-unique'
+      and recipient.email = 'legacy.ownerless.28@example.invalid';
+
+    select count(*) into repaired_suppressions
+    from email_suppressions
+    where owner_id = '00000000-0000-4000-8000-000000000001'
+      and email in (
+          'synthetic.contact.1@example.invalid',
+          'synthetic.contact.2@example.invalid'
+      );
+
+    if ownerless_contacts <> 0
+       or duplicate_contacts <> 0
+       or cross_owner_memberships <> 0
+       or cross_owner_sends <> 0 then
+        raise exception
+            '0051 owner repair failed: ownerless %, duplicates %, memberships %, sends %',
+            ownerless_contacts,
+            duplicate_contacts,
+            cross_owner_memberships,
+            cross_owner_sends;
+    end if;
+    if conflict_events <> 1 or unique_events <> 1 then
+        raise exception
+            '0051 history rewiring failed: conflict events %, unique events %',
+            conflict_events,
+            unique_events;
+    end if;
+    if repaired_suppressions <> 2 then
+        raise exception '0051 suppression owner repair expected 2, found %',
+            repaired_suppressions;
+    end if;
+    if (
+        select status
+        from campaign_recipients
+        where owner_id = '00000000-0000-4000-8000-000000000001'
+          and email = 'synthetic.contact.2@example.invalid'
+    ) <> 'unsubscribed'::campaignrecipientstatus then
+        raise exception '0051 status precedence did not preserve unsubscribe';
+    end if;
+end
+\$\$;
+"
+
+contacts_after_owner_repair="$(run_psql -Atc 'select count(*) from campaign_recipients')"
+memberships_after_owner_repair="$(run_psql -Atc 'select count(*) from campaign_recipient_memberships')"
+events_after_owner_repair="$(run_psql -Atc 'select count(*) from campaign_recipient_events')"
+sends_after_owner_repair="$(run_psql -Atc 'select count(*) from email_sends')"
+if [[ "${contacts_after_owner_repair}" -ne $(( contacts_before_owner_repair - 27 )) ]]; then
+    printf '0051 expected exactly 27 contact consolidations: before %s, after %s\n' \
+        "${contacts_before_owner_repair}" "${contacts_after_owner_repair}" >&2
+    exit 9
+fi
+if [[ "${memberships_after_owner_repair}" -gt "${memberships_before_owner_repair}" ]] \
+    || [[ "${events_after_owner_repair}" -ne "${events_before_owner_repair}" ]] \
+    || [[ "${sends_after_owner_repair}" -ne "${sends_before_owner_repair}" ]]; then
+    printf '0051 changed protected history counts unexpectedly.\n' >&2
+    exit 10
+fi
+
+owner_repair_fingerprint="$(
+    run_psql -Atc "
+        select md5(
+            (select count(*)::text from campaign_recipients) || ':' ||
+            (select count(*)::text from campaign_recipient_memberships) || ':' ||
+            (select count(*)::text from campaign_recipient_events) || ':' ||
+            (select count(*)::text from email_sends)
+        )
+    "
+)"
+CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
+    run_alembic upgrade 0051_contact_owner_repair
+owner_repair_rerun_fingerprint="$(
+    run_psql -Atc "
+        select md5(
+            (select count(*)::text from campaign_recipients) || ':' ||
+            (select count(*)::text from campaign_recipient_memberships) || ':' ||
+            (select count(*)::text from campaign_recipient_events) || ':' ||
+            (select count(*)::text from email_sends)
+        )
+    "
+)"
+if [[ "${owner_repair_fingerprint}" != "${owner_repair_rerun_fingerprint}" ]]; then
+    printf '0051 owner repair changed data during an idempotent rerun.\n' >&2
+    exit 11
+fi
+
+set +e
+owner_repair_rollback_output="$(run_alembic downgrade 0050_identity_account_types 2>&1)"
+owner_repair_rollback_status=$?
+set -e
+if [[ ${owner_repair_rollback_status} -eq 0 ]] \
+    || [[ "${owner_repair_rollback_output}" != *"Cannot safely undo campaign contact ownership repair"* ]]; then
+    printf 'Expected the unsafe 0051 owner-repair rollback to be blocked:\n%s\n' \
+        "${owner_repair_rollback_output}" >&2
+    exit 12
+fi
+printf '\nContact ownership repair: Pass (865 rows, 27 conflicts, safe rerun).\n'
 
 run_alembic upgrade head
 run_alembic check
