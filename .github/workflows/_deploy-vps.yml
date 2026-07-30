@@ -175,7 +175,12 @@ jobs:
           COMPOSE_PROJECT_NAME_VALUE="${CODRUT_COMPOSE_PROJECT_NAME:-codrut-platform}"
 
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "mkdir -p ${DEPLOY_DIR}"
-          scp -i ~/.ssh/id_rsa compose.yaml compose.prod.yaml "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/"
+          scp -i ~/.ssh/id_rsa \
+            compose.yaml \
+            compose.prod.yaml \
+            .github/scripts/check_vps_capacity.sh \
+            .github/scripts/retain_codrut_images.sh \
+            "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/"
 
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cd ${DEPLOY_DIR} && if [ -f .env ]; then awk -F= '/^(FRONTEND_IMAGE|BACKEND_IMAGE)=/ { print }' .env > previous-images.env; else : > previous-images.env; fi"
           scp -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/previous-images.env" "$RUNNER_TEMP/previous-images.env"
@@ -272,6 +277,7 @@ jobs:
           }
 
           "${compose[@]}" config >/dev/null
+          bash ./check_vps_capacity.sh preflight / 85 8
           "${compose[@]}" pull
           "${compose[@]}" run --rm -T backend alembic upgrade head </dev/null
           "${compose[@]}" run --rm -T backend python -m codrut.tools.reconcile_result_publications </dev/null
@@ -289,7 +295,6 @@ jobs:
           assert_service_healthy backend
           assert_service_healthy worker
           "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=10).read()"
-          docker image prune -f
           REMOTE
 
           HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/ready"
@@ -310,6 +315,22 @@ jobs:
           PREVIOUS_FRONTEND_IMAGE="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' "$RUNNER_TEMP/previous-images.env" || true)"
           PREVIOUS_BACKEND_IMAGE="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' "$RUNNER_TEMP/previous-images.env" || true)"
 
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "DEPLOY_DIR='${DEPLOY_DIR}' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+
+          current_backend="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' .env)"
+          current_frontend="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' .env)"
+          previous_backend="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' previous-images.env)"
+          previous_frontend="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' previous-images.env)"
+
+          bash ./retain_codrut_images.sh \
+            "$current_backend" \
+            "$previous_backend" \
+            "$current_frontend" \
+            "$previous_frontend"
+          REMOTE
+
           {
             echo "### ${DEPLOY_ENVIRONMENT} VPS deployment"
             echo "- Release SHA: \`${RELEASE_SHA}\`"
@@ -317,6 +338,8 @@ jobs:
             echo "- Backend image: \`${BACKEND_IMAGE}\`"
             echo "- Previous frontend image: \`${PREVIOUS_FRONTEND_IMAGE:-unknown}\`"
             echo "- Previous backend image: \`${PREVIOUS_BACKEND_IMAGE:-unknown}\`"
+            echo ""
+            echo "Retention ran only after internal and public readiness. The current and previous Codrut image refs remain available."
             echo ""
             echo "Rollback: set \`FRONTEND_IMAGE\` and \`BACKEND_IMAGE\` in \`${DEPLOY_DIR}/.env\` to the previous refs above, then run \`docker compose -f compose.yaml -f compose.prod.yaml up -d --wait\` when supported and verify \`${HEALTH_URL}\`."
           } >> "$GITHUB_STEP_SUMMARY"

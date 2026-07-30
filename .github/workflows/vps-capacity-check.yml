@@ -1,0 +1,57 @@
+name: VPS Capacity Check
+
+on:
+  schedule:
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capacity:
+    name: production / disk-capacity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}
+      SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check production disk capacity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for var_name in SSH_PRIVATE_KEY HETZNER_VPS_IP SSH_USER; do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "${var_name} is required for the production capacity check."
+              exit 1
+            fi
+          done
+
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$HETZNER_VPS_IP" >> ~/.ssh/known_hosts
+
+          set +e
+          capacity_output="$(
+            ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+              'bash -s -- scheduled / 80 90' \
+              < .github/scripts/check_vps_capacity.sh
+          )"
+          capacity_status=$?
+          set -e
+
+          echo "$capacity_output"
+          if grep -q 'CAPACITY_STATUS=warning' <<<"$capacity_output"; then
+            echo "::warning::Production root disk usage is at or above 80%."
+          fi
+          if [[ "$capacity_status" -ne 0 ]]; then
+            echo "::error::Production root disk usage is at or above 90%, or capacity could not be measured."
+            exit "$capacity_status"
+          fi

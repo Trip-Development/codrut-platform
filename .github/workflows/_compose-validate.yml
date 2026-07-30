@@ -98,6 +98,35 @@ jobs:
           if worker_origin != backend_origin:
               raise SystemExit("Worker and backend production CORS origins must match.")
 
+          expected_logging = {
+              "driver": "json-file",
+              "options": {"max-file": "5", "max-size": "10m"},
+          }
+          for service_name, service in services.items():
+              if service.get("logging") != expected_logging:
+                  raise SystemExit(
+                      f"Production {service_name} must use bounded json-file logs."
+                  )
+
+          backend_command = services["backend"].get("command", [])
+          if "--workers" not in backend_command:
+              raise SystemExit("Production backend must configure explicit Uvicorn workers.")
+          worker_index = backend_command.index("--workers") + 1
+          if backend_command[worker_index] != "4":
+              raise SystemExit("Production backend must default to four Uvicorn workers.")
+
+          for service_name in ("backend", "worker"):
+              environment = services[service_name]["environment"]
+              expected_pool = {
+                  "CODRUT_DB_POOL_SIZE": "5",
+                  "CODRUT_DB_MAX_OVERFLOW": "5",
+                  "CODRUT_DB_POOL_TIMEOUT_SECONDS": "10",
+              }
+              if any(environment.get(key) != value for key, value in expected_pool.items()):
+                  raise SystemExit(
+                      f"Production {service_name} must use the bounded database pool defaults."
+                  )
+
           frontend_labels = services["frontend"]["labels"]
           backend_labels = services["backend"]["labels"]
           for service_name in ("frontend", "backend"):
