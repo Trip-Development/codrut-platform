@@ -131,7 +131,7 @@ describe("project report overview", () => {
     expect(screen.queryByRole("heading", { name: "TA Drivers" })).toBeNull();
   });
 
-  it("explains when a completed TA result cannot be ranked", async () => {
+  it("explains when a person has no completed TA result that can be ranked", async () => {
     data.getProjectReportWorkspaceData.mockResolvedValue({
       aggregate: {
         ...aggregate,
@@ -151,8 +151,8 @@ describe("project report overview", () => {
     });
     render(ui);
 
-    expect(screen.getByText(/Un rezultat TA finalizat nu a putut fi inclus/)).toBeTruthy();
-    expect(screen.getByText(/nu are suficiente scoruri pentru a stabili primii doi driveri/)).toBeTruthy();
+    expect(screen.getByText(/O persoană nu a putut fi inclusă/)).toBeTruthy();
+    expect(screen.getByText(/nu are un rezultat TA finalizat cu suficiente scoruri/)).toBeTruthy();
   });
 
   it("uses honest chart copy when every finalized TA result is excluded", async () => {
@@ -183,6 +183,6 @@ describe("project report overview", () => {
 
     expect(screen.getAllByText("Nu există rezultate TA care pot fi incluse în aceste grafice.")).toHaveLength(2);
     expect(screen.queryByText("Nu există încă rezultate TA finalizate pentru această evaluare.")).toBeNull();
-    expect(screen.getByText(/Un rezultat TA finalizat nu a putut fi inclus/)).toBeTruthy();
+    expect(screen.getByText(/O persoană nu a putut fi inclusă/)).toBeTruthy();
   });
 });

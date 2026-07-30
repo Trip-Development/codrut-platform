@@ -182,8 +182,8 @@ export default async function ProjectReportsPage({
         {aggregate.driver_rank_summary.insufficient_driver_score_count > 0 ? (
           <p className="text-sm leading-6 text-muted-foreground">
             {aggregate.driver_rank_summary.insufficient_driver_score_count === 1
-              ? "Un rezultat TA finalizat nu a putut fi inclus, deoarece nu are suficiente scoruri pentru a stabili primii doi driveri."
-              : `${aggregate.driver_rank_summary.insufficient_driver_score_count} rezultate TA finalizate nu au putut fi incluse, deoarece nu au suficiente scoruri pentru a stabili primii doi driveri.`}
+              ? "O persoană nu a putut fi inclusă, deoarece nu are un rezultat TA finalizat cu suficiente scoruri pentru a stabili primii doi driveri."
+              : `${aggregate.driver_rank_summary.insufficient_driver_score_count} persoane nu au putut fi incluse, deoarece nu au un rezultat TA finalizat cu suficiente scoruri pentru a stabili primii doi driveri.`}
           </p>
         ) : null}
       </ResultSection>
