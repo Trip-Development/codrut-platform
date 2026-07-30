@@ -82,6 +82,33 @@ class DeploySafeguardTests(unittest.TestCase):
         self.assertEqual(failure.returncode, 1)
         self.assertIn("CAPACITY_STATUS=failure", failure.stdout)
 
+    def test_capacity_schedule_dispatches_an_environment_bound_prod_run(self) -> None:
+        capacity_workflow = (
+            REPOSITORY_ROOT / ".github/workflows/vps-capacity-check.yml"
+        ).read_text(encoding="utf-8")
+        dispatch_job = capacity_workflow[
+            capacity_workflow.index("  dispatch-production-check:")
+            : capacity_workflow.index("  validate-production-ref:")
+        ]
+        validation_job = capacity_workflow[
+            capacity_workflow.index("  validate-production-ref:")
+            : capacity_workflow.index("  capacity:")
+        ]
+        capacity_job = capacity_workflow[capacity_workflow.index("  capacity:") :]
+
+        self.assertIn("if: github.event_name == 'schedule'", dispatch_job)
+        self.assertIn("actions: write", dispatch_job)
+        self.assertIn("--ref prod", dispatch_job)
+        self.assertNotIn("environment:", dispatch_job)
+        self.assertIn(
+            "if: github.event_name == 'workflow_dispatch'",
+            validation_job,
+        )
+        self.assertIn('refs/heads/prod', validation_job)
+        self.assertIn("needs: validate-production-ref", capacity_job)
+        self.assertIn("environment: prod", capacity_job)
+        self.assertNotIn("environment: production", capacity_job)
+
     def test_retention_removes_only_obsolete_codrut_tags(self) -> None:
         current_backend = (
             "ghcr.io/trip-development/codrut-platform-backend:sha-current"
