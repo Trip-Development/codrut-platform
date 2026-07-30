@@ -502,6 +502,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/communications/send-capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Email Send Capacity */
+        get: operations["get_email_send_capacity_api_communications_send_capacity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/communications/templates": {
         parameters: {
             query?: never;
@@ -1085,6 +1102,23 @@ export interface paths {
         put?: never;
         /** Permanently Delete Company Project */
         post: operations["permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/reports/leadership/{participant_profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Leadership Member Report */
+        get: operations["get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1791,6 +1825,12 @@ export interface components {
         AssignmentTargetType: "self" | "person" | "team";
         /** AuthResponse */
         AuthResponse: {
+            /**
+             * Access Mode
+             * @default account
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
             /** @default registered */
             account_type: components["schemas"]["UserAccountType"];
             /**
@@ -1800,6 +1840,11 @@ export interface components {
             available_workspaces: components["schemas"]["UserRole"][];
             /** Avatar Palette Key */
             avatar_palette_key?: number | null;
+            /**
+             * Consent Current
+             * @default false
+             */
+            consent_current: boolean;
             default_workspace?: components["schemas"]["UserRole"] | null;
             /**
              * Email
@@ -2002,6 +2047,11 @@ export interface components {
         };
         /** CampaignRecipientMembershipRowResponse */
         CampaignRecipientMembershipRowResponse: {
+            /**
+             * Activationallowed
+             * @default false
+             */
+            activationAllowed: boolean;
             /** Archivedat */
             archivedAt?: string | null;
             /**
@@ -2058,6 +2108,8 @@ export interface components {
             source?: string | null;
             /** Status */
             status: string;
+            /** Statusbeforearchive */
+            statusBeforeArchive?: string | null;
             /**
              * Viewcount
              * @default 0
@@ -2107,6 +2159,11 @@ export interface components {
         };
         /** CampaignRecipientRowResponse */
         CampaignRecipientRowResponse: {
+            /**
+             * Activationallowed
+             * @default false
+             */
+            activationAllowed: boolean;
             /** Archivedat */
             archivedAt?: string | null;
             /**
@@ -2155,6 +2212,8 @@ export interface components {
             source?: string | null;
             /** Status */
             status: string;
+            /** Statusbeforearchive */
+            statusBeforeArchive?: string | null;
             /**
              * Viewcount
              * @default 0
@@ -2439,6 +2498,7 @@ export interface components {
             driver_averages: components["schemas"]["ReportAverageResponse"][];
             /** Driver Count */
             driver_count: number;
+            driver_rank_summary: components["schemas"]["DriverRankSummaryResponse"];
             /** Hierarchy Ambiguity Message */
             hierarchy_ambiguity_message?: string | null;
             /**
@@ -2448,8 +2508,12 @@ export interface components {
             hierarchy_ambiguous: boolean;
             /** Hierarchy Issues */
             hierarchy_issues: components["schemas"]["ReportHierarchyIssueResponse"][];
+            /** Icare Cohorts */
+            icare_cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
             /** Icare Target Summaries */
             icare_target_summaries: components["schemas"]["IcareTargetSummaryResponse"][];
+            /** Leadership Members */
+            leadership_members?: components["schemas"]["LeadershipMemberSummaryResponse"][];
             /** Lencioni Averages */
             lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */
@@ -2462,6 +2526,8 @@ export interface components {
             pcm_phase_count: number;
             /** Pcm Phase Distribution */
             pcm_phase_distribution: components["schemas"]["ReportDistributionResponse"][];
+            /** Project Id */
+            project_id?: string | null;
             /** Results */
             results: components["schemas"]["ScoringResultResponse"][];
             /** Team Lenses */
@@ -2568,6 +2634,19 @@ export interface components {
             /** Questionnaire Key */
             questionnaire_key: string;
         };
+        /** DriverRankSummaryResponse */
+        DriverRankSummaryResponse: {
+            /** First Rank */
+            first_rank: components["schemas"]["ReportDistributionResponse"][];
+            /** First Rank Tie Breaks */
+            first_rank_tie_breaks: number;
+            /** Second Rank */
+            second_rank: components["schemas"]["ReportDistributionResponse"][];
+            /** Second Rank Tie Breaks */
+            second_rank_tie_breaks: number;
+            /** Total People */
+            total_people: number;
+        };
         /** EmailDeliveryMetricResponse */
         EmailDeliveryMetricResponse: {
             /** Detail */
@@ -2597,6 +2676,15 @@ export interface components {
          * @enum {string}
          */
         EmailProviderKey: "test" | "smtp" | "mailpit" | "brevo";
+        /** EmailSendCapacityResponse */
+        EmailSendCapacityResponse: {
+            /** Daily Cap */
+            daily_cap: number;
+            /** Remaining Today */
+            remaining_today: number;
+            /** Used Today */
+            used_today: number;
+        };
         /** EmailTemplateCreateRequest */
         EmailTemplateCreateRequest: {
             /**
@@ -2780,8 +2868,22 @@ export interface components {
             /** Target Type */
             target_type: string;
         };
+        /** IcareCohortSummaryResponse */
+        IcareCohortSummaryResponse: {
+            /** Averages */
+            averages: components["schemas"]["ReportAverageResponse"][];
+            /**
+             * Cohort
+             * @enum {string}
+             */
+            cohort: "direct_team" | "leadership_peers" | "self";
+            /** Response Count */
+            response_count: number;
+        };
         /** IcareTargetSummaryResponse */
         IcareTargetSummaryResponse: {
+            /** Cohorts */
+            cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
             /** External Averages */
             external_averages: components["schemas"]["ReportAverageResponse"][];
             /** External Response Count */
@@ -2864,12 +2966,25 @@ export interface components {
         /** InviteExchangeResponse */
         InviteExchangeResponse: {
             /**
+             * Access Mode
+             * @default secure_link
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
+            /** @default guest */
+            account_type: components["schemas"]["UserAccountType"];
+            /**
              * Action
              * @enum {string}
              */
             action: "secure_link_ready" | "login_required" | "dashboard_ready" | "account_switch_required";
             /** Assessment Cycle Id */
             assessment_cycle_id?: string | null;
+            /**
+             * Consent Current
+             * @default false
+             */
+            consent_current: boolean;
             /** Destination */
             destination?: string | null;
             /**
@@ -2879,6 +2994,10 @@ export interface components {
             participant_profile_id: string;
             /** Project Id */
             project_id?: string | null;
+            /** Terms Accepted At */
+            terms_accepted_at?: string | null;
+            /** Terms Version */
+            terms_version?: string | null;
         };
         /** InviteTask */
         InviteTask: {
@@ -2888,8 +3007,16 @@ export interface components {
             assignmentId: string;
             /** Assignmentroundid */
             assignmentRoundId?: string | null;
+            /** Cyclename */
+            cycleName?: string | null;
+            /** Cyclesequence */
+            cycleSequence?: number | null;
+            /** Deadlinelabel */
+            deadlineLabel?: string | null;
             /** Detail */
             detail: string;
+            /** Dueat */
+            dueAt?: string | null;
             /** Estimatedminutes */
             estimatedMinutes: number;
             /** Href */
@@ -2900,6 +3027,8 @@ export interface components {
             projectId?: string | null;
             /** Projectname */
             projectName?: string | null;
+            /** Questionnairedefinitionid */
+            questionnaireDefinitionId?: string | null;
             /** Questionnairekey */
             questionnaireKey: string;
             /** Status */
@@ -2912,14 +3041,27 @@ export interface components {
         /** InviteVerifyResponse */
         InviteVerifyResponse: {
             /**
+             * Access Mode
+             * @default secure_link
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
+            /**
              * Account Dashboard Available
              * @default false
              */
             account_dashboard_available: boolean;
+            /** @default guest */
+            account_type: components["schemas"]["UserAccountType"];
             /** Already Registered */
             already_registered: boolean;
             /** Anonymous Name */
             anonymous_name?: string | null;
+            /**
+             * Consent Current
+             * @default false
+             */
+            consent_current: boolean;
             /**
              * Email
              * Format: email
@@ -2949,6 +3091,45 @@ export interface components {
              * @constant
              */
             token_status: "active";
+        };
+        /** LeadershipMemberReportResponse */
+        LeadershipMemberReportResponse: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
+            /** Driver Averages */
+            driver_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Driver Count */
+            driver_count: number;
+            /** Icare Cohorts */
+            icare_cohorts: components["schemas"]["IcareCohortSummaryResponse"][];
+            /** Lencioni Averages */
+            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Lencioni Count */
+            lencioni_count: number;
+            member: components["schemas"]["LeadershipMemberSummaryResponse"];
+            /** Pcm Base */
+            pcm_base?: string | null;
+            /** Pcm Phase */
+            pcm_phase?: string | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+        };
+        /** LeadershipMemberSummaryResponse */
+        LeadershipMemberSummaryResponse: {
+            /** Full Name */
+            full_name: string;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /** Position */
+            position?: string | null;
+            /** Role Group */
+            role_group?: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -3126,6 +3307,74 @@ export interface components {
             /** Required */
             required: boolean;
         };
+        /** ParticipantQuestionnaireProject */
+        ParticipantQuestionnaireProject: {
+            /** Company Name */
+            company_name: string;
+            /** Completed Count */
+            completed_count: number;
+            /** Deadline Label */
+            deadline_label: string;
+            /** History Bucket */
+            history_bucket: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /** Questionnaires */
+            questionnaires?: components["schemas"]["ParticipantQuestionnaireTask"][];
+            /** Status */
+            status: string;
+            /** Total Count */
+            total_count: number;
+        };
+        /** ParticipantQuestionnaireTask */
+        ParticipantQuestionnaireTask: {
+            /** Assessmentcycleid */
+            assessmentCycleId?: string | null;
+            /** Assignmentid */
+            assignmentId: string;
+            /** Assignmentroundid */
+            assignmentRoundId?: string | null;
+            /** Cyclename */
+            cycleName?: string | null;
+            /** Cyclesequence */
+            cycleSequence?: number | null;
+            /** Deadlinelabel */
+            deadlineLabel: string;
+            /** Detail */
+            detail: string;
+            /** Dueat */
+            dueAt?: string | null;
+            /** Estimatedminutes */
+            estimatedMinutes: number;
+            /** Href */
+            href: string;
+            /** Id */
+            id: string;
+            /** Projectid */
+            projectId?: string | null;
+            /** Projectname */
+            projectName?: string | null;
+            /** Questionnairedefinitionid */
+            questionnaireDefinitionId?: string | null;
+            /** Questionnairekey */
+            questionnaireKey: string;
+            /** Status */
+            status: string;
+            /** Targetlabel */
+            targetLabel: string;
+            /** Title */
+            title: string;
+        };
         /** ParticipantReceivedFeedbackDimension */
         ParticipantReceivedFeedbackDimension: {
             /** Average Score */
@@ -3146,6 +3395,11 @@ export interface components {
              * Format: uuid
              */
             assignment_round_id: string;
+            /**
+             * Cohort
+             * @enum {string}
+             */
+            cohort: "direct_team" | "leadership_peers";
             /** Completed Count */
             completed_count: number;
             /** Dimensions */
@@ -3378,6 +3632,8 @@ export interface components {
             project_name?: string | null;
             /** Projects */
             projects?: components["schemas"]["ParticipantWorkspaceProject"][];
+            /** Questionnaire Projects */
+            questionnaire_projects?: components["schemas"]["ParticipantQuestionnaireProject"][];
             received_feedback?: components["schemas"]["ParticipantReceivedFeedbackSummary"] | null;
             /** Received Feedback Groups */
             received_feedback_groups?: components["schemas"]["ParticipantReceivedFeedbackSummary"][];
@@ -3627,6 +3883,8 @@ export interface components {
         ReportAverageResponse: {
             /** Avg */
             avg: number;
+            /** Feedback */
+            feedback?: string | null;
             /** Id */
             id: string;
             /** Interpretation */
@@ -3841,6 +4099,11 @@ export interface components {
             available_workspaces: components["schemas"]["UserRole"][];
             /** Avatar Palette Key */
             avatar_palette_key?: number | null;
+            /**
+             * Consent Current
+             * @default false
+             */
+            consent_current: boolean;
             default_workspace?: components["schemas"]["UserRole"] | null;
             /**
              * Email
@@ -6499,6 +6762,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmailOpsSummaryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_email_send_capacity_api_communications_send_capacity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailSendCapacityResponse"];
                 };
             };
             /** @description Bad Request */
@@ -10034,6 +10371,86 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get: {
+        parameters: {
+            query?: {
+                assessment_cycle_id?: string | null;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+                participant_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadershipMemberReportResponse"];
+                };
             };
             /** @description Bad Request */
             400: {

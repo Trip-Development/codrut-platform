@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import AssessmentCycle, AssessmentCycleStatus
-from codrut.modules.companies.anonymous import new_anonymous_name
+from codrut.modules.companies.anonymous import (
+    allocate_anonymous_name,
+)
 from codrut.modules.companies.manager_matching import (
     clean_manager_reference,
     manager_reference_key,
@@ -608,7 +610,7 @@ class CompanyService:
                 pcm_profile=_clean_optional(payload.pcm_profile),
                 pcm_base=_clean_optional(payload.pcm_base),
                 pcm_phase=_clean_optional(payload.pcm_phase),
-                anonymous_name=new_anonymous_name(),
+                anonymous_name=await self._allocate_anonymous_name(),
             )
         )
         await self._sync_leadership_team_membership(company_id, participant)
@@ -727,6 +729,7 @@ class CompanyService:
             seen_emails.add(row.email)
 
         participants: list[ParticipantProfile] = []
+        reserved_anonymous_names: set[str] = set()
         for row in rows:
             participant = (
                 await self.repository.get_participant_by_company_email(
@@ -755,11 +758,18 @@ class CompanyService:
                         pcm_profile=row.pcm_profile or row.pcm_base,
                         pcm_base=row.pcm_base,
                         pcm_phase=row.pcm_phase,
-                        anonymous_name=new_anonymous_name(),
+                        anonymous_name=await self._allocate_anonymous_name(
+                            reserved_anonymous_names
+                        ),
                     )
                 )
             elif not participant.anonymous_name:
-                participant.anonymous_name = new_anonymous_name()
+                participant.anonymous_name = await self._allocate_anonymous_name(
+                    reserved_anonymous_names
+                )
+
+            if participant.anonymous_name:
+                reserved_anonymous_names.add(participant.anonymous_name)
 
             if payload.project_id is not None:
                 await self._upsert_project_membership(
@@ -907,13 +917,35 @@ class CompanyService:
 
     async def _ensure_anonymous_names(self, participants: list[ParticipantProfile]) -> None:
         changed = False
+        reserved_anonymous_names = {
+            participant.anonymous_name
+            for participant in participants
+            if participant.anonymous_name
+        }
         for participant in participants:
             if participant.anonymous_name:
                 continue
-            participant.anonymous_name = new_anonymous_name()
+            participant.anonymous_name = await self._allocate_anonymous_name(
+                reserved_anonymous_names
+            )
+            reserved_anonymous_names.add(participant.anonymous_name)
             changed = True
         if changed:
             await self.repository.session.flush()
+
+    async def _allocate_anonymous_name(
+        self,
+        reserved: set[str] | None = None,
+    ) -> str:
+        reserved_names = reserved or set()
+
+        async def is_taken(candidate: str) -> bool:
+            return await self.repository.anonymous_name_exists(candidate)
+
+        return await allocate_anonymous_name(
+            is_taken,
+            reserved=reserved_names,
+        )
 
     async def _sync_leadership_team_membership(
         self,
@@ -1124,6 +1156,12 @@ class CompanyService:
 
         results: list[RosterImportEmailResult] = []
         has_sendable_email = any(participant.email is not None for participant in participants)
+        if (
+            mode == "email"
+            and has_sendable_email
+            and hasattr(communications_repository, "acquire_email_capacity_lock")
+        ):
+            await communications_repository.acquire_email_capacity_lock()
         remaining_sends = (
             await _remaining_email_sends_today(communications_repository, settings)
             if mode == "email" and has_sendable_email
@@ -1165,6 +1203,7 @@ class CompanyService:
             send_error: str | None = None
             send_error_code: str | None = None
             delivery_status: str | None = None
+            new_email_reserved = False
             try:
                 async with self.repository.session.begin_nested():
                     invite = await identity_service.create_invite(
@@ -1183,9 +1222,6 @@ class CompanyService:
                             if assignment.status == AssignmentStatus.assigned:
                                 assignment.status = AssignmentStatus.invited
                             assignment.invited_at = assignment.invited_at or now
-                    elif remaining_sends <= 0:
-                        send_error_code = "daily_send_cap_reached"
-                        send_error = "Limita zilnică de emailuri a fost atinsă."
                     else:
                         assert email_service is not None
                         reminder_assignment_ids = [
@@ -1201,7 +1237,7 @@ class CompanyService:
                                 "trimise.",
                                 code="reminder_not_due",
                             )
-                        result = await email_service.send_assignment_invitation(
+                        queued = await email_service.enqueue_assignment_invitation(
                             assignments[0],
                             participant,
                             AssignmentInvitationContext(
@@ -1221,7 +1257,10 @@ class CompanyService:
                             reminder_assignment_ids=(
                                 reminder_assignment_ids if has_prior_delivery else None
                             ),
+                            allow_new=remaining_sends > 0,
                         )
+                        result = queued.delivery
+                        new_email_reserved = queued.created
                         delivery_status = result.status.value
                         if result.status == "accepted":
                             now = datetime.now(UTC)
@@ -1259,7 +1298,7 @@ class CompanyService:
                     invite_url=invite_url,
                 )
             )
-            if mode == "email" and send_error is None:
+            if mode == "email" and send_error is None and new_email_reserved:
                 remaining_sends -= 1
 
         emails_sent = sum(1 for result in results if result.email_sent)

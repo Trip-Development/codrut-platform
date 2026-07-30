@@ -101,12 +101,12 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
     assert next(iter(owner_column.foreign_keys)).ondelete == "CASCADE"
 
 
-def test_contact_archive_expand_keeps_recipient_owner_required_but_event_owner_nullable() -> None:
+def test_contact_privacy_contract_requires_recipient_and_event_owners() -> None:
     recipient_owner = Base.metadata.tables["campaign_recipients"].columns["owner_id"]
     event_owner = Base.metadata.tables["campaign_recipient_events"].columns["owner_id"]
 
     assert not recipient_owner.nullable
-    assert event_owner.nullable
+    assert not event_owner.nullable
 
 
 def test_contact_tombstones_retain_only_pseudonymous_delivery_lookups() -> None:

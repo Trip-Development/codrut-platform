@@ -179,6 +179,30 @@ class DeploySafeguardTests(unittest.TestCase):
         )
         self.assertNotIn("docker system prune", workflow)
 
+    def test_deploy_verifies_active_log_rotation_for_every_service(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("assert_bounded_log_config()", workflow)
+        self.assertIn(
+            "for service in traefik frontend backend worker db redis",
+            workflow,
+        )
+        self.assertIn('"$max_size" != "10m"', workflow)
+        self.assertIn('"$max_file" != "5"', workflow)
+
+    def test_privacy_bridge_requires_fingerprint_aware_expand_release(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        guard = workflow.index("pre_migration_revision=")
+        migrate = workflow.index('backend alembic upgrade head')
+        self.assertLess(guard, migrate)
+        self.assertIn("deploy the 0052 expand release first", workflow)
+        self.assertIn("hasattr(EmailSuppression, 'email_fingerprint')", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

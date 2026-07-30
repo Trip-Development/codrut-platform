@@ -1,3 +1,4 @@
+import hashlib
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -80,12 +81,20 @@ def install_rate_limit_middleware(
             return await call_next(request)
 
         rate_limiter: RateLimiter = request.app.state.rate_limiter
-        decision = await rate_limiter.hit(
-            rate_limit_key(request, trusted_proxies=trusted_proxies),
-            limit=active_settings.rate_limit_max_requests,
-            window_seconds=active_settings.rate_limit_window_seconds,
-        )
-        if decision.allowed:
+        decision = RateLimitDecision(allowed=True)
+        for key, limit in rate_limit_budgets(
+            request,
+            settings=active_settings,
+            trusted_proxies=trusted_proxies,
+        ):
+            decision = await rate_limiter.hit(
+                key,
+                limit=limit,
+                window_seconds=active_settings.rate_limit_window_seconds,
+            )
+            if not decision.allowed:
+                break
+        else:
             return await call_next(request)
 
         headers = {}
@@ -106,14 +115,52 @@ def is_rate_limited_request(request: Request) -> bool:
     return request.url.path.startswith("/api/")
 
 
-def rate_limit_key(
+def rate_limit_budgets(
     request: Request,
     *,
+    settings: Settings,
     trusted_proxies: tuple[TrustedProxyNetwork, ...] = (),
-) -> str:
+) -> tuple[tuple[str, int], ...]:
     client_ip = rate_limit_client_ip(request, trusted_proxies=trusted_proxies)
     path = rate_limit_path_family(request.url.path)
-    return f"{client_ip}:{request.method.upper()}:{path}"
+    method = request.method.upper()
+    request_limit = rate_limit_request_limit(request, settings)
+    ip_key = f"{client_ip}:{method}:{path}"
+    subject = rate_limit_authenticated_subject(request)
+    if subject is None:
+        return ((ip_key, request_limit),)
+    return (
+        (ip_key, settings.rate_limit_ip_max_requests),
+        (f"{subject}:{method}:{path}", request_limit),
+    )
+
+
+def rate_limit_authenticated_subject(request: Request) -> str | None:
+    session_token = request.cookies.get("codrut_session")
+    if session_token:
+        return f"session:{_rate_limit_token_fingerprint(session_token)}"
+
+    path_parts = request.url.path.split("/")
+    try:
+        secure_link_index = path_parts.index("secure-links")
+    except ValueError:
+        return None
+    token_index = secure_link_index + 1
+    if token_index >= len(path_parts) or not path_parts[token_index]:
+        return None
+    return f"secure-link:{_rate_limit_token_fingerprint(path_parts[token_index])}"
+
+
+def _rate_limit_token_fingerprint(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()[:32]
+
+
+def rate_limit_request_limit(request: Request, settings: Settings) -> int:
+    if request.url.path == "/api/auth/invite/exchange":
+        # Invite tokens are cryptographically strong. A higher per-IP ceiling lets a
+        # large company launch behind one NAT while keeping a finite abuse bound.
+        return settings.rate_limit_invite_exchange_max_requests
+    return settings.rate_limit_max_requests
 
 
 def trusted_proxy_networks(proxies: list[str]) -> tuple[TrustedProxyNetwork, ...]:
@@ -165,6 +212,12 @@ def is_trusted_proxy(
 
 
 def rate_limit_path_family(path: str) -> str:
+    if path.startswith("/api/forms/secure-links/"):
+        parts = path.split("/")
+        if len(parts) >= 8 and parts[5] == "assignments":
+            suffix = "/".join(parts[7:])
+            return f"/api/forms/secure-links/:token/assignments/:assignment_id/{suffix}"
+        return "/api/forms/secure-links/:token"
     if path.startswith("/api/communications/campaigns/recipients/") and path.endswith("/events"):
         return "/api/communications/campaigns/recipients/:recipient_id/events"
     if path.startswith("/api/communications/campaigns/unsubscribe/"):

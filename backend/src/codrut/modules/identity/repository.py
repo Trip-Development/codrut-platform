@@ -27,8 +27,16 @@ class IdentityRepository:
         result = await self.session.execute(select(User).where(User.email == email.lower()))
         return result.scalar_one_or_none()
 
-    async def get_user_by_id(self, user_id: UUID) -> User | None:
-        result = await self.session.execute(select(User).where(User.id == user_id))
+    async def get_user_by_id(
+        self,
+        user_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> User | None:
+        statement = select(User).where(User.id == user_id)
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
     async def has_participant_profile(self, user_id: UUID) -> bool:
@@ -55,6 +63,18 @@ class IdentityRepository:
             .with_for_update()
         )
         return list(result.scalars().all())
+
+    async def anonymous_name_exists(self, anonymous_name: str) -> bool:
+        from codrut.modules.companies.models import ParticipantProfile
+
+        result = await self.session.execute(
+            select(
+                exists().where(
+                    ParticipantProfile.anonymous_name == anonymous_name
+                )
+            )
+        )
+        return bool(result.scalar())
 
     async def get_user_by_session_token(self, token: str) -> User | None:
         result = await self.session.execute(

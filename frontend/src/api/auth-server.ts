@@ -30,6 +30,7 @@ type SessionPrincipalResponse = {
   access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
   terms_version?: string | null;
+  consent_current?: boolean;
 };
 
 const getSessionFromApi = cache(async function getSessionFromApi(
@@ -95,6 +96,7 @@ const getSessionFromApi = cache(async function getSessionFromApi(
       accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
       termsVersion: user.terms_version,
+      consentCurrent: user.consent_current ?? false,
     },
   };
 });

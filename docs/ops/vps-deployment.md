@@ -168,9 +168,9 @@ Optional environment secrets:
   total execution time of any migration statement.
 - `CODRUT_CAMPAIGN_RECIPIENT_ARCHIVE_RETENTION_DAYS` defaults to `30`.
 - `CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS` defaults to `7`.
-- `CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` stays `false` for the expand
-  release and becomes `true` only after the contract migration removes the
-  rollback-only full-email suppression column.
+- `CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` defaults to `true` after the
+  contact privacy bridge has replaced rollback-only suppression addresses with
+  enforced `@invalid` placeholders.
 - `CODRUT_CAMPAIGN_DELIVERY_TOMBSTONE_RETENTION_DAYS` defaults to `365` and
   bounds late-provider lookup receipts independently of do-not-contact review.
 - `CODRUT_EMAIL_SUPPRESSION_REVIEW_DAYS` defaults to `365`.
@@ -344,8 +344,10 @@ Rollback is manual and image-ref based:
    readiness, then switch back to the candidate and repeat the checks. Confirm
    both pairs remain visible with `docker image inspect`.
 
-Rollback to an older application image does not undo database migrations. Check
-the migration notes before rolling back across schema changes.
+Rollback to an older application image does not undo database migrations. The
+contact privacy bridge deliberately keeps the legacy suppression column with
+only enforced `@invalid` placeholders so the retained fingerprint-aware image
+can still start. Never restore original addresses to that column.
 
 For the contact-archive expand release, archived active contacts are persisted
 as `suppressed` with their prior status in the additive schema. The previous

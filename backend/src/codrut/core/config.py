@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     email_smtp_password: SecretStr | None = None
     email_smtp_starttls: bool = False
     email_test_mode: bool = True
-    email_daily_send_cap: int = Field(default=750, ge=0)
+    email_brevo_sandbox_enabled: bool = False
+    email_daily_send_cap: int = Field(default=2000, ge=0)
+    email_outbox_batch_size: int = Field(default=100, ge=1, le=1000)
+    email_outbox_concurrency: int = Field(default=8, ge=1, le=32)
     campaign_recipient_archive_retention_days: int = Field(default=30, ge=1, le=365)
     campaign_recipient_delivery_reconciliation_days: int = Field(
         default=7,
@@ -58,6 +61,7 @@ class Settings(BaseSettings):
     readiness_timeout_seconds: float = Field(default=3.0, ge=0.25, le=30.0)
     worker_heartbeat_key: str = "codrut:worker:heartbeat"
     worker_heartbeat_ttl_seconds: int = Field(default=30, ge=10, le=300)
+    worker_max_jobs: int = Field(default=3, ge=1, le=20)
     outbox_backlog_max_pending: int = Field(default=5000, ge=1, le=1_000_000)
     outbox_backlog_max_age_seconds: int = Field(default=1800, ge=60, le=86_400)
     public_app_url: str = "http://localhost:3000"
@@ -73,8 +77,12 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = False
     rate_limit_backend: Literal["noop", "redis"] = "noop"
     rate_limit_max_requests: int = 120
+    rate_limit_ip_max_requests: int = Field(default=2000, ge=1, le=100_000)
+    rate_limit_invite_exchange_max_requests: int = Field(default=2000, ge=1, le=10_000)
     rate_limit_window_seconds: int = 60
     rate_limit_trusted_proxies: list[str] = Field(default_factory=list)
+    maintenance_mode: bool = False
+    maintenance_bypass_token: SecretStr | None = None
     password_breach_check_enabled: bool = False
     password_breach_timeout_seconds: float = Field(default=1.5, ge=0.25, le=5.0)
     password_breach_api_url: str = "https://api.pwnedpasswords.com/range"  # noqa: S105
@@ -125,6 +133,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_safety(self) -> "Settings":
+        peak_worker_connections = (
+            self.email_outbox_concurrency + self.worker_max_jobs - 1
+        )
+        worker_pool_capacity = self.db_pool_size + self.db_max_overflow
+        if peak_worker_connections > worker_pool_capacity:
+            raise ValueError(
+                "Worker concurrency can exceed its database pool: "
+                "email_outbox_concurrency + worker_max_jobs - 1 must be no "
+                "greater than db_pool_size + db_max_overflow."
+            )
+        if self.maintenance_mode:
+            maintenance_token = (
+                self.maintenance_bypass_token.get_secret_value().strip()
+                if self.maintenance_bypass_token
+                else ""
+            )
+            if len(maintenance_token) < 32:
+                raise ValueError(
+                    "Maintenance mode requires a bypass token with at least 32 characters."
+                )
         if not self.is_production:
             return self
         if self.local_auth_bypass:

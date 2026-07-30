@@ -1,6 +1,7 @@
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ScoringResultResponse(BaseModel):
@@ -18,6 +19,7 @@ class ReportAverageResponse(BaseModel):
     avg: float
     interpretation: str | None = None
     range_label: str | None = None
+    feedback: str | None = None
 
 
 class ReportDistributionResponse(BaseModel):
@@ -88,9 +90,45 @@ class IcareTargetSummaryResponse(BaseModel):
     self_response_count: int
     external_averages: list[ReportAverageResponse]
     self_averages: list[ReportAverageResponse]
+    cohorts: list["IcareCohortSummaryResponse"] = Field(default_factory=list)
+
+
+class IcareCohortSummaryResponse(BaseModel):
+    cohort: Literal["direct_team", "leadership_peers", "self"]
+    response_count: int
+    averages: list[ReportAverageResponse]
+
+
+class DriverRankSummaryResponse(BaseModel):
+    total_people: int
+    first_rank: list[ReportDistributionResponse]
+    second_rank: list[ReportDistributionResponse]
+    first_rank_tie_breaks: int
+    second_rank_tie_breaks: int
+
+
+class LeadershipMemberSummaryResponse(BaseModel):
+    participant_profile_id: UUID
+    full_name: str
+    position: str | None = None
+    role_group: str | None = None
+
+
+class LeadershipMemberReportResponse(BaseModel):
+    project_id: UUID
+    assessment_cycle_id: UUID | None = None
+    member: LeadershipMemberSummaryResponse
+    pcm_base: str | None = None
+    pcm_phase: str | None = None
+    lencioni_count: int
+    lencioni_averages: list[ReportAverageResponse]
+    icare_cohorts: list[IcareCohortSummaryResponse]
+    driver_count: int
+    driver_averages: list[ReportAverageResponse]
 
 
 class CompanyReportAggregateResponse(BaseModel):
+    project_id: UUID | None = None
     assessment_cycle_id: UUID | None = None
     total_assigned: int
     total_completed: int
@@ -104,6 +142,9 @@ class CompanyReportAggregateResponse(BaseModel):
     driver_averages: list[ReportAverageResponse]
     boss_360_averages: list[ReportAverageResponse]
     icare_target_summaries: list[IcareTargetSummaryResponse]
+    icare_cohorts: list[IcareCohortSummaryResponse] = Field(default_factory=list)
+    driver_rank_summary: DriverRankSummaryResponse
+    leadership_members: list[LeadershipMemberSummaryResponse] = Field(default_factory=list)
     pcm_base_distribution: list[ReportDistributionResponse]
     pcm_phase_distribution: list[ReportDistributionResponse]
     team_lenses: list[ReportTeamLensResponse]

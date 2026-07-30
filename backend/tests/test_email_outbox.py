@@ -1,8 +1,9 @@
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
 from codrut.contracts.emails import (
     EmailAddress,
@@ -21,6 +22,9 @@ from codrut.modules.assignments.models import (
 )
 from codrut.modules.communications.models import (
     Campaign,
+    CampaignRecipient,
+    CampaignRecipientSegment,
+    CampaignRecipientStatus,
     CampaignStatus,
     EmailEvent,
     EmailEventType,
@@ -90,16 +94,19 @@ def outbox_send(
     key: str | None = None,
     payload: dict[str, object] | None = None,
     campaign_id: uuid.UUID | None = None,
+    campaign_recipient_id: uuid.UUID | None = None,
     status: EmailSendStatus = EmailSendStatus.queued,
     attempt_count: int = 0,
     lease_expires_at: datetime | None = None,
     owner_id: uuid.UUID | None = None,
+    sandbox_required: bool = False,
 ) -> EmailSend:
     message_payload = payload or outbox_payload()
     return EmailSend(
         id=uuid.uuid4(),
         owner_id=owner_id,
         campaign_id=campaign_id,
+        campaign_recipient_id=campaign_recipient_id,
         recipient_email="ana@example.com",
         template_key="campaign",
         template_version=1,
@@ -107,6 +114,7 @@ def outbox_send(
         idempotency_key=key or uuid.uuid4().hex,
         payload_fingerprint=_email_outbox_payload_fingerprint(message_payload),
         message_payload=message_payload,
+        sandbox_required=sandbox_required,
         attempt_count=attempt_count,
         max_attempts=5,
         next_attempt_at=EARLY_DUE_AT if status == EmailSendStatus.queued else None,
@@ -288,7 +296,7 @@ async def test_provider_failure_schedules_bounded_retry() -> None:
 
 
 async def test_provider_acceptance_completes_same_outbox_row() -> None:
-    send = outbox_send()
+    send = outbox_send(sandbox_required=True)
     provider = AcceptingProvider()
     try:
         async with SessionLocal() as session:
@@ -304,8 +312,214 @@ async def test_provider_acceptance_completes_same_outbox_row() -> None:
             assert stored.provider_message_id == "provider:1"
             assert stored.lease_token is None
             assert [message.subject for message in provider.messages] == ["Salut"]
+            assert provider.messages[0].provider_sandbox is True
     finally:
         await cleanup_send(send.id)
+
+
+async def test_forged_cross_owner_campaign_send_never_reaches_provider() -> None:
+    owner_a = User(
+        id=uuid.uuid4(),
+        email=f"trainer-a-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="test-hash",  # noqa: S106
+        role=UserRole.trainer,
+    )
+    owner_b = User(
+        id=uuid.uuid4(),
+        email=f"trainer-b-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="test-hash",  # noqa: S106
+        role=UserRole.trainer,
+    )
+    campaign = Campaign(
+        id=uuid.uuid4(),
+        owner_id=owner_b.id,
+        name=f"Cross-owner campaign {uuid.uuid4()}",
+        status=CampaignStatus.ready,
+        subject="Salut",
+        html_body="<p>Mesaj</p>",
+        text_body="Mesaj",
+    )
+    recipient_id = uuid.uuid4()
+    send = outbox_send(
+        owner_id=owner_a.id,
+        campaign_id=campaign.id,
+        campaign_recipient_id=recipient_id,
+    )
+    provider = AcceptingProvider()
+    try:
+        async with SessionLocal() as session:
+            session.add_all([owner_a, owner_b])
+            await session.flush()
+            session.add(campaign)
+            await session.flush()
+            await session.execute(
+                text(
+                    "insert into campaign_recipients "
+                    "(id, owner_id, email, contact_name, segment, status, "
+                    "created_at, updated_at) "
+                    "values (:id, :owner_id, :email, :contact_name, "
+                    "cast(:segment as campaignrecipientsegment), "
+                    "cast(:status as campaignrecipientstatus), :now, :now)"
+                ),
+                {
+                    "id": recipient_id,
+                    "owner_id": owner_a.id,
+                    "email": "ana@example.com",
+                    "contact_name": "Ana",
+                    "segment": CampaignRecipientSegment.potential_customer.value,
+                    "status": CampaignRecipientStatus.active.value,
+                    "now": datetime.now(UTC),
+                },
+            )
+            await CommunicationsRepository(session).enqueue_email_send(send)
+            await session.commit()
+
+            result = await EmailOutboxProcessor(session, provider).process_due(limit=1)
+            stored = await session.get(EmailSend, send.id)
+
+            assert result.claimed == 1
+            assert result.cancelled == 1
+            assert stored is not None
+            assert stored.status == EmailSendStatus.cancelled
+            assert stored.error_details == (
+                "Campaign, contact, and queued delivery ownership do not match."
+            )
+            assert stored.provider_request_started_at is None
+            assert stored.provider_idempotency_key is None
+            assert provider.messages == []
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(delete(EmailSend).where(EmailSend.id == send.id))
+            await session.execute(delete(Campaign).where(Campaign.id == campaign.id))
+            await session.execute(
+                delete(CampaignRecipient).where(CampaignRecipient.id == recipient_id)
+            )
+            await session.execute(
+                delete(User).where(User.id.in_((owner_a.id, owner_b.id)))
+            )
+            await session.commit()
+        await engine.dispose()
+
+
+async def test_concurrent_final_sends_complete_campaign_after_both_commit() -> None:
+    await engine.dispose()
+    owner = User(
+        id=uuid.uuid4(),
+        email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="test-hash",  # noqa: S106
+        role=UserRole.trainer,
+    )
+    campaign = Campaign(
+        id=uuid.uuid4(),
+        owner_id=owner.id,
+        name=f"Concurrent completion {uuid.uuid4()}",
+        status=CampaignStatus.ready,
+        subject="Salut",
+        html_body="<p>Mesaj</p>",
+        text_body="Mesaj",
+    )
+    sends = [
+        outbox_send(
+            owner_id=owner.id,
+            campaign_id=campaign.id,
+            status=EmailSendStatus.dispatching,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        for _index in range(2)
+    ]
+    first_session = SessionLocal()
+    second_session = SessionLocal()
+    completion_task: asyncio.Task[None] | None = None
+    try:
+        async with SessionLocal() as setup_session:
+            setup_session.add(owner)
+            await setup_session.flush()
+            setup_session.add(campaign)
+            await setup_session.flush()
+            setup_session.add_all(sends)
+            await setup_session.commit()
+
+        first_send = (
+            await first_session.execute(
+                select(EmailSend)
+                .where(EmailSend.id == sends[0].id)
+                .with_for_update()
+            )
+        ).scalar_one()
+        second_send = (
+            await second_session.execute(
+                select(EmailSend)
+                .where(EmailSend.id == sends[1].id)
+                .with_for_update()
+            )
+        ).scalar_one()
+        first_send.status = EmailSendStatus.accepted
+        second_send.status = EmailSendStatus.accepted
+        await first_session.flush()
+        await second_session.flush()
+        second_pid = int(
+            (await second_session.execute(text("select pg_backend_pid()"))).scalar_one()
+        )
+
+        await EmailOutboxProcessor(
+            first_session,
+            AcceptingProvider(),
+        )._complete_campaign_if_idle(campaign.id)
+        completion_task = asyncio.create_task(
+            EmailOutboxProcessor(
+                second_session,
+                AcceptingProvider(),
+            )._complete_campaign_if_idle(campaign.id)
+        )
+
+        observed_wait = False
+        async with SessionLocal() as observer:
+            for _attempt in range(500):
+                wait_event_type = (
+                    await observer.execute(
+                        text(
+                            "select wait_event_type from pg_stat_activity "
+                            "where pid = :backend_pid"
+                        ),
+                        {"backend_pid": second_pid},
+                    )
+                ).scalar_one_or_none()
+                if wait_event_type == "Lock":
+                    observed_wait = True
+                    break
+                if completion_task.done():
+                    await completion_task
+                await asyncio.sleep(0.01)
+        assert observed_wait, "the second completion check must wait for the campaign row"
+
+        await first_session.commit()
+        await asyncio.wait_for(completion_task, timeout=10)
+        await second_session.commit()
+
+        async with SessionLocal() as verification_session:
+            stored_campaign = await verification_session.get(Campaign, campaign.id)
+            assert stored_campaign is not None
+            assert stored_campaign.status == CampaignStatus.completed
+    finally:
+        if completion_task is not None and not completion_task.done():
+            completion_task.cancel()
+            await asyncio.gather(completion_task, return_exceptions=True)
+        await first_session.rollback()
+        await second_session.rollback()
+        await first_session.close()
+        await second_session.close()
+        async with SessionLocal() as cleanup_session:
+            await cleanup_session.execute(
+                delete(EmailSend).where(
+                    EmailSend.id.in_((sends[0].id, sends[1].id))
+                )
+            )
+            await cleanup_session.execute(
+                delete(Campaign).where(Campaign.id == campaign.id)
+            )
+            await cleanup_session.execute(delete(User).where(User.id == owner.id))
+            await cleanup_session.commit()
+        await engine.dispose()
 
 
 async def test_stale_started_provider_request_becomes_indeterminate_without_replay() -> None:
@@ -434,7 +648,6 @@ async def test_owner_suppression_blocks_only_that_owners_delivery() -> None:
             session.add(
                 EmailSuppression(
                     owner_id=owner_a.id,
-                    legacy_email="ana@example.com",
                     email_fingerprint=email_suppression_fingerprint(
                         owner_id=owner_a.id,
                         email="ANA@example.com",

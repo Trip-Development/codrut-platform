@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from starlette import status
 
 from codrut.core.config import Settings, get_settings
@@ -147,6 +148,11 @@ def install_exception_handlers(app: FastAPI, *, settings: Settings | None = None
     async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
         request_id = request_id_from_request(request)
         error_category = type(exc).__name__
+        error_code = (
+            "database_pool_timeout"
+            if isinstance(exc, SQLAlchemyTimeoutError)
+            else "database_error"
+        )
         log_context = {
             "request_id": request_id,
             "error_category": error_category,
@@ -171,7 +177,7 @@ def install_exception_handlers(app: FastAPI, *, settings: Settings | None = None
         return error_response(
             request,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            code="database_error",
+            code=error_code,
             message="The request could not be completed because of a database error.",
         )
 

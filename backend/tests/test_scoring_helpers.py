@@ -8,9 +8,12 @@ from codrut.modules.scoring.service import (
     ReportParticipant,
     _accumulate_scores,
     _averages_from_accumulators,
+    _build_driver_rank_summary,
+    _build_icare_cohort_summaries,
     _build_score_summary,
     _distribution_count,
     _distribution_from_completed_pcm_assignments,
+    _driver_feedback_by_dimension,
     _format_pcm_label,
     _get_pcm_color,
     _interpretation_from_rules,
@@ -217,6 +220,31 @@ def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
     )
 
 
+def test_driver_feedback_comes_from_the_pinned_definition() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers"),
+            _result({"perfect": 62}),
+            _definition(
+                {
+                    "scoring": {
+                        "drivers": [
+                            {
+                                "id": "perfect",
+                                "feedback_above_50": "Verifică dacă standardul te ajută.",
+                            }
+                        ]
+                    }
+                }
+            ),
+        )
+    ]
+
+    assert _driver_feedback_by_dimension(rows) == {  # type: ignore[arg-type]
+        "perfect": "Verifică dacă standardul te ajută."
+    }
+
+
 def test_score_summary_excludes_icare_self_evaluation_from_external_aggregate() -> None:
     manager_id = uuid.uuid4()
     reviewer_id = uuid.uuid4()
@@ -245,6 +273,124 @@ def test_score_summary_excludes_icare_self_evaluation_from_external_aggregate() 
 
     assert summary.boss_360_count == 1
     assert summary.boss_360_averages[0].avg == 80
+
+
+def test_icare_cohorts_keep_single_trainer_responses_visible_and_separate() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    direct_report_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=chief_id,
+            full_name="Ana Chief",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=leader_id,
+            full_name="Bogdan Leader",
+            reports_to_name="Ana Chief",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=direct_report_id,
+            full_name="Carmen Direct",
+            reports_to_name="Bogdan Leader",
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    rows = [
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=leader_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 70}),
+            None,
+        ),
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=chief_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 80}),
+            None,
+        ),
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=direct_report_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 90}),
+            None,
+        ),
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+
+    assert [(item.cohort, item.response_count) for item in cohorts] == [
+        ("direct_team", 1),
+        ("leadership_peers", 1),
+        ("self", 1),
+    ]
+    assert [item.averages[0].avg for item in cohorts] == [90, 80, 70]
+
+
+def test_driver_rank_summary_uses_definition_order_for_ties_and_exact_totals() -> None:
+    first_participant = uuid.uuid4()
+    second_participant = uuid.uuid4()
+    definition = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "drivers": [
+                    {"id": "be_perfect", "label": "Fii perfect"},
+                    {"id": "hurry_up", "label": "Grăbește-te"},
+                    {"id": "try_hard", "label": "Străduiește-te"},
+                ],
+            }
+        }
+    )
+    rows = [
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=first_participant,
+            ),
+            _result({"try_hard": 60, "hurry_up": 60, "be_perfect": 60}),
+            definition,
+        ),
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=second_participant,
+            ),
+            _result({"try_hard": 20, "hurry_up": 70, "be_perfect": 80}),
+            definition,
+        ),
+    ]
+
+    ranking = _build_driver_rank_summary(rows)  # type: ignore[arg-type]
+
+    assert ranking.total_people == 2
+    assert sum(item.value for item in ranking.first_rank) == 2
+    assert sum(item.value for item in ranking.second_rank) == 2
+    assert {item.id: item.value for item in ranking.first_rank} == {"be_perfect": 2}
+    assert {item.id: item.value for item in ranking.second_rank} == {"hurry_up": 2}
+    assert ranking.first_rank_tie_breaks == 1
+    assert ranking.second_rank_tie_breaks == 1
 
 
 def test_pcm_distribution_requires_completed_known_profiles() -> None:

@@ -402,6 +402,7 @@ export type ReportAverage = {
   avg: number;
   interpretation?: string | null;
   range_label?: string | null;
+  feedback?: string | null;
 };
 
 export type ReportDistribution = {
@@ -446,6 +447,8 @@ export type CompanyScoringResult = {
 };
 
 export type CompanyReportAggregate = {
+  project_id?: string | null;
+  assessment_cycle_id?: string | null;
   total_assigned: number;
   total_completed: number;
   completion_rate: number;
@@ -458,6 +461,9 @@ export type CompanyReportAggregate = {
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
   icare_target_summaries: IcareTargetSummary[];
+  icare_cohorts: IcareCohortSummary[];
+  driver_rank_summary: DriverRankSummary;
+  leadership_members: LeadershipMemberSummary[];
   pcm_base_distribution: ReportDistribution[];
   pcm_phase_distribution: ReportDistribution[];
   team_lenses: ReportTeamLens[];
@@ -474,6 +480,41 @@ export type IcareTargetSummary = {
   self_response_count: number;
   external_averages: ReportAverage[];
   self_averages: ReportAverage[];
+  cohorts: IcareCohortSummary[];
+};
+
+export type IcareCohortSummary = {
+  cohort: "direct_team" | "leadership_peers" | "self";
+  response_count: number;
+  averages: ReportAverage[];
+};
+
+export type DriverRankSummary = {
+  total_people: number;
+  first_rank: ReportDistribution[];
+  second_rank: ReportDistribution[];
+  first_rank_tie_breaks: number;
+  second_rank_tie_breaks: number;
+};
+
+export type LeadershipMemberSummary = {
+  participant_profile_id: string;
+  full_name: string;
+  position?: string | null;
+  role_group?: string | null;
+};
+
+export type LeadershipMemberReport = {
+  project_id: string;
+  assessment_cycle_id?: string | null;
+  member: LeadershipMemberSummary;
+  pcm_base?: string | null;
+  pcm_phase?: string | null;
+  lencioni_count: number;
+  lencioni_averages: ReportAverage[];
+  icare_cohorts: IcareCohortSummary[];
+  driver_count: number;
+  driver_averages: ReportAverage[];
 };
 
 export type CompanyReportComparison = {
@@ -906,6 +947,15 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
     driver_averages: driverAverages,
     boss_360_averages: boss360Averages,
     icare_target_summaries: [],
+    icare_cohorts: [],
+    driver_rank_summary: {
+      total_people: 0,
+      first_rank: [],
+      second_rank: [],
+      first_rank_tie_breaks: 0,
+      second_rank_tie_breaks: 0,
+    },
+    leadership_members: [],
     pcm_base_distribution: pcmBaseDistribution,
     pcm_phase_distribution: pcmPhaseDistribution,
     team_lenses: fallbackReportTeamLenses({
@@ -1272,6 +1322,29 @@ export async function getCompanyReportComparison(
     throw new Error(formatApiError(data, `Backend refuzat (${response.status})`));
   }
   return (await response.json()) as CompanyReportComparison;
+}
+
+export async function getLeadershipMemberReport(
+  companyId: string,
+  projectId: string,
+  participantProfileId: string,
+  options: ApiRequestOptions = {},
+  scope: Pick<ProjectScopeOptions, "assessmentCycleId"> = {},
+): Promise<LeadershipMemberReport> {
+  const params = new URLSearchParams();
+  if (scope.assessmentCycleId) {
+    params.set("assessment_cycle_id", scope.assessmentCycleId);
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/reports/leadership/${participantProfileId}${query}`,
+    { cache: "no-store", credentials: "include", ...options },
+  );
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(formatApiError(data, `Backend refuzat (${response.status})`));
+  }
+  return (await response.json()) as LeadershipMemberReport;
 }
 
 export async function getIcareAnswerReview(

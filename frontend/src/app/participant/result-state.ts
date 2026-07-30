@@ -19,10 +19,11 @@ export function mergeParticipantFeedbackGroups(
   const seen = new Set<string>();
   return merged.filter((feedback) => {
     const identity = feedback.assignmentRoundId
-      ? `round:${feedback.assignmentRoundId}`
+      ? `round:${feedback.assignmentRoundId}:${feedback.cohort}`
       : [
           feedback.projectId ?? feedback.projectName ?? "none",
           feedback.questionnaireKey ?? feedback.questionnaireTitle ?? "legacy",
+          feedback.cohort,
         ].join(":");
     if (seen.has(identity)) return false;
     seen.add(identity);

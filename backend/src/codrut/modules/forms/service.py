@@ -308,6 +308,7 @@ class FormsService:
             project_id=project_id,
             cycle_id=cycle_id,
             allowed_assignment_ids=allowed_assignment_ids,
+            for_update=True,
         )
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
@@ -321,7 +322,11 @@ class FormsService:
         *,
         submit: bool = False,
     ) -> QuestionnaireResponseResponse:
-        assignment = await self._assignment_for_secure_link(token, assignment_id)
+        assignment = await self._assignment_for_secure_link(
+            token,
+            assignment_id,
+            for_update=True,
+        )
         return await self._save_response_for_assignment(assignment, payload, submit=submit)
 
     async def _save_response_for_assignment(
@@ -334,7 +339,10 @@ class FormsService:
         repository = self._require_repository()
         assignment_id = assignment.id
         await _validate_assignment_response_window(repository, assignment)
-        response = await repository.get_response_by_assignment(assignment_id)
+        response = await repository.get_response_by_assignment(
+            assignment_id,
+            for_update=True,
+        )
         if response is not None and response.status == QuestionnaireResponseStatus.submitted:
             if submit and response.answers == payload.answers:
                 return _response_to_schema(response)
@@ -366,35 +374,13 @@ class FormsService:
                 payload.answers,
             )
 
-            session = getattr(repository, "session", None)
-            if session is not None:
-                from codrut.modules.scoring.publication import ResultPublicationService
-                from codrut.modules.scoring.service import ScoringService
-
-                scoring_service = ScoringService(session)
-                scoring_schema = definition.schema
-                if definition.private_config:
-                    scoring_schema = definition.private_config.get("schema", scoring_schema)
-                try:
-                    await scoring_service.compute_and_save_score(
-                        assignment_id=assignment.id,
-                        questionnaire_key=definition.key,
-                        questionnaire_version=definition.version,
-                        answers=payload.answers,
-                        definition_schema=scoring_schema,
-                    )
-                    assignment.status = AssignmentStatus.scored
-                    assignment.submitted_at = assignment.submitted_at or response.submitted_at
-                    assignment.scored_at = response.submitted_at
-                    await ResultPublicationService(session).reconcile_assignment(assignment.id)
-                except DomainError as e:
-                    if e.code not in {"scoring_not_supported", "scoring_metadata_missing"}:
-                        raise
-                    assignment.status = AssignmentStatus.submitted
-                    assignment.submitted_at = assignment.submitted_at or response.submitted_at
-            else:
-                assignment.status = AssignmentStatus.submitted
-                assignment.submitted_at = assignment.submitted_at or response.submitted_at
+            assignment.status = AssignmentStatus.submitted
+            assignment.submitted_at = assignment.submitted_at or response.submitted_at
+            assignment.scored_at = None
+            await repository.enqueue_submission_processing(
+                assignment.id,
+                now=response.submitted_at,
+            )
         elif assignment.status == AssignmentStatus.assigned:
             assignment.status = AssignmentStatus.started
             assignment.started_at = assignment.started_at or datetime.now(UTC)
@@ -404,6 +390,8 @@ class FormsService:
         self,
         token: str,
         assignment_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment:
         from sqlalchemy import select
 
@@ -436,7 +424,10 @@ class FormsService:
                 code="task_link_scope_mismatch",
             )
 
-        assignment = await repository.get_assignment_by_id(assignment_id)
+        assignment = await repository.get_assignment_by_id(
+            assignment_id,
+            for_update=for_update,
+        )
         if (
             assignment is None
             or assignment.company_id != claims.company_id

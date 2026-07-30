@@ -30,6 +30,7 @@ from codrut.modules.scoring.schemas import (
     CompanyReportAggregateResponse,
     CompanyReportComparisonResponse,
     IcareAnswerReviewResponse,
+    LeadershipMemberReportResponse,
 )
 from codrut.modules.scoring.service import ScoringService
 
@@ -318,6 +319,28 @@ async def get_company_report_aggregate(
     return await ScoringService(session).get_company_report_aggregate(
         company_id,
         project_id,
+        assessment_cycle_id,
+    )
+
+
+@router.get(
+    "/companies/{company_id}/projects/{project_id}/reports/leadership/{participant_profile_id}",
+    response_model=LeadershipMemberReportResponse,
+)
+async def get_leadership_member_report(
+    company_id: UUID,
+    project_id: UUID,
+    participant_profile_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+    assessment_cycle_id: Annotated[UUID | None, Query()] = None,
+) -> LeadershipMemberReportResponse:
+    require_trainer_principal(principal)
+    await AssignmentService(session).require_company_manager(principal.user_id, company_id)
+    return await ScoringService(session).get_leadership_member_report(
+        company_id,
+        project_id,
+        participant_profile_id,
         assessment_cycle_id,
     )
 

@@ -32,11 +32,11 @@ The default Archive recovery window is 30 days, configured by
    old unsubscribe links and late permanent provider events work without
    recovering the email address or retaining event type/timestamps per row.
 
-`CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` must remain `false` for the additive
-expand release because its rollback-compatible suppression table still contains
-the legacy full email. Enable purge only after the sequential contract release
-removes that column. `CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS`
-defaults to seven days.
+`CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` defaults to `true` after the contact
+privacy contract migration. The bridge migration scrubs rollback-compatible
+suppression values before the final contract removes the compatibility column,
+so purge never depends on a retained full email.
+`CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS` defaults to seven days.
 `CODRUT_CAMPAIGN_DELIVERY_TOMBSTONE_RETENTION_DAYS` separately defaults to
 365 days. Delivery and deduplication receipts are deleted at that deadline even
 when a contact's do-not-contact fingerprint remains justified.
@@ -127,15 +127,16 @@ Before promoting a release that introduces or changes this lifecycle:
 
 ## Expand/contract rollback window
 
-The first archive release is an additive migration. It backfills fingerprints
-but temporarily retains the legacy normalized email column and allows the new
-fingerprint/review/event-owner fields to remain nullable. This is deliberate:
-the immediately previous application image must still start against the
-expanded schema during the rollback window.
+The archive release first adds the fingerprint and review fields, then the
+privacy bridge backfills and enforces them. The database retains the legacy
+`email` column only as a rollback-compatibility field. The bridge replaces every
+value with a deterministic `@invalid` placeholder and a trigger prevents a real
+address from being stored there again. The application model and all lookups use
+the keyed owner-scoped fingerprint, never the compatibility value.
 
-Permanent and scheduled purge are disabled throughout this expand window.
+Permanent and scheduled purge can run after the bridge migration succeeds.
 Archiving, restoring, membership removal, queued-send cancellation, and the
-reviewable retention timestamps remain available.
+reviewable retention timestamps remain available throughout the rollout.
 
 Archive also stores the prior delivery status and changes an active archived
 contact to `suppressed`. The immediately previous image does not understand
@@ -150,15 +151,16 @@ that older UI, so avoid contact catalog mutations until the fingerprint-aware
 image is restored. Existing archive state cannot silently become sendable, and
 participant flows and health checks remain available.
 
-After that release passes public health checks and becomes the retained
-rollback image, the next sequential release must:
+The bridge migration:
 
-1. backfill any rows written by the previous image during a rollback;
-2. make fingerprint, review date, and event owner non-null;
-3. drop the legacy full-email suppression index and column; and
-4. enable permanent and scheduled purge; and
-5. prove both the new deployment and its now-compatible rollback image before
-   retention removes the older image.
+1. backfills any rows written by the previous image;
+2. makes fingerprint, review date, and event owner non-null;
+3. removes the legacy full-email uniqueness index;
+4. scrubs the compatibility column and installs its enforcement trigger; and
+5. enables permanent and scheduled purge in the fingerprint-aware application.
 
-Do not run the contract migration in the same production promotion as the
-expand migration.
+Do not remove the compatibility column while a retained rollback image still
+maps it. A future cleanup may drop it only after both current and previous
+images have been proven not to map the field. That cleanup is storage hygiene,
+not a privacy dependency: no full address remains in the column after the
+bridge.

@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,6 +13,7 @@ from codrut.modules.assignments.models import (
     AssignmentTargetType,
     QuestionnaireAssignment,
 )
+from codrut.modules.communications import service as communications_service
 from codrut.modules.communications.campaign_tracking import (
     CampaignTrackingClaims,
     create_campaign_tracking_token,
@@ -24,6 +26,7 @@ from codrut.modules.communications.models import (
 )
 from codrut.modules.communications.schemas import CampaignRecipientEventCreateRequest
 from codrut.modules.communications.service import CommunicationsService
+from codrut.modules.communications.suppression import email_suppression_fingerprint
 from codrut.modules.companies.models import ParticipantProfile
 from codrut.modules.identity import models as identity_models  # noqa: F401
 
@@ -193,6 +196,8 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
             ]
         ),
         FakeTupleResult([(recipient_id, "variant_a")]),
+        FakeScalarsResult([]),
+        FakeScalarsResult([]),
     ]
 
     summary = await CommunicationsService(session).get_email_ops_summary(owner_id=owner_id)
@@ -212,6 +217,67 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
     assert row["emailVariant"] == "variant_a"
     assert "reply-uri" in summary["campaign"]["weeklyReport"]["metrics"]
     assert "clickuri Calendly" in summary["campaign"]["weeklyReport"]["metrics"]
+
+
+@pytest.mark.asyncio
+async def test_campaign_activation_is_blocked_only_for_the_suppressed_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner_id = uuid.uuid4()
+    secret = "summary-suppression-secret-at-least-32-characters"  # noqa: S105
+    blocked_email = "bounced@example.com"
+    blocked_recipient = CampaignRecipient(
+        id=uuid.uuid4(),
+        owner_id=owner_id,
+        email=blocked_email,
+        contact_name="Adresă veche",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.suppressed,
+    )
+    corrected_recipient = CampaignRecipient(
+        id=uuid.uuid4(),
+        owner_id=owner_id,
+        email="corrected@example.com",
+        contact_name="Adresă corectată",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.suppressed,
+    )
+    blocked_fingerprint = email_suppression_fingerprint(
+        owner_id=owner_id,
+        email=blocked_email,
+        secret=secret,
+    )
+    monkeypatch.setattr(
+        communications_service,
+        "Settings",
+        lambda: SimpleNamespace(
+            effective_email_suppression_fingerprint_secret=secret,
+        ),
+    )
+
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.execute.side_effect = [
+        FakeTupleResult([]),
+        FakeScalarsResult([]),
+        FakeTupleResult([]),
+        FakeScalarsResult([blocked_recipient, corrected_recipient]),
+        FakeScalarsResult([]),
+        FakeTupleResult([]),
+        FakeTupleResult([]),
+        FakeScalarsResult(
+            [SimpleNamespace(email_fingerprint=blocked_fingerprint)]
+        ),
+        FakeScalarsResult([]),
+    ]
+
+    summary = await CommunicationsService(session).get_email_ops_summary(owner_id=owner_id)
+    rows_by_email = {
+        row["email"]: row for row in summary["campaign"]["recipients"]
+    }
+
+    assert rows_by_email[blocked_email]["activationAllowed"] is False
+    assert rows_by_email["corrected@example.com"]["activationAllowed"] is True
 
 
 @pytest.mark.asyncio

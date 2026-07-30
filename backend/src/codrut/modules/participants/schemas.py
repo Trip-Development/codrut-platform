@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -38,6 +39,7 @@ class ParticipantReceivedFeedbackSummary(BaseModel):
     assessment_cycle_id: UUID | None = None
     questionnaire_key: str
     questionnaire_title: str
+    cohort: Literal["direct_team", "leadership_peers"]
     completed_count: int
     minimum_completed: int
     scale_max: float
@@ -67,6 +69,26 @@ class ParticipantWorkspaceCycle(BaseModel):
     closed_at: datetime | None = None
 
 
+class ParticipantQuestionnaireTask(InviteTask):
+    cycleName: str | None = None
+    cycleSequence: int | None = None
+    deadlineLabel: str
+    dueAt: datetime | None = None
+
+
+class ParticipantQuestionnaireProject(BaseModel):
+    id: UUID
+    participant_profile_id: UUID
+    company_name: str
+    name: str
+    status: str
+    history_bucket: str
+    deadline_label: str
+    completed_count: int
+    total_count: int
+    questionnaires: list[ParticipantQuestionnaireTask] = Field(default_factory=list)
+
+
 class ParticipantWorkspaceContext(BaseModel):
     participant_profile_id: UUID
     participant_full_name: str
@@ -92,6 +114,9 @@ class ParticipantWorkspaceSummary(BaseModel):
     contexts: list[ParticipantWorkspaceContext] = Field(default_factory=list)
     cycles: list[ParticipantWorkspaceCycle] = Field(default_factory=list)
     projects: list[ParticipantWorkspaceProject] = Field(default_factory=list)
+    questionnaire_projects: list[ParticipantQuestionnaireProject] = Field(
+        default_factory=list
+    )
     deadline_label: str = "finalul evaluării"
     deadline_at: datetime | None = None
     tasks: list[InviteTask] = Field(default_factory=list)

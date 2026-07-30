@@ -11,6 +11,7 @@ import {
   getTrainerSession,
 } from "./auth";
 import {
+  archiveCampaignRecipientOnServer,
   bulkCreateCampaignRecipientsOnServer,
   buildVideoCampaignCreatePayload,
   campaignAssetFileNameFromUrl,
@@ -27,6 +28,7 @@ import {
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
   replaceCampaignRecipientMembershipOnServer,
+  restoreCampaignRecipientOnServer,
   sendCampaignOnServer,
   updateCampaignOnServer,
   updateCampaignRecipientOnServer,
@@ -370,6 +372,59 @@ describe("frontend API adapter stubs", () => {
         campaign: expect.objectContaining({
           recipients: expect.not.arrayContaining([
             expect.objectContaining({ email: "ada@manual.example" }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it("preserves protected contact status through demo archive and restore", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    await bulkCreateCampaignRecipientsOnServer([
+      {
+        email: "protected@demo.example",
+        contact_name: "Contact Protejat",
+        organization_name: "Demo Org",
+        segment: "potential_customer",
+      },
+    ]);
+    const created = (await getEmailOpsSummary()).campaign.recipients.find(
+      (recipient) => recipient.email === "protected@demo.example",
+    );
+    expect(created).toBeDefined();
+
+    await updateCampaignRecipientOnServer(created?.id ?? "", {
+      status: "unsubscribed",
+    });
+    await archiveCampaignRecipientOnServer(created?.id ?? "");
+
+    await expect(getEmailOpsSummary({ catalogScope: "archived" })).resolves.toEqual(
+      expect.objectContaining({
+        campaign: expect.objectContaining({
+          recipients: expect.arrayContaining([
+            expect.objectContaining({
+              id: created?.id,
+              status: "archived",
+              statusBeforeArchive: "unsubscribed",
+            }),
+          ]),
+        }),
+      }),
+    );
+
+    await expect(restoreCampaignRecipientOnServer(created?.id ?? "")).resolves.toMatchObject({
+      status: "unsubscribed",
+    });
+    await expect(getEmailOpsSummary()).resolves.toEqual(
+      expect.objectContaining({
+        campaign: expect.objectContaining({
+          recipients: expect.arrayContaining([
+            expect.objectContaining({
+              id: created?.id,
+              status: "unsubscribed",
+              statusBeforeArchive: null,
+            }),
           ]),
         }),
       }),

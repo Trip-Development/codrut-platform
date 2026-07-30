@@ -300,7 +300,10 @@ class FakeAssignmentRepository:
         self,
         company_id: uuid.UUID,
         assignment_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment | None:
+        self.assignment_requested_for_update = for_update
         for assignment in self.assignments:
             if assignment.company_id == company_id and assignment.id == assignment_id:
                 return assignment
@@ -450,6 +453,7 @@ class FakeFormsRepository:
         self.persisted_keys: set[str] = set()
         self.responses_by_assignment: dict[uuid.UUID, QuestionnaireResponse] = {}
         self.definitions_by_id: dict[uuid.UUID, object] = {}
+        self.deleted_processing_assignment_ids: list[uuid.UUID] = []
 
     async def get_definition(self, key: str) -> object | None:
         if key in self.active_keys:
@@ -474,6 +478,12 @@ class FakeFormsRepository:
         response.status = QuestionnaireResponseStatus.draft
         response.submitted_at = None
         return response
+
+    async def delete_submission_processing_for_assignment(
+        self,
+        assignment_id: uuid.UUID,
+    ) -> None:
+        self.deleted_processing_assignment_ids.append(assignment_id)
 
 
 class FakeScoringRepository:
@@ -1108,6 +1118,8 @@ async def test_reopening_completed_assignment_unlocks_response_and_clears_score(
     assert updated.scored_at is None
     assert response.status == QuestionnaireResponseStatus.draft
     assert response.submitted_at is None
+    assert assignment_repository.assignment_requested_for_update is True
+    assert forms_repository.deleted_processing_assignment_ids == [assignment.id]
     assert scoring_repository.deleted_assignment_ids == [assignment.id]
     assert result_publication_service.reconciled_assignment_ids == [assignment.id]
 

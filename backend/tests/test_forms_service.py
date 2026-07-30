@@ -165,7 +165,10 @@ class SecureLinkRepository:
     async def get_assignment_by_id(
         self,
         assignment_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment | None:
+        del for_update
         if self.assignment is not None and self.assignment.id == assignment_id:
             return self.assignment
         return None

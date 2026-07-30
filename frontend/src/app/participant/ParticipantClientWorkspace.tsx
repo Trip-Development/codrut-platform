@@ -5,6 +5,7 @@ import type { SessionState } from "@/api/auth";
 import type { InviteTask } from "@/api/invites";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import type {
+  ParticipantQuestionnaireProject,
   ParticipantReceivedFeedbackSummary,
   ParticipantWorkspaceContext,
   ParticipantWorkspaceCycle,
@@ -24,7 +25,10 @@ import {
   participantScopedNavItems,
 } from "./participant-context";
 import { countAvailableParticipantResults, mergeParticipantFeedbackGroups } from "./result-state";
-import { groupParticipantTasks } from "./task-display";
+import {
+  groupParticipantTasksByProject,
+  participantTaskProjectsFromCatalog,
+} from "./task-display";
 
 type ParticipantClientWorkspaceProps = {
   session: SessionState;
@@ -37,6 +41,7 @@ type ParticipantClientWorkspaceProps = {
     contexts?: ParticipantWorkspaceContext[];
     cycles?: ParticipantWorkspaceCycle[];
     projects?: ParticipantWorkspaceProject[];
+    questionnaireProjects?: ParticipantQuestionnaireProject[];
     companyName?: string;
     participantFullName?: string;
     anonymousName?: string | null;
@@ -59,17 +64,42 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
   const participantIdentity =
     summaryData.participantFullName?.trim() || summaryData.anonymousName?.trim() || "Participant";
   const participantFirstName = participantIdentity.split(/\s+/)[0];
-  const pendingTasks = summaryData.tasks.filter((task) => task.status !== "completed");
-  const taskGroups = groupParticipantTasks(summaryData.tasks);
-  const pendingTaskGroups = taskGroups.filter((group) => group.status !== "completed");
-  const completedTasksCount = summaryData.tasks.length - pendingTasks.length;
+  const taskProjects =
+    (summaryData.questionnaireProjects?.length ?? 0) > 0
+      ? participantTaskProjectsFromCatalog(
+          summaryData.questionnaireProjects ?? [],
+        )
+      : groupParticipantTasksByProject(
+          summaryData.tasks,
+          summaryData.projects ?? [],
+        );
+  const activeTaskProjects = taskProjects.filter(
+    (project) =>
+      project.historyBucket === "current" && project.status === "active",
+  );
+  const activeTasks = activeTaskProjects.flatMap((project) =>
+    project.groups.flatMap((group) => group.tasks),
+  );
+  const pendingActiveTasks = activeTasks.filter(
+    (task) => task.status !== "completed",
+  );
+  const activeTaskGroups = activeTaskProjects.flatMap(
+    (project) => project.groups,
+  );
+  const pendingTaskGroups = activeTaskGroups.filter(
+    (group) => group.status !== "completed",
+  );
+  const completedTasksCount = activeTasks.length - pendingActiveTasks.length;
   const tasksProgressPct =
-    summaryData.tasks.length > 0 ? Math.round((completedTasksCount / summaryData.tasks.length) * 100) : 0;
-  const hasAnyTasks = summaryData.tasks.length > 0;
-  const isComplete = hasAnyTasks && pendingTasks.length === 0;
+    activeTasks.length > 0
+      ? Math.round((completedTasksCount / activeTasks.length) * 100)
+      : 0;
+  const hasAnyTasks = activeTasks.length > 0;
+  const isComplete = hasAnyTasks && pendingActiveTasks.length === 0;
   const resultCount = countAvailableParticipantResults(summaryData);
-  const projects = summaryData.projects ?? [];
-  const hasMultipleProjects = projects.length > 1;
+  const projects = taskProjects;
+  const hasMultipleProjects = taskProjects.length > 1;
+  const projectCountCopy = participantProjectCountCopy(projects);
   const contexts = summaryData.contexts ?? [];
   const scopeParams = participantScopeParams(summaryData);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
@@ -102,7 +132,8 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
               <ParticipantCompletionState resultCount={resultCount} resultsHref={resultsHref} />
               <div className="mt-8">
                 <ParticipantTaskList
-                  groups={taskGroups}
+                  projects={taskProjects}
+                  persistenceIdentityKey={`${session.user.id}:${summaryData.participantProfileId ?? "all"}`}
                   returnTo={questionnairesHref}
                   emptyTitle="Toate răspunsurile au fost trimise"
                   emptyDescription="Nu mai ai sarcini active."
@@ -117,20 +148,23 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                     {pendingTaskGroups.length > 0 ? "De completat" : "Chestionare"}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {hasMultipleProjects ? `${projects.length} proiecte active` : summaryData.projectName}
+                    {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
                   </p>
                 </div>
-                <div
-                  className="flex items-baseline gap-2 text-burgundy"
-                  role="status"
-                  aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
-                >
-                  <span className="font-mono text-2xl font-semibold tabular-nums">{pendingTaskGroups.length}</span>
-                  <span className="text-sm font-semibold">active</span>
-                </div>
+                {pendingTaskGroups.length > 0 ? (
+                  <div
+                    className="flex items-baseline gap-2 text-burgundy"
+                    role="status"
+                    aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
+                  >
+                    <span className="font-mono text-2xl font-semibold tabular-nums">{pendingTaskGroups.length}</span>
+                    <span className="text-sm font-semibold">active</span>
+                  </div>
+                ) : null}
               </div>
               <ParticipantTaskList
-                groups={taskGroups}
+                projects={taskProjects}
+                persistenceIdentityKey={`${session.user.id}:${summaryData.participantProfileId ?? "all"}`}
                 returnTo={questionnairesHref}
                 emptyTitle={summaryData.emptyState?.title ?? "Nu ai chestionare disponibile"}
                 emptyDescription={
@@ -168,18 +202,16 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
             <div className="h-full rounded-full bg-burgundy transition-[width] duration-200" style={{ width: `${tasksProgressPct}%` }} />
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            {completedTasksCount}/{summaryData.tasks.length} finalizate
+            {completedTasksCount}/{activeTasks.length} finalizate
           </p>
           {hasMultipleProjects ? (
             <div className="mt-7 border-y border-border" aria-label="Progres pe proiecte">
               {projects.map((project) => {
-                const projectTasks = summaryData.tasks.filter((task) => task.projectId === project.id);
-                const completed = projectTasks.filter((task) => task.status === "completed").length;
                 return (
                   <div key={project.id} className="border-b border-border py-3 last:border-b-0">
                     <p className="text-sm font-semibold text-foreground">{project.name}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {completed}/{projectTasks.length} finalizate · {project.deadlineLabel}
+                      {project.completedCount}/{project.totalCount} finalizate · {project.deadlineLabel}
                     </p>
                   </div>
                 );
@@ -195,6 +227,23 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
       </div>
     </AppShell>
   );
+}
+
+function participantProjectCountCopy(
+  projects: Array<{ historyBucket: "current" | "history" }>,
+): string {
+  const currentCount = projects.filter(
+    (project) => project.historyBucket === "current",
+  ).length;
+  const historyCount = projects.length - currentCount;
+
+  if (currentCount > 0 && historyCount > 0) {
+    return `${currentCount} în desfășurare · ${historyCount} în istoric`;
+  }
+  if (currentCount > 0) {
+    return `${currentCount} ${currentCount === 1 ? "proiect în desfășurare" : "proiecte în desfășurare"}`;
+  }
+  return `${historyCount} ${historyCount === 1 ? "proiect în istoric" : "proiecte în istoric"}`;
 }
 
 function ContextRow({ label, value }: { label: string; value: string }) {
@@ -229,17 +278,10 @@ export function ParticipantResultsPanel({
   const visibleFeedbackCount = feedbackGroups.filter((feedback) => feedback.visible).length;
   const profileResultCount = pcmBase || pcmPhase ? 1 : 0;
   const availableResultCount = results.length + visibleFeedbackCount + profileResultCount;
-  const availableLabels = [
-    profileResultCount > 0 ? "Profil PCM" : null,
-    visibleFeedbackCount > 0 ? "Feedback iCARE" : null,
-    results.length > 0 ? "Chestionare" : null,
-  ].filter(Boolean);
-  const comparisonFeedbackGroups = comparison
-    ? mergeParticipantFeedbackGroups(
-        comparison.baselineReceivedFeedbackGroups,
-        comparison.baselineReceivedFeedback,
-      )
-    : [];
+  const lencioniResults = results.filter((result) => resultKind(result.questionnaireKey) === "lencioni");
+  const icareResults = results.filter((result) => resultKind(result.questionnaireKey) === "icare");
+  const driverResults = results.filter((result) => resultKind(result.questionnaireKey) === "drivers");
+  const otherResults = results.filter((result) => resultKind(result.questionnaireKey) === "other");
   return (
     <section className="flex flex-col gap-10">
       {availableResultCount > 0 ? (
@@ -250,7 +292,7 @@ export function ParticipantResultsPanel({
               {availableResultCount} {availableResultCount === 1 ? "rezultat" : "rezultate"}
             </h2>
           </div>
-          <p className="text-sm font-semibold text-muted-foreground">{availableLabels.join(" · ")}</p>
+          <p className="text-sm font-semibold text-muted-foreground">Lencioni · iCARE · TA Drivers</p>
         </header>
       ) : null}
 
@@ -276,52 +318,46 @@ export function ParticipantResultsPanel({
         </section>
       ) : null}
 
-      {comparison
-        ? mergeFeedbackForComparison(comparisonFeedbackGroups, feedbackGroups).map((entry) => (
-            <ReceivedFeedbackComparisonPanel
-              key={entry.key}
-              baseline={entry.baseline}
-              current={entry.current}
-              baselineLabel={comparison.baselineLabel}
-              currentLabel={comparison.currentLabel}
-            />
-          ))
-        : feedbackGroups.map((feedback, index) => (
-            <ReceivedFeedbackPanel
-              key={feedback.assignmentRoundId ?? `${feedback.projectId ?? feedback.projectName ?? "legacy"}-${index}`}
-              feedback={feedback}
-            />
-          ))}
+      <ParticipantResultSection
+        number="01"
+        title="Lencioni"
+        empty="Rezultatul Lencioni apare aici după ce evaluarea este finalizată."
+        hasContent={lencioniResults.length > 0}
+      >
+        {lencioniResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
+      </ParticipantResultSection>
 
-      {comparison && (results.length > 0 || comparison.baselineResults.length > 0) ? (
-        <section aria-labelledby="questionnaire-results-title">
-          <h2 id="questionnaire-results-title" className="text-xl font-semibold tracking-tight text-foreground">
-            Rezultate chestionare
-          </h2>
-          <div className="mt-4 divide-y divide-border border-y border-border">
-            {mergeResultsForComparison(comparison.baselineResults, results).map((entry) => (
-              <ComparisonResultCard
-                key={entry.key}
-                baseline={entry.baseline}
-                current={entry.current}
-                baselineLabel={comparison.baselineLabel}
-                currentLabel={comparison.currentLabel}
-              />
-            ))}
-          </div>
+      <ParticipantResultSection
+        number="02"
+        title="iCARE"
+        empty="Rezultatele iCARE apar aici când perspectivele sunt disponibile."
+        hasContent={feedbackGroups.length > 0 || icareResults.length > 0}
+      >
+        {feedbackGroups.map((feedback, index) => (
+          <ReceivedFeedbackPanel
+            key={`${feedback.assignmentRoundId ?? "round"}-${feedback.cohort}-${index}`}
+            feedback={feedback}
+          />
+        ))}
+        {icareResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
+      </ParticipantResultSection>
+
+      <ParticipantResultSection
+        number="03"
+        title="TA Drivers"
+        empty="Rezultatul TA Drivers apare aici după finalizare."
+        hasContent={driverResults.length > 0}
+      >
+        {driverResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
+      </ParticipantResultSection>
+
+      {otherResults.length > 0 ? (
+        <section className="divide-y divide-border border-y border-border" aria-label="Alte rezultate">
+          {otherResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
         </section>
-      ) : results.length > 0 ? (
-        <section aria-labelledby="questionnaire-results-title">
-          <h2 id="questionnaire-results-title" className="text-xl font-semibold tracking-tight text-foreground">
-            Rezultate chestionare
-          </h2>
-          <div className="mt-4 divide-y divide-border border-y border-border">
-            {results.map((result) => (
-              <ResultCard key={result.assignmentId} result={result} />
-            ))}
-          </div>
-        </section>
-      ) : feedbackGroups.length > 0 || profileResultCount > 0 ? null : (
+      ) : null}
+
+      {availableResultCount === 0 && feedbackGroups.length === 0 ? (
         <div className="border-y border-border py-8">
           <h3 className="text-base font-semibold text-foreground">
             {allTasksComplete && hasTasks ? "Răspunsurile au fost trimise" : "Nu există rezultate disponibile încă"}
@@ -332,6 +368,34 @@ export function ParticipantResultsPanel({
               : "Finalizează chestionarele eligibile pentru a vedea rezultatele."}
           </p>
         </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ParticipantResultSection({
+  number,
+  title,
+  empty,
+  hasContent,
+  children,
+}: {
+  number: string;
+  title: string;
+  empty: string;
+  hasContent: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section aria-labelledby={`participant-result-${number}`}>
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-xs font-semibold text-burgundy">{number}</span>
+        <h2 id={`participant-result-${number}`} className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+      </div>
+      {hasContent ? (
+        <div className="mt-4 divide-y divide-border border-y border-border">{children}</div>
+      ) : (
+        <p className="mt-4 border-y border-border py-6 text-sm text-muted-foreground">{empty}</p>
       )}
     </section>
   );
@@ -412,220 +476,25 @@ function PcmInlineValue({ label, value }: { label: string; value?: string | null
   );
 }
 
-type FeedbackComparisonEntry = {
-  key: string;
-  baseline?: ParticipantReceivedFeedbackSummary;
-  current?: ParticipantReceivedFeedbackSummary;
-};
-
-function mergeFeedbackForComparison(
-  baseline: ParticipantReceivedFeedbackSummary[],
-  current: ParticipantReceivedFeedbackSummary[],
-): FeedbackComparisonEntry[] {
-  const entries = new Map<string, FeedbackComparisonEntry>();
-  for (const feedback of baseline) {
-    const key = feedbackComparisonKey(feedback);
-    entries.set(key, { key, baseline: feedback });
-  }
-  for (const feedback of current) {
-    const key = feedbackComparisonKey(feedback);
-    entries.set(key, { ...entries.get(key), key, current: feedback });
-  }
-  return [...entries.values()];
-}
-
-function feedbackComparisonKey(feedback: ParticipantReceivedFeedbackSummary): string {
-  return [feedback.projectId ?? "project", feedback.questionnaireKey ?? "feedback"].join(":");
-}
-
-function ReceivedFeedbackComparisonPanel({
-  baseline,
-  current,
-  baselineLabel,
-  currentLabel,
-}: {
-  baseline?: ParticipantReceivedFeedbackSummary;
-  current?: ParticipantReceivedFeedbackSummary;
-  baselineLabel: string;
-  currentLabel: string;
-}) {
-  const dimensions = new Map<string, {
-    label: string;
-    baseline?: number;
-    current?: number;
-  }>();
-  for (const dimension of baseline?.dimensions ?? []) {
-    dimensions.set(dimension.id, { label: dimension.label, baseline: dimension.averageScore });
-  }
-  for (const dimension of current?.dimensions ?? []) {
-    dimensions.set(dimension.id, {
-      ...dimensions.get(dimension.id),
-      label: dimension.label,
-      current: dimension.averageScore,
-    });
-  }
-  const scaleMax = Math.max(
-    baseline ? receivedFeedbackScaleMax(baseline) : 0,
-    current ? receivedFeedbackScaleMax(current) : 0,
-    5,
-  );
-  return (
-    <article className="border-t border-border pt-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-semibold tracking-tight text-foreground">Feedback primit</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {current?.questionnaireTitle ?? baseline?.questionnaireTitle ?? "iCARE 360"}
-          </p>
-        </div>
-        <ComparisonLegend baselineLabel={baselineLabel} currentLabel={currentLabel} />
-      </div>
-      {dimensions.size > 0 ? (
-        <div className="mt-5 divide-y divide-border border-y border-border">
-          {[...dimensions.entries()].map(([id, dimension]) => (
-            <ComparisonScoreRow key={id} item={dimension} max={scaleMax} />
-          ))}
-        </div>
-      ) : (
-        <p className="mt-5 text-sm text-muted-foreground">Rezultatul este încă în așteptare.</p>
-      )}
-    </article>
-  );
-}
-
-type ResultComparisonEntry = {
-  key: string;
-  baseline?: ParticipantWorkspaceResult;
-  current?: ParticipantWorkspaceResult;
-};
-
-function mergeResultsForComparison(
-  baseline: ParticipantWorkspaceResult[],
-  current: ParticipantWorkspaceResult[],
-): ResultComparisonEntry[] {
-  const entries = new Map<string, ResultComparisonEntry>();
-  for (const result of baseline) {
-    const key = resultComparisonKey(result);
-    entries.set(key, { key, baseline: result });
-  }
-  for (const result of current) {
-    const key = resultComparisonKey(result);
-    entries.set(key, { ...entries.get(key), key, current: result });
-  }
-  return [...entries.values()];
-}
-
-function resultComparisonKey(result: ParticipantWorkspaceResult): string {
-  return [result.questionnaireKey, result.targetLabel].join(":");
-}
-
-function ComparisonResultCard({
-  baseline,
-  current,
-  baselineLabel,
-  currentLabel,
-}: {
-  baseline?: ParticipantWorkspaceResult;
-  current?: ParticipantWorkspaceResult;
-  baselineLabel: string;
-  currentLabel: string;
-}) {
-  const result = current ?? baseline;
-  if (!result) return null;
-  const kind = resultKind(result.questionnaireKey);
-  const baselineItems = new Map(scoreItemsForResult(baseline ?? result).map((item) => [item.id, item]));
-  const currentItems = new Map(scoreItemsForResult(current ?? result).map((item) => [item.id, item]));
-  const ids = [...new Set([...baselineItems.keys(), ...currentItems.keys()])];
-  const max = maxScoreForKind(kind);
-  return (
-    <article className="py-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-burgundy">{resultKindLabel(kind)}</p>
-          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{result.title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{result.targetLabel}</p>
-        </div>
-        <ComparisonLegend baselineLabel={baselineLabel} currentLabel={currentLabel} />
-      </div>
-      <div className="mt-6 divide-y divide-border border-y border-border">
-        {ids.map((id) => {
-          const baselineItem = baselineItems.get(id);
-          const currentItem = currentItems.get(id);
-          return (
-            <ComparisonScoreRow
-              key={id}
-              item={{
-                label: currentItem?.label ?? baselineItem?.label ?? id,
-                baseline: baseline ? baselineItem?.score : undefined,
-                current: current ? currentItem?.score : undefined,
-              }}
-              max={max}
-            />
-          );
-        })}
-      </div>
-    </article>
-  );
-}
-
-function ComparisonLegend({ baselineLabel, currentLabel }: { baselineLabel: string; currentLabel: string }) {
-  return (
-    <div className="flex flex-wrap gap-4 text-xs font-semibold">
-      <span className="flex items-center gap-2 text-muted-foreground"><span className="size-2 rounded-full bg-zinc-400" />{baselineLabel}</span>
-      <span className="flex items-center gap-2 text-burgundy"><span className="size-2 rounded-full bg-burgundy" />{currentLabel}</span>
-    </div>
-  );
-}
-
-function ComparisonScoreRow({
-  item,
-  max,
-}: {
-  item: { label: string; baseline?: number; current?: number };
-  max: number;
-}) {
-  return (
-    <div className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_11rem] md:items-center">
-      <div>
-        <h4 className="text-base font-semibold text-foreground">{item.label}</h4>
-        <div className="mt-3 grid gap-2">
-          <ComparisonBar value={item.baseline} max={max} tone="baseline" />
-          <ComparisonBar value={item.current} max={max} tone="current" />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3 font-mono text-lg font-semibold tabular-nums md:text-right">
-        <span className="text-muted-foreground">{item.baseline === undefined ? "N/A" : formatScore(item.baseline)}</span>
-        <span className="text-burgundy">{item.current === undefined ? "N/A" : formatScore(item.current)}</span>
-      </div>
-    </div>
-  );
-}
-
-function ComparisonBar({ value, max, tone }: { value?: number; max: number; tone: "baseline" | "current" }) {
-  const width = value === undefined ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
-  return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-      <div className={cn("h-full rounded-full", tone === "current" ? "bg-burgundy" : "bg-zinc-400")} style={{ width: `${width}%` }} />
-    </div>
-  );
-}
-
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
   const visible = feedback.visible;
   const scaleMax = receivedFeedbackScaleMax(feedback);
+  const cohortTitle = feedback.cohort === "direct_team"
+    ? "Cum te vede echipa ta"
+    : "Cum te văd colegii din leadership";
 
   return (
     <article className="border-t border-border pt-6">
       <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <h3 className="text-2xl font-semibold tracking-tight text-foreground">Feedback primit</h3>
+          <h3 className="text-xl font-semibold tracking-tight text-foreground">{cohortTitle}</h3>
           {feedback.projectName ? (
             <p className="mt-1 text-sm font-semibold text-burgundy">{feedback.projectName}</p>
           ) : null}
           {feedback.questionnaireTitle ? (
             <p className="mt-1 text-sm text-muted-foreground">{feedback.questionnaireTitle}</p>
           ) : null}
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Mediile sunt anonime și nu includ răspunsuri individuale.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Vezi doar media grupului, niciodată răspunsurile unei persoane.</p>
         </div>
         <div className="flex gap-10">
           <FeedbackMetric label="Feedbackuri" value={String(feedback.completedCount)} />
@@ -650,7 +519,8 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
         </div>
       ) : !visible ? (
         <p className="mt-6 border-l-2 border-burgundy bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
-          Media apare după minimum {feedback.minimumCompleted} feedbackuri completate. Pragul protejează anonimitatea respondenților.
+          Mai avem nevoie de cel puțin {Math.max(feedback.minimumCompleted - feedback.completedCount, 1)}{" "}
+          {feedback.minimumCompleted - feedback.completedCount === 1 ? "răspuns" : "răspunsuri"} înainte să putem afișa media acestui grup.
         </p>
       ) : null}
     </article>
@@ -717,8 +587,8 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
       ) : null}
 
       {highlightedItems.length > 0 ? (
-        <section className="mt-7 border-l-2 border-burgundy pl-5" aria-labelledby={`guidance-${result.assignmentId}`}>
-          <div className="flex items-center gap-2 text-burgundy">
+        <section className="mt-7 border-l-2 border-destructive pl-5" aria-labelledby={`guidance-${result.assignmentId}`}>
+          <div className="flex items-center gap-2 text-destructive">
             <MessageSquareTextIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
             <h4 id={`guidance-${result.assignmentId}`} className="text-sm font-semibold">Ce merită atenție</h4>
           </div>
@@ -753,7 +623,7 @@ function GuidanceBlock({ item }: { item: ScoreItem }) {
 
   return (
     <article>
-      <div className="flex items-center gap-2 text-burgundy">
+      <div className="flex items-center gap-2 text-destructive">
         <ClipboardCheckIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
         <h5 className="text-sm font-semibold">Punct de lucru pentru {item.label}</h5>
       </div>
@@ -772,7 +642,7 @@ function ScoreRow({
   showSignal: boolean;
 }) {
   const width = Math.max(0, Math.min(100, (item.score / max) * 100));
-  const tone = showSignal ? "bg-burgundy" : "bg-foreground";
+  const tone = showSignal ? "bg-destructive" : "bg-foreground";
 
   return (
     <div className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_7rem] md:items-center">
@@ -780,7 +650,7 @@ function ScoreRow({
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-base font-semibold leading-6 text-foreground">{item.label}</h4>
           {showSignal ? (
-            <span className="rounded-md bg-burgundy/10 px-2 py-1 text-[11px] font-semibold text-burgundy">
+            <span className="rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive">
               De urmărit
             </span>
           ) : null}

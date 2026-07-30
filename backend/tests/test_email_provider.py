@@ -121,6 +121,86 @@ async def test_brevo_email_provider_sends_transactional_payload() -> None:
     }
 
 
+async def test_brevo_email_provider_adds_documented_sandbox_header() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(201, json={"messageId": "sandbox-message-id"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = BrevoEmailProvider(
+            Settings(
+                email_brevo_api_key="brevo-secret",
+                email_brevo_sandbox_enabled=True,
+            ),
+            client=client,
+        )
+        result = await provider.send(
+            EmailMessage(
+                to=EmailAddress("participant@example.com"),
+                subject="Invitatie",
+                html_body="<p>Mesaj</p>",
+                text_body="Mesaj",
+                provider_idempotency_key="delivery-request-id",
+                provider_sandbox=True,
+            )
+        )
+
+    assert result.status == EmailDeliveryStatus.accepted
+    assert json.loads(requests[0].content)["headers"] == {
+        "idempotencyKey": "delivery-request-id",
+        "X-Sib-Sandbox": "drop",
+    }
+
+
+async def test_brevo_sandbox_permission_does_not_drop_normal_messages() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(201, json={"messageId": "normal-message-id"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = BrevoEmailProvider(
+            Settings(
+                email_brevo_api_key="brevo-secret",
+                email_brevo_sandbox_enabled=True,
+            ),
+            client=client,
+        )
+        await provider.send(
+            EmailMessage(
+                to=EmailAddress("participant@example.com"),
+                subject="Invitatie",
+                html_body="<p>Mesaj</p>",
+                text_body="Mesaj",
+            )
+        )
+
+    assert "X-Sib-Sandbox" not in json.loads(requests[0].content).get("headers", {})
+
+
+async def test_brevo_sandbox_message_fails_closed_without_permission() -> None:
+    provider = BrevoEmailProvider(
+        Settings(
+            email_brevo_api_key="brevo-secret",
+            email_brevo_sandbox_enabled=False,
+        )
+    )
+
+    with pytest.raises(DomainError, match="requires Brevo sandbox"):
+        await provider.send(
+            EmailMessage(
+                to=EmailAddress("participant@example.com"),
+                subject="Invitatie",
+                html_body="<p>Mesaj</p>",
+                text_body="Mesaj",
+                provider_sandbox=True,
+            )
+        )
+
+
 @pytest.mark.parametrize(
     ("status_code", "retryable"),
     [(400, False), (401, False), (408, True), (500, True)],

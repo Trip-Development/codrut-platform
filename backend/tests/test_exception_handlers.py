@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from pytest import LogCaptureFixture
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from codrut.core.config import Settings
 from codrut.core.errors import DomainError, install_exception_handlers
@@ -144,6 +145,19 @@ def test_database_errors_are_logged_and_return_structured_response(
             "request_id": "req-db",
         }
     }
+
+
+def test_database_pool_timeouts_have_a_machine_readable_abort_code() -> None:
+    app = create_test_app()
+
+    @app.get("/pool-timeout")
+    async def pool_timeout() -> None:
+        raise SQLAlchemyTimeoutError("QueuePool limit reached")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/pool-timeout")
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "database_pool_timeout"
 
 
 def test_production_database_error_logs_exclude_exception_details(

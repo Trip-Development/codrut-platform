@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +38,14 @@ def _require_owner_id(owner_id: UUID | None) -> UUID:
 class CommunicationsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def acquire_email_capacity_lock(self) -> None:
+        # One transaction at a time may reserve daily capacity. The lock is
+        # released automatically on commit/rollback and carries no user data.
+        await self.session.execute(
+            text("select pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": 0x434F44525554454D},
+        )
 
     async def list_templates(
         self,
@@ -364,10 +372,13 @@ class CommunicationsRepository:
         campaign_id: UUID,
         *,
         owner_id: UUID | None = None,
+        for_update: bool = False,
     ) -> Campaign | None:
         stmt = select(Campaign).where(Campaign.id == campaign_id)
         if owner_id is not None:
             stmt = stmt.where(Campaign.owner_id == owner_id)
+        if for_update:
+            stmt = stmt.with_for_update()
         result = await self.session.execute(stmt.limit(1))
         return result.scalar_one_or_none()
 
@@ -679,17 +690,7 @@ class CommunicationsRepository:
             .limit(1)
         )
         tombstone = tombstone_result.scalar_one_or_none()
-        if tombstone is not None or email is None:
-            return tombstone
-        legacy_result = await self.session.execute(
-            select(EmailSuppression)
-            .where(
-                EmailSuppression.owner_id == owner_id,
-                func.lower(EmailSuppression.legacy_email) == email.strip().casefold(),
-            )
-            .limit(1)
-        )
-        return legacy_result.scalar_one_or_none()
+        return tombstone
 
     async def list_email_suppressions_by_fingerprints(
         self,
@@ -742,7 +743,6 @@ class CommunicationsRepository:
         if suppression is None:
             suppression = EmailSuppression(
                 owner_id=owner_id,
-                legacy_email=email.strip().casefold(),
                 email_fingerprint=email_fingerprint,
                 reason=reason,
                 source_email_send_id=source_email_send_id,
@@ -956,6 +956,32 @@ class CommunicationsRepository:
             .limit(1)
         )
         return result.scalar_one_or_none() == CampaignRecipientStatus.active
+
+    async def campaign_send_ownership_is_valid(
+        self,
+        send: EmailSend,
+    ) -> bool:
+        if (
+            send.owner_id is None
+            or send.campaign_id is None
+            or send.campaign_recipient_id is None
+        ):
+            return False
+        result = await self.session.execute(
+            select(Campaign.id)
+            .join(
+                CampaignRecipient,
+                CampaignRecipient.id == send.campaign_recipient_id,
+            )
+            .where(
+                Campaign.id == send.campaign_id,
+                Campaign.owner_id == send.owner_id,
+                CampaignRecipient.owner_id == send.owner_id,
+            )
+            .with_for_update(of=(Campaign, CampaignRecipient))
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def delete_campaign_recipient_memberships(
         self,

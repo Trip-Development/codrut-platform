@@ -96,10 +96,46 @@ def test_default_email_sender_name_is_andrei_vacaru(monkeypatch) -> None:
     assert settings.email_from_name == "Andrei Văcaru"
 
 
-def test_default_email_daily_cap_covers_controlled_pilot_delivery() -> None:
+def test_default_email_capacity_covers_launch_delivery() -> None:
     settings = Settings(_env_file=None)
 
-    assert settings.email_daily_send_cap >= 750
+    assert settings.email_daily_send_cap == 2000
+    assert settings.email_outbox_batch_size == 100
+    assert settings.email_outbox_concurrency == 8
+    assert settings.worker_max_jobs == 3
+    assert settings.email_brevo_sandbox_enabled is False
+
+
+def test_worker_concurrency_cannot_exceed_database_pool_capacity() -> None:
+    with pytest.raises(ValidationError, match="Worker concurrency can exceed"):
+        Settings(
+            _env_file=None,
+            db_pool_size=5,
+            db_max_overflow=5,
+            email_outbox_concurrency=9,
+            worker_max_jobs=3,
+        )
+
+
+def test_worker_concurrency_may_exactly_fill_database_pool_capacity() -> None:
+    settings = Settings(
+        _env_file=None,
+        db_pool_size=5,
+        db_max_overflow=5,
+        email_outbox_concurrency=8,
+        worker_max_jobs=3,
+    )
+
+    assert settings.email_outbox_concurrency + settings.worker_max_jobs - 1 == (
+        settings.db_pool_size + settings.db_max_overflow
+    )
+
+
+def test_default_ip_rate_limit_ceiling_covers_shared_network_launches() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.rate_limit_max_requests == 120
+    assert settings.rate_limit_ip_max_requests == 2000
 
 
 def test_database_pool_defaults_are_bounded_for_four_api_workers() -> None:

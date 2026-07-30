@@ -100,6 +100,7 @@ def test_participant_profile_is_company_scoped() -> None:
     }
 
     assert ("company_id", "email") in unique_columns
+    assert ("anonymous_name",) in unique_columns
     assert ("user_id",) not in unique_columns
 
 

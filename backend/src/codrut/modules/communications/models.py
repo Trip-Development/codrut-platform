@@ -144,6 +144,12 @@ class EmailSend(TimestampMixin, Base):
     )
     payload_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     message_payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    sandbox_required: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     next_attempt_at: Mapped[datetime | None] = mapped_column(
@@ -193,12 +199,6 @@ class EmailSuppression(TimestampMixin, Base):
     __tablename__ = "email_suppressions"
     __table_args__ = (
         Index(
-            "uq_email_suppressions_owner_normalized_email",
-            "owner_id",
-            sa_text("lower(email)"),
-            unique=True,
-        ),
-        Index(
             "uq_email_suppressions_owner_fingerprint",
             "owner_id",
             "email_fingerprint",
@@ -212,19 +212,19 @@ class EmailSuppression(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    # Kept only through the expand/contract rollback window. The application
-    # never exposes it and the follow-up contract migration removes it after
-    # the fingerprint-aware release becomes the rollback image.
+    # Rollback-compatibility storage only. Migration 0053 forces this physical
+    # column to a synthetic value derived from the fingerprint on every write;
+    # application code must never use it to look up or expose an address.
     legacy_email: Mapped[str] = mapped_column("email", String(320), nullable=False)
-    email_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    email_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     reason: Mapped[str] = mapped_column(String(64), nullable=False)
     source_email_send_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("email_sends.id", ondelete="SET NULL"),
         nullable=True,
     )
-    review_after: Mapped[datetime | None] = mapped_column(
+    review_after: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        nullable=True,
+        nullable=False,
     )
     last_reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -469,12 +469,9 @@ class CampaignRecipientEvent(TimestampMixin, Base):
     __tablename__ = "campaign_recipient_events"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    # Nullable only for the expand/contract rollback window. Migration 0052
-    # backfills every existing row; the follow-up contract migration makes
-    # this non-null once the expand release is the rollback image.
-    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+    owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
     campaign_id: Mapped[uuid.UUID | None] = mapped_column(

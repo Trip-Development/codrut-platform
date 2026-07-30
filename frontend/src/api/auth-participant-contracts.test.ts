@@ -97,6 +97,7 @@ describe("auth adapter contracts", () => {
         accessMode: "account",
         termsAcceptedAt: "2026-07-17T08:00:00Z",
         termsVersion: "2026-07-01",
+        consentCurrent: false,
       },
     });
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
@@ -164,11 +165,26 @@ describe("auth adapter contracts", () => {
   it("persists the current legal version and exposes consent failures", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response({ ok: true, payload: {} }))
+      .mockResolvedValueOnce(response({
+        ok: true,
+        payload: {
+          user_id: "participant-1",
+          email: "participant@example.com",
+          role: "participant",
+          account_type: "guest",
+          access_mode: "secure_link",
+          consent_current: true,
+        },
+      }))
       .mockResolvedValueOnce(response({ ok: false, status: 403, jsonError: new Error("invalid json") }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(acceptCurrentTerms()).resolves.toBeUndefined();
+    await expect(acceptCurrentTerms()).resolves.toMatchObject({
+      id: "participant-1",
+      accountType: "guest",
+      accessMode: "secure_link",
+      consentCurrent: true,
+    });
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(expect.objectContaining({
       terms_accepted: true,
       terms_version: expect.any(String),

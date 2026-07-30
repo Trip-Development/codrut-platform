@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDaysIcon,
@@ -29,6 +29,10 @@ import {
   type ParticipantInvitationStatus,
   type RosterInviteResult,
 } from "@/api/companies";
+import {
+  getEmailSendCapacity,
+  type EmailSendCapacity,
+} from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
@@ -326,6 +330,7 @@ export function InvitationDeliveryWorkspace({
     new Map<string, RosterInviteResult>(),
   );
   const [message, setMessage] = useState<string | null>(null);
+  const [emailCapacity, setEmailCapacity] = useState<EmailSendCapacity | null>(null);
   const [sendingMode, setSendingMode] = useState<ParticipantInvitationMode | "resend" | null>(null);
   const [pendingInviteAction, setPendingInviteAction] = useState<InvitationPendingAction | null>(null);
   const [resendingParticipantId, setResendingParticipantId] = useState<string | null>(null);
@@ -340,6 +345,16 @@ export function InvitationDeliveryWorkspace({
     || Boolean(selectedCycleId && loadedCycleScope === cycleScopeKey && !cycleDataLoading);
   const selectedCycle = assessmentCycles.find((cycle) => cycle.id === selectedCycleId) ?? null;
   const deliveryEnabled = !selectedProjectId || selectedCycle?.status !== "closed";
+  const refreshEmailCapacity = useCallback(async () => {
+    try {
+      const capacity = await getEmailSendCapacity();
+      setEmailCapacity(capacity);
+      return capacity;
+    } catch {
+      setEmailCapacity(null);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     setAssignmentState(assignments);
@@ -348,6 +363,13 @@ export function InvitationDeliveryWorkspace({
   useEffect(() => {
     setInvitationStatusState(invitationStatuses);
   }, [invitationStatuses]);
+
+  useEffect(() => {
+    void refreshEmailCapacity();
+    const refreshOnFocus = () => void refreshEmailCapacity();
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [refreshEmailCapacity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -492,6 +514,15 @@ export function InvitationDeliveryWorkspace({
     selectableRows.length > 0 &&
     selectableRows.every((row) => selectedParticipantIds.has(row.participant.id));
   const readyCount = rows.filter((row) => matchesInvitationFilter(row, "ready")).length;
+  const readyEmailCount = rows.filter(
+    (row) => matchesInvitationFilter(row, "ready") && Boolean(row.participant.email),
+  ).length;
+  const allEmailCount = rows.filter(
+    (row) => row.totalTasks > 0 && Boolean(row.participant.email),
+  ).length;
+  const selectedEmailCount = selectedRows.filter(
+    (row) => row.totalTasks > 0 && Boolean(row.participant.email),
+  ).length;
   const errorCount = rows.filter((row) => matchesInvitationFilter(row, "errors")).length;
   const noAssignmentCount = rows.filter((row) => row.totalTasks === 0).length;
   const currentOperation = getCurrentOperation(
@@ -580,6 +611,18 @@ export function InvitationDeliveryWorkspace({
     );
   }
 
+  function plannedEmailRecipientCount(
+    participantIds: string[] | undefined,
+    targetMode: "unsent" | "selected" | "all",
+  ): number {
+    const selectedIds = participantIds ? new Set(participantIds) : null;
+    return rows.filter((row) => {
+      if (!row.participant.email || row.totalTasks === 0) return false;
+      if (targetMode === "unsent") return row.deliveryState === "ready";
+      return selectedIds === null || selectedIds.has(row.participant.id);
+    }).length;
+  }
+
   async function dispatchInvitations(
     mode: ParticipantInvitationMode,
     participantIds: string[] | undefined,
@@ -606,6 +649,22 @@ export function InvitationDeliveryWorkspace({
     }
 
     invitationSendingRef.current = true;
+    if (mode === "email") {
+      const capacity = await refreshEmailCapacity();
+      if (capacity === null) {
+        invitationSendingRef.current = false;
+        setMessage("Nu am putut verifica limita de trimitere. Reîncearcă înainte să pornești invitațiile.");
+        return;
+      }
+      const plannedCount = plannedEmailRecipientCount(participantIds, targetMode);
+      if (plannedCount > capacity.remaining_today) {
+        invitationSendingRef.current = false;
+        setMessage(
+          `Mai sunt disponibile ${capacity.remaining_today} emailuri astăzi, iar această trimitere are ${plannedCount}. Redu selecția și încearcă din nou.`,
+        );
+        return;
+      }
+    }
     setSendingMode(mode);
     setPendingInviteAction(pendingAction);
     setMessage(null);
@@ -631,7 +690,10 @@ export function InvitationDeliveryWorkspace({
           ? formatEmailBatchMessage(result)
           : `${result.links_generated}/${result.total} linkuri securizate generate.`,
       );
-      await refreshAssessmentCycles();
+      await Promise.all([
+        refreshAssessmentCycles(),
+        mode === "email" ? refreshEmailCapacity() : Promise.resolve(null),
+      ]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invitațiile nu au putut fi trimise.");
     } finally {
@@ -687,6 +749,16 @@ export function InvitationDeliveryWorkspace({
       return;
     }
     invitationSendingRef.current = true;
+    const capacity = await refreshEmailCapacity();
+    if (capacity === null || capacity.remaining_today < 1) {
+      invitationSendingRef.current = false;
+      setMessage(
+        capacity === null
+          ? "Nu am putut verifica limita de trimitere. Reîncearcă înainte de retrimitere."
+          : "Capacitatea de trimitere pentru astăzi a fost folosită.",
+      );
+      return;
+    }
     setSendingMode("resend");
     setPendingInviteAction("resend");
     setResendingParticipantId(participantId);
@@ -708,6 +780,7 @@ export function InvitationDeliveryWorkspace({
         ));
         setMessage(formatResendMessage(result));
       }
+      await refreshEmailCapacity();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invitația nu a putut fi retrimisă.");
     } finally {
@@ -751,6 +824,11 @@ export function InvitationDeliveryWorkspace({
         ) : null}
 
         <header className="border-b border-border px-4 py-4 md:px-5">
+          <p className="mb-3 w-fit rounded-md border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground/70">
+            {emailCapacity
+              ? `${emailCapacity.remaining_today} din ${emailCapacity.daily_cap} emailuri disponibile astăzi`
+              : "Verificăm capacitatea de trimitere…"}
+          </p>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 items-baseline gap-3">
               <h2 className="text-xl font-semibold text-foreground">Livrare invitații</h2>
@@ -761,7 +839,15 @@ export function InvitationDeliveryWorkspace({
                 type="button"
                 size="sm"
                 onClick={() => void handleSendAll("email")}
-                disabled={!deliveryEnabled || !canUseProjectActions || !cycleScopeReady || sendingMode !== null || readyCount === 0}
+                disabled={
+                  !deliveryEnabled
+                  || !canUseProjectActions
+                  || !cycleScopeReady
+                  || sendingMode !== null
+                  || readyCount === 0
+                  || (emailCapacity !== null
+                    && readyEmailCount > emailCapacity.remaining_today)
+                }
               >
                 {pendingInviteAction === "unsent-email" ? (
                   <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" />
@@ -788,7 +874,15 @@ export function InvitationDeliveryWorkspace({
                     "all-email",
                   );
                 }}
-                disabled={!deliveryEnabled || !canUseProjectActions || !cycleScopeReady || sendingMode !== null || rows.every((row) => row.totalTasks === 0)}
+                disabled={
+                  !deliveryEnabled
+                  || !canUseProjectActions
+                  || !cycleScopeReady
+                  || sendingMode !== null
+                  || rows.every((row) => row.totalTasks === 0)
+                  || (emailCapacity !== null
+                    && allEmailCount > emailCapacity.remaining_today)
+                }
               >
                 <SendIcon data-icon="inline-start" aria-hidden="true" />
                 {pendingInviteAction === "all-email" ? "Trimitem tuturor" : "Trimite tuturor"}
@@ -863,7 +957,14 @@ export function InvitationDeliveryWorkspace({
                 type="button"
                 size="sm"
                 onClick={() => void handleSendSelected("email")}
-                disabled={!deliveryEnabled || !cycleScopeReady || sendingMode !== null || selectedReadyCount === 0}
+                disabled={
+                  !deliveryEnabled
+                  || !cycleScopeReady
+                  || sendingMode !== null
+                  || selectedReadyCount === 0
+                  || (emailCapacity !== null
+                    && selectedEmailCount > emailCapacity.remaining_today)
+                }
               >
                 <MailIcon data-icon="inline-start" aria-hidden="true" />
                 {pendingInviteAction === "selected-email" ? "Trimitem emailurile" : "Trimite email invitații"}
@@ -996,7 +1097,14 @@ export function InvitationDeliveryWorkspace({
                           variant="outline"
                           size="sm"
                           onClick={() => void handleResend(row.participant.id)}
-                          disabled={!deliveryEnabled || !cycleScopeReady || sendingMode !== null || row.totalTasks === 0}
+                          disabled={
+                            !deliveryEnabled
+                            || !cycleScopeReady
+                            || sendingMode !== null
+                            || row.totalTasks === 0
+                            || (emailCapacity !== null
+                              && emailCapacity.remaining_today < 1)
+                          }
                         >
                           {pendingInviteAction === "resend" &&
                           resendingParticipantId === row.participant.id ? (

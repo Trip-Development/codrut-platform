@@ -10,6 +10,7 @@ from codrut.core.config import get_settings
 from codrut.core.csrf import install_csrf_middleware
 from codrut.core.errors import ERROR_RESPONSES, install_exception_handlers
 from codrut.core.logging import configure_logging
+from codrut.core.maintenance import install_maintenance_middleware
 from codrut.core.rate_limit import install_rate_limit_middleware
 from codrut.core.request_id import install_request_id_middleware
 from codrut.core.request_limits import install_request_limit_middleware
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     )
     install_rate_limit_middleware(app)
     install_request_limit_middleware(app)
+    install_maintenance_middleware(app, settings)
     install_csrf_middleware(app, session_cookie_name=SESSION_COOKIE_NAME)
     install_security_headers_middleware(app)
     install_request_id_middleware(app)

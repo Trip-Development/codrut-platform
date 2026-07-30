@@ -1,8 +1,9 @@
+import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
 from codrut.core.database import SessionLocal, engine
 from codrut.modules.assignments.models import (
@@ -49,6 +50,177 @@ def _definition(*, key: str = "pilot_feedback") -> QuestionnaireDefinition:
         content_checksum=uuid.uuid4().hex + uuid.uuid4().hex,
         active=True,
     )
+
+
+async def test_concurrent_aggregate_reconciliation_publishes_complete_cohort() -> None:
+    await engine.dispose()
+    company_id = uuid.uuid4()
+    definition_id = uuid.uuid4()
+    target_id = uuid.uuid4()
+    assignment_ids = [uuid.uuid4(), uuid.uuid4()]
+    round_id = uuid.uuid4()
+    controller = SessionLocal()
+    tasks: list[asyncio.Task[None]] = []
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=company_id, name=f"Concurrent publication {uuid.uuid4()}")
+            definition = _definition(key="boss_360")
+            definition.id = definition_id
+            target = ParticipantProfile(
+                id=target_id,
+                company_id=company_id,
+                full_name="Manager concurent",
+                email=f"target-{uuid.uuid4().hex[:8]}@example.com",
+            )
+            reviewers = [
+                ParticipantProfile(
+                    id=uuid.uuid4(),
+                    company_id=company_id,
+                    full_name=f"Reviewer concurent {index}",
+                    email=f"concurrent-reviewer-{index}-{uuid.uuid4().hex[:8]}@example.com",
+                )
+                for index in range(2)
+            ]
+            assignments = [
+                QuestionnaireAssignment(
+                    id=assignment_id,
+                    company_id=company_id,
+                    assignment_round_id=round_id,
+                    respondent_profile_id=reviewer.id,
+                    questionnaire_key=definition.key,
+                    questionnaire_definition_id=definition_id,
+                    target_type=AssignmentTargetType.person,
+                    target_person_id=target_id,
+                    status=AssignmentStatus.started,
+                )
+                for assignment_id, reviewer in zip(assignment_ids, reviewers, strict=True)
+            ]
+            session.add_all([company, definition])
+            await session.flush()
+            session.add_all([target, *reviewers])
+            await session.flush()
+            session.add_all(assignments)
+            await session.commit()
+
+        lock_scope = ":".join(
+            (
+                "result-publication",
+                str(company_id),
+                "none",
+                "none",
+                str(target_id),
+                str(definition_id),
+            )
+        )
+        await controller.execute(
+            text(
+                "select pg_advisory_xact_lock("
+                "hashtextextended(:lock_scope, 0)"
+                ")"
+            ),
+            {"lock_scope": lock_scope},
+        )
+
+        ready: asyncio.Queue[int] = asyncio.Queue()
+        start = asyncio.Event()
+
+        async def score_and_reconcile(assignment_id: uuid.UUID) -> None:
+            async with SessionLocal() as session:
+                assignment = (
+                    await session.execute(
+                        select(QuestionnaireAssignment)
+                        .where(QuestionnaireAssignment.id == assignment_id)
+                        .with_for_update()
+                    )
+                ).scalar_one()
+                assignment.status = AssignmentStatus.scored
+                session.add(
+                    ScoringResult(
+                        assignment_id=assignment_id,
+                        scores={"clarity": {"score": 4}},
+                        primary_result="clarity",
+                    )
+                )
+                await session.flush()
+                backend_pid = int(
+                    (await session.execute(text("select pg_backend_pid()"))).scalar_one()
+                )
+                await ready.put(backend_pid)
+                await start.wait()
+                await ResultPublicationService(session).reconcile_assignment(assignment_id)
+                await session.commit()
+
+        tasks = [
+            asyncio.create_task(score_and_reconcile(assignment_id))
+            for assignment_id in assignment_ids
+        ]
+        backend_pids = [await ready.get(), await ready.get()]
+        start.set()
+
+        waiters = 0
+        for _attempt in range(500):
+            waiters = int(
+                (
+                    await controller.execute(
+                        text(
+                            "select count(*) from pg_stat_activity "
+                            "where pid in (:first_pid, :second_pid) "
+                            "and wait_event_type = 'Lock'"
+                        ),
+                        {
+                            "first_pid": backend_pids[0],
+                            "second_pid": backend_pids[1],
+                        },
+                    )
+                ).scalar_one()
+            )
+            if waiters == 2:
+                break
+            if any(task.done() for task in tasks):
+                await asyncio.gather(*tasks)
+            await asyncio.sleep(0.01)
+        assert waiters == 2, "both reconcilers must wait on the aggregate advisory lock"
+
+        await controller.commit()
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=10)
+
+        async with SessionLocal() as session:
+            publications = list(
+                (
+                    await session.execute(
+                        select(ResultPublication).where(
+                            ResultPublication.kind
+                            == ResultPublicationKind.aggregate_360,
+                            ResultPublication.participant_profile_id == target_id,
+                            ResultPublication.revoked_at.is_(None),
+                        )
+                    )
+                ).scalars()
+            )
+
+        assert len(publications) == 1
+        assert publications[0].source_count == 2
+        assert set(publications[0].policy_snapshot["source_assignment_ids"]) == {
+            str(assignment_id) for assignment_id in assignment_ids
+        }
+    finally:
+        if controller.in_transaction():
+            await controller.rollback()
+        await controller.close()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        async with SessionLocal() as session:
+            await session.execute(delete(Company).where(Company.id == company_id))
+            await session.execute(
+                delete(QuestionnaireDefinition).where(
+                    QuestionnaireDefinition.id == definition_id
+                )
+            )
+            await session.commit()
+        await engine.dispose()
 
 
 async def test_individual_publication_is_idempotent_and_excludes_private_scoring() -> None:
@@ -236,7 +408,7 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
                 full_name=f"Reviewer {index}",
                 email=f"reviewer-{index}-{uuid.uuid4().hex[:8]}@example.com",
             )
-            for index in range(2)
+            for index in range(3)
         ]
         definition = _definition(key="boss_360")
         definition.feedback_policy = {}
@@ -272,9 +444,13 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
                 questionnaire_definition_id=definition.id,
                 target_type=AssignmentTargetType.person,
                 target_person_id=target.id,
-                status=AssignmentStatus.scored,
+                status=(
+                    AssignmentStatus.scored
+                    if index < 2
+                    else AssignmentStatus.started
+                ),
             )
-            for reviewer in reviewers
+            for index, reviewer in enumerate(reviewers)
         ]
         self_assignment = QuestionnaireAssignment(
             id=uuid.uuid4(),
@@ -295,7 +471,7 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
                 scores={"clarity": {"score": 4 + index / 2}},
                 primary_result="clarity",
             )
-            for index, assignment in enumerate(assignments)
+            for index, assignment in enumerate(assignments[:2])
         ]
         session.add_all(
             [

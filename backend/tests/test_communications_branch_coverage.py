@@ -1111,6 +1111,7 @@ async def test_outbox_cancels_delivery_when_campaign_recipient_became_inactive(
     send.campaign_recipient_id = uuid.uuid4()
     current = send if claimed else None
     repository = SimpleNamespace(
+        campaign_send_ownership_is_valid=AsyncMock(return_value=True),
         campaign_recipient_is_active=AsyncMock(return_value=False),
         get_claimed_email_send=AsyncMock(return_value=current),
         mark_email_send_cancelled=AsyncMock(),

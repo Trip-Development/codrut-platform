@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -6,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from codrut.api.dependencies import current_principal, db_session
 from codrut.core.csrf import csrf_token_for_session, set_csrf_cookie
 from codrut.core.errors import DomainError
+from codrut.core.request_id import request_id_from_request
 from codrut.modules.identity.schemas import (
     AuthResponse,
     ConsentRequest,
@@ -29,6 +31,7 @@ from codrut.modules.identity.session_cookie import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/invite/verify", response_model=InviteVerifyResponse)
@@ -96,10 +99,34 @@ async def login(
 @router.post("/reset-password", response_model=PasswordResetResponse)
 async def request_password_reset(
     payload: PasswordResetRequest,
+    request: Request,
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> PasswordResetResponse:
-    await IdentityService(session).request_password_reset(payload)
-    await session.commit()
+    request_id = request_id_from_request(request)
+    try:
+        await IdentityService(session).request_password_reset(
+            payload,
+            request_id=request_id,
+        )
+        await session.commit()
+    except Exception:  # noqa: BLE001
+        try:
+            await session.rollback()
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Password reset transaction rollback failed.",
+                extra={
+                    "auth_event": "password_reset_rollback_failure",
+                    "request_id": request_id,
+                },
+            )
+        logger.exception(
+            "Password reset request completed with an internal delivery failure.",
+            extra={
+                "auth_event": "password_reset_internal_failure",
+                "request_id": request_id,
+            },
+        )
     return PasswordResetResponse()
 
 

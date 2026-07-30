@@ -23,7 +23,10 @@ export function ConsentForm() {
     setIsSaving(true);
     setError(null);
     try {
-      await acceptCurrentTerms();
+      const user = await acceptCurrentTerms();
+      if (!user.consentCurrent) {
+        throw new Error("Acordul nu a fost confirmat de server. Reîncearcă.");
+      }
       window.location.assign("/participant");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Acordul nu a putut fi salvat.");

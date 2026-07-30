@@ -21,6 +21,19 @@ export type ParticipantTaskGroup = {
   projectName?: string | null;
 };
 
+export type ParticipantTaskProject = {
+  id: string;
+  participantProfileId?: string;
+  companyName?: string;
+  name: string;
+  status: "active" | "completed" | "archived";
+  historyBucket: "current" | "history";
+  deadlineLabel: string;
+  completedCount: number;
+  totalCount: number;
+  groups: ParticipantTaskGroup[];
+};
+
 const review360Keys = new Set(["boss_360", "boss_360_en", "icare"]);
 
 export const participantTaskStatusCopy: Record<InviteTaskStatus, { label: string; helper: string }> = {
@@ -46,7 +59,9 @@ export function groupParticipantTasks(tasks: InviteTask[]): ParticipantTaskGroup
     if (isReview360Task(task)) {
       const projectKey = task.projectId ?? task.projectName ?? "legacy";
       const roundKey = task.assignmentRoundId ?? "legacy";
-      const groupKey = `${projectKey}:${roundKey}`;
+      const questionnaireKey = task.questionnaireKey || "legacy";
+      const definitionKey = task.questionnaireDefinitionId ?? "legacy";
+      const groupKey = `${projectKey}:${roundKey}:${questionnaireKey}:${definitionKey}`;
       const projectTasks = reviewTasksByProject.get(groupKey) ?? [];
       projectTasks.push(task);
       reviewTasksByProject.set(groupKey, projectTasks);
@@ -60,6 +75,83 @@ export function groupParticipantTasks(tasks: InviteTask[]): ParticipantTaskGroup
   }
 
   return groups.sort((left, right) => firstTaskIndex(tasks, left) - firstTaskIndex(tasks, right));
+}
+
+export function groupParticipantTasksByProject(
+  tasks: InviteTask[],
+  projectMetadata: Array<{
+    id: string;
+    participantProfileId?: string;
+    companyName?: string;
+    name: string;
+    status?: "active" | "completed" | "archived";
+    historyBucket?: "current" | "history";
+    deadlineLabel?: string;
+  }> = [],
+): ParticipantTaskProject[] {
+  const metadataById = new Map(projectMetadata.map((project) => [project.id, project]));
+  const tasksByProject = new Map<string, InviteTask[]>();
+
+  for (const task of tasks) {
+    const projectId = task.projectId ?? `legacy:${task.projectName ?? "fara-proiect"}`;
+    const projectTasks = tasksByProject.get(projectId) ?? [];
+    projectTasks.push(task);
+    tasksByProject.set(projectId, projectTasks);
+  }
+
+  return Array.from(tasksByProject, ([id, projectTasks]) => {
+    const metadata = metadataById.get(id);
+    const groups = groupParticipantTasks(projectTasks);
+    const completedCount = projectTasks.filter(
+      (task) => task.status === "completed",
+    ).length;
+    return {
+      id,
+      participantProfileId: metadata?.participantProfileId,
+      companyName: metadata?.companyName,
+      name:
+        metadata?.name ??
+        projectTasks[0]?.projectName ??
+        "Chestionare fără proiect",
+      status: metadata?.status ?? "active",
+      historyBucket: metadata?.historyBucket ?? "current",
+      deadlineLabel:
+        metadata?.deadlineLabel ??
+        projectTasks.find((task) => task.deadlineLabel)?.deadlineLabel ??
+        "Fără termen",
+      completedCount,
+      totalCount: projectTasks.length,
+      groups,
+    };
+  }).sort(compareTaskProjects);
+}
+
+export function participantTaskProjectsFromCatalog(
+  projects: Array<{
+    id: string;
+    participantProfileId?: string;
+    companyName?: string;
+    name: string;
+    status: "active" | "completed" | "archived";
+    historyBucket: "current" | "history";
+    deadlineLabel: string;
+    completedCount: number;
+    totalCount: number;
+    questionnaires: InviteTask[];
+  }>,
+): ParticipantTaskProject[] {
+  return projects.map((project) => ({
+    id: project.id,
+    participantProfileId: project.participantProfileId,
+    companyName: project.companyName,
+    name: project.name,
+    status: project.status,
+    historyBucket: project.historyBucket,
+    deadlineLabel: project.deadlineLabel,
+    completedCount: project.completedCount,
+    totalCount: project.totalCount,
+    groups: groupParticipantTasks(project.questionnaires),
+  }));
 }
 
 export function participantTaskGroupHref(
@@ -132,7 +224,13 @@ function review360TaskGroup(tasks: InviteTask[]): ParticipantTaskGroup {
   const targetCount = tasks.length;
 
   return {
-    id: `review-360:${tasks[0]?.projectId ?? tasks[0]?.projectName ?? "legacy"}:${tasks[0]?.assignmentRoundId ?? "legacy"}`,
+    id: [
+      "review-360",
+      tasks[0]?.projectId ?? tasks[0]?.projectName ?? "legacy",
+      tasks[0]?.assignmentRoundId ?? "legacy",
+      tasks[0]?.questionnaireKey ?? "legacy",
+      tasks[0]?.questionnaireDefinitionId ?? "legacy",
+    ].join(":"),
     kind: "review360",
     title: "Review 360",
     detail:
@@ -171,4 +269,17 @@ export function safeReviewTargetLabel(value: string): string {
 function firstTaskIndex(allTasks: InviteTask[], group: ParticipantTaskGroup): number {
   const first = group.tasks[0];
   return Math.max(0, allTasks.findIndex((task) => task.assignmentId === first.assignmentId));
+}
+
+function compareTaskProjects(
+  left: ParticipantTaskProject,
+  right: ParticipantTaskProject,
+): number {
+  const leftComplete = left.completedCount === left.totalCount;
+  const rightComplete = right.completedCount === right.totalCount;
+  if (leftComplete !== rightComplete) return leftComplete ? 1 : -1;
+  if (left.historyBucket !== right.historyBucket) {
+    return left.historyBucket === "current" ? -1 : 1;
+  }
+  return left.name.localeCompare(right.name, "ro");
 }

@@ -17,6 +17,7 @@ class EmailMessage:
     from_address: EmailAddress | None = None
     reply_to: EmailAddress | None = None
     provider_idempotency_key: str | None = None
+    provider_sandbox: bool = False
 
 
 class EmailProviderKey(StrEnum):

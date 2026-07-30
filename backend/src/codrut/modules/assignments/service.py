@@ -880,7 +880,11 @@ class AssignmentService:
         payload: AssignmentStatusUpdateRequest,
     ) -> QuestionnaireAssignment:
         await self._require_company_manager(user_id, company_id)
-        assignment = await self.assignment_repository.get_assignment(company_id, assignment_id)
+        assignment = await self.assignment_repository.get_assignment(
+            company_id,
+            assignment_id,
+            for_update=True,
+        )
         if assignment is None:
             raise DomainError("Assignment not found.", code="assignment_not_found")
         previous_status = assignment.status
@@ -889,6 +893,9 @@ class AssignmentService:
             previous_status in COMPLETED_ASSIGNMENT_STATUSES
             and payload.status in EDITABLE_ASSIGNMENT_STATUSES
         ):
+            await self.forms_repository.delete_submission_processing_for_assignment(
+                assignment_id
+            )
             await self.forms_repository.unlock_response_for_assignment(assignment_id)
             await self.scoring_repository.delete_by_assignment(assignment_id)
             await self.result_publication_service.reconcile_assignment(assignment_id)

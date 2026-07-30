@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import case, select, update
+from sqlalchemy import case, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,9 +37,12 @@ def required_feedback_count(
     minimum_completed: int = 2,
     target_completed: int = 3,
 ) -> int:
-    minimum = max(1, minimum_completed)
-    target = max(minimum, target_completed)
-    return max(minimum, min(target, eligible_count))
+    # `target_completed` remains useful for invitation/progress planning, but it
+    # must not silently raise the participant-facing privacy threshold. Results
+    # become publishable at the explicit minimum and are then split into cohorts,
+    # each of which independently enforces that same minimum.
+    _ = eligible_count, target_completed
+    return max(1, minimum_completed)
 
 
 class ResultPublicationService:
@@ -129,6 +132,7 @@ class ResultPublicationService:
         definition: QuestionnaireDefinition | None,
     ) -> None:
         assert assignment.target_person_id is not None
+        await self._lock_aggregate_scope(assignment)
         feedback_policy = _effective_feedback_policy(definition)
         publication_key = _aggregate_publication_key(assignment)
         if definition is None or feedback_policy.get("publication", "none") != "aggregate":
@@ -227,6 +231,33 @@ class ResultPublicationService:
                 ),
             },
             assignment_round_id=publication_round_id,
+        )
+
+    async def _lock_aggregate_scope(
+        self,
+        assignment: QuestionnaireAssignment,
+    ) -> None:
+        """Serialize publication decisions that read the same response cohort."""
+        lock_scope = ":".join(
+            (
+                "result-publication",
+                str(assignment.company_id),
+                str(assignment.project_id or "none"),
+                str(assignment.assessment_cycle_id or "none"),
+                str(assignment.target_person_id),
+                str(
+                    assignment.questionnaire_definition_id
+                    or assignment.questionnaire_key
+                ),
+            )
+        )
+        await self.session.execute(
+            text(
+                "select pg_advisory_xact_lock("
+                "hashtextextended(:lock_scope, 0)"
+                ")"
+            ),
+            {"lock_scope": lock_scope},
         )
 
     async def _publish(
