@@ -99,6 +99,14 @@ def test_default_email_daily_cap_covers_controlled_pilot_delivery() -> None:
     assert settings.email_daily_send_cap >= 750
 
 
+def test_database_pool_defaults_are_bounded_for_four_api_workers() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.db_pool_size == 5
+    assert settings.db_max_overflow == 5
+    assert settings.db_pool_timeout_seconds == 10
+
+
 def test_email_sender_identity_values_are_trimmed() -> None:
     settings = Settings(
         _env_file=None,

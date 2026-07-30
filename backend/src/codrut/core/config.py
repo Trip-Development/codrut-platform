@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     app_name: str = "Cody Platform"
     env: str = "development"
     database_url: str = "postgresql+asyncpg://codrut:codrut@localhost:5432/codrut"
+    db_pool_size: int = Field(default=5, ge=1, le=50)
+    db_max_overflow: int = Field(default=5, ge=0, le=50)
+    db_pool_timeout_seconds: float = Field(default=10.0, ge=1.0, le=120.0)
     redis_url: str = "redis://localhost:6379/0"
     session_secret: SecretStr = Field(default=SecretStr("local-development-secret"))
     # Dedicated secret for signing task/invite links. Defaults to session_secret if not set.

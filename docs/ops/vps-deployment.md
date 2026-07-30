@@ -245,6 +245,18 @@ unsafe rollback boundary, run `alembic check`, and remove its guarded
 `*_rehearsal` database. It uses only `.invalid` email addresses and never reads
 the active development or production database.
 
+Before any image pull, the deploy runs
+`.github/scripts/check_vps_capacity.sh preflight / 85 8` on the VPS. The
+deployment stops before downloading layers when root usage is above 85% or
+less than 8 GiB is available. A separate daily `VPS Capacity Check` workflow
+warns at 80% and fails at 90%. Investigate a warning before the next deploy;
+do not solve it with a global Docker prune.
+
+Production Compose bounds every service's `json-file` logs to five 10 MB
+files. The API defaults to four Uvicorn workers. Each API process and the
+email worker use an explicit SQLAlchemy pool of five connections, five
+overflow connections, and a ten-second acquisition timeout.
+
 After startup, the workflow checks:
 
 - Running backend, worker, and frontend container image refs against the
@@ -261,6 +273,14 @@ After startup, the workflow checks:
 
 The workflow summary records the deployed release SHA, deployed image refs, and
 the previous frontend/backend image refs from the deploy job.
+
+Only after both internal and public readiness pass, the deploy runs
+`.github/scripts/retain_codrut_images.sh`. It first proves that all current and
+previous rollback refs exist locally, then removes other tags only from the
+resolved Codrut backend and frontend repositories and finally removes
+unreferenced dangling layers. It never runs a global image, volume, network, or
+system prune. If either previous ref is unavailable, retention is skipped so a
+deploy cannot erase its only rollback candidate.
 
 ## Rollback
 
@@ -299,6 +319,12 @@ Rollback is manual and image-ref based:
 
    The backend and worker image refs must match `BACKEND_IMAGE`; the frontend
    image ref must match `FRONTEND_IMAGE`.
+
+5. Before allowing a later deploy to delete older image tags, exercise the
+   rollback once in the maintenance environment: switch to the recorded
+   previous refs, recreate the three app services, verify internal and public
+   readiness, then switch back to the candidate and repeat the checks. Confirm
+   both pairs remain visible with `docker image inspect`.
 
 Rollback to an older application image does not undo database migrations. Check
 the migration notes before rolling back across schema changes.
