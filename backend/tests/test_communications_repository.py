@@ -32,7 +32,7 @@ class RowResult:
 
 
 @pytest.mark.asyncio
-async def test_contact_catalog_is_shared_but_contact_mutations_remain_owner_scoped() -> None:
+async def test_contact_catalog_and_mutations_are_owner_scoped() -> None:
     session = MagicMock()
     session.execute = AsyncMock(return_value=EmptyResult())
     repository = CommunicationsRepository(session)
@@ -52,10 +52,10 @@ async def test_contact_catalog_is_shared_but_contact_mutations_remain_owner_scop
     await repository.list_campaign_recipient_events(owner_id=owner_id)
     events_statement = str(session.execute.call_args.args[0])
 
-    assert "campaign_recipients.owner_id =" not in list_statement
+    assert "campaign_recipients.owner_id =" in list_statement
     assert "campaign_recipients.owner_id =" in get_statement
     assert "campaign_recipients.owner_id =" in email_statement
-    assert "campaign_recipients.owner_id =" not in ids_statement
+    assert "campaign_recipients.owner_id =" in ids_statement
     assert "campaign_recipients.owner_id =" in events_statement
 
     with pytest.raises(ValueError, match="owner_id is required"):
@@ -63,7 +63,7 @@ async def test_contact_catalog_is_shared_but_contact_mutations_remain_owner_scop
 
 
 @pytest.mark.asyncio
-async def test_membership_reads_keep_campaign_owner_scope_for_shared_contacts() -> None:
+async def test_membership_reads_require_matching_campaign_and_contact_owners() -> None:
     session = MagicMock()
     session.execute = AsyncMock(return_value=EmptyResult())
     repository = CommunicationsRepository(session)
@@ -79,11 +79,11 @@ async def test_membership_reads_keep_campaign_owner_scope_for_shared_contacts() 
 
     for statement in (recipient_statement, id_statement):
         assert "campaigns.owner_id =" in statement
-        assert "campaign_recipients.owner_id =" not in statement
+        assert "campaign_recipients.owner_id =" in statement
 
 
 @pytest.mark.asyncio
-async def test_campaign_membership_accepts_legacy_and_cross_trainer_contacts() -> None:
+async def test_campaign_membership_rejects_legacy_and_cross_trainer_contacts() -> None:
     session = MagicMock()
     session.flush = AsyncMock()
     repository = CommunicationsRepository(session)
@@ -109,18 +109,19 @@ async def test_campaign_membership_accepts_legacy_and_cross_trainer_contacts() -
     repository.list_campaign_recipients_by_ids = AsyncMock(return_value=recipients)
     repository.list_campaign_member_recipient_ids = AsyncMock(return_value=[])
 
-    await repository.replace_campaign_memberships(
-        campaign_id,
-        [recipient.id for recipient in recipients],
-        owner_id=owner_id,
-    )
+    with pytest.raises(
+        ValueError,
+        match="contacts owned by another trainer",
+    ):
+        await repository.replace_campaign_memberships(
+            campaign_id,
+            [recipient.id for recipient in recipients],
+            owner_id=owner_id,
+        )
 
     repository.get_campaign.assert_awaited_once_with(campaign_id, owner_id=owner_id)
-    session.add_all.assert_called_once()
-    assert {membership.recipient_id for membership in session.add_all.call_args.args[0]} == {
-        recipient.id for recipient in recipients
-    }
-    session.flush.assert_awaited_once()
+    session.add_all.assert_not_called()
+    session.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio

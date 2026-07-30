@@ -296,14 +296,25 @@ async def test_hard_bounce_persists_owner_scoped_suppression() -> None:
 
 
 async def test_unsubscribe_suppresses_campaign_recipient() -> None:
+    owner = User(
+        id=uuid.uuid4(),
+        email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="test-hash",  # noqa: S106
+        role=UserRole.trainer,
+    )
     recipient = CampaignRecipient(
         id=uuid.uuid4(),
+        owner_id=owner.id,
         email="ana@example.com",
         contact_name="Ana",
         segment=CampaignRecipientSegment.past_customer,
         status=CampaignRecipientStatus.active,
     )
-    send = _send(message_id="provider-unsubscribe", recipient_id=recipient.id)
+    send = _send(
+        message_id="provider-unsubscribe",
+        recipient_id=recipient.id,
+        owner_id=owner.id,
+    )
     payload = BrevoWebhookEvent.model_validate(
         {
             "event": "unsubscribed",
@@ -314,6 +325,8 @@ async def test_unsubscribe_suppresses_campaign_recipient() -> None:
     )
     try:
         async with SessionLocal() as session:
+            session.add(owner)
+            await session.flush()
             session.add_all([recipient, send])
             await session.commit()
 
@@ -324,7 +337,11 @@ async def test_unsubscribe_suppresses_campaign_recipient() -> None:
             assert stored is not None
             assert stored.status == CampaignRecipientStatus.unsubscribed
     finally:
-        await _cleanup(send_id=send.id, recipient_id=recipient.id)
+        await _cleanup(
+            send_id=send.id,
+            recipient_id=recipient.id,
+            owner_id=owner.id,
+        )
 
 
 def _webhook_client() -> TestClient:

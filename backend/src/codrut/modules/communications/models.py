@@ -212,9 +212,9 @@ class CampaignRecipient(TimestampMixin, Base):
     __tablename__ = "campaign_recipients"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)

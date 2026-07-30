@@ -111,6 +111,27 @@ def _require_delivery_owner_id(owner_id: UUID | None) -> UUID:
     return owner_id
 
 
+def _require_campaign_delivery_ownership(
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    *,
+    owner_id: UUID,
+) -> None:
+    if campaign.owner_id != owner_id or recipient.owner_id != owner_id:
+        raise DomainError(
+            "Campaign recipient not found.",
+            code="campaign_recipient_not_found",
+        )
+
+
+def _require_email_send_ownership(send: EmailSend, *, owner_id: UUID) -> None:
+    if send.owner_id != owner_id:
+        raise DomainError(
+            "Campaign recipient not found.",
+            code="campaign_recipient_not_found",
+        )
+
+
 def _is_managed_campaign_asset_url(value: str | None, settings: Settings | None) -> bool:
     if not value:
         return False
@@ -588,6 +609,7 @@ class CommunicationsService:
         owner_id: UUID | None = None,
     ) -> CampaignRecipientBulkCreateResult:
         repository = self._require_repository()
+        delivery_owner_id = _require_delivery_owner_id(owner_id)
 
         recipients_by_email: dict[str, CampaignRecipient] = {}
         recipients_without_email: list[CampaignRecipient] = []
@@ -613,7 +635,7 @@ class CommunicationsService:
                     )
                 recipients_without_email.append(
                     CampaignRecipient(
-                        owner_id=owner_id,
+                        owner_id=delivery_owner_id,
                         email=None,
                         contact_name=req.contact_name,
                         organization_name=req.organization_name,
@@ -625,7 +647,7 @@ class CommunicationsService:
                 continue
             status_provided_by_email[normalized_email] = req.status is not None
             recipients_by_email[normalized_email] = CampaignRecipient(
-                owner_id=owner_id,
+                owner_id=delivery_owner_id,
                 email=normalized_email,
                 contact_name=req.contact_name,
                 organization_name=req.organization_name,
@@ -636,7 +658,7 @@ class CommunicationsService:
 
         existing = await repository.list_campaign_recipients_by_emails(
             set(recipients_by_email),
-            owner_id=owner_id,
+            owner_id=delivery_owner_id,
         )
         existing_by_email = {
             recipient.email.lower(): recipient
@@ -665,7 +687,7 @@ class CommunicationsService:
         if recipients_to_create:
             await repository.add_campaign_recipients(
                 recipients_to_create,
-                owner_id=owner_id,
+                owner_id=delivery_owner_id,
             )
         return CampaignRecipientBulkCreateResult(
             recipients=[*existing, *recipients_to_create],
@@ -1008,6 +1030,8 @@ class CommunicationsService:
         if campaign is None:
             raise DomainError("Campaign not found.", code="campaign_not_found")
         delivery_owner_id = _require_delivery_owner_id(owner_id or campaign.owner_id)
+        if campaign.owner_id != delivery_owner_id:
+            raise DomainError("Campaign not found.", code="campaign_not_found")
         if campaign.video_url and not campaign.thumbnail_url:
             raise DomainError(
                 "Add a thumbnail before sending this video campaign.",
@@ -1019,13 +1043,22 @@ class CommunicationsService:
                 code="campaign_not_ready",
             )
 
-        recipients = await self._campaign_send_recipients(campaign, payload, owner_id=owner_id)
+        recipients = await self._campaign_send_recipients(
+            campaign,
+            payload,
+            owner_id=delivery_owner_id,
+        )
         if not recipients:
             raise DomainError("Campaign has no matching recipients.", code="campaign_no_recipients")
 
         results: list[CampaignSendRecipientResult] = []
         remaining_sends = await _remaining_email_sends_today(repository, settings)
         for recipient in recipients:
+            _require_campaign_delivery_ownership(
+                campaign,
+                recipient,
+                owner_id=delivery_owner_id,
+            )
             if recipient.status != CampaignRecipientStatus.active or not recipient.email:
                 results.append(
                     CampaignSendRecipientResult(
@@ -1074,6 +1107,7 @@ class CommunicationsService:
             )
             existing_send = await repository.get_email_send_by_idempotency_key(delivery_key)
             if existing_send is not None:
+                _require_email_send_ownership(existing_send, owner_id=delivery_owner_id)
                 _require_matching_email_send_payload(existing_send, payload_fingerprint)
                 results.append(_campaign_result_from_existing_send(existing_send, recipient))
                 continue
@@ -1112,6 +1146,7 @@ class CommunicationsService:
                 last_event_at=now,
             )
             email_send, created = await _enqueue_email_send(repository, candidate)
+            _require_email_send_ownership(email_send, owner_id=delivery_owner_id)
             _require_matching_email_send_payload(email_send, payload_fingerprint)
             if not created:
                 results.append(_campaign_result_from_existing_send(email_send, recipient))
@@ -1221,10 +1256,16 @@ class CommunicationsService:
                     "Selected campaign send requires recipient_ids.",
                     code="campaign_selected_recipients_required",
                 )
-            return await repository.list_campaign_recipients_by_ids(
+            recipients = await repository.list_campaign_recipients_by_ids(
                 payload.recipient_ids,
                 owner_id=owner_id,
             )
+            if {recipient.id for recipient in recipients} != set(payload.recipient_ids):
+                raise DomainError(
+                    "Campaign recipient not found.",
+                    code="campaign_recipient_not_found",
+                )
+            return recipients
         await self._ensure_default_campaign_memberships(campaign, owner_id=owner_id)
         matching = await repository.list_campaign_member_recipients(
             campaign.id,
@@ -2293,7 +2334,13 @@ class EmailOutboxProcessor:
 
         if (
             send.campaign_recipient_id is not None
-            and not await self.repository.campaign_recipient_is_active(send.campaign_recipient_id)
+            and (
+                send.owner_id is None
+                or not await self.repository.campaign_recipient_is_active(
+                    send.campaign_recipient_id,
+                    owner_id=send.owner_id,
+                )
+            )
         ):
             current = await self.repository.get_claimed_email_send(send.id, lease_token)
             if current is None:

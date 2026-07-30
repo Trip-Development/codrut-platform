@@ -355,7 +355,7 @@ async def test_campaign_dry_run_allows_mixed_segments_and_explains_suppression()
     current_campaign = campaign()
     wrong_segment = recipient(segment=CampaignRecipientSegment.past_customer)
     suppressed = recipient(status=CampaignRecipientStatus.suppressed)
-    eligible = recipient(owner_id=None)
+    eligible = recipient(owner_id=OWNER_ID)
     repository = SimpleNamespace(
         get_campaign=AsyncMock(return_value=current_campaign),
         list_campaign_recipients_by_ids=AsyncMock(
@@ -381,7 +381,7 @@ async def test_campaign_dry_run_allows_mixed_segments_and_explains_suppression()
     assert "suppressed" in cast(str, result.results[1].error).lower()
 
 
-async def test_campaign_dry_run_uses_contacts_created_by_another_trainer() -> None:
+async def test_campaign_dry_run_rejects_contacts_created_by_another_trainer() -> None:
     current_campaign = campaign()
     shared_recipient = recipient(owner_id=OTHER_OWNER_ID)
     repository = SimpleNamespace(
@@ -391,18 +391,19 @@ async def test_campaign_dry_run_uses_contacts_created_by_another_trainer() -> No
     )
     service = service_with(repository)
 
-    result = await service.send_campaign(
-        current_campaign.id,
-        CampaignSendRequest(
-            mode="selected",
-            recipient_ids=[shared_recipient.id],
-            dry_run=True,
-        ),
-        settings=SETTINGS,
-        owner_id=OWNER_ID,
-    )
+    with pytest.raises(DomainError) as exc_info:
+        await service.send_campaign(
+            current_campaign.id,
+            CampaignSendRequest(
+                mode="selected",
+                recipient_ids=[shared_recipient.id],
+                dry_run=True,
+            ),
+            settings=SETTINGS,
+            owner_id=OWNER_ID,
+        )
 
-    assert [item.status for item in result.results] == ["dry_run"]
+    assert_domain_code(exc_info, "campaign_recipient_not_found")
     repository.get_campaign.assert_awaited_once_with(
         current_campaign.id,
         owner_id=OWNER_ID,
@@ -1118,6 +1119,10 @@ async def test_outbox_cancels_delivery_when_campaign_recipient_became_inactive(
         repository.mark_email_send_cancelled.assert_awaited_once()
         session.commit.assert_awaited_once()
     provider.send.assert_not_awaited()
+    repository.campaign_recipient_is_active.assert_awaited_once_with(
+        send.campaign_recipient_id,
+        owner_id=send.owner_id,
+    )
 
 
 @pytest.mark.parametrize("claimed", [None, "current"])

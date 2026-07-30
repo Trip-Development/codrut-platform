@@ -165,8 +165,12 @@ class CommunicationsRepository:
         *,
         owner_id: UUID | None,
     ) -> list[CampaignRecipient]:
-        _require_owner_id(owner_id)
-        stmt = select(CampaignRecipient).order_by(CampaignRecipient.created_at.desc())
+        owner_id = _require_owner_id(owner_id)
+        stmt = (
+            select(CampaignRecipient)
+            .where(CampaignRecipient.owner_id == owner_id)
+            .order_by(CampaignRecipient.created_at.desc())
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -208,10 +212,13 @@ class CommunicationsRepository:
         *,
         owner_id: UUID | None,
     ) -> list[CampaignRecipient]:
-        _require_owner_id(owner_id)
+        owner_id = _require_owner_id(owner_id)
         if not recipient_ids:
             return []
-        stmt = select(CampaignRecipient).where(CampaignRecipient.id.in_(recipient_ids))
+        stmt = select(CampaignRecipient).where(
+            CampaignRecipient.id.in_(recipient_ids),
+            CampaignRecipient.owner_id == owner_id,
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -336,6 +343,8 @@ class CommunicationsRepository:
             .join(CampaignRecipient, CampaignRecipient.id == EmailSend.campaign_recipient_id)
             .where(EmailSend.campaign_id == campaign_id)
             .where(Campaign.owner_id == owner_id)
+            .where(CampaignRecipient.owner_id == owner_id)
+            .where(EmailSend.owner_id == owner_id)
             .where(EmailSend.campaign_recipient_id.is_not(None))
             .where(
                 EmailSend.status.in_(
@@ -368,6 +377,8 @@ class CommunicationsRepository:
             .join(CampaignRecipient, CampaignRecipient.id == EmailSend.campaign_recipient_id)
             .where(EmailSend.campaign_id == campaign_id)
             .where(Campaign.owner_id == owner_id)
+            .where(CampaignRecipient.owner_id == owner_id)
+            .where(EmailSend.owner_id == owner_id)
             .where(EmailSend.campaign_recipient_id.in_(recipient_ids))
         )
         delivery_statuses: dict[UUID, str] = {}
@@ -413,6 +424,7 @@ class CommunicationsRepository:
             )
             .where(CampaignRecipientMembership.campaign_id == campaign_id)
             .where(Campaign.owner_id == owner_id)
+            .where(CampaignRecipient.owner_id == owner_id)
             .order_by(CampaignRecipientMembership.created_at.asc())
         )
         result = await self.session.execute(stmt)
@@ -434,6 +446,7 @@ class CommunicationsRepository:
             .join(Campaign, Campaign.id == CampaignRecipientMembership.campaign_id)
             .where(CampaignRecipientMembership.campaign_id == campaign_id)
             .where(Campaign.owner_id == owner_id)
+            .where(CampaignRecipient.owner_id == owner_id)
             .order_by(CampaignRecipientMembership.created_at.asc())
         )
         result = await self.session.execute(stmt)
@@ -451,12 +464,15 @@ class CommunicationsRepository:
         campaign = await self.get_campaign(campaign_id, owner_id=owner_id)
         if campaign is None:
             raise ValueError("campaign does not belong to the requested owner")
-        shared_recipients = await self.list_campaign_recipients_by_ids(
+        owned_recipients = await self.list_campaign_recipients_by_ids(
             recipient_ids,
             owner_id=owner_id,
         )
-        if {recipient.id for recipient in shared_recipients} != set(recipient_ids):
-            raise ValueError("campaign membership contains unknown contacts")
+        if (
+            {recipient.id for recipient in owned_recipients} != set(recipient_ids)
+            or any(recipient.owner_id != owner_id for recipient in owned_recipients)
+        ):
+            raise ValueError("campaign membership contains contacts owned by another trainer")
         existing_ids = set(
             await self.list_campaign_member_recipient_ids(campaign_id, owner_id=owner_id)
         )
@@ -800,9 +816,19 @@ class CommunicationsRepository:
         send.last_event_at = now
         await self.add_email_event(send.id, EmailEventType.cancelled, occurred_at=now)
 
-    async def campaign_recipient_is_active(self, recipient_id: UUID) -> bool:
+    async def campaign_recipient_is_active(
+        self,
+        recipient_id: UUID,
+        *,
+        owner_id: UUID,
+    ) -> bool:
         result = await self.session.execute(
-            select(CampaignRecipient.status).where(CampaignRecipient.id == recipient_id).limit(1)
+            select(CampaignRecipient.status)
+            .where(
+                CampaignRecipient.id == recipient_id,
+                CampaignRecipient.owner_id == owner_id,
+            )
+            .limit(1)
         )
         return result.scalar_one_or_none() == CampaignRecipientStatus.active
 

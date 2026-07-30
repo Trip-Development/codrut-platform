@@ -525,6 +525,7 @@ async def test_bulk_create_campaign_recipients_dedupes_email_last_row_wins() -> 
     repository = FakeCommunicationsRepository()
     existing = CampaignRecipient(
         id=uuid.uuid4(),
+        owner_id=TEST_OWNER_ID,
         email="existing@example.com",
         contact_name="Existing Contact",
         organization_name="Existing Org",
@@ -559,7 +560,8 @@ async def test_bulk_create_campaign_recipients_dedupes_email_last_row_wins() -> 
                     source="csv",
                 ),
             ]
-        )
+        ),
+        owner_id=TEST_OWNER_ID,
     )
 
     assert [recipient.email for recipient in repository.campaign_recipients] == [
@@ -579,6 +581,7 @@ async def test_bulk_create_campaign_recipients_reports_created_and_updated_count
     repository = FakeCommunicationsRepository()
     existing = CampaignRecipient(
         id=uuid.uuid4(),
+        owner_id=TEST_OWNER_ID,
         email="existing@example.com",
         contact_name="Existing Contact",
         organization_name="Existing Org",
@@ -606,7 +609,8 @@ async def test_bulk_create_campaign_recipients_reports_created_and_updated_count
                     source="csv",
                 ),
             ]
-        )
+        ),
+        owner_id=TEST_OWNER_ID,
     )
 
     assert result.created == 1
@@ -673,7 +677,8 @@ async def test_bulk_create_campaign_recipients_allows_suppressed_contacts_withou
                     source="excel_import",
                 ),
             ]
-        )
+        ),
+        owner_id=TEST_OWNER_ID,
     )
 
     assert len(recipients) == 1
@@ -1828,7 +1833,8 @@ async def test_delete_campaign_recipient_suppresses_contact_without_erasing_hist
                     segment="potential_customer",
                 )
             ]
-        )
+        ),
+        owner_id=TEST_OWNER_ID,
     )
 
     assert imported == [recipient]
