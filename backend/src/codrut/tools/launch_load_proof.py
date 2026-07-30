@@ -1957,7 +1957,7 @@ async def _monitor(
         try:
             await asyncio.wait_for(stop.wait(), timeout=wait_seconds)
         except TimeoutError:
-            pass
+            continue
 
 
 async def _request(

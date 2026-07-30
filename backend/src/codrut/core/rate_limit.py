@@ -81,7 +81,6 @@ def install_rate_limit_middleware(
             return await call_next(request)
 
         rate_limiter: RateLimiter = request.app.state.rate_limiter
-        decision = RateLimitDecision(allowed=True)
         for key, limit in rate_limit_budgets(
             request,
             settings=active_settings,
@@ -92,21 +91,20 @@ def install_rate_limit_middleware(
                 limit=limit,
                 window_seconds=active_settings.rate_limit_window_seconds,
             )
-            if not decision.allowed:
-                break
-        else:
-            return await call_next(request)
+            if decision.allowed:
+                continue
 
-        headers = {}
-        if decision.retry_after_seconds is not None:
-            headers["Retry-After"] = str(decision.retry_after_seconds)
-        return error_response(
-            request,
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            code="rate_limited",
-            message="Too many requests.",
-            headers=headers,
-        )
+            headers = {}
+            if decision.retry_after_seconds is not None:
+                headers["Retry-After"] = str(decision.retry_after_seconds)
+            return error_response(
+                request,
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                code="rate_limited",
+                message="Too many requests.",
+                headers=headers,
+            )
+        return await call_next(request)
 
 
 def is_rate_limited_request(request: Request) -> bool:
