@@ -1646,7 +1646,7 @@ async def _monitor_exact_outbox(
         try:
             await asyncio.wait_for(abort.event.wait(), timeout=2.0)
         except TimeoutError:
-            pass
+            continue
     successful, failed = _outbox_terminal_counts(latest_counts)
     return {
         "accepted_or_delivered": successful,
@@ -1739,7 +1739,7 @@ async def _monitor_exact_processing(
         try:
             await asyncio.wait_for(abort.event.wait(), timeout=2.0)
         except TimeoutError:
-            pass
+            continue
     return {**latest, "drain_seconds": None}
 
 
@@ -1839,6 +1839,7 @@ async def _ramped_initial_flow(
     try:
         await asyncio.wait_for(abort.event.wait(), timeout=delay)
     except TimeoutError:
+        # The ramp delay elapsed without a global abort, so this participant may start.
         pass
     if abort.event.is_set():
         raise RuntimeError(abort.reason or "load proof aborted")
@@ -1884,7 +1885,7 @@ async def _hold_reads(
         try:
             await asyncio.wait_for(abort.event.wait(), timeout=read_interval_seconds)
         except TimeoutError:
-            pass
+            continue
 
 
 async def _monitor(

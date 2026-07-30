@@ -489,6 +489,9 @@ async def test_concurrent_final_sends_complete_campaign_after_both_commit() -> N
                     break
                 if completion_task.done():
                     await completion_task
+                    raise AssertionError(
+                        "the completion check finished before waiting for the campaign row"
+                    )
                 await asyncio.sleep(0.01)
         assert observed_wait, "the second completion check must wait for the campaign row"
 
