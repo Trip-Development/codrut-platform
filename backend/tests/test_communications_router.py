@@ -216,6 +216,51 @@ def test_campaign_recipient_delete_requires_trainer_role() -> None:
     assert response.status_code == 403
 
 
+def test_campaign_recipient_restore_passes_runtime_settings(monkeypatch) -> None:
+    trainer_id = uuid4()
+    recipient_id = uuid4()
+    settings = Settings()
+    recipient = CampaignRecipient(
+        id=recipient_id,
+        owner_id=trainer_id,
+        email="ana@example.com",
+        segment=CampaignRecipientSegment.potential_customer,
+        status=CampaignRecipientStatus.active,
+    )
+    restore = AsyncMock(return_value=recipient)
+    monkeypatch.setattr(
+        CommunicationsService,
+        "restore_campaign_recipient",
+        restore,
+    )
+    session = MagicMock()
+    session.commit = AsyncMock()
+    client = _client_as(
+        UserRole.trainer,
+        settings=settings,
+        user_id=trainer_id,
+        session=session,
+    )
+
+    response = client.post(
+        f"/api/communications/campaigns/recipients/{recipient_id}/restore"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(recipient_id),
+        "status": "active",
+        "archived_at": None,
+        "purge_after": None,
+    }
+    restore.assert_awaited_once_with(
+        recipient_id,
+        owner_id=trainer_id,
+        settings=settings,
+    )
+    session.commit.assert_awaited_once()
+
+
 def test_campaign_delete_requires_trainer_role() -> None:
     client = _client_as(UserRole.participant)
 
@@ -723,7 +768,14 @@ def test_campaign_unsubscribe_post_updates_recipient() -> None:
         email_from_name="Cody Test",
     )
     session = MagicMock()
-    session.execute = AsyncMock(return_value=FakeScalarOneResult(recipient))
+    session.execute = AsyncMock(
+        side_effect=[
+            FakeScalarOneResult(recipient),
+            FakeScalarOneResult(None),
+            FakeScalarOneResult(None),
+            FakeScalarOneResult(None),
+        ]
+    )
     session.flush = AsyncMock()
     session.commit = AsyncMock()
     token = create_campaign_recipient_action_token(
@@ -750,5 +802,5 @@ def test_campaign_unsubscribe_post_updates_recipient() -> None:
     assert "Cody Test" in response.text
     assert "ceo@example.com" in response.text
     assert recipient.status == CampaignRecipientStatus.unsubscribed
-    session.flush.assert_awaited_once()
+    assert session.flush.await_count == 2
     session.commit.assert_awaited_once()

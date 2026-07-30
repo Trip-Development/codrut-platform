@@ -1,11 +1,11 @@
 "use client";
 
-import { FileTextIcon, MailIcon, UsersIcon } from "lucide-react";
+import { ArchiveIcon, FileTextIcon, MailIcon, UsersIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 
-export type EmailWorkspaceView = "campaigns" | "contacts" | "templates";
+export type EmailWorkspaceView = "campaigns" | "contacts" | "archive" | "templates";
 
 const views: Array<{
   key: EmailWorkspaceView;
@@ -14,6 +14,7 @@ const views: Array<{
 }> = [
   { key: "campaigns", label: "Campanii", icon: MailIcon },
   { key: "contacts", label: "Contacte", icon: UsersIcon },
+  { key: "archive", label: "Arhivă", icon: ArchiveIcon },
   { key: "templates", label: "Șabloane", icon: FileTextIcon },
 ];
 

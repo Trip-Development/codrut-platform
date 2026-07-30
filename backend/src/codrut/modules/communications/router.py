@@ -1,6 +1,6 @@
 import hmac
 from html import escape
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
@@ -21,11 +21,14 @@ from codrut.modules.communications.schemas import (
     CampaignAssetUploadResponse,
     CampaignCancelResponse,
     CampaignCreateRequest,
+    CampaignRecipientArchiveResponse,
     CampaignRecipientBulkCreateRequest,
     CampaignRecipientEventCreateRequest,
     CampaignRecipientEventResponse,
     CampaignRecipientMembershipRowResponse,
     CampaignRecipientMembershipUpdateRequest,
+    CampaignRecipientPermanentDeleteResponse,
+    CampaignRecipientRestoreResponse,
     CampaignRecipientUpdateRequest,
     CampaignSendRequest,
     CampaignSendResponse,
@@ -82,7 +85,7 @@ async def receive_brevo_webhook(
             detail="Webhook authentication failed.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return await DeliveryEventService(session).apply_brevo_event(payload)
+    return await DeliveryEventService(session, settings).apply_brevo_event(payload)
 
 
 @router.post("/test-email", response_model=EmailTestSendResponse)
@@ -276,9 +279,13 @@ async def retire_email_template(
 async def get_email_ops_summary(
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
     session: Annotated[AsyncSession, Depends(db_session)],
+    catalog_scope: Literal["active", "archived"] = "active",
 ) -> EmailOpsSummaryResponse:
     _require_trainer(principal)
-    summary = await CommunicationsService(session).get_email_ops_summary(owner_id=principal.user_id)
+    summary = await CommunicationsService(session).get_email_ops_summary(
+        owner_id=principal.user_id,
+        catalog_scope=catalog_scope,
+    )
     await session.commit()
     return summary
 
@@ -287,12 +294,14 @@ async def get_email_ops_summary(
 async def bulk_create_campaign_recipients(
     payload: CampaignRecipientBulkCreateRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> dict:
     _require_trainer(principal)
     result = await CommunicationsService(session).bulk_create_campaign_recipients_with_result(
         payload,
         owner_id=principal.user_id,
+        settings=settings,
     )
     await session.commit()
     return {
@@ -308,6 +317,7 @@ async def update_campaign_recipient(
     recipient_id: UUID,
     payload: CampaignRecipientUpdateRequest,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> dict:
     _require_trainer(principal)
@@ -315,6 +325,7 @@ async def update_campaign_recipient(
         recipient_id,
         payload,
         owner_id=principal.user_id,
+        settings=settings,
     )
     await session.commit()
     return {
@@ -332,15 +343,95 @@ async def update_campaign_recipient(
 async def delete_campaign_recipient(
     recipient_id: UUID,
     principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> Response:
     _require_trainer(principal)
     await CommunicationsService(session).delete_campaign_recipient(
         recipient_id,
         owner_id=principal.user_id,
+        settings=settings,
     )
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/campaigns/recipients/{recipient_id}/archive",
+    response_model=CampaignRecipientArchiveResponse,
+)
+async def archive_campaign_recipient(
+    recipient_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CampaignRecipientArchiveResponse:
+    _require_trainer(principal)
+    result = await CommunicationsService(session).archive_campaign_recipient(
+        recipient_id,
+        owner_id=principal.user_id,
+        settings=settings,
+    )
+    await session.commit()
+    if result.recipient.archived_at is None or result.recipient.purge_after is None:
+        raise RuntimeError("Archived contact is missing its retention window.")
+    return CampaignRecipientArchiveResponse(
+        id=result.recipient.id,
+        status="archived",
+        archived_at=result.recipient.archived_at,
+        purge_after=result.recipient.purge_after,
+        memberships_removed=result.memberships_removed,
+        cancelled=result.cancelled,
+        in_flight=result.in_flight,
+    )
+
+
+@router.post(
+    "/campaigns/recipients/{recipient_id}/restore",
+    response_model=CampaignRecipientRestoreResponse,
+)
+async def restore_campaign_recipient(
+    recipient_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CampaignRecipientRestoreResponse:
+    _require_trainer(principal)
+    recipient = await CommunicationsService(session).restore_campaign_recipient(
+        recipient_id,
+        owner_id=principal.user_id,
+        settings=settings,
+    )
+    await session.commit()
+    return CampaignRecipientRestoreResponse(
+        id=recipient.id,
+        status=recipient.status.value,
+    )
+
+
+@router.delete(
+    "/campaigns/recipients/{recipient_id}/permanent",
+    response_model=CampaignRecipientPermanentDeleteResponse,
+)
+async def permanently_delete_campaign_recipient(
+    recipient_id: UUID,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> CampaignRecipientPermanentDeleteResponse:
+    _require_trainer(principal)
+    result = await CommunicationsService(session).permanently_delete_campaign_recipient(
+        recipient_id,
+        owner_id=principal.user_id,
+        settings=settings,
+    )
+    await session.commit()
+    return CampaignRecipientPermanentDeleteResponse(
+        id=result.recipient_id,
+        status="deleted",
+        cancelled=result.cancelled,
+        anonymized_sends=result.anonymized_sends,
+    )
 
 
 @router.post(

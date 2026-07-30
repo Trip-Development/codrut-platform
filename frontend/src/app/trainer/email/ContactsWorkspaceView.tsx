@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2Icon, CheckIcon, CircleDashedIcon, Loader2Icon, PencilIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ArchiveIcon, Building2Icon, CheckIcon, CircleDashedIcon, Loader2Icon, PencilIcon, SearchIcon, XIcon } from "lucide-react";
 
 import type { CampaignRecipientRow } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
@@ -73,7 +73,7 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
           <span className="rounded-md bg-surface-muted px-3 py-2 text-[11px] font-semibold text-foreground/55">{props.contacts.length} afișate</span>
           <Button type="button" onClick={props.toggleAllVisible} disabled={props.visibleSelectableIds.length === 0} variant="outline" size="sm">{props.allVisibleSelected ? "Deselectează vizibile" : "Selectează vizibile"}</Button>
-          <Button type="button" onClick={props.toggleInactive} variant="outline" size="sm" aria-expanded={props.showInactive}>{props.showInactive ? "Ascunde inactive" : `Arată inactive (${props.inactiveCount})`}</Button>
+          <Button type="button" onClick={props.toggleInactive} variant="outline" size="sm" aria-expanded={props.showInactive}>{props.showInactive ? "Ascunde restricționate" : `Arată restricționate (${props.inactiveCount})`}</Button>
           {props.visibleSelectedIds.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-burgundy/20 bg-burgundy/5 px-2 py-1.5">
               <span className="px-1 text-[11px] font-bold text-burgundy">{props.visibleSelectedIds.length} selectate</span>
@@ -81,9 +81,9 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                 {props.bulkAction === "activate" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} /> : null}{props.bulkAction === "activate" ? "Activăm contactele" : "Activează"}
               </Button>
               <Button type="button" onClick={() => props.updateSelectedStatus("suppressed")} disabled={props.bulkAction !== null || props.selectedContactBeingEdited} variant="outline" size="sm">
-                {props.bulkAction === "suppress" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} /> : null}{props.bulkAction === "suppress" ? "Dezactivăm contactele" : "Dezactivează"}
+                {props.bulkAction === "suppress" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} /> : null}{props.bulkAction === "suppress" ? "Oprim trimiterile" : "Oprește trimiterea"}
               </Button>
-              <IconButton label="Șterge contactele selectate" tone="danger" disabled={props.bulkAction !== null || props.selectedContactBeingEdited} onClick={props.deleteSelected}><Trash2Icon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton>
+              <IconButton label="Arhivează contactele selectate" tone="danger" disabled={props.bulkAction !== null || props.selectedContactBeingEdited} onClick={props.deleteSelected}><ArchiveIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton>
             </div>
           ) : null}
         </div>
@@ -117,7 +117,7 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                   </td>
                   <td className={cn("min-w-[11rem] px-4 py-2.5 align-middle", isEditing && "align-top")}>
                     {isEditing ? (
-                      <div className="flex flex-col gap-2"><SelectControl label={`Segment pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.segment} onChange={(event) => props.updateDraft(recipient.id, "segment", event.target.value as CampaignContactDraft["segment"])} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="potential_customer">Prospect</option><option value="past_customer">Client existent</option></SelectControl><SelectControl label={`Status campanie pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.status} onChange={(event) => props.updateDraft(recipient.id, "status", event.target.value as CampaignContactDraft["status"])} disabled={isUnsubscribed} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="active">Da - activ în campanii</option><option value="suppressed">Nu - inactiv</option>{isUnsubscribed ? <option value="unsubscribed">Dezabonat</option> : null}</SelectControl></div>
+                      <div className="flex flex-col gap-2"><SelectControl label={`Segment pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.segment} onChange={(event) => props.updateDraft(recipient.id, "segment", event.target.value as CampaignContactDraft["segment"])} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="potential_customer">Prospect</option><option value="past_customer">Client existent</option></SelectControl><SelectControl label={`Status campanie pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.status} onChange={(event) => props.updateDraft(recipient.id, "status", event.target.value as CampaignContactDraft["status"])} disabled={isUnsubscribed} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="active">Activ</option><option value="suppressed">Adresă respinsă</option>{isUnsubscribed ? <option value="unsubscribed">Dezabonat</option> : null}</SelectControl></div>
                     ) : (
                       <div className="flex min-w-[9rem] items-start gap-2.5">
                         <SegmentIcon aria-hidden="true" className={cn("mt-0.5 size-4 shrink-0", isPastCustomer ? "text-zinc-600" : "text-burgundy")} strokeWidth={1.8} />
@@ -133,7 +133,7 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                   </td>
                   <td className={cn("px-4 py-2.5 align-middle", isEditing && "align-top")}><div className="flex min-w-[17rem] flex-wrap gap-x-4 gap-y-1.5"><ContactMetric label="Desch." value={recipient.openCount} /><ContactMetric label="Click" value={recipient.clickCount} /><ContactMetric label="Video" value={recipient.viewCount} /><ContactMetric label="Răsp." value={recipient.replyCount} /><ContactMetric label="Cal." value={recipient.calendlyClickCount} /></div></td>
                   <td className={cn("px-4 py-2.5 align-middle", isEditing && "align-top")}><div className="flex justify-end gap-2 opacity-80 transition group-hover/contact:opacity-100 group-focus-within/contact:opacity-100">
-                    {isEditing ? <><IconButton appearance="plain" label={props.savingContactId === recipient.id ? "Salvăm contactul" : `Salvează ${recipient.email}`} tone="success" disabled={props.savingContactId === recipient.id} onClick={() => props.saveContact(recipient)}><CheckIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton><IconButton appearance="plain" label={`Anulează editarea pentru ${recipient.email}`} disabled={props.savingContactId === recipient.id} onClick={() => props.cancelEditing(recipient.id)}><XIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton></> : <><IconButton appearance="plain" label={`Editează ${recipient.email}`} onClick={() => props.startEditing(recipient)}><PencilIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton><IconButton appearance="plain" label={props.deletingContactId === recipient.id ? "Ștergem contactul" : `Șterge ${recipient.email}`} tone="danger" disabled={props.deletingContactId === recipient.id} onClick={() => props.deleteContact(recipient)}><Trash2Icon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton></>}
+                    {isEditing ? <><IconButton appearance="plain" label={props.savingContactId === recipient.id ? "Salvăm contactul" : `Salvează ${recipient.email}`} tone="success" disabled={props.savingContactId === recipient.id} onClick={() => props.saveContact(recipient)}><CheckIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton><IconButton appearance="plain" label={`Anulează editarea pentru ${recipient.email}`} disabled={props.savingContactId === recipient.id} onClick={() => props.cancelEditing(recipient.id)}><XIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton></> : <><IconButton appearance="plain" label={`Editează ${recipient.email}`} onClick={() => props.startEditing(recipient)}><PencilIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton><IconButton appearance="plain" label={props.deletingContactId === recipient.id ? "Arhivăm contactul" : `Arhivează ${recipient.email}`} tone="danger" disabled={props.deletingContactId === recipient.id} onClick={() => props.deleteContact(recipient)}><ArchiveIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton></>}
                   </div></td>
                 </tr>
               );
@@ -149,9 +149,11 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
 
 function ContactStatus({ status }: { status: CampaignRecipientRow["status"] }) {
   const dotClass = status === "suppressed"
-    ? "bg-zinc-400"
+    ? "bg-destructive"
     : status === "unsubscribed"
       ? "bg-destructive"
+      : status === "archived"
+        ? "bg-zinc-400"
       : status === "needs_contact_name"
         ? "bg-warning"
         : "bg-emerald-500";

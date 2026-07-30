@@ -56,6 +56,7 @@ from codrut.modules.communications.service import (
     _email_result_from_existing_send,
     _require_delivery_owner_id,
 )
+from codrut.modules.communications.suppression import email_suppression_fingerprint
 from codrut.modules.companies import models as company_models  # noqa: F401
 from codrut.modules.forms import models as form_models  # noqa: F401
 from codrut.modules.identity import models as identity_models  # noqa: F401
@@ -362,6 +363,7 @@ async def test_campaign_dry_run_allows_mixed_segments_and_explains_suppression()
             return_value=[wrong_segment, suppressed, eligible]
         ),
         count_accepted_sends_since=AsyncMock(return_value=0),
+        get_email_suppression=AsyncMock(return_value=None),
     )
     service = service_with(repository)
 
@@ -434,6 +436,7 @@ async def test_campaign_send_preserves_existing_delivery_states_and_daily_cap() 
         ),
         count_accepted_sends_since=AsyncMock(return_value=SETTINGS.email_daily_send_cap),
         get_email_send_by_idempotency_key=AsyncMock(side_effect=existing_by_key),
+        get_email_suppression=AsyncMock(return_value=None),
     )
     for send in existing_by_key[:3]:
         assert send is not None
@@ -551,6 +554,7 @@ async def test_contact_edit_preserves_unsubscribe_for_shared_contact() -> None:
     repository.get_campaign_recipient.assert_awaited_once_with(
         unsubscribed.id,
         owner_id=OWNER_ID,
+        for_update=True,
     )
     repository.flush.assert_not_awaited()
 
@@ -589,6 +593,7 @@ async def test_contact_edit_normalizes_fields_and_retains_explicit_status() -> N
     repository = SimpleNamespace(
         get_campaign_recipient=AsyncMock(return_value=current),
         get_campaign_recipient_by_email=AsyncMock(return_value=current),
+        get_email_suppression=AsyncMock(return_value=None),
         flush=AsyncMock(),
     )
     service = service_with(repository)
@@ -964,7 +969,11 @@ async def test_delivery_webhook_ignores_unknown_or_unmatched_events() -> None:
     unmatched = await service.apply_brevo_event(brevo_event(event="delivered"))
 
     assert unknown.status == unmatched.status == "ignored"
-    repository.get_email_send_by_provider_message_id.assert_awaited_once()
+    assert repository.get_email_send_by_provider_message_id.await_count == 2
+    assert [
+        call.kwargs["for_update"]
+        for call in repository.get_email_send_by_provider_message_id.await_args_list
+    ] == [False, True]
     session.commit.assert_not_awaited()
 
 
@@ -1146,6 +1155,11 @@ async def test_outbox_cancels_delivery_for_owner_scoped_suppression(
     repository.get_email_suppression.assert_awaited_once_with(
         owner_id=OWNER_ID,
         email=send.recipient_email,
+        email_fingerprint=email_suppression_fingerprint(
+            owner_id=OWNER_ID,
+            email=send.recipient_email,
+            secret=processor.settings.effective_email_suppression_fingerprint_secret,
+        ),
     )
     if current is None:
         session.rollback.assert_awaited_once()

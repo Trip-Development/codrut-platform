@@ -22,6 +22,9 @@ def production_settings(**overrides: object) -> Settings:
         "email_webhook_token": SecretStr(
             "brevo-webhook-token-with-at-least-32-characters"
         ),
+        "email_suppression_fingerprint_secret": SecretStr(
+            "suppression-fingerprint-secret-at-least-32-characters"
+        ),
     }
     values.update(overrides)
     return Settings(**values)

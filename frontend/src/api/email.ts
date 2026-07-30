@@ -387,7 +387,9 @@ export type CampaignRecipientRow = {
   lastName?: string;
   email: string;
   clientType: "tip_1" | "tip_2" | "tip_3" | "tip_4";
-  status: "ready" | "needs_contact_name" | "suppressed" | "unsubscribed" | "sent";
+  status: "ready" | "needs_contact_name" | "suppressed" | "unsubscribed" | "sent" | "archived";
+  archivedAt?: string | null;
+  purgeAfter?: string | null;
   openRate?: string;
   clickRate?: string;
   viewRate?: string;
@@ -500,12 +502,18 @@ export async function listEmailSurfaceStubs(): Promise<EmailSurfaceStub[]> {
   ];
 }
 
-export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promise<EmailOpsSummary> {
+export type EmailOpsSummaryOptions = ApiRequestOptions & {
+  catalogScope?: "active" | "archived";
+};
+
+export async function getEmailOpsSummary(options: EmailOpsSummaryOptions = {}): Promise<EmailOpsSummary> {
+  const { catalogScope = "active", ...requestOptions } = options;
   try {
-    const response = await apiFetch(`${getApiBaseUrl()}/communications/ops-summary`, {
+    const search = new URLSearchParams({ catalog_scope: catalogScope });
+    const response = await apiFetch(`${getApiBaseUrl()}/communications/ops-summary?${search}`, {
       cache: "no-store",
       credentials: "include",
-      ...options,
+      ...requestOptions,
     });
     if (!response.ok) {
       throw new Error(`Server returned status ${response.status}`);
@@ -531,7 +539,11 @@ export async function getEmailOpsSummary(options: ApiRequestOptions = {}): Promi
           ctaPrimary: "Programează o discuție",
           ctaSecondary: "Vreau să fiu contactat",
         },
-        recipients: readDemoCampaignRecipients(),
+        recipients: readDemoCampaignRecipients().filter((recipient) =>
+          catalogScope === "archived"
+            ? recipient.status === "archived"
+            : recipient.status !== "archived",
+        ),
         weeklyReport: {
           cadence: "Săptămânal",
           metrics: ["deschideri", "clickuri", "vizualizări video", "reply-uri", "clickuri Calendly", "variantă email"],
@@ -561,6 +573,45 @@ export type CampaignRecipientBulkCreateResponse = {
 export type CampaignRecipientUpdate = Omit<Partial<CampaignRecipientCreate>, "status"> & {
   status?: "active" | "suppressed" | "unsubscribed";
 };
+
+export type CampaignRecipientArchiveResponse = {
+  id: string;
+  status: "archived";
+  archived_at: string;
+  purge_after: string;
+  memberships_removed: number;
+  cancelled: number;
+  in_flight: number;
+};
+
+export type CampaignRecipientRestoreResponse = {
+  id: string;
+  status: "active" | "suppressed" | "unsubscribed";
+  archived_at: null;
+  purge_after: null;
+};
+
+export type CampaignRecipientPermanentDeleteResponse = {
+  id: string;
+  status: "deleted";
+  cancelled: number;
+  anonymized_sends: number;
+};
+
+function permanentDeleteContactErrorMessage(
+  errorBody: unknown,
+  fallback: string,
+): string {
+  const error = errorBody && typeof errorBody === "object"
+    ? (errorBody as { error?: { code?: unknown; message?: unknown } }).error
+    : undefined;
+  if (error?.code === "campaign_recipient_purge_disabled") {
+    return "Ștergerea definitivă va fi disponibilă după finalizarea actualizării de confidențialitate. Contactul rămâne în siguranță în Arhivă și nu poate fi folosit în campanii.";
+  }
+  return typeof error?.message === "string" && error.message.trim()
+    ? error.message
+    : fallback;
+}
 
 export async function bulkCreateCampaignRecipientsOnServer(
   recipients: CampaignRecipientCreate[],
@@ -633,6 +684,81 @@ export async function deleteCampaignRecipientOnServer(recipientId: string): Prom
       return;
     }
     throw err;
+  }
+}
+
+export async function archiveCampaignRecipientOnServer(
+  recipientId: string,
+): Promise<CampaignRecipientArchiveResponse> {
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}/archive`,
+      {
+        method: "POST",
+        cache: "no-store",
+        credentials: "include",
+      },
+    );
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return archiveDemoCampaignRecipient(recipientId);
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut arhiva contactul (${response.status}).`);
+    }
+    return await response.json();
+  } catch (error) {
+    if (isDemoFallbackEnabled()) return archiveDemoCampaignRecipient(recipientId);
+    throw error;
+  }
+}
+
+export async function restoreCampaignRecipientOnServer(
+  recipientId: string,
+): Promise<CampaignRecipientRestoreResponse> {
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}/restore`,
+      {
+        method: "POST",
+        cache: "no-store",
+        credentials: "include",
+      },
+    );
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return restoreDemoCampaignRecipient(recipientId);
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(errorBody?.error?.message ?? `Nu am putut restaura contactul (${response.status}).`);
+    }
+    return await response.json();
+  } catch (error) {
+    if (isDemoFallbackEnabled()) return restoreDemoCampaignRecipient(recipientId);
+    throw error;
+  }
+}
+
+export async function permanentlyDeleteCampaignRecipientOnServer(
+  recipientId: string,
+): Promise<CampaignRecipientPermanentDeleteResponse> {
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/communications/campaigns/recipients/${recipientId}/permanent`,
+      {
+        method: "DELETE",
+        cache: "no-store",
+        credentials: "include",
+      },
+    );
+    if (!response.ok) {
+      if (isDemoFallbackEnabled()) return permanentlyDeleteDemoCampaignRecipient(recipientId);
+      const errorBody = await response.json().catch(() => null);
+      throw new Error(permanentDeleteContactErrorMessage(
+        errorBody,
+        `Nu am putut șterge definitiv contactul (${response.status}).`,
+      ));
+    }
+    return await response.json();
+  } catch (error) {
+    if (isDemoFallbackEnabled()) return permanentlyDeleteDemoCampaignRecipient(recipientId);
+    throw error;
   }
 }
 
@@ -1103,6 +1229,78 @@ function deleteDemoCampaignRecipient(recipientId: string): void {
       ]),
     ),
   );
+}
+
+function archiveDemoCampaignRecipient(recipientId: string): CampaignRecipientArchiveResponse {
+  const archivedAt = new Date();
+  const purgeAfter = new Date(archivedAt);
+  purgeAfter.setDate(purgeAfter.getDate() + 30);
+  const recipients = readDemoCampaignRecipients();
+  writeDemoCampaignRecipients(recipients.map((recipient) =>
+    recipient.id === recipientId
+      ? {
+          ...recipient,
+          status: "archived",
+          archivedAt: archivedAt.toISOString(),
+          purgeAfter: purgeAfter.toISOString(),
+        }
+      : recipient,
+  ));
+  const memberships = readDemoCampaignMemberships();
+  let membershipsRemoved = 0;
+  writeDemoCampaignMemberships(
+    Object.fromEntries(
+      Object.entries(memberships).map(([campaignId, recipientIds]) => {
+        if (recipientIds.includes(recipientId)) membershipsRemoved += 1;
+        return [campaignId, recipientIds.filter((id) => id !== recipientId)];
+      }),
+    ),
+  );
+  return {
+    id: recipientId,
+    status: "archived",
+    archived_at: archivedAt.toISOString(),
+    purge_after: purgeAfter.toISOString(),
+    memberships_removed: membershipsRemoved,
+    cancelled: 0,
+    in_flight: 0,
+  };
+}
+
+function restoreDemoCampaignRecipient(recipientId: string): CampaignRecipientRestoreResponse {
+  const recipients = readDemoCampaignRecipients();
+  writeDemoCampaignRecipients(recipients.map((recipient) =>
+    recipient.id === recipientId
+      ? {
+          ...recipient,
+          status: campaignRecipientNameForDemo(recipient) ? "ready" : "needs_contact_name",
+          archivedAt: null,
+          purgeAfter: null,
+        }
+      : recipient,
+  ));
+  return {
+    id: recipientId,
+    status: "active",
+    archived_at: null,
+    purge_after: null,
+  };
+}
+
+function permanentlyDeleteDemoCampaignRecipient(
+  recipientId: string,
+): CampaignRecipientPermanentDeleteResponse {
+  deleteDemoCampaignRecipient(recipientId);
+  return {
+    id: recipientId,
+    status: "deleted",
+    cancelled: 0,
+    anonymized_sends: 0,
+  };
+}
+
+function campaignRecipientNameForDemo(recipient: CampaignRecipientRow): string {
+  return [recipient.firstName, recipient.lastName].filter(Boolean).join(" ").trim();
 }
 
 function readDemoCampaigns(): EmailCampaign[] {

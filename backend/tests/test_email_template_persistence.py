@@ -1,5 +1,7 @@
 import uuid
+from datetime import datetime, timedelta
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -154,13 +156,17 @@ class FakeCommunicationsRepository:
         emails: set[str],
         *,
         owner_id: uuid.UUID | None = None,
+        include_archived: bool = False,
+        for_update: bool = False,
     ) -> list[CampaignRecipient]:
+        del for_update
         return [
             recipient
             for recipient in self.campaign_recipients
             if recipient.email is not None
             and recipient.email.lower() in emails
             and (owner_id is None or recipient.owner_id == owner_id)
+            and (include_archived or recipient.archived_at is None)
         ]
 
     async def add_campaign_recipients(
@@ -238,11 +244,17 @@ class FakeCommunicationsRepository:
         self,
         *,
         owner_id: uuid.UUID | None = None,
+        catalog_scope: str = "active",
     ) -> list[CampaignRecipient]:
         return [
             recipient
             for recipient in self.campaign_recipients
             if owner_id is None or recipient.owner_id == owner_id
+            if (
+                catalog_scope == "any"
+                or (catalog_scope == "active" and recipient.archived_at is None)
+                or (catalog_scope == "archived" and recipient.archived_at is not None)
+            )
         ]
 
     async def list_campaign_recipients_by_ids(
@@ -257,20 +269,43 @@ class FakeCommunicationsRepository:
             for recipient in self.campaign_recipients
             if recipient.id in recipient_id_set
             and (owner_id is None or recipient.owner_id == owner_id)
+            and recipient.archived_at is None
         ]
+
+    async def lock_campaign_recipients_for_send(
+        self,
+        recipient_ids: list[uuid.UUID],
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> list[CampaignRecipient]:
+        return await self.list_campaign_recipients_by_ids(
+            recipient_ids,
+            owner_id=owner_id,
+        )
 
     async def get_campaign_recipient(
         self,
         recipient_id: uuid.UUID,
         *,
         owner_id: uuid.UUID | None = None,
+        catalog_scope: str = "active",
+        for_update: bool = False,
     ) -> CampaignRecipient | None:
+        del for_update
         return next(
             (
                 recipient
                 for recipient in self.campaign_recipients
                 if recipient.id == recipient_id
                 and (owner_id is None or recipient.owner_id == owner_id)
+                and (
+                    catalog_scope == "any"
+                    or (catalog_scope == "active" and recipient.archived_at is None)
+                    or (
+                        catalog_scope == "archived"
+                        and recipient.archived_at is not None
+                    )
+                )
             ),
             None,
         )
@@ -288,9 +323,58 @@ class FakeCommunicationsRepository:
                 if recipient.email is not None
                 and recipient.email.lower() == email.lower()
                 and (owner_id is None or recipient.owner_id == owner_id)
+                and recipient.archived_at is None
             ),
             None,
         )
+
+    async def get_campaign_contact_tombstone(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        former_recipient_id: uuid.UUID,
+        for_update: bool = False,
+    ) -> None:
+        del owner_id, former_recipient_id, for_update
+        return None
+
+    async def get_email_suppression(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        email_fingerprint: str,
+        email: str | None = None,
+    ) -> None:
+        del owner_id, email_fingerprint, email
+        return None
+
+    async def list_email_suppressions_by_fingerprints(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        email_fingerprints: set[str],
+    ) -> list[object]:
+        del owner_id, email_fingerprints
+        return []
+
+    async def suppress_email(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        email: str,
+        email_fingerprint: str,
+        reason: str,
+        source_email_send_id: uuid.UUID | None,
+        review_after: datetime,
+    ) -> object:
+        return {
+            "owner_id": owner_id,
+            "email": email,
+            "email_fingerprint": email_fingerprint,
+            "reason": reason,
+            "source_email_send_id": source_email_send_id,
+            "review_after": review_after,
+        }
 
     async def add_email_send(self, send: EmailSend) -> EmailSend:
         self.sends.append(send)
@@ -410,6 +494,7 @@ class FakeCommunicationsRepository:
             for recipient in self.campaign_recipients
             if recipient.id in member_id_set
             and (owner_id is None or recipient.owner_id == owner_id)
+            and recipient.archived_at is None
         ]
         recipients_by_id = {recipient.id: recipient for recipient in recipients}
         return [
@@ -435,7 +520,8 @@ class FakeCommunicationsRepository:
             not in {
                 recipient.id
                 for recipient in self.campaign_recipients
-                if owner_id is None or recipient.owner_id == owner_id
+                if (owner_id is None or recipient.owner_id == owner_id)
+                and recipient.archived_at is None
             }
             for recipient_id in next_ids
         ):
@@ -464,6 +550,58 @@ class FakeCommunicationsRepository:
 
     async def count_accepted_sends_since(self, _since: object) -> int:
         return sum(1 for send in self.sends if send.status == EmailSendStatus.accepted)
+
+    async def delete_campaign_recipient_memberships(
+        self,
+        recipient_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID,
+    ) -> int:
+        campaign_ids = {
+            campaign.id for campaign in self.campaigns if campaign.owner_id == owner_id
+        }
+        before = len(self.campaign_recipient_memberships)
+        self.campaign_recipient_memberships = [
+            membership
+            for membership in self.campaign_recipient_memberships
+            if not (
+                membership.recipient_id == recipient_id
+                and membership.campaign_id in campaign_ids
+            )
+        ]
+        return before - len(self.campaign_recipient_memberships)
+
+    async def cancel_unsent_campaign_recipient_sends(
+        self,
+        recipient_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID,
+        now: datetime,
+    ) -> tuple[int, int]:
+        cancelled = 0
+        in_flight = 0
+        for send in self.sends:
+            if (
+                send.campaign_recipient_id != recipient_id
+                or send.owner_id != owner_id
+                or send.status
+                not in {EmailSendStatus.queued, EmailSendStatus.dispatching}
+            ):
+                continue
+            if send.provider_request_started_at is not None:
+                in_flight += 1
+                continue
+            send.status = EmailSendStatus.cancelled
+            send.cancelled_at = now
+            cancelled += 1
+        in_flight += sum(
+            1
+            for send in self.sends
+            if send.campaign_recipient_id == recipient_id
+            and send.owner_id == owner_id
+            and send.status == EmailSendStatus.indeterminate
+        )
+        return cancelled, in_flight
 
     async def flush(self) -> None:
         return None
@@ -658,6 +796,45 @@ async def test_bulk_create_campaign_recipients_creates_owner_local_contact() -> 
     assert owner_local.email == "shared@example.com"
     assert owner_local.contact_name == "Owner One"
     assert owner_local.organization_name == "Compania owner one"
+
+
+@pytest.mark.asyncio
+async def test_bulk_import_locks_and_rejects_contact_archived_concurrently() -> None:
+    archived_at = datetime.now()
+    repository = FakeCommunicationsRepository()
+    archived = persisted_campaign_recipient(email="archived@example.com")
+    archived.archived_at = archived_at
+    archived.purge_after = archived_at + timedelta(days=30)
+    repository.campaign_recipients.append(archived)
+    original_lookup = repository.list_campaign_recipients_by_emails
+    repository.list_campaign_recipients_by_emails = AsyncMock(  # type: ignore[method-assign]
+        wraps=original_lookup
+    )
+    service = make_service(repository)
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.bulk_create_campaign_recipients_with_result(
+            CampaignRecipientBulkCreateRequest(
+                recipients=[
+                    CampaignRecipientCreateRequest(
+                        email="archived@example.com",
+                        contact_name="Archived",
+                        organization_name="Compania",
+                        segment="potential_customer",
+                        source="csv",
+                    ),
+                ]
+            ),
+            owner_id=TEST_OWNER_ID,
+        )
+
+    assert exc_info.value.code == "campaign_recipient_archived"
+    repository.list_campaign_recipients_by_emails.assert_awaited_once_with(
+        {"archived@example.com"},
+        owner_id=TEST_OWNER_ID,
+        include_archived=True,
+        for_update=True,
+    )
 
 
 @pytest.mark.asyncio
@@ -1812,34 +1989,43 @@ async def test_update_campaign_recipient_preserves_unsubscribe_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_campaign_recipient_suppresses_contact_without_erasing_history() -> None:
+async def test_delete_campaign_recipient_archives_contact_without_erasing_history() -> None:
     repository = FakeCommunicationsRepository()
     recipient = persisted_campaign_recipient()
     repository.campaign_recipients.append(recipient)
     service = make_service(repository)
 
-    await service.delete_campaign_recipient(recipient.id)
-
-    assert repository.campaign_recipients == [recipient]
-    assert recipient.status == CampaignRecipientStatus.suppressed
-
-    imported = await service.bulk_create_campaign_recipients(
-        CampaignRecipientBulkCreateRequest(
-            recipients=[
-                CampaignRecipientCreateRequest(
-                    email=recipient.email,
-                    contact_name="Reimportat",
-                    organization_name="Compania nouă",
-                    segment="potential_customer",
-                )
-            ]
-        ),
+    await service.delete_campaign_recipient(
+        recipient.id,
         owner_id=TEST_OWNER_ID,
+        settings=Settings(campaign_recipient_archive_retention_days=30),
     )
 
-    assert imported == [recipient]
     assert repository.campaign_recipients == [recipient]
     assert recipient.status == CampaignRecipientStatus.suppressed
+    assert recipient.status_before_archive == CampaignRecipientStatus.active
+    assert recipient.archived_at is not None
+    assert recipient.purge_after == recipient.archived_at + timedelta(days=30)
+
+    with pytest.raises(DomainError) as reimport_error:
+        await service.bulk_create_campaign_recipients(
+            CampaignRecipientBulkCreateRequest(
+                recipients=[
+                    CampaignRecipientCreateRequest(
+                        email=recipient.email,
+                        contact_name="Reimportat",
+                        organization_name="Compania nouă",
+                        segment="potential_customer",
+                    )
+                ]
+            ),
+            owner_id=TEST_OWNER_ID,
+        )
+
+    assert reimport_error.value.code == "campaign_recipient_archived"
+    assert repository.campaign_recipients == [recipient]
+    assert recipient.status == CampaignRecipientStatus.suppressed
+    assert recipient.status_before_archive == CampaignRecipientStatus.active
 
 
 @pytest.mark.asyncio
@@ -1849,10 +2035,15 @@ async def test_delete_campaign_recipient_preserves_unsubscribe_state() -> None:
     repository.campaign_recipients.append(recipient)
     service = make_service(repository)
 
-    await service.delete_campaign_recipient(recipient.id)
+    await service.delete_campaign_recipient(
+        recipient.id,
+        owner_id=TEST_OWNER_ID,
+        settings=Settings(campaign_recipient_archive_retention_days=30),
+    )
 
     assert repository.campaign_recipients == [recipient]
     assert recipient.status == CampaignRecipientStatus.unsubscribed
+    assert recipient.archived_at is not None
 
 
 @pytest.mark.asyncio
@@ -1870,6 +2061,7 @@ async def test_delete_campaign_recipient_rejects_other_owner_contact() -> None:
 
     assert exc_info.value.code == "campaign_recipient_not_found"
     assert recipient.status == CampaignRecipientStatus.active
+    assert recipient.archived_at is None
 
 
 @pytest.mark.asyncio

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     email_legal_address: str = "Cody"
     email_brevo_api_key: SecretStr | None = None
     email_webhook_token: SecretStr | None = None
+    email_suppression_fingerprint_secret: SecretStr | None = None
     email_smtp_host: str = "mailpit"
     email_smtp_port: int = 1025
     email_smtp_username: str | None = None
@@ -41,6 +42,19 @@ class Settings(BaseSettings):
     email_smtp_starttls: bool = False
     email_test_mode: bool = True
     email_daily_send_cap: int = Field(default=750, ge=0)
+    campaign_recipient_archive_retention_days: int = Field(default=30, ge=1, le=365)
+    campaign_recipient_delivery_reconciliation_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+    )
+    campaign_recipient_purge_enabled: bool = False
+    campaign_delivery_tombstone_retention_days: int = Field(
+        default=365,
+        ge=30,
+        le=3650,
+    )
+    email_suppression_review_days: int = Field(default=365, ge=30, le=3650)
     readiness_timeout_seconds: float = Field(default=3.0, ge=0.25, le=30.0)
     worker_heartbeat_key: str = "codrut:worker:heartbeat"
     worker_heartbeat_ttl_seconds: int = Field(default=30, ge=10, le=300)
@@ -135,6 +149,11 @@ class Settings(BaseSettings):
                 if self.email_webhook_token
                 else ""
             ),
+            "email-suppression": (
+                self.email_suppression_fingerprint_secret.get_secret_value().strip()
+                if self.email_suppression_fingerprint_secret
+                else ""
+            ),
         }
         for purpose, secret in secrets.items():
             if len(secret) < 32:
@@ -183,6 +202,13 @@ class Settings(BaseSettings):
         if self.campaign_asset_signing_secret is not None:
             return self.campaign_asset_signing_secret.get_secret_value()
         return self.effective_task_link_secret
+
+    @property
+    def effective_email_suppression_fingerprint_secret(self) -> str:
+        """The secret used for protected do-not-contact email fingerprints."""
+        if self.email_suppression_fingerprint_secret is not None:
+            return self.email_suppression_fingerprint_secret.get_secret_value().strip()
+        return self.effective_task_link_secret.strip()
 
 
 @lru_cache
