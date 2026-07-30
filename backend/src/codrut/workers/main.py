@@ -209,7 +209,6 @@ class WorkerSettings:
             second=set(range(0, 60, 5)),
             run_at_startup=True,
             unique=True,
-            job_id="codrut:cron:email-outbox:single-flight",
         ),
         cron(
             process_questionnaire_submissions,

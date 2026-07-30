@@ -179,7 +179,7 @@ async def test_email_worker_drains_one_thousand_unique_sandbox_claims_well_withi
     assert elapsed_seconds < 300
 
 
-def test_email_outbox_cron_uses_a_fixed_single_flight_job_id() -> None:
+def test_email_outbox_cron_is_unique_per_scheduled_run() -> None:
     cron_job = next(
         job
         for job in worker.WorkerSettings.cron_jobs
@@ -187,7 +187,7 @@ def test_email_outbox_cron_uses_a_fixed_single_flight_job_id() -> None:
     )
 
     assert cron_job.unique is True
-    assert cron_job.job_id == "codrut:cron:email-outbox:single-flight"
+    assert cron_job.job_id is None
 
 
 def test_worker_max_jobs_stays_within_validated_database_pool_budget() -> None:
