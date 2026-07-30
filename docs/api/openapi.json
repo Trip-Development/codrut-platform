@@ -3493,7 +3493,14 @@
             "type": "array"
           },
           "first_rank_tie_breaks": {
+            "minimum": 0.0,
             "title": "First Rank Tie Breaks",
+            "type": "integer"
+          },
+          "insufficient_driver_score_count": {
+            "description": "Selected completed participants omitted from both rankings because fewer than two driver scores were numeric.",
+            "minimum": 0.0,
+            "title": "Insufficient Driver Score Count",
             "type": "integer"
           },
           "second_rank": {
@@ -3504,10 +3511,13 @@
             "type": "array"
           },
           "second_rank_tie_breaks": {
+            "minimum": 0.0,
             "title": "Second Rank Tie Breaks",
             "type": "integer"
           },
           "total_people": {
+            "description": "Participants with at least two numeric driver scores.",
+            "minimum": 0.0,
             "title": "Total People",
             "type": "integer"
           }
@@ -3517,7 +3527,8 @@
           "first_rank",
           "second_rank",
           "first_rank_tie_breaks",
-          "second_rank_tie_breaks"
+          "second_rank_tie_breaks",
+          "insufficient_driver_score_count"
         ],
         "title": "DriverRankSummaryResponse",
         "type": "object"
@@ -7202,6 +7213,7 @@
             "type": "string"
           },
           "value": {
+            "minimum": 0.0,
             "title": "Value",
             "type": "integer"
           }

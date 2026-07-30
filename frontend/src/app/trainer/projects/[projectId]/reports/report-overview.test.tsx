@@ -40,10 +40,14 @@ const aggregate = {
   ],
   driver_rank_summary: {
     total_people: 3,
-    first_rank: [{ id: "perfect", label: "Fii perfect", value: 2 }],
+    first_rank: [
+      { id: "perfect", label: "Fii perfect", value: 2 },
+      { id: "strong", label: "Fii puternic", value: 1 },
+    ],
     second_rank: [{ id: "strong", label: "Fii puternic", value: 3 }],
     first_rank_tie_breaks: 1,
     second_rank_tie_breaks: 0,
+    insufficient_driver_score_count: 0,
   },
   leadership_members: [
     { participant_profile_id: "leader-1", full_name: "Ana Lider", position: "Director" },
@@ -91,9 +95,11 @@ describe("project report overview", () => {
     expect(screen.getByRole("heading", { name: "Cum vede echipa leadershipul" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum se văd colegii din leadership" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Primul driver dominant" })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Al doilea driver dominant" })).toBeTruthy();
-    expect(screen.getByText(/1 departajări pentru primul driver/)).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Primul driver dominant.*3 persoane incluse/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Al doilea driver dominant.*3 persoane incluse/ })).toBeTruthy();
+    expect(screen.getByText("2 persoane · 67%")).toBeTruthy();
+    expect(screen.getByText("3 persoane · 100%")).toBeTruthy();
+    expect(screen.getByText(/o departajare pentru primul driver/)).toBeTruthy();
     expect(screen.getByText("Evaluare selectată: cycle-2")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Ana Lider/ }).getAttribute("href")).toBe(
       "/trainer/projects/project-1/reports/leadership/leader-1?cycle=cycle-2",
@@ -123,5 +129,60 @@ describe("project report overview", () => {
 
     expect(screen.getByText("Structura echipelor are nume ambigue.")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "TA Drivers" })).toBeNull();
+  });
+
+  it("explains when a completed TA result cannot be ranked", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        driver_rank_summary: {
+          ...aggregate.driver_rank_summary,
+          insufficient_driver_score_count: 1,
+        },
+      },
+      assignments: [],
+      participants: [{ id: "participant-1" }],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText(/Un rezultat TA finalizat nu a putut fi inclus/)).toBeTruthy();
+    expect(screen.getByText(/nu are suficiente scoruri pentru a stabili primii doi driveri/)).toBeTruthy();
+  });
+
+  it("uses honest chart copy when every finalized TA result is excluded", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        driver_count: 0,
+        driver_averages: [],
+        driver_rank_summary: {
+          total_people: 0,
+          first_rank: [],
+          second_rank: [],
+          first_rank_tie_breaks: 0,
+          second_rank_tie_breaks: 0,
+          insufficient_driver_score_count: 1,
+        },
+      },
+      assignments: [],
+      participants: [{ id: "participant-1" }],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getAllByText("Nu există rezultate TA care pot fi incluse în aceste grafice.")).toHaveLength(2);
+    expect(screen.queryByText("Nu există încă rezultate TA finalizate pentru această evaluare.")).toBeNull();
+    expect(screen.getByText(/Un rezultat TA finalizat nu a putut fi inclus/)).toBeTruthy();
   });
 });

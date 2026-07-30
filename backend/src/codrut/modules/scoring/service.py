@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -139,6 +140,12 @@ AssignmentResultWithDefinition = tuple[
 ]
 
 
+@dataclass(frozen=True)
+class DriverRowSelection:
+    rankable_rows: tuple[AssignmentResultWithDefinition, ...]
+    insufficient_driver_score_count: int
+
+
 @dataclass
 class ReportDimensionAccumulator:
     label: str
@@ -206,7 +213,11 @@ class ScoringService:
                 continue
 
             results.append(ScoringResultResponse.model_validate(result))
-        score_summary = _build_score_summary(assignment_results)
+        driver_selection = _select_latest_completed_driver_rows(assignment_results)
+        score_summary = _build_score_summary(
+            assignment_results,
+            rankable_driver_rows=driver_selection.rankable_rows,
+        )
         icare_cohorts = _build_icare_cohort_summaries(
             assignment_results,
             participants,
@@ -215,7 +226,10 @@ class ScoringService:
             assignment_results,
             participants,
         )
-        driver_rank_summary = _build_driver_rank_summary(assignment_results)
+        driver_rank_summary = _build_driver_rank_summary(
+            driver_selection.rankable_rows,
+            insufficient_driver_score_count=(driver_selection.insufficient_driver_score_count),
+        )
         pcm_base_distribution = _distribution_from_completed_pcm_assignments(
             participants,
             assignments,
@@ -351,15 +365,11 @@ class ScoringService:
             pcm_base=cycle_pcm.get("pcm_base", member.pcm_base),
             pcm_phase=cycle_pcm.get("pcm_phase", member.pcm_phase),
             lencioni_count=manager_team.lencioni_count if manager_team is not None else 0,
-            lencioni_averages=(
-                manager_team.lencioni_averages if manager_team is not None else []
-            ),
+            lencioni_averages=(manager_team.lencioni_averages if manager_team is not None else []),
             icare_cohorts=target_summary.cohorts if target_summary is not None else [],
             driver_count=driver_summary.driver_count,
             driver_averages=[
-                average.model_copy(
-                    update={"feedback": driver_feedback.get(average.id)}
-                )
+                average.model_copy(update={"feedback": driver_feedback.get(average.id)})
                 for average in driver_summary.driver_averages
             ],
         )
@@ -1095,7 +1105,15 @@ def _report_participant_from_membership(
 
 def _build_score_summary(
     assignment_results: Iterable[AssignmentResultWithDefinition],
+    *,
+    rankable_driver_rows: Iterable[AssignmentResultWithDefinition] | None = None,
 ) -> ScoreSummary:
+    assignment_result_rows = list(assignment_results)
+    driver_rows = (
+        list(rankable_driver_rows)
+        if rankable_driver_rows is not None
+        else list(_select_latest_completed_driver_rows(assignment_result_rows).rankable_rows)
+    )
     lencioni_dimensions: dict[str, ReportDimensionAccumulator] = {}
     driver_dimensions: dict[str, ReportDimensionAccumulator] = {}
     boss_360_dimensions: dict[str, ReportDimensionAccumulator] = {}
@@ -1103,20 +1121,22 @@ def _build_score_summary(
     driver_count = 0
     boss_360_count = 0
 
-    for assignment, result, definition in assignment_results:
+    for assignment, result, definition in assignment_result_rows:
         if assignment.status not in COMPLETED_STATUSES or result is None:
             continue
         if assignment.questionnaire_key in LENCIONI_REPORT_KEYS:
             if _accumulate_scores(lencioni_dimensions, result, definition):
                 lencioni_count += 1
-        elif assignment.questionnaire_key in DISTRESS_DRIVER_REPORT_KEYS:
-            if _accumulate_scores(driver_dimensions, result, definition):
-                driver_count += 1
         elif assignment.questionnaire_key in BOSS_360_REPORT_KEYS:
             if _is_self_boss_assignment(assignment):
                 continue
             if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
+
+    for _assignment, result, definition in driver_rows:
+        assert result is not None
+        if _accumulate_scores(driver_dimensions, result, definition):
+            driver_count += 1
 
     return ScoreSummary(
         lencioni_count=lencioni_count,
@@ -1165,8 +1185,7 @@ def _icare_assignment_cohort(
         return None
     respondent_id = assignment.respondent_profile_id
     direct_report_ids = {
-        participant.id
-        for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
+        participant.id for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
     }
     if respondent_id in direct_report_ids:
         return "direct_team"
@@ -1196,10 +1215,7 @@ def _build_icare_cohort_summaries(
             assignment.questionnaire_key not in BOSS_360_REPORT_KEYS
             or assignment.status not in COMPLETED_STATUSES
             or result is None
-            or (
-                target_profile_id is not None
-                and _icare_target_id(assignment) != target_profile_id
-            )
+            or (target_profile_id is not None and _icare_target_id(assignment) != target_profile_id)
         ):
             continue
         cohort = _icare_assignment_cohort(assignment, hierarchy=hierarchy)
@@ -1287,19 +1303,80 @@ def _build_icare_target_summaries(
     ]
 
 
-def _build_driver_rank_summary(
-    assignment_results: Iterable[AssignmentResultWithDefinition],
-) -> DriverRankSummaryResponse:
-    latest_by_participant: dict[UUID, AssignmentResultWithDefinition] = {}
-    for row in assignment_results:
-        assignment, result, _definition = row
-        if (
-            assignment.questionnaire_key in DISTRESS_DRIVER_REPORT_KEYS
-            and assignment.status in COMPLETED_STATUSES
-            and result is not None
-        ):
-            latest_by_participant[assignment.respondent_profile_id] = row
+def _driver_assignment_order_key(
+    row: AssignmentResultWithDefinition,
+) -> tuple[datetime, str]:
+    assignment = row[0]
+    created_at = getattr(assignment, "created_at", None)
+    if not isinstance(created_at, datetime):
+        created_at = datetime.min.replace(tzinfo=UTC)
+    elif created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    else:
+        created_at = created_at.astimezone(UTC)
+    return created_at, str(getattr(assignment, "id", UUID(int=0)))
 
+
+def _select_latest_completed_driver_rows(
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+) -> DriverRowSelection:
+    participants_with_results: set[UUID] = set()
+    latest_valid_by_participant: dict[UUID, AssignmentResultWithDefinition] = {}
+    for row in assignment_results:
+        assignment, result, definition = row
+        if (
+            assignment.questionnaire_key not in DISTRESS_DRIVER_REPORT_KEYS
+            or assignment.status not in COMPLETED_STATUSES
+            or result is None
+        ):
+            continue
+        participant_id = assignment.respondent_profile_id
+        participants_with_results.add(participant_id)
+        if len(_ranked_driver_scores(result, definition)) < 2:
+            continue
+        current = latest_valid_by_participant.get(participant_id)
+        if current is None or _driver_assignment_order_key(row) > _driver_assignment_order_key(
+            current
+        ):
+            latest_valid_by_participant[participant_id] = row
+    rankable_rows = [
+        latest_valid_by_participant[participant_id]
+        for participant_id in sorted(latest_valid_by_participant, key=str)
+    ]
+    return DriverRowSelection(
+        rankable_rows=tuple(rankable_rows),
+        insufficient_driver_score_count=(
+            len(participants_with_results) - len(latest_valid_by_participant)
+        ),
+    )
+
+
+def _ranked_driver_scores(
+    result: ScoringResult,
+    definition: QuestionnaireDefinition | None,
+) -> list[tuple[str, str, float]]:
+    definition_dimensions = _report_dimensions(definition, result.scores)
+    order_index = {dimension_id: index for index, dimension_id in enumerate(definition_dimensions)}
+    ranked = [
+        (dimension_id, label, score)
+        for dimension_id, (label, _rules) in definition_dimensions.items()
+        if (score := _coerce_score(result.scores.get(dimension_id))) is not None
+    ]
+    ranked.sort(
+        key=lambda item: (
+            -item[2],
+            order_index.get(item[0], len(order_index)),
+            item[0],
+        )
+    )
+    return ranked
+
+
+def _build_driver_rank_summary(
+    rankable_driver_rows: Iterable[AssignmentResultWithDefinition],
+    *,
+    insufficient_driver_score_count: int,
+) -> DriverRankSummaryResponse:
     first_counts: dict[str, int] = {}
     second_counts: dict[str, int] = {}
     labels: dict[str, str] = {}
@@ -1308,38 +1385,21 @@ def _build_driver_rank_summary(
     second_tie_breaks = 0
     total_people = 0
 
-    for _assignment, result, definition in latest_by_participant.values():
+    for _assignment, result, definition in rankable_driver_rows:
         assert result is not None
-        definition_dimensions = _report_dimensions(definition, result.scores)
-        definition_order = list(definition_dimensions)
-        order_index = {dimension_id: index for index, dimension_id in enumerate(definition_order)}
-        ranked: list[tuple[str, float]] = []
-        for dimension_id, value in result.scores.items():
-            score = _coerce_score(value)
-            if score is None:
-                continue
-            labels[dimension_id] = definition_dimensions.get(
-                dimension_id,
-                (_prettify_score_key(dimension_id), ()),
-            )[0]
-            colors.setdefault(dimension_id, None)
-            ranked.append((dimension_id, score))
+        ranked = _ranked_driver_scores(result, definition)
         if len(ranked) < 2:
-            continue
-        ranked.sort(
-            key=lambda item: (
-                -item[1],
-                order_index.get(item[0], len(order_index)),
-                item[0],
-            )
-        )
+            raise ValueError("Rankable driver rows must contain at least two scores.")
+        for dimension_id, label, _score in ranked:
+            labels[dimension_id] = label
+            colors.setdefault(dimension_id, None)
         first, second = ranked[0], ranked[1]
         first_counts[first[0]] = first_counts.get(first[0], 0) + 1
         second_counts[second[0]] = second_counts.get(second[0], 0) + 1
         total_people += 1
-        if sum(score == first[1] for _dimension_id, score in ranked) > 1:
+        if sum(score == first[2] for _dimension_id, _label, score in ranked) > 1:
             first_tie_breaks += 1
-        if sum(score == second[1] for _dimension_id, score in ranked[1:]) > 1:
+        if sum(score == second[2] for _dimension_id, _label, score in ranked[1:]) > 1:
             second_tie_breaks += 1
 
     def distribution(counts: dict[str, int]) -> list[ReportDistributionResponse]:
@@ -1362,6 +1422,7 @@ def _build_driver_rank_summary(
         second_rank=distribution(second_counts),
         first_rank_tie_breaks=first_tie_breaks,
         second_rank_tie_breaks=second_tie_breaks,
+        insufficient_driver_score_count=insufficient_driver_score_count,
     )
 
 
@@ -1383,9 +1444,11 @@ def _build_leadership_members(
         )
         for participant_id in sorted(
             hierarchy.leadership_ids,
-            key=lambda value: participant_by_id.get(value).full_name.casefold()
-            if participant_by_id.get(value) is not None
-            else "",
+            key=lambda value: (
+                participant_by_id.get(value).full_name.casefold()
+                if participant_by_id.get(value) is not None
+                else ""
+            ),
         )
         if (participant := participant_by_id.get(participant_id)) is not None
     ]
@@ -1406,6 +1469,7 @@ def _without_incompatible_overlay_dimensions(
             second_rank=[],
             first_rank_tie_breaks=0,
             second_rank_tie_breaks=0,
+            insufficient_driver_score_count=0,
         )
     if incompatible_questionnaire_keys & BOSS_360_REPORT_KEYS:
         updates["boss_360_averages"] = []

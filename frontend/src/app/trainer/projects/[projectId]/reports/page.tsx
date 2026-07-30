@@ -9,7 +9,7 @@ import type {
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { EmptyState } from "@/components/presentation/empty-state";
-import { DonutChart, ScaledBar } from "@/components/reports/native-charts";
+import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getProjectAssessmentCyclesData, getProjectReportWorkspaceData } from "../project-data";
 import { CycleComparisonControls } from "./CycleComparisonControls";
@@ -21,6 +21,10 @@ const ICARE_LABELS: Record<IcareCohortSummary["cohort"], string> = {
   leadership_peers: "Cum se văd colegii din leadership",
   self: "Cum se evaluează liderii",
 };
+
+function tieBreakLabel(count: number): string {
+  return count === 1 ? "o departajare" : `${count} departajări`;
+}
 
 export default async function ProjectReportsPage({
   params,
@@ -46,6 +50,9 @@ export default async function ProjectReportsPage({
     cycle: selectedCycle?.id,
   });
   const reportsPath = `/trainer/projects/${projectId}/reports`;
+  const driverPieEmptyLabel = aggregate.driver_rank_summary.insufficient_driver_score_count > 0
+    ? "Nu există rezultate TA care pot fi incluse în aceste grafice."
+    : undefined;
 
   if (aggregate.hierarchy_ambiguous) {
     return (
@@ -134,25 +141,33 @@ export default async function ProjectReportsPage({
           max={100}
           suffix="%"
         />
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">Driverii întâlniți cel mai des</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+            Fiecare persoană apare o singură dată în fiecare grafic, după driverul cu scorul cel mai mare și apoi după următorul.
+          </p>
+        </div>
         <div className="grid gap-5 lg:grid-cols-2">
-          <ChartPanel title="Primul driver dominant — număr persoane">
-            <DonutChart
+          <ChartPanel title="Primul driver dominant">
+            <ParticipantFrequencyPie
               title="Primul driver dominant"
               data={aggregate.driver_rank_summary.first_rank.map((item) => ({
                 ...item,
                 color: item.color ?? undefined,
               }))}
-              emptyLabel="Nu există încă suficiente rezultate TA."
+              totalPeople={aggregate.driver_rank_summary.total_people}
+              emptyLabel={driverPieEmptyLabel}
             />
           </ChartPanel>
-          <ChartPanel title="Al doilea driver dominant — număr persoane">
-            <DonutChart
+          <ChartPanel title="Al doilea driver dominant">
+            <ParticipantFrequencyPie
               title="Al doilea driver dominant"
               data={aggregate.driver_rank_summary.second_rank.map((item) => ({
                 ...item,
                 color: item.color ?? undefined,
               }))}
-              emptyLabel="Nu există încă suficiente rezultate TA."
+              totalPeople={aggregate.driver_rank_summary.total_people}
+              emptyLabel={driverPieEmptyLabel}
             />
           </ChartPanel>
         </div>
@@ -160,8 +175,15 @@ export default async function ProjectReportsPage({
           || aggregate.driver_rank_summary.second_rank_tie_breaks > 0) ? (
           <p className="text-sm leading-6 text-muted-foreground">
             La egalitate am păstrat ordinea din chestionar:{" "}
-            {aggregate.driver_rank_summary.first_rank_tie_breaks} departajări pentru primul driver și{" "}
-            {aggregate.driver_rank_summary.second_rank_tie_breaks} pentru al doilea.
+            {tieBreakLabel(aggregate.driver_rank_summary.first_rank_tie_breaks)} pentru primul driver și{" "}
+            {tieBreakLabel(aggregate.driver_rank_summary.second_rank_tie_breaks)} pentru al doilea.
+          </p>
+        ) : null}
+        {aggregate.driver_rank_summary.insufficient_driver_score_count > 0 ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {aggregate.driver_rank_summary.insufficient_driver_score_count === 1
+              ? "Un rezultat TA finalizat nu a putut fi inclus, deoarece nu are suficiente scoruri pentru a stabili primii doi driveri."
+              : `${aggregate.driver_rank_summary.insufficient_driver_score_count} rezultate TA finalizate nu au putut fi incluse, deoarece nu au suficiente scoruri pentru a stabili primii doi driveri.`}
           </p>
         ) : null}
       </ResultSection>

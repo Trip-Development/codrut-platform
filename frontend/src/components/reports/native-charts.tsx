@@ -17,8 +17,103 @@ const defaultColors = [
   "var(--muted-foreground)",
 ];
 
+function stableColorForId(id: string): string {
+  let hash = 2166136261;
+  for (const character of id) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return defaultColors[(hash >>> 0) % defaultColors.length];
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function peopleLabel(value: number): string {
+  return `${value} ${value === 1 ? "persoană" : "persoane"}`;
+}
+
+function includedPeopleLabel(value: number): string {
+  return `${peopleLabel(value)} ${value === 1 ? "inclusă" : "incluse"}`;
+}
+
+function percentage(value: number, total: number): number {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+export function ParticipantFrequencyPie({
+  title,
+  data,
+  totalPeople,
+  emptyLabel = "Nu există încă rezultate TA finalizate pentru această evaluare.",
+}: {
+  title: string;
+  data: ChartDatum[];
+  totalPeople: number;
+  emptyLabel?: string;
+}) {
+  const total = Math.max(0, totalPeople);
+  const visibleData = total > 0 ? data.filter((item) => item.value > 0) : [];
+  let cursor = 0;
+  const segments = visibleData.map((item) => {
+    const start = clamp((cursor / total) * 100, 0, 100);
+    cursor += item.value;
+    const end = clamp((cursor / total) * 100, start, 100);
+    const color = item.color ?? stableColorForId(item.id);
+    return { ...item, color, start, end, share: percentage(item.value, total) };
+  });
+  const filledUntil = segments.at(-1)?.end ?? 0;
+  const backgroundImage = total > 0 && segments.length > 0
+    ? `conic-gradient(${[
+        ...segments.map((item) => `${item.color} ${item.start}% ${item.end}%`),
+        ...(filledUntil < 100 ? [`var(--muted) ${filledUntil}% 100%`] : []),
+      ].join(", ")})`
+    : undefined;
+  const accessibleSummary = segments.length > 0
+    ? segments
+        .map((item) => `${item.label}: ${peopleLabel(item.value)}, ${item.share}%`)
+        .join("; ")
+    : emptyLabel;
+
+  return (
+    <figure className="grid gap-4 sm:grid-cols-[132px_1fr] sm:items-center">
+      <div
+        className="mx-auto size-32 rounded-full border border-border bg-muted"
+        role="img"
+        aria-label={`${title}. ${includedPeopleLabel(total)}. ${accessibleSummary}.`}
+        style={{
+          backgroundImage,
+          printColorAdjust: "exact",
+          WebkitPrintColorAdjust: "exact",
+        }}
+      />
+      <figcaption>
+        <p className="text-sm font-semibold text-foreground">{includedPeopleLabel(total)}</p>
+        {segments.length > 0 ? (
+          <ul className="mt-3 grid gap-2">
+            {segments.map((item) => (
+              <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
+                <span className="flex min-w-0 items-start gap-2 text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className="mt-1 size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span>{item.label}</span>
+                </span>
+                <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                  {peopleLabel(item.value)} · {item.share}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{emptyLabel}</p>
+        )}
+      </figcaption>
+    </figure>
+  );
 }
 
 export function DonutChart({

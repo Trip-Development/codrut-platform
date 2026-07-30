@@ -2640,11 +2640,19 @@ export interface components {
             first_rank: components["schemas"]["ReportDistributionResponse"][];
             /** First Rank Tie Breaks */
             first_rank_tie_breaks: number;
+            /**
+             * Insufficient Driver Score Count
+             * @description Selected completed participants omitted from both rankings because fewer than two driver scores were numeric.
+             */
+            insufficient_driver_score_count: number;
             /** Second Rank */
             second_rank: components["schemas"]["ReportDistributionResponse"][];
             /** Second Rank Tie Breaks */
             second_rank_tie_breaks: number;
-            /** Total People */
+            /**
+             * Total People
+             * @description Participants with at least two numeric driver scores.
+             */
             total_people: number;
         };
         /** EmailDeliveryMetricResponse */

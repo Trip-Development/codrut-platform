@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ScoringResultResponse(BaseModel):
@@ -25,7 +25,7 @@ class ReportAverageResponse(BaseModel):
 class ReportDistributionResponse(BaseModel):
     id: str
     label: str
-    value: int
+    value: int = Field(ge=0)
     color: str | None = None
 
 
@@ -100,11 +100,34 @@ class IcareCohortSummaryResponse(BaseModel):
 
 
 class DriverRankSummaryResponse(BaseModel):
-    total_people: int
+    total_people: int = Field(
+        ge=0,
+        description="Participants with at least two numeric driver scores.",
+    )
     first_rank: list[ReportDistributionResponse]
     second_rank: list[ReportDistributionResponse]
-    first_rank_tie_breaks: int
-    second_rank_tie_breaks: int
+    first_rank_tie_breaks: int = Field(ge=0)
+    second_rank_tie_breaks: int = Field(ge=0)
+    insufficient_driver_score_count: int = Field(
+        ge=0,
+        description=(
+            "Selected completed participants omitted from both rankings because "
+            "fewer than two driver scores were numeric."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_rank_totals(self) -> "DriverRankSummaryResponse":
+        if sum(item.value for item in self.first_rank) != self.total_people:
+            raise ValueError("First-rank driver counts must sum to total_people.")
+        if sum(item.value for item in self.second_rank) != self.total_people:
+            raise ValueError("Second-rank driver counts must sum to total_people.")
+        if (
+            self.first_rank_tie_breaks > self.total_people
+            or self.second_rank_tie_breaks > self.total_people
+        ):
+            raise ValueError("Driver tie-break counts cannot exceed total_people.")
+        return self
 
 
 class LeadershipMemberSummaryResponse(BaseModel):
