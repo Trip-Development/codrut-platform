@@ -10,7 +10,7 @@ import type {
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
 import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
-import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
+import { DonutChart, ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -93,6 +93,35 @@ export default async function ProjectReportsPage({
         failed={aggregate.reportable_failed_score_count}
         orphaned={aggregate.reportable_orphaned_score_count}
       />
+
+      <ResultSection
+        id="pcm"
+        title="PCM"
+        description="Distribuția profilurilor de bază și de fază pentru participanții proiectului."
+      >
+        <div className="grid gap-5 lg:grid-cols-2">
+          <ChartPanel title="Profil de bază">
+            <DonutChart
+              title="Distribuție PCM bază"
+              data={aggregate.pcm_base_distribution.map((item) => ({
+                ...item,
+                color: item.color ?? undefined,
+              }))}
+              emptyLabel="Nu există încă profiluri PCM de bază completate."
+            />
+          </ChartPanel>
+          <ChartPanel title="Profil de fază">
+            <DonutChart
+              title="Distribuție PCM fază"
+              data={aggregate.pcm_phase_distribution.map((item) => ({
+                ...item,
+                color: item.color ?? undefined,
+              }))}
+              emptyLabel="Nu există încă profiluri PCM de fază completate."
+            />
+          </ChartPanel>
+        </div>
+      </ResultSection>
 
       <ResultSection
         id="lencioni"

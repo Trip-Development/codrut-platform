@@ -1509,6 +1509,64 @@ def _summarize_report_rows(
     return count, averages, scale_response
 
 
+def _summarize_driver_rows(
+    rows: Iterable[AssignmentResultWithDefinition],
+) -> tuple[int, list[ReportAverageResponse], ReportScoreScaleResponse]:
+    dimensions: dict[str, ReportDimensionAccumulator] = {}
+    has_unknown_scale = False
+    count = 0
+
+    for _assignment, result, definition in rows:
+        assert result is not None
+        report_dimensions = _report_dimensions(definition, result.scores)
+        dimension_ids = {
+            dimension_id
+            for dimension_id in report_dimensions
+            if _coerce_score(result.scores.get(dimension_id)) is not None
+        }
+        derived_scale = derive_definition_score_scale(
+            definition,
+            dimension_ids=dimension_ids,
+        )
+        if not derived_scale.compatible or derived_scale.scale is None:
+            has_unknown_scale = True
+            count += 1
+            continue
+
+        scale = derived_scale.scale
+        scale_range = scale.scale_max - scale.scale_min
+        if scale_range <= 0:
+            has_unknown_scale = True
+            count += 1
+            continue
+
+        found = False
+        for dimension_id, (label, _rules) in report_dimensions.items():
+            score = _coerce_score(result.scores.get(dimension_id))
+            if score is None:
+                continue
+            accumulator = dimensions.setdefault(
+                dimension_id,
+                ReportDimensionAccumulator(label=label),
+            )
+            accumulator.total += ((score - scale.scale_min) / scale_range) * 100
+            accumulator.count += 1
+            found = True
+        if found:
+            count += 1
+
+    scale_response = _score_scale_response(
+        {ScoreScale("percent", 0.0, 100.0)} if not has_unknown_scale else set(),
+        has_unknown_scale=has_unknown_scale,
+    )
+    averages = (
+        _averages_from_accumulators(dimensions)
+        if scale_response.score_scale_compatible
+        else []
+    )
+    return count, averages, scale_response
+
+
 def _build_score_summary(
     assignment_results: Iterable[AssignmentResultWithDefinition],
     *,
@@ -1535,7 +1593,7 @@ def _build_score_summary(
             if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
     lencioni_count, lencioni_averages, lencioni_scale = _summarize_report_rows(lencioni_rows)
-    driver_count, driver_averages, driver_scale = _summarize_report_rows(selected_driver_rows)
+    driver_count, driver_averages, driver_scale = _summarize_driver_rows(selected_driver_rows)
 
     return ScoreSummary(
         lencioni_count=lencioni_count,
