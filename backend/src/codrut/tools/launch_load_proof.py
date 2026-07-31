@@ -1920,6 +1920,7 @@ async def _hold_reads(
                     timeout=wait_seconds,
                 )
             except TimeoutError:
+                # The scheduled slot arrived without a global abort.
                 pass
         if abort.event.is_set():
             return
