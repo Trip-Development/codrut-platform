@@ -23,10 +23,12 @@ accidental local or staging seed from being mistaken for normal test fixtures.
 
 ## What it proves
 
-The seed creates one uniquely tagged company and project, one versioned,
-supported Lencioni scoring fixture, and exactly 1,000 guest users. Each participant has
-one profile, one project membership, one assignment, one signed secure-link
-invite, one held invitation outbox row, and current synthetic consent state.
+The seed creates one uniquely tagged company and project, one versioned generic
+scoring fixture, and exactly 1,000 guest users. The assignment key and pinned
+definition key are identical, preserving the same production integrity
+constraint as normal questionnaires. Each participant has one profile, one
+project membership, one assignment, one signed secure-link invite, one held
+invitation outbox row, and current synthetic consent state.
 The seed holds every outbox row in the future so the normal worker cannot drain
 it before the measured run begins.
 
