@@ -47,9 +47,7 @@ class FakeAlembicOp:
         *,
         ondelete: str | None = None,
     ) -> None:
-        self.created_foreign_keys.append(
-            (constraint_name, source_table, referent_table, ondelete)
-        )
+        self.created_foreign_keys.append((constraint_name, source_table, referent_table, ondelete))
 
 
 def _load_migration() -> ModuleType:
@@ -78,6 +76,7 @@ def test_campaign_contact_owner_repair_enforces_non_null_cascading_owner(
     owner_id = UUID("e24ef388-0b16-4645-a9f7-d91bc9ffbeb6")
     ownerless_counts = iter((865, 0))
     validated: list[object] = []
+    repaired_campaigns: list[tuple[object, UUID]] = []
 
     monkeypatch.setattr(migration, "op", operation)
     monkeypatch.setattr(
@@ -85,7 +84,13 @@ def test_campaign_contact_owner_repair_enforces_non_null_cascading_owner(
         "_ownerless_count",
         lambda _bind: next(ownerless_counts),
     )
+    monkeypatch.setattr(migration, "_ownerless_campaign_count", lambda _bind: 2)
     monkeypatch.setattr(migration, "_resolve_legacy_owner_id", lambda _bind: owner_id)
+    monkeypatch.setattr(
+        migration,
+        "_repair_campaigns",
+        lambda bind, resolved_owner_id: repaired_campaigns.append((bind, resolved_owner_id)) or 2,
+    )
     monkeypatch.setattr(
         migration,
         "_repair_contacts",
@@ -98,6 +103,7 @@ def test_campaign_contact_owner_repair_enforces_non_null_cascading_owner(
 
     assert migration.revision == "0051_contact_owner_repair"
     assert migration.down_revision == "0050_identity_account_types"
+    assert repaired_campaigns == [(operation.bind, owner_id)]
     assert validated == [operation.bind]
     assert operation.dropped_constraints == [
         (
@@ -106,9 +112,7 @@ def test_campaign_contact_owner_repair_enforces_non_null_cascading_owner(
             "foreignkey",
         )
     ]
-    assert operation.altered_columns == [
-        ("campaign_recipients", "owner_id", False)
-    ]
+    assert operation.altered_columns == [("campaign_recipients", "owner_id", False)]
     assert operation.created_foreign_keys == [
         (
             "fk_campaign_recipients_owner_id_users",
@@ -117,6 +121,41 @@ def test_campaign_contact_owner_repair_enforces_non_null_cascading_owner(
             "CASCADE",
         )
     ]
+
+
+def test_campaign_owner_repair_runs_when_contacts_are_already_owned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    migration = _load_migration()
+    operation = FakeAlembicOp()
+    owner_id = UUID("e24ef388-0b16-4645-a9f7-d91bc9ffbeb6")
+    ownerless_contact_counts = iter((0, 0))
+    repaired_campaigns: list[tuple[object, UUID]] = []
+
+    monkeypatch.setattr(migration, "op", operation)
+    monkeypatch.setattr(
+        migration,
+        "_ownerless_count",
+        lambda _bind: next(ownerless_contact_counts),
+    )
+    monkeypatch.setattr(migration, "_ownerless_campaign_count", lambda _bind: 2)
+    monkeypatch.setattr(migration, "_resolve_legacy_owner_id", lambda _bind: owner_id)
+    monkeypatch.setattr(
+        migration,
+        "_repair_campaigns",
+        lambda bind, resolved_owner_id: repaired_campaigns.append((bind, resolved_owner_id)) or 2,
+    )
+    monkeypatch.setattr(
+        migration,
+        "_repair_contacts",
+        lambda *_args: pytest.fail("Contact repair must not run without ownerless contacts"),
+    )
+    monkeypatch.setattr(migration, "_repair_suppression_owners", lambda _bind: 0)
+    monkeypatch.setattr(migration, "_validate_repair", lambda _bind: None)
+
+    migration.upgrade()
+
+    assert repaired_campaigns == [(operation.bind, owner_id)]
 
 
 def test_campaign_contact_owner_repair_contains_required_history_rewiring() -> None:
@@ -129,6 +168,8 @@ def test_campaign_contact_owner_repair_contains_required_history_rewiring() -> N
     normalized = source.lower()
 
     assert "campaign_contact_owner_repair" in normalized
+    assert "update campaigns" in normalized
+    assert "set owner_id = campaign.owner_id" in normalized
     assert "insert into campaign_recipient_memberships" in normalized
     assert "delete from campaign_recipient_memberships" in normalized
     assert "update email_sends send" in normalized

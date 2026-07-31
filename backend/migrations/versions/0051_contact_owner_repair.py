@@ -1,4 +1,4 @@
-"""repair legacy campaign contact ownership
+"""repair legacy campaign and contact ownership
 
 Revision ID: 0051_contact_owner_repair
 Revises: 0050_identity_account_types
@@ -29,6 +29,12 @@ def _ownerless_count(bind: sa.Connection) -> int:
         bind.execute(
             sa.text("select count(*) from campaign_recipients where owner_id is null")
         ).scalar_one()
+    )
+
+
+def _ownerless_campaign_count(bind: sa.Connection) -> int:
+    return int(
+        bind.execute(sa.text("select count(*) from campaigns where owner_id is null")).scalar_one()
     )
 
 
@@ -94,10 +100,37 @@ def _resolve_legacy_owner_id(bind: sa.Connection) -> UUID:
         {"owner_id": owner_id},
     ).scalar_one()
     if not is_trainer:
-        raise RuntimeError(
-            f"{LEGACY_OWNER_ENV} must identify an existing trainer account."
-        )
+        raise RuntimeError(f"{LEGACY_OWNER_ENV} must identify an existing trainer account.")
     return owner_id
+
+
+def _repair_campaigns(bind: sa.Connection, owner_id: UUID) -> int:
+    repaired_count = _ownerless_campaign_count(bind)
+    if repaired_count == 0:
+        return 0
+
+    bind.execute(
+        sa.text(
+            """
+            update campaigns
+            set owner_id = :owner_id
+            where owner_id is null
+            """
+        ),
+        {"owner_id": owner_id},
+    )
+    bind.execute(
+        sa.text(
+            """
+            update email_sends send
+            set owner_id = campaign.owner_id
+            from campaigns campaign
+            where send.campaign_id = campaign.id
+              and send.owner_id is null
+            """
+        )
+    )
+    return repaired_count
 
 
 def _repair_contacts(bind: sa.Connection, owner_id: UUID) -> tuple[int, int]:
@@ -312,9 +345,7 @@ def _repair_contacts(bind: sa.Connection, owner_id: UUID) -> tuple[int, int]:
         )
     )
     repaired_count = int(
-        bind.execute(
-            sa.text("select count(*) from campaign_contact_owner_repair")
-        ).scalar_one()
+        bind.execute(sa.text("select count(*) from campaign_contact_owner_repair")).scalar_one()
     )
     return repaired_count, conflict_count
 
@@ -414,11 +445,16 @@ def _validate_repair(bind: sa.Connection) -> None:
             """
             do $$
             declare
+                ownerless_campaigns integer;
                 ownerless_contacts integer;
                 cross_owner_memberships integer;
                 cross_owner_sends integer;
                 suppression_owner_mismatches integer;
             begin
+                select count(*) into ownerless_campaigns
+                from campaigns
+                where owner_id is null;
+
                 select count(*) into ownerless_contacts
                 from campaign_recipients
                 where owner_id is null;
@@ -447,13 +483,16 @@ def _validate_repair(bind: sa.Connection) -> None:
                 where send.owner_id is not null
                   and suppression.owner_id <> send.owner_id;
 
-                if ownerless_contacts <> 0
+                if ownerless_campaigns <> 0
+                   or ownerless_contacts <> 0
                    or cross_owner_memberships <> 0
                    or cross_owner_sends <> 0
                    or suppression_owner_mismatches <> 0 then
                     raise exception
                         'campaign contact ownership repair failed: '
-                        'ownerless %, memberships %, sends %, suppressions %',
+                        'campaigns %, contacts %, memberships %, sends %, '
+                        'suppressions %',
+                        ownerless_campaigns,
                         ownerless_contacts,
                         cross_owner_memberships,
                         cross_owner_sends,
@@ -469,13 +508,23 @@ def _validate_repair(bind: sa.Connection) -> None:
 def upgrade() -> None:
     bind = op.get_bind()
     ownerless_before = _ownerless_count(bind)
-    LOGGER.info("Campaign contact ownership dry run: %s ownerless contacts.", ownerless_before)
+    ownerless_campaigns_before = _ownerless_campaign_count(bind)
+    LOGGER.info(
+        "Campaign ownership dry run: %s ownerless campaigns, %s ownerless contacts.",
+        ownerless_campaigns_before,
+        ownerless_before,
+    )
 
+    repaired_campaigns = 0
     repaired_count = 0
     conflict_count = 0
     owner_id: UUID | None = None
-    if ownerless_before:
+    if ownerless_before or ownerless_campaigns_before:
         owner_id = _resolve_legacy_owner_id(bind)
+        repaired_campaigns = _repair_campaigns(bind, owner_id)
+    if ownerless_before:
+        if owner_id is None:  # pragma: no cover - guarded by the branch above
+            raise RuntimeError("Legacy contact owner resolution unexpectedly failed.")
         repaired_count, conflict_count = _repair_contacts(bind, owner_id)
 
     suppression_repairs = _repair_suppression_owners(bind)
@@ -502,9 +551,11 @@ def upgrade() -> None:
     )
 
     LOGGER.info(
-        "Campaign contact ownership repaired: owner=%s, input=%s, mapped=%s, "
-        "matching-email conflicts=%s, suppression owners=%s, remaining=%s.",
+        "Campaign ownership repaired: owner=%s, campaigns=%s, contacts=%s, "
+        "mapped=%s, matching-email conflicts=%s, suppression owners=%s, "
+        "remaining contacts=%s.",
         owner_id,
+        repaired_campaigns,
         ownerless_before,
         repaired_count,
         conflict_count,
