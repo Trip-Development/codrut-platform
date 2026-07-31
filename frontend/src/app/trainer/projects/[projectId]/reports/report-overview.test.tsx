@@ -23,6 +23,8 @@ const aggregate = {
   assessment_cycle_id: "cycle-2",
   total_assigned: 12,
   total_completed: 10,
+  reportable_scored_count: 10,
+  reportable_pending_score_count: 0,
   completion_rate: 83,
   lencioni_count: 3,
   driver_count: 3,
@@ -34,9 +36,9 @@ const aggregate = {
   boss_360_averages: [],
   icare_target_summaries: [],
   icare_cohorts: [
-    { cohort: "direct_team", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 78 }] },
-    { cohort: "leadership_peers", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 72 }] },
-    { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 68 }] },
+    { cohort: "direct_team", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 78 }], score_unit: "percent", scale_min: 0, scale_max: 100, score_scale_compatible: true, unavailable_reason: null },
+    { cohort: "leadership_peers", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 72 }], score_unit: "percent", scale_min: 0, scale_max: 100, score_scale_compatible: true, unavailable_reason: null },
+    { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 68 }], score_unit: "percent", scale_min: 0, scale_max: 100, score_scale_compatible: true, unavailable_reason: null },
   ],
   driver_rank_summary: {
     total_people: 3,
@@ -106,9 +108,11 @@ describe("project report overview", () => {
     );
     expect(screen.queryByText("Răspunsuri individuale iCARE")).toBeNull();
     expect(screen.queryByRole("link", { name: "Detalii" })).toBeNull();
+    expect(screen.queryByText("01")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Rezultatul întregului proiect" }).closest("[data-slot='card']")).toBeTruthy();
   });
 
-  it("blocks rendering when hierarchy names are ambiguous", async () => {
+  it("keeps project-wide results visible and limits only hierarchy-dependent views", async () => {
     data.getProjectAssessmentCyclesData.mockResolvedValue({ assessmentCycles: [] });
     data.getProjectReportWorkspaceData.mockResolvedValue({
       aggregate: {
@@ -127,8 +131,71 @@ describe("project report overview", () => {
     });
     render(ui);
 
-    expect(screen.getByText("Structura echipelor are nume ambigue.")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "TA Drivers" })).toBeNull();
+    expect(screen.getByText("Rezultatele pe echipe sunt momentan indisponibile")).toBeTruthy();
+    expect(screen.getByText("Perspectivele bazate pe organigramă sunt momentan indisponibile")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Rezultatul întregului proiect" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "TA Drivers" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Vezi rezultatele pe echipe/ })).toBeNull();
+  });
+
+  it("renders iCARE grades on their declared scale", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        icare_cohorts: aggregate.icare_cohorts.map((summary) => ({
+          ...summary,
+          averages: [{ id: "clarity", label: "Claritate", avg: 4.2 }],
+          score_unit: "grade_1_to_5",
+          scale_min: 1,
+          scale_max: 5,
+        })),
+      },
+      assignments: [],
+      participants: [],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getAllByText("4.2 din 5")).toHaveLength(3);
+    expect(screen.queryByText("4.2%")).toBeNull();
+  });
+
+  it("explains pending scores without hiding available results", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        reportable_pending_score_count: 1,
+        icare_cohorts: aggregate.icare_cohorts.map((summary) => summary.cohort === "direct_team"
+          ? {
+              ...summary,
+              response_count: 0,
+              averages: [],
+              score_scale_compatible: false,
+              unavailable_reason: "incompatible_score_scales",
+            }
+          : summary),
+      },
+      assignments: [],
+      participants: [],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText("Unele rezultate sunt încă în curs de procesare")).toBeTruthy();
+    expect(screen.getByText(/Un răspuns trimis nu are încă un rezultat disponibil/)).toBeTruthy();
+    expect(screen.getByText(/Aceste răspunsuri folosesc scale diferite/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "TA Drivers" })).toBeTruthy();
   });
 
   it("defaults reports to the latest non-draft cycle", async () => {

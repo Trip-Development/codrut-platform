@@ -61,18 +61,20 @@ export default async function LeadershipMemberReportPage({
         </p>
       </header>
 
-      <section aria-labelledby="pcm-profile-title" className="grid gap-5 rounded-lg bg-foreground px-6 py-6 text-background md:grid-cols-[minmax(12rem,0.7fr)_minmax(0,1.3fr)] md:items-center">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-background/55">Profil personal</p>
-          <h2 id="pcm-profile-title" className="mt-2 text-2xl font-semibold">PCM</h2>
-        </div>
-        <div className="flex flex-wrap gap-x-12 gap-y-5">
-          <PcmValue label="Bază" value={report.pcm_base} />
-          <PcmValue label="Fază" value={report.pcm_phase} />
-        </div>
-      </section>
+      <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
+        <section aria-labelledby="pcm-profile-title" className="grid gap-5 md:grid-cols-[minmax(12rem,0.7fr)_minmax(0,1.3fr)] md:items-center">
+          <div>
+            <p className="text-sm font-semibold text-burgundy">Profil personal</p>
+            <h2 id="pcm-profile-title" className="mt-1 text-2xl font-semibold tracking-tight text-foreground">PCM</h2>
+          </div>
+          <div className="flex flex-wrap gap-x-12 gap-y-5">
+            <PcmValue label="Bază" value={report.pcm_base} />
+            <PcmValue label="Fază" value={report.pcm_phase} />
+          </div>
+        </section>
+      </Card>
 
-      <OrderedSection number="01" title="Lencioni" description="Rezultatul echipei coordonate de această persoană.">
+      <ResultSection id="lencioni" title="Lencioni" description="Rezultatul echipei coordonate de această persoană.">
         <Card className="px-5 [--card-spacing:--spacing(5)]">
           <AverageList
             count={report.lencioni_count}
@@ -81,12 +83,13 @@ export default async function LeadershipMemberReportPage({
             empty="Nu există încă un rezultat Lencioni pentru această echipă."
           />
         </Card>
-      </OrderedSection>
+      </ResultSection>
 
-      <OrderedSection number="02" title="iCARE" description="Cele trei perspective sunt păstrate separat.">
+      <ResultSection id="icare" title="iCARE" description="Cele trei perspective sunt păstrate separat.">
         <div className="grid gap-5 lg:grid-cols-3">
           {(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = report.icare_cohorts.find((item) => item.cohort === cohort);
+            const scale = icareScale(summary);
             return (
               <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
                 <article>
@@ -98,10 +101,10 @@ export default async function LeadershipMemberReportPage({
                     <AverageList
                       count={summary?.response_count ?? 0}
                       items={summary?.averages ?? []}
-                      max={100}
-                      suffix="%"
+                      max={scale.max}
+                      suffix={scale.suffix}
                       showCount={false}
-                      empty="Nu există încă rezultate pentru această perspectivă."
+                      empty={icareEmptyCopy(summary)}
                     />
                   </div>
                 </article>
@@ -109,9 +112,9 @@ export default async function LeadershipMemberReportPage({
             );
           })}
         </div>
-      </OrderedSection>
+      </ResultSection>
 
-      <OrderedSection number="03" title="TA Drivers" description="Rezultatul individual, fără comparații sau detalii de echipă.">
+      <ResultSection id="ta-drivers" title="TA Drivers" description="Rezultatul individual, fără comparații sau detalii de echipă.">
         <Card className="px-5 [--card-spacing:--spacing(5)]">
           <AverageList
             count={report.driver_count}
@@ -123,7 +126,7 @@ export default async function LeadershipMemberReportPage({
             empty="Nu există încă un rezultat TA pentru această persoană."
           />
         </Card>
-      </OrderedSection>
+      </ResultSection>
     </div>
   );
 }
@@ -132,11 +135,11 @@ function PcmValue({ label, value }: { label: string; value?: string | null }) {
   const profile = getPcmProfile(value);
   return (
     <div>
-      <p className="text-xs font-semibold text-background/55">{label}</p>
-      <p className="mt-1.5 flex items-center gap-2 text-xl font-semibold">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1.5 flex items-center gap-2 text-xl font-semibold text-foreground">
         <span
           aria-hidden="true"
-          className="size-3 rounded-full ring-2 ring-background/15"
+          className="size-3 rounded-full ring-2 ring-border"
           style={{ backgroundColor: profile?.color ?? "var(--muted-foreground)" }}
         />
         {value ? formatPcmLabel(value) : "În așteptare"}
@@ -145,29 +148,44 @@ function PcmValue({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function OrderedSection({
-  number,
+function ResultSection({
+  id,
   title,
   description,
   children,
 }: {
-  number: string;
+  id: string;
   title: string;
   description: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-6 border-b border-border pb-10" aria-labelledby={`member-result-${number}`}>
-      <div className="grid gap-2 md:grid-cols-[3rem_minmax(0,1fr)]">
-        <p className="font-mono text-sm font-semibold text-burgundy">{number}</p>
-        <div>
-          <h2 id={`member-result-${number}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-        </div>
+    <section className="grid gap-6 border-b border-border pb-10" aria-labelledby={`member-result-${id}`}>
+      <div>
+        <h2 id={`member-result-${id}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
-      <div className="md:pl-12">{children}</div>
+      <div>{children}</div>
     </section>
   );
+}
+
+function icareScale(summary?: IcareCohortSummary): { max: number; suffix: string } {
+  if (summary?.score_unit === "percent") {
+    return { max: summary.scale_max ?? 100, suffix: "%" };
+  }
+  if (summary?.score_unit === "grade_1_to_5") {
+    const max = summary.scale_max ?? 5;
+    return { max, suffix: ` din ${max}` };
+  }
+  return { max: summary?.scale_max ?? 100, suffix: "" };
+}
+
+function icareEmptyCopy(summary?: IcareCohortSummary): string {
+  if (summary?.unavailable_reason === "incompatible_score_scales" || summary?.score_scale_compatible === false) {
+    return "Aceste răspunsuri folosesc scale diferite și nu pot fi afișate împreună. Selectează o singură evaluare.";
+  }
+  return "Nu există încă un rezultat iCARE scorabil pentru această perspectivă.";
 }
 
 function AverageList({

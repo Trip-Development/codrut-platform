@@ -407,6 +407,8 @@ describe("ParticipantResultsPanel", () => {
     expect(lencioniHeading.compareDocumentPosition(icareHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(icareHeading.compareDocumentPosition(taHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("feedback_signal_a")).toBeNull();
+    expect(screen.queryByText("01")).toBeNull();
+    expect(lencioniHeading.parentElement?.querySelector("[data-slot='card']")).toBeTruthy();
   });
 
   it("shows anonymous received iCARE averages after the privacy threshold", () => {
@@ -435,8 +437,8 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("2")).toBeDefined();
     expect(screen.getByText("Claritate")).toBeDefined();
     expect(screen.getByText("Sprijin")).toBeDefined();
-    expect(screen.getByText("92")).toBeDefined();
-    expect(screen.getByText("68")).toBeDefined();
+    expect(screen.getByText("92%")).toBeDefined();
+    expect(screen.getByText("68%")).toBeDefined();
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemax")).toBe("100");
     expect(
       screen.getByRole("meter", { name: "Scor Claritate" }).firstElementChild?.getAttribute("style"),
@@ -468,7 +470,7 @@ describe("ParticipantResultsPanel", () => {
 
     expect(screen.getByText("Cum te vede echipa ta")).toBeDefined();
     expect(screen.getByText("1")).toBeDefined();
-    expect(screen.getByText(/Mai avem nevoie de cel puțin 1 răspuns/)).toBeDefined();
+    expect(screen.getByText(/Pentru confidențialitate, mai avem nevoie de cel puțin 1 răspuns/)).toBeDefined();
     expect(screen.queryByText("Claritate")).toBeNull();
     expect(screen.queryByText("4.5")).toBeNull();
   });
@@ -486,6 +488,8 @@ describe("ParticipantResultsPanel", () => {
           questionnaireTitle: "Feedback iCARE",
           completedCount: 3,
           minimumCompleted: 2,
+          scoreUnit: "grade_1_to_5",
+          scaleMin: 1,
           scaleMax: 5,
           visible: true,
           overallAverage: 4.2,
@@ -496,7 +500,7 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("4.5")).toBeDefined();
+    expect(screen.getByText("4.5 din 5")).toBeDefined();
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemax")).toBe("5");
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuenow")).toBe("4.5");
     expect(
@@ -547,7 +551,7 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("4.1")).toBeDefined();
+    expect(screen.getByText("4.1 din 5")).toBeDefined();
     expect(screen.queryByText(/Mai avem nevoie de cel puțin/)).toBeNull();
   });
 
@@ -592,8 +596,9 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Răspunsurile au fost trimise" })).toBeDefined();
-    expect(screen.getByText("Rezultatele vor apărea aici când sunt disponibile.")).toBeDefined();
+    expect(screen.getByText("Răspunsurile au fost trimise")).toBeDefined();
+    expect(screen.getByText("Rezultatele vor apărea aici după procesare.")).toBeDefined();
+    expect(screen.getByText("Răspunsurile au fost trimise").closest("[data-slot='empty']")).toBeTruthy();
     expect(screen.queryByText("Disponibile acum")).toBeNull();
   });
 
@@ -608,6 +613,7 @@ describe("ParticipantResultsPanel", () => {
 
     expect(screen.getByRole("heading", { name: "1 rezultat" })).toBeDefined();
     expect(screen.getByText("Profil personal")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "PCM" }).closest("[data-slot='card']")).toBeTruthy();
     expect(screen.queryByText("Nu există rezultate disponibile încă")).toBeNull();
   });
 });

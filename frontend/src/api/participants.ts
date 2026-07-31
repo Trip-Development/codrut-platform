@@ -108,6 +108,8 @@ export type ParticipantReceivedFeedbackSummary = {
   cohort: "direct_team" | "leadership_peers";
   completedCount: number;
   minimumCompleted: number;
+  scoreUnit?: string | null;
+  scaleMin?: number | null;
   scaleMax?: number;
   visible: boolean;
   overallAverage?: number | null;
@@ -213,6 +215,8 @@ type BackendParticipantReceivedFeedbackSummary = {
   cohort?: "direct_team" | "leadership_peers";
   completed_count: number;
   minimum_completed: number;
+  score_unit?: string | null;
+  scale_min?: number | null;
   scale_max?: number;
   visible: boolean;
   overall_average?: number | null;
@@ -397,6 +401,8 @@ function mapParticipantReceivedFeedback(
     cohort: feedback.cohort ?? "leadership_peers",
     completedCount: feedback.completed_count,
     minimumCompleted: feedback.minimum_completed,
+    scoreUnit: feedback.score_unit,
+    scaleMin: feedback.scale_min,
     scaleMax: feedback.scale_max,
     visible: feedback.visible,
     overallAverage: feedback.overall_average,

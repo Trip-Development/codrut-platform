@@ -452,6 +452,8 @@ export type CompanyReportAggregate = {
   assessment_cycle_id?: string | null;
   total_assigned: number;
   total_completed: number;
+  reportable_scored_count: number;
+  reportable_pending_score_count: number;
   completion_rate: number;
   lencioni_count: number;
   driver_count: number;
@@ -488,6 +490,11 @@ export type IcareCohortSummary = {
   cohort: "direct_team" | "leadership_peers" | "self";
   response_count: number;
   averages: ReportAverage[];
+  score_unit: string | null;
+  scale_min: number | null;
+  scale_max: number | null;
+  score_scale_compatible: boolean;
+  unavailable_reason: "incompatible_score_scales" | null;
 };
 
 export type DriverRankSummary = {
@@ -967,6 +974,8 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
   return {
     total_assigned: assignments.length,
     total_completed: completedAssignments.length,
+    reportable_scored_count: lencioniCount + driverCount + boss360Count,
+    reportable_pending_score_count: 0,
     completion_rate: assignments.length > 0 ? Math.round((completedAssignments.length / assignments.length) * 100) : 0,
     lencioni_count: lencioniCount,
     driver_count: driverCount,

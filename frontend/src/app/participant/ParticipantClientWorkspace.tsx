@@ -12,7 +12,9 @@ import type {
   ParticipantWorkspaceProject,
   ParticipantWorkspaceResult,
 } from "@/api/participants";
+import { EmptyState } from "@/components/presentation/empty-state";
 import { AppShell } from "@/components/shell/app-shell";
+import { Card } from "@/components/ui/card";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { cn } from "@/utils/cn";
 import { ParticipantCompletionState } from "./ParticipantCompletionState";
@@ -306,20 +308,22 @@ export function ParticipantResultsPanel({
           currentPhase={pcmPhase}
         />
       ) : pcmBase || pcmPhase ? (
-        <section className="grid gap-7 rounded-lg bg-foreground px-6 py-6 text-background md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] md:items-center md:px-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-background/55">Profil personal</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight">PCM</h2>
-          </div>
-          <div className="flex flex-wrap gap-x-12 gap-y-5">
-            {pcmBase ? <PcmResultChip label="Bază PCM" value={pcmBase} /> : null}
-            {pcmPhase ? <PcmResultChip label="Fază PCM" value={pcmPhase} /> : null}
-          </div>
-        </section>
+        <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
+          <section className="grid gap-7 md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] md:items-center" aria-labelledby="participant-pcm-title">
+            <div>
+              <p className="text-sm font-semibold text-burgundy">Profil personal</p>
+              <h2 id="participant-pcm-title" className="mt-1 text-2xl font-semibold tracking-tight text-foreground">PCM</h2>
+            </div>
+            <div className="flex flex-wrap gap-x-12 gap-y-5">
+              {pcmBase ? <PcmResultChip label="Bază PCM" value={pcmBase} /> : null}
+              {pcmPhase ? <PcmResultChip label="Fază PCM" value={pcmPhase} /> : null}
+            </div>
+          </section>
+        </Card>
       ) : null}
 
       <ParticipantResultSection
-        number="01"
+        id="lencioni"
         title="Lencioni"
         empty="Rezultatul Lencioni apare aici după ce evaluarea este finalizată."
         hasContent={lencioniResults.length > 0}
@@ -328,7 +332,7 @@ export function ParticipantResultsPanel({
       </ParticipantResultSection>
 
       <ParticipantResultSection
-        number="02"
+        id="icare"
         title="iCARE"
         empty="Rezultatele iCARE apar aici când perspectivele sunt disponibile."
         hasContent={feedbackGroups.length > 0 || icareResults.length > 0}
@@ -343,7 +347,7 @@ export function ParticipantResultsPanel({
       </ParticipantResultSection>
 
       <ParticipantResultSection
-        number="03"
+        id="ta-drivers"
         title="TA Drivers"
         empty="Rezultatul TA Drivers apare aici după finalizare."
         hasContent={driverResults.length > 0}
@@ -352,50 +356,45 @@ export function ParticipantResultsPanel({
       </ParticipantResultSection>
 
       {otherResults.length > 0 ? (
-        <section className="divide-y divide-border border-y border-border" aria-label="Alte rezultate">
-          {otherResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
-        </section>
+        <Card asChild className="gap-0 divide-y divide-border py-0">
+          <section aria-label="Alte rezultate">
+            {otherResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
+          </section>
+        </Card>
       ) : null}
 
       {availableResultCount === 0 && feedbackGroups.length === 0 ? (
-        <div className="border-y border-border py-8">
-          <h3 className="text-base font-semibold text-foreground">
-            {allTasksComplete && hasTasks ? "Răspunsurile au fost trimise" : "Nu există rezultate disponibile încă"}
-          </h3>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            {allTasksComplete && hasTasks
-              ? "Rezultatele vor apărea aici când sunt disponibile."
-              : "Finalizează chestionarele eligibile pentru a vedea rezultatele."}
-          </p>
-        </div>
+        <EmptyState
+          title={allTasksComplete && hasTasks ? "Răspunsurile au fost trimise" : "Nu există rezultate disponibile încă"}
+          description={allTasksComplete && hasTasks
+            ? "Rezultatele vor apărea aici după procesare."
+            : "Finalizează chestionarele eligibile pentru a vedea rezultatele."}
+        />
       ) : null}
     </section>
   );
 }
 
 function ParticipantResultSection({
-  number,
+  id,
   title,
   empty,
   hasContent,
   children,
 }: {
-  number: string;
+  id: string;
   title: string;
   empty: string;
   hasContent: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section aria-labelledby={`participant-result-${number}`}>
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-xs font-semibold text-burgundy">{number}</span>
-        <h2 id={`participant-result-${number}`} className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
-      </div>
+    <section aria-labelledby={`participant-result-${id}`}>
+      <h2 id={`participant-result-${id}`} className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
       {hasContent ? (
-        <div className="mt-4 divide-y divide-border border-y border-border">{children}</div>
+        <Card className="mt-4 gap-0 divide-y divide-border py-0">{children}</Card>
       ) : (
-        <p className="mt-4 border-y border-border py-6 text-sm text-muted-foreground">{empty}</p>
+        <EmptyState className="mt-4" title={`Niciun rezultat ${title} disponibil`} description={empty} />
       )}
     </section>
   );
@@ -427,13 +426,15 @@ function PcmComparison({
   currentPhase?: string | null;
 }) {
   return (
-    <section className="border-y border-border py-6" aria-labelledby="pcm-comparison-title">
-      <h2 id="pcm-comparison-title" className="text-xl font-semibold tracking-tight text-foreground">Profil PCM</h2>
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <PcmCycleValues label={baselineLabel} base={baselineBase} phase={baselinePhase} tone="baseline" />
-        <PcmCycleValues label={currentLabel} base={currentBase} phase={currentPhase} tone="current" />
-      </div>
-    </section>
+    <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
+      <section aria-labelledby="pcm-comparison-title">
+        <h2 id="pcm-comparison-title" className="text-xl font-semibold tracking-tight text-foreground">Profil PCM</h2>
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <PcmCycleValues label={baselineLabel} base={baselineBase} phase={baselinePhase} tone="baseline" />
+          <PcmCycleValues label={currentLabel} base={currentBase} phase={currentPhase} tone="current" />
+        </div>
+      </section>
+    </Card>
   );
 }
 
@@ -479,12 +480,13 @@ function PcmInlineValue({ label, value }: { label: string; value?: string | null
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
   const visible = feedback.visible;
   const scaleMax = receivedFeedbackScaleMax(feedback);
+  const scoreSuffix = receivedFeedbackScoreSuffix(feedback, scaleMax);
   const cohortTitle = feedback.cohort === "direct_team"
     ? "Cum te vede echipa ta"
     : "Cum te văd colegii din leadership";
 
   return (
-    <article className="border-t border-border pt-6">
+    <article className="px-5 py-6">
       <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <h3 className="text-xl font-semibold tracking-tight text-foreground">{cohortTitle}</h3>
@@ -498,12 +500,12 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
         </div>
         <div className="flex gap-10">
           <FeedbackMetric label="Feedbackuri" value={String(feedback.completedCount)} />
-          <FeedbackMetric label="Medie" value={visible ? formatScore(feedback.overallAverage ?? 0) : "N/A"} />
+          <FeedbackMetric label="Medie" value={visible ? `${formatScore(feedback.overallAverage ?? 0)}${scoreSuffix}` : "N/A"} />
         </div>
       </div>
 
       {visible && feedback.dimensions.length > 0 ? (
-        <div className="mt-6 divide-y divide-border border-y border-border">
+        <div className="mt-6 divide-y divide-border border-t border-border">
           {feedback.dimensions.map((dimension) => (
             <ScoreRow
               key={dimension.id}
@@ -513,14 +515,15 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
                 score: dimension.averageScore,
               }}
               max={scaleMax}
+              suffix={scoreSuffix}
               showSignal={false}
             />
           ))}
         </div>
       ) : !visible ? (
         <p className="mt-6 border-l-2 border-burgundy bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
-          Mai avem nevoie de cel puțin {Math.max(feedback.minimumCompleted - feedback.completedCount, 1)}{" "}
-          {feedback.minimumCompleted - feedback.completedCount === 1 ? "răspuns" : "răspunsuri"} înainte să putem afișa media acestui grup.
+          Pentru confidențialitate, mai avem nevoie de cel puțin {Math.max(feedback.minimumCompleted - feedback.completedCount, 1)}{" "}
+          {feedback.minimumCompleted - feedback.completedCount === 1 ? "răspuns" : "răspunsuri"} înainte să putem afișa media grupului.
         </p>
       ) : null}
     </article>
@@ -528,6 +531,8 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
 }
 
 function receivedFeedbackScaleMax(feedback: ParticipantReceivedFeedbackSummary): number {
+  if (feedback.scoreUnit === "percent") return feedback.scaleMax ?? 100;
+  if (feedback.scoreUnit === "grade_1_to_5") return feedback.scaleMax ?? 5;
   const observedMaximum = Math.max(
     feedback.overallAverage ?? 0,
     ...feedback.dimensions.map((dimension) => dimension.averageScore),
@@ -538,14 +543,22 @@ function receivedFeedbackScaleMax(feedback: ParticipantReceivedFeedbackSummary):
   return Math.max(5, feedback.scaleMax ?? 0, observedMaximum);
 }
 
+function receivedFeedbackScoreSuffix(feedback: ParticipantReceivedFeedbackSummary, scaleMax: number): string {
+  if (feedback.scoreUnit === "percent") return "%";
+  if (feedback.scoreUnit === "grade_1_to_5") return ` din ${scaleMax}`;
+  return Math.max(feedback.overallAverage ?? 0, ...feedback.dimensions.map((dimension) => dimension.averageScore)) > 5
+    ? "%"
+    : ` din ${scaleMax}`;
+}
+
 function PcmResultChip({ label, value }: { label: string; value?: string | null }) {
   const profile = getPcmProfile(value);
   const color = profile?.color ?? "var(--border)";
   return (
     <div>
-      <p className="text-xs font-semibold text-background/55">{label}</p>
-      <p className="mt-1.5 flex items-center gap-2.5 text-xl font-semibold text-background">
-        <span className="size-3 rounded-full ring-2 ring-background/15" style={{ backgroundColor: color }} />
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1.5 flex items-center gap-2.5 text-xl font-semibold text-foreground">
+        <span className="size-3 rounded-full ring-2 ring-border" style={{ backgroundColor: color }} />
         {formatPcmLabel(value)}
       </p>
     </div>
@@ -561,7 +574,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
   const highlightedItems = items.filter((item) => kind === "drivers" && item.score > 50 && item.explanation);
 
   return (
-    <article className="py-8">
+    <article className="px-5 py-6">
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-burgundy">{resultKindLabel(kind)}</p>
@@ -600,7 +613,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
         </section>
       ) : null}
 
-      <div className="mt-7 divide-y divide-border border-y border-border" aria-label="Scoruri detaliate">
+      <div className="mt-7 divide-y divide-border border-t border-border" aria-label="Scoruri detaliate">
         {items.map((item) => (
           <ScoreRow key={item.id} item={item} max={max} showSignal={kind === "drivers" && item.score > 50} />
         ))}
@@ -635,10 +648,12 @@ function GuidanceBlock({ item }: { item: ScoreItem }) {
 function ScoreRow({
   item,
   max,
+  suffix = "",
   showSignal,
 }: {
   item: ScoreItem;
   max: number;
+  suffix?: string;
   showSignal: boolean;
 }) {
   const width = Math.max(0, Math.min(100, (item.score / max) * 100));
@@ -676,7 +691,7 @@ function ScoreRow({
         </div>
       </div>
       <div className="md:text-right">
-        <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">{formatScore(item.score)}</p>
+        <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">{formatScore(item.score)}{suffix}</p>
         <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">scor</p>
       </div>
     </div>
