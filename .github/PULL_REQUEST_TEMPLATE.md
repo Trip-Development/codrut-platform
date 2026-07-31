@@ -2,11 +2,9 @@
 
 <!-- Describe the change and why it is needed. -->
 
-## Tracking
+## Related work
 
-<!-- Use `Closes #123` for completed work or `Refs #123` for related work. Tiny administrative/documentation work may use the `admin-exempt` label. -->
-
-Refs #
+<!-- Optional issue, Festival task, or design note. -->
 
 ## Verification
 

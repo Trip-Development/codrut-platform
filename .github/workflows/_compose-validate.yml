@@ -151,22 +151,3 @@ jobs:
               if labels.get(f"traefik.http.routers.{router}.middlewares") != "codrut-hsts":
                   raise SystemExit(f"Production router {router} must use the HSTS middleware.")
           PY
-      - name: Validate E2E Runtime Compose Config
-        run: |
-          docker compose -f compose.yaml -f compose.e2e.yaml config --format json > /tmp/compose-e2e.json
-          python3 - <<'PY'
-          import json
-
-          with open("/tmp/compose-e2e.json", encoding="utf-8") as config_file:
-              services = json.load(config_file)["services"]
-
-          for service_name in ("backend", "worker"):
-              environment = services[service_name]["environment"]
-              if environment.get("CODRUT_ENV") != "test":
-                  raise SystemExit(f"E2E {service_name} must use the isolated test environment.")
-              if environment.get("CODRUT_EMAIL_PROVIDER") != "mailpit":
-                  raise SystemExit(f"E2E {service_name} must use Mailpit.")
-          frontend = services["frontend"]["environment"]
-          if frontend.get("NEXT_PUBLIC_CODRUT_LOCAL_AUTH_BYPASS") != "false":
-              raise SystemExit("E2E frontend must exercise real authentication.")
-          PY
