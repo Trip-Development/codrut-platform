@@ -129,19 +129,19 @@ stop_monitor() {
 }
 trap stop_monitor EXIT INT TERM
 
-if ! docker compose "${COMPOSE_ARGS[@]}" run --rm \
+if ! docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --user "$(id -u):$(id -g)" \
   -v "$LOAD_PROOF_DIR:$CONTAINER_PROOF_DIR" \
   backend python -m codrut.tools.launch_load_proof seed \
   --run-id "$RUN_ID" \
   --manifest "$MANIFEST" \
-  --ack "$ACK"; then
+  --ack "$ACK" </dev/null; then
   stop_monitor
   trap - EXIT INT TERM
   exit 1
 fi
 
-docker compose "${COMPOSE_ARGS[@]}" run --rm \
+docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --user "$(id -u):$(id -g)" \
   -v "$LOAD_PROOF_DIR:$CONTAINER_PROOF_DIR" \
   backend python -m codrut.tools.launch_load_proof run \
@@ -152,7 +152,7 @@ docker compose "${COMPOSE_ARGS[@]}" run --rm \
   --base-url https://codrut.andreivacaru.ro \
   --ramp-seconds 60 \
   --read-interval-seconds 5 \
-  --ack "$ACK"
+  --ack "$ACK" </dev/null
 
 RUN_STATUS=$?
 stop_monitor
@@ -167,13 +167,13 @@ After collecting the report, clean only that exact run while maintenance and
 Brevo sandbox remain enabled:
 
 ```bash
-docker compose "${COMPOSE_ARGS[@]}" run --rm \
+docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --user "$(id -u):$(id -g)" \
   -v "$LOAD_PROOF_DIR:$CONTAINER_PROOF_DIR" \
   backend python -m codrut.tools.launch_load_proof cleanup \
   --run-id "$RUN_ID" \
   --manifest "$MANIFEST" \
-  --ack "$ACK"
+  --ack "$ACK" </dev/null
 CLEANUP_STATUS=$?
 
 test "$RUN_STATUS" -eq 0 && test "$CLEANUP_STATUS" -eq 0

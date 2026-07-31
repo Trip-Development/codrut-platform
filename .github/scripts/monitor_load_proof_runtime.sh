@@ -32,11 +32,7 @@ capture() {
         BEGIN { count = 0 }
         {
           line = tolower($0)
-          if (
-            line ~ /database_pool_timeout/ ||
-            line ~ /queuepool limit/ ||
-            line ~ /connection pool timed out/
-          ) {
+          if (line ~ /database_pool_timeout/ || line ~ /queuepool limit/ || line ~ /connection pool timed out/) {
             count += 1
           }
         }
@@ -53,11 +49,7 @@ capture() {
         BEGIN { count = 0 }
         {
           line = tolower($0)
-          if (
-            line ~ /database_pool_timeout/ ||
-            line ~ /queuepool limit/ ||
-            line ~ /connection pool timed out/
-          ) {
+          if (line ~ /database_pool_timeout/ || line ~ /queuepool limit/ || line ~ /connection pool timed out/) {
             count += 1
           }
         }
