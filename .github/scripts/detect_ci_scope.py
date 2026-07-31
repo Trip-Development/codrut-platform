@@ -51,7 +51,6 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
                 "compose.backup.yaml",
                 "compose.yaml",
                 "compose.dev.yaml",
-                "compose.e2e.yaml",
                 "compose.prod.yaml",
                 ".env.example",
             ),
@@ -81,18 +80,10 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
             "docs/api/openapi.json",
             "frontend/src/api/generated/schema.d.ts",
         }
-        or path.startswith("backend/src/codrut/")
-        for path in normalized
-    )
-
-    e2e = any(
-        path.startswith("frontend/e2e/")
-        or path
-        in {
-            "compose.e2e.yaml",
-            "frontend/playwright.config.ts",
-            ".github/workflows/_e2e-playwright.yml",
-        }
+        or path == "backend/src/codrut/main.py"
+        or path.startswith("backend/src/codrut/api/")
+        or path.startswith("backend/src/codrut/contracts/")
+        or path.endswith(("/router.py", "/schemas.py"))
         for path in normalized
     )
 
@@ -103,7 +94,6 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
         "automation": automation,
         "database": database,
         "contract": contract,
-        "e2e": e2e,
     }
 
 
