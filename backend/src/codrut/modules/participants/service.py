@@ -521,11 +521,9 @@ class ParticipantWorkspaceService:
             for dimension_id in policy.get("dimension_ids", [])
             if isinstance(dimension_id, str) and dimension_id.strip()
         }
-        if publication.source_count < minimum_completed or not allowed_dimensions:
-            return []
         labels = _definition_score_labels(definition)
         questionnaire_title = definition.title
-        scale_max = _definition_scale_max(definition)
+        score_unit, scale_min, scale_max = _definition_score_scale(definition)
 
         completed_assignments = [
             assignment
@@ -557,6 +555,8 @@ class ParticipantWorkspaceService:
                 allowed_dimensions=allowed_dimensions,
                 labels=labels,
                 questionnaire_title=questionnaire_title,
+                score_unit=score_unit,
+                scale_min=scale_min,
                 scale_max=scale_max,
             )
             if summary is not None:
@@ -575,6 +575,8 @@ class ParticipantWorkspaceService:
         allowed_dimensions: set[str],
         labels: dict[str, str],
         questionnaire_title: str,
+        score_unit: str,
+        scale_min: float,
         scale_max: float,
     ) -> ParticipantReceivedFeedbackSummary | None:
         if not completed_assignments:
@@ -585,14 +587,13 @@ class ParticipantWorkspaceService:
         )
         scoring_results = list(scoring_result.scalars().all())
         completed_count = len(completed_assignments)
-        if len(scoring_results) != completed_count:
-            return None
+        scoring_unavailable = len(scoring_results) != completed_count
         visible = completed_count >= minimum_completed
 
         dimension_values: dict[str, list[float]] = {}
-        for scoring in scoring_results if visible else []:
+        for scoring in scoring_results if visible and not scoring_unavailable else []:
             for dimension_id, value in scoring.scores.items():
-                if allowed_dimensions and dimension_id not in allowed_dimensions:
+                if dimension_id not in allowed_dimensions:
                     continue
                 score = _extract_numeric_score(value)
                 if score is None:
@@ -614,6 +615,13 @@ class ParticipantWorkspaceService:
             )
             for dimension_id, values in visible_dimension_values.items()
         ]
+        unavailable_reason = None
+        if scoring_unavailable:
+            unavailable_reason = "scoring_unavailable"
+        elif not visible:
+            unavailable_reason = "privacy_threshold"
+        elif not dimensions:
+            unavailable_reason = "no_eligible_dimensions"
         return ParticipantReceivedFeedbackSummary(
             project_id=project_id,
             project_name=project_name,
@@ -624,8 +632,11 @@ class ParticipantWorkspaceService:
             cohort=cohort,  # type: ignore[arg-type]
             completed_count=completed_count,
             minimum_completed=minimum_completed,
+            score_unit=score_unit,
+            scale_min=scale_min,
             scale_max=scale_max,
             visible=visible and bool(dimensions),
+            unavailable_reason=unavailable_reason,  # type: ignore[arg-type]
             overall_average=(
                 round(sum(visible_scores) / len(visible_scores), 1) if visible_scores else None
             ),
@@ -695,12 +706,12 @@ class ParticipantWorkspaceService:
                 assignment
                 for assignment in assignments
                 if assignment.respondent_profile_id in direct_report_ids
+                and assignment.respondent_profile_id not in hierarchy.leadership_ids
             ],
             "leadership_peers": [
                 assignment
                 for assignment in assignments
                 if assignment.respondent_profile_id in hierarchy.leadership_ids
-                and assignment.respondent_profile_id not in direct_report_ids
                 and profile.id in hierarchy.leadership_ids
                 and assignment.respondent_profile_id != profile.id
             ],
@@ -1644,10 +1655,19 @@ def _definition_score_feedback(
     return feedback
 
 
-def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
+def _definition_score_scale(
+    definition: QuestionnaireDefinition,
+) -> tuple[str, float, float]:
     explicit = definition.feedback_policy.get("scale_max")
     if isinstance(explicit, (int, float)) and not isinstance(explicit, bool) and explicit > 0:
-        return float(explicit)
+        explicit_min = definition.feedback_policy.get("scale_min", 0)
+        minimum = (
+            float(explicit_min)
+            if isinstance(explicit_min, (int, float)) and not isinstance(explicit_min, bool)
+            else 0.0
+        )
+        unit = definition.feedback_policy.get("score_unit", "score")
+        return str(unit), minimum, float(explicit)
 
     schemas = (definition.schema, (definition.private_config or {}).get("schema"))
     for schema in schemas:
@@ -1657,22 +1677,26 @@ def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
         if not isinstance(scoring, dict):
             continue
         if scoring.get("method") == "average_statement_scores_by_section":
-            if scoring.get("score_unit") != "grade_1_to_5":
-                return 100.0
+            score_unit = str(scoring.get("score_unit", "percent"))
+            if score_unit != "grade_1_to_5":
+                return score_unit, 0.0, 100.0
+            scale_min = scoring.get("scale_min", 1)
             scale_max = scoring.get("scale_max")
             if (
-                isinstance(scale_max, (int, float))
+                isinstance(scale_min, (int, float))
+                and not isinstance(scale_min, bool)
+                and isinstance(scale_max, (int, float))
                 and not isinstance(scale_max, bool)
-                and scale_max > 0
+                and scale_max > scale_min
             ):
-                return float(scale_max)
+                return score_unit, float(scale_min), float(scale_max)
         normalize_to = scoring.get("normalize_to")
         if (
             isinstance(normalize_to, (int, float))
             and not isinstance(normalize_to, bool)
             and normalize_to > 0
         ):
-            return float(normalize_to)
+            return "score", 0.0, float(normalize_to)
 
     numeric_values: list[float] = []
     for schema in schemas:
@@ -1697,7 +1721,11 @@ def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
                         value = option.get("value") if isinstance(option, dict) else None
                         if isinstance(value, (int, float)) and not isinstance(value, bool):
                             numeric_values.append(float(value))
-    return max(numeric_values, default=5.0)
+    return "score", 0.0, max(numeric_values, default=5.0)
+
+
+def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
+    return _definition_score_scale(definition)[2]
 
 
 def _prettify_score_key(value: str) -> str:

@@ -14,6 +14,8 @@ from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
+    TeamMembershipRole,
+    TeamType,
 )
 from codrut.modules.companies.models import (
     Company,
@@ -51,6 +53,47 @@ class FakeScoringRepository:
     async def delete_by_assignment(self, assignment_id: uuid.UUID) -> None:
         if assignment_id in self.results:
             del self.results[assignment_id]
+
+
+@pytest.mark.asyncio
+async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
+    functional_team_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                all=lambda: [
+                    (
+                        leadership_team_id,
+                        TeamType.leadership,
+                        TeamMembershipRole.member,
+                    ),
+                    (
+                        functional_team_id,
+                        TeamType.functional,
+                        TeamMembershipRole.leader,
+                    ),
+                ]
+            )
+        )
+    )
+    service = ScoringService(session)  # type: ignore[arg-type]
+
+    functional = await service._resolve_member_lencioni_team_id(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        [],
+        prefer_leadership=False,
+    )
+    top_leader = await service._resolve_member_lencioni_team_id(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        [],
+        prefer_leadership=True,
+    )
+
+    assert functional == functional_team_id
+    assert top_leader == leadership_team_id
 
 
 @pytest.mark.asyncio
@@ -831,6 +874,10 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
 
             assert aggregate.total_assigned == 5
             assert aggregate.total_completed == 5
+            assert aggregate.reportable_scored_count == 4
+            assert aggregate.reportable_pending_score_count == 0
+            assert aggregate.reportable_failed_score_count == 0
+            assert aggregate.reportable_orphaned_score_count == 1
             assert aggregate.completion_rate == 100
             assert aggregate.lencioni_count == 2
             assert aggregate.driver_count == 1
@@ -1392,6 +1439,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
 
             team_by_id = {team.id: team for team in aggregate.team_lenses}
             assert team_by_id["leadership"].member_count == 2
+            assert team_by_id[f"manager:{ceo.id}"].member_count == 2
             manager_team = next(
                 team for team in aggregate.team_lenses if team.name == "Echipa Bogdan Manager"
             )

@@ -5,8 +5,12 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from codrut.modules.assignments.models import AssignmentStatus, AssignmentTargetType
+from codrut.modules.assignments.models import (
+    AssignmentStatus,
+    AssignmentTargetType,
+)
 from codrut.modules.companies.hierarchy import HierarchyIssue
+from codrut.modules.forms.models import SubmissionProcessingStatus
 from codrut.modules.scoring.schemas import (
     DriverRankSummaryResponse,
     ReportDistributionResponse,
@@ -26,19 +30,22 @@ from codrut.modules.scoring.service import (
     _format_pcm_label,
     _get_pcm_color,
     _interpretation_from_rules,
+    _leadership_ids_for_report,
+    _leadership_member_lencioni_summary,
     _non_empty_string,
     _pcm_profile_key,
     _prettify_score_key,
     _private_definition_schema,
     _report_dimensions,
     _report_hierarchy_issue,
+    _reportable_score_availability,
     _select_latest_completed_driver_rows,
     _valid_interpretation_rules,
 )
 
 
 def _definition(private_schema: object) -> SimpleNamespace:
-    return SimpleNamespace(private_config={"schema": private_schema})
+    return SimpleNamespace(private_config={"schema": private_schema}, schema={})
 
 
 def _result(scores: dict) -> SimpleNamespace:
@@ -54,6 +61,7 @@ def _assignment(
     target_type: AssignmentTargetType = AssignmentTargetType.person,
     assignment_id: uuid.UUID | None = None,
     created_at: datetime | None = None,
+    target_team_id: uuid.UUID | None = None,
 ) -> SimpleNamespace:
     respondent_id = respondent_profile_id or uuid.uuid4()
     return SimpleNamespace(
@@ -63,6 +71,7 @@ def _assignment(
         status=status,
         respondent_profile_id=respondent_id,
         target_person_id=target_person_id or uuid.uuid4(),
+        target_team_id=target_team_id,
         target_type=target_type,
     )
 
@@ -235,6 +244,136 @@ def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
     )
 
 
+def test_reportable_score_availability_distinguishes_queue_failure_and_orphan() -> None:
+    scored = _assignment("lencioni")
+    pending = _assignment("icare")
+    failed = _assignment("distress_drivers")
+    orphaned = _assignment("lencioni")
+    response_derived = _assignment("pcm_base")
+    rows = [
+        (scored, _result({"signal": 1}), None),
+        (pending, None, None),
+        (failed, None, None),
+        (orphaned, None, None),
+        (response_derived, None, None),
+    ]
+    jobs = [
+        SimpleNamespace(
+            assignment_id=pending.id,
+            status=SubmissionProcessingStatus.processing,
+        ),
+        SimpleNamespace(
+            assignment_id=failed.id,
+            status=SubmissionProcessingStatus.failed,
+        ),
+    ]
+
+    availability = _reportable_score_availability(rows, jobs)  # type: ignore[arg-type]
+
+    assert availability.scored == 1
+    assert availability.pending == 1
+    assert availability.failed == 1
+    assert availability.orphaned == 1
+
+
+def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    member_one_id = uuid.uuid4()
+    member_two_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    rows = [
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=chief_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=leadership_team_id,
+            ),
+            _result({"trust": 2}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=leader_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=leadership_team_id,
+            ),
+            _result({"trust": 4}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=member_one_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=functional_team_id,
+            ),
+            _result({"trust": 8}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=member_two_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=functional_team_id,
+            ),
+            _result({"trust": 10}),
+            None,
+        ),
+    ]
+
+    chief = _leadership_member_lencioni_summary(  # type: ignore[arg-type]
+        rows,
+        target_team_id=leadership_team_id,
+    )
+    leader = _leadership_member_lencioni_summary(  # type: ignore[arg-type]
+        rows,
+        target_team_id=functional_team_id,
+    )
+
+    assert chief.lencioni_count == 2
+    assert chief.lencioni_averages[0].avg == 3
+    assert leader.lencioni_count == 2
+    assert leader.lencioni_averages[0].avg == 9
+
+
+def test_ambiguous_hierarchy_keeps_explicit_leaders_for_individual_reports() -> None:
+    explicit_leader_id = uuid.uuid4()
+    inferred_leader_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=explicit_leader_id,
+            full_name="Explicit Leader",
+            reports_to_name="Alex Dup",
+            role_group="manager",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=inferred_leader_id,
+            full_name="Inferred Leader",
+            reports_to_name=None,
+            role_group=None,
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    ambiguous_hierarchy = SimpleNamespace(
+        ambiguous_name="Alex Dup",
+        leadership_ids=set(),
+    )
+
+    assert _leadership_ids_for_report(ambiguous_hierarchy, participants) == {
+        explicit_leader_id
+    }
+
+
 def test_driver_feedback_comes_from_the_pinned_definition() -> None:
     rows = [
         (
@@ -361,6 +500,214 @@ def test_icare_cohorts_keep_single_trainer_responses_visible_and_separate() -> N
         ("self", 1),
     ]
     assert [item.averages[0].avg for item in cohorts] == [90, 80, 70]
+
+
+def test_icare_leadership_direct_report_is_a_peer_before_direct_team() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=chief_id,
+            full_name="Ana Chief",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=leader_id,
+            full_name="Bogdan Leader",
+            reports_to_name="Ana Chief",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    definition = _definition(
+        {
+            "scoring": {
+                "method": "average_statement_scores_by_section",
+                "score_unit": "grade_1_to_5",
+                "scale_min": 1,
+                "scale_max": 5,
+            }
+        }
+    )
+    rows = [
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=leader_id,
+                target_person_id=chief_id,
+            ),
+            _result({"clarity": 4}),
+            definition,
+        )
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+    by_cohort = {item.cohort: item for item in cohorts}
+
+    assert by_cohort["direct_team"].response_count == 0
+    assert by_cohort["leadership_peers"].response_count == 1
+    assert by_cohort["leadership_peers"].score_unit == "grade_1_to_5"
+    assert by_cohort["leadership_peers"].scale_min == 1
+    assert by_cohort["leadership_peers"].scale_max == 5
+
+
+def test_icare_cohorts_suppress_incompatible_score_scales() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    member_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=chief_id,
+            full_name="Ana Chief",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=leader_id,
+            full_name="Bogdan Leader",
+            reports_to_name="Ana Chief",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=member_id,
+            full_name="Carmen Member",
+            reports_to_name="Ana Chief",
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    percent_definition = _definition(
+        {
+            "scoring": {
+                "method": "average_statement_scores_by_section",
+                "score_unit": "percent",
+                "scale_min": 1,
+                "scale_max": 4,
+            }
+        }
+    )
+    grade_definition = _definition(
+        {
+            "scoring": {
+                "method": "average_statement_scores_by_section",
+                "score_unit": "grade_1_to_5",
+                "scale_min": 1,
+                "scale_max": 5,
+            }
+        }
+    )
+    rows = [
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=leader_id,
+                target_person_id=chief_id,
+            ),
+            _result({"clarity": 75}),
+            percent_definition,
+        ),
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=member_id,
+                target_person_id=chief_id,
+            ),
+            _result({"clarity": 4}),
+            grade_definition,
+        ),
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+
+    assert all(item.response_count == 0 and item.averages == [] for item in cohorts)
+    assert all(item.score_scale_compatible is False for item in cohorts)
+    assert all(item.unavailable_reason == "incompatible_score_scales" for item in cohorts)
+
+
+def test_icare_hierarchy_ambiguity_preserves_explicit_leadership_self_result() -> None:
+    leader_id = uuid.uuid4()
+    duplicate_one_id = uuid.uuid4()
+    duplicate_two_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=leader_id,
+            full_name="Ana Leader",
+            reports_to_name="Alex Dup",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=duplicate_one_id,
+            full_name="Alex Dup",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=duplicate_two_id,
+            full_name="Alex Dup",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    rows = [
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=leader_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 80}),
+            _definition(
+                {
+                    "scoring": {
+                        "method": "average_statement_scores_by_section",
+                        "score_unit": "percent",
+                        "scale_min": 1,
+                        "scale_max": 4,
+                    }
+                }
+            ),
+        ),
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=duplicate_one_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 60}),
+            None,
+        ),
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+    by_cohort = {item.cohort: item for item in cohorts}
+
+    assert by_cohort["self"].response_count == 1
+    assert by_cohort["self"].averages[0].avg == 80
+    assert by_cohort["direct_team"].response_count == 0
+    assert by_cohort["leadership_peers"].response_count == 0
 
 
 def test_icare_cohorts_exclude_non_leadership_targets() -> None:
@@ -544,7 +891,7 @@ def test_driver_rank_summary_top_two_tie_only_counts_first_tie_break() -> None:
     assert ranking.second_rank_tie_breaks == 0
 
 
-def test_latest_driver_row_uses_assignment_id_and_aligns_average_population() -> None:
+def test_driver_average_keeps_all_rows_while_pies_use_latest_person_result() -> None:
     participant_id = uuid.uuid4()
     same_created_at = datetime(2026, 7, 30, tzinfo=UTC)
     lower_id = uuid.UUID(int=1)
@@ -573,16 +920,14 @@ def test_latest_driver_row_uses_assignment_id_and_aligns_average_population() ->
     ]
 
     selection, ranking = _driver_selection_and_ranking(rows)
-    summary = _build_score_summary(  # type: ignore[arg-type]
-        rows,
-        rankable_driver_rows=selection.rankable_rows,
-    )
+    summary = _build_score_summary(rows)  # type: ignore[arg-type]
 
     assert [row[0].id for row in selection.rankable_rows] == [higher_id]
-    assert summary.driver_count == ranking.total_people == 1
+    assert summary.driver_count == 2
+    assert ranking.total_people == 1
     assert {item.id: item.avg for item in summary.driver_averages} == {
-        "be_perfect": 90,
-        "hurry_up": 30,
+        "be_perfect": 47.5,
+        "hurry_up": 62.5,
         "try_hard": 10,
     }
     assert [item.id for item in ranking.first_rank] == ["be_perfect"]
@@ -617,16 +962,14 @@ def test_latest_valid_driver_row_ignores_a_newer_malformed_result() -> None:
     ]
 
     selection, ranking = _driver_selection_and_ranking(rows)
-    summary = _build_score_summary(  # type: ignore[arg-type]
-        rows,
-        rankable_driver_rows=selection.rankable_rows,
-    )
+    summary = _build_score_summary(rows)  # type: ignore[arg-type]
 
     assert [row[0].id for row in selection.rankable_rows] == [older_id]
     assert selection.insufficient_driver_score_count == 0
-    assert summary.driver_count == ranking.total_people == 1
+    assert summary.driver_count == 2
+    assert ranking.total_people == 1
     assert {item.id: item.avg for item in summary.driver_averages} == {
-        "be_perfect": 80,
+        "be_perfect": 89.5,
         "hurry_up": 60,
         "try_hard": 20,
     }
@@ -660,6 +1003,7 @@ def test_driver_exclusion_counts_people_without_any_valid_result_once() -> None:
     selection, ranking = _driver_selection_and_ranking(rows)
 
     assert selection.rankable_rows == ()
+    assert len(selection.average_rows) == 1
     assert selection.insufficient_driver_score_count == 1
     assert ranking.total_people == 0
     assert ranking.insufficient_driver_score_count == 1
@@ -680,13 +1024,10 @@ def test_driver_rank_summary_reports_nonnumeric_and_one_driver_exclusions() -> N
     ]
 
     selection, ranking = _driver_selection_and_ranking(rows)
-    summary = _build_score_summary(  # type: ignore[arg-type]
-        rows,
-        rankable_driver_rows=selection.rankable_rows,
-    )
+    summary = _build_score_summary(rows)  # type: ignore[arg-type]
 
-    assert summary.driver_count == 0
-    assert summary.driver_averages == []
+    assert summary.driver_count == 1
+    assert {item.id: item.avg for item in summary.driver_averages} == {"be_perfect": 50}
     assert ranking.total_people == 0
     assert ranking.first_rank == []
     assert ranking.second_rank == []

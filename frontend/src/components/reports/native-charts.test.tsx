@@ -137,5 +137,8 @@ describe("native report charts", () => {
 
     rerender(<ScaledBar value={12} max={0} />);
     expect((container.querySelector(".bg-burgundy") as HTMLElement).style.width).toBe("0%");
+
+    rerender(<ScaledBar value={3} min={1} max={5} />);
+    expect((container.querySelector(".bg-burgundy") as HTMLElement).style.width).toBe("50%");
   });
 });

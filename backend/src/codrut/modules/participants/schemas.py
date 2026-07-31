@@ -42,8 +42,15 @@ class ParticipantReceivedFeedbackSummary(BaseModel):
     cohort: Literal["direct_team", "leadership_peers"]
     completed_count: int
     minimum_completed: int
+    score_unit: str
+    scale_min: float
     scale_max: float
     visible: bool
+    unavailable_reason: Literal[
+        "privacy_threshold",
+        "no_eligible_dimensions",
+        "scoring_unavailable",
+    ] | None = None
     overall_average: float | None = None
     dimensions: list[ParticipantReceivedFeedbackDimension] = Field(default_factory=list)
 
