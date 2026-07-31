@@ -47,7 +47,10 @@ def derive_definition_score_scale(
 
     feedback_policy = getattr(definition, "feedback_policy", None)
     if isinstance(feedback_policy, dict):
-        explicit = _explicit_scale(feedback_policy)
+        explicit = _explicit_scale(
+            feedback_policy,
+            default_unit=_inferred_output_unit(schemas) or "score",
+        )
         if explicit is not None:
             return DefinitionScoreScale(scale=explicit, compatible=True)
 
@@ -93,6 +96,24 @@ def derive_definition_score_scale(
             )
 
     return DefinitionScoreScale(scale=None, compatible=False)
+
+
+def _inferred_output_unit(schemas: Collection[object]) -> str | None:
+    for schema in schemas:
+        if not isinstance(schema, dict):
+            continue
+        scoring = schema.get("scoring")
+        if not isinstance(scoring, dict):
+            continue
+        explicit_unit = _non_empty_string(scoring.get("score_unit"))
+        if explicit_unit is not None:
+            return explicit_unit
+        if scoring.get("method") == "average_statement_scores_by_section":
+            return "percent"
+        normalize_to = _numeric(scoring.get("normalize_to"))
+        if normalize_to == 100:
+            return "percent"
+    return None
 
 
 def _sum_by_group_scale(
