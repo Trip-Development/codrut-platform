@@ -570,6 +570,34 @@ class ScoringService:
         if assessment_cycle_id is None and prefer_leadership and leadership_ids:
             return MemberLencioniTeamResolution(leadership_ids[0])
         if assessment_cycle_id is not None and leadership_ids and functional_leader_ids:
+            leadership_snapshot_leaders = (
+                await self.session.execute(
+                    select(
+                        AssessmentCycleTeamMembership.team_id,
+                        AssessmentCycleTeamMembership.participant_profile_id,
+                    )
+                    .join(Team, Team.id == AssessmentCycleTeamMembership.team_id)
+                    .where(
+                        AssessmentCycleTeamMembership.assessment_cycle_id
+                        == assessment_cycle_id,
+                        AssessmentCycleTeamMembership.team_id.in_(leadership_ids),
+                        Team.type == TeamType.leadership,
+                        AssessmentCycleTeamMembership.role == TeamMembershipRole.leader,
+                    )
+                )
+            ).all()
+            if leadership_snapshot_leaders:
+                if len(leadership_snapshot_leaders) == 1 and len(functional_leader_ids) == 1:
+                    return MemberLencioniTeamResolution(functional_leader_ids[0])
+                return MemberLencioniTeamResolution(
+                    team_id=None,
+                    ambiguous=True,
+                    ambiguity_message=(
+                        "Ciclul conține mai multe roluri de lider și nu putem stabili "
+                        "sigur echipa Lencioni."
+                    ),
+                )
+
             # Older cycle snapshots did not record the top leader. Current hierarchy
             # is intentionally not consulted: only scored targets already scoped to
             # this cycle can resolve a single unambiguous historical team.
