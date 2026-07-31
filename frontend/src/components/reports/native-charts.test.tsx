@@ -9,7 +9,7 @@ describe("native report charts", () => {
   it("renders an accessible empty donut state", () => {
     render(<DonutChart title="Distribuție PCM" data={[{ id: "empty", label: "Fără date", value: 0 }]} />);
 
-    expect(screen.getByRole("img", { name: "Distribuție PCM" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Distribuție PCM. Nu există date" })).toBeTruthy();
     expect(screen.getByText("Nu există date")).toBeTruthy();
     expect(screen.getByText("0")).toBeTruthy();
   });
@@ -29,6 +29,9 @@ describe("native report charts", () => {
     expect(screen.getByText("3")).toBeTruthy();
     expect(screen.getByText("Gânditor")).toBeTruthy();
     expect(screen.getByText("Perseverent")).toBeTruthy();
+    expect(screen.getByText("2 participanți · 67%")).toBeTruthy();
+    expect(screen.getByText("1 participant · 33%")).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Profil echipă.*Gânditor: 67%.*Perseverent: 33%/ })).toBeTruthy();
     expect(screen.queryByText("Absent")).toBeNull();
     expect(container.querySelectorAll("svg circle")).toHaveLength(3);
     expect((screen.getByText("Gânditor").previousElementSibling as HTMLElement).style.backgroundColor).toBe("rgb(10, 20, 30)");

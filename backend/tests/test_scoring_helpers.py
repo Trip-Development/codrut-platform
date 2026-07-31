@@ -300,6 +300,66 @@ def test_percent_feedback_policy_without_unit_matches_normalized_driver_scale() 
     assert summary.driver_averages[0].avg == 60
 
 
+def test_driver_averages_normalize_each_pinned_definition_to_percent() -> None:
+    eighty_point = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "normalize_to": 80,
+                "drivers": [{"id": "hurry_up", "label": "Grăbește-te"}],
+            }
+        }
+    )
+    hundred_point = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "normalize_to": 100,
+                "drivers": [{"id": "hurry_up", "label": "Grăbește-te"}],
+            }
+        }
+    )
+
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        [
+            (
+                _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+                _result({"hurry_up": 40}),
+                eighty_point,
+            ),
+            (
+                _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+                _result({"hurry_up": 75}),
+                hundred_point,
+            ),
+        ]
+    )
+
+    assert summary.driver_count == 2
+    assert summary.driver_scale.score_unit == "percent"
+    assert summary.driver_scale.scale_min == 0
+    assert summary.driver_scale.scale_max == 100
+    assert summary.driver_scale.score_scale_compatible is True
+    assert summary.driver_averages[0].avg == 62.5
+
+
+def test_driver_averages_stay_unavailable_when_a_pinned_scale_is_unknown() -> None:
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        [
+            (
+                _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+                _result({"hurry_up": 40}),
+                None,
+            )
+        ]
+    )
+
+    assert summary.driver_count == 1
+    assert summary.driver_averages == []
+    assert summary.driver_scale.score_scale_compatible is False
+    assert summary.driver_scale.unavailable_reason == "incompatible_score_scales"
+
+
 def test_score_summary_marks_unknown_only_scales_unavailable() -> None:
     summary = _build_score_summary(  # type: ignore[arg-type]
         [(_assignment("lencioni"), _result({"trust": 7}), None)]
