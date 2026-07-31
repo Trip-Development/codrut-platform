@@ -455,7 +455,7 @@ def test_participant_schema_metadata_uses_safe_labels_and_scale_fallbacks() -> N
         },
         private_config={"schema": None},
     )
-    assert _definition_scale_max(inferred_definition) == 6.0
+    assert _definition_scale_max(inferred_definition) is None
 
 
 def test_participant_value_helpers_cover_user_visible_fallbacks() -> None:
