@@ -60,6 +60,7 @@ describe("CycleComparisonControls", () => {
 
     fireEvent.click(screen.getByRole("combobox", { name: "Evaluare" }));
 
+    expect(screen.getByRole("option", { name: "Toate evaluările" })).toBeDefined();
     expect(screen.getByRole("option", { name: "Evaluare inițială · Finalizată" })).toBeDefined();
     expect(screen.getByRole("option", { name: "Reevaluare · În desfășurare" })).toBeDefined();
     expect(screen.getByRole("option", { name: "Evaluare viitoare · În pregătire" })).toBeDefined();
@@ -69,5 +70,38 @@ describe("CycleComparisonControls", () => {
     expect(navigation.push).toHaveBeenCalledWith(
       "/trainer/projects/project-1/reports?cycle=cycle-1&source=menu",
     );
+  });
+
+  it("returns to the all-evaluations view and clears comparison parameters", () => {
+    render(
+      <CycleComparisonControls
+        cycles={[
+          cycle("cycle-1", "Evaluare inițială", 1, "closed"),
+          cycle("cycle-2", "Reevaluare", 2, "active"),
+        ]}
+        cycleId="cycle-2"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Evaluare" }));
+    fireEvent.click(screen.getByRole("option", { name: "Toate evaluările" }));
+
+    expect(navigation.push).toHaveBeenCalledWith(
+      "/trainer/projects/project-1/reports?source=menu",
+    );
+  });
+
+  it("shows all evaluations as the default selection", () => {
+    render(
+      <CycleComparisonControls
+        cycles={[
+          cycle("cycle-1", "Evaluare inițială", 1, "closed"),
+          cycle("cycle-2", "Reevaluare", 2, "active"),
+        ]}
+        cycleId={null}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "Evaluare" }).textContent).toContain("Toate evaluările");
   });
 });

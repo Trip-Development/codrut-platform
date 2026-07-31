@@ -172,3 +172,42 @@ export async function getProjectReportWorkspaceData(
     assessmentCycles,
   };
 }
+
+export async function getProjectReportHistoryData(
+  projectId: string,
+  requestOptions: ApiRequestOptions,
+  requestedCycleId?: string | null,
+) {
+  const project = await getRequiredProject(projectId, requestOptions);
+  const [participants, assessmentCycles] = await Promise.all([
+    getProjectParticipants(project.company_id, project.id, requestOptions),
+    getAssessmentCycles(project.company_id, project.id, requestOptions),
+  ]);
+  const reportCycles = [...assessmentCycles]
+    .filter((cycle) => cycle.status !== "draft")
+    .sort((left, right) => left.sequence - right.sequence);
+  const selectedCycle = reportCycles.find((cycle) => cycle.id === requestedCycleId) ?? null;
+  const reportScopes = selectedCycle
+    ? [selectedCycle]
+    : reportCycles.length > 0
+      ? reportCycles
+      : [null];
+  const aggregates = await Promise.all(
+    reportScopes.map((cycle) =>
+      getCompanyReportAggregate(project.company_id, requestOptions, {
+        projectId: project.id,
+        assessmentCycleId: cycle?.id,
+      }),
+    ),
+  );
+
+  return {
+    project,
+    participants,
+    assessmentCycles,
+    cycleReports: aggregates.map((aggregate, index) => ({
+      cycle: reportScopes[index],
+      aggregate,
+    })),
+  };
+}
