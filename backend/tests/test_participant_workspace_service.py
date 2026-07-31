@@ -1171,21 +1171,32 @@ async def test_participant_workspace_received_feedback_hides_scores_below_thresh
             session.add_all([user, company])
             await session.flush()
 
+            director = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Director",
+                email=f"director-{uuid.uuid4().hex[:8]}@example.com",
+                role_group="leadership",
+            )
             profile = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 user_id=user.id,
                 full_name="Ana Participant",
                 email=user.email,
+                role_group="leadership",
+                reports_to_name=director.full_name,
             )
             reviewer = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 full_name="Reviewer One",
                 email=f"reviewer-one-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name=profile.full_name,
+                role_group="individual",
             )
             feedback_definition = _feedback_definition()
-            session.add_all([profile, reviewer, feedback_definition])
+            session.add_all([director, profile, reviewer, feedback_definition])
             await session.flush()
 
             received_assignment = QuestionnaireAssignment(
@@ -1211,10 +1222,21 @@ async def test_participant_workspace_received_feedback_hides_scores_below_thresh
             )
             await session.flush()
 
+            await ResultPublicationService(session).reconcile_assignment(
+                received_assignment.id
+            )
+
             summary = await ParticipantWorkspaceService(session).get_workspace_summary(user.id)
 
-            assert summary.received_feedback is None
-            assert summary.received_feedback_groups == []
+            assert summary.received_feedback is not None
+            assert summary.received_feedback.cohort == "direct_team"
+            assert summary.received_feedback.completed_count == 1
+            assert summary.received_feedback.minimum_completed == 2
+            assert summary.received_feedback.visible is False
+            assert summary.received_feedback.unavailable_reason == "privacy_threshold"
+            assert summary.received_feedback.overall_average is None
+            assert summary.received_feedback.dimensions == []
+            assert summary.received_feedback_groups == [summary.received_feedback]
 
             await session.rollback()
     finally:

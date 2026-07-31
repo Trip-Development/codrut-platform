@@ -202,13 +202,16 @@ class ResultPublicationService:
             minimum_completed=minimum_completed,
             target_completed=target_completed,
         )
+        # Keep a count-only publication below the privacy threshold. The
+        # participant workspace enforces the minimum independently per cohort
+        # before exposing any numeric dimension.
         dimension_ids = _dimension_ids(feedback_policy)
-        visible_dimensions = {
+        available_dimensions = {
             dimension
             for dimension in dimension_ids
-            if sum(dimension in result.scores for _candidate, result in completed_rows) >= required
+            if any(dimension in result.scores for _candidate, result in completed_rows)
         }
-        if len(completed_rows) < required or not visible_dimensions:
+        if not completed_rows or not available_dimensions:
             await self._revoke(publication_key)
             return
 
@@ -225,7 +228,7 @@ class ResultPublicationService:
                 "minimum_completed": minimum_completed,
                 "target_completed": target_completed,
                 "required_completed": required,
-                "dimension_ids": sorted(visible_dimensions),
+                "dimension_ids": sorted(available_dimensions),
                 "source_assignment_ids": sorted(
                     str(candidate.id) for candidate, _result in completed_rows
                 ),
