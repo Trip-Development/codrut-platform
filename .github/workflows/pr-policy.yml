@@ -25,10 +25,6 @@ jobs:
       - name: Checkout policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Test repository policy scripts
-        working-directory: .github/scripts
-        run: python3 -m unittest discover -p 'test_*.py'
-
       - name: Validate title and work tracking reference
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

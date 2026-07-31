@@ -9,6 +9,8 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+      - labeled
+      - unlabeled
 
 permissions:
   contents: read
@@ -28,6 +30,9 @@ jobs:
       backend: ${{ steps.scope.outputs.backend }}
       frontend: ${{ steps.scope.outputs.frontend }}
       infra: ${{ steps.scope.outputs.infra }}
+      automation: ${{ steps.scope.outputs.automation }}
+      database: ${{ steps.scope.outputs.database }}
+      contract: ${{ steps.scope.outputs.contract }}
       e2e: ${{ steps.scope.outputs.e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -43,28 +48,50 @@ jobs:
   backend:
     name: backend / checks
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     uses: ./.github/workflows/_backend-checks.yml
+    with:
+      check_database: ${{ needs.changes.outputs.database == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+      check_api_contract: ${{ needs.changes.outputs.contract == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
 
   frontend:
     name: frontend / checks
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     uses: ./.github/workflows/_frontend-checks.yml
 
   e2e:
     name: end-to-end / representative
     needs: changes
-    if: needs.changes.outputs.e2e == 'true'
+    if: needs.changes.outputs.e2e == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:e2e') || contains(github.event.pull_request.labels.*.name, 'ci:full')
     uses: ./.github/workflows/_e2e-playwright.yml
 
   infra:
     name: infra / compose-config
     needs: changes
-    if: needs.changes.outputs.infra == 'true'
+    if: needs.changes.outputs.infra == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:full')
     uses: ./.github/workflows/_compose-validate.yml
     with:
       mode: both
+
+  automation:
+    name: automation / checks
+    needs: changes
+    if: needs.changes.outputs.automation == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Test workflow helpers
+        working-directory: .github/scripts
+        run: python3 -m unittest discover -p 'test_*.py'
+      - name: Parse shell helpers
+        run: bash -n .github/scripts/*.sh
+      - name: Parse workflow YAML
+        run: >-
+          ruby -e 'require "yaml";
+          Dir[".github/workflows/*.{yml,yaml}"].each {
+          |path| YAML.parse_file(path) }'
 
   required:
     name: app-ci / required
@@ -77,6 +104,7 @@ jobs:
       - frontend
       - e2e
       - infra
+      - automation
     steps:
       - name: Verify affected checks
         shell: bash
@@ -90,6 +118,10 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           INFRA_REQUIRED: ${{ needs.changes.outputs.infra }}
           INFRA_RESULT: ${{ needs.infra.result }}
+          AUTOMATION_REQUIRED: ${{ needs.changes.outputs.automation }}
+          AUTOMATION_RESULT: ${{ needs.automation.result }}
+          FULL_REQUIRED: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+          E2E_LABEL_REQUIRED: ${{ contains(github.event.pull_request.labels.*.name, 'ci:e2e') }}
         run: |
           set -euo pipefail
 
@@ -113,7 +145,18 @@ jobs:
             fi
           }
 
+          if [[ "${FULL_REQUIRED}" == "true" ]]; then
+            BACKEND_REQUIRED=true
+            FRONTEND_REQUIRED=true
+            INFRA_REQUIRED=true
+            AUTOMATION_REQUIRED=true
+            E2E_REQUIRED=true
+          elif [[ "${E2E_LABEL_REQUIRED}" == "true" ]]; then
+            E2E_REQUIRED=true
+          fi
+
           verify_check BACKEND_RESULT "${BACKEND_REQUIRED}" "${BACKEND_RESULT}"
           verify_check FRONTEND_RESULT "${FRONTEND_REQUIRED}" "${FRONTEND_RESULT}"
           verify_check E2E_RESULT "${E2E_REQUIRED}" "${E2E_RESULT}"
           verify_check INFRA_RESULT "${INFRA_REQUIRED}" "${INFRA_RESULT}"
+          verify_check AUTOMATION_RESULT "${AUTOMATION_REQUIRED}" "${AUTOMATION_RESULT}"

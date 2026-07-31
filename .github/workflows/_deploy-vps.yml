@@ -186,13 +186,16 @@ jobs:
             compose.yaml \
             compose.prod.yaml \
             .github/scripts/check_vps_capacity.sh \
+            .github/scripts/capture_codrut_rollback.sh \
+            .github/scripts/assert_codrut_release.sh \
             .github/scripts/monitor_load_proof_runtime.sh \
             .github/scripts/retain_codrut_images.sh \
             "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/"
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
-            "chmod 0755 ${DEPLOY_DIR}/monitor_load_proof_runtime.sh"
+            "chmod 0755 '${DEPLOY_DIR}'/*.sh"
 
-          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cd ${DEPLOY_DIR} && if [ -f .env ]; then awk -F= '/^(FRONTEND_IMAGE|BACKEND_IMAGE)=/ { print }' .env > previous-images.env; else : > previous-images.env; fi"
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+            "cd '${DEPLOY_DIR}' && bash ./capture_codrut_rollback.sh previous-images.env .env.rollback"
           scp -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/previous-images.env" "$RUNNER_TEMP/previous-images.env"
 
           umask 077
@@ -233,20 +236,29 @@ jobs:
           CODRUT_DB_VOLUME_PATH=$DERIVED_DB_VOLUME_PATH
           EOF
           sed -i 's/^          //' "$RUNNER_TEMP/app.env"
-          scp -i ~/.ssh/id_rsa "$RUNNER_TEMP/app.env" "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/.env"
 
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+            "cd '${DEPLOY_DIR}' && bash ./check_vps_capacity.sh preflight / 85 8"
           printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+            "docker pull '${BACKEND_IMAGE}' && docker pull '${FRONTEND_IMAGE}'"
+          scp -i ~/.ssh/id_rsa \
+            "$RUNNER_TEMP/app.env" \
+            "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/.env.next"
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+            "chmod 0600 '${DEPLOY_DIR}/.env.next'"
 
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "DEPLOY_DIR='${DEPLOY_DIR}' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_DIR"
-          compose=(docker compose -f compose.yaml -f compose.prod.yaml)
+          trap 'rm -f .env.next' EXIT
+          compose=(docker compose --env-file .env.next -f compose.yaml -f compose.prod.yaml)
 
-          expected_backend_image="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' .env)"
-          expected_frontend_image="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' .env)"
+          expected_backend_image="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' .env.next)"
+          expected_frontend_image="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' .env.next)"
 
           if [[ -z "$expected_backend_image" || -z "$expected_frontend_image" ]]; then
-            echo "BACKEND_IMAGE and FRONTEND_IMAGE must be present in /opt/codrut-platform/.env."
+            echo "BACKEND_IMAGE and FRONTEND_IMAGE must be present in /opt/codrut-platform/.env.next."
             exit 1
           fi
 
@@ -318,10 +330,10 @@ jobs:
           }
 
           "${compose[@]}" config >/dev/null
-          bash ./check_vps_capacity.sh preflight / 85 8
           pre_migration_revision="$(
             "${compose[@]}" exec -T db sh -lc \
-              'psql -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version"'
+              'psql -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version"' \
+              </dev/null
           )"
           pre_migration_number="${pre_migration_revision%%_*}"
           if [[ ! "$pre_migration_number" =~ ^[0-9]+$ ]] || (( 10#$pre_migration_number < 52 )); then
@@ -330,12 +342,19 @@ jobs:
           fi
           if (( 10#$pre_migration_number == 52 )); then
             "${compose[@]}" exec -T backend python -c \
-              "from codrut.modules.communications.models import EmailSuppression; assert hasattr(EmailSuppression, 'email_fingerprint')"
+              "from codrut.modules.communications.models import EmailSuppression; assert hasattr(EmailSuppression, 'email_fingerprint')" \
+              </dev/null
             echo "Retained rollback backend is fingerprint-aware at 0052."
           fi
-          "${compose[@]}" pull
+          docker image inspect "$expected_backend_image" >/dev/null
+          docker image inspect "$expected_frontend_image" >/dev/null
           "${compose[@]}" run --rm -T backend alembic upgrade head </dev/null
           "${compose[@]}" run --rm -T backend python -m codrut.tools.reconcile_result_publications </dev/null
+
+          mv .env.next .env
+          chmod 0600 .env
+          trap - EXIT
+          compose=(docker compose --env-file .env -f compose.yaml -f compose.prod.yaml)
 
           if docker compose up --help | grep -q -- '--wait'; then
             "${compose[@]}" up -d --force-recreate --no-build --pull never --remove-orphans --wait backend worker frontend
@@ -349,11 +368,16 @@ jobs:
           assert_service_image frontend "$expected_frontend_image"
           assert_service_healthy backend
           assert_service_healthy worker
-          "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=10).read()"
+          "${compose[@]}" exec -T backend python -c \
+            "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=10).read()" \
+            </dev/null
           for service in traefik frontend backend worker db redis; do
             assert_bounded_log_config "$service"
           done
           REMOTE
+
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+            "cd '${DEPLOY_DIR}' && bash ./assert_codrut_release.sh '${BACKEND_IMAGE}' '${FRONTEND_IMAGE}'"
 
           HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/ready"
           for attempt in {1..30}; do
@@ -382,11 +406,13 @@ jobs:
           previous_backend="$(awk -F= '$1 == "BACKEND_IMAGE" { print $2 }' previous-images.env)"
           previous_frontend="$(awk -F= '$1 == "FRONTEND_IMAGE" { print $2 }' previous-images.env)"
 
-          bash ./retain_codrut_images.sh \
+          if ! bash ./retain_codrut_images.sh \
             "$current_backend" \
             "$previous_backend" \
             "$current_frontend" \
-            "$previous_frontend"
+            "$previous_frontend"; then
+            echo "WARNING: deployment is healthy, but image retention needs manual cleanup." >&2
+          fi
           REMOTE
 
           {
@@ -399,5 +425,5 @@ jobs:
             echo ""
             echo "Retention ran only after internal and public readiness. The current and previous Codrut image refs remain available."
             echo ""
-            echo "Rollback: set \`FRONTEND_IMAGE\` and \`BACKEND_IMAGE\` in \`${DEPLOY_DIR}/.env\` to the previous refs above, then run \`docker compose -f compose.yaml -f compose.prod.yaml up -d --wait\` when supported and verify \`${HEALTH_URL}\`."
+            echo "Rollback: copy \`${DEPLOY_DIR}/.env.rollback\` over \`${DEPLOY_DIR}/.env\`, recreate backend/worker/frontend with \`--no-build --pull never\`, and verify \`${HEALTH_URL}\`."
           } >> "$GITHUB_STEP_SUMMARY"
