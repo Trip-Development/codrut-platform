@@ -11,9 +11,11 @@ from codrut.modules.assignments.models import (
     AssessmentCycle,
     AssessmentCycleQuestionnaire,
     AssessmentCycleStatus,
+    AssessmentCycleTeamMembership,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
+    Team,
     TeamMembershipRole,
     TeamType,
 )
@@ -109,6 +111,97 @@ async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
 
     assert functional == functional_team_id
     assert leadership == leadership_team_id
+
+
+@pytest.mark.asyncio
+async def test_historical_cycle_keeps_inactive_snapshot_leader_reportable() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Historical {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Historical leadership",
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Former Leader",
+                email=f"former-{uuid.uuid4().hex[:8]}@example.com",
+                role_group="individual",
+            )
+            membership = ProjectMembership(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                participant_profile_id=participant.id,
+                role_group="leadership",
+                position="Director istoric",
+                active=False,
+            )
+            cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Ciclul istoric",
+                status=AssessmentCycleStatus.closed,
+            )
+            leadership_team = Team(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name=f"Leadership {uuid.uuid4().hex[:8]}",
+                type=TeamType.leadership,
+            )
+            session.add(company)
+            await session.flush()
+            session.add_all([project, participant, leadership_team])
+            await session.flush()
+            session.add_all([membership, cycle])
+            await session.flush()
+            cycle_membership = AssessmentCycleTeamMembership(
+                id=uuid.uuid4(),
+                assessment_cycle_id=cycle.id,
+                team_id=leadership_team.id,
+                participant_profile_id=participant.id,
+                role=TeamMembershipRole.leader,
+            )
+            session.add(cycle_membership)
+            await session.flush()
+
+            service = ScoringService(session)
+            service.company_repository = SimpleNamespace(
+                get_company=AsyncMock(return_value=company),
+                get_project=AsyncMock(return_value=project),
+            )
+            service.repository = SimpleNamespace(
+                list_company_assignment_results_with_definitions=AsyncMock(
+                    return_value=[]
+                ),
+                list_company_pcm_responses=AsyncMock(return_value=[]),
+            )
+
+            aggregate = await service.get_company_report_aggregate(
+                company.id,
+                project.id,
+                cycle.id,
+            )
+            report = await service.get_leadership_member_report(
+                company.id,
+                project.id,
+                participant.id,
+                cycle.id,
+            )
+
+            assert [member.participant_profile_id for member in aggregate.leadership_members] == [
+                participant.id
+            ]
+            assert report.member.participant_profile_id == participant.id
+            assert report.member.position == "Director istoric"
+            assert report.member.role_group == "leadership"
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

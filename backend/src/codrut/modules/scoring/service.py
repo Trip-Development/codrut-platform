@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -217,7 +217,11 @@ class ScoringService:
             project_id,
             assessment_cycle_id,
         )
-        participants = await self._list_report_participants(company_id, project_id)
+        participants = await self._list_report_participants(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
         pcm_values = (
             _pcm_values_from_responses(
                 await self.repository.list_company_pcm_responses(
@@ -371,7 +375,11 @@ class ScoringService:
             assessment_cycle_id,
         )
         assert project_id is not None
-        participants = await self._list_report_participants(company_id, project_id)
+        participants = await self._list_report_participants(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
         participant_by_id = {participant.id: participant for participant in participants}
         hierarchy = build_organization_hierarchy(
             [_hierarchy_participant_from_report(participant) for participant in participants]
@@ -713,7 +721,45 @@ class ScoringService:
         self,
         company_id: UUID,
         project_id: UUID | None,
+        assessment_cycle_id: UUID | None = None,
     ) -> list[ReportParticipant]:
+        if project_id is not None and assessment_cycle_id is not None:
+            rows = (
+                await self.session.execute(
+                    select(ParticipantProfile, ProjectMembership)
+                    .join(
+                        AssessmentCycleTeamMembership,
+                        AssessmentCycleTeamMembership.participant_profile_id
+                        == ParticipantProfile.id,
+                    )
+                    .outerjoin(
+                        ProjectMembership,
+                        and_(
+                            ProjectMembership.company_id == company_id,
+                            ProjectMembership.project_id == project_id,
+                            ProjectMembership.participant_profile_id
+                            == ParticipantProfile.id,
+                        ),
+                    )
+                    .where(
+                        AssessmentCycleTeamMembership.assessment_cycle_id
+                        == assessment_cycle_id,
+                        ParticipantProfile.company_id == company_id,
+                    )
+                    .order_by(ParticipantProfile.full_name)
+                )
+            ).all()
+            participants_by_id: dict[UUID, ReportParticipant] = {}
+            for participant, membership in rows:
+                participants_by_id.setdefault(
+                    participant.id,
+                    (
+                        _report_participant_from_membership(membership, participant)
+                        if membership is not None
+                        else _report_participant_from_profile(participant)
+                    ),
+                )
+            return list(participants_by_id.values())
         if project_id is not None:
             memberships = await self.company_repository.list_project_memberships(
                 company_id,
