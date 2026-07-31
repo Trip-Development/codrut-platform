@@ -13,9 +13,6 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
     Team,
 )
-from codrut.modules.assignments.team_snapshot import (
-    load_assessment_cycle_team_snapshot,
-)
 from codrut.modules.companies.anonymous import allocate_anonymous_name
 from codrut.modules.companies.hierarchy import (
     HierarchyParticipant,

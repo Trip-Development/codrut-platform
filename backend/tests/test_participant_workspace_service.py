@@ -1,7 +1,5 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -16,7 +14,6 @@ from codrut.modules.assignments.models import (
     AssignmentTargetType,
     QuestionnaireAssignment,
     Team,
-    TeamMembershipRole,
     TeamType,
 )
 from codrut.modules.companies.models import (
