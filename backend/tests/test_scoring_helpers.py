@@ -343,6 +343,50 @@ def test_driver_averages_normalize_each_pinned_definition_to_percent() -> None:
     assert summary.driver_averages[0].avg == 62.5
 
 
+def test_driver_averages_infer_historical_statement_scale() -> None:
+    scale = [{"value": value, "label": str(value)} for value in range(11)]
+    historical_definition = _definition(
+        {
+            "sections": [
+                {
+                    "questions": [
+                        {
+                            "id": "driver_set",
+                            "type": "statement_score_set",
+                            "scale": scale,
+                            "statements": [
+                                {
+                                    "id": f"hurry_up_{index}",
+                                    "scoring": {"driver": "hurry_up"},
+                                }
+                                for index in range(10)
+                            ],
+                        }
+                    ]
+                }
+            ],
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "drivers": [{"id": "hurry_up", "label": "Grăbește-te"}],
+            },
+        }
+    )
+
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        [
+            (
+                _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+                _result({"hurry_up": 75}),
+                historical_definition,
+            )
+        ]
+    )
+
+    assert summary.driver_scale.score_scale_compatible is True
+    assert summary.driver_scale.score_unit == "percent"
+    assert summary.driver_averages[0].avg == 75
+
+
 def test_driver_averages_stay_unavailable_when_a_pinned_scale_is_unknown() -> None:
     summary = _build_score_summary(  # type: ignore[arg-type]
         [

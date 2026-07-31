@@ -95,6 +95,16 @@ def derive_definition_score_scale(
                 compatible=True,
             )
 
+        if method == "sum_statement_scores_by_driver":
+            driver_scale = _sum_statement_scores_by_driver_scale(
+                schema,
+                scoring,
+                dimension_ids=dimension_ids,
+                score_unit=score_unit or "score",
+            )
+            if driver_scale is not None:
+                return driver_scale
+
     return DefinitionScoreScale(scale=None, compatible=False)
 
 
@@ -170,6 +180,70 @@ def _sum_by_group_scale(
     if len(ranges) != 1:
         return DefinitionScoreScale(scale=None, compatible=False)
     minimum, maximum = next(iter(ranges))
+    return DefinitionScoreScale(
+        scale=ScoreScale(score_unit, minimum, maximum),
+        compatible=True,
+    )
+
+
+def _sum_statement_scores_by_driver_scale(
+    schema: dict[str, Any],
+    scoring: dict[str, Any],
+    *,
+    dimension_ids: Collection[str] | None,
+    score_unit: str,
+) -> DefinitionScoreScale | None:
+    requested_ids = set(dimension_ids) if dimension_ids is not None else None
+    configured_ids = {
+        driver["id"]
+        for driver in scoring.get("drivers", [])
+        if isinstance(driver, dict) and isinstance(driver.get("id"), str)
+    }
+    target_ids = requested_ids if requested_ids is not None else configured_ids
+    if not target_ids or (requested_ids is not None and not requested_ids <= configured_ids):
+        return None
+
+    totals = {driver_id: [0.0, 0.0] for driver_id in target_ids}
+    seen_ids: set[str] = set()
+    for section in schema.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for question in section.get("questions", []):
+            if not isinstance(question, dict) or question.get("type") != "statement_score_set":
+                continue
+            question_scale = question.get("scale", [])
+            for statement in question.get("statements", []):
+                if not isinstance(statement, dict):
+                    continue
+                statement_scoring = statement.get("scoring")
+                driver_id = (
+                    statement_scoring.get("driver")
+                    if isinstance(statement_scoring, dict)
+                    else None
+                )
+                if driver_id not in target_ids:
+                    continue
+                scale = statement.get("scale") or question_scale
+                values = [
+                    value
+                    for option in scale
+                    if isinstance(option, dict)
+                    and (value := _numeric(option.get("value"))) is not None
+                ]
+                if not values:
+                    return DefinitionScoreScale(scale=None, compatible=False)
+                totals[driver_id][0] += min(values)
+                totals[driver_id][1] += max(values)
+                seen_ids.add(driver_id)
+
+    if seen_ids != target_ids:
+        return DefinitionScoreScale(scale=None, compatible=False)
+    ranges = {tuple(total) for total in totals.values()}
+    if len(ranges) != 1:
+        return DefinitionScoreScale(scale=None, compatible=False)
+    minimum, maximum = next(iter(ranges))
+    if maximum <= minimum:
+        return DefinitionScoreScale(scale=None, compatible=False)
     return DefinitionScoreScale(
         scale=ScoreScale(score_unit, minimum, maximum),
         compatible=True,
