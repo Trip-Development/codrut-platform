@@ -308,9 +308,41 @@ Rollback is manual and image-ref based:
 
 1. Open the failed `VPS Deployment` run summary and copy the previous
    `FRONTEND_IMAGE` and `BACKEND_IMAGE` values.
-2. SSH into the VPS and edit `/opt/codrut-platform/.env` so those two variables
+2. When reverting a database at `0056_email_send_sandbox_scope` to the retained
+   `0052_contact_archive` bridge image, announce maintenance and block
+   participant and trainer mutations. Leave the current worker running until
+   both compatibility counts are zero:
+
+   ```sh
+   cd /opt/codrut-platform
+   docker compose -f compose.yaml -f compose.prod.yaml exec -T db sh -lc '
+     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -tAc "
+       select '\''sandbox_outbox'\'', count(*)
+       from email_sends
+       where sandbox_required
+         and status in ('\''queued'\'', '\''dispatching'\'')
+       union all
+       select '\''submission_jobs'\'', count(*)
+       from submission_processing_jobs
+       where status in ('\''queued'\'', '\''processing'\'');
+     "
+   '
+   ```
+
+   The result must be `0` for both rows. The bridge worker cannot honor
+   per-message sandbox delivery and does not process asynchronous submission
+   jobs. A nonzero count blocks rollback: resolve sandbox work and let
+   submission processing drain under the current image, then rerun the query.
+   Once both counts are zero, stop the current worker to close the race before
+   changing image refs:
+
+   ```sh
+   docker compose -f compose.yaml -f compose.prod.yaml stop worker
+   ```
+
+3. SSH into the VPS and edit `/opt/codrut-platform/.env` so those two variables
    point at the previous image refs.
-3. Validate and restart:
+4. Validate and restart:
 
    ```sh
    cd /opt/codrut-platform
@@ -325,7 +357,7 @@ Rollback is manual and image-ref based:
    docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --no-build --pull never --remove-orphans backend worker frontend
    ```
 
-4. Verify image refs and health:
+5. Verify image refs and health:
 
    ```sh
    docker compose -f compose.yaml -f compose.prod.yaml ps backend worker frontend
@@ -340,7 +372,7 @@ Rollback is manual and image-ref based:
    The backend and worker image refs must match `BACKEND_IMAGE`; the frontend
    image ref must match `FRONTEND_IMAGE`.
 
-5. Before allowing a later deploy to delete older image tags, exercise the
+6. Before allowing a later deploy to delete older image tags, exercise the
    rollback once in the maintenance environment: switch to the recorded
    previous refs, recreate the three app services, verify internal and public
    readiness, then switch back to the candidate and repeat the checks. Confirm

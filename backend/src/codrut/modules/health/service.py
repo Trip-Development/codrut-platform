@@ -16,6 +16,21 @@ from codrut.core.config import Settings, get_settings
 from codrut.core.database import engine
 from codrut.modules.communications.models import EmailSend, EmailSendStatus
 
+_FORWARD_COMPATIBLE_DATABASE_HEADS: dict[str, frozenset[str]] = {
+    # The retained bridge image packages 0052, while the launch release only
+    # adds backward-compatible schema through 0056. Keeping this allowlist
+    # explicit preserves that rollback image while still failing closed for
+    # every unreviewed migration.
+    "0052_contact_archive": frozenset(
+        {
+            "0053_contact_privacy_bridge",
+            "0054_identity_consent_submission",
+            "0055_participant_aliases",
+            "0056_email_send_sandbox_scope",
+        }
+    ),
+}
+
 
 @dataclass(frozen=True)
 class ReadinessCheck:
@@ -30,6 +45,22 @@ def expected_migration_heads() -> frozenset[str]:
     config = Config(str(backend_root / "alembic.ini"))
     config.set_main_option("script_location", str(backend_root / "migrations"))
     return frozenset(ScriptDirectory.from_config(config).get_heads())
+
+
+def migration_heads_are_compatible(
+    expected_heads: frozenset[str],
+    database_heads: frozenset[str],
+) -> bool:
+    if len(expected_heads) != 1 or len(database_heads) != 1:
+        return False
+    if database_heads == expected_heads:
+        return True
+    expected_head = next(iter(expected_heads))
+    database_head = next(iter(database_heads))
+    return database_head in _FORWARD_COMPATIBLE_DATABASE_HEADS.get(
+        expected_head,
+        frozenset(),
+    )
 
 
 async def check_database(settings: Settings | None = None) -> ReadinessCheck:
@@ -67,7 +98,7 @@ async def check_migration_head(settings: Settings | None = None) -> ReadinessChe
                 database_heads = frozenset(str(value) for value in result.scalars().all())
     except Exception:  # noqa: BLE001 - readiness returns a stable non-sensitive code
         return ReadinessCheck("migration", False, "migration_state_unavailable")
-    if not expected_heads or database_heads != expected_heads:
+    if not migration_heads_are_compatible(expected_heads, database_heads):
         return ReadinessCheck("migration", False, "migration_head_mismatch")
     return ReadinessCheck("migration", True, "ok")
 
