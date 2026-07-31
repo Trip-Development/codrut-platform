@@ -1077,7 +1077,7 @@ async def exercise_participant(
         params={"token": participant.token},
     )
     tasks = verify.json().get("tasks", [])
-    if not any(str(task.get("assignment_id")) == participant.assignment_id for task in tasks):
+    if not any(str(task.get("assignmentId")) == participant.assignment_id for task in tasks):
         raise RuntimeError("Invite verification omitted the manifest assignment.")
 
     exchange = await _request(

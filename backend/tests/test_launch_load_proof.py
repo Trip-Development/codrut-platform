@@ -425,7 +425,7 @@ async def test_participant_flow_exercises_security_and_submission_endpoints() ->
         if path == "/api/auth/invite/verify":
             return httpx.Response(
                 200,
-                json={"tasks": [{"assignment_id": participant.assignment_id}]},
+                json={"tasks": [{"assignmentId": participant.assignment_id}]},
             )
         if path == "/api/auth/invite/exchange":
             return httpx.Response(
