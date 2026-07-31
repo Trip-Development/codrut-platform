@@ -411,6 +411,57 @@ describe("ParticipantResultsPanel", () => {
     expect(lencioniHeading.parentElement?.querySelector("[data-slot='card']")).toBeTruthy();
   });
 
+  it("uses the pinned Lencioni sum range for labels and bars", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase={null}
+        pcmPhase={null}
+        results={[{
+          assignmentId: "lencioni",
+          questionnaireKey: "lencioni",
+          title: "Lencioni",
+          targetLabel: "Echipa ta",
+          scores: {
+            trust: { score: 6, label: "Încredere" },
+          },
+          scoreUnit: "score",
+          scaleMin: 3,
+          scaleMax: 9,
+          scoreScaleCompatible: true,
+        }]}
+      />,
+    );
+
+    expect(screen.getByText("3-9")).toBeTruthy();
+    expect(screen.getAllByText("6 / 9")).toHaveLength(2);
+    const meter = screen.getByRole("meter", { name: "Scor Încredere" });
+    expect(meter.getAttribute("aria-valuemin")).toBe("3");
+    expect(meter.getAttribute("aria-valuemax")).toBe("9");
+    expect(meter.firstElementChild?.getAttribute("style")).toContain("width: 50%");
+  });
+
+  it("does not guess a participant scale when the published groups are incompatible", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase={null}
+        pcmPhase={null}
+        results={[{
+          assignmentId: "lencioni",
+          questionnaireKey: "lencioni",
+          title: "Lencioni",
+          targetLabel: "Echipa ta",
+          scores: { trust: { score: 6, label: "Încredere" } },
+          scoreScaleCompatible: false,
+          unavailableReason: "incompatible_score_scales",
+        }]}
+      />,
+    );
+
+    expect(screen.getByText(/dimensiuni cu scale diferite/)).toBeTruthy();
+    expect(screen.queryByRole("meter")).toBeNull();
+    expect(screen.queryByText("0-10")).toBeNull();
+  });
+
   it("shows anonymous received iCARE averages after the privacy threshold", () => {
     render(
       <ParticipantResultsPanel
@@ -531,6 +582,34 @@ describe("ParticipantResultsPanel", () => {
     expect(
       screen.getByRole("meter", { name: "Scor Claritate" }).firstElementChild?.getAttribute("style"),
     ).toContain("width: 87.5%");
+  });
+
+  it("renders the participant's own iCARE result against its published scale", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[
+          {
+            assignmentId: "icare-self",
+            questionnaireKey: "boss_360",
+            title: "Autoevaluare iCARE",
+            targetLabel: "Autoevaluare",
+            scoreUnit: "grade_1_to_5",
+            scaleMin: 1,
+            scaleMax: 5,
+            scores: {
+              clarity: { score: 4.5, label: "Claritate" },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("4.5 din 5")).toHaveLength(2);
+    expect(screen.getByText("1-5")).toBeDefined();
+    const clarity = screen.getByRole("meter", { name: "Scor Claritate" });
+    expect(clarity.getAttribute("aria-valuemin")).toBe("1");
+    expect(clarity.getAttribute("aria-valuemax")).toBe("5");
+    expect(clarity.firstElementChild?.getAttribute("style")).toContain("width: 87.5%");
   });
 
   it("defends against a stale raw scale when feedback scores are percentages", () => {

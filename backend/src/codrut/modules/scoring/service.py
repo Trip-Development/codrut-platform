@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -19,6 +19,10 @@ from codrut.modules.assignments.models import (
     TeamMembership,
     TeamMembershipRole,
     TeamType,
+)
+from codrut.modules.assignments.team_snapshot import (
+    AssessmentCycleTeamSnapshot,
+    load_assessment_cycle_team_snapshot,
 )
 from codrut.modules.companies.hierarchy import (
     HierarchyIssue,
@@ -40,6 +44,7 @@ from codrut.modules.forms.models import (
 )
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
+from codrut.modules.scoring.scale import ScoreScale, derive_definition_score_scale
 from codrut.modules.scoring.schemas import (
     CompanyReportAggregateResponse,
     CompanyReportComparisonResponse,
@@ -54,6 +59,7 @@ from codrut.modules.scoring.schemas import (
     ReportAverageResponse,
     ReportDistributionResponse,
     ReportHierarchyIssueResponse,
+    ReportScoreScaleResponse,
     ReportTeamLensResponse,
     ScoringResultResponse,
 )
@@ -128,7 +134,9 @@ class ScoreSummary:
     driver_count: int
     boss_360_count: int
     lencioni_averages: list[ReportAverageResponse]
+    lencioni_scale: ReportScoreScaleResponse
     driver_averages: list[ReportAverageResponse]
+    driver_scale: ReportScoreScaleResponse
     boss_360_averages: list[ReportAverageResponse]
 
 
@@ -138,6 +146,13 @@ class TeamLensBuildResult:
     hierarchy_ambiguous: bool
     hierarchy_ambiguity_message: str | None
     hierarchy_issues: list[ReportHierarchyIssueResponse]
+
+
+@dataclass(frozen=True)
+class MemberLencioniTeamResolution:
+    team_id: UUID | None
+    ambiguous: bool = False
+    ambiguity_message: str | None = None
 
 
 AssignmentResultWithDefinition = tuple[
@@ -152,13 +167,6 @@ class DriverRowSelection:
     average_rows: tuple[AssignmentResultWithDefinition, ...]
     rankable_rows: tuple[AssignmentResultWithDefinition, ...]
     insufficient_driver_score_count: int
-
-
-@dataclass(frozen=True)
-class IcareScoreScale:
-    score_unit: str
-    scale_min: float
-    scale_max: float
 
 
 @dataclass(frozen=True)
@@ -210,7 +218,12 @@ class ScoringService:
             project_id,
             assessment_cycle_id,
         )
-        participants = await self._list_report_participants(company_id, project_id)
+        participants = await self._list_report_participants(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            assignment_results,
+        )
         pcm_values = (
             _pcm_values_from_responses(
                 await self.repository.list_company_pcm_responses(
@@ -268,13 +281,29 @@ class ScoringService:
             assignment_results,
             driver_rows=driver_selection.average_rows,
         )
+        team_snapshot = (
+            await load_assessment_cycle_team_snapshot(self.session, assessment_cycle_id)
+            if assessment_cycle_id is not None
+            else None
+        )
+        if team_snapshot is not None:
+            team_snapshot = _with_persisted_icare_cohorts(
+                team_snapshot,
+                assignment_results,
+            )
         icare_cohorts = _build_icare_cohort_summaries(
+            assignment_results,
+            participants,
+            team_snapshot=team_snapshot,
+        )
+        icare_unclassified_response_count = _icare_unclassified_response_count(
             assignment_results,
             participants,
         )
         icare_target_summaries = _build_icare_target_summaries(
             assignment_results,
             participants,
+            team_snapshot=team_snapshot,
         )
         driver_rank_summary = _build_driver_rank_summary(
             driver_selection.rankable_rows,
@@ -296,6 +325,7 @@ class ScoringService:
             participants,
             assignment_results,
             pcm_values,
+            team_snapshot=team_snapshot,
         )
 
         return CompanyReportAggregateResponse(
@@ -316,12 +346,25 @@ class ScoringService:
             pcm_base_count=_distribution_count(pcm_base_distribution),
             pcm_phase_count=_distribution_count(pcm_phase_distribution),
             lencioni_averages=score_summary.lencioni_averages,
+            lencioni_scale=score_summary.lencioni_scale,
             driver_averages=score_summary.driver_averages,
+            driver_scale=score_summary.driver_scale,
             boss_360_averages=score_summary.boss_360_averages,
             icare_target_summaries=icare_target_summaries,
             icare_cohorts=icare_cohorts,
+            icare_unclassified_response_count=icare_unclassified_response_count,
+            icare_unclassified_reason=(
+                "historical_cohort_unavailable"
+                if icare_unclassified_response_count
+                else None
+            ),
             driver_rank_summary=driver_rank_summary,
-            leadership_members=_build_leadership_members(participants),
+            leadership_members=_build_leadership_members(
+                participants,
+                leadership_ids=(
+                    set(team_snapshot.leadership_ids) if team_snapshot is not None else None
+                ),
+            ),
             pcm_base_distribution=pcm_base_distribution,
             pcm_phase_distribution=pcm_phase_distribution,
             team_lenses=team_lens_result.team_lenses,
@@ -350,24 +393,43 @@ class ScoringService:
             assessment_cycle_id,
         )
         assert project_id is not None
-        participants = await self._list_report_participants(company_id, project_id)
+        assignment_results = await self.repository.list_company_assignment_results_with_definitions(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
+        participants = await self._list_report_participants(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+            assignment_results,
+        )
         participant_by_id = {participant.id: participant for participant in participants}
         hierarchy = build_organization_hierarchy(
             [_hierarchy_participant_from_report(participant) for participant in participants]
         )
+        team_snapshot = (
+            await load_assessment_cycle_team_snapshot(self.session, assessment_cycle_id)
+            if assessment_cycle_id is not None
+            else None
+        )
+        if team_snapshot is not None:
+            team_snapshot = _with_persisted_icare_cohorts(
+                team_snapshot,
+                assignment_results,
+            )
         member = participant_by_id.get(participant_profile_id)
-        leadership_ids = _leadership_ids_for_report(hierarchy, participants)
+        leadership_ids = (
+            set(team_snapshot.leadership_ids)
+            if team_snapshot is not None
+            else _leadership_ids_for_report(hierarchy, participants)
+        )
         if member is None or participant_profile_id not in leadership_ids:
             raise DomainError(
                 "Leadership member not found in this project.",
                 code="leadership_member_not_found",
             )
 
-        assignment_results = await self.repository.list_company_assignment_results_with_definitions(
-            company_id,
-            project_id,
-            assessment_cycle_id,
-        )
         pcm_values = (
             _pcm_values_from_responses(
                 await self.repository.list_company_pcm_responses(
@@ -384,15 +446,18 @@ class ScoringService:
             for row in assignment_results
             if row[0].respondent_profile_id == participant_profile_id
         ]
-        lencioni_team_id = await self._resolve_member_lencioni_team_id(
+        lencioni_team = await self._resolve_member_lencioni_team(
             participant_profile_id,
             assessment_cycle_id,
             assignment_results,
-            prefer_leadership=participant_profile_id in hierarchy.top_level_ids,
+            prefer_leadership=(
+                assessment_cycle_id is None
+                and participant_profile_id in hierarchy.top_level_ids
+            ),
         )
         lencioni_summary = _leadership_member_lencioni_summary(
             assignment_results,
-            target_team_id=lencioni_team_id,
+            target_team_id=lencioni_team.team_id,
         )
         target_summary = next(
             (
@@ -400,6 +465,7 @@ class ScoringService:
                 for summary in _build_icare_target_summaries(
                     assignment_results,
                     participants,
+                    team_snapshot=team_snapshot,
                 )
                 if summary.target_profile_id == participant_profile_id
             ),
@@ -422,12 +488,22 @@ class ScoringService:
             pcm_phase=cycle_pcm.get("pcm_phase", member.pcm_phase),
             lencioni_count=lencioni_summary.lencioni_count,
             lencioni_averages=lencioni_summary.lencioni_averages,
+            lencioni_scale=lencioni_summary.lencioni_scale,
+            lencioni_team_ambiguous=lencioni_team.ambiguous,
+            lencioni_team_ambiguity_message=lencioni_team.ambiguity_message,
             icare_cohorts=target_summary.cohorts if target_summary is not None else [],
+            icare_unclassified_response_count=(
+                target_summary.unclassified_response_count if target_summary is not None else 0
+            ),
+            icare_unclassified_reason=(
+                target_summary.unclassified_reason if target_summary is not None else None
+            ),
             driver_count=driver_summary.driver_count,
             driver_averages=[
                 average.model_copy(update={"feedback": driver_feedback.get(average.id)})
                 for average in driver_summary.driver_averages
             ],
+            driver_scale=driver_summary.driver_scale,
         )
 
     async def _resolve_member_lencioni_team_id(
@@ -438,6 +514,24 @@ class ScoringService:
         *,
         prefer_leadership: bool,
     ) -> UUID | None:
+        return (
+            await self._resolve_member_lencioni_team(
+                member_id,
+                assessment_cycle_id,
+                assignment_results,
+                prefer_leadership=prefer_leadership,
+            )
+        ).team_id
+
+    async def _resolve_member_lencioni_team(
+        self,
+        member_id: UUID,
+        assessment_cycle_id: UUID | None,
+        assignment_results: Iterable[AssignmentResultWithDefinition],
+        *,
+        prefer_leadership: bool,
+    ) -> MemberLencioniTeamResolution:
+        assignment_result_rows = list(assignment_results)
         if assessment_cycle_id is not None:
             rows = (
                 await self.session.execute(
@@ -448,8 +542,7 @@ class ScoringService:
                     )
                     .join(Team, Team.id == AssessmentCycleTeamMembership.team_id)
                     .where(
-                        AssessmentCycleTeamMembership.assessment_cycle_id
-                        == assessment_cycle_id,
+                        AssessmentCycleTeamMembership.assessment_cycle_id == assessment_cycle_id,
                         AssessmentCycleTeamMembership.participant_profile_id == member_id,
                     )
                 )
@@ -466,25 +559,91 @@ class ScoringService:
         leadership_ids = sorted(
             team_id for team_id, team_type, _role in rows if team_type == TeamType.leadership
         )
+        leadership_leader_ids = sorted(
+            team_id
+            for team_id, team_type, role in rows
+            if team_type == TeamType.leadership and role == TeamMembershipRole.leader
+        )
         functional_leader_ids = sorted(
             team_id
             for team_id, team_type, role in rows
             if team_type == TeamType.functional and role == TeamMembershipRole.leader
         )
-        if prefer_leadership and leadership_ids:
-            return leadership_ids[0]
+        if assessment_cycle_id is not None and len(leadership_leader_ids) == 1:
+            return MemberLencioniTeamResolution(leadership_leader_ids[0])
+        if assessment_cycle_id is not None and len(leadership_leader_ids) > 1:
+            return MemberLencioniTeamResolution(
+                team_id=None,
+                ambiguous=True,
+                ambiguity_message=(
+                    "Ciclul istoric conține mai mulți lideri pentru echipa de leadership."
+                ),
+            )
+        if assessment_cycle_id is None and prefer_leadership and leadership_ids:
+            return MemberLencioniTeamResolution(leadership_ids[0])
+        if assessment_cycle_id is not None and leadership_ids and functional_leader_ids:
+            leadership_snapshot_leaders = (
+                await self.session.execute(
+                    select(
+                        AssessmentCycleTeamMembership.team_id,
+                        AssessmentCycleTeamMembership.participant_profile_id,
+                    )
+                    .join(Team, Team.id == AssessmentCycleTeamMembership.team_id)
+                    .where(
+                        AssessmentCycleTeamMembership.assessment_cycle_id
+                        == assessment_cycle_id,
+                        AssessmentCycleTeamMembership.team_id.in_(leadership_ids),
+                        Team.type == TeamType.leadership,
+                        AssessmentCycleTeamMembership.role == TeamMembershipRole.leader,
+                    )
+                )
+            ).all()
+            if leadership_snapshot_leaders:
+                if len(leadership_snapshot_leaders) == 1 and len(functional_leader_ids) == 1:
+                    return MemberLencioniTeamResolution(functional_leader_ids[0])
+                return MemberLencioniTeamResolution(
+                    team_id=None,
+                    ambiguous=True,
+                    ambiguity_message=(
+                        "Ciclul conține mai multe roluri de lider și nu putem stabili "
+                        "sigur echipa Lencioni."
+                    ),
+                )
+
+            # Older cycle snapshots did not record the top leader. Current hierarchy
+            # is intentionally not consulted: only scored targets already scoped to
+            # this cycle can resolve a single unambiguous historical team.
+            candidate_ids = set(leadership_ids) | set(functional_leader_ids)
+            result_target_ids = {
+                assignment.target_team_id
+                for assignment, result, _definition in assignment_result_rows
+                if assignment.questionnaire_key in LENCIONI_REPORT_KEYS
+                and assignment.status in COMPLETED_STATUSES
+                and result is not None
+                and assignment.target_team_id in candidate_ids
+            }
+            if len(result_target_ids) == 1:
+                return MemberLencioniTeamResolution(next(iter(result_target_ids)))
+            return MemberLencioniTeamResolution(
+                team_id=None,
+                ambiguous=True,
+                ambiguity_message=(
+                    "Nu putem stabili sigur dacă rezultatul istoric Lencioni aparține "
+                    "echipei de leadership sau echipei funcționale."
+                ),
+            )
         if functional_leader_ids:
-            return functional_leader_ids[0]
+            return MemberLencioniTeamResolution(functional_leader_ids[0])
         if leadership_ids:
-            return leadership_ids[0]
+            return MemberLencioniTeamResolution(leadership_ids[0])
 
         # Legacy projects may predate team snapshots. This fallback is intentionally
         # restricted to a team the member personally evaluated in the already scoped
         # assignment set, so it cannot pull rows from another project or cycle.
-        return min(
+        fallback_team_id = min(
             (
                 assignment.target_team_id
-                for assignment, result, _definition in assignment_results
+                for assignment, result, _definition in assignment_result_rows
                 if assignment.questionnaire_key in LENCIONI_REPORT_KEYS
                 and assignment.respondent_profile_id == member_id
                 and result is not None
@@ -492,6 +651,7 @@ class ScoringService:
             ),
             default=None,
         )
+        return MemberLencioniTeamResolution(fallback_team_id)
 
     async def get_icare_answer_review(
         self,
@@ -671,7 +831,85 @@ class ScoringService:
         self,
         company_id: UUID,
         project_id: UUID | None,
+        assessment_cycle_id: UUID | None = None,
+        assignment_results: Iterable[AssignmentResultWithDefinition] = (),
     ) -> list[ReportParticipant]:
+        if project_id is not None and assessment_cycle_id is not None:
+            assignment_result_rows = list(assignment_results)
+            rows = (
+                await self.session.execute(
+                    select(ParticipantProfile, ProjectMembership)
+                    .join(
+                        AssessmentCycleTeamMembership,
+                        AssessmentCycleTeamMembership.participant_profile_id
+                        == ParticipantProfile.id,
+                    )
+                    .outerjoin(
+                        ProjectMembership,
+                        and_(
+                            ProjectMembership.company_id == company_id,
+                            ProjectMembership.project_id == project_id,
+                            ProjectMembership.participant_profile_id
+                            == ParticipantProfile.id,
+                        ),
+                    )
+                    .where(
+                        AssessmentCycleTeamMembership.assessment_cycle_id
+                        == assessment_cycle_id,
+                        ParticipantProfile.company_id == company_id,
+                    )
+                    .order_by(ParticipantProfile.full_name)
+                )
+            ).all()
+            participants_by_id: dict[UUID, ReportParticipant] = {}
+            for participant, membership in rows:
+                participants_by_id.setdefault(
+                    participant.id,
+                    (
+                        _report_participant_from_membership(membership, participant)
+                        if membership is not None
+                        else _report_participant_from_profile(participant)
+                    ),
+                )
+            persisted_participant_ids = {
+                participant_id
+                for assignment, _result, _definition in assignment_result_rows
+                for participant_id in (
+                    assignment.respondent_profile_id,
+                    _icare_target_id(assignment),
+                )
+                if participant_id is not None
+            }
+            missing_participant_ids = (
+                persisted_participant_ids - participants_by_id.keys()
+            )
+            if missing_participant_ids:
+                missing_rows = (
+                    await self.session.execute(
+                        select(ParticipantProfile, ProjectMembership)
+                        .outerjoin(
+                            ProjectMembership,
+                            and_(
+                                ProjectMembership.company_id == company_id,
+                                ProjectMembership.project_id == project_id,
+                                ProjectMembership.participant_profile_id
+                                == ParticipantProfile.id,
+                            ),
+                        )
+                        .where(
+                            ParticipantProfile.company_id == company_id,
+                            ParticipantProfile.id.in_(missing_participant_ids),
+                        )
+                        .order_by(ParticipantProfile.full_name)
+                    )
+                ).all()
+                for participant, membership in missing_rows:
+                    participants_by_id[participant.id] = (
+                        _report_participant_from_membership(membership, participant)
+                        if membership is not None
+                        else _report_participant_from_profile(participant)
+                    )
+            return list(participants_by_id.values())
         if project_id is not None:
             memberships = await self.company_repository.list_project_memberships(
                 company_id,
@@ -1222,6 +1460,54 @@ def _report_participant_from_membership(
     )
 
 
+def _score_scale_response(
+    scales: set[ScoreScale],
+    *,
+    has_unknown_scale: bool,
+) -> ReportScoreScaleResponse:
+    compatible = len(scales) <= 1 and not has_unknown_scale
+    scale = next(iter(scales), None) if compatible else None
+    return ReportScoreScaleResponse(
+        score_unit=scale.score_unit if scale is not None else None,
+        scale_min=scale.scale_min if scale is not None else None,
+        scale_max=scale.scale_max if scale is not None else None,
+        score_scale_compatible=compatible,
+        unavailable_reason=None if compatible else "incompatible_score_scales",
+    )
+
+
+def _summarize_report_rows(
+    rows: Iterable[AssignmentResultWithDefinition],
+) -> tuple[int, list[ReportAverageResponse], ReportScoreScaleResponse]:
+    dimensions: dict[str, ReportDimensionAccumulator] = {}
+    scales: set[ScoreScale] = set()
+    has_unknown_scale = False
+    count = 0
+    for _assignment, result, definition in rows:
+        assert result is not None
+        if not _accumulate_scores(dimensions, result, definition):
+            continue
+        count += 1
+        dimension_ids = {
+            dimension_id
+            for dimension_id in _report_dimensions(definition, result.scores)
+            if _coerce_score(result.scores.get(dimension_id)) is not None
+        }
+        derived_scale = derive_definition_score_scale(
+            definition,
+            dimension_ids=dimension_ids,
+        )
+        if not derived_scale.compatible or derived_scale.scale is None:
+            has_unknown_scale = True
+        else:
+            scales.add(derived_scale.scale)
+    scale_response = _score_scale_response(scales, has_unknown_scale=has_unknown_scale)
+    averages = (
+        _averages_from_accumulators(dimensions) if scale_response.score_scale_compatible else []
+    )
+    return count, averages, scale_response
+
+
 def _build_score_summary(
     assignment_results: Iterable[AssignmentResultWithDefinition],
     *,
@@ -1233,35 +1519,31 @@ def _build_score_summary(
         if driver_rows is not None
         else list(_select_latest_completed_driver_rows(assignment_result_rows).average_rows)
     )
-    lencioni_dimensions: dict[str, ReportDimensionAccumulator] = {}
-    driver_dimensions: dict[str, ReportDimensionAccumulator] = {}
     boss_360_dimensions: dict[str, ReportDimensionAccumulator] = {}
-    lencioni_count = 0
-    driver_count = 0
     boss_360_count = 0
+    lencioni_rows: list[AssignmentResultWithDefinition] = []
 
     for assignment, result, definition in assignment_result_rows:
         if assignment.status not in COMPLETED_STATUSES or result is None:
             continue
         if assignment.questionnaire_key in LENCIONI_REPORT_KEYS:
-            if _accumulate_scores(lencioni_dimensions, result, definition):
-                lencioni_count += 1
+            lencioni_rows.append((assignment, result, definition))
         elif assignment.questionnaire_key in BOSS_360_REPORT_KEYS:
             if _is_self_boss_assignment(assignment):
                 continue
             if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
-    for _assignment, result, definition in selected_driver_rows:
-        assert result is not None
-        if _accumulate_scores(driver_dimensions, result, definition):
-            driver_count += 1
+    lencioni_count, lencioni_averages, lencioni_scale = _summarize_report_rows(lencioni_rows)
+    driver_count, driver_averages, driver_scale = _summarize_report_rows(selected_driver_rows)
 
     return ScoreSummary(
         lencioni_count=lencioni_count,
         driver_count=driver_count,
         boss_360_count=boss_360_count,
-        lencioni_averages=_averages_from_accumulators(lencioni_dimensions),
-        driver_averages=_averages_from_accumulators(driver_dimensions),
+        lencioni_averages=lencioni_averages,
+        lencioni_scale=lencioni_scale,
+        driver_averages=driver_averages,
+        driver_scale=driver_scale,
         boss_360_averages=_averages_from_accumulators(boss_360_dimensions),
     )
 
@@ -1341,9 +1623,50 @@ def _icare_target_id(assignment: QuestionnaireAssignment) -> UUID | None:
 ICARE_COHORT_ORDER = ("direct_team", "leadership_peers", "self")
 
 
+def _with_persisted_icare_cohorts(
+    team_snapshot: AssessmentCycleTeamSnapshot,
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+) -> AssessmentCycleTeamSnapshot:
+    icare_assignments = [
+        assignment
+        for assignment, _result, _definition in assignment_results
+        if assignment.questionnaire_key in BOSS_360_REPORT_KEYS
+    ]
+    derived_leadership_ids = {
+        target_id
+        for assignment in icare_assignments
+        if (target_id := _icare_target_id(assignment)) is not None
+        and assignment.respondent_profile_id != target_id
+    }
+    leadership_ids = team_snapshot.leadership_ids | derived_leadership_ids
+    direct_report_ids_by_leader_id = {
+        leader_id: set(direct_report_ids)
+        for leader_id, direct_report_ids in team_snapshot.direct_report_ids_by_leader_id.items()
+    }
+    for assignment in icare_assignments:
+        target_id = _icare_target_id(assignment)
+        respondent_id = assignment.respondent_profile_id
+        if (
+            target_id in leadership_ids
+            and respondent_id != target_id
+            and respondent_id not in leadership_ids
+        ):
+            direct_report_ids_by_leader_id.setdefault(target_id, set()).add(
+                respondent_id
+            )
+    return AssessmentCycleTeamSnapshot(
+        leadership_ids=leadership_ids,
+        direct_report_ids_by_leader_id={
+            leader_id: frozenset(direct_report_ids)
+            for leader_id, direct_report_ids in direct_report_ids_by_leader_id.items()
+        },
+        teams=team_snapshot.teams,
+    )
+
+
 def _icare_score_scale(
     definition: QuestionnaireDefinition | None,
-) -> IcareScoreScale | None:
+) -> ScoreScale | None:
     if definition is None:
         return None
     for schema in (
@@ -1360,9 +1683,9 @@ def _icare_score_scale(
             minimum = _coerce_score(scoring.get("scale_min"))
             maximum = _coerce_score(scoring.get("scale_max"))
             if minimum is not None and maximum is not None and maximum > minimum:
-                return IcareScoreScale(unit, minimum, maximum)
+                return ScoreScale(unit, minimum, maximum)
         else:
-            return IcareScoreScale(unit, 0.0, 100.0)
+            return ScoreScale(unit, 0.0, 100.0)
     return None
 
 
@@ -1370,19 +1693,33 @@ def _icare_assignment_cohort(
     assignment: QuestionnaireAssignment,
     *,
     hierarchy: Any,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> str | None:
+    if getattr(assignment, "assessment_cycle_id", None) is not None:
+        persisted_cohort = _enum_value(getattr(assignment, "icare_cohort", None))
+        return persisted_cohort if persisted_cohort in ICARE_COHORT_ORDER else None
     target_id = _icare_target_id(assignment)
-    if target_id is None or target_id not in hierarchy.leadership_ids:
+    leadership_ids = (
+        team_snapshot.leadership_ids
+        if team_snapshot is not None
+        else hierarchy.leadership_ids
+    )
+    if target_id is None or target_id not in leadership_ids:
         return None
     if _is_self_boss_assignment(assignment):
         return "self"
     respondent_id = assignment.respondent_profile_id
-    if respondent_id in hierarchy.leadership_ids and respondent_id != target_id:
+    if respondent_id in leadership_ids and respondent_id != target_id:
         return "leadership_peers"
-    direct_report_ids = {
-        participant.id for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
-    }
-    if respondent_id in direct_report_ids and respondent_id not in hierarchy.leadership_ids:
+    direct_report_ids = (
+        team_snapshot.direct_report_ids_by_leader_id.get(target_id, frozenset())
+        if team_snapshot is not None
+        else {
+            participant.id
+            for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
+        }
+    )
+    if respondent_id in direct_report_ids and respondent_id not in leadership_ids:
         return "direct_team"
     return None
 
@@ -1392,6 +1729,7 @@ def _build_icare_cohort_summaries(
     participants: list[ReportParticipant],
     *,
     target_profile_id: UUID | None = None,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> list[IcareCohortSummaryResponse]:
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
@@ -1411,6 +1749,8 @@ def _build_icare_cohort_summaries(
     }
 
     def cohort_for_row(assignment: QuestionnaireAssignment) -> str | None:
+        if getattr(assignment, "assessment_cycle_id", None) is not None:
+            return _icare_assignment_cohort(assignment, hierarchy=hierarchy)
         if hierarchy.ambiguous_name is None:
             return _icare_assignment_cohort(assignment, hierarchy=hierarchy)
         target_id = _icare_target_id(assignment)
@@ -1423,52 +1763,93 @@ def _build_icare_cohort_summaries(
         for assignment, result, definition in eligible_rows
         if (cohort := cohort_for_row(assignment)) is not None
     ]
-    scales = {
-        scale
-        for _assignment, _result, definition, _cohort in classified_rows
-        if (scale := _icare_score_scale(definition)) is not None
-    }
-    definition_ids = {
-        definition_id
-        for _assignment, _result, definition, _cohort in classified_rows
-        if definition is not None
-        and (definition_id := getattr(definition, "id", None)) is not None
-    }
-    if len(scales) > 1 or len(definition_ids) > 1:
-        return [
+    summaries: list[IcareCohortSummaryResponse] = []
+    for cohort in ICARE_COHORT_ORDER:
+        cohort_rows = [row for row in classified_rows if row[3] == cohort]
+        scales = {
+            scale
+            for _assignment, _result, definition, _cohort in cohort_rows
+            if (scale := _icare_score_scale(definition)) is not None
+        }
+        definition_ids = {
+            definition_id
+            for _assignment, _result, definition, _cohort in cohort_rows
+            if definition is not None
+            and (definition_id := getattr(definition, "id", None)) is not None
+        }
+        if len(scales) > 1 or len(definition_ids) > 1:
+            summaries.append(
+                IcareCohortSummaryResponse(
+                    cohort=cohort,  # type: ignore[arg-type]
+                    response_count=len(cohort_rows),
+                    averages=[],
+                    score_scale_compatible=False,
+                    unavailable_reason="incompatible_score_scales",
+                )
+            )
+            continue
+        dimensions: dict[str, ReportDimensionAccumulator] = {}
+        for _assignment, result, definition, _cohort in cohort_rows:
+            assert result is not None
+            _accumulate_scores(dimensions, result, definition)
+        score_scale = next(iter(scales), None)
+        summaries.append(
             IcareCohortSummaryResponse(
                 cohort=cohort,  # type: ignore[arg-type]
-                response_count=0,
-                averages=[],
-                score_scale_compatible=False,
-                unavailable_reason="incompatible_score_scales",
+                response_count=len(cohort_rows),
+                averages=_averages_from_accumulators(dimensions),
+                score_unit=score_scale.score_unit if score_scale is not None else None,
+                scale_min=score_scale.scale_min if score_scale is not None else None,
+                scale_max=score_scale.scale_max if score_scale is not None else None,
             )
-            for cohort in ICARE_COHORT_ORDER
-        ]
-    score_scale = next(iter(scales), None)
-    grouped: dict[str, tuple[dict[str, ReportDimensionAccumulator], int]] = {}
-    for _assignment, result, definition, cohort in classified_rows:
-        assert result is not None
-        dimensions, count = grouped.setdefault(cohort, ({}, 0))
-        if _accumulate_scores(dimensions, result, definition):
-            grouped[cohort] = (dimensions, count + 1)
-
-    return [
-        IcareCohortSummaryResponse(
-            cohort=cohort,  # type: ignore[arg-type]
-            response_count=grouped.get(cohort, ({}, 0))[1],
-            averages=_averages_from_accumulators(grouped.get(cohort, ({}, 0))[0]),
-            score_unit=score_scale.score_unit if score_scale is not None else None,
-            scale_min=score_scale.scale_min if score_scale is not None else None,
-            scale_max=score_scale.scale_max if score_scale is not None else None,
         )
-        for cohort in ICARE_COHORT_ORDER
-    ]
+    return summaries
+
+
+def _icare_unclassified_response_count(
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+    participants: list[ReportParticipant],
+    *,
+    target_profile_id: UUID | None = None,
+) -> int:
+    hierarchy = build_organization_hierarchy(
+        [_hierarchy_participant_from_report(participant) for participant in participants]
+    )
+    explicit_leadership_ids = _explicit_leadership_ids(participants)
+    count = 0
+    for assignment, result, definition in assignment_results:
+        if (
+            assignment.questionnaire_key not in BOSS_360_REPORT_KEYS
+            or assignment.status not in COMPLETED_STATUSES
+            or result is None
+            or definition is None
+            or (target_profile_id is not None and _icare_target_id(assignment) != target_profile_id)
+        ):
+            continue
+        if hierarchy.ambiguous_name is None:
+            cohort = _icare_assignment_cohort(assignment, hierarchy=hierarchy)
+        elif (
+            getattr(assignment, "assessment_cycle_id", None) is not None
+            and _enum_value(getattr(assignment, "icare_cohort", None))
+            in ICARE_COHORT_ORDER
+        ):
+            cohort = _enum_value(getattr(assignment, "icare_cohort", None))
+        elif _is_self_boss_assignment(assignment) and (
+            _icare_target_id(assignment) in explicit_leadership_ids
+        ):
+            cohort = "self"
+        else:
+            cohort = None
+        if cohort is None:
+            count += 1
+    return count
 
 
 def _build_icare_target_summaries(
     assignment_results: Iterable[AssignmentResultWithDefinition],
     participants: list[ReportParticipant],
+    *,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> list[IcareTargetSummaryResponse]:
     assignment_result_rows = list(assignment_results)
     participant_names = {participant.id: participant.full_name for participant in participants}
@@ -1476,14 +1857,18 @@ def _build_icare_target_summaries(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
     leadership_ids = (
-        hierarchy.leadership_ids
-        if hierarchy.ambiguous_name is None
-        else {
-            participant.id
-            for participant in participants
-            if (participant.role_group or "").strip().casefold()
-            in {"leadership", "manager"}
-        }
+        team_snapshot.leadership_ids
+        if team_snapshot is not None
+        else (
+            hierarchy.leadership_ids
+            if hierarchy.ambiguous_name is None
+            else {
+                participant.id
+                for participant in participants
+                if (participant.role_group or "").strip().casefold()
+                in {"leadership", "manager"}
+            }
+        )
     )
     grouped: dict[
         UUID,
@@ -1509,7 +1894,10 @@ def _build_icare_target_summaries(
             target_id,
             ({}, {}, 0, 0),
         )
-        if _is_self_boss_assignment(assignment):
+        cohort = _icare_assignment_cohort(assignment, hierarchy=hierarchy)
+        if cohort is None:
+            continue
+        if cohort == "self":
             if _accumulate_scores(self_dimensions, result, definition):
                 self_count += 1
         elif _accumulate_scores(external_dimensions, result, definition):
@@ -1521,6 +1909,14 @@ def _build_icare_target_summaries(
             self_count,
         )
 
+    unclassified_counts = {
+        target_id: _icare_unclassified_response_count(
+            assignment_result_rows,
+            participants,
+            target_profile_id=target_id,
+        )
+        for target_id in grouped
+    }
     return [
         IcareTargetSummaryResponse(
             target_profile_id=target_id,
@@ -1533,6 +1929,13 @@ def _build_icare_target_summaries(
                 assignment_result_rows,
                 participants,
                 target_profile_id=target_id,
+                team_snapshot=team_snapshot,
+            ),
+            unclassified_response_count=unclassified_counts[target_id],
+            unclassified_reason=(
+                "historical_cohort_unavailable"
+                if unclassified_counts[target_id]
+                else None
             ),
         )
         for target_id, (
@@ -1677,11 +2080,17 @@ def _build_driver_rank_summary(
 
 def _build_leadership_members(
     participants: list[ReportParticipant],
+    *,
+    leadership_ids: set[UUID] | None = None,
 ) -> list[LeadershipMemberSummaryResponse]:
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
-    leadership_ids = _leadership_ids_for_report(hierarchy, participants)
+    leadership_ids = (
+        leadership_ids
+        if leadership_ids is not None
+        else _leadership_ids_for_report(hierarchy, participants)
+    )
     participant_by_id = {participant.id: participant for participant in participants}
     return [
         LeadershipMemberSummaryResponse(
@@ -1809,7 +2218,27 @@ def _build_team_lenses(
     participants: list[ReportParticipant],
     assignment_results: list[AssignmentResultWithDefinition],
     pcm_values: dict[UUID, dict[str, str]] | None = None,
+    *,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> TeamLensBuildResult:
+    if team_snapshot is not None:
+        return TeamLensBuildResult(
+            team_lenses=[
+                _build_team_lens(
+                    str(team.id),
+                    team.name,
+                    set(team.member_ids),
+                    participants,
+                    assignment_results,
+                    pcm_values,
+                    lencioni_target_team_id=team.id,
+                )
+                for team in team_snapshot.teams
+            ],
+            hierarchy_ambiguous=False,
+            hierarchy_ambiguity_message=None,
+            hierarchy_issues=[],
+        )
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
@@ -1848,9 +2277,7 @@ def _build_team_lenses(
         if manager is None:
             continue
         direct_reports = direct_reports_by_manager_id.get(manager.id, [])
-        direct_report_ids = {
-            direct_report.id for direct_report in direct_reports
-        }
+        direct_report_ids = {direct_report.id for direct_report in direct_reports}
         if not direct_report_ids:
             continue
 
@@ -1897,11 +2324,24 @@ def _build_team_lens(
     participants: list[ReportParticipant],
     assignment_results: list[AssignmentResultWithDefinition],
     pcm_values: dict[UUID, dict[str, str]] | None = None,
+    *,
+    lencioni_target_team_id: UUID | None = None,
 ) -> ReportTeamLensResponse:
     team_assignment_results = [
         (assignment, result, definition)
         for assignment, result, definition in assignment_results
-        if assignment.respondent_profile_id in member_ids
+        if (
+            assignment.questionnaire_key in LENCIONI_REPORT_KEYS
+            and lencioni_target_team_id is not None
+            and assignment.target_team_id == lencioni_target_team_id
+        )
+        or (
+            assignment.respondent_profile_id in member_ids
+            and (
+                lencioni_target_team_id is None
+                or assignment.questionnaire_key not in LENCIONI_REPORT_KEYS
+            )
+        )
     ]
     team_assignments = [assignment for assignment, _result, _definition in team_assignment_results]
     assigned_count = len(team_assignments)
@@ -1940,6 +2380,7 @@ def _build_team_lens(
         pcm_base_count=_distribution_count(pcm_base_distribution),
         pcm_phase_count=_distribution_count(pcm_phase_distribution),
         lencioni_averages=score_summary.lencioni_averages,
+        lencioni_scale=score_summary.lencioni_scale,
         driver_averages=score_summary.driver_averages,
         boss_360_averages=score_summary.boss_360_averages,
         pcm_base_distribution=pcm_base_distribution,

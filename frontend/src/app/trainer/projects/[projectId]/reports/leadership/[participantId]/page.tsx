@@ -10,7 +10,10 @@ import {
 } from "@/api/companies";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
+import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
 import { ScaledBar } from "@/components/reports/native-charts";
+import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Card } from "@/components/ui/card";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { buildProjectReportQuery } from "../../report-cycle";
@@ -19,6 +22,12 @@ const ICARE_LABELS: Record<IcareCohortSummary["cohort"], string> = {
   direct_team: "Cum te vede echipa ta",
   leadership_peers: "Cum te văd colegii din leadership",
   self: "Cum te evaluezi",
+};
+
+const ICARE_TAB_LABELS: Record<IcareCohortSummary["cohort"], string> = {
+  direct_team: "Echipa",
+  leadership_peers: "Colegii din leadership",
+  self: "Autoevaluare",
 };
 
 export default async function LeadershipMemberReportPage({
@@ -46,6 +55,14 @@ export default async function LeadershipMemberReportPage({
   const overviewHref = `/trainer/projects/${project.id}/reports${buildProjectReportQuery({
     cycle: query.cycle,
   })}`;
+  const lencioniScale = resolveReportScoreScale(
+    report.lencioni_scale,
+    { min: 0, max: 10, suffix: "" },
+  );
+  const driverScale = resolveReportScoreScale(
+    report.driver_scale,
+    { min: 0, max: 100, suffix: "%" },
+  );
 
   return (
     <div className="flex flex-col gap-10">
@@ -75,44 +92,71 @@ export default async function LeadershipMemberReportPage({
       </Card>
 
       <ResultSection id="lencioni" title="Lencioni" description="Rezultatul echipei coordonate de această persoană.">
-        <Card className="px-5 [--card-spacing:--spacing(5)]">
-          <AverageList
-            count={report.lencioni_count}
-            items={report.lencioni_averages}
-            max={10}
-            empty="Nu există încă un rezultat Lencioni pentru această echipă."
-          />
-        </Card>
+        {report.lencioni_team_ambiguous ? (
+          <Card className="px-5 [--card-spacing:--spacing(5)]">
+            <p className="font-semibold text-foreground">Echipa istorică nu poate fi stabilită sigur</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {report.lencioni_team_ambiguity_message ??
+                "Rezultatele rămân separate până când putem confirma echipa corectă pentru acest ciclu."}
+            </p>
+          </Card>
+        ) : (
+          <Card className="px-5 [--card-spacing:--spacing(5)]">
+            <AverageList
+              count={report.lencioni_count}
+              items={report.lencioni_averages}
+              min={lencioniScale.min}
+              max={lencioniScale.max}
+              suffix={lencioniScale.suffix}
+              empty={reportScaleEmptyCopy(
+                report.lencioni_scale,
+                "Nu există încă un rezultat Lencioni pentru această echipă.",
+              )}
+            />
+          </Card>
+        )}
       </ResultSection>
 
       <ResultSection id="icare" title="iCARE" description="Cele trei perspective sunt păstrate separat.">
-        <div className="grid gap-5 lg:grid-cols-3">
-          {(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
+        <HistoricalIcareNotice
+          count={report.icare_unclassified_response_count}
+          reason={report.icare_unclassified_reason}
+        />
+        <IcarePerspectiveTabs
+          ariaLabel="Perspective iCARE pentru această persoană"
+          perspectives={(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = report.icare_cohorts.find((item) => item.cohort === cohort);
             const scale = icareScale(summary);
-            return (
-              <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
-                <article>
-                  <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {summary?.response_count ?? 0} {(summary?.response_count ?? 0) === 1 ? "răspuns" : "răspunsuri"}
-                  </p>
-                  <div className="mt-4">
-                    <AverageList
-                      count={summary?.response_count ?? 0}
-                      items={summary?.averages ?? []}
-                      min={scale.min}
-                      max={scale.max}
-                      suffix={scale.suffix}
-                      showCount={false}
-                      empty={icareEmptyCopy(summary)}
-                    />
-                  </div>
-                </article>
-              </Card>
-            );
+            return {
+              id: cohort,
+              label: ICARE_LABELS[cohort],
+              tabLabel: ICARE_TAB_LABELS[cohort],
+              responseCount: summary?.response_count ?? 0,
+              content: (
+                <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
+                  <article>
+                    <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {summary?.response_count ?? 0} {(summary?.response_count ?? 0) === 1 ? "răspuns" : "răspunsuri"}
+                    </p>
+                    <div className="mt-4">
+                      <AverageList
+                        count={summary?.response_count ?? 0}
+                        items={summary?.averages ?? []}
+                        min={scale.min}
+                        max={scale.max}
+                        suffix={scale.suffix}
+                        showCount={false}
+                        empty={icareEmptyCopy(summary)}
+                        note={icareMinimumScoreCopy(summary)}
+                      />
+                    </div>
+                  </article>
+                </Card>
+              ),
+            };
           })}
-        </div>
+        />
       </ResultSection>
 
       <ResultSection id="ta-drivers" title="TA Drivers" description="Rezultatul individual, fără comparații sau detalii de echipă.">
@@ -120,11 +164,15 @@ export default async function LeadershipMemberReportPage({
           <AverageList
             count={report.driver_count}
             items={report.driver_averages}
-            max={100}
-            suffix="%"
+            min={driverScale.min}
+            max={driverScale.max}
+            suffix={driverScale.suffix}
             dangerAbove={50}
             showFeedback
-            empty="Nu există încă un rezultat TA pentru această persoană."
+            empty={reportScaleEmptyCopy(
+              report.driver_scale,
+              "Nu există încă un rezultat TA pentru această persoană.",
+            )}
           />
         </Card>
       </ResultSection>
@@ -166,7 +214,7 @@ function ResultSection({
         <h2 id={`member-result-${id}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
-      <div>{children}</div>
+      <div className="grid gap-5">{children}</div>
     </section>
   );
 }
@@ -189,6 +237,19 @@ function icareEmptyCopy(summary?: IcareCohortSummary): string {
   return "Nu există încă un rezultat iCARE scorabil pentru această perspectivă.";
 }
 
+function icareMinimumScoreCopy(summary?: IcareCohortSummary): string | null {
+  if (!summary || summary.averages.length === 0) return null;
+  const minimum = summary.scale_min ?? (summary.score_unit === "grade_1_to_5" ? 1 : 0);
+  if (!summary.averages.some((item) => Math.abs(item.avg - minimum) < 0.05)) return null;
+  if (summary.score_unit === "percent") {
+    return "0% este scorul minim valid pe această scală, nu un rezultat lipsă.";
+  }
+  if (summary.score_unit === "grade_1_to_5") {
+    return `${minimum} din ${summary.scale_max ?? 5} este scorul minim valid pe această scală, nu un rezultat lipsă.`;
+  }
+  return null;
+}
+
 function AverageList({
   count,
   items,
@@ -199,6 +260,7 @@ function AverageList({
   showCount = true,
   dangerAbove,
   showFeedback = false,
+  note,
 }: {
   count: number;
   items: ReportAverage[];
@@ -209,6 +271,7 @@ function AverageList({
   showCount?: boolean;
   dangerAbove?: number;
   showFeedback?: boolean;
+  note?: string | null;
 }) {
   if (items.length === 0) {
     return <p className="text-sm text-muted-foreground">{empty}</p>;
@@ -241,6 +304,7 @@ function AverageList({
             </div>
           );
         })}
+        {note ? <p className="text-xs leading-5 text-muted-foreground">{note}</p> : null}
       </div>
     </div>
   );

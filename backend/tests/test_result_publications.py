@@ -391,7 +391,7 @@ async def test_aggregate_publications_never_mix_assessment_cycles() -> None:
     await engine.dispose()
 
 
-async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_drops() -> None:
+async def test_aggregate_publication_keeps_count_below_threshold_and_revokes_when_empty() -> None:
     await engine.dispose()
     async with SessionLocal() as session:
         company = Company(id=uuid.uuid4(), name=f"Aggregate publication {uuid.uuid4()}")
@@ -519,6 +519,18 @@ async def test_aggregate_publication_requires_threshold_and_is_revoked_when_it_d
         await service.reconcile_assignment(assignments[0].id)
         await session.refresh(publication)
 
+        assert publication.source_count == 1
+        assert publication.policy_snapshot["required_completed"] == 2
+        assert publication.revoked_at is None
+
+        assignments[1].status = AssignmentStatus.started
+        await session.execute(
+            delete(ScoringResult).where(ScoringResult.assignment_id == assignments[1].id)
+        )
+        await session.flush()
+        await service.reconcile_assignment(assignments[1].id)
+        await session.refresh(publication)
+
         assert publication.revoked_at is not None
         await session.rollback()
     await engine.dispose()
@@ -641,6 +653,17 @@ async def test_reconcile_reuses_and_revokes_backfilled_legacy_aggregate_publicat
         )
         await session.flush()
         await service.reconcile_assignment(assignments[0].id)
+        await session.refresh(backfilled_publication)
+
+        assert backfilled_publication.source_count == 1
+        assert backfilled_publication.revoked_at is None
+
+        assignments[1].status = AssignmentStatus.started
+        await session.execute(
+            delete(ScoringResult).where(ScoringResult.assignment_id == assignments[1].id)
+        )
+        await session.flush()
+        await service.reconcile_assignment(assignments[1].id)
         await session.refresh(backfilled_publication)
 
         assert backfilled_publication.revoked_at is not None

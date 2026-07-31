@@ -13,6 +13,7 @@ from codrut.modules.assignments.models import (
     AssignmentAccessMode,
     AssignmentStatus,
     AssignmentTargetType,
+    IcareCohort,
     QuestionnaireAssignment,
     ResponseVisibilityPolicy,
     Team,
@@ -40,6 +41,7 @@ from codrut.modules.assignments.schemas import (
 )
 from codrut.modules.companies.hierarchy import (
     HierarchyParticipant,
+    OrganizationHierarchy,
     build_organization_hierarchy,
 )
 from codrut.modules.companies.models import (
@@ -83,6 +85,7 @@ SUPPORTED_CYCLE_PLAN_QUESTIONNAIRES = frozenset(
         "icare",
     }
 )
+ICARE_QUESTIONNAIRE_KEYS = frozenset({"boss_360", "boss_360_en", "icare"})
 
 
 class AssignmentService:
@@ -93,6 +96,10 @@ class AssignmentService:
         self.forms_repository = FormsRepository(session)
         self.scoring_repository = ScoringRepository(session)
         self.result_publication_service = ResultPublicationService(session)
+        self._icare_hierarchy_cache: dict[
+            tuple[UUID, UUID | None],
+            OrganizationHierarchy,
+        ] = {}
 
     async def list_assessment_cycles(
         self,
@@ -482,6 +489,18 @@ class AssignmentService:
             if cycle is not None
             else []
         )
+        if cycle is not None:
+            leadership_ids = await self._cycle_icare_leadership_ids(
+                cycle,
+                cycle_assignments,
+            )
+            _require_cycle_icare_self_target(
+                questionnaire_key=questionnaire_key,
+                target_type=payload.target_type,
+                respondent_profile_id=payload.respondent_profile_id,
+                target_person_id=payload.target_person_id,
+                leadership_ids=leadership_ids,
+            )
         assignment = QuestionnaireAssignment(
             company_id=company_id,
             project_id=payload.project_id,
@@ -496,6 +515,15 @@ class AssignmentService:
             target_type=payload.target_type,
             target_person_id=payload.target_person_id,
             target_team_id=payload.target_team_id,
+            icare_cohort=await self._icare_cohort_for_assignment(
+                company_id=company_id,
+                project_id=payload.project_id,
+                cycle=cycle,
+                questionnaire_key=questionnaire_key,
+                respondent_profile_id=payload.respondent_profile_id,
+                target_type=payload.target_type,
+                target_person_id=payload.target_person_id,
+            ),
             access_mode=AssignmentAccessMode.account_link,
             status=AssignmentStatus.assigned,
             visibility_policy=payload.visibility_policy,
@@ -647,6 +675,10 @@ class AssignmentService:
             manager_ids,
             key=lambda item: participant_by_id[item].full_name,
         )
+        top_leader_ids = set(hierarchy.top_level_ids) & manager_ids
+        leadership_team_leader_id = (
+            next(iter(top_leader_ids)) if len(top_leader_ids) == 1 else None
+        )
         if leadership_ids:
             leadership_team = teams_by_name.get("leadership")
             scopes.append(
@@ -669,7 +701,7 @@ class AssignmentService:
                         team_name="Leadership",
                         team_type=TeamType.leadership,
                         team_member_ids=leadership_ids,
-                        team_leader_id=None,
+                        team_leader_id=leadership_team_leader_id,
                     )
                 )
 
@@ -840,6 +872,15 @@ class AssignmentService:
             payload.project_id,
             payload.assessment_cycle_id,
         )
+        cycle_icare_leadership_ids = (
+            await self._cycle_icare_leadership_ids(
+                cycle,
+                existing_assignments,
+                payload.assignments,
+            )
+            if cycle is not None
+            else set()
+        )
         assignment_round_id = (
             min(
                 (assignment.assignment_round_id for assignment in existing_assignments),
@@ -856,6 +897,7 @@ class AssignmentService:
                 item,
                 assignment_round_id=assignment_round_id,
                 cycle=cycle,
+                cycle_icare_leadership_ids=cycle_icare_leadership_ids,
             )
             if assignment.id in seen_assignment_ids:
                 continue
@@ -913,6 +955,7 @@ class AssignmentService:
         *,
         assignment_round_id: UUID,
         cycle: AssessmentCycle | None,
+        cycle_icare_leadership_ids: set[UUID] | None = None,
     ) -> tuple[QuestionnaireAssignment, bool]:
         definition = await self._definition_for_cycle(cycle, item.questionnaire_key)
         await self._require_company_participant(company_id, item.respondent_profile_id)
@@ -935,6 +978,14 @@ class AssignmentService:
                 project_id,
                 item,
                 cycle=cycle,
+            )
+        if cycle is not None:
+            _require_cycle_icare_self_target(
+                questionnaire_key=item.questionnaire_key.strip(),
+                target_type=item.target_type,
+                respondent_profile_id=item.respondent_profile_id,
+                target_person_id=item.target_person_id,
+                leadership_ids=cycle_icare_leadership_ids or set(),
             )
 
         existing = await self.assignment_repository.get_matching_assignment(
@@ -981,6 +1032,15 @@ class AssignmentService:
             target_type=payload.target_type,
             target_person_id=payload.target_person_id,
             target_team_id=payload.target_team_id,
+            icare_cohort=await self._icare_cohort_for_assignment(
+                company_id=company_id,
+                project_id=project_id,
+                cycle=cycle,
+                questionnaire_key=payload.questionnaire_key,
+                respondent_profile_id=payload.respondent_profile_id,
+                target_type=payload.target_type,
+                target_person_id=payload.target_person_id,
+            ),
             access_mode=AssignmentAccessMode.account_link,
             status=AssignmentStatus.assigned,
             visibility_policy=payload.visibility_policy,
@@ -1014,6 +1074,71 @@ class AssignmentService:
                     code="assessment_cycle_assignment_conflict",
                 ) from None
             return existing, False
+
+    async def _icare_cohort_for_assignment(
+        self,
+        *,
+        company_id: UUID,
+        project_id: UUID | None,
+        cycle: AssessmentCycle | None,
+        questionnaire_key: str,
+        respondent_profile_id: UUID,
+        target_type: AssignmentTargetType,
+        target_person_id: UUID | None,
+    ) -> IcareCohort | None:
+        if cycle is None or questionnaire_key.strip() not in ICARE_QUESTIONNAIRE_KEYS:
+            return None
+        if target_type == AssignmentTargetType.self_assessment:
+            return IcareCohort.self
+        if target_type != AssignmentTargetType.person or target_person_id is None:
+            raise DomainError(
+                "iCARE assignments must target a leadership member.",
+                code="icare_cohort_unavailable",
+            )
+        if respondent_profile_id == target_person_id:
+            return IcareCohort.self
+
+        cache_key = (company_id, project_id)
+        hierarchy = self._icare_hierarchy_cache.get(cache_key)
+        if hierarchy is None:
+            if project_id is not None:
+                rows = await self.company_repository.list_project_memberships(
+                    company_id,
+                    project_id,
+                )
+                hierarchy_participants = [
+                    _hierarchy_participant_from_membership(membership, participant)
+                    for membership, participant in rows
+                ]
+            else:
+                hierarchy_participants = [
+                    _hierarchy_participant_from_profile(participant)
+                    for participant in await self.company_repository.list_participants(company_id)
+                ]
+            hierarchy = build_organization_hierarchy(hierarchy_participants)
+            self._icare_hierarchy_cache[cache_key] = hierarchy
+        if hierarchy.ambiguous_name is not None:
+            raise DomainError(
+                "Correct the ambiguous reporting lines before assigning iCARE.",
+                code="icare_cohort_unavailable",
+            )
+        if target_person_id not in hierarchy.leadership_ids:
+            raise DomainError(
+                "iCARE assignments must target a leadership member.",
+                code="icare_cohort_unavailable",
+            )
+        if respondent_profile_id in hierarchy.leadership_ids:
+            return IcareCohort.leadership_peers
+        direct_report_ids = {
+            participant.id
+            for participant in hierarchy.direct_reports_by_manager_id.get(target_person_id, [])
+        }
+        if respondent_profile_id in direct_report_ids:
+            return IcareCohort.direct_team
+        raise DomainError(
+            "The iCARE feedback relationship is not part of this project organigram.",
+            code="icare_cohort_unavailable",
+        )
 
     async def _resolve_plan_team(
         self,
@@ -1067,6 +1192,29 @@ class AssignmentService:
                 )
             )
         return target_team_id
+
+    async def _cycle_icare_leadership_ids(
+        self,
+        cycle: AssessmentCycle,
+        persisted_assignments: list[QuestionnaireAssignment],
+        planned_assignments: list[AssignmentPlanSaveItem] | None = None,
+    ) -> set[UUID]:
+        leadership_ids = (
+            await self.assignment_repository.list_cycle_leadership_participant_ids(
+                cycle.id
+            )
+        )
+        for assignment in [*persisted_assignments, *(planned_assignments or [])]:
+            questionnaire_key = assignment.questionnaire_key.strip()
+            target_person_id = assignment.target_person_id
+            if (
+                questionnaire_key in ICARE_QUESTIONNAIRE_KEYS
+                and assignment.target_type == AssignmentTargetType.person
+                and target_person_id is not None
+                and target_person_id != assignment.respondent_profile_id
+            ):
+                leadership_ids.add(target_person_id)
+        return leadership_ids
 
     async def _snapshot_cycle_team_membership(
         self,
@@ -1424,6 +1572,29 @@ def _validate_target_shape(payload: AssignmentCreateRequest) -> None:
         valid = payload.target_team_id is not None and payload.target_person_id is None
     if not valid:
         raise DomainError("Assignment target does not match target type.", code="invalid_target")
+
+
+def _require_cycle_icare_self_target(
+    *,
+    questionnaire_key: str,
+    target_type: AssignmentTargetType,
+    respondent_profile_id: UUID,
+    target_person_id: UUID | None,
+    leadership_ids: set[UUID],
+) -> None:
+    is_self_target = target_type == AssignmentTargetType.self_assessment or (
+        target_type == AssignmentTargetType.person
+        and target_person_id == respondent_profile_id
+    )
+    if (
+        questionnaire_key in ICARE_QUESTIONNAIRE_KEYS
+        and is_self_target
+        and respondent_profile_id not in leadership_ids
+    ):
+        raise DomainError(
+            "Self-evaluation iCARE is available only for this cycle's leadership cohort.",
+            code="assessment_cycle_icare_self_target_not_leadership",
+        )
 
 
 def _validate_cycle_dates(

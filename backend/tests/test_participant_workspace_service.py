@@ -34,6 +34,7 @@ from codrut.modules.participants.service import (
     _definition_scale_max,
     _definition_score_feedback,
     _definition_score_labels,
+    _definition_score_scale,
 )
 from codrut.modules.scoring.models import (
     ResultPublication,
@@ -133,6 +134,143 @@ def test_received_feedback_scale_uses_the_scoring_output_unit() -> None:
     scoring["score_unit"] = "grade_1_to_5"
     assert _definition_scale_max(definition) == 5.0
 
+
+@pytest.mark.asyncio
+async def test_cycle_feedback_uses_persisted_cohorts_and_hides_ambiguous_rows() -> None:
+    cycle_id = uuid.uuid4()
+    target_id = uuid.uuid4()
+    direct_id = uuid.uuid4()
+    peer_id = uuid.uuid4()
+    ambiguous_id = uuid.uuid4()
+    service = ParticipantWorkspaceService(None)  # type: ignore[arg-type]
+    profile = ParticipantProfile(
+        id=target_id,
+        company_id=uuid.uuid4(),
+        full_name="Target",
+    )
+    assignments = [
+        QuestionnaireAssignment(
+            company_id=profile.company_id,
+            assessment_cycle_id=cycle_id,
+            respondent_profile_id=direct_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=target_id,
+            icare_cohort="direct_team",
+        ),
+        QuestionnaireAssignment(
+            company_id=profile.company_id,
+            assessment_cycle_id=cycle_id,
+            respondent_profile_id=peer_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=target_id,
+            icare_cohort="leadership_peers",
+        ),
+        QuestionnaireAssignment(
+            company_id=profile.company_id,
+            assessment_cycle_id=cycle_id,
+            respondent_profile_id=ambiguous_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=target_id,
+            icare_cohort=None,
+        ),
+    ]
+
+    cohorts = await service._split_received_feedback_cohorts(
+        profile,
+        uuid.uuid4(),
+        assignments,
+    )
+
+    assert [item.respondent_profile_id for item in cohorts["direct_team"]] == [direct_id]
+    assert [item.respondent_profile_id for item in cohorts["leadership_peers"]] == [peer_id]
+
+
+def test_lencioni_scale_sums_each_pinned_question_range() -> None:
+    scale = [
+        {"value": 1, "label": "Rareori"},
+        {"value": 2, "label": "Uneori"},
+        {"value": 3, "label": "De obicei"},
+    ]
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key="lencioni",
+        version=1,
+        title="Lencioni",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "sections": [
+                    {
+                        "questions": [
+                            {"id": "q1", "scale": scale},
+                            {"id": "q2", "scale": scale},
+                            {"id": "q3", "scale": scale},
+                        ]
+                    }
+                ],
+                "scoring": {
+                    "method": "sum_by_group",
+                    "groups": [
+                        {"id": "trust", "question_ids": ["q1", "q2", "q3"]},
+                    ],
+                },
+            }
+        },
+        feedback_policy={"scale_min": 0, "scale_max": 10},
+        content_checksum=uuid.uuid4().hex * 2,
+        active=True,
+    )
+
+    assert _definition_score_scale(definition, dimension_ids={"trust"}) == (
+        "score",
+        3.0,
+        9.0,
+    )
+
+
+def test_lencioni_heterogeneous_visible_group_ranges_are_unavailable() -> None:
+    scale = [{"value": 1}, {"value": 2}, {"value": 3}]
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key="lencioni",
+        version=1,
+        title="Lencioni",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "sections": [
+                    {
+                        "questions": [
+                            {"id": "q1", "scale": scale},
+                            {"id": "q2", "scale": scale},
+                            {"id": "q3", "scale": scale},
+                        ]
+                    }
+                ],
+                "scoring": {
+                    "method": "sum_by_group",
+                    "groups": [
+                        {"id": "trust", "question_ids": ["q1", "q2", "q3"]},
+                        {"id": "conflict", "question_ids": ["q1", "q2"]},
+                    ],
+                },
+            }
+        },
+        feedback_policy={},
+        content_checksum=uuid.uuid4().hex * 2,
+        active=True,
+    )
+
+    assert (
+        _definition_score_scale(
+            definition,
+            dimension_ids={"trust", "conflict"},
+        )
+        is None
+    )
 
 def test_driver_feedback_is_read_from_the_pinned_questionnaire_definition() -> None:
     definition = QuestionnaireDefinition(
@@ -815,6 +953,10 @@ async def test_participant_results_require_active_matching_publication_snapshot(
             published = await ParticipantWorkspaceService(session).get_workspace_summary(user.id)
             assert len(published.results) == 1
             assert published.results[0].scores["feedback_signal_a"]["score"] == 4.3
+            assert published.results[0].score_unit == "grade_1_to_5"
+            assert published.results[0].scale_min == 1.0
+            assert published.results[0].scale_max == 5.0
+            assert published.results[0].score_scale_compatible is True
 
             publication = (
                 await session.execute(
@@ -1171,21 +1313,32 @@ async def test_participant_workspace_received_feedback_hides_scores_below_thresh
             session.add_all([user, company])
             await session.flush()
 
+            director = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Director",
+                email=f"director-{uuid.uuid4().hex[:8]}@example.com",
+                role_group="leadership",
+            )
             profile = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 user_id=user.id,
                 full_name="Ana Participant",
                 email=user.email,
+                role_group="leadership",
+                reports_to_name=director.full_name,
             )
             reviewer = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 full_name="Reviewer One",
                 email=f"reviewer-one-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name=profile.full_name,
+                role_group="individual",
             )
             feedback_definition = _feedback_definition()
-            session.add_all([profile, reviewer, feedback_definition])
+            session.add_all([director, profile, reviewer, feedback_definition])
             await session.flush()
 
             received_assignment = QuestionnaireAssignment(
@@ -1211,10 +1364,21 @@ async def test_participant_workspace_received_feedback_hides_scores_below_thresh
             )
             await session.flush()
 
+            await ResultPublicationService(session).reconcile_assignment(
+                received_assignment.id
+            )
+
             summary = await ParticipantWorkspaceService(session).get_workspace_summary(user.id)
 
-            assert summary.received_feedback is None
-            assert summary.received_feedback_groups == []
+            assert summary.received_feedback is not None
+            assert summary.received_feedback.cohort == "direct_team"
+            assert summary.received_feedback.completed_count == 1
+            assert summary.received_feedback.minimum_completed == 2
+            assert summary.received_feedback.visible is False
+            assert summary.received_feedback.unavailable_reason == "privacy_threshold"
+            assert summary.received_feedback.overall_average is None
+            assert summary.received_feedback.dimensions == []
+            assert summary.received_feedback_groups == [summary.received_feedback]
 
             await session.rollback()
     finally:

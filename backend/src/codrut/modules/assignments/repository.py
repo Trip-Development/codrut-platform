@@ -13,6 +13,7 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
     Team,
     TeamMembership,
+    TeamType,
 )
 
 
@@ -201,6 +202,21 @@ class AssignmentRepository:
             .order_by(AssessmentCycleTeamMembership.created_at)
         )
         return list(result.scalars().all())
+
+    async def list_cycle_leadership_participant_ids(
+        self,
+        assessment_cycle_id: UUID,
+    ) -> set[UUID]:
+        result = await self.session.execute(
+            select(AssessmentCycleTeamMembership.participant_profile_id)
+            .join(Team, Team.id == AssessmentCycleTeamMembership.team_id)
+            .where(
+                AssessmentCycleTeamMembership.assessment_cycle_id
+                == assessment_cycle_id,
+                Team.type == TeamType.leadership,
+            )
+        )
+        return set(result.scalars().all())
 
     async def add_cycle_team_memberships(
         self,

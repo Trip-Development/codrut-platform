@@ -1,5 +1,5 @@
 import { managerReferenceKey, normalizeReportsToName } from "@/api/roster-format";
-import type { CompanyAssignment, CompanyParticipant, ReportTeamLens } from "@/api/companies";
+import type { CompanyAssignment, CompanyParticipant, ReportScoreScale, ReportTeamLens } from "@/api/companies";
 import { formatPcmLabel, getPcmColor } from "@/api/pcm";
 import type { ScoringResultRecord } from "@/api/trainer";
 
@@ -37,6 +37,7 @@ export type TeamLens = {
   pcmBaseCount: number;
   pcmPhaseCount: number;
   lencioniAverages: ReportAverage[];
+  lencioniScale?: ReportScoreScale | null;
   driverAverages: ReportAverage[];
   boss360Averages: ReportAverage[];
   pcmBaseDistribution: ReportDistribution[];
@@ -109,6 +110,7 @@ export function adaptReportTeamLenses(teamLenses: ReportTeamLens[]): TeamLens[] 
     pcmBaseCount: team.pcm_base_count,
     pcmPhaseCount: team.pcm_phase_count,
     lencioniAverages: team.lencioni_averages,
+    lencioniScale: team.lencioni_scale,
     driverAverages: team.driver_averages,
     boss360Averages: team.boss_360_averages,
     pcmBaseDistribution: team.pcm_base_distribution.map((item) => ({ ...item, color: item.color ?? undefined })),

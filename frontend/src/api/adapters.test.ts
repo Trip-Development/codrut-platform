@@ -738,6 +738,11 @@ describe("frontend API adapter stubs", () => {
             target_label: "Autoevaluare",
             scores: { work_signal_a: { score: 72, label: "Semnal de lucru A" } },
             primary_result: "work_signal_a",
+            score_unit: "percent",
+            scale_min: 0,
+            scale_max: 100,
+            score_scale_compatible: true,
+            unavailable_reason: null,
           },
         ],
         received_feedback: {
@@ -771,7 +776,15 @@ describe("frontend API adapter stubs", () => {
       pcmBase: "Gânditor",
       pcmPhase: "Perseverent",
       tasks: [expect.objectContaining({ assignmentId: "assignment-1" })],
-      results: [expect.objectContaining({ assignmentId: "result-assignment-1" })],
+      results: [
+        expect.objectContaining({
+          assignmentId: "result-assignment-1",
+          scoreUnit: "percent",
+          scaleMin: 0,
+          scaleMax: 100,
+          scoreScaleCompatible: true,
+        }),
+      ],
       receivedFeedback: {
         completedCount: 2,
         minimumCompleted: 2,

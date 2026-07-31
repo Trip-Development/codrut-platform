@@ -406,6 +406,14 @@ export type ReportAverage = {
   feedback?: string | null;
 };
 
+export type ReportScoreScale = {
+  score_unit?: string | null;
+  scale_min?: number | null;
+  scale_max?: number | null;
+  score_scale_compatible?: boolean;
+  unavailable_reason?: "incompatible_score_scales" | null;
+};
+
 export type ReportDistribution = {
   id: string;
   label: string;
@@ -426,6 +434,7 @@ export type ReportTeamLens = {
   pcm_base_count: number;
   pcm_phase_count: number;
   lencioni_averages: ReportAverage[];
+  lencioni_scale?: ReportScoreScale | null;
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
   pcm_base_distribution: ReportDistribution[];
@@ -463,10 +472,14 @@ export type CompanyReportAggregate = {
   pcm_base_count: number;
   pcm_phase_count: number;
   lencioni_averages: ReportAverage[];
+  lencioni_scale?: ReportScoreScale | null;
   driver_averages: ReportAverage[];
+  driver_scale?: ReportScoreScale | null;
   boss_360_averages: ReportAverage[];
   icare_target_summaries: IcareTargetSummary[];
   icare_cohorts: IcareCohortSummary[];
+  icare_unclassified_response_count: number;
+  icare_unclassified_reason: "historical_cohort_unavailable" | null;
   driver_rank_summary: DriverRankSummary;
   leadership_members: LeadershipMemberSummary[];
   pcm_base_distribution: ReportDistribution[];
@@ -486,6 +499,8 @@ export type IcareTargetSummary = {
   external_averages: ReportAverage[];
   self_averages: ReportAverage[];
   cohorts: IcareCohortSummary[];
+  unclassified_response_count: number;
+  unclassified_reason: "historical_cohort_unavailable" | null;
 };
 
 export type IcareCohortSummary = {
@@ -523,9 +538,15 @@ export type LeadershipMemberReport = {
   pcm_phase?: string | null;
   lencioni_count: number;
   lencioni_averages: ReportAverage[];
+  lencioni_scale?: ReportScoreScale | null;
+  lencioni_team_ambiguous: boolean;
+  lencioni_team_ambiguity_message?: string | null;
   icare_cohorts: IcareCohortSummary[];
+  icare_unclassified_response_count: number;
+  icare_unclassified_reason: "historical_cohort_unavailable" | null;
   driver_count: number;
   driver_averages: ReportAverage[];
+  driver_scale?: ReportScoreScale | null;
 };
 
 export type CompanyReportComparison = {
@@ -991,6 +1012,8 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
     boss_360_averages: boss360Averages,
     icare_target_summaries: [],
     icare_cohorts: [],
+    icare_unclassified_response_count: 0,
+    icare_unclassified_reason: null,
     driver_rank_summary: driverRankSummary,
     leadership_members: [],
     pcm_base_distribution: pcmBaseDistribution,

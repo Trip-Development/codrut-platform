@@ -46,6 +46,7 @@ describe("Lencioni team detail", () => {
             id: "single",
             name: "Echipa cu un răspuns",
             lencioniCount: 1,
+            lencioniScale: { score_unit: "score", scale_min: 0, scale_max: 12 },
             lencioniAverages: [
               {
                 id: "trust",
@@ -62,8 +63,25 @@ describe("Lencioni team detail", () => {
 
     const card = screen.getByText("Echipa cu un răspuns").closest("article");
     expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText("6.8 / 10")).toBeTruthy();
+    expect(within(card as HTMLElement).getByText("6.8 / 12")).toBeTruthy();
     expect(within(card as HTMLElement).getByText("Solid: Echipa colaborează.")).toBeTruthy();
     expect(screen.queryByText(/Prag de confidențialitate|Ascuns până există/)).toBeNull();
+  });
+
+  it("explains a team whose pinned scales cannot be combined", () => {
+    render(
+      <LencioniTeamBreakdown
+        overviewHref="/reports"
+        teams={[team({
+          lencioniCount: 2,
+          lencioniScale: {
+            score_scale_compatible: false,
+            unavailable_reason: "incompatible_score_scales",
+          },
+        })]}
+      />,
+    );
+
+    expect(screen.getByText(/Aceste rezultate folosesc scale diferite/)).toBeTruthy();
   });
 });

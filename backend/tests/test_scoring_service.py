@@ -11,9 +11,11 @@ from codrut.modules.assignments.models import (
     AssessmentCycle,
     AssessmentCycleQuestionnaire,
     AssessmentCycleStatus,
+    AssessmentCycleTeamMembership,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
+    Team,
     TeamMembershipRole,
     TeamType,
 )
@@ -56,7 +58,66 @@ class FakeScoringRepository:
 
 
 @pytest.mark.asyncio
-async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
+async def test_normal_manager_uses_functional_lencioni_result_from_complete_snapshot() -> None:
+    manager_id = uuid.uuid4()
+    top_leader_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                SimpleNamespace(
+                    all=lambda: [
+                        (
+                            leadership_team_id,
+                            TeamType.leadership,
+                            TeamMembershipRole.member,
+                        ),
+                        (
+                            functional_team_id,
+                            TeamType.functional,
+                            TeamMembershipRole.leader,
+                        ),
+                    ]
+                ),
+                SimpleNamespace(all=lambda: [(leadership_team_id, top_leader_id)]),
+            ]
+        )
+    )
+    service = ScoringService(session)  # type: ignore[arg-type]
+
+    resolution = await service._resolve_member_lencioni_team(
+        manager_id,
+        uuid.uuid4(),
+        [
+            (
+                SimpleNamespace(
+                    questionnaire_key="lencioni",
+                    status=AssignmentStatus.scored,
+                    target_team_id=leadership_team_id,
+                ),
+                SimpleNamespace(scores={"trust": 5}),
+                None,
+            ),
+            (
+                SimpleNamespace(
+                    questionnaire_key="lencioni",
+                    status=AssignmentStatus.scored,
+                    target_team_id=functional_team_id,
+                ),
+                SimpleNamespace(scores={"trust": 8}),
+                None,
+            )
+        ],  # type: ignore[arg-type]
+        prefer_leadership=True,
+    )
+
+    assert resolution.team_id == functional_team_id
+    assert resolution.ambiguous is False
+
+
+@pytest.mark.asyncio
+async def test_top_leader_keeps_leadership_lencioni_result() -> None:
     functional_team_id = uuid.uuid4()
     leadership_team_id = uuid.uuid4()
     session = SimpleNamespace(
@@ -66,7 +127,7 @@ async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
                     (
                         leadership_team_id,
                         TeamType.leadership,
-                        TeamMembershipRole.member,
+                        TeamMembershipRole.leader,
                     ),
                     (
                         functional_team_id,
@@ -79,21 +140,331 @@ async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
     )
     service = ScoringService(session)  # type: ignore[arg-type]
 
-    functional = await service._resolve_member_lencioni_team_id(
+    resolution = await service._resolve_member_lencioni_team(
         uuid.uuid4(),
         uuid.uuid4(),
-        [],
+        [
+            (
+                SimpleNamespace(
+                    questionnaire_key="lencioni",
+                    status=AssignmentStatus.scored,
+                    target_team_id=leadership_team_id,
+                ),
+                SimpleNamespace(scores={"trust": 5}),
+                None,
+            ),
+            (
+                SimpleNamespace(
+                    questionnaire_key="lencioni",
+                    status=AssignmentStatus.scored,
+                    target_team_id=functional_team_id,
+                ),
+                SimpleNamespace(scores={"trust": 8}),
+                None,
+            ),
+        ],  # type: ignore[arg-type]
         prefer_leadership=False,
     )
-    top_leader = await service._resolve_member_lencioni_team_id(
+
+    assert resolution.team_id == leadership_team_id
+    assert resolution.ambiguous is False
+
+
+@pytest.mark.asyncio
+async def test_legacy_cycle_flags_ambiguous_top_leader_without_guessing() -> None:
+    member_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                SimpleNamespace(
+                    all=lambda: [
+                        (
+                            leadership_team_id,
+                            TeamType.leadership,
+                            TeamMembershipRole.member,
+                        ),
+                        (
+                            functional_team_id,
+                            TeamType.functional,
+                            TeamMembershipRole.leader,
+                        ),
+                    ]
+                ),
+                SimpleNamespace(all=lambda: []),
+            ]
+        )
+    )
+    service = ScoringService(session)  # type: ignore[arg-type]
+    assignment_results = [
+        (
+            SimpleNamespace(
+                questionnaire_key="lencioni",
+                status=AssignmentStatus.scored,
+                target_team_id=leadership_team_id,
+            ),
+            SimpleNamespace(scores={"trust": 3}),
+            None,
+        ),
+        (
+            SimpleNamespace(
+                questionnaire_key="lencioni",
+                status=AssignmentStatus.scored,
+                target_team_id=functional_team_id,
+            ),
+            SimpleNamespace(scores={"trust": 8}),
+            None,
+        ),
+    ]
+
+    resolution = await service._resolve_member_lencioni_team(
+        member_id,
         uuid.uuid4(),
-        uuid.uuid4(),
-        [],
-        prefer_leadership=True,
+        assignment_results,  # type: ignore[arg-type]
+        prefer_leadership=False,
     )
 
-    assert functional == functional_team_id
-    assert top_leader == leadership_team_id
+    assert resolution.team_id is None
+    assert resolution.ambiguous is True
+    assert "istoric Lencioni" in (resolution.ambiguity_message or "")
+
+
+@pytest.mark.asyncio
+async def test_historical_cycle_keeps_inactive_snapshot_leader_reportable() -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"Historical {uuid.uuid4().hex[:8]}")
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="Historical leadership",
+            )
+            participant = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Former Leader",
+                email=f"former-{uuid.uuid4().hex[:8]}@example.com",
+                role_group="individual",
+            )
+            membership = ProjectMembership(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                participant_profile_id=participant.id,
+                role_group="leadership",
+                position="Director istoric",
+                active=False,
+            )
+            cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Ciclul istoric",
+                status=AssessmentCycleStatus.closed,
+            )
+            leadership_team = Team(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name=f"Leadership {uuid.uuid4().hex[:8]}",
+                type=TeamType.leadership,
+            )
+            session.add(company)
+            await session.flush()
+            session.add_all([project, participant, leadership_team])
+            await session.flush()
+            session.add_all([membership, cycle])
+            await session.flush()
+            cycle_membership = AssessmentCycleTeamMembership(
+                id=uuid.uuid4(),
+                assessment_cycle_id=cycle.id,
+                team_id=leadership_team.id,
+                participant_profile_id=participant.id,
+                role=TeamMembershipRole.leader,
+            )
+            session.add(cycle_membership)
+            await session.flush()
+
+            service = ScoringService(session)
+            service.company_repository = SimpleNamespace(
+                get_company=AsyncMock(return_value=company),
+                get_project=AsyncMock(return_value=project),
+            )
+            service.repository = SimpleNamespace(
+                list_company_assignment_results_with_definitions=AsyncMock(
+                    return_value=[]
+                ),
+                list_company_pcm_responses=AsyncMock(return_value=[]),
+            )
+
+            aggregate = await service.get_company_report_aggregate(
+                company.id,
+                project.id,
+                cycle.id,
+            )
+            report = await service.get_leadership_member_report(
+                company.id,
+                project.id,
+                participant.id,
+                cycle.id,
+            )
+
+            assert [member.participant_profile_id for member in aggregate.leadership_members] == [
+                participant.id
+            ]
+            assert report.member.participant_profile_id == participant.id
+            assert report.member.position == "Director istoric"
+            assert report.member.role_group == "leadership"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_icare_only_cycle_derives_report_roster_and_leader_from_assignments(
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            company = Company(id=uuid.uuid4(), name=f"iCARE-only {uuid.uuid4().hex[:8]}")
+            session.add(company)
+            await session.flush()
+
+            project = CompanyProject(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name="iCARE fără organigramă salvată",
+            )
+            leader = ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                full_name="Lider istoric",
+                email=f"leader-{uuid.uuid4().hex[:8]}@example.com",
+                role_group="individual",
+            )
+            reviewers = [
+                ParticipantProfile(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    full_name=f"Respondent {index}",
+                    email=f"reviewer-{index}-{uuid.uuid4().hex[:8]}@example.com",
+                    role_group="individual",
+                )
+                for index in range(1, 3)
+            ]
+            definition = questionnaire_definition_factory("boss_360")
+            session.add_all([project, leader, *reviewers, definition])
+            await session.flush()
+
+            cycle = AssessmentCycle(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=1,
+                name="Ciclul iCARE",
+                status=AssessmentCycleStatus.closed,
+            )
+            session.add(cycle)
+            await session.flush()
+            session.add(
+                AssessmentCycleQuestionnaire(
+                    assessment_cycle_id=cycle.id,
+                    questionnaire_definition_id=definition.id,
+                    questionnaire_key="boss_360",
+                    display_order=0,
+                )
+            )
+            session.add_all(
+                [
+                    ProjectMembership(
+                        company_id=company.id,
+                        project_id=project.id,
+                        participant_profile_id=participant.id,
+                        role_group="individual",
+                        active=False,
+                    )
+                    for participant in [leader, *reviewers]
+                ]
+            )
+            await session.flush()
+
+            assignments = [
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    assessment_cycle_id=cycle.id,
+                    cycle_shape_guard=cycle.id,
+                    respondent_profile_id=reviewer.id,
+                    questionnaire_key="boss_360",
+                    questionnaire_definition_id=definition.id,
+                    target_type=AssignmentTargetType.person,
+                    target_person_id=leader.id,
+                    icare_cohort="direct_team",
+                    status=AssignmentStatus.scored,
+                )
+                for reviewer in reviewers
+            ]
+            assignments.append(
+                QuestionnaireAssignment(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    project_id=project.id,
+                    assessment_cycle_id=cycle.id,
+                    cycle_shape_guard=cycle.id,
+                    respondent_profile_id=leader.id,
+                    questionnaire_key="boss_360",
+                    questionnaire_definition_id=definition.id,
+                    target_type=AssignmentTargetType.person,
+                    target_person_id=leader.id,
+                    icare_cohort="self",
+                    status=AssignmentStatus.scored,
+                )
+            )
+            session.add_all(assignments)
+            await session.flush()
+            session.add_all(
+                [
+                    ScoringResult(
+                        assignment_id=assignment.id,
+                        scores={"claritate": {"score": 80 + index}},
+                    )
+                    for index, assignment in enumerate(assignments)
+                ]
+            )
+            await session.flush()
+
+            service = ScoringService(session)
+            aggregate = await service.get_company_report_aggregate(
+                company.id,
+                project.id,
+                cycle.id,
+            )
+            report = await service.get_leadership_member_report(
+                company.id,
+                project.id,
+                leader.id,
+                cycle.id,
+            )
+
+            assert [
+                member.participant_profile_id for member in aggregate.leadership_members
+            ] == [leader.id]
+            target_summary = aggregate.icare_target_summaries[0]
+            assert target_summary.target_profile_id == leader.id
+            assert target_summary.external_response_count == 2
+            assert target_summary.self_response_count == 1
+            assert {
+                cohort.cohort: cohort.response_count for cohort in report.icare_cohorts
+            } == {
+                "direct_team": 2,
+                "leadership_peers": 0,
+                "self": 1,
+            }
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -736,6 +1107,16 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
                 key: questionnaire_definition_factory(key)
                 for key in ("lencioni", "distress_drivers", "boss_360")
             }
+            definitions["lencioni"].feedback_policy = {
+                "score_unit": "score",
+                "scale_min": 0,
+                "scale_max": 15,
+            }
+            definitions["distress_drivers"].feedback_policy = {
+                "score_unit": "percent",
+                "scale_min": 0,
+                "scale_max": 100,
+            }
             session.add_all(definitions.values())
             await session.flush()
 
@@ -966,9 +1347,24 @@ async def test_cycle_report_derives_and_enforces_its_project_scope(
                 full_name="Carmen Outside",
                 email=f"carmen-{uuid.uuid4().hex[:8]}@example.com",
             )
+            leadership_team = Team(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name=f"Leadership {uuid.uuid4().hex[:8]}",
+                type=TeamType.leadership,
+            )
             session.add(company)
             await session.flush()
-            session.add_all([project, other_project, leader, direct_report, outside_participant])
+            session.add_all(
+                [
+                    project,
+                    other_project,
+                    leader,
+                    direct_report,
+                    outside_participant,
+                    leadership_team,
+                ]
+            )
             await session.flush()
             session.add_all(
                 [
@@ -1001,13 +1397,27 @@ async def test_cycle_report_derives_and_enforces_its_project_scope(
             )
             session.add_all([definition, cycle])
             await session.flush()
-            session.add(
-                AssessmentCycleQuestionnaire(
-                    assessment_cycle_id=cycle.id,
-                    questionnaire_definition_id=definition.id,
-                    questionnaire_key="lencioni",
-                    display_order=0,
-                )
+            session.add_all(
+                [
+                    AssessmentCycleQuestionnaire(
+                        assessment_cycle_id=cycle.id,
+                        questionnaire_definition_id=definition.id,
+                        questionnaire_key="lencioni",
+                        display_order=0,
+                    ),
+                    AssessmentCycleTeamMembership(
+                        assessment_cycle_id=cycle.id,
+                        team_id=leadership_team.id,
+                        participant_profile_id=leader.id,
+                        role=TeamMembershipRole.leader,
+                    ),
+                    AssessmentCycleTeamMembership(
+                        assessment_cycle_id=cycle.id,
+                        team_id=leadership_team.id,
+                        participant_profile_id=direct_report.id,
+                        role=TeamMembershipRole.member,
+                    ),
+                ]
             )
 
             aggregate = await ScoringService(session).get_company_report_aggregate(
@@ -1017,7 +1427,9 @@ async def test_cycle_report_derives_and_enforces_its_project_scope(
 
             assert aggregate.assessment_cycle_id == cycle.id
             leadership_lens = next(
-                team for team in aggregate.team_lenses if team.id == "leadership"
+                team
+                for team in aggregate.team_lenses
+                if team.id == str(leadership_team.id)
             )
             assert leadership_lens.member_count == 2
             with pytest.raises(DomainError) as wrong_project:
@@ -1054,6 +1466,17 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
             baseline_lencioni = questionnaire_definition_factory("lencioni")
             comparison_lencioni = questionnaire_definition_factory("lencioni")
             shared_drivers = questionnaire_definition_factory("distress_drivers")
+            for definition in (baseline_lencioni, comparison_lencioni):
+                definition.feedback_policy = {
+                    "score_unit": "score",
+                    "scale_min": 0,
+                    "scale_max": 10,
+                }
+            shared_drivers.feedback_policy = {
+                "score_unit": "percent",
+                "scale_min": 0,
+                "scale_max": 100,
+            }
             baseline_cycle = AssessmentCycle(
                 id=uuid.uuid4(),
                 company_id=company.id,

@@ -2499,6 +2499,7 @@ export interface components {
             /** Driver Count */
             driver_count: number;
             driver_rank_summary: components["schemas"]["DriverRankSummaryResponse"];
+            driver_scale: components["schemas"]["ReportScoreScaleResponse"];
             /** Hierarchy Ambiguity Message */
             hierarchy_ambiguity_message?: string | null;
             /**
@@ -2512,12 +2513,20 @@ export interface components {
             icare_cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
             /** Icare Target Summaries */
             icare_target_summaries: components["schemas"]["IcareTargetSummaryResponse"][];
+            /** Icare Unclassified Reason */
+            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            /**
+             * Icare Unclassified Response Count
+             * @default 0
+             */
+            icare_unclassified_response_count: number;
             /** Leadership Members */
             leadership_members?: components["schemas"]["LeadershipMemberSummaryResponse"][];
             /** Lencioni Averages */
             lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */
             lencioni_count: number;
+            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
             /** Pcm Base Count */
             pcm_base_count: number;
             /** Pcm Base Distribution */
@@ -2928,6 +2937,13 @@ export interface components {
              * Format: uuid
              */
             target_profile_id: string;
+            /** Unclassified Reason */
+            unclassified_reason?: "historical_cohort_unavailable" | null;
+            /**
+             * Unclassified Response Count
+             * @default 0
+             */
+            unclassified_response_count: number;
         };
         /** InvitationCreateRequest */
         InvitationCreateRequest: {
@@ -3129,12 +3145,28 @@ export interface components {
             driver_averages: components["schemas"]["ReportAverageResponse"][];
             /** Driver Count */
             driver_count: number;
+            driver_scale: components["schemas"]["ReportScoreScaleResponse"];
             /** Icare Cohorts */
             icare_cohorts: components["schemas"]["IcareCohortSummaryResponse"][];
+            /** Icare Unclassified Reason */
+            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            /**
+             * Icare Unclassified Response Count
+             * @default 0
+             */
+            icare_unclassified_response_count: number;
             /** Lencioni Averages */
             lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */
             lencioni_count: number;
+            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
+            /** Lencioni Team Ambiguity Message */
+            lencioni_team_ambiguity_message?: string | null;
+            /**
+             * Lencioni Team Ambiguous
+             * @default false
+             */
+            lencioni_team_ambiguous: boolean;
             member: components["schemas"]["LeadershipMemberSummaryResponse"];
             /** Pcm Base */
             pcm_base?: string | null;
@@ -3613,6 +3645,17 @@ export interface components {
             project_name?: string | null;
             /** Questionnaire Key */
             questionnaire_key: string;
+            /** Scale Max */
+            scale_max?: number | null;
+            /** Scale Min */
+            scale_min?: number | null;
+            /**
+             * Score Scale Compatible
+             * @default true
+             */
+            score_scale_compatible: boolean;
+            /** Score Unit */
+            score_unit?: string | null;
             /** Scores */
             scores: {
                 [key: string]: unknown;
@@ -3621,6 +3664,8 @@ export interface components {
             target_label: string;
             /** Title */
             title: string;
+            /** Unavailable Reason */
+            unavailable_reason?: "incompatible_score_scales" | null;
         };
         /** ParticipantWorkspaceSummary */
         ParticipantWorkspaceSummary: {
@@ -3953,6 +3998,22 @@ export interface components {
             /** Reports To Name */
             reports_to_name?: string | null;
         };
+        /** ReportScoreScaleResponse */
+        ReportScoreScaleResponse: {
+            /** Scale Max */
+            scale_max?: number | null;
+            /** Scale Min */
+            scale_min?: number | null;
+            /**
+             * Score Scale Compatible
+             * @default true
+             */
+            score_scale_compatible: boolean;
+            /** Score Unit */
+            score_unit?: string | null;
+            /** Unavailable Reason */
+            unavailable_reason?: "incompatible_score_scales" | null;
+        };
         /** ReportTeamLensResponse */
         ReportTeamLensResponse: {
             /** Assigned Count */
@@ -3975,6 +4036,7 @@ export interface components {
             lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */
             lencioni_count: number;
+            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
             /** Member Count */
             member_count: number;
             /** Name */
