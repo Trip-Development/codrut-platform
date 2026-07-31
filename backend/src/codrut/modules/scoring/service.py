@@ -290,6 +290,10 @@ class ScoringService:
             participants,
             team_snapshot=team_snapshot,
         )
+        icare_unclassified_response_count = _icare_unclassified_response_count(
+            assignment_results,
+            participants,
+        )
         icare_target_summaries = _build_icare_target_summaries(
             assignment_results,
             participants,
@@ -342,6 +346,12 @@ class ScoringService:
             boss_360_averages=score_summary.boss_360_averages,
             icare_target_summaries=icare_target_summaries,
             icare_cohorts=icare_cohorts,
+            icare_unclassified_response_count=icare_unclassified_response_count,
+            icare_unclassified_reason=(
+                "historical_cohort_unavailable"
+                if icare_unclassified_response_count
+                else None
+            ),
             driver_rank_summary=driver_rank_summary,
             leadership_members=_build_leadership_members(
                 participants,
@@ -470,6 +480,12 @@ class ScoringService:
             lencioni_team_ambiguous=lencioni_team.ambiguous,
             lencioni_team_ambiguity_message=lencioni_team.ambiguity_message,
             icare_cohorts=target_summary.cohorts if target_summary is not None else [],
+            icare_unclassified_response_count=(
+                target_summary.unclassified_response_count if target_summary is not None else 0
+            ),
+            icare_unclassified_reason=(
+                target_summary.unclassified_reason if target_summary is not None else None
+            ),
             driver_count=driver_summary.driver_count,
             driver_averages=[
                 average.model_copy(update={"feedback": driver_feedback.get(average.id)})
@@ -1558,6 +1574,9 @@ def _icare_assignment_cohort(
     hierarchy: Any,
     team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> str | None:
+    if getattr(assignment, "assessment_cycle_id", None) is not None:
+        persisted_cohort = _enum_value(getattr(assignment, "icare_cohort", None))
+        return persisted_cohort if persisted_cohort in ICARE_COHORT_ORDER else None
     target_id = _icare_target_id(assignment)
     leadership_ids = (
         team_snapshot.leadership_ids
@@ -1609,12 +1628,8 @@ def _build_icare_cohort_summaries(
     }
 
     def cohort_for_row(assignment: QuestionnaireAssignment) -> str | None:
-        if team_snapshot is not None:
-            return _icare_assignment_cohort(
-                assignment,
-                hierarchy=hierarchy,
-                team_snapshot=team_snapshot,
-            )
+        if getattr(assignment, "assessment_cycle_id", None) is not None:
+            return _icare_assignment_cohort(assignment, hierarchy=hierarchy)
         if hierarchy.ambiguous_name is None:
             return _icare_assignment_cohort(assignment, hierarchy=hierarchy)
         target_id = _icare_target_id(assignment)
@@ -1627,46 +1642,86 @@ def _build_icare_cohort_summaries(
         for assignment, result, definition in eligible_rows
         if (cohort := cohort_for_row(assignment)) is not None
     ]
-    scales = {
-        scale
-        for _assignment, _result, definition, _cohort in classified_rows
-        if (scale := _icare_score_scale(definition)) is not None
-    }
-    definition_ids = {
-        definition_id
-        for _assignment, _result, definition, _cohort in classified_rows
-        if definition is not None and (definition_id := getattr(definition, "id", None)) is not None
-    }
-    if len(scales) > 1 or len(definition_ids) > 1:
-        return [
+    summaries: list[IcareCohortSummaryResponse] = []
+    for cohort in ICARE_COHORT_ORDER:
+        cohort_rows = [row for row in classified_rows if row[3] == cohort]
+        scales = {
+            scale
+            for _assignment, _result, definition, _cohort in cohort_rows
+            if (scale := _icare_score_scale(definition)) is not None
+        }
+        definition_ids = {
+            definition_id
+            for _assignment, _result, definition, _cohort in cohort_rows
+            if definition is not None
+            and (definition_id := getattr(definition, "id", None)) is not None
+        }
+        if len(scales) > 1 or len(definition_ids) > 1:
+            summaries.append(
+                IcareCohortSummaryResponse(
+                    cohort=cohort,  # type: ignore[arg-type]
+                    response_count=len(cohort_rows),
+                    averages=[],
+                    score_scale_compatible=False,
+                    unavailable_reason="incompatible_score_scales",
+                )
+            )
+            continue
+        dimensions: dict[str, ReportDimensionAccumulator] = {}
+        for _assignment, result, definition, _cohort in cohort_rows:
+            assert result is not None
+            _accumulate_scores(dimensions, result, definition)
+        score_scale = next(iter(scales), None)
+        summaries.append(
             IcareCohortSummaryResponse(
                 cohort=cohort,  # type: ignore[arg-type]
-                response_count=0,
-                averages=[],
-                score_scale_compatible=False,
-                unavailable_reason="incompatible_score_scales",
+                response_count=len(cohort_rows),
+                averages=_averages_from_accumulators(dimensions),
+                score_unit=score_scale.score_unit if score_scale is not None else None,
+                scale_min=score_scale.scale_min if score_scale is not None else None,
+                scale_max=score_scale.scale_max if score_scale is not None else None,
             )
-            for cohort in ICARE_COHORT_ORDER
-        ]
-    score_scale = next(iter(scales), None)
-    grouped: dict[str, tuple[dict[str, ReportDimensionAccumulator], int]] = {}
-    for _assignment, result, definition, cohort in classified_rows:
-        assert result is not None
-        dimensions, count = grouped.setdefault(cohort, ({}, 0))
-        if _accumulate_scores(dimensions, result, definition):
-            grouped[cohort] = (dimensions, count + 1)
-
-    return [
-        IcareCohortSummaryResponse(
-            cohort=cohort,  # type: ignore[arg-type]
-            response_count=grouped.get(cohort, ({}, 0))[1],
-            averages=_averages_from_accumulators(grouped.get(cohort, ({}, 0))[0]),
-            score_unit=score_scale.score_unit if score_scale is not None else None,
-            scale_min=score_scale.scale_min if score_scale is not None else None,
-            scale_max=score_scale.scale_max if score_scale is not None else None,
         )
-        for cohort in ICARE_COHORT_ORDER
-    ]
+    return summaries
+
+
+def _icare_unclassified_response_count(
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+    participants: list[ReportParticipant],
+    *,
+    target_profile_id: UUID | None = None,
+) -> int:
+    hierarchy = build_organization_hierarchy(
+        [_hierarchy_participant_from_report(participant) for participant in participants]
+    )
+    explicit_leadership_ids = _explicit_leadership_ids(participants)
+    count = 0
+    for assignment, result, definition in assignment_results:
+        if (
+            assignment.questionnaire_key not in BOSS_360_REPORT_KEYS
+            or assignment.status not in COMPLETED_STATUSES
+            or result is None
+            or definition is None
+            or (target_profile_id is not None and _icare_target_id(assignment) != target_profile_id)
+        ):
+            continue
+        if hierarchy.ambiguous_name is None:
+            cohort = _icare_assignment_cohort(assignment, hierarchy=hierarchy)
+        elif (
+            getattr(assignment, "assessment_cycle_id", None) is not None
+            and _enum_value(getattr(assignment, "icare_cohort", None))
+            in ICARE_COHORT_ORDER
+        ):
+            cohort = _enum_value(getattr(assignment, "icare_cohort", None))
+        elif _is_self_boss_assignment(assignment) and (
+            _icare_target_id(assignment) in explicit_leadership_ids
+        ):
+            cohort = "self"
+        else:
+            cohort = None
+        if cohort is None:
+            count += 1
+    return count
 
 
 def _build_icare_target_summaries(
@@ -1718,7 +1773,10 @@ def _build_icare_target_summaries(
             target_id,
             ({}, {}, 0, 0),
         )
-        if _is_self_boss_assignment(assignment):
+        cohort = _icare_assignment_cohort(assignment, hierarchy=hierarchy)
+        if cohort is None:
+            continue
+        if cohort == "self":
             if _accumulate_scores(self_dimensions, result, definition):
                 self_count += 1
         elif _accumulate_scores(external_dimensions, result, definition):
@@ -1730,6 +1788,14 @@ def _build_icare_target_summaries(
             self_count,
         )
 
+    unclassified_counts = {
+        target_id: _icare_unclassified_response_count(
+            assignment_result_rows,
+            participants,
+            target_profile_id=target_id,
+        )
+        for target_id in grouped
+    }
     return [
         IcareTargetSummaryResponse(
             target_profile_id=target_id,
@@ -1743,6 +1809,12 @@ def _build_icare_target_summaries(
                 participants,
                 target_profile_id=target_id,
                 team_snapshot=team_snapshot,
+            ),
+            unclassified_response_count=unclassified_counts[target_id],
+            unclassified_reason=(
+                "historical_cohort_unavailable"
+                if unclassified_counts[target_id]
+                else None
             ),
         )
         for target_id, (

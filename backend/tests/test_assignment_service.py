@@ -13,6 +13,7 @@ from codrut.modules.assignments.models import (
     AssessmentCycleTeamMembership,
     AssignmentStatus,
     AssignmentTargetType,
+    IcareCohort,
     QuestionnaireAssignment,
     Team,
     TeamMembership,
@@ -2141,6 +2142,138 @@ async def test_manual_assignment_rejects_duplicate_within_cycle() -> None:
     with pytest.raises(DomainError) as exc_info:
         await service.create_assignment(user_id, company_id, payload)
     assert exc_info.value.code == "assessment_cycle_assignment_exists"
+
+
+async def test_icare_only_cycle_persists_cohort_without_lencioni_team_snapshot() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        respondent_id,
+        leader_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    chief_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="iCARE only",
+    )
+    company_repository.participants[chief_id] = ParticipantProfile(
+        id=chief_id,
+        company_id=company_id,
+        full_name="Chief",
+        email="chief@example.com",
+        role_group="leadership",
+    )
+    company_repository.participants[leader_id].role_group = "leadership"
+    company_repository.project_memberships.extend(
+        [
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=chief_id,
+                reports_to_name=None,
+                position="CEO",
+                location=None,
+                role_group="leadership",
+                active=True,
+            ),
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=leader_id,
+                reports_to_name="Chief",
+                position="Director",
+                location=None,
+                role_group="leadership",
+                active=True,
+            ),
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=respondent_id,
+                reports_to_name="Target",
+                position=None,
+                location=None,
+                role_group="individual",
+                active=True,
+            ),
+        ]
+    )
+    definition_id = uuid.uuid4()
+    forms_repository = cast(FakeFormsRepository, service.forms_repository)
+    forms_repository.definitions_by_id[definition_id] = SimpleNamespace(
+        id=definition_id,
+        key="boss_360",
+        version=1,
+        active=False,
+    )
+    cycle = await assignment_repository.add_assessment_cycle(
+        AssessmentCycle(
+            company_id=company_id,
+            project_id=project_id,
+            sequence=1,
+            name="iCARE",
+            status=AssessmentCycleStatus.draft,
+            created_by_user_id=user_id,
+        )
+    )
+    await assignment_repository.add_assessment_cycle_questionnaires(
+        [
+            AssessmentCycleQuestionnaire(
+                assessment_cycle_id=cycle.id,
+                questionnaire_definition_id=definition_id,
+                questionnaire_key="boss_360",
+                display_order=0,
+            )
+        ]
+    )
+
+    direct_assignment = await service.create_assignment(
+        user_id,
+        company_id,
+        AssignmentCreateRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            respondent_profile_id=respondent_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=leader_id,
+        ),
+    )
+    peer_assignment = await service.create_assignment(
+        user_id,
+        company_id,
+        AssignmentCreateRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            respondent_profile_id=chief_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=leader_id,
+        ),
+    )
+    self_assignment = await service.create_assignment(
+        user_id,
+        company_id,
+        AssignmentCreateRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            respondent_profile_id=leader_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=leader_id,
+        ),
+    )
+
+    assert direct_assignment.icare_cohort == IcareCohort.direct_team
+    assert peer_assignment.icare_cohort == IcareCohort.leadership_peers
+    assert self_assignment.icare_cohort == IcareCohort.self
+    assert assignment_repository.cycle_team_memberships == []
 
 
 async def test_delete_assessment_cycle_requires_draft() -> None:

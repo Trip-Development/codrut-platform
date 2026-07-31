@@ -3203,6 +3203,23 @@
             "title": "Icare Target Summaries",
             "type": "array"
           },
+          "icare_unclassified_reason": {
+            "anyOf": [
+              {
+                "const": "historical_cohort_unavailable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icare Unclassified Reason"
+          },
+          "icare_unclassified_response_count": {
+            "default": 0,
+            "title": "Icare Unclassified Response Count",
+            "type": "integer"
+          },
           "leadership_members": {
             "items": {
               "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
@@ -4332,6 +4349,23 @@
             "format": "uuid",
             "title": "Target Profile Id",
             "type": "string"
+          },
+          "unclassified_reason": {
+            "anyOf": [
+              {
+                "const": "historical_cohort_unavailable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unclassified Reason"
+          },
+          "unclassified_response_count": {
+            "default": 0,
+            "title": "Unclassified Response Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -4893,6 +4927,23 @@
             },
             "title": "Icare Cohorts",
             "type": "array"
+          },
+          "icare_unclassified_reason": {
+            "anyOf": [
+              {
+                "const": "historical_cohort_unavailable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icare Unclassified Reason"
+          },
+          "icare_unclassified_response_count": {
+            "default": 0,
+            "title": "Icare Unclassified Response Count",
+            "type": "integer"
           },
           "lencioni_averages": {
             "items": {

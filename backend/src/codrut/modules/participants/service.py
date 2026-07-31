@@ -662,30 +662,26 @@ class ParticipantWorkspaceService:
         *,
         assessment_cycle_id: UUID | None = None,
     ) -> dict[str, list[QuestionnaireAssignment]]:
-        if assessment_cycle_id is not None:
-            snapshot = await load_assessment_cycle_team_snapshot(
-                self.session,
-                assessment_cycle_id,
-            )
-            direct_report_ids = snapshot.direct_report_ids_by_leader_id.get(
-                profile.id,
-                frozenset(),
-            )
-            return {
-                "direct_team": [
-                    assignment
-                    for assignment in assignments
-                    if assignment.respondent_profile_id in direct_report_ids
-                    and assignment.respondent_profile_id not in snapshot.leadership_ids
-                ],
-                "leadership_peers": [
-                    assignment
-                    for assignment in assignments
-                    if assignment.respondent_profile_id in snapshot.leadership_ids
-                    and profile.id in snapshot.leadership_ids
-                    and assignment.respondent_profile_id != profile.id
-                ],
-            }
+        cycle_scoped_assignments = [
+            assignment for assignment in assignments if assignment.assessment_cycle_id is not None
+        ]
+        legacy_assignments = [
+            assignment for assignment in assignments if assignment.assessment_cycle_id is None
+        ]
+        persisted = {
+            "direct_team": [
+                assignment
+                for assignment in cycle_scoped_assignments
+                if assignment.icare_cohort == "direct_team"
+            ],
+            "leadership_peers": [
+                assignment
+                for assignment in cycle_scoped_assignments
+                if assignment.icare_cohort == "leadership_peers"
+            ],
+        }
+        if not legacy_assignments:
+            return persisted
         if project_id is not None:
             rows = (
                 await self.session.execute(
@@ -733,21 +729,21 @@ class ParticipantWorkspaceService:
             ]
         hierarchy = build_organization_hierarchy(participants)
         if hierarchy.ambiguous_name is not None:
-            return {"direct_team": [], "leadership_peers": []}
+            return persisted
         direct_report_ids = {
             participant.id
             for participant in hierarchy.direct_reports_by_manager_id.get(profile.id, [])
         }
         return {
-            "direct_team": [
+            "direct_team": persisted["direct_team"] + [
                 assignment
-                for assignment in assignments
+                for assignment in legacy_assignments
                 if assignment.respondent_profile_id in direct_report_ids
                 and assignment.respondent_profile_id not in hierarchy.leadership_ids
             ],
-            "leadership_peers": [
+            "leadership_peers": persisted["leadership_peers"] + [
                 assignment
-                for assignment in assignments
+                for assignment in legacy_assignments
                 if assignment.respondent_profile_id in hierarchy.leadership_ids
                 and profile.id in hierarchy.leadership_ids
                 and assignment.respondent_profile_id != profile.id

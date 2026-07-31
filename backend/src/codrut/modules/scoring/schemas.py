@@ -100,6 +100,8 @@ class IcareTargetSummaryResponse(BaseModel):
     external_averages: list[ReportAverageResponse]
     self_averages: list[ReportAverageResponse]
     cohorts: list["IcareCohortSummaryResponse"] = Field(default_factory=list)
+    unclassified_response_count: int = 0
+    unclassified_reason: Literal["historical_cohort_unavailable"] | None = None
 
 
 class IcareCohortSummaryResponse(BaseModel):
@@ -163,6 +165,8 @@ class LeadershipMemberReportResponse(BaseModel):
     lencioni_team_ambiguous: bool = False
     lencioni_team_ambiguity_message: str | None = None
     icare_cohorts: list[IcareCohortSummaryResponse]
+    icare_unclassified_response_count: int = 0
+    icare_unclassified_reason: Literal["historical_cohort_unavailable"] | None = None
     driver_count: int
     driver_averages: list[ReportAverageResponse]
     driver_scale: ReportScoreScaleResponse
@@ -190,6 +194,8 @@ class CompanyReportAggregateResponse(BaseModel):
     boss_360_averages: list[ReportAverageResponse]
     icare_target_summaries: list[IcareTargetSummaryResponse]
     icare_cohorts: list[IcareCohortSummaryResponse] = Field(default_factory=list)
+    icare_unclassified_response_count: int = 0
+    icare_unclassified_reason: Literal["historical_cohort_unavailable"] | None = None
     driver_rank_summary: DriverRankSummaryResponse
     leadership_members: list[LeadershipMemberSummaryResponse] = Field(default_factory=list)
     pcm_base_distribution: list[ReportDistributionResponse]

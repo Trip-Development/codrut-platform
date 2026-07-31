@@ -139,84 +139,57 @@ def test_received_feedback_scale_uses_the_scoring_output_unit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_received_feedback_cycle_snapshot_ignores_current_organigram() -> None:
-    leader_id = uuid.uuid4()
+async def test_cycle_feedback_uses_persisted_cohorts_and_hides_ambiguous_rows() -> None:
+    cycle_id = uuid.uuid4()
+    target_id = uuid.uuid4()
+    direct_id = uuid.uuid4()
     peer_id = uuid.uuid4()
-    direct_report_id = uuid.uuid4()
-    leadership_team_id = uuid.uuid4()
-    functional_team_id = uuid.uuid4()
-    session = SimpleNamespace(
-        execute=AsyncMock(
-            return_value=SimpleNamespace(
-                all=lambda: [
-                    (
-                        leadership_team_id,
-                        leader_id,
-                        TeamMembershipRole.leader,
-                        TeamType.leadership,
-                        "Leadership",
-                    ),
-                    (
-                        leadership_team_id,
-                        peer_id,
-                        TeamMembershipRole.member,
-                        TeamType.leadership,
-                        "Leadership",
-                    ),
-                    (
-                        functional_team_id,
-                        leader_id,
-                        TeamMembershipRole.leader,
-                        TeamType.functional,
-                        "Echipa Ana",
-                    ),
-                    (
-                        functional_team_id,
-                        direct_report_id,
-                        TeamMembershipRole.member,
-                        TeamType.functional,
-                        "Echipa Ana",
-                    ),
-                ]
-            )
-        )
-    )
-    service = ParticipantWorkspaceService(session)  # type: ignore[arg-type]
+    ambiguous_id = uuid.uuid4()
+    service = ParticipantWorkspaceService(None)  # type: ignore[arg-type]
     profile = ParticipantProfile(
-        id=leader_id,
+        id=target_id,
         company_id=uuid.uuid4(),
-        full_name="Ana Leader",
-        role_group="individual",
-        reports_to_name="Alt manager",
+        full_name="Target",
     )
-    peer_assignment = QuestionnaireAssignment(
-        respondent_profile_id=peer_id,
-        company_id=profile.company_id,
-        questionnaire_key="icare",
-        questionnaire_definition_id=uuid.uuid4(),
-        target_type=AssignmentTargetType.person,
-        target_person_id=leader_id,
-    )
-    direct_assignment = QuestionnaireAssignment(
-        respondent_profile_id=direct_report_id,
-        company_id=profile.company_id,
-        questionnaire_key="icare",
-        questionnaire_definition_id=uuid.uuid4(),
-        target_type=AssignmentTargetType.person,
-        target_person_id=leader_id,
-    )
+    assignments = [
+        QuestionnaireAssignment(
+            company_id=profile.company_id,
+            assessment_cycle_id=cycle_id,
+            respondent_profile_id=direct_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=target_id,
+            icare_cohort="direct_team",
+        ),
+        QuestionnaireAssignment(
+            company_id=profile.company_id,
+            assessment_cycle_id=cycle_id,
+            respondent_profile_id=peer_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=target_id,
+            icare_cohort="leadership_peers",
+        ),
+        QuestionnaireAssignment(
+            company_id=profile.company_id,
+            assessment_cycle_id=cycle_id,
+            respondent_profile_id=ambiguous_id,
+            questionnaire_key="boss_360",
+            target_type=AssignmentTargetType.person,
+            target_person_id=target_id,
+            icare_cohort=None,
+        ),
+    ]
 
     cohorts = await service._split_received_feedback_cohorts(
         profile,
         uuid.uuid4(),
-        [peer_assignment, direct_assignment],
-        assessment_cycle_id=uuid.uuid4(),
+        assignments,
     )
 
-    assert cohorts == {
-        "direct_team": [direct_assignment],
-        "leadership_peers": [peer_assignment],
-    }
+    assert [item.respondent_profile_id for item in cohorts["direct_team"]] == [direct_id]
+    assert [item.respondent_profile_id for item in cohorts["leadership_peers"]] == [peer_id]
+
 
 def test_lencioni_scale_sums_each_pinned_question_range() -> None:
     scale = [

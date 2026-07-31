@@ -2513,6 +2513,13 @@ export interface components {
             icare_cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
             /** Icare Target Summaries */
             icare_target_summaries: components["schemas"]["IcareTargetSummaryResponse"][];
+            /** Icare Unclassified Reason */
+            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            /**
+             * Icare Unclassified Response Count
+             * @default 0
+             */
+            icare_unclassified_response_count: number;
             /** Leadership Members */
             leadership_members?: components["schemas"]["LeadershipMemberSummaryResponse"][];
             /** Lencioni Averages */
@@ -2930,6 +2937,13 @@ export interface components {
              * Format: uuid
              */
             target_profile_id: string;
+            /** Unclassified Reason */
+            unclassified_reason?: "historical_cohort_unavailable" | null;
+            /**
+             * Unclassified Response Count
+             * @default 0
+             */
+            unclassified_response_count: number;
         };
         /** InvitationCreateRequest */
         InvitationCreateRequest: {
@@ -3134,6 +3148,13 @@ export interface components {
             driver_scale: components["schemas"]["ReportScoreScaleResponse"];
             /** Icare Cohorts */
             icare_cohorts: components["schemas"]["IcareCohortSummaryResponse"][];
+            /** Icare Unclassified Reason */
+            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            /**
+             * Icare Unclassified Response Count
+             * @default 0
+             */
+            icare_unclassified_response_count: number;
             /** Lencioni Averages */
             lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */

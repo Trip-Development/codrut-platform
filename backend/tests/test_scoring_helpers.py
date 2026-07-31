@@ -36,6 +36,7 @@ from codrut.modules.scoring.service import (
     _driver_feedback_by_dimension,
     _format_pcm_label,
     _get_pcm_color,
+    _icare_unclassified_response_count,
     _interpretation_from_rules,
     _leadership_ids_for_report,
     _leadership_member_lencioni_summary,
@@ -69,6 +70,8 @@ def _assignment(
     assignment_id: uuid.UUID | None = None,
     created_at: datetime | None = None,
     target_team_id: uuid.UUID | None = None,
+    assessment_cycle_id: uuid.UUID | None = None,
+    icare_cohort: str | None = None,
 ) -> SimpleNamespace:
     respondent_id = respondent_profile_id or uuid.uuid4()
     return SimpleNamespace(
@@ -80,6 +83,8 @@ def _assignment(
         target_person_id=target_person_id or uuid.uuid4(),
         target_team_id=target_team_id,
         target_type=target_type,
+        assessment_cycle_id=assessment_cycle_id,
+        icare_cohort=icare_cohort,
     )
 
 
@@ -806,91 +811,11 @@ def test_icare_leadership_direct_report_is_a_peer_before_direct_team() -> None:
     assert by_cohort["leadership_peers"].scale_max == 5
 
 
-def test_icare_cycle_snapshot_ignores_current_organigram_changes() -> None:
-    leader_id = uuid.uuid4()
-    peer_id = uuid.uuid4()
-    direct_report_id = uuid.uuid4()
-    participants = [
-        ReportParticipant(
-            id=leader_id,
-            full_name="Ana Leader",
-            reports_to_name=None,
-            role_group="individual",
-            pcm_base=None,
-            pcm_phase=None,
-            user_id=None,
-        ),
-        ReportParticipant(
-            id=peer_id,
-            full_name="Bogdan Peer",
-            reports_to_name=None,
-            role_group="individual",
-            pcm_base=None,
-            pcm_phase=None,
-            user_id=None,
-        ),
-        ReportParticipant(
-            id=direct_report_id,
-            full_name="Carmen Direct",
-            reports_to_name="Alt manager",
-            role_group="leadership",
-            pcm_base=None,
-            pcm_phase=None,
-            user_id=None,
-        ),
-    ]
-    snapshot = AssessmentCycleTeamSnapshot(
-        leadership_ids=frozenset({leader_id, peer_id}),
-        direct_report_ids_by_leader_id={leader_id: frozenset({direct_report_id})},
-    )
-    rows = [
-        (
-            _assignment(
-                "icare",
-                respondent_profile_id=leader_id,
-                target_person_id=leader_id,
-            ),
-            _result({"clarity": 3}),
-            None,
-        ),
-        (
-            _assignment(
-                "icare",
-                respondent_profile_id=peer_id,
-                target_person_id=leader_id,
-            ),
-            _result({"clarity": 4}),
-            None,
-        ),
-        (
-            _assignment(
-                "icare",
-                respondent_profile_id=direct_report_id,
-                target_person_id=leader_id,
-            ),
-            _result({"clarity": 5}),
-            None,
-        ),
-    ]
-
-    cohorts = _build_icare_cohort_summaries(  # type: ignore[arg-type]
-        rows,
-        participants,
-        team_snapshot=snapshot,
-    )
-
-    assert [(item.cohort, item.response_count) for item in cohorts] == [
-        ("direct_team", 1),
-        ("leadership_peers", 1),
-        ("self", 1),
-    ]
-    assert [item.averages[0].avg for item in cohorts] == [5, 4, 3]
-
-
-def test_icare_cohorts_suppress_incompatible_score_scales() -> None:
+def test_icare_cohorts_evaluate_definition_compatibility_independently() -> None:
     chief_id = uuid.uuid4()
     leader_id = uuid.uuid4()
     member_id = uuid.uuid4()
+    second_member_id = uuid.uuid4()
     participants = [
         ReportParticipant(
             id=chief_id,
@@ -913,7 +838,16 @@ def test_icare_cohorts_suppress_incompatible_score_scales() -> None:
         ReportParticipant(
             id=member_id,
             full_name="Carmen Member",
-            reports_to_name="Ana Chief",
+            reports_to_name="Bogdan Leader",
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=second_member_id,
+            full_name="Dan Member",
+            reports_to_name="Bogdan Leader",
             role_group="individual",
             pcm_base=None,
             pcm_phase=None,
@@ -940,12 +874,14 @@ def test_icare_cohorts_suppress_incompatible_score_scales() -> None:
             }
         }
     )
+    percent_definition.id = uuid.uuid4()
+    grade_definition.id = uuid.uuid4()
     rows = [
         (
             _assignment(
                 "icare",
-                respondent_profile_id=leader_id,
-                target_person_id=chief_id,
+                respondent_profile_id=chief_id,
+                target_person_id=leader_id,
             ),
             _result({"clarity": 75}),
             percent_definition,
@@ -954,18 +890,132 @@ def test_icare_cohorts_suppress_incompatible_score_scales() -> None:
             _assignment(
                 "icare",
                 respondent_profile_id=member_id,
-                target_person_id=chief_id,
+                target_person_id=leader_id,
             ),
             _result({"clarity": 4}),
             grade_definition,
+        ),
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=second_member_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 70}),
+            percent_definition,
         ),
     ]
 
     cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
 
-    assert all(item.response_count == 0 and item.averages == [] for item in cohorts)
-    assert all(item.score_scale_compatible is False for item in cohorts)
-    assert all(item.unavailable_reason == "incompatible_score_scales" for item in cohorts)
+    by_cohort = {item.cohort: item for item in cohorts}
+    assert by_cohort["direct_team"].response_count == 2
+    assert by_cohort["direct_team"].averages == []
+    assert by_cohort["direct_team"].score_scale_compatible is False
+    assert by_cohort["direct_team"].unavailable_reason == "incompatible_score_scales"
+    assert by_cohort["leadership_peers"].response_count == 1
+    assert by_cohort["leadership_peers"].averages[0].avg == 75
+    assert by_cohort["leadership_peers"].score_scale_compatible is True
+    assert by_cohort["self"].response_count == 0
+
+
+def test_icare_cycle_cohort_survives_later_organigram_changes() -> None:
+    leader_id = uuid.uuid4()
+    former_direct_id = uuid.uuid4()
+    other_leader_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=leader_id,
+            full_name="Ana Leader",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=other_leader_id,
+            full_name="Bogdan Leader",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=former_direct_id,
+            full_name="Carmen Member",
+            reports_to_name="Bogdan Leader",
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    cycle_id = uuid.uuid4()
+    rows = [
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=former_direct_id,
+                target_person_id=leader_id,
+                assessment_cycle_id=cycle_id,
+                icare_cohort="direct_team",
+            ),
+            _result({"clarity": 82}),
+            _definition({"scoring": {"score_unit": "percent"}}),
+        )
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+
+    assert cohorts[0].cohort == "direct_team"
+    assert cohorts[0].response_count == 1
+    assert cohorts[0].averages[0].avg == 82
+
+
+def test_icare_ambiguous_historical_cycle_rows_are_counted_but_not_exposed() -> None:
+    leader_id = uuid.uuid4()
+    reviewer_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=leader_id,
+            full_name="Ana Leader",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=reviewer_id,
+            full_name="Carmen Reviewer",
+            reports_to_name="Ana Leader",
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    rows = [
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=reviewer_id,
+                target_person_id=leader_id,
+                assessment_cycle_id=uuid.uuid4(),
+                icare_cohort=None,
+            ),
+            _result({"clarity": 91}),
+            _definition({"scoring": {"score_unit": "percent"}}),
+        )
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+
+    assert sum(item.response_count for item in cohorts) == 0
+    assert all(item.averages == [] for item in cohorts)
+    assert _icare_unclassified_response_count(rows, participants) == 1  # type: ignore[arg-type]
 
 
 def test_icare_hierarchy_ambiguity_preserves_explicit_leadership_self_result() -> None:
