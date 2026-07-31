@@ -82,6 +82,16 @@ class MemoryCommunicationsRepository:
     async def count_accepted_sends_since(self, _since: datetime) -> int:
         return sum(send.status == EmailSendStatus.accepted for send in self.sends)
 
+    async def get_email_suppression(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        email_fingerprint: str,
+        email: str | None = None,
+    ) -> None:
+        del owner_id, email_fingerprint, email
+        return None
+
     async def add_email_send(self, send: EmailSend) -> EmailSend:
         self.sends.append(send)
         return send

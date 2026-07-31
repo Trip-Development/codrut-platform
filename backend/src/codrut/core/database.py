@@ -55,6 +55,9 @@ def build_database_engine(active_settings: Settings) -> AsyncEngine:
     return create_async_engine(
         str(active_settings.database_url),
         pool_pre_ping=True,
+        pool_size=active_settings.db_pool_size,
+        max_overflow=active_settings.db_max_overflow,
+        pool_timeout=active_settings.db_pool_timeout_seconds,
         hide_parameters=active_settings.is_production,
     )
 

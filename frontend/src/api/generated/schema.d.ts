@@ -278,6 +278,23 @@ export interface paths {
         patch: operations["update_campaign_recipient_api_communications_campaigns_recipients__recipient_id__patch"];
         trace?: never;
     };
+    "/api/communications/campaigns/recipients/{recipient_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Campaign Recipient */
+        post: operations["archive_campaign_recipient_api_communications_campaigns_recipients__recipient_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/communications/campaigns/recipients/{recipient_id}/events": {
         parameters: {
             query?: never;
@@ -289,6 +306,40 @@ export interface paths {
         put?: never;
         /** Record Campaign Recipient Event */
         post: operations["record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/campaigns/recipients/{recipient_id}/permanent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Permanently Delete Campaign Recipient */
+        delete: operations["permanently_delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__permanent_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/campaigns/recipients/{recipient_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Campaign Recipient */
+        post: operations["restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1813,6 +1864,15 @@ export interface components {
             /** Cancelled */
             cancelled: number;
         };
+        /** CampaignContactAggregateResponse */
+        CampaignContactAggregateResponse: {
+            /** Campaignid */
+            campaignId?: string | null;
+            /** Count */
+            count: number;
+            /** Metric */
+            metric: string;
+        };
         /** CampaignCreateRequest */
         CampaignCreateRequest: {
             /** Html Body */
@@ -1836,6 +1896,8 @@ export interface components {
         CampaignOpsSummaryResponse: {
             /** Recipients */
             recipients: components["schemas"]["CampaignRecipientRowResponse"][];
+            /** Retainedaggregates */
+            retainedAggregates?: components["schemas"]["CampaignContactAggregateResponse"][];
             /** Template */
             template: {
                 [key: string]: unknown;
@@ -1848,6 +1910,35 @@ export interface components {
             weeklyReport: {
                 [key: string]: unknown;
             };
+        };
+        /** CampaignRecipientArchiveResponse */
+        CampaignRecipientArchiveResponse: {
+            /**
+             * Archived At
+             * Format: date-time
+             */
+            archived_at: string;
+            /** Cancelled */
+            cancelled: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** In Flight */
+            in_flight: number;
+            /** Memberships Removed */
+            memberships_removed: number;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "archived";
         };
         /** CampaignRecipientBulkCreateRequest */
         CampaignRecipientBulkCreateRequest: {
@@ -1911,6 +2002,8 @@ export interface components {
         };
         /** CampaignRecipientMembershipRowResponse */
         CampaignRecipientMembershipRowResponse: {
+            /** Archivedat */
+            archivedAt?: string | null;
             /**
              * Calendlyclickcount
              * @default 0
@@ -1954,6 +2047,8 @@ export interface components {
             openRate?: string | null;
             /** Outcome */
             outcome?: string | null;
+            /** Purgeafter */
+            purgeAfter?: string | null;
             /**
              * Replycount
              * @default 0
@@ -1976,8 +2071,44 @@ export interface components {
             /** Recipient Ids */
             recipient_ids?: string[];
         };
+        /** CampaignRecipientPermanentDeleteResponse */
+        CampaignRecipientPermanentDeleteResponse: {
+            /** Anonymized Sends */
+            anonymized_sends: number;
+            /** Cancelled */
+            cancelled: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "deleted";
+        };
+        /** CampaignRecipientRestoreResponse */
+        CampaignRecipientRestoreResponse: {
+            /** Archived At */
+            archived_at?: null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Purge After */
+            purge_after?: null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "suppressed" | "unsubscribed";
+        };
         /** CampaignRecipientRowResponse */
         CampaignRecipientRowResponse: {
+            /** Archivedat */
+            archivedAt?: string | null;
             /**
              * Calendlyclickcount
              * @default 0
@@ -2013,6 +2144,8 @@ export interface components {
             openRate?: string | null;
             /** Outcome */
             outcome?: string | null;
+            /** Purgeafter */
+            purgeAfter?: string | null;
             /**
              * Replycount
              * @default 0
@@ -5189,6 +5322,82 @@ export interface operations {
             };
         };
     };
+    archive_campaign_recipient_api_communications_campaigns_recipients__recipient_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignRecipientArchiveResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post: {
         parameters: {
             query?: never;
@@ -5211,6 +5420,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignRecipientEventResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    permanently_delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__permanent_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignRecipientPermanentDeleteResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignRecipientRestoreResponse"];
                 };
             };
             /** @description Bad Request */
@@ -6122,7 +6483,9 @@ export interface operations {
     };
     get_email_ops_summary_api_communications_ops_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                catalog_scope?: "active" | "archived";
+            };
             header?: never;
             path?: never;
             cookie?: never;

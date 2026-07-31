@@ -118,7 +118,7 @@ async def test_get_email_ops_summary_success() -> None:
         assignments_result,
         sends_result,
         FakeScalarsResult([]),
-        FakeTupleResult([]),
+        FakeScalarsResult([]),
         FakeTupleResult([]),
     ]
 
@@ -182,6 +182,7 @@ async def test_get_email_ops_summary_includes_campaign_reply_and_calendly_metric
         FakeScalarsResult([]),
         FakeTupleResult([]),
         FakeScalarsResult([recipient]),
+        FakeScalarsResult([]),
         FakeTupleResult(
             [
                 (recipient_id, "opened", 1),
@@ -233,6 +234,7 @@ async def test_get_email_ops_summary_keeps_unsubscribed_campaign_status() -> Non
         FakeScalarsResult([]),
         FakeTupleResult([]),
         FakeScalarsResult([recipient]),
+        FakeScalarsResult([]),
         FakeTupleResult([]),
         FakeTupleResult([]),
     ]

@@ -13,7 +13,7 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
 
 concurrency:
   group: prod-vps-deploy
@@ -42,22 +42,6 @@ jobs:
             exit 1
           fi
 
-  build-images:
-    name: Build Production Images
-    needs:
-      - guard-prod-ref
-      - deploy-preflight
-      - resolve-release-source
-      - resolve-images
-    if: needs.resolve-images.outputs.images-exist != 'true' && needs.resolve-release-source.outputs.deployment-kind == 'hotfix'
-    uses: ./.github/workflows/_image-build.yml
-    with:
-      push: true
-      tag: sha-${{ needs.resolve-release-source.outputs.source-sha }}
-      ref: ${{ needs.resolve-release-source.outputs.source-sha }}
-      cache_scope: trusted-hotfix
-    secrets: inherit
-
   deploy-preflight:
     name: Validate Production Deploy Config
     needs: guard-prod-ref
@@ -73,7 +57,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       source-sha: ${{ steps.source.outputs.source-sha }}
-      deployment-kind: ${{ steps.source.outputs.deployment-kind }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -87,19 +70,19 @@ jobs:
           git fetch --no-tags origin dev:refs/remotes/origin/dev
 
           read -r -a commit_line <<< "$(git rev-list --parents -n 1 "${GITHUB_SHA}")"
-          source_sha="${GITHUB_SHA}"
-          if [[ "${#commit_line[@]}" -ge 3 ]]; then
-            source_sha="${commit_line[2]}"
+          if [[ "${#commit_line[@]}" -ne 3 ]]; then
+            echo "Production must point at a two-parent dev promotion merge; received ${#commit_line[@]} fields."
+            exit 1
           fi
+          source_sha="${commit_line[2]}"
 
-          deployment_kind="hotfix"
-          if git merge-base --is-ancestor "${source_sha}" refs/remotes/origin/dev; then
-            deployment_kind="candidate"
+          if ! git merge-base --is-ancestor "${source_sha}" refs/remotes/origin/dev; then
+            echo "Production merge source ${source_sha} is not contained in dev."
+            exit 1
           fi
 
           echo "source-sha=${source_sha}" >> "$GITHUB_OUTPUT"
-          echo "deployment-kind=${deployment_kind}" >> "$GITHUB_OUTPUT"
-          echo "Using ${source_sha} as the immutable ${deployment_kind} deployment source."
+          echo "Using ${source_sha} as the immutable validated dev deployment source."
 
   resolve-images:
     name: Resolve Candidate Images
@@ -111,7 +94,6 @@ jobs:
     outputs:
       backend-image: ${{ steps.images.outputs.backend }}
       frontend-image: ${{ steps.images.outputs.frontend }}
-      images-exist: ${{ steps.check.outputs.images-exist }}
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
@@ -145,32 +127,25 @@ jobs:
         env:
           BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
           FRONTEND_IMAGE: ${{ steps.images.outputs.frontend }}
-          DEPLOYMENT_KIND: ${{ needs.resolve-release-source.outputs.deployment-kind }}
         run: |
           set -euo pipefail
 
           if docker manifest inspect "${BACKEND_IMAGE}" >/dev/null 2>&1 && docker manifest inspect "${FRONTEND_IMAGE}" >/dev/null 2>&1; then
-            echo "images-exist=true" >> "$GITHUB_OUTPUT"
             echo "Found previously built candidate images."
             exit 0
           fi
 
-          echo "images-exist=false" >> "$GITHUB_OUTPUT"
-          if [[ "${DEPLOYMENT_KIND}" == "candidate" ]]; then
-            echo "Validated candidate images are missing; refusing to rebuild during production promotion."
-            exit 1
-          fi
-          echo "Hotfix images are missing; production will build the reviewed hotfix source."
+          echo "Validated candidate images are missing; refusing to rebuild during production promotion."
+          exit 1
 
   deploy-vps:
     name: Deploy to Hetzner VPS
     needs:
-      - build-images
       - deploy-preflight
       - guard-prod-ref
       - resolve-images
       - resolve-release-source
-    if: always() && needs.guard-prod-ref.result == 'success' && needs.deploy-preflight.result == 'success' && needs.resolve-images.result == 'success' && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
+    if: always() && needs.guard-prod-ref.result == 'success' && needs.deploy-preflight.result == 'success' && needs.resolve-images.result == 'success'
     uses: ./.github/workflows/_deploy-vps.yml
     with:
       environment: prod

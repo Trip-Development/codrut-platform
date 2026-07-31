@@ -39,6 +39,7 @@ jobs:
       CODRUT_SESSION_SECRET: compose-config-secret
       CODRUT_TASK_LINK_SECRET: compose-config-task-link-secret
       CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: compose-config-campaign-asset-secret
+      CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: compose-config-suppression-secret-with-32-chars
       CODRUT_CORS_ORIGINS: '["https://codrut.example.com"]'
       CODRUT_PUBLIC_APP_URL: https://codrut.example.com
       CODRUT_EMAIL_PROVIDER: brevo
@@ -97,6 +98,40 @@ jobs:
           worker_origin = services["worker"]["environment"]["CODRUT_CORS_ORIGINS"]
           if worker_origin != backend_origin:
               raise SystemExit("Worker and backend production CORS origins must match.")
+
+          expected_logging = {
+              "driver": "json-file",
+              "options": {"max-file": "5", "max-size": "10m"},
+          }
+          for service_name, service in services.items():
+              if service.get("logging") != expected_logging:
+                  raise SystemExit(
+                      f"Production {service_name} must use bounded json-file logs."
+                  )
+
+          backend_command = services["backend"].get("command", [])
+          if "--workers" not in backend_command:
+              raise SystemExit("Production backend must configure explicit Uvicorn workers.")
+          worker_index = backend_command.index("--workers") + 1
+          if backend_command[worker_index] != "4":
+              raise SystemExit("Production backend must default to four Uvicorn workers.")
+
+          for service_name in ("backend", "worker"):
+              environment = services[service_name]["environment"]
+              if environment.get("CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED") != "false":
+                  raise SystemExit(
+                      "The expand release must keep direct-data purge disabled "
+                      "until its contract migration is deployed."
+                  )
+              expected_pool = {
+                  "CODRUT_DB_POOL_SIZE": "5",
+                  "CODRUT_DB_MAX_OVERFLOW": "5",
+                  "CODRUT_DB_POOL_TIMEOUT_SECONDS": "10",
+              }
+              if any(environment.get(key) != value for key, value in expected_pool.items()):
+                  raise SystemExit(
+                      f"Production {service_name} must use the bounded database pool defaults."
+                  )
 
           frontend_labels = services["frontend"]["labels"]
           backend_labels = services["backend"]["labels"]

@@ -18,6 +18,7 @@ CampaignRecipientEventType = Literal[
     "replied",
 ]
 CampaignSegmentValue = Literal["past_customer", "potential_customer"]
+CampaignRecipientStatusValue = Literal["active", "suppressed", "unsubscribed"]
 
 
 class EmailTestSendRequest(StrictRequestModel):
@@ -122,6 +123,8 @@ class CampaignRecipientRowResponse(BaseModel):
     source: str | None = None
     emailVariant: str | None = None
     outcome: str | None = None
+    archivedAt: datetime | None = None
+    purgeAfter: datetime | None = None
 
 
 class CampaignRecipientMembershipRowResponse(CampaignRecipientRowResponse):
@@ -133,11 +136,18 @@ class CampaignRecipientMembershipUpdateRequest(StrictRequestModel):
     recipient_ids: list[UUID] = Field(default_factory=list)
 
 
+class CampaignContactAggregateResponse(BaseModel):
+    campaignId: UUID | None = None
+    metric: str
+    count: int
+
+
 class CampaignOpsSummaryResponse(BaseModel):
     videoHost: dict
     template: dict
     recipients: list[CampaignRecipientRowResponse]
     weeklyReport: dict
+    retainedAggregates: list[CampaignContactAggregateResponse] = Field(default_factory=list)
 
 
 class EmailOpsSummaryResponse(BaseModel):
@@ -361,6 +371,30 @@ class CampaignRecipientUpdateRequest(StrictRequestModel):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+
+class CampaignRecipientArchiveResponse(BaseModel):
+    id: UUID
+    status: Literal["archived"]
+    archived_at: datetime
+    purge_after: datetime
+    memberships_removed: int
+    cancelled: int
+    in_flight: int
+
+
+class CampaignRecipientRestoreResponse(BaseModel):
+    id: UUID
+    status: CampaignRecipientStatusValue
+    archived_at: None = None
+    purge_after: None = None
+
+
+class CampaignRecipientPermanentDeleteResponse(BaseModel):
+    id: UUID
+    status: Literal["deleted"]
+    cancelled: int
+    anonymized_sends: int
 
 
 class CampaignRecipientEventCreateRequest(StrictRequestModel):

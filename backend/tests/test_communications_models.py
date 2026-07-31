@@ -22,6 +22,9 @@ def test_email_delivery_tables_are_registered() -> None:
         "campaign_recipients",
         "campaigns",
         "campaign_recipient_memberships",
+        "campaign_contact_tombstones",
+        "campaign_delivery_tombstones",
+        "campaign_delivery_event_tombstones",
     }.issubset(Base.metadata.tables)
     configure_mappers()
 
@@ -93,7 +96,36 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
         "lower(campaign_recipients.email)",
     ]
     assert Base.metadata.tables["campaign_recipients"].columns["email"].nullable
-    assert "owner_id" in Base.metadata.tables["campaign_recipients"].columns
+    owner_column = Base.metadata.tables["campaign_recipients"].columns["owner_id"]
+    assert not owner_column.nullable
+    assert next(iter(owner_column.foreign_keys)).ondelete == "CASCADE"
+
+
+def test_contact_archive_expand_keeps_recipient_owner_required_but_event_owner_nullable() -> None:
+    recipient_owner = Base.metadata.tables["campaign_recipients"].columns["owner_id"]
+    event_owner = Base.metadata.tables["campaign_recipient_events"].columns["owner_id"]
+
+    assert not recipient_owner.nullable
+    assert event_owner.nullable
+
+
+def test_contact_tombstones_retain_only_pseudonymous_delivery_lookups() -> None:
+    contact_columns = Base.metadata.tables["campaign_contact_tombstones"].columns
+    delivery_columns = Base.metadata.tables["campaign_delivery_tombstones"].columns
+    event_columns = Base.metadata.tables[
+        "campaign_delivery_event_tombstones"
+    ].columns
+
+    assert "email" not in contact_columns
+    assert "email_fingerprint" in contact_columns
+    assert "provider_message_id" not in delivery_columns
+    assert "provider_message_fingerprint" in delivery_columns
+    assert not delivery_columns["expires_at"].nullable
+    assert set(event_columns.keys()) == {
+        "id",
+        "delivery_tombstone_id",
+        "provider_event_fingerprint",
+    }
 
 
 def test_campaign_model_supports_template_and_video_link_design() -> None:

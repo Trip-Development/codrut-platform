@@ -2,13 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   activateEmailTemplateOnServer,
+  archiveCampaignRecipientOnServer,
   CampaignPersistenceError,
   createCampaignOnServer,
   deleteCampaignAssetOnServer,
   deleteEmailTemplateOnServer,
+  getEmailOpsSummary,
   getEmailTemplateOnServer,
   listCampaignRecipientMembershipOnServer,
+  permanentlyDeleteCampaignRecipientOnServer,
   replaceCampaignRecipientMembershipOnServer,
+  restoreCampaignRecipientOnServer,
   sendCampaignOnServer,
   updateCampaignOnServer,
   updateCampaignRecipientOnServer,
@@ -248,6 +252,73 @@ describe("campaign persistence and dispatch contracts", () => {
       "Emailul nu este valid.",
     );
     await expect(updateCampaignRecipientOnServer("recipient-1", { email: "ana@example.com" })).rejects.toThrow("offline");
+  });
+
+  it("uses scoped contact catalogs and explicit archive lifecycle endpoints", async () => {
+    const archivePayload = {
+      id: "recipient-1",
+      status: "archived",
+      archived_at: "2026-07-30T12:00:00Z",
+      purge_after: "2026-08-29T12:00:00Z",
+      memberships_removed: 2,
+      cancelled: 1,
+      in_flight: 0,
+    };
+    const restorePayload = {
+      id: "recipient-1",
+      status: "suppressed",
+      archived_at: null,
+      purge_after: null,
+    };
+    const deletePayload = {
+      id: "recipient-1",
+      status: "deleted",
+      cancelled: 0,
+      anonymized_sends: 3,
+    };
+    const summaryPayload = {
+      metrics: [],
+      assessmentRows: [],
+      rules: [],
+      campaign: { videoHost: {}, template: {}, recipients: [], weeklyReport: {} },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ ok: true, payload: summaryPayload }))
+      .mockResolvedValueOnce(response({ ok: true, payload: archivePayload }))
+      .mockResolvedValueOnce(response({ ok: true, payload: restorePayload }))
+      .mockResolvedValueOnce(response({ ok: true, payload: deletePayload }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getEmailOpsSummary({ catalogScope: "archived" })).resolves.toEqual(summaryPayload);
+    await expect(archiveCampaignRecipientOnServer("recipient-1")).resolves.toEqual(archivePayload);
+    await expect(restoreCampaignRecipientOnServer("recipient-1")).resolves.toEqual(restorePayload);
+    await expect(permanentlyDeleteCampaignRecipientOnServer("recipient-1")).resolves.toEqual(deletePayload);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("catalog_scope=archived");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/recipient-1/archive");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "POST" });
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/recipient-1/restore");
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "POST" });
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/recipient-1/permanent");
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({ method: "DELETE" });
+  });
+
+  it("explains a temporarily unavailable permanent deletion without exposing an internal error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({
+      ok: false,
+      status: 409,
+      payload: {
+        error: {
+          code: "campaign_recipient_purge_disabled",
+          message: "Permanent deletion is temporarily unavailable while the privacy migration is being completed.",
+        },
+      },
+    })));
+
+    await expect(permanentlyDeleteCampaignRecipientOnServer("recipient-1")).rejects.toThrow(
+      "Ștergerea definitivă va fi disponibilă după finalizarea actualizării de confidențialitate. Contactul rămâne în siguranță în Arhivă și nu poate fi folosit în campanii.",
+    );
   });
 });
 

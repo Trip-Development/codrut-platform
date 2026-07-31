@@ -21,10 +21,16 @@ Production releases follow the repo branch policy:
 4. Merge the `dev -> prod` PR. The `VPS Deployment` workflow deploys only from
    `refs/heads/prod`.
 
-Emergency production fixes may use a `hotfix/*` branch directly into `prod`
-when waiting for a full `dev` promotion would leave production broken. A merged
-hotfix must be back-merged into `dev` immediately after the production deploy
-passes, so `dev` remains the source of the next normal release.
+Routine production merge commits are not back-merged into `dev`. The `prod`
+branch uses loose required status checks, while `release / required` proves
+that the exact `dev` head has a successful immutable candidate and that the
+proposed merge tree is identical to the `dev` tree. This keeps both long-lived
+branches without ancestry-sync PRs.
+
+Route emergency fixes through a focused PR into `dev`, then promote `dev`
+normally. Direct `hotfix/* -> prod` releases are intentionally rejected because
+production-only content would require a back-merge and make the next release
+ambiguous.
 
 The deploy workflow also allows `workflow_dispatch`, but the run must execute
 from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
@@ -32,7 +38,7 @@ workflow from another branch fails before images are built.
 
 Treat the `prod` GitHub Environment as the final approval and secret boundary.
 Use the acceptance checklist before opening the release PR; do not use manual
-dispatch to promote unmerged feature refs or non-hotfix branches. The staging
+dispatch to promote unmerged feature refs or branches other than `dev`. The staging
 workflow exists but is optional/deferred for the current client-ready push unless
 `ENABLE_STAGING_DEPLOY=true` is intentionally enabled.
 
@@ -91,27 +97,27 @@ For PRs into `dev`, require:
 
 For PRs into `prod`, require:
 
-- `app-ci / required`
-- `policy / required`
-- `security / required`
 - `release / required`
 
-`app-ci / required` runs backend, frontend, and Compose checks for PRs into
-`dev`. For normal `dev -> prod` promotion PRs it skips those duplicated dev
-checks and requires the Playwright E2E job instead. For `hotfix/* -> prod`, it
-runs backend, frontend, Compose, and E2E checks because the change bypasses
-`dev`. `release / required` then validates the production Compose config and
-runtime image builds. `policy / required` allows production PRs only from `dev`
-or `hotfix/*`, and skips that source-branch check on non-production PRs.
+Use strict required status checks for `dev` and loose required status checks
+for `prod`. `app-ci / required`, `policy / required`, `security / required`,
+and native CodeQL run only on feature PRs into `dev`.
+
+After a change lands on `dev`, `Dev Candidate` builds SHA-tagged images once,
+runs representative Playwright E2E against those images, and validates the
+production Compose configuration. The production PR does not rerun those
+checks or rebuild images. `release / required` accepts only `dev`, locates the
+successful candidate for the exact proposed SHA, and verifies that the
+`prod + dev` merge tree equals the `dev` tree.
 
 ## Images
 
 The deployment workflows separate build and deploy work:
 
-- `_image-build.yml` builds backend/frontend images with BuildKit cache and can
-  either build-only for release gates or push SHA-tagged images for deploys.
+- `_image-build.yml` builds backend/frontend images with BuildKit cache.
+  `Dev Candidate` uses it to push the SHA-tagged release candidate once.
 - `_deploy-vps.yml` runs behind the selected GitHub Environment, consumes the exact
-  image refs from `build-images`, writes the VPS `.env`, pulls those images,
+  candidate image refs, writes the VPS `.env`, pulls those images,
   migrates, recreates app services, asserts running image refs, and checks
   health.
 - `deploy-vps.yml` is the production caller. `deploy-staging.yml` is the staging
@@ -127,8 +133,9 @@ ghcr.io/<owner>/<repo>-frontend:sha-<sha>
 The VPS `.env` stores those SHA image refs in `BACKEND_IMAGE` and
 `FRONTEND_IMAGE`. It does not deploy `latest`.
 
-Production manual dispatch validates `refs/heads/prod` before any image build or
-push occurs. The reusable deploy workflow repeats that guard before SSH deploy.
+Production manual dispatch validates `refs/heads/prod` before resolving the
+existing candidate images. The reusable deploy workflow repeats that guard
+before SSH deploy.
 
 Required GitHub secrets for the `VPS Deployment` workflow:
 
@@ -140,6 +147,7 @@ Required GitHub secrets for the `VPS Deployment` workflow:
 - `CODRUT_SESSION_SECRET`
 - `CODRUT_TASK_LINK_SECRET`
 - `CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET`
+- `CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET`
 - `CODRUT_CORS_ORIGINS`
 - `CODRUT_PUBLIC_APP_URL`
 - `CODRUT_EMAIL_PROVIDER`
@@ -158,6 +166,14 @@ Optional environment secrets:
   instead of waiting indefinitely for a conflicting database lock.
 - `CODRUT_MIGRATION_STATEMENT_TIMEOUT_MS` defaults to `900000` and bounds the
   total execution time of any migration statement.
+- `CODRUT_CAMPAIGN_RECIPIENT_ARCHIVE_RETENTION_DAYS` defaults to `30`.
+- `CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS` defaults to `7`.
+- `CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` stays `false` for the expand
+  release and becomes `true` only after the contract migration removes the
+  rollback-only full-email suppression column.
+- `CODRUT_CAMPAIGN_DELIVERY_TOMBSTONE_RETENTION_DAYS` defaults to `365` and
+  bounds late-provider lookup receipts independently of do-not-contact review.
+- `CODRUT_EMAIL_SUPPRESSION_REVIEW_DAYS` defaults to `365`.
 
 For the current single-host Compose deployment, the workflow derives
 `CODRUT_DATABASE_URL` from the `POSTGRES_*` secrets and writes the database into a
@@ -175,10 +191,19 @@ Set `CODRUT_PUBLIC_APP_URL` to the final HTTPS origin, for example:
 https://app.example.com
 ```
 
-The session, task-link, campaign-asset, and Brevo webhook secrets must each
-contain at least 32 characters and must be different. Production accepts only
-the `brevo` email provider and fails startup when the Brevo API key or webhook
-bearer token is missing.
+The session, task-link, campaign-asset, suppression-fingerprint, and Brevo
+webhook secrets must each contain at least 32 characters and must be different.
+Generate the suppression-fingerprint secret once with a cryptographically
+secure generator, for example `openssl rand -hex 32`, store it in the production
+secret manager, and back it up with the other recovery credentials. It must be
+present before the contact-archive migration or application rollout. Do not
+replace it during a routine deploy: changing it makes existing do-not-contact
+fingerprints unreachable. Follow the controlled procedure in
+[Contact data retention and suppression](contact-data-retention.md) if
+compromise requires rotation.
+
+Production accepts only the `brevo` email provider and fails startup when the
+Brevo API key or webhook bearer token is missing.
 
 Configure the Brevo outbound webhook after the release is reachable over HTTPS:
 
@@ -215,8 +240,9 @@ Before using real participant data, verify:
 
 ## Deployment Checks
 
-The `build-images` job validates `compose.yaml` plus `compose.prod.yaml` before
-building images. The `deploy-vps` job copies both Compose files to
+The `Dev Candidate` workflow validates `compose.yaml` plus `compose.prod.yaml`
+before an image can be promoted. The production workflow refuses to rebuild a
+missing candidate. The `deploy-vps` job copies both Compose files to
 `/opt/codrut-platform`, writes the production `.env`, validates Compose again on
 the VPS, pulls the SHA-tagged images, runs migrations, and force-recreates only
 the app services
@@ -237,6 +263,18 @@ unsafe rollback boundary, run `alembic check`, and remove its guarded
 `*_rehearsal` database. It uses only `.invalid` email addresses and never reads
 the active development or production database.
 
+Before any image pull, the deploy runs
+`.github/scripts/check_vps_capacity.sh preflight / 85 8` on the VPS. The
+deployment stops before downloading layers when root usage is above 85% or
+less than 8 GiB is available. A separate daily `VPS Capacity Check` workflow
+warns at 80% and fails at 90%. Investigate a warning before the next deploy;
+do not solve it with a global Docker prune.
+
+Production Compose bounds every service's `json-file` logs to five 10 MB
+files. The API defaults to four Uvicorn workers. Each API process and the
+email worker use an explicit SQLAlchemy pool of five connections, five
+overflow connections, and a ten-second acquisition timeout.
+
 After startup, the workflow checks:
 
 - Running backend, worker, and frontend container image refs against the
@@ -253,6 +291,14 @@ After startup, the workflow checks:
 
 The workflow summary records the deployed release SHA, deployed image refs, and
 the previous frontend/backend image refs from the deploy job.
+
+Only after both internal and public readiness pass, the deploy runs
+`.github/scripts/retain_codrut_images.sh`. It first proves that all current and
+previous rollback refs exist locally, then removes other tags only from the
+resolved Codrut backend and frontend repositories and finally removes
+unreferenced dangling layers. It never runs a global image, volume, network, or
+system prune. If either previous ref is unavailable, retention is skipped so a
+deploy cannot erase its only rollback candidate.
 
 ## Rollback
 
@@ -292,5 +338,17 @@ Rollback is manual and image-ref based:
    The backend and worker image refs must match `BACKEND_IMAGE`; the frontend
    image ref must match `FRONTEND_IMAGE`.
 
+5. Before allowing a later deploy to delete older image tags, exercise the
+   rollback once in the maintenance environment: switch to the recorded
+   previous refs, recreate the three app services, verify internal and public
+   readiness, then switch back to the candidate and repeat the checks. Confirm
+   both pairs remain visible with `docker image inspect`.
+
 Rollback to an older application image does not undo database migrations. Check
 the migration notes before rolling back across schema changes.
+
+For the contact-archive expand release, archived active contacts are persisted
+as `suppressed` with their prior status in the additive schema. The previous
+image may display them as inactive, but it cannot select or send to them.
+Avoid contact catalog mutations during that temporary rollback; return to the
+fingerprint-aware image before resuming campaign operations.

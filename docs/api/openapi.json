@@ -1303,6 +1303,36 @@
         "title": "CampaignCancelResponse",
         "type": "object"
       },
+      "CampaignContactAggregateResponse": {
+        "properties": {
+          "campaignId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaignid"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "count"
+        ],
+        "title": "CampaignContactAggregateResponse",
+        "type": "object"
+      },
       "CampaignCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1398,6 +1428,13 @@
             "title": "Recipients",
             "type": "array"
           },
+          "retainedAggregates": {
+            "items": {
+              "$ref": "#/components/schemas/CampaignContactAggregateResponse"
+            },
+            "title": "Retainedaggregates",
+            "type": "array"
+          },
           "template": {
             "additionalProperties": true,
             "title": "Template",
@@ -1421,6 +1458,53 @@
           "weeklyReport"
         ],
         "title": "CampaignOpsSummaryResponse",
+        "type": "object"
+      },
+      "CampaignRecipientArchiveResponse": {
+        "properties": {
+          "archived_at": {
+            "format": "date-time",
+            "title": "Archived At",
+            "type": "string"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_flight": {
+            "title": "In Flight",
+            "type": "integer"
+          },
+          "memberships_removed": {
+            "title": "Memberships Removed",
+            "type": "integer"
+          },
+          "purge_after": {
+            "format": "date-time",
+            "title": "Purge After",
+            "type": "string"
+          },
+          "status": {
+            "const": "archived",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "archived_at",
+          "purge_after",
+          "memberships_removed",
+          "cancelled",
+          "in_flight"
+        ],
+        "title": "CampaignRecipientArchiveResponse",
         "type": "object"
       },
       "CampaignRecipientBulkCreateRequest": {
@@ -1610,6 +1694,18 @@
       },
       "CampaignRecipientMembershipRowResponse": {
         "properties": {
+          "archivedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivedat"
+          },
           "calendlyClickCount": {
             "default": 0,
             "title": "Calendlyclickcount",
@@ -1729,6 +1825,18 @@
             ],
             "title": "Outcome"
           },
+          "purgeAfter": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purgeafter"
+          },
           "replyCount": {
             "default": 0,
             "title": "Replycount",
@@ -1791,8 +1899,82 @@
         "title": "CampaignRecipientMembershipUpdateRequest",
         "type": "object"
       },
+      "CampaignRecipientPermanentDeleteResponse": {
+        "properties": {
+          "anonymized_sends": {
+            "title": "Anonymized Sends",
+            "type": "integer"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "deleted",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "cancelled",
+          "anonymized_sends"
+        ],
+        "title": "CampaignRecipientPermanentDeleteResponse",
+        "type": "object"
+      },
+      "CampaignRecipientRestoreResponse": {
+        "properties": {
+          "archived_at": {
+            "title": "Archived At",
+            "type": "null"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purge_after": {
+            "title": "Purge After",
+            "type": "null"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "suppressed",
+              "unsubscribed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "CampaignRecipientRestoreResponse",
+        "type": "object"
+      },
       "CampaignRecipientRowResponse": {
         "properties": {
+          "archivedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivedat"
+          },
           "calendlyClickCount": {
             "default": 0,
             "title": "Calendlyclickcount",
@@ -1889,6 +2071,18 @@
               }
             ],
             "title": "Outcome"
+          },
+          "purgeAfter": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purgeafter"
           },
           "replyCount": {
             "default": 0,
@@ -8749,6 +8943,99 @@
         ]
       }
     },
+    "/api/communications/campaigns/recipients/{recipient_id}/archive": {
+      "post": {
+        "operationId": "archive_campaign_recipient_api_communications_campaigns_recipients__recipient_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignRecipientArchiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Archive Campaign Recipient",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
     "/api/communications/campaigns/recipients/{recipient_id}/events": {
       "post": {
         "operationId": "record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post",
@@ -8847,6 +9134,192 @@
           }
         },
         "summary": "Record Campaign Recipient Event",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/communications/campaigns/recipients/{recipient_id}/permanent": {
+      "delete": {
+        "operationId": "permanently_delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__permanent_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignRecipientPermanentDeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Permanently Delete Campaign Recipient",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/communications/campaigns/recipients/{recipient_id}/restore": {
+      "post": {
+        "operationId": "restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignRecipientRestoreResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Restore Campaign Recipient",
         "tags": [
           "communications"
         ]
@@ -9917,6 +10390,22 @@
     "/api/communications/ops-summary": {
       "get": {
         "operationId": "get_email_ops_summary_api_communications_ops_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "catalog_scope",
+            "required": false,
+            "schema": {
+              "default": "active",
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "title": "Catalog Scope",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

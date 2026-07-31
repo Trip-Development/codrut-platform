@@ -28,6 +28,7 @@ jobs:
       CODRUT_SESSION_SECRET: ${{ secrets.CODRUT_SESSION_SECRET }}
       CODRUT_TASK_LINK_SECRET: ${{ secrets.CODRUT_TASK_LINK_SECRET }}
       CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET: ${{ secrets.CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET }}
+      CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${{ secrets.CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET }}
       CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
       CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
       CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
@@ -56,6 +57,7 @@ jobs:
             CODRUT_SESSION_SECRET
             CODRUT_TASK_LINK_SECRET
             CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET
+            CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET
             CODRUT_CORS_ORIGINS
             CODRUT_PUBLIC_APP_URL
             CODRUT_EMAIL_PROVIDER
@@ -116,9 +118,10 @@ jobs:
               os.environ["CODRUT_SESSION_SECRET"],
               os.environ["CODRUT_TASK_LINK_SECRET"],
               os.environ["CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET"],
+              os.environ["CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET"],
               os.environ["CODRUT_EMAIL_WEBHOOK_TOKEN"],
           ]
-          if any(len(secret.strip()) < 32 for secret in secrets) or len(set(secrets)) != 4:
+          if any(len(secret.strip()) < 32 for secret in secrets) or len(set(secrets)) != 5:
               print("Runtime secrets must be distinct and at least 32 characters.", file=sys.stderr)
               raise SystemExit(1)
 

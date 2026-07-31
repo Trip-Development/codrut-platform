@@ -11,6 +11,7 @@ from codrut.contracts.emails import (
     EmailProviderKey,
     EmailSendResult,
 )
+from codrut.core.config import Settings
 from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
@@ -35,6 +36,7 @@ from codrut.modules.communications.service import (
     _email_outbox_retry_delay,
     _require_matching_email_send_payload,
 )
+from codrut.modules.communications.suppression import email_suppression_fingerprint
 from codrut.modules.companies.models import Company, ParticipantProfile
 from codrut.modules.forms import models as form_models  # noqa: F401
 from codrut.modules.identity import models as identity_models  # noqa: F401
@@ -432,8 +434,14 @@ async def test_owner_suppression_blocks_only_that_owners_delivery() -> None:
             session.add(
                 EmailSuppression(
                     owner_id=owner_a.id,
-                    email="ANA@example.com",
+                    legacy_email="ana@example.com",
+                    email_fingerprint=email_suppression_fingerprint(
+                        owner_id=owner_a.id,
+                        email="ANA@example.com",
+                        secret=Settings().effective_email_suppression_fingerprint_secret,
+                    ),
                     reason="hard_bounce",
+                    review_after=datetime.now(UTC) + timedelta(days=365),
                 )
             )
             await CommunicationsRepository(session).enqueue_email_send(suppressed_send)

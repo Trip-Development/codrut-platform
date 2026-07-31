@@ -50,7 +50,7 @@ export function campaignDeliveryLabel(delivery: CampaignDeliveryState): string {
 function campaignSendErrorLabel(error: string): string {
   const labels: Record<string, string> = {
     "Daily email send cap reached.": "A fost atinsă limita zilnică de emailuri.",
-    "Recipient is suppressed or unsubscribed.": "Contactul este inactiv sau dezabonat.",
+    "Recipient is suppressed or unsubscribed.": "Adresa este respinsă sau contactul s-a dezabonat.",
     "Recipient segment does not match campaign segment.": "Tipul contactului nu corespunde campaniei.",
   };
   return labels[error] ?? error;
@@ -134,11 +134,12 @@ export function campaignRecipientSortKey(recipient: CampaignRecipientRow): strin
 
 export function campaignRecipientStatusLabel(status: CampaignRecipientRow["status"]): string {
   const labels: Record<CampaignRecipientRow["status"], string> = {
-    needs_contact_name: "Nume lipsă",
-    ready: "Pregătit",
-    sent: "Trimis",
-    suppressed: "Inactiv",
+    needs_contact_name: "Activ",
+    ready: "Activ",
+    sent: "Activ",
+    suppressed: "Adresă respinsă",
     unsubscribed: "Dezabonat",
+    archived: "Arhivat",
   };
   return labels[status] ?? status;
 }
@@ -154,7 +155,9 @@ export function campaignStatusLabel(status: EmailCampaign["status"]): string {
 }
 
 export function isCampaignRecipientEffectivelyActive(recipient: CampaignRecipientRow): boolean {
-  return recipient.status !== "suppressed" && recipient.status !== "unsubscribed";
+  return recipient.status !== "suppressed"
+    && recipient.status !== "unsubscribed"
+    && recipient.status !== "archived";
 }
 
 export function campaignRecipientSourceLabel(source?: string | null): string {
