@@ -519,10 +519,22 @@ async def seed_synthetic_tenant(
                 ),
             ]
         )
+        # The assignment-definition integrity trigger resolves the pinned
+        # definition during assignment INSERT. Make the synthetic parent scope
+        # visible before the bulk assignment flush.
+        await session.flush()
 
         assignment_round_id = uuid.uuid4()
         expires_at = now + timedelta(days=2)
         outbox_release_after = now + timedelta(days=1)
+        participant_users: list[User] = []
+        participant_profiles: list[ParticipantProfile] = []
+        project_memberships: list[ProjectMembership] = []
+        assignments: list[QuestionnaireAssignment] = []
+        invites: list[AssignmentInvite] = []
+        email_sends: list[EmailSend] = []
+        email_events: list[EmailEvent] = []
+        consent_acceptances: list[ConsentAcceptance] = []
         for index in range(1, PARTICIPANT_COUNT + 1):
             user_id = uuid.uuid4()
             profile_id = uuid.uuid4()
@@ -555,7 +567,7 @@ async def seed_synthetic_tenant(
                 project_id=project_id,
                 assignment_round_id=assignment_round_id,
                 respondent_profile_id=profile_id,
-                questionnaire_key="lencioni",
+                questionnaire_key=definition_key,
                 questionnaire_definition_id=definition_id,
                 target_type=AssignmentTargetType.self_assessment,
                 status=AssignmentStatus.invited,
@@ -607,33 +619,35 @@ async def seed_synthetic_tenant(
                 status=EmailSendStatus.queued,
                 last_event_at=now,
             )
-            session.add_all(
-                [
-                    user,
-                    profile,
-                    ProjectMembership(
-                        company_id=company_id,
-                        project_id=project_id,
-                        participant_profile_id=profile_id,
-                        position=profile.position,
-                        role_group=tag,
-                    ),
-                    assignment,
-                    invite,
-                    email_send,
-                    EmailEvent(
-                        email_send_id=email_send_id,
-                        event_type=EmailEventType.queued,
-                        occurred_at=now,
-                    ),
-                    ConsentAcceptance(
-                        user_id=user_id,
-                        respondent_profile_id=profile_id,
-                        terms_version=CURRENT_TERMS_VERSION,
-                        source="authenticated",
-                        accepted_at=now,
-                    ),
-                ]
+            participant_users.append(user)
+            participant_profiles.append(profile)
+            project_memberships.append(
+                ProjectMembership(
+                    company_id=company_id,
+                    project_id=project_id,
+                    participant_profile_id=profile_id,
+                    position=profile.position,
+                    role_group=tag,
+                )
+            )
+            assignments.append(assignment)
+            invites.append(invite)
+            email_sends.append(email_send)
+            email_events.append(
+                EmailEvent(
+                    email_send_id=email_send_id,
+                    event_type=EmailEventType.queued,
+                    occurred_at=now,
+                )
+            )
+            consent_acceptances.append(
+                ConsentAcceptance(
+                    user_id=user_id,
+                    respondent_profile_id=profile_id,
+                    terms_version=CURRENT_TERMS_VERSION,
+                    source="authenticated",
+                    accepted_at=now,
+                )
             )
             participants.append(
                 ParticipantManifest(
@@ -648,6 +662,19 @@ async def seed_synthetic_tenant(
                     answers={"q1": 4},
                 )
             )
+
+        # These models deliberately avoid broad ORM relationships. Flush the
+        # synthetic graph in foreign-key order while retaining bulk inserts.
+        for objects in (
+            participant_users,
+            participant_profiles,
+            [*project_memberships, *consent_acceptances],
+            assignments,
+            [*invites, *email_sends],
+            email_events,
+        ):
+            session.add_all(objects)
+            await session.flush()
 
         manifest = LoadProofManifest(
             format_version=FORMAT_VERSION,
@@ -1790,7 +1817,6 @@ async def _trainer_aggregate_result_read(
         if (
             payload.get("total_assigned") != PARTICIPANT_COUNT
             or payload.get("total_completed") != PARTICIPANT_COUNT
-            or payload.get("lencioni_count") != PARTICIPANT_COUNT
             or len(payload.get("results", [])) != PARTICIPANT_COUNT
         ):
             raise RuntimeError("Trainer aggregate did not expose the exact scored fixture.")
