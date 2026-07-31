@@ -97,6 +97,11 @@ class IcareCohortSummaryResponse(BaseModel):
     cohort: Literal["direct_team", "leadership_peers", "self"]
     response_count: int
     averages: list[ReportAverageResponse]
+    score_unit: str | None = None
+    scale_min: float | None = None
+    scale_max: float | None = None
+    score_scale_compatible: bool = True
+    unavailable_reason: Literal["incompatible_score_scales"] | None = None
 
 
 class DriverRankSummaryResponse(BaseModel):
@@ -155,6 +160,8 @@ class CompanyReportAggregateResponse(BaseModel):
     assessment_cycle_id: UUID | None = None
     total_assigned: int
     total_completed: int
+    reportable_scored_count: int
+    reportable_pending_score_count: int
     completion_rate: int
     lencioni_count: int
     driver_count: int

@@ -19,6 +19,19 @@ from codrut.modules.scoring.service import ScoringService
 
 SUBMISSION_PROCESSING_LEASE = timedelta(minutes=2)
 SUBMISSION_PROCESSING_BATCH_SIZE = 25
+SCORING_REQUIRED_QUESTIONNAIRE_KEYS = {
+    "lencioni",
+    "lencioni_en",
+    "distress_drivers",
+    "distress_drivers_en",
+    "boss_360",
+    "boss_360_en",
+    "icare",
+}
+
+
+def requires_scoring_result(questionnaire_key: str) -> bool:
+    return questionnaire_key in SCORING_REQUIRED_QUESTIONNAIRE_KEYS
 
 
 @dataclass(frozen=True)
@@ -102,7 +115,10 @@ async def process_claimed_submission(
             definition_schema=scoring_schema,
         )
     except DomainError as exc:
-        if exc.code not in {"scoring_not_supported", "scoring_metadata_missing"}:
+        if (
+            exc.code not in {"scoring_not_supported", "scoring_metadata_missing"}
+            or requires_scoring_result(definition.key)
+        ):
             raise
     else:
         assignment.status = AssignmentStatus.scored

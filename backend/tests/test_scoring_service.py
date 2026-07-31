@@ -831,6 +831,8 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
 
             assert aggregate.total_assigned == 5
             assert aggregate.total_completed == 5
+            assert aggregate.reportable_scored_count == 4
+            assert aggregate.reportable_pending_score_count == 1
             assert aggregate.completion_rate == 100
             assert aggregate.lencioni_count == 2
             assert aggregate.driver_count == 1
@@ -1392,6 +1394,7 @@ async def test_company_report_aggregate_includes_team_lenses_and_hierarchy_warni
 
             team_by_id = {team.id: team for team in aggregate.team_lenses}
             assert team_by_id["leadership"].member_count == 2
+            assert team_by_id[f"manager:{ceo.id}"].member_count == 2
             manager_team = next(
                 team for team in aggregate.team_lenses if team.name == "Echipa Bogdan Manager"
             )

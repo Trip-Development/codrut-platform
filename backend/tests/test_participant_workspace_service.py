@@ -866,6 +866,7 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 email=user.email,
                 pcm_base="harmonizer",
                 pcm_phase="thinker",
+                role_group="leadership",
             )
             manager = ParticipantProfile(
                 id=uuid.uuid4(),
@@ -878,12 +879,16 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 company_id=company.id,
                 full_name="Reviewer One",
                 email=f"reviewer-one-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name="Ana Participant",
+                role_group="leadership",
             )
             reviewer_two = ParticipantProfile(
                 id=uuid.uuid4(),
                 company_id=company.id,
                 full_name="Reviewer Two",
                 email=f"reviewer-two-{uuid.uuid4().hex[:8]}@example.com",
+                reports_to_name="Ana Participant",
+                role_group="leadership",
             )
             project = CompanyProject(
                 id=uuid.uuid4(),
@@ -1038,6 +1043,8 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
             assert summary.received_feedback.cohort == "leadership_peers"
             assert summary.received_feedback.completed_count == 2
             assert summary.received_feedback.minimum_completed == 2
+            assert summary.received_feedback.score_unit == "grade_1_to_5"
+            assert summary.received_feedback.scale_min == 1.0
             assert summary.received_feedback.scale_max == 5.0
             assert summary.received_feedback.visible is True
             assert summary.received_feedback.overall_average == 4.0

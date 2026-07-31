@@ -39,6 +39,7 @@ from codrut.modules.forms.processing import (
     claim_due_submission_processing,
     process_claimed_submission,
     record_submission_processing_failure,
+    requires_scoring_result,
 )
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
@@ -60,6 +61,14 @@ from codrut.tools.local_preview import (
 PREVIEW_DEFINITIONS = {
     definition.key: definition for definition in build_preview_questionnaire_definitions()
 }
+
+
+def test_submission_processing_requires_scores_only_for_reportable_families() -> None:
+    assert requires_scoring_result("lencioni") is True
+    assert requires_scoring_result("icare") is True
+    assert requires_scoring_result("distress_drivers") is True
+    assert requires_scoring_result("pcm_base") is False
+    assert requires_scoring_result("phase") is False
 
 
 class FakeFormsRepository:
@@ -518,15 +527,19 @@ async def test_submit_survives_scoring_failure_and_worker_retry(
             await worker_session.commit()
 
         original_compute = ScoringService.compute_and_save_score
-        worker_error = RuntimeError("simulated scoring outage")
+        worker_error = DomainError(
+            "Scoring metadata is unavailable.",
+            code="scoring_metadata_missing",
+        )
         monkeypatch.setattr(
             ScoringService,
             "compute_and_save_score",
             AsyncMock(side_effect=worker_error),
         )
         async with SessionLocal() as worker_session:
-            with pytest.raises(RuntimeError, match="simulated scoring outage"):
+            with pytest.raises(DomainError) as processing_error:
                 await process_claimed_submission(worker_session, claims[0])
+            assert processing_error.value.code == "scoring_metadata_missing"
             await worker_session.rollback()
 
         async with SessionLocal() as failure_session:
@@ -546,7 +559,7 @@ async def test_submit_survives_scoring_failure_and_worker_retry(
                 )
             ).scalar_one()
             assert job.status == SubmissionProcessingStatus.queued
-            assert job.last_error_code == "RuntimeError"
+            assert job.last_error_code == "scoring_metadata_missing"
             job.next_attempt_at = datetime.now(UTC)
             await failure_session.commit()
 

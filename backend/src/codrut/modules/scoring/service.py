@@ -142,8 +142,16 @@ AssignmentResultWithDefinition = tuple[
 
 @dataclass(frozen=True)
 class DriverRowSelection:
+    average_rows: tuple[AssignmentResultWithDefinition, ...]
     rankable_rows: tuple[AssignmentResultWithDefinition, ...]
     insufficient_driver_score_count: int
+
+
+@dataclass(frozen=True)
+class IcareScoreScale:
+    score_unit: str
+    scale_min: float
+    scale_max: float
 
 
 @dataclass
@@ -216,7 +224,7 @@ class ScoringService:
         driver_selection = _select_latest_completed_driver_rows(assignment_results)
         score_summary = _build_score_summary(
             assignment_results,
-            rankable_driver_rows=driver_selection.rankable_rows,
+            driver_rows=driver_selection.average_rows,
         )
         icare_cohorts = _build_icare_cohort_summaries(
             assignment_results,
@@ -253,6 +261,22 @@ class ScoringService:
             assessment_cycle_id=assessment_cycle_id,
             total_assigned=total_assigned,
             total_completed=total_completed,
+            reportable_scored_count=sum(
+                1
+                for assignment, result, _definition in assignment_results
+                if assignment.questionnaire_key
+                in (LENCIONI_REPORT_KEYS | DISTRESS_DRIVER_REPORT_KEYS | BOSS_360_REPORT_KEYS)
+                and assignment.status in COMPLETED_STATUSES
+                and result is not None
+            ),
+            reportable_pending_score_count=sum(
+                1
+                for assignment, result, _definition in assignment_results
+                if assignment.questionnaire_key
+                in (LENCIONI_REPORT_KEYS | DISTRESS_DRIVER_REPORT_KEYS | BOSS_360_REPORT_KEYS)
+                and assignment.status in COMPLETED_STATUSES
+                and result is None
+            ),
             completion_rate=round((total_completed / total_assigned) * 100)
             if total_assigned > 0
             else 0,
@@ -1106,13 +1130,13 @@ def _report_participant_from_membership(
 def _build_score_summary(
     assignment_results: Iterable[AssignmentResultWithDefinition],
     *,
-    rankable_driver_rows: Iterable[AssignmentResultWithDefinition] | None = None,
+    driver_rows: Iterable[AssignmentResultWithDefinition] | None = None,
 ) -> ScoreSummary:
     assignment_result_rows = list(assignment_results)
-    driver_rows = (
-        list(rankable_driver_rows)
-        if rankable_driver_rows is not None
-        else list(_select_latest_completed_driver_rows(assignment_result_rows).rankable_rows)
+    selected_driver_rows = (
+        list(driver_rows)
+        if driver_rows is not None
+        else list(_select_latest_completed_driver_rows(assignment_result_rows).average_rows)
     )
     lencioni_dimensions: dict[str, ReportDimensionAccumulator] = {}
     driver_dimensions: dict[str, ReportDimensionAccumulator] = {}
@@ -1132,8 +1156,7 @@ def _build_score_summary(
                 continue
             if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
-
-    for _assignment, result, definition in driver_rows:
+    for _assignment, result, definition in selected_driver_rows:
         assert result is not None
         if _accumulate_scores(driver_dimensions, result, definition):
             driver_count += 1
@@ -1173,6 +1196,31 @@ def _icare_target_id(assignment: QuestionnaireAssignment) -> UUID | None:
 ICARE_COHORT_ORDER = ("direct_team", "leadership_peers", "self")
 
 
+def _icare_score_scale(
+    definition: QuestionnaireDefinition | None,
+) -> IcareScoreScale | None:
+    if definition is None:
+        return None
+    for schema in (
+        _private_definition_schema(definition),
+        getattr(definition, "schema", None),
+    ):
+        if not isinstance(schema, dict):
+            continue
+        scoring = schema.get("scoring")
+        if not isinstance(scoring, dict):
+            continue
+        unit = _non_empty_string(scoring.get("score_unit")) or "percent"
+        if unit == "grade_1_to_5":
+            minimum = _coerce_score(scoring.get("scale_min"))
+            maximum = _coerce_score(scoring.get("scale_max"))
+            if minimum is not None and maximum is not None and maximum > minimum:
+                return IcareScoreScale(unit, minimum, maximum)
+        else:
+            return IcareScoreScale(unit, 0.0, 100.0)
+    return None
+
+
 def _icare_assignment_cohort(
     assignment: QuestionnaireAssignment,
     *,
@@ -1184,17 +1232,13 @@ def _icare_assignment_cohort(
     if _is_self_boss_assignment(assignment):
         return "self"
     respondent_id = assignment.respondent_profile_id
+    if respondent_id in hierarchy.leadership_ids and respondent_id != target_id:
+        return "leadership_peers"
     direct_report_ids = {
         participant.id for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
     }
-    if respondent_id in direct_report_ids:
+    if respondent_id in direct_report_ids and respondent_id not in hierarchy.leadership_ids:
         return "direct_team"
-    if (
-        target_id in hierarchy.leadership_ids
-        and respondent_id in hierarchy.leadership_ids
-        and respondent_id != target_id
-    ):
-        return "leadership_peers"
     return None
 
 
@@ -1207,20 +1251,59 @@ def _build_icare_cohort_summaries(
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
-    if hierarchy.ambiguous_name is not None:
-        return []
+    eligible_rows = [
+        row
+        for row in assignment_results
+        if row[0].questionnaire_key in BOSS_360_REPORT_KEYS
+        and row[0].status in COMPLETED_STATUSES
+        and row[1] is not None
+        and (target_profile_id is None or _icare_target_id(row[0]) == target_profile_id)
+    ]
+    explicit_leadership_ids = {
+        participant.id
+        for participant in participants
+        if (participant.role_group or "").strip().casefold() in {"leadership", "manager"}
+    }
+
+    def cohort_for_row(assignment: QuestionnaireAssignment) -> str | None:
+        if hierarchy.ambiguous_name is None:
+            return _icare_assignment_cohort(assignment, hierarchy=hierarchy)
+        target_id = _icare_target_id(assignment)
+        if _is_self_boss_assignment(assignment) and target_id in explicit_leadership_ids:
+            return "self"
+        return None
+
+    classified_rows = [
+        (assignment, result, definition, cohort)
+        for assignment, result, definition in eligible_rows
+        if (cohort := cohort_for_row(assignment)) is not None
+    ]
+    scales = {
+        scale
+        for _assignment, _result, definition, _cohort in classified_rows
+        if (scale := _icare_score_scale(definition)) is not None
+    }
+    definition_ids = {
+        definition_id
+        for _assignment, _result, definition, _cohort in classified_rows
+        if definition is not None
+        and (definition_id := getattr(definition, "id", None)) is not None
+    }
+    if len(scales) > 1 or len(definition_ids) > 1:
+        return [
+            IcareCohortSummaryResponse(
+                cohort=cohort,  # type: ignore[arg-type]
+                response_count=0,
+                averages=[],
+                score_scale_compatible=False,
+                unavailable_reason="incompatible_score_scales",
+            )
+            for cohort in ICARE_COHORT_ORDER
+        ]
+    score_scale = next(iter(scales), None)
     grouped: dict[str, tuple[dict[str, ReportDimensionAccumulator], int]] = {}
-    for assignment, result, definition in assignment_results:
-        if (
-            assignment.questionnaire_key not in BOSS_360_REPORT_KEYS
-            or assignment.status not in COMPLETED_STATUSES
-            or result is None
-            or (target_profile_id is not None and _icare_target_id(assignment) != target_profile_id)
-        ):
-            continue
-        cohort = _icare_assignment_cohort(assignment, hierarchy=hierarchy)
-        if cohort is None:
-            continue
+    for _assignment, result, definition, cohort in classified_rows:
+        assert result is not None
         dimensions, count = grouped.setdefault(cohort, ({}, 0))
         if _accumulate_scores(dimensions, result, definition):
             grouped[cohort] = (dimensions, count + 1)
@@ -1230,6 +1313,9 @@ def _build_icare_cohort_summaries(
             cohort=cohort,  # type: ignore[arg-type]
             response_count=grouped.get(cohort, ({}, 0))[1],
             averages=_averages_from_accumulators(grouped.get(cohort, ({}, 0))[0]),
+            score_unit=score_scale.score_unit if score_scale is not None else None,
+            scale_min=score_scale.scale_min if score_scale is not None else None,
+            scale_max=score_scale.scale_max if score_scale is not None else None,
         )
         for cohort in ICARE_COHORT_ORDER
     ]
@@ -1241,6 +1327,19 @@ def _build_icare_target_summaries(
 ) -> list[IcareTargetSummaryResponse]:
     assignment_result_rows = list(assignment_results)
     participant_names = {participant.id: participant.full_name for participant in participants}
+    hierarchy = build_organization_hierarchy(
+        [_hierarchy_participant_from_report(participant) for participant in participants]
+    )
+    leadership_ids = (
+        hierarchy.leadership_ids
+        if hierarchy.ambiguous_name is None
+        else {
+            participant.id
+            for participant in participants
+            if (participant.role_group or "").strip().casefold()
+            in {"leadership", "manager"}
+        }
+    )
     grouped: dict[
         UUID,
         tuple[
@@ -1259,7 +1358,7 @@ def _build_icare_target_summaries(
         ):
             continue
         target_id = _icare_target_id(assignment)
-        if target_id is None:
+        if target_id is None or target_id not in leadership_ids:
             continue
         external_dimensions, self_dimensions, external_count, self_count = grouped.setdefault(
             target_id,
@@ -1321,6 +1420,7 @@ def _select_latest_completed_driver_rows(
     assignment_results: Iterable[AssignmentResultWithDefinition],
 ) -> DriverRowSelection:
     participants_with_results: set[UUID] = set()
+    latest_average_by_participant: dict[UUID, AssignmentResultWithDefinition] = {}
     latest_valid_by_participant: dict[UUID, AssignmentResultWithDefinition] = {}
     for row in assignment_results:
         assignment, result, definition = row
@@ -1332,18 +1432,30 @@ def _select_latest_completed_driver_rows(
             continue
         participant_id = assignment.respondent_profile_id
         participants_with_results.add(participant_id)
-        if len(_ranked_driver_scores(result, definition)) < 2:
+        ranked_scores = _ranked_driver_scores(result, definition)
+        if ranked_scores:
+            current_average = latest_average_by_participant.get(participant_id)
+            if current_average is None or _driver_assignment_order_key(
+                row
+            ) > _driver_assignment_order_key(current_average):
+                latest_average_by_participant[participant_id] = row
+        if len(ranked_scores) < 2:
             continue
         current = latest_valid_by_participant.get(participant_id)
         if current is None or _driver_assignment_order_key(row) > _driver_assignment_order_key(
             current
         ):
             latest_valid_by_participant[participant_id] = row
+    average_rows = [
+        latest_average_by_participant[participant_id]
+        for participant_id in sorted(latest_average_by_participant, key=str)
+    ]
     rankable_rows = [
         latest_valid_by_participant[participant_id]
         for participant_id in sorted(latest_valid_by_participant, key=str)
     ]
     return DriverRowSelection(
+        average_rows=tuple(average_rows),
         rankable_rows=tuple(rankable_rows),
         insufficient_driver_score_count=(
             len(participants_with_results) - len(latest_valid_by_participant)
@@ -1584,9 +1696,7 @@ def _build_team_lenses(
             continue
         direct_reports = direct_reports_by_manager_id.get(manager.id, [])
         direct_report_ids = {
-            direct_report.id
-            for direct_report in direct_reports
-            if direct_report.id not in leadership_ids
+            direct_report.id for direct_report in direct_reports
         }
         if not direct_report_ids:
             continue
