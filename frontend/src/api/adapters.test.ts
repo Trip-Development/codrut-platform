@@ -11,6 +11,7 @@ import {
   getTrainerSession,
 } from "./auth";
 import {
+  archiveCampaignRecipientOnServer,
   bulkCreateCampaignRecipientsOnServer,
   buildVideoCampaignCreatePayload,
   campaignAssetFileNameFromUrl,
@@ -27,6 +28,7 @@ import {
   listEmailSurfaceStubs,
   listEmailTemplatesOnServer,
   replaceCampaignRecipientMembershipOnServer,
+  restoreCampaignRecipientOnServer,
   sendCampaignOnServer,
   updateCampaignOnServer,
   updateCampaignRecipientOnServer,
@@ -43,11 +45,13 @@ import {
 import { getParticipantWorkspaceSummary } from "./participants";
 import {
   addCompanyTeamMembership,
+  buildFallbackDriverAggregate,
   createCompanyAssignment,
   createCompany,
   createCompanyTeam,
   deleteCompany,
   getAllCompanyProjects,
+  getAssessmentCycles,
   getCompanyAssignments,
   getCompanyDefaultAssignmentPlan,
   getCompanyDetail,
@@ -66,6 +70,8 @@ import {
   resendParticipantInvitation,
   saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
+  type CompanyAssignment,
+  type CompanyScoringResult,
 } from "./companies";
 import {
   clearQuestionnaireDefinitionCache,
@@ -370,6 +376,59 @@ describe("frontend API adapter stubs", () => {
         campaign: expect.objectContaining({
           recipients: expect.not.arrayContaining([
             expect.objectContaining({ email: "ada@manual.example" }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it("preserves protected contact status through demo archive and restore", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response));
+
+    await bulkCreateCampaignRecipientsOnServer([
+      {
+        email: "protected@demo.example",
+        contact_name: "Contact Protejat",
+        organization_name: "Demo Org",
+        segment: "potential_customer",
+      },
+    ]);
+    const created = (await getEmailOpsSummary()).campaign.recipients.find(
+      (recipient) => recipient.email === "protected@demo.example",
+    );
+    expect(created).toBeDefined();
+
+    await updateCampaignRecipientOnServer(created?.id ?? "", {
+      status: "unsubscribed",
+    });
+    await archiveCampaignRecipientOnServer(created?.id ?? "");
+
+    await expect(getEmailOpsSummary({ catalogScope: "archived" })).resolves.toEqual(
+      expect.objectContaining({
+        campaign: expect.objectContaining({
+          recipients: expect.arrayContaining([
+            expect.objectContaining({
+              id: created?.id,
+              status: "archived",
+              statusBeforeArchive: "unsubscribed",
+            }),
+          ]),
+        }),
+      }),
+    );
+
+    await expect(restoreCampaignRecipientOnServer(created?.id ?? "")).resolves.toMatchObject({
+      status: "unsubscribed",
+    });
+    await expect(getEmailOpsSummary()).resolves.toEqual(
+      expect.objectContaining({
+        campaign: expect.objectContaining({
+          recipients: expect.arrayContaining([
+            expect.objectContaining({
+              id: created?.id,
+              status: "unsubscribed",
+              statusBeforeArchive: null,
+            }),
           ]),
         }),
       }),
@@ -1887,6 +1946,14 @@ describe("frontend API adapter stubs", () => {
       expect.objectContaining({ id: "claudia-neagu", reports_to_name: "Sorin Dima" }),
     ]);
     await expect(getProjectParticipants("demo-project", "demo-project")).resolves.toHaveLength(6);
+    await expect(getAssessmentCycles("demo-project", "demo-project")).resolves.toEqual([
+      expect.objectContaining({
+        id: "demo-project-cycle-1",
+        project_id: "demo-project",
+        sequence: 1,
+        status: "active",
+      }),
+    ]);
 
     const assignments = await getCompanyAssignments("demo-project", {}, { projectId: "demo-project" });
     expect(assignments.map((assignment) => assignment.id)).toEqual([
@@ -1906,6 +1973,14 @@ describe("frontend API adapter stubs", () => {
       lencioni_count: 3,
       driver_count: 1,
       boss_360_count: 2,
+      driver_rank_summary: {
+        total_people: 1,
+        first_rank: [{ id: "hurry_up", label: "Grăbește-te", value: 1 }],
+        second_rank: [{ id: "try_hard", label: "Străduiește-te", value: 1 }],
+        first_rank_tie_breaks: 0,
+        second_rank_tie_breaks: 0,
+        insufficient_driver_score_count: 0,
+      },
       pcm_base_count: 0,
       pcm_phase_count: 0,
       pcm_base_distribution: [],
@@ -1970,6 +2045,21 @@ describe("frontend API adapter stubs", () => {
       lencioni_count: 6,
       driver_count: 3,
       boss_360_count: 11,
+      driver_rank_summary: {
+        total_people: 3,
+        first_rank: expect.arrayContaining([
+          { id: "be_perfect", label: "Fii perfect", value: 1 },
+          { id: "hurry_up", label: "Grăbește-te", value: 1 },
+          { id: "try_hard", label: "Străduiește-te", value: 1 },
+        ]),
+        second_rank: expect.arrayContaining([
+          { id: "try_hard", label: "Străduiește-te", value: 2 },
+          { id: "be_perfect", label: "Fii perfect", value: 1 },
+        ]),
+        first_rank_tie_breaks: 0,
+        second_rank_tie_breaks: 0,
+        insufficient_driver_score_count: 0,
+      },
       pcm_base_count: 3,
       pcm_phase_count: 3,
       pcm_base_distribution: expect.arrayContaining([
@@ -2915,5 +3005,80 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 } as Response));
 
     await expect(listEmailTemplatesOnServer()).rejects.toThrow("Server returned status 503");
+  });
+});
+
+describe("TA demo report aggregation", () => {
+  const assignment = (
+    id: string,
+    respondentProfileId: string,
+    createdAt: string,
+  ): CompanyAssignment => ({
+    id,
+    created_at: createdAt,
+    company_id: "demo-project",
+    project_id: "demo-project",
+    respondent_profile_id: respondentProfileId,
+    questionnaire_key: "distress_drivers",
+    target_type: "self",
+    target_person_id: null,
+    target_team_id: null,
+    status: "scored",
+    submitted_at: createdAt,
+    scored_at: createdAt,
+  });
+
+  const result = (
+    assignmentId: string,
+    scores: Record<string, unknown>,
+  ): CompanyScoringResult => ({
+    id: `result-${assignmentId}`,
+    assignment_id: assignmentId,
+    scores,
+    primary_result: null,
+  });
+
+  it("uses one latest-valid participant population for averages and both pies", () => {
+    const olderValid = assignment(
+      "driver-older-valid",
+      "participant-1",
+      "2026-07-29T08:00:00.000Z",
+    );
+    const newerInvalid = assignment(
+      "driver-newer-invalid",
+      "participant-1",
+      "2026-07-30T08:00:00.000Z",
+    );
+    const onlyInvalid = assignment(
+      "driver-only-invalid",
+      "participant-2",
+      "2026-07-30T09:00:00.000Z",
+    );
+
+    const aggregate = buildFallbackDriverAggregate(
+      [olderValid, newerInvalid, onlyInvalid],
+      [
+        result(olderValid.id, {
+          be_perfect: 80,
+          hurry_up: 60,
+          try_hard: 20,
+        }),
+        result(newerInvalid.id, { be_perfect: 99 }),
+        result(onlyInvalid.id, { hurry_up: 90 }),
+      ],
+    );
+
+    expect(aggregate.driverCount).toBe(1);
+    expect(aggregate.driverAverages).toEqual([
+      expect.objectContaining({ id: "be_perfect", avg: 80 }),
+      expect.objectContaining({ id: "hurry_up", avg: 60 }),
+      expect.objectContaining({ id: "try_hard", avg: 20 }),
+    ]);
+    expect(aggregate.driverRankSummary).toMatchObject({
+      total_people: 1,
+      first_rank: [{ id: "be_perfect", label: "Fii perfect", value: 1 }],
+      second_rank: [{ id: "hurry_up", label: "Grăbește-te", value: 1 }],
+      insufficient_driver_score_count: 1,
+    });
   });
 });

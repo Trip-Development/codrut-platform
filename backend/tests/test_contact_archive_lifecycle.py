@@ -56,6 +56,9 @@ PURGE_SETTINGS = Settings(
     campaign_recipient_purge_enabled=True,
     email_suppression_review_days=365,
 )
+DISABLED_PURGE_SETTINGS = SETTINGS.model_copy(
+    update={"campaign_recipient_purge_enabled": False},
+)
 
 
 def recipient(
@@ -271,14 +274,14 @@ async def test_permanent_delete_is_archive_only_and_owner_scoped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_manual_permanent_delete_is_disabled_during_expand_release() -> None:
+async def test_manual_permanent_delete_respects_the_emergency_kill_switch() -> None:
     repository = lifecycle_repository(stored_recipient=recipient())
 
     with pytest.raises(DomainError) as exc_info:
         await service_with(repository).permanently_delete_campaign_recipient(
             uuid.uuid4(),
             owner_id=OWNER_ID,
-            settings=SETTINGS,
+            settings=DISABLED_PURGE_SETTINGS,
         )
 
     assert exc_info.value.code == "campaign_recipient_purge_disabled"
@@ -626,12 +629,12 @@ async def test_scheduled_purge_terminalizes_stale_provider_delivery_after_grace(
 
 
 @pytest.mark.asyncio
-async def test_scheduled_purge_is_disabled_during_expand_release_by_default() -> None:
+async def test_scheduled_purge_respects_the_emergency_kill_switch() -> None:
     repository = lifecycle_repository(stored_recipient=None)
     repository.list_due_archived_campaign_recipients = AsyncMock()
 
     result = await service_with(repository).purge_due_campaign_recipients(
-        settings=SETTINGS,
+        settings=DISABLED_PURGE_SETTINGS,
     )
 
     assert (result.examined, result.purged, result.deferred) == (0, 0, 0)
@@ -845,6 +848,31 @@ async def test_suppression_reason_never_downgrades_unsubscribe() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_suppression_dual_writes_rollback_email_and_fingerprint() -> None:
+    review_after = datetime.now(UTC) + timedelta(days=365)
+    session = MagicMock()
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    repository = CommunicationsRepository(cast(Any, session))
+    repository.get_email_suppression = AsyncMock(return_value=None)
+
+    created = await repository.suppress_email(
+        owner_id=OWNER_ID,
+        email=" ANA@Example.Test ",
+        email_fingerprint="b" * 64,
+        reason="hard_bounce",
+        source_email_send_id=uuid.uuid4(),
+        review_after=review_after,
+    )
+
+    assert isinstance(created, EmailSuppression)
+    assert created.legacy_email == "ana@example.test"
+    assert created.email_fingerprint == "b" * 64
+    session.add.assert_called_once_with(created)
+    session.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_due_suppression_review_audits_retention_and_manual_review() -> None:
     now = datetime.now(UTC)
     retained = EmailSuppression(
@@ -859,7 +887,7 @@ async def test_due_suppression_review_audits_retention_and_manual_review() -> No
     needs_review = EmailSuppression(
         id=uuid.uuid4(),
         owner_id=OWNER_ID,
-        legacy_email="needs-review@example.test",
+        legacy_email="review@example.test",
         email_fingerprint="b" * 64,
         reason="soft_bounce",
         source_email_send_id=None,
@@ -907,7 +935,7 @@ async def test_due_suppression_review_quarantines_unknown_reason_for_manual_revi
     unknown = EmailSuppression(
         id=uuid.uuid4(),
         owner_id=OWNER_ID,
-        legacy_email="legacy@example.test",
+        legacy_email="unknown@example.test",
         email_fingerprint="c" * 64,
         reason="legacy_provider_reject",
         source_email_send_id=None,

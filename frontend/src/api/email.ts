@@ -380,6 +380,12 @@ export type EmailOpsSummary = {
   campaign: CampaignOpsSummary;
 };
 
+export type EmailSendCapacity = {
+  daily_cap: number;
+  used_today: number;
+  remaining_today: number;
+};
+
 export type CampaignRecipientRow = {
   id: string;
   company: string;
@@ -388,8 +394,10 @@ export type CampaignRecipientRow = {
   email: string;
   clientType: "tip_1" | "tip_2" | "tip_3" | "tip_4";
   status: "ready" | "needs_contact_name" | "suppressed" | "unsubscribed" | "sent" | "archived";
+  activationAllowed: boolean;
   archivedAt?: string | null;
   purgeAfter?: string | null;
+  statusBeforeArchive?: "active" | "suppressed" | "unsubscribed" | null;
   openRate?: string;
   clickRate?: string;
   viewRate?: string;
@@ -437,6 +445,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     email: "radu.munteanu@atlas.example.com",
     clientType: "tip_1",
     status: "sent",
+    activationAllowed: false,
     openCount: 3,
     clickCount: 2,
     viewCount: 1,
@@ -453,6 +462,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     email: "diana.ene@meridian.example.com",
     clientType: "tip_1",
     status: "ready",
+    activationAllowed: false,
     openCount: 1,
     clickCount: 1,
     viewCount: 1,
@@ -468,6 +478,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     email: "cristina.olaru@nova.example.com",
     clientType: "tip_2",
     status: "needs_contact_name",
+    activationAllowed: false,
     openCount: 0,
     clickCount: 0,
     viewCount: 0,
@@ -481,6 +492,7 @@ const SEEDED_CAMPAIGN_RECIPIENTS: CampaignRecipientRow[] = [
     email: "office@fabrica.example.com",
     clientType: "tip_2",
     status: "suppressed",
+    activationAllowed: false,
     openCount: 0,
     clickCount: 0,
     viewCount: 0,
@@ -550,6 +562,29 @@ export async function getEmailOpsSummary(options: EmailOpsSummaryOptions = {}): 
           notification: "Andrei primește email/Telegram cu link către raport.",
         },
       },
+    };
+  }
+}
+
+export async function getEmailSendCapacity(): Promise<EmailSendCapacity> {
+  try {
+    const response = await apiFetch(
+      `${getApiBaseUrl()}/communications/send-capacity`,
+      {
+        cache: "no-store",
+        credentials: "include",
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    if (!isDemoFallbackEnabled()) throw error;
+    return {
+      daily_cap: 2000,
+      used_today: 0,
+      remaining_today: 2000,
     };
   }
 }
@@ -1162,15 +1197,25 @@ function buildDemoCampaignRecipient(
 ): CampaignRecipientRow {
   const contactName = payload.contact_name ?? [existing?.firstName, existing?.lastName].filter(Boolean).join(" ");
   const splitName = splitDemoContactName(contactName);
+  const nextEmail = payload.email?.trim() ?? existing?.email ?? "";
+  const nextStatus = demoRecipientStatus(payload.status, contactName, existing?.status);
+  const correctedSuppressedEmail =
+    existing?.status === "suppressed"
+    && nextStatus === "suppressed"
+    && nextEmail.toLocaleLowerCase("ro-RO") !== existing.email.trim().toLocaleLowerCase("ro-RO");
   return {
     ...existing,
     id,
     company: payload.organization_name ?? existing?.company ?? "Companie necompletată",
     firstName: splitName.firstName,
     lastName: splitName.lastName,
-    email: payload.email?.trim() ?? existing?.email ?? "",
+    email: nextEmail,
     clientType: payload.segment ? demoRecipientClientType(payload.segment) : existing?.clientType ?? "tip_2",
-    status: demoRecipientStatus(payload.status, contactName, existing?.status),
+    status: nextStatus,
+    activationAllowed:
+      nextStatus === "suppressed"
+        ? correctedSuppressedEmail || existing?.activationAllowed === true
+        : false,
   };
 }
 
@@ -1241,6 +1286,9 @@ function archiveDemoCampaignRecipient(recipientId: string): CampaignRecipientArc
       ? {
           ...recipient,
           status: "archived",
+          statusBeforeArchive:
+            recipient.statusBeforeArchive
+            ?? demoRecipientProtectionStatus(recipient.status),
           archivedAt: archivedAt.toISOString(),
           purgeAfter: purgeAfter.toISOString(),
         }
@@ -1269,19 +1317,31 @@ function archiveDemoCampaignRecipient(recipientId: string): CampaignRecipientArc
 
 function restoreDemoCampaignRecipient(recipientId: string): CampaignRecipientRestoreResponse {
   const recipients = readDemoCampaignRecipients();
+  const recipient = recipients.find((item) => item.id === recipientId);
+  const restoredStatus = recipient?.statusBeforeArchive ?? "active";
   writeDemoCampaignRecipients(recipients.map((recipient) =>
     recipient.id === recipientId
       ? {
           ...recipient,
-          status: campaignRecipientNameForDemo(recipient) ? "ready" : "needs_contact_name",
+          status:
+            restoredStatus === "suppressed" || restoredStatus === "unsubscribed"
+              ? restoredStatus
+              : campaignRecipientNameForDemo(recipient)
+                ? "ready"
+                : "needs_contact_name",
+          activationAllowed:
+            restoredStatus === "suppressed"
+              ? recipient.activationAllowed === true
+              : false,
           archivedAt: null,
           purgeAfter: null,
+          statusBeforeArchive: null,
         }
       : recipient,
   ));
   return {
     id: recipientId,
-    status: "active",
+    status: restoredStatus,
     archived_at: null,
     purge_after: null,
   };
@@ -1301,6 +1361,13 @@ function permanentlyDeleteDemoCampaignRecipient(
 
 function campaignRecipientNameForDemo(recipient: CampaignRecipientRow): string {
   return [recipient.firstName, recipient.lastName].filter(Boolean).join(" ").trim();
+}
+
+function demoRecipientProtectionStatus(
+  status: CampaignRecipientRow["status"],
+): NonNullable<CampaignRecipientRow["statusBeforeArchive"]> {
+  if (status === "suppressed" || status === "unsubscribed") return status;
+  return "active";
 }
 
 function readDemoCampaigns(): EmailCampaign[] {
@@ -1405,6 +1472,7 @@ function demoMembershipRows(recipientIds: string[]): CampaignRecipientMembership
       email: "",
       clientType: "tip_2",
       status: "ready",
+      activationAllowed: false,
       membershipSource: "manual",
     };
   });

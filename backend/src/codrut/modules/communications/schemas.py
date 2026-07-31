@@ -125,6 +125,8 @@ class CampaignRecipientRowResponse(BaseModel):
     outcome: str | None = None
     archivedAt: datetime | None = None
     purgeAfter: datetime | None = None
+    statusBeforeArchive: str | None = None
+    activationAllowed: bool = False
 
 
 class CampaignRecipientMembershipRowResponse(CampaignRecipientRowResponse):
@@ -155,6 +157,12 @@ class EmailOpsSummaryResponse(BaseModel):
     assessmentRows: list[AssessmentDeliveryRowResponse]
     rules: list[str]
     campaign: CampaignOpsSummaryResponse
+
+
+class EmailSendCapacityResponse(BaseModel):
+    daily_cap: int
+    used_today: int
+    remaining_today: int
 
 
 class CampaignRecipientCreateRequest(StrictRequestModel):

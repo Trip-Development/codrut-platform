@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.core.errors import DomainError
@@ -13,7 +13,11 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
     Team,
 )
-from codrut.modules.companies.anonymous import new_anonymous_name
+from codrut.modules.companies.anonymous import allocate_anonymous_name
+from codrut.modules.companies.hierarchy import (
+    HierarchyParticipant,
+    build_organization_hierarchy,
+)
 from codrut.modules.companies.models import (
     Company,
     CompanyProject,
@@ -29,6 +33,8 @@ from codrut.modules.forms.models import (
 from codrut.modules.identity.schemas import InviteTask
 from codrut.modules.identity.service import _invite_task_copy
 from codrut.modules.participants.schemas import (
+    ParticipantQuestionnaireProject,
+    ParticipantQuestionnaireTask,
     ParticipantReceivedFeedbackDimension,
     ParticipantReceivedFeedbackSummary,
     ParticipantWorkspaceCard,
@@ -52,12 +58,21 @@ COMPLETED_ASSIGNMENT_STATUSES = {
 }
 RECEIVED_360_QUESTIONNAIRE_KEYS = {"boss_360", "boss_360_en", "icare"}
 RECEIVED_360_MINIMUM_COMPLETED = 2
-RECEIVED_360_TARGET_COMPLETED = 3
 
 
 class ParticipantWorkspaceService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def _anonymous_name_exists(self, anonymous_name: str) -> bool:
+        result = await self.session.execute(
+            select(
+                exists().where(
+                    ParticipantProfile.anonymous_name == anonymous_name
+                )
+            )
+        )
+        return bool(result.scalar())
 
     async def get_workspace_summary(
         self,
@@ -71,6 +86,12 @@ class ParticipantWorkspaceService:
     ) -> ParticipantWorkspaceSummary:
         profile_rows = await self._list_profiles_and_companies(user_id)
         contexts = await self._get_authorized_contexts(profile_rows)
+        questionnaire_projects = await self._get_questionnaire_projects(
+            profile_rows,
+            contexts,
+            allowed_assignment_ids=allowed_assignment_ids,
+            scoped_project_id=scoped_project_id,
+        )
         profile, company, project_id, cycle_id = await self._resolve_workspace_context(
             profile_rows,
             contexts,
@@ -84,9 +105,12 @@ class ParticipantWorkspaceService:
             return ParticipantWorkspaceSummary(
                 context_selection_required=True,
                 contexts=contexts,
+                questionnaire_projects=questionnaire_projects,
             )
         if not profile.anonymous_name:
-            profile.anonymous_name = new_anonymous_name()
+            profile.anonymous_name = await allocate_anonymous_name(
+                self._anonymous_name_exists
+            )
             await self.session.flush()
         visible_cycle_ids = {
             cycle.id
@@ -206,6 +230,7 @@ class ParticipantWorkspaceService:
                 projects,
                 cycles=self._selected_cycles(contexts, profile.id, None),
             ),
+            questionnaire_projects=questionnaire_projects,
             deadline_label=_format_deadline(deadline_at),
             deadline_at=deadline_at,
             tasks=tasks,
@@ -234,6 +259,172 @@ class ParticipantWorkspaceService:
                 description=(
                     "Când trainerul salvează alocări pentru tine, chestionarele apar aici automat."
                 ),
+            ),
+        )
+
+    async def _get_questionnaire_projects(
+        self,
+        profile_rows: list[tuple[ParticipantProfile, Company]],
+        contexts: list[ParticipantWorkspaceContext],
+        *,
+        allowed_assignment_ids: tuple[UUID, ...] | None,
+        scoped_project_id: UUID | None,
+    ) -> list[ParticipantQuestionnaireProject]:
+        profiles_by_id = {
+            profile.id: (profile, company)
+            for profile, company in profile_rows
+        }
+        visible_project_ids_by_profile = {
+            context.participant_profile_id: {
+                project.id for project in context.projects
+            }
+            for context in contexts
+        }
+        profile_ids = set(profiles_by_id)
+        if not profile_ids:
+            return []
+
+        statement = (
+            select(QuestionnaireAssignment)
+            .outerjoin(
+                AssessmentCycle,
+                AssessmentCycle.id
+                == QuestionnaireAssignment.assessment_cycle_id,
+            )
+            .where(
+                QuestionnaireAssignment.respondent_profile_id.in_(profile_ids)
+            )
+            .where(
+                QuestionnaireAssignment.status != AssignmentStatus.cancelled
+            )
+            .where(
+                or_(
+                    QuestionnaireAssignment.assessment_cycle_id.is_(None),
+                    AssessmentCycle.status != AssessmentCycleStatus.draft,
+                )
+            )
+            .order_by(
+                QuestionnaireAssignment.due_at.asc().nulls_last(),
+                QuestionnaireAssignment.created_at.asc(),
+            )
+        )
+        if allowed_assignment_ids is not None:
+            if not allowed_assignment_ids:
+                return []
+            statement = statement.where(
+                QuestionnaireAssignment.id.in_(allowed_assignment_ids)
+            )
+        if scoped_project_id is not None:
+            statement = statement.where(
+                QuestionnaireAssignment.project_id == scoped_project_id
+            )
+        assignment_result = await self.session.execute(statement)
+        assignments = [
+            assignment
+            for assignment in assignment_result.scalars().all()
+            if assignment.project_id
+            in visible_project_ids_by_profile.get(
+                assignment.respondent_profile_id,
+                set(),
+            )
+        ]
+        if not assignments:
+            return []
+
+        projects = await self._get_projects(assignments)
+        teams = await self._get_teams(assignments)
+        company_ids = {
+            company.id for _profile, company in profile_rows
+        }
+        people: dict[UUID, ParticipantProfile] = {}
+        for company_id in company_ids:
+            people.update(await self._get_people(assignments, company_id))
+
+        cycle_ids = {
+            assignment.assessment_cycle_id
+            for assignment in assignments
+            if assignment.assessment_cycle_id is not None
+        }
+        cycles: dict[UUID, AssessmentCycle] = {}
+        if cycle_ids:
+            cycle_result = await self.session.execute(
+                select(AssessmentCycle).where(
+                    AssessmentCycle.id.in_(cycle_ids)
+                )
+            )
+            cycles = {
+                cycle.id: cycle for cycle in cycle_result.scalars().all()
+            }
+
+        catalog: list[ParticipantQuestionnaireProject] = []
+        for context in contexts:
+            for workspace_project in context.projects:
+                project_assignments = [
+                    assignment
+                    for assignment in assignments
+                    if assignment.respondent_profile_id
+                    == context.participant_profile_id
+                    and assignment.project_id == workspace_project.id
+                ]
+                if not project_assignments:
+                    continue
+
+                questionnaires: list[ParticipantQuestionnaireTask] = []
+                for assignment in project_assignments:
+                    task = self._assignment_to_task(
+                        assignment=assignment,
+                        teams=teams,
+                        people=people,
+                        projects=projects,
+                    )
+                    cycle = (
+                        cycles.get(assignment.assessment_cycle_id)
+                        if assignment.assessment_cycle_id is not None
+                        else None
+                    )
+                    deadline_at = assignment.due_at
+                    if deadline_at is None:
+                        project = projects.get(workspace_project.id)
+                        deadline_at = project.due_at if project is not None else None
+                    task_payload = task.model_dump()
+                    task_payload.update(
+                        cycleName=cycle.name if cycle is not None else None,
+                        cycleSequence=(
+                            cycle.sequence if cycle is not None else None
+                        ),
+                        deadlineLabel=_format_deadline(deadline_at),
+                        dueAt=deadline_at,
+                    )
+                    questionnaires.append(
+                        ParticipantQuestionnaireTask.model_validate(task_payload)
+                    )
+
+                completed_count = sum(
+                    questionnaire.status == "completed"
+                    for questionnaire in questionnaires
+                )
+                catalog.append(
+                    ParticipantQuestionnaireProject(
+                        id=workspace_project.id,
+                        participant_profile_id=context.participant_profile_id,
+                        company_name=context.company_name,
+                        name=workspace_project.name,
+                        status=workspace_project.status,
+                        history_bucket=workspace_project.history_bucket,
+                        deadline_label=workspace_project.deadline_label,
+                        completed_count=completed_count,
+                        total_count=len(questionnaires),
+                        questionnaires=questionnaires,
+                    )
+                )
+
+        return sorted(
+            catalog,
+            key=lambda project: (
+                project.completed_count == project.total_count,
+                project.history_bucket == "history",
+                project.name.casefold(),
+                str(project.id),
             ),
         )
 
@@ -295,8 +486,9 @@ class ParticipantWorkspaceService:
                 profile,
                 publication,
             )
-            summary = await self._build_received_feedback_summary(
+            cohort_summaries = await self._build_received_feedback_summaries(
                 assignments,
+                profile=profile,
                 publication=publication,
                 definition=definition,
                 project_id=publication.project_id,
@@ -307,33 +499,30 @@ class ParticipantWorkspaceService:
                     else "Fără proiect"
                 ),
             )
-            if summary is not None:
-                summaries.append(summary)
+            summaries.extend(cohort_summaries)
         return summaries
 
-    async def _build_received_feedback_summary(
+    async def _build_received_feedback_summaries(
         self,
         received_assignments: list[QuestionnaireAssignment],
         *,
+        profile: ParticipantProfile,
         publication: ResultPublication,
         definition: QuestionnaireDefinition,
         project_id: UUID | None,
         project_name: str,
-    ) -> ParticipantReceivedFeedbackSummary | None:
+    ) -> list[ParticipantReceivedFeedbackSummary]:
         policy = publication.policy_snapshot
         if not isinstance(policy, dict) or policy.get("publication") != "aggregate":
-            return None
-        minimum_completed = _positive_int(
-            policy.get("required_completed"),
-            RECEIVED_360_MINIMUM_COMPLETED,
-        )
+            return []
+        minimum_completed = RECEIVED_360_MINIMUM_COMPLETED
         allowed_dimensions = {
             str(dimension_id)
             for dimension_id in policy.get("dimension_ids", [])
             if isinstance(dimension_id, str) and dimension_id.strip()
         }
         if publication.source_count < minimum_completed or not allowed_dimensions:
-            return None
+            return []
         labels = _definition_score_labels(definition)
         questionnaire_title = definition.title
         scale_max = _definition_scale_max(definition)
@@ -344,18 +533,64 @@ class ParticipantWorkspaceService:
             if assignment.status in COMPLETED_ASSIGNMENT_STATUSES
         ]
         if len(completed_assignments) != publication.source_count:
-            return None
+            return []
 
+        cohort_assignments = await self._split_received_feedback_cohorts(
+            profile,
+            publication.project_id,
+            completed_assignments,
+        )
+        summaries: list[ParticipantReceivedFeedbackSummary] = []
+        for cohort in ("direct_team", "leadership_peers"):
+            assignments = cohort_assignments[cohort]
+            latest_by_respondent = {
+                assignment.respondent_profile_id: assignment for assignment in assignments
+            }
+            distinct_assignments = list(latest_by_respondent.values())
+            summary = await self._build_received_feedback_cohort_summary(
+                distinct_assignments,
+                publication=publication,
+                project_id=project_id,
+                project_name=project_name,
+                cohort=cohort,
+                minimum_completed=minimum_completed,
+                allowed_dimensions=allowed_dimensions,
+                labels=labels,
+                questionnaire_title=questionnaire_title,
+                scale_max=scale_max,
+            )
+            if summary is not None:
+                summaries.append(summary)
+        return summaries
+
+    async def _build_received_feedback_cohort_summary(
+        self,
+        completed_assignments: list[QuestionnaireAssignment],
+        *,
+        publication: ResultPublication,
+        project_id: UUID | None,
+        project_name: str,
+        cohort: str,
+        minimum_completed: int,
+        allowed_dimensions: set[str],
+        labels: dict[str, str],
+        questionnaire_title: str,
+        scale_max: float,
+    ) -> ParticipantReceivedFeedbackSummary | None:
+        if not completed_assignments:
+            return None
         completed_assignment_ids = {assignment.id for assignment in completed_assignments}
         scoring_result = await self.session.execute(
             select(ScoringResult).where(ScoringResult.assignment_id.in_(completed_assignment_ids))
         )
         scoring_results = list(scoring_result.scalars().all())
-        if len(scoring_results) != publication.source_count:
+        completed_count = len(completed_assignments)
+        if len(scoring_results) != completed_count:
             return None
+        visible = completed_count >= minimum_completed
 
         dimension_values: dict[str, list[float]] = {}
-        for scoring in scoring_results:
+        for scoring in scoring_results if visible else []:
             for dimension_id, value in scoring.scores.items():
                 if allowed_dimensions and dimension_id not in allowed_dimensions:
                     continue
@@ -379,8 +614,6 @@ class ParticipantWorkspaceService:
             )
             for dimension_id, values in visible_dimension_values.items()
         ]
-        if not dimensions:
-            return None
         return ParticipantReceivedFeedbackSummary(
             project_id=project_id,
             project_name=project_name,
@@ -388,15 +621,90 @@ class ParticipantWorkspaceService:
             assessment_cycle_id=publication.assessment_cycle_id,
             questionnaire_key=publication.questionnaire_key,
             questionnaire_title=questionnaire_title,
-            completed_count=publication.source_count,
+            cohort=cohort,  # type: ignore[arg-type]
+            completed_count=completed_count,
             minimum_completed=minimum_completed,
             scale_max=scale_max,
-            visible=True,
+            visible=visible and bool(dimensions),
             overall_average=(
                 round(sum(visible_scores) / len(visible_scores), 1) if visible_scores else None
             ),
             dimensions=dimensions,
         )
+
+    async def _split_received_feedback_cohorts(
+        self,
+        profile: ParticipantProfile,
+        project_id: UUID | None,
+        assignments: list[QuestionnaireAssignment],
+    ) -> dict[str, list[QuestionnaireAssignment]]:
+        if project_id is not None:
+            rows = (
+                await self.session.execute(
+                    select(ProjectMembership, ParticipantProfile)
+                    .join(
+                        ParticipantProfile,
+                        ParticipantProfile.id == ProjectMembership.participant_profile_id,
+                    )
+                    .where(ProjectMembership.project_id == project_id)
+                    .where(ProjectMembership.active.is_(True))
+                )
+            ).all()
+            participants = [
+                HierarchyParticipant(
+                    id=participant.id,
+                    full_name=participant.full_name,
+                    reports_to_name=membership.reports_to_name,
+                    role_group=membership.role_group,
+                    user_id=participant.user_id,
+                )
+                for membership, participant in rows
+            ]
+        else:
+            participants = []
+        if not participants or profile.id not in {
+            participant.id for participant in participants
+        }:
+            profiles = list(
+                (
+                    await self.session.execute(
+                        select(ParticipantProfile)
+                        .where(ParticipantProfile.company_id == profile.company_id)
+                    )
+                ).scalars()
+            )
+            participants = [
+                HierarchyParticipant(
+                    id=participant.id,
+                    full_name=participant.full_name,
+                    reports_to_name=participant.reports_to_name,
+                    role_group=participant.role_group,
+                    user_id=participant.user_id,
+                )
+                for participant in profiles
+            ]
+        hierarchy = build_organization_hierarchy(participants)
+        if hierarchy.ambiguous_name is not None:
+            return {"direct_team": [], "leadership_peers": []}
+        direct_report_ids = {
+            participant.id
+            for participant in hierarchy.direct_reports_by_manager_id.get(profile.id, [])
+        }
+        return {
+            "direct_team": [
+                assignment
+                for assignment in assignments
+                if assignment.respondent_profile_id in direct_report_ids
+            ],
+            "leadership_peers": [
+                assignment
+                for assignment in assignments
+                if assignment.respondent_profile_id in hierarchy.leadership_ids
+                and assignment.respondent_profile_id not in direct_report_ids
+                and profile.id in hierarchy.leadership_ids
+                and assignment.respondent_profile_id != profile.id
+            ],
+        }
 
     async def _received_assignments_for_publication(
         self,
@@ -1037,6 +1345,7 @@ class ParticipantWorkspaceService:
             targetLabel=target_label,
             estimatedMinutes=estimated_minutes,
             questionnaireKey=assignment.questionnaire_key,
+            questionnaireDefinitionId=assignment.questionnaire_definition_id,
             projectId=assignment.project_id,
             projectName=(
                 projects[assignment.project_id].name
@@ -1094,6 +1403,7 @@ class ParticipantWorkspaceService:
             if isinstance(value, str) and value.strip()
         }
         labels = _definition_score_labels(definition)
+        feedback_by_dimension = _definition_score_feedback(definition)
         public_scores: dict[str, dict[str, float | str]] = {}
         for dimension_id in visible_dimension_ids:
             value = result.scores.get(dimension_id)
@@ -1108,6 +1418,14 @@ class ParticipantWorkspaceService:
                 interpretation = value.get("interpretation")
                 if isinstance(interpretation, str) and interpretation.strip():
                     public_value["interpretation"] = interpretation.strip()
+            feedback = feedback_by_dimension.get(dimension_id)
+            if (
+                assignment.questionnaire_key
+                in {"distress_drivers", "distress_drivers_en"}
+                and score > 50
+                and feedback
+            ):
+                public_value["feedback"] = feedback
             public_scores[dimension_id] = public_value
 
         if not public_scores:
@@ -1292,6 +1610,40 @@ def _schema_score_labels(schema: object) -> dict[str, str]:
     return labels
 
 
+def _definition_score_feedback(
+    definition: QuestionnaireDefinition | None,
+) -> dict[str, str]:
+    if definition is None:
+        return {}
+    feedback: dict[str, str] = {}
+    for schema in (
+        definition.schema,
+        (definition.private_config or {}).get("schema"),
+    ):
+        if not isinstance(schema, dict):
+            continue
+        scoring = schema.get("scoring")
+        if not isinstance(scoring, dict):
+            continue
+        for item in scoring.get("drivers", []):
+            if not isinstance(item, dict):
+                continue
+            dimension_id = item.get("id")
+            if not isinstance(dimension_id, str) or not dimension_id.strip():
+                continue
+            for key in (
+                "feedback_above_50",
+                "participant_feedback",
+                "feedback",
+                "guidance",
+            ):
+                value = item.get(key)
+                if isinstance(value, str) and value.strip():
+                    feedback[dimension_id] = value.strip()
+                    break
+    return feedback
+
+
 def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
     explicit = definition.feedback_policy.get("scale_max")
     if isinstance(explicit, (int, float)) and not isinstance(explicit, bool) and explicit > 0:
@@ -1388,17 +1740,6 @@ def _source_assignment_ids(policy: object) -> set[UUID]:
         except ValueError:
             return set()
     return assignment_ids
-
-
-def _required_feedback_count(
-    *,
-    eligible_count: int,
-    minimum_completed: object,
-    target_completed: object,
-) -> int:
-    minimum = _positive_int(minimum_completed, RECEIVED_360_MINIMUM_COMPLETED)
-    target = _positive_int(target_completed, RECEIVED_360_TARGET_COMPLETED)
-    return max(minimum, min(target, eligible_count))
 
 
 def _positive_int(value: object, default: int) -> int:

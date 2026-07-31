@@ -35,18 +35,12 @@ describe("ProjectTabs", () => {
     expect(screen.getByRole("link", { name: "Sumar" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("keeps the preserved project teams workspace discoverable", () => {
-    navigationState.pathname = "/trainer/projects/project-1/teams";
+  it("removes the duplicate project teams presentation route", () => {
+    navigationState.pathname = "/trainer/projects/project-1/org-chart";
     render(<ProjectTabs basePath="/trainer/projects/project-1" />);
 
-    expect(screen.getByRole("link", { name: "Echipe" }).getAttribute("aria-current")).toBe("page");
-  });
-
-  it("places teams immediately after the organization chart", () => {
-    render(<ProjectTabs basePath="/trainer/projects/project-1" />);
-
-    const labels = screen.getAllByRole("link").map((link) => link.textContent);
-    expect(labels.indexOf("Echipe")).toBe(labels.indexOf("Organigramă") + 1);
+    expect(screen.queryByRole("link", { name: "Echipe" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Organigramă" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("preserves the selected assessment cycle across project tools", () => {

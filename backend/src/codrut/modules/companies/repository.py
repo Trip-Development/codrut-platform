@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.companies.models import (
@@ -451,6 +451,16 @@ class CompanyRepository:
         self.session.add(participant)
         await self.session.flush()
         return participant
+
+    async def anonymous_name_exists(self, anonymous_name: str) -> bool:
+        result = await self.session.execute(
+            select(
+                exists().where(
+                    ParticipantProfile.anonymous_name == anonymous_name
+                )
+            )
+        )
+        return bool(result.scalar())
 
     async def add_access_code(self, access_code: CompanyAccessCode) -> CompanyAccessCode:
         self.session.add(access_code)

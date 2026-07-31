@@ -13,7 +13,6 @@ import {
   type InviteBundle,
 } from "@/api/invites";
 import { getApiBaseUrl } from "@/api/runtime";
-import { CURRENT_TERMS_VERSION } from "@/api/terms";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,26 +26,6 @@ type ValidInviteBundle = Extract<InviteBundle, { state: "valid" }>;
 
 const CONSENT_FEEDBACK_MIN_MS = 450;
 const INVITE_STORAGE_KEY = "codrut_invite";
-
-function consentStorageKey(token: string): string {
-  return `codrut_invite_consent:${CURRENT_TERMS_VERSION}:${token}`;
-}
-
-function hasStoredConsent(token: string): boolean {
-  try {
-    return window.localStorage.getItem(consentStorageKey(token)) === "accepted";
-  } catch {
-    return false;
-  }
-}
-
-function storeConsent(token: string): void {
-  try {
-    window.localStorage.setItem(consentStorageKey(token), "accepted");
-  } catch {
-    // Consent is saved server-side when the backend exposes it; local persistence is best-effort.
-  }
-}
 
 function inviteStoragePayload(token: string, bundle: ValidInviteBundle) {
   return {
@@ -241,7 +220,7 @@ export function InviteConsentGate({
   bundle: ValidInviteBundle;
   children: ReactNode;
 }) {
-  const { replace } = useRouter();
+  const { refresh, replace } = useRouter();
   const [termsChecked, setTermsChecked] = useState(false);
   const [consentSaved, setConsentSaved] = useState(false);
   const [consentSubmitting, setConsentSubmitting] = useState(false);
@@ -251,7 +230,6 @@ export function InviteConsentGate({
   const consentSubmittingRef = useRef(false);
 
   useEffect(() => {
-    setTermsChecked(hasStoredConsent(token));
     storeInviteForRegistration(token, bundle);
   }, [bundle, token]);
 
@@ -275,9 +253,12 @@ export function InviteConsentGate({
         setConsentError("Invitația aparține unui alt cont.");
         return;
       }
-      await acceptCurrentTerms();
+      const acceptedUser = await acceptCurrentTerms();
+      if (!acceptedUser.consentCurrent) {
+        throw new Error("Acordul nu a fost confirmat de server. Reîncearcă.");
+      }
       await minimumFeedback;
-      storeConsent(token);
+      refresh();
       setConsentSaved(true);
     } catch (err) {
       if (isInviteSessionConflictError(err)) {
@@ -342,7 +323,15 @@ export function InviteConsentGate({
               Accept regulile de confidențialitate și prelucrare a datelor.
             </FieldLabel>
             <FieldDescription>
-              Acordul permite completarea chestionarelor pentru proiectul asociat invitației.
+              Citește{" "}
+              <Link href="/confidentialitate" className="font-semibold text-primary hover:underline">
+                politica de confidențialitate
+              </Link>
+              {" "}și{" "}
+              <Link href="/termeni" className="font-semibold text-primary hover:underline">
+                termenii de utilizare
+              </Link>
+              . Acordul permite completarea chestionarelor pentru proiectul asociat invitației.
             </FieldDescription>
           </div>
         </Field>

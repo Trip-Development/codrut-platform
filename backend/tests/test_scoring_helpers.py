@@ -1,16 +1,28 @@
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
+
+import pytest
+from pydantic import ValidationError
 
 from codrut.modules.assignments.models import AssignmentStatus, AssignmentTargetType
 from codrut.modules.companies.hierarchy import HierarchyIssue
+from codrut.modules.scoring.schemas import (
+    DriverRankSummaryResponse,
+    ReportDistributionResponse,
+)
 from codrut.modules.scoring.service import (
+    DriverRowSelection,
     ReportDimensionAccumulator,
     ReportParticipant,
     _accumulate_scores,
     _averages_from_accumulators,
+    _build_driver_rank_summary,
+    _build_icare_cohort_summaries,
     _build_score_summary,
     _distribution_count,
     _distribution_from_completed_pcm_assignments,
+    _driver_feedback_by_dimension,
     _format_pcm_label,
     _get_pcm_color,
     _interpretation_from_rules,
@@ -20,6 +32,7 @@ from codrut.modules.scoring.service import (
     _private_definition_schema,
     _report_dimensions,
     _report_hierarchy_issue,
+    _select_latest_completed_driver_rows,
     _valid_interpretation_rules,
 )
 
@@ -39,9 +52,13 @@ def _assignment(
     respondent_profile_id: uuid.UUID | None = None,
     target_person_id: uuid.UUID | None = None,
     target_type: AssignmentTargetType = AssignmentTargetType.person,
+    assignment_id: uuid.UUID | None = None,
+    created_at: datetime | None = None,
 ) -> SimpleNamespace:
     respondent_id = respondent_profile_id or uuid.uuid4()
     return SimpleNamespace(
+        id=assignment_id or uuid.uuid4(),
+        created_at=created_at or datetime.now(UTC),
         questionnaire_key=questionnaire_key,
         status=status,
         respondent_profile_id=respondent_id,
@@ -148,9 +165,7 @@ def test_report_dimensions_use_public_labels_rules_and_safe_fallbacks() -> None:
 
     assert _report_dimensions(  # type: ignore[arg-type]
         _definition({}), {"valid_score": "7", "private": None}
-    ) == {
-        "valid_score": ("Valid Score", ())
-    }
+    ) == {"valid_score": ("Valid Score", ())}
 
 
 def test_interpretation_and_average_helpers_ignore_invalid_rules() -> None:
@@ -189,9 +204,12 @@ def test_interpretation_and_average_helpers_ignore_invalid_rules() -> None:
 
 def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
     accumulator: dict[str, ReportDimensionAccumulator] = {}
-    assert _accumulate_scores(  # type: ignore[arg-type]
-        accumulator, _result({"invalid": True}), None
-    ) is False
+    assert (
+        _accumulate_scores(  # type: ignore[arg-type]
+            accumulator, _result({"invalid": True}), None
+        )
+        is False
+    )
     assert _accumulate_scores(  # type: ignore[arg-type]
         accumulator, _result({"signal": {"score": "4.5"}}), None
     )
@@ -205,7 +223,7 @@ def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
         (_assignment("lencioni", status=AssignmentStatus.assigned), _result({"a": 1}), None),
         (_assignment("lencioni"), None, None),
         (_assignment("lencioni"), _result({"a": 1}), None),
-        (_assignment("distress_drivers"), _result({"b": 2}), None),
+        (_assignment("distress_drivers"), _result({"b": 2, "c": 3}), None),
         (_assignment("boss_360"), _result({"c": 3}), None),
         (_assignment("unrelated"), _result({"d": 4}), None),
     ]
@@ -215,6 +233,31 @@ def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
         1,
         1,
     )
+
+
+def test_driver_feedback_comes_from_the_pinned_definition() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers"),
+            _result({"perfect": 62}),
+            _definition(
+                {
+                    "scoring": {
+                        "drivers": [
+                            {
+                                "id": "perfect",
+                                "feedback_above_50": "Verifică dacă standardul te ajută.",
+                            }
+                        ]
+                    }
+                }
+            ),
+        )
+    ]
+
+    assert _driver_feedback_by_dimension(rows) == {  # type: ignore[arg-type]
+        "perfect": "Verifică dacă standardul te ajută."
+    }
 
 
 def test_score_summary_excludes_icare_self_evaluation_from_external_aggregate() -> None:
@@ -245,6 +288,347 @@ def test_score_summary_excludes_icare_self_evaluation_from_external_aggregate() 
 
     assert summary.boss_360_count == 1
     assert summary.boss_360_averages[0].avg == 80
+
+
+def test_icare_cohorts_keep_single_trainer_responses_visible_and_separate() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    direct_report_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=chief_id,
+            full_name="Ana Chief",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=leader_id,
+            full_name="Bogdan Leader",
+            reports_to_name="Ana Chief",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=direct_report_id,
+            full_name="Carmen Direct",
+            reports_to_name="Bogdan Leader",
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    rows = [
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=leader_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 70}),
+            None,
+        ),
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=chief_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 80}),
+            None,
+        ),
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=direct_report_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 90}),
+            None,
+        ),
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+
+    assert [(item.cohort, item.response_count) for item in cohorts] == [
+        ("direct_team", 1),
+        ("leadership_peers", 1),
+        ("self", 1),
+    ]
+    assert [item.averages[0].avg for item in cohorts] == [90, 80, 70]
+
+
+def _driver_definition() -> SimpleNamespace:
+    return _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "drivers": [
+                    {"id": "be_perfect", "label": "Fii perfect"},
+                    {"id": "hurry_up", "label": "Grăbește-te"},
+                    {"id": "try_hard", "label": "Străduiește-te"},
+                ],
+            }
+        }
+    )
+
+
+def _driver_selection_and_ranking(
+    rows: list[tuple],
+) -> tuple[DriverRowSelection, DriverRankSummaryResponse]:
+    selection = _select_latest_completed_driver_rows(rows)  # type: ignore[arg-type]
+    ranking = _build_driver_rank_summary(  # type: ignore[arg-type]
+        selection.rankable_rows,
+        insufficient_driver_score_count=selection.insufficient_driver_score_count,
+    )
+    return selection, ranking
+
+
+def test_driver_rank_summary_counts_normal_primary_and_secondary_once() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"be_perfect": 90, "hurry_up": 70, "try_hard": 20}),
+            _driver_definition(),
+        ),
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"be_perfect": 10, "hurry_up": 80, "try_hard": 70}),
+            _driver_definition(),
+        ),
+    ]
+
+    _selection, ranking = _driver_selection_and_ranking(rows)
+
+    assert ranking.total_people == 2
+    assert {item.id: item.value for item in ranking.first_rank} == {
+        "be_perfect": 1,
+        "hurry_up": 1,
+    }
+    assert {item.id: item.value for item in ranking.second_rank} == {
+        "hurry_up": 1,
+        "try_hard": 1,
+    }
+    assert ranking.first_rank_tie_breaks == 0
+    assert ranking.second_rank_tie_breaks == 0
+    assert ranking.insufficient_driver_score_count == 0
+
+
+def test_driver_rank_summary_counts_one_participant_in_both_ranks() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"be_perfect": 10, "hurry_up": 20, "try_hard": 30}),
+            _driver_definition(),
+        )
+    ]
+
+    _selection, ranking = _driver_selection_and_ranking(rows)
+
+    assert ranking.total_people == 1
+    assert [(item.id, item.value) for item in ranking.first_rank] == [("try_hard", 1)]
+    assert [(item.id, item.value) for item in ranking.second_rank] == [("hurry_up", 1)]
+    assert ranking.insufficient_driver_score_count == 0
+
+
+def test_driver_rank_summary_uses_definition_order_for_all_way_tie() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"try_hard": 60, "hurry_up": 60, "be_perfect": 60}),
+            _driver_definition(),
+        )
+    ]
+
+    _selection, ranking = _driver_selection_and_ranking(rows)
+
+    assert [(item.id, item.value) for item in ranking.first_rank] == [("be_perfect", 1)]
+    assert [(item.id, item.value) for item in ranking.second_rank] == [("hurry_up", 1)]
+    assert ranking.first_rank_tie_breaks == 1
+    assert ranking.second_rank_tie_breaks == 1
+
+
+def test_driver_rank_summary_top_two_tie_only_counts_first_tie_break() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"try_hard": 40, "hurry_up": 60, "be_perfect": 60}),
+            _driver_definition(),
+        )
+    ]
+
+    _selection, ranking = _driver_selection_and_ranking(rows)
+
+    assert [item.id for item in ranking.first_rank] == ["be_perfect"]
+    assert [item.id for item in ranking.second_rank] == ["hurry_up"]
+    assert ranking.first_rank_tie_breaks == 1
+    assert ranking.second_rank_tie_breaks == 0
+
+
+def test_latest_driver_row_uses_assignment_id_and_aligns_average_population() -> None:
+    participant_id = uuid.uuid4()
+    same_created_at = datetime(2026, 7, 30, tzinfo=UTC)
+    lower_id = uuid.UUID(int=1)
+    higher_id = uuid.UUID(int=2)
+    rows = [
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=participant_id,
+                assignment_id=higher_id,
+                created_at=same_created_at,
+            ),
+            _result({"be_perfect": 90, "hurry_up": 30, "try_hard": 10}),
+            _driver_definition(),
+        ),
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=participant_id,
+                assignment_id=lower_id,
+                created_at=same_created_at,
+            ),
+            _result({"be_perfect": 5, "hurry_up": 95, "try_hard": 10}),
+            _driver_definition(),
+        ),
+    ]
+
+    selection, ranking = _driver_selection_and_ranking(rows)
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        rows,
+        rankable_driver_rows=selection.rankable_rows,
+    )
+
+    assert [row[0].id for row in selection.rankable_rows] == [higher_id]
+    assert summary.driver_count == ranking.total_people == 1
+    assert {item.id: item.avg for item in summary.driver_averages} == {
+        "be_perfect": 90,
+        "hurry_up": 30,
+        "try_hard": 10,
+    }
+    assert [item.id for item in ranking.first_rank] == ["be_perfect"]
+    assert [item.id for item in ranking.second_rank] == ["hurry_up"]
+
+
+def test_latest_valid_driver_row_ignores_a_newer_malformed_result() -> None:
+    participant_id = uuid.uuid4()
+    older_id = uuid.UUID(int=1)
+    newer_id = uuid.UUID(int=2)
+    rows = [
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=participant_id,
+                assignment_id=older_id,
+                created_at=datetime(2026, 7, 29, tzinfo=UTC),
+            ),
+            _result({"be_perfect": 80, "hurry_up": 60, "try_hard": 20}),
+            _driver_definition(),
+        ),
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=participant_id,
+                assignment_id=newer_id,
+                created_at=datetime(2026, 7, 30, tzinfo=UTC),
+            ),
+            _result({"be_perfect": 99, "hurry_up": "invalid"}),
+            _driver_definition(),
+        ),
+    ]
+
+    selection, ranking = _driver_selection_and_ranking(rows)
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        rows,
+        rankable_driver_rows=selection.rankable_rows,
+    )
+
+    assert [row[0].id for row in selection.rankable_rows] == [older_id]
+    assert selection.insufficient_driver_score_count == 0
+    assert summary.driver_count == ranking.total_people == 1
+    assert {item.id: item.avg for item in summary.driver_averages} == {
+        "be_perfect": 80,
+        "hurry_up": 60,
+        "try_hard": 20,
+    }
+    assert [item.id for item in ranking.first_rank] == ["be_perfect"]
+    assert [item.id for item in ranking.second_rank] == ["hurry_up"]
+
+
+def test_driver_exclusion_counts_people_without_any_valid_result_once() -> None:
+    participant_id = uuid.uuid4()
+    rows = [
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=participant_id,
+                created_at=datetime(2026, 7, 29, tzinfo=UTC),
+            ),
+            _result({"be_perfect": "invalid"}),
+            _driver_definition(),
+        ),
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=participant_id,
+                created_at=datetime(2026, 7, 30, tzinfo=UTC),
+            ),
+            _result({"hurry_up": 90}),
+            _driver_definition(),
+        ),
+    ]
+
+    selection, ranking = _driver_selection_and_ranking(rows)
+
+    assert selection.rankable_rows == ()
+    assert selection.insufficient_driver_score_count == 1
+    assert ranking.total_people == 0
+    assert ranking.insufficient_driver_score_count == 1
+
+
+def test_driver_rank_summary_reports_nonnumeric_and_one_driver_exclusions() -> None:
+    rows = [
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"be_perfect": "invalid", "hurry_up": None}),
+            _driver_definition(),
+        ),
+        (
+            _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+            _result({"be_perfect": 50, "hurry_up": "invalid"}),
+            _driver_definition(),
+        ),
+    ]
+
+    selection, ranking = _driver_selection_and_ranking(rows)
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        rows,
+        rankable_driver_rows=selection.rankable_rows,
+    )
+
+    assert summary.driver_count == 0
+    assert summary.driver_averages == []
+    assert ranking.total_people == 0
+    assert ranking.first_rank == []
+    assert ranking.second_rank == []
+    assert ranking.insufficient_driver_score_count == 2
+
+
+def test_driver_rank_contract_rejects_distributions_that_do_not_sum_to_people() -> None:
+    with pytest.raises(ValidationError, match="First-rank driver counts"):
+        DriverRankSummaryResponse(
+            total_people=1,
+            first_rank=[],
+            second_rank=[ReportDistributionResponse(id="perfect", label="Perfect", value=1)],
+            first_rank_tie_breaks=0,
+            second_rank_tie_breaks=0,
+            insufficient_driver_score_count=0,
+        )
 
 
 def test_pcm_distribution_requires_completed_known_profiles() -> None:

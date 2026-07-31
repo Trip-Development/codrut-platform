@@ -1,8 +1,10 @@
+import asyncio
 import uuid
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -17,12 +19,26 @@ from codrut.modules.assignments.models import (
     AssignmentTargetType,
     QuestionnaireAssignment,
 )
+from codrut.modules.assignments.repository import AssignmentRepository
+from codrut.modules.assignments.schemas import AssignmentStatusUpdateRequest
+from codrut.modules.assignments.service import AssignmentService
 from codrut.modules.companies import models as company_models  # noqa: F401
-from codrut.modules.companies.models import CompanyProject
+from codrut.modules.companies.models import (
+    CompanyMembership,
+    CompanyMembershipRole,
+    CompanyProject,
+)
 from codrut.modules.forms.models import (
     QuestionnaireDefinition,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
+    SubmissionProcessingJob,
+    SubmissionProcessingStatus,
+)
+from codrut.modules.forms.processing import (
+    claim_due_submission_processing,
+    process_claimed_submission,
+    record_submission_processing_failure,
 )
 from codrut.modules.forms.schemas import QuestionnaireResponseSaveRequest
 from codrut.modules.forms.service import FormsService
@@ -33,6 +49,8 @@ from codrut.modules.identity.models import (
     UserAccountType,
     UserRole,
 )
+from codrut.modules.scoring.models import ResultPublication, ScoringResult
+from codrut.modules.scoring.service import ScoringService
 from codrut.tools.local_preview import (
     PREVIEW_DEFINITION_VERSION,
     build_preview_questionnaire_definitions,
@@ -55,6 +73,7 @@ class FakeFormsRepository:
         self.project = project
         self.cycle = cycle
         self.response: QuestionnaireResponse | None = None
+        self.processing_assignments: list[uuid.UUID] = []
         preview = PREVIEW_DEFINITIONS["lencioni"]
         self.definition = QuestionnaireDefinition(
             id=uuid.uuid4(),
@@ -75,7 +94,9 @@ class FakeFormsRepository:
         project_id: uuid.UUID | None = None,
         cycle_id: uuid.UUID | None = None,
         allowed_assignment_ids: tuple[uuid.UUID, ...] | None = None,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment | None:
+        del for_update
         if allowed_assignment_ids is not None and assignment_id not in allowed_assignment_ids:
             return None
         if (
@@ -94,7 +115,10 @@ class FakeFormsRepository:
     async def get_response_by_assignment(
         self,
         assignment_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireResponse | None:
+        del for_update
         if self.response and self.response.assignment_id == assignment_id:
             return self.response
         return None
@@ -121,6 +145,19 @@ class FakeFormsRepository:
         response.id = uuid.uuid4()
         self.response = response
         return response
+
+    async def enqueue_submission_processing(
+        self,
+        assignment_id: uuid.UUID,
+        *,
+        now: datetime,
+    ) -> SimpleNamespace:
+        self.processing_assignments.append(assignment_id)
+        return SimpleNamespace(
+            assignment_id=assignment_id,
+            status=SubmissionProcessingStatus.queued,
+            next_attempt_at=now,
+        )
 
     async def get_project_for_assignment(
         self,
@@ -193,7 +230,8 @@ async def test_save_assignment_response_creates_draft_and_starts_assignment() ->
 
 async def test_submit_assignment_response_marks_response_and_assignment_submitted() -> None:
     assignment = make_assignment()
-    service = make_service(FakeFormsRepository(assignment))
+    repository = FakeFormsRepository(assignment)
+    service = make_service(repository)
 
     response = await service.save_assignment_response(
         uuid.uuid4(),
@@ -205,6 +243,7 @@ async def test_submit_assignment_response_marks_response_and_assignment_submitte
     assert response.status == QuestionnaireResponseStatus.submitted
     assert assignment.status == AssignmentStatus.submitted
     assert assignment.submitted_at is not None
+    assert repository.processing_assignments == [assignment.id]
 
 
 async def test_save_assignment_response_rejects_changes_after_submission() -> None:
@@ -417,7 +456,9 @@ async def test_participant_definition_requires_profile_context_for_multiple_prof
         await engine.dispose()
 
 
-async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> None:
+async def test_submit_survives_scoring_failure_and_worker_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     await engine.dispose()
     try:
         async with SessionLocal() as session:
@@ -465,13 +506,275 @@ async def test_submit_scored_assignment_stamps_submitted_and_scored_times() -> N
             )
 
             assert response.status == QuestionnaireResponseStatus.submitted
-            assert assignment.status == AssignmentStatus.scored
+            assert assignment.status == AssignmentStatus.submitted
             assert assignment.submitted_at is not None
-            assert assignment.scored_at is not None
-            assert assignment.scored_at == assignment.submitted_at
+            assert assignment.scored_at is None
+            assignment_id = assignment.id
+            await session.commit()
 
-            await session.rollback()
+        async with SessionLocal() as worker_session:
+            claims = await claim_due_submission_processing(worker_session)
+            assert len(claims) == 1
+            await worker_session.commit()
+
+        original_compute = ScoringService.compute_and_save_score
+        worker_error = RuntimeError("simulated scoring outage")
+        monkeypatch.setattr(
+            ScoringService,
+            "compute_and_save_score",
+            AsyncMock(side_effect=worker_error),
+        )
+        async with SessionLocal() as worker_session:
+            with pytest.raises(RuntimeError, match="simulated scoring outage"):
+                await process_claimed_submission(worker_session, claims[0])
+            await worker_session.rollback()
+
+        async with SessionLocal() as failure_session:
+            assert (
+                await record_submission_processing_failure(
+                    failure_session,
+                    claims[0],
+                    worker_error,
+                )
+                == "retried"
+            )
+            job = (
+                await failure_session.execute(
+                    select(SubmissionProcessingJob).where(
+                        SubmissionProcessingJob.assignment_id == assignment_id
+                    )
+                )
+            ).scalar_one()
+            assert job.status == SubmissionProcessingStatus.queued
+            assert job.last_error_code == "RuntimeError"
+            job.next_attempt_at = datetime.now(UTC)
+            await failure_session.commit()
+
+        async with SessionLocal() as verification_session:
+            persisted_response = (
+                await verification_session.execute(
+                    select(QuestionnaireResponse).where(
+                        QuestionnaireResponse.assignment_id == assignment_id
+                    )
+                )
+            ).scalar_one()
+            persisted_assignment = await verification_session.get(
+                QuestionnaireAssignment,
+                assignment_id,
+            )
+            assert persisted_response.status == QuestionnaireResponseStatus.submitted
+            assert persisted_assignment is not None
+            assert persisted_assignment.status == AssignmentStatus.submitted
+
+        monkeypatch.setattr(
+            ScoringService,
+            "compute_and_save_score",
+            original_compute,
+        )
+        async with SessionLocal() as worker_session:
+            retry_claims = await claim_due_submission_processing(worker_session)
+            assert len(retry_claims) == 1
+            await worker_session.commit()
+
+        async with SessionLocal() as worker_session:
+            assert await process_claimed_submission(worker_session, retry_claims[0]) is True
+            await worker_session.commit()
+
+        async with SessionLocal() as verification_session:
+            persisted_assignment = await verification_session.get(
+                QuestionnaireAssignment,
+                assignment_id,
+            )
+            assert persisted_assignment is not None
+            assert persisted_assignment.status == AssignmentStatus.scored
+            assert persisted_assignment.scored_at is not None
+
     finally:
+        await engine.dispose()
+
+
+async def test_reopen_waits_for_processing_and_removes_committed_score(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await engine.dispose()
+    scoring_started = asyncio.Event()
+    allow_scoring_to_finish = asyncio.Event()
+    reopen_requested = asyncio.Event()
+    try:
+        async with SessionLocal() as session:
+            trainer = User(
+                id=uuid.uuid4(),
+                email=f"trainer-reopen-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("trainer-password-123"),
+                role=UserRole.trainer,
+            )
+            participant = User(
+                id=uuid.uuid4(),
+                email=f"participant-reopen-{uuid.uuid4().hex[:8]}@example.com",
+                password_hash=hash_password("participant-password-123"),
+                role=UserRole.participant,
+            )
+            company = company_models.Company(
+                id=uuid.uuid4(),
+                name=f"Concurrent reopen {uuid.uuid4().hex[:8]}",
+            )
+            definition = persisted_preview_definition("lencioni")
+            session.add_all([trainer, participant, company, definition])
+            await session.flush()
+            session.add(
+                CompanyMembership(
+                    id=uuid.uuid4(),
+                    company_id=company.id,
+                    user_id=trainer.id,
+                    role=CompanyMembershipRole.trainer,
+                )
+            )
+            profile = company_models.ParticipantProfile(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=participant.id,
+                full_name="Concurrent Participant",
+                email=participant.email,
+            )
+            session.add(profile)
+            await session.flush()
+            assignment = QuestionnaireAssignment(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                respondent_profile_id=profile.id,
+                questionnaire_key="lencioni",
+                questionnaire_definition_id=definition.id,
+                target_type=AssignmentTargetType.self_assessment,
+                status=AssignmentStatus.assigned,
+            )
+            session.add(assignment)
+            await session.flush()
+            await FormsService(session).save_assignment_response(
+                participant.id,
+                assignment.id,
+                QuestionnaireResponseSaveRequest(answers=complete_lencioni_answers()),
+                submit=True,
+            )
+            assignment_id = assignment.id
+            company_id = company.id
+            trainer_id = trainer.id
+            await session.commit()
+
+        async with SessionLocal() as claim_session:
+            claims = await claim_due_submission_processing(claim_session)
+            assert len(claims) == 1
+            claim = claims[0]
+            await claim_session.commit()
+
+        original_compute = ScoringService.compute_and_save_score
+
+        async def delayed_compute(
+            service: ScoringService,
+            *args: Any,
+            **kwargs: Any,
+        ) -> ScoringResult:
+            scoring_started.set()
+            await allow_scoring_to_finish.wait()
+            return await original_compute(service, *args, **kwargs)
+
+        monkeypatch.setattr(
+            ScoringService,
+            "compute_and_save_score",
+            delayed_compute,
+        )
+        original_get_assignment = AssignmentRepository.get_assignment
+
+        async def observed_get_assignment(
+            repository: AssignmentRepository,
+            requested_company_id: uuid.UUID,
+            requested_assignment_id: uuid.UUID,
+            *,
+            for_update: bool = False,
+        ) -> QuestionnaireAssignment | None:
+            if requested_assignment_id == assignment_id and for_update:
+                reopen_requested.set()
+            return await original_get_assignment(
+                repository,
+                requested_company_id,
+                requested_assignment_id,
+                for_update=for_update,
+            )
+
+        monkeypatch.setattr(
+            AssignmentRepository,
+            "get_assignment",
+            observed_get_assignment,
+        )
+
+        async def process_submission() -> None:
+            async with SessionLocal() as worker_session:
+                assert await process_claimed_submission(worker_session, claim) is True
+                await worker_session.commit()
+
+        async def reopen_assignment() -> None:
+            async with SessionLocal() as trainer_session:
+                await AssignmentService(trainer_session).update_assignment_status(
+                    trainer_id,
+                    company_id,
+                    assignment_id,
+                    AssignmentStatusUpdateRequest(status=AssignmentStatus.started),
+                )
+                await trainer_session.commit()
+
+        worker_task = asyncio.create_task(process_submission())
+        await scoring_started.wait()
+        reopen_task = asyncio.create_task(reopen_assignment())
+        await reopen_requested.wait()
+        await asyncio.sleep(0)
+        assert not reopen_task.done()
+
+        allow_scoring_to_finish.set()
+        await asyncio.gather(worker_task, reopen_task)
+
+        async with SessionLocal() as verification_session:
+            persisted_assignment = await verification_session.get(
+                QuestionnaireAssignment,
+                assignment_id,
+            )
+            persisted_response = (
+                await verification_session.execute(
+                    select(QuestionnaireResponse).where(
+                        QuestionnaireResponse.assignment_id == assignment_id
+                    )
+                )
+            ).scalar_one()
+            score = (
+                await verification_session.execute(
+                    select(ScoringResult).where(ScoringResult.assignment_id == assignment_id)
+                )
+            ).scalar_one_or_none()
+            processing_job = (
+                await verification_session.execute(
+                    select(SubmissionProcessingJob).where(
+                        SubmissionProcessingJob.assignment_id == assignment_id
+                    )
+                )
+            ).scalar_one_or_none()
+            active_publication = (
+                await verification_session.execute(
+                    select(ResultPublication).where(
+                        ResultPublication.source_assignment_id == assignment_id,
+                        ResultPublication.revoked_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+
+            assert persisted_assignment is not None
+            assert persisted_assignment.status == AssignmentStatus.started
+            assert persisted_assignment.submitted_at is None
+            assert persisted_assignment.scored_at is None
+            assert persisted_response.status == QuestionnaireResponseStatus.draft
+            assert persisted_response.submitted_at is None
+            assert score is None
+            assert processing_job is None
+            assert active_publication is None
+    finally:
+        allow_scoring_to_finish.set()
         await engine.dispose()
 
 

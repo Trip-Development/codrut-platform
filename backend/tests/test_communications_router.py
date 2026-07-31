@@ -122,6 +122,27 @@ class FakeScalarOneResult:
         return self.value
 
 
+def test_email_send_capacity_is_available_to_trainer() -> None:
+    result = MagicMock()
+    result.scalar_one.return_value = 375
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+    client = _client_as(
+        UserRole.trainer,
+        settings=Settings(_env_file=None, email_daily_send_cap=2000),
+        session=session,
+    )
+
+    response = client.get("/api/communications/send-capacity")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "daily_cap": 2000,
+        "used_today": 375,
+        "remaining_today": 1625,
+    }
+
+
 def test_test_email_requires_trainer_role() -> None:
     client = _client_as(UserRole.participant)
 

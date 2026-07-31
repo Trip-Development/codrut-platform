@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DonutChart, ScaledBar } from "./native-charts";
+import { DonutChart, ParticipantFrequencyPie, ScaledBar } from "./native-charts";
 
 afterEach(cleanup);
 
@@ -32,6 +32,100 @@ describe("native report charts", () => {
     expect(screen.queryByText("Absent")).toBeNull();
     expect(container.querySelectorAll("svg circle")).toHaveLength(3);
     expect((screen.getByText("Gânditor").previousElementSibling as HTMLElement).style.backgroundColor).toBe("rgb(10, 20, 30)");
+  });
+
+  it("renders participant counts and count-derived shares with an accessible summary", () => {
+    render(
+      <ParticipantFrequencyPie
+        title="Primul driver dominant"
+        totalPeople={3}
+        data={[
+          { id: "be_perfect", label: "Fii perfect", value: 2 },
+          { id: "hurry_up", label: "Grăbește-te", value: 1 },
+          { id: "zero", label: "Fără răspuns", value: 0 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("3 persoane incluse")).toBeTruthy();
+    expect(screen.getByText("2 persoane · 67%")).toBeTruthy();
+    expect(screen.getByText("1 persoană · 33%")).toBeTruthy();
+    expect(screen.queryByText("Fără răspuns")).toBeNull();
+    expect(
+      screen.getByRole("img", {
+        name: "Primul driver dominant. 3 persoane incluse. Fii perfect: 2 persoane, 67%; Grăbește-te: 1 persoană, 33%.",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("renders one included participant as a full 100% slice", () => {
+    render(
+      <ParticipantFrequencyPie
+        title="Al doilea driver dominant"
+        totalPeople={1}
+        data={[{ id: "try_hard", label: "Străduiește-te", value: 1 }]}
+      />,
+    );
+
+    expect(screen.getByText("1 persoană inclusă")).toBeTruthy();
+    expect(screen.getByText("1 persoană · 100%")).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: /Al doilea driver dominant\. 1 persoană inclusă\..*100%/,
+      }),
+    ).toBeTruthy();
+  });
+
+  it("uses the same driver color across both frequency pies", () => {
+    render(
+      <>
+        <ParticipantFrequencyPie
+          title="Primul driver dominant"
+          totalPeople={2}
+          data={[
+            { id: "be_perfect", label: "Fii perfect", value: 1 },
+            { id: "hurry_up", label: "Grăbește-te", value: 1 },
+          ]}
+        />
+        <ParticipantFrequencyPie
+          title="Al doilea driver dominant"
+          totalPeople={2}
+          data={[
+            { id: "try_hard", label: "Străduiește-te", value: 1 },
+            { id: "be_perfect", label: "Fii perfect", value: 1 },
+          ]}
+        />
+      </>,
+    );
+
+    const perfectLabels = screen.getAllByText("Fii perfect");
+    expect(perfectLabels).toHaveLength(2);
+    const firstSwatch = perfectLabels[0].previousElementSibling as HTMLElement;
+    const secondSwatch = perfectLabels[1].previousElementSibling as HTMLElement;
+    expect(firstSwatch.style.backgroundColor).not.toBe("");
+    expect(firstSwatch.style.backgroundColor).toBe(secondSwatch.style.backgroundColor);
+    expect(
+      (screen.getByRole("img", { name: /Primul driver dominant/ }) as HTMLElement)
+        .style.printColorAdjust,
+    ).toBe("exact");
+  });
+
+  it("uses an honest zero-result state without implying a privacy threshold", () => {
+    render(
+      <ParticipantFrequencyPie
+        title="Primul driver dominant"
+        totalPeople={0}
+        data={[]}
+      />,
+    );
+
+    expect(screen.getByText("0 persoane incluse")).toBeTruthy();
+    expect(screen.getByText("Nu există încă rezultate TA finalizate pentru această evaluare.")).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: /0 persoane incluse.*Nu există încă rezultate TA finalizate/,
+      }),
+    ).toBeTruthy();
   });
 
   it("clamps scale widths and handles a zero maximum", () => {

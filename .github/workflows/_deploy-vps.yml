@@ -186,8 +186,11 @@ jobs:
             compose.yaml \
             compose.prod.yaml \
             .github/scripts/check_vps_capacity.sh \
+            .github/scripts/monitor_load_proof_runtime.sh \
             .github/scripts/retain_codrut_images.sh \
             "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/"
+          ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" \
+            "chmod 0755 ${DEPLOY_DIR}/monitor_load_proof_runtime.sh"
 
           ssh -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP" "cd ${DEPLOY_DIR} && if [ -f .env ]; then awk -F= '/^(FRONTEND_IMAGE|BACKEND_IMAGE)=/ { print }' .env > previous-images.env; else : > previous-images.env; fi"
           scp -i ~/.ssh/id_rsa "$SSH_USER@$HETZNER_VPS_IP:${DEPLOY_DIR}/previous-images.env" "$RUNNER_TEMP/previous-images.env"
@@ -205,12 +208,19 @@ jobs:
           CODRUT_DATABASE_URL=$DERIVED_DATABASE_URL
           CODRUT_REDIS_URL=$CODRUT_REDIS_URL
           CODRUT_RATE_LIMIT_TRUSTED_PROXIES=$CODRUT_RATE_LIMIT_TRUSTED_PROXIES
+          CODRUT_RATE_LIMIT_INVITE_EXCHANGE_MAX_REQUESTS=2000
+          CODRUT_MAINTENANCE_MODE=false
+          CODRUT_MAINTENANCE_BYPASS_TOKEN=
           CODRUT_SESSION_SECRET=$CODRUT_SESSION_SECRET
           CODRUT_TASK_LINK_SECRET=$CODRUT_TASK_LINK_SECRET
           CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET=$CODRUT_CAMPAIGN_ASSET_SIGNING_SECRET
           CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET=$CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET
           CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID=$CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID
-          CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED=false
+          CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED=true
+          CODRUT_EMAIL_BREVO_SANDBOX_ENABLED=false
+          CODRUT_EMAIL_DAILY_SEND_CAP=2000
+          CODRUT_EMAIL_OUTBOX_BATCH_SIZE=100
+          CODRUT_EMAIL_OUTBOX_CONCURRENCY=8
           CODRUT_CORS_ORIGINS=$CODRUT_CORS_ORIGINS
           CODRUT_PUBLIC_APP_URL=$CODRUT_PUBLIC_APP_URL
           CODRUT_EMAIL_PROVIDER=$CODRUT_EMAIL_PROVIDER
@@ -286,8 +296,43 @@ jobs:
             return 1
           }
 
+          assert_bounded_log_config() {
+            local service="$1"
+            local container_id
+            local log_driver
+            local max_size
+            local max_file
+
+            container_id="$("${compose[@]}" ps -q "$service")"
+            if [[ -z "$container_id" ]]; then
+              echo "Service ${service} is unavailable for log-rotation verification."
+              return 1
+            fi
+            log_driver="$(docker inspect "$container_id" --format '{{.HostConfig.LogConfig.Type}}')"
+            max_size="$(docker inspect "$container_id" --format '{{index .HostConfig.LogConfig.Config "max-size"}}')"
+            max_file="$(docker inspect "$container_id" --format '{{index .HostConfig.LogConfig.Config "max-file"}}')"
+            if [[ "$log_driver" != "json-file" || "$max_size" != "10m" || "$max_file" != "5" ]]; then
+              echo "Service ${service} is not running with json-file 10m x 5 rotation."
+              return 1
+            fi
+          }
+
           "${compose[@]}" config >/dev/null
           bash ./check_vps_capacity.sh preflight / 85 8
+          pre_migration_revision="$(
+            "${compose[@]}" exec -T db sh -lc \
+              'psql -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version"'
+          )"
+          pre_migration_number="${pre_migration_revision%%_*}"
+          if [[ ! "$pre_migration_number" =~ ^[0-9]+$ ]] || (( 10#$pre_migration_number < 52 )); then
+            echo "Unsupported pre-migration revision ${pre_migration_revision}; deploy the 0052 expand release first."
+            exit 1
+          fi
+          if (( 10#$pre_migration_number == 52 )); then
+            "${compose[@]}" exec -T backend python -c \
+              "from codrut.modules.communications.models import EmailSuppression; assert hasattr(EmailSuppression, 'email_fingerprint')"
+            echo "Retained rollback backend is fingerprint-aware at 0052."
+          fi
           "${compose[@]}" pull
           "${compose[@]}" run --rm -T backend alembic upgrade head </dev/null
           "${compose[@]}" run --rm -T backend python -m codrut.tools.reconcile_result_publications </dev/null
@@ -305,6 +350,9 @@ jobs:
           assert_service_healthy backend
           assert_service_healthy worker
           "${compose[@]}" exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=10).read()"
+          for service in traefik frontend backend worker db redis; do
+            assert_bounded_log_config "$service"
+          done
           REMOTE
 
           HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}/api/health/ready"

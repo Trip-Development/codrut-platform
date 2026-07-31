@@ -278,12 +278,17 @@ class AssignmentRepository:
         self,
         company_id: UUID,
         assignment_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment | None:
-        result = await self.session.execute(
+        statement = (
             select(QuestionnaireAssignment)
             .where(QuestionnaireAssignment.company_id == company_id)
             .where(QuestionnaireAssignment.id == assignment_id)
         )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
     async def get_matching_assignment(

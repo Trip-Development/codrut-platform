@@ -1,15 +1,18 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { InviteTask } from "@/api/invites";
 
 import { ParticipantClientWorkspace, ParticipantResultsPanel } from "./ParticipantClientWorkspace";
 import { ParticipantTaskList } from "./ParticipantTaskList";
-import { groupParticipantTasks } from "./task-display";
+import {
+  groupParticipantTasksByProject,
+} from "./task-display";
 
 describe("ParticipantClientWorkspace", () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
   });
 
   it("keeps the participant home copy focused and shows active work as a compact status", () => {
@@ -154,6 +157,7 @@ describe("ParticipantClientWorkspace", () => {
           receivedFeedbackGroups: [
             {
               assignmentRoundId: "round-1",
+              cohort: "direct_team",
               completedCount: 1,
               minimumCompleted: 2,
               visible: false,
@@ -242,10 +246,74 @@ describe("ParticipantClientWorkspace", () => {
       />,
     );
 
-    expect(screen.getByText("2 proiecte active")).toBeDefined();
+    expect(screen.getByText("2 proiecte în desfășurare")).toBeDefined();
     expect(screen.getByText("1/1 finalizate · 31 iul.")).toBeDefined();
     expect(screen.getByText("0/1 finalizate · 15 aug.")).toBeDefined();
     expect(screen.queryByText("Termen")).toBeNull();
+  });
+
+  it("separates current projects from history and excludes history from active progress", () => {
+    render(
+      <ParticipantClientWorkspace
+        session={{ state: "authenticated", user: { id: "participant-1", name: "Mihai", role: "participant" } }}
+        summaryData={{
+          projectName: "Pilot principal",
+          projects: [
+            {
+              id: "project-current",
+              name: "Pilot principal",
+              status: "active",
+              historyBucket: "current",
+              deadlineLabel: "31 iul.",
+            },
+            {
+              id: "project-history",
+              name: "Atelier încheiat",
+              status: "completed",
+              historyBucket: "history",
+              deadlineLabel: "Finalizat",
+            },
+          ],
+          companyName: "Companie sintetică",
+          participantEmail: "participant@example.com",
+          deadlineLabel: "31 iul.",
+          results: [],
+          tasks: [
+            {
+              id: "task-current",
+              assignmentId: "task-current",
+              title: "Activitate curentă",
+              status: "not_started",
+              detail: "Mostră",
+              href: "/participant/tasks/task-current",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 5,
+              questionnaireKey: "synthetic_current",
+              projectId: "project-current",
+              projectName: "Pilot principal",
+            },
+            {
+              id: "task-history",
+              assignmentId: "task-history",
+              title: "Activitate veche",
+              status: "not_started",
+              detail: "Mostră",
+              href: "/participant/tasks/task-history",
+              targetLabel: "Autoevaluare",
+              estimatedMinutes: 5,
+              questionnaireKey: "synthetic_history",
+              projectId: "project-history",
+              projectName: "Atelier încheiat",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("1 în desfășurare · 1 în istoric")).toBeDefined();
+    expect(screen.getByRole("status", { name: "1 sarcină activă" })).toBeDefined();
+    expect(screen.getByRole("progressbar", { name: "Progresul sarcinilor" }).getAttribute("aria-valuenow")).toBe("0");
+    expect(screen.getAllByText("0/1 finalizate").length).toBeGreaterThan(0);
   });
 });
 
@@ -271,6 +339,7 @@ describe("ParticipantResultsPanel", () => {
                 score: 76,
                 label: "Semnal de lucru A",
                 interpretation: "Observă acest tipar în situațiile cu presiune.",
+                feedback: "Textul de lucru păstrat din definiția chestionarului.",
               },
               work_signal_b: { score: 58, label: "Semnal de lucru B" },
               work_signal_c: { score: 42, label: "Semnal de lucru C" },
@@ -284,6 +353,8 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("Semnal de lucru B")).toBeDefined();
     expect(screen.getByText("Semnal de lucru C")).toBeDefined();
     expect(screen.getByText(/Observă acest tipar/)).toBeDefined();
+    expect(screen.getByText("Textul de lucru păstrat din definiția chestionarului.")).toBeDefined();
+    expect(screen.getAllByText("De urmărit").length).toBeGreaterThan(0);
     expect(screen.queryByText("work_signal_a")).toBeNull();
   });
 
@@ -314,6 +385,15 @@ describe("ParticipantResultsPanel", () => {
               feedback_signal_b: { score: 53, label: "Sprijin" },
             },
           },
+          {
+            assignmentId: "drivers",
+            questionnaireKey: "distress_drivers",
+            title: "TA Drivers",
+            targetLabel: "Autoevaluare",
+            scores: {
+              hurry_up: { score: 44, label: "Grăbește-te" },
+            },
+          },
         ]}
       />,
     );
@@ -321,6 +401,11 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getAllByText("Semnal de echipă")).toHaveLength(2);
     expect(screen.getByText("Claritate")).toBeDefined();
     expect(screen.getAllByText("Sprijin")).toHaveLength(2);
+    const lencioniHeading = screen.getByRole("heading", { name: "Lencioni" });
+    const icareHeading = screen.getByRole("heading", { name: "iCARE" });
+    const taHeading = screen.getByRole("heading", { name: "TA Drivers", level: 2 });
+    expect(lencioniHeading.compareDocumentPosition(icareHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(icareHeading.compareDocumentPosition(taHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("feedback_signal_a")).toBeNull();
   });
 
@@ -331,6 +416,7 @@ describe("ParticipantResultsPanel", () => {
         pcmPhase="persister"
         results={[]}
         receivedFeedback={{
+          cohort: "direct_team",
           completedCount: 2,
           minimumCompleted: 2,
           visible: true,
@@ -343,8 +429,8 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Feedback primit")).toBeDefined();
-    expect(screen.getByText(/Mediile sunt anonime/)).toBeDefined();
+    expect(screen.getByText("Cum te vede echipa ta")).toBeDefined();
+    expect(screen.getByText(/Vezi doar media grupului/)).toBeDefined();
     expect(screen.getByText("Feedbackuri")).toBeDefined();
     expect(screen.getByText("2")).toBeDefined();
     expect(screen.getByText("Claritate")).toBeDefined();
@@ -370,6 +456,7 @@ describe("ParticipantResultsPanel", () => {
         pcmPhase="persister"
         results={[]}
         receivedFeedback={{
+          cohort: "direct_team",
           completedCount: 1,
           minimumCompleted: 2,
           visible: false,
@@ -379,9 +466,9 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Feedback primit")).toBeDefined();
+    expect(screen.getByText("Cum te vede echipa ta")).toBeDefined();
     expect(screen.getByText("1")).toBeDefined();
-    expect(screen.getByText(/Media apare după minimum 2 feedbackuri completate/)).toBeDefined();
+    expect(screen.getByText(/Mai avem nevoie de cel puțin 1 răspuns/)).toBeDefined();
     expect(screen.queryByText("Claritate")).toBeNull();
     expect(screen.queryByText("4.5")).toBeNull();
   });
@@ -394,6 +481,7 @@ describe("ParticipantResultsPanel", () => {
         results={[]}
         receivedFeedback={{
           assignmentRoundId: "round-1",
+          cohort: "leadership_peers",
           questionnaireKey: "boss_360",
           questionnaireTitle: "Feedback iCARE",
           completedCount: 3,
@@ -423,6 +511,7 @@ describe("ParticipantResultsPanel", () => {
         pcmPhase={null}
         results={[]}
         receivedFeedback={{
+          cohort: "leadership_peers",
           completedCount: 2,
           minimumCompleted: 2,
           scaleMax: 5,
@@ -448,6 +537,7 @@ describe("ParticipantResultsPanel", () => {
       <ParticipantResultsPanel
         results={[]}
         receivedFeedback={{
+          cohort: "leadership_peers",
           completedCount: 2,
           minimumCompleted: 2,
           visible: true,
@@ -458,12 +548,13 @@ describe("ParticipantResultsPanel", () => {
     );
 
     expect(screen.getByText("4.1")).toBeDefined();
-    expect(screen.queryByText(/Media apare după minimum/)).toBeNull();
+    expect(screen.queryByText(/Mai avem nevoie de cel puțin/)).toBeNull();
   });
 
   it("merges legacy and grouped feedback without duplicating the same round", () => {
     const feedback = {
       assignmentRoundId: "round-shared",
+      cohort: "leadership_peers" as const,
       projectId: "project-a",
       questionnaireKey: "boss_360",
       completedCount: 2,
@@ -488,7 +579,7 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getAllByText("Feedback primit")).toHaveLength(2);
+    expect(screen.getAllByText("Cum te văd colegii din leadership")).toHaveLength(2);
     expect(screen.getByRole("heading", { name: "2 rezultate" })).toBeDefined();
   });
 
@@ -516,7 +607,7 @@ describe("ParticipantResultsPanel", () => {
     );
 
     expect(screen.getByRole("heading", { name: "1 rezultat" })).toBeDefined();
-    expect(screen.getByText("Profil PCM")).toBeDefined();
+    expect(screen.getByText("Profil personal")).toBeDefined();
     expect(screen.queryByText("Nu există rezultate disponibile încă")).toBeNull();
   });
 });
@@ -565,7 +656,8 @@ describe("ParticipantTaskList", () => {
 
     render(
       <ParticipantTaskList
-        groups={groupParticipantTasks(tasks)}
+        projects={groupParticipantTasksByProject(tasks)}
+        persistenceIdentityKey="participant-1"
         returnTo="/participant/questionnaires"
         emptyTitle="Nu ai sarcini"
         emptyDescription="Lista este goală."
@@ -613,7 +705,8 @@ describe("ParticipantTaskList", () => {
 
     render(
       <ParticipantTaskList
-        groups={groupParticipantTasks(tasks)}
+        projects={groupParticipantTasksByProject(tasks)}
+        persistenceIdentityKey="participant-1"
         returnTo="/participant/questionnaires"
         emptyTitle="Nu ai sarcini"
         emptyDescription="Lista este goală."
@@ -621,6 +714,148 @@ describe("ParticipantTaskList", () => {
     );
 
     expect(screen.getAllByRole("heading", { name: "Review 360" })).toHaveLength(2);
-    expect(screen.getAllByText("Leadership Q3")).toHaveLength(2);
+    expect(screen.getAllByText("Leadership Q3")).toHaveLength(1);
+  });
+
+  it("expands pending projects, collapses completed projects, and remembers choices per identity", () => {
+    const pendingTask: InviteTask = {
+      id: "pending-task",
+      assignmentId: "pending-task",
+      title: "iCARE",
+      status: "not_started",
+      detail: "De completat",
+      href: "/participant/tasks/pending-task",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 8,
+      questionnaireKey: "icare",
+      projectId: "project-pending",
+      projectName: "Proiect Atlas",
+      cycleName: "Reevaluare",
+      cycleSequence: 2,
+      deadlineLabel: "31 august 2026",
+    };
+    const completedTask: InviteTask = {
+      ...pendingTask,
+      id: "completed-task",
+      assignmentId: "completed-task",
+      status: "completed",
+      href: "/participant/tasks/completed-task",
+      projectId: "project-complete",
+      projectName: "Proiect Orion",
+    };
+    const projects = groupParticipantTasksByProject(
+      [pendingTask, completedTask],
+      [
+        {
+          id: "project-pending",
+          name: "Proiect Atlas",
+          deadlineLabel: "31 august 2026",
+        },
+        {
+          id: "project-complete",
+          name: "Proiect Orion",
+          status: "completed",
+          historyBucket: "history",
+          deadlineLabel: "Finalizat",
+        },
+      ],
+    );
+
+    const { unmount } = render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-a"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+      />,
+    );
+
+    const atlas = screen.getByRole("button", { name: /Proiect Atlas/i });
+    const orion = screen.getByRole("button", { name: /Proiect Orion/i });
+    expect(atlas.getAttribute("aria-expanded")).toBe("true");
+    expect(orion.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText("Ciclul 2, Reevaluare")).toBeDefined();
+    expect(screen.getByText("31 august 2026")).toBeDefined();
+
+    fireEvent.click(atlas);
+    expect(atlas.getAttribute("aria-expanded")).toBe("false");
+    unmount();
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-a"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+      />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /Proiect Atlas/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+
+    cleanup();
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-b"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+      />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /Proiect Atlas/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  it("keeps unfinished questionnaires in historical projects read-only", () => {
+    const historicalTask: InviteTask = {
+      id: "historical-task",
+      assignmentId: "historical-task",
+      title: "iCARE",
+      status: "in_progress",
+      detail: "Început înainte de închiderea proiectului",
+      href: "/participant/tasks/historical-task",
+      targetLabel: "Autoevaluare",
+      estimatedMinutes: 8,
+      questionnaireKey: "icare",
+      projectId: "project-history",
+      projectName: "Proiect încheiat",
+    };
+    const projects = groupParticipantTasksByProject(
+      [historicalTask],
+      [{
+        id: "project-history",
+        name: "Proiect încheiat",
+        status: "completed",
+        historyBucket: "history",
+        deadlineLabel: "Finalizat",
+      }],
+    );
+
+    render(
+      <ParticipantTaskList
+        projects={projects}
+        persistenceIdentityKey="participant-history"
+        returnTo="/participant/questionnaires"
+        emptyTitle="Nu ai sarcini"
+        emptyDescription="Lista este goală."
+      />,
+    );
+
+    const projectButton = screen.getByRole("button", { name: /Proiect încheiat/i });
+    expect(projectButton.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(projectButton);
+
+    expect(screen.getByText("Închis")).toBeDefined();
+    expect(screen.getAllByText("Proiect încheiat").length).toBeGreaterThan(1);
+    expect(screen.queryByRole("link", { name: /Continuă review-ul/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Deschide|Continuă/i })).toBeNull();
   });
 });

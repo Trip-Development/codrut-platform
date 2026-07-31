@@ -1,6 +1,7 @@
-from uuid import UUID
+from datetime import datetime
+from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codrut.modules.assignments.models import (
@@ -13,6 +14,8 @@ from codrut.modules.forms.models import (
     QuestionnaireDefinition,
     QuestionnaireResponse,
     QuestionnaireResponseStatus,
+    SubmissionProcessingJob,
+    SubmissionProcessingStatus,
 )
 from codrut.modules.identity.models import User, UserAccountType
 
@@ -30,6 +33,7 @@ class FormsRepository:
         project_id: UUID | None = None,
         cycle_id: UUID | None = None,
         allowed_assignment_ids: tuple[UUID, ...] | None = None,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment | None:
         statement = (
             select(QuestionnaireAssignment)
@@ -52,6 +56,8 @@ class FormsRepository:
             if assignment_id not in allowed_assignment_ids:
                 return None
             statement = statement.where(QuestionnaireAssignment.id.in_(allowed_assignment_ids))
+        if for_update:
+            statement = statement.with_for_update()
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
@@ -99,10 +105,15 @@ class FormsRepository:
     async def get_assignment_by_id(
         self,
         assignment_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireAssignment | None:
-        result = await self.session.execute(
-            select(QuestionnaireAssignment).where(QuestionnaireAssignment.id == assignment_id)
+        statement = select(QuestionnaireAssignment).where(
+            QuestionnaireAssignment.id == assignment_id
         )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
     async def list_permanent_participants_for_user(self, user_id: UUID) -> list[ParticipantProfile]:
@@ -144,11 +155,115 @@ class FormsRepository:
     async def get_response_by_assignment(
         self,
         assignment_id: UUID,
+        *,
+        for_update: bool = False,
     ) -> QuestionnaireResponse | None:
+        statement = select(QuestionnaireResponse).where(
+            QuestionnaireResponse.assignment_id == assignment_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def enqueue_submission_processing(
+        self,
+        assignment_id: UUID,
+        *,
+        now: datetime,
+    ) -> SubmissionProcessingJob:
         result = await self.session.execute(
-            select(QuestionnaireResponse).where(
-                QuestionnaireResponse.assignment_id == assignment_id,
+            select(SubmissionProcessingJob)
+            .where(SubmissionProcessingJob.assignment_id == assignment_id)
+            .with_for_update()
+        )
+        job = result.scalar_one_or_none()
+        if job is None:
+            job = SubmissionProcessingJob(
+                id=uuid4(),
+                assignment_id=assignment_id,
+                status=SubmissionProcessingStatus.queued,
+                attempt_count=0,
+                max_attempts=5,
+                next_attempt_at=now,
             )
+            self.session.add(job)
+        elif job.status != SubmissionProcessingStatus.processing:
+            job.status = SubmissionProcessingStatus.queued
+            job.attempt_count = 0
+            job.next_attempt_at = now
+            job.lease_token = None
+            job.lease_expires_at = None
+            job.last_error_code = None
+            job.processed_at = None
+        await self.session.flush()
+        return job
+
+    async def delete_submission_processing_for_assignment(
+        self,
+        assignment_id: UUID,
+    ) -> None:
+        await self.session.execute(
+            delete(SubmissionProcessingJob).where(
+                SubmissionProcessingJob.assignment_id == assignment_id
+            )
+        )
+
+    async def claim_due_submission_processing(
+        self,
+        *,
+        now: datetime,
+        lease_expires_at: datetime,
+        limit: int,
+    ) -> list[SubmissionProcessingJob]:
+        result = await self.session.execute(
+            select(SubmissionProcessingJob)
+            .where(
+                SubmissionProcessingJob.attempt_count
+                < SubmissionProcessingJob.max_attempts,
+                or_(
+                    (
+                        SubmissionProcessingJob.status
+                        == SubmissionProcessingStatus.queued
+                    )
+                    & (SubmissionProcessingJob.next_attempt_at <= now),
+                    (
+                        SubmissionProcessingJob.status
+                        == SubmissionProcessingStatus.processing
+                    )
+                    & (SubmissionProcessingJob.lease_expires_at <= now),
+                ),
+            )
+            .order_by(
+                SubmissionProcessingJob.next_attempt_at,
+                SubmissionProcessingJob.created_at,
+            )
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        jobs = list(result.scalars().all())
+        for job in jobs:
+            job.status = SubmissionProcessingStatus.processing
+            job.attempt_count += 1
+            job.lease_token = uuid4()
+            job.lease_expires_at = lease_expires_at
+        await self.session.flush()
+        return jobs
+
+    async def get_claimed_submission_processing(
+        self,
+        job_id: UUID,
+        lease_token: UUID,
+    ) -> SubmissionProcessingJob | None:
+        result = await self.session.execute(
+            select(SubmissionProcessingJob)
+            .where(
+                SubmissionProcessingJob.id == job_id,
+                SubmissionProcessingJob.status
+                == SubmissionProcessingStatus.processing,
+                SubmissionProcessingJob.lease_token == lease_token,
+            )
+            .with_for_update()
         )
         return result.scalar_one_or_none()
 

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { acceptCurrentTerms } from "@/api/auth";
+import { acceptCurrentTerms, type CurrentUser } from "@/api/auth";
 import { ConsentForm } from "./ConsentForm";
 
 vi.mock("@/api/auth", () => ({ acceptCurrentTerms: vi.fn() }));
@@ -13,7 +13,9 @@ describe("ConsentForm", () => {
   });
 
   it("requires explicit consent and saves it once", async () => {
-    vi.mocked(acceptCurrentTerms).mockImplementation(() => new Promise<void>(() => undefined));
+    vi.mocked(acceptCurrentTerms).mockImplementation(
+      () => new Promise<CurrentUser>(() => undefined),
+    );
     render(<ConsentForm />);
 
     const button = screen.getByRole("button", { name: "Continuă" });

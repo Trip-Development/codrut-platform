@@ -284,9 +284,8 @@ async def test_secure_link_rejects_stale_or_cross_scoped_session_state() -> None
             respondent_profile_id=invite.respondent_profile_id,
         )
     )
-    with pytest.raises(DomainError, match="Consent does not match") as consent_scope_error:
-        await service.require_secure_link_consent(principal, "invite-token")
-    assert consent_scope_error.value.code == "task_link_scope_mismatch"
+    await service.require_secure_link_consent(principal, "invite-token")
+    repository.get_consent_acceptance.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -663,6 +662,9 @@ async def test_multi_project_selection_response_preserves_program_contexts() -> 
     )
     service._get_authorized_contexts = AsyncMock(  # type: ignore[method-assign]
         return_value=[context]
+    )
+    service._get_questionnaire_projects = AsyncMock(  # type: ignore[method-assign]
+        return_value=[]
     )
 
     summary = await service.get_workspace_summary(uuid.uuid4())

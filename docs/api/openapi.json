@@ -1096,6 +1096,15 @@
       },
       "AuthResponse": {
         "properties": {
+          "access_mode": {
+            "default": "account",
+            "enum": [
+              "account",
+              "secure_link"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
           "account_type": {
             "$ref": "#/components/schemas/UserAccountType",
             "default": "registered"
@@ -1118,6 +1127,11 @@
               }
             ],
             "title": "Avatar Palette Key"
+          },
+          "consent_current": {
+            "default": false,
+            "title": "Consent Current",
+            "type": "boolean"
           },
           "default_workspace": {
             "anyOf": [
@@ -1694,6 +1708,11 @@
       },
       "CampaignRecipientMembershipRowResponse": {
         "properties": {
+          "activationAllowed": {
+            "default": false,
+            "title": "Activationallowed",
+            "type": "boolean"
+          },
           "archivedAt": {
             "anyOf": [
               {
@@ -1857,6 +1876,17 @@
             "title": "Status",
             "type": "string"
           },
+          "statusBeforeArchive": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statusbeforearchive"
+          },
           "viewCount": {
             "default": 0,
             "title": "Viewcount",
@@ -1963,6 +1993,11 @@
       },
       "CampaignRecipientRowResponse": {
         "properties": {
+          "activationAllowed": {
+            "default": false,
+            "title": "Activationallowed",
+            "type": "boolean"
+          },
           "archivedAt": {
             "anyOf": [
               {
@@ -2103,6 +2138,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "statusBeforeArchive": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statusbeforearchive"
           },
           "viewCount": {
             "default": 0,
@@ -3114,6 +3160,9 @@
             "title": "Driver Count",
             "type": "integer"
           },
+          "driver_rank_summary": {
+            "$ref": "#/components/schemas/DriverRankSummaryResponse"
+          },
           "hierarchy_ambiguity_message": {
             "anyOf": [
               {
@@ -3137,11 +3186,25 @@
             "title": "Hierarchy Issues",
             "type": "array"
           },
+          "icare_cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/IcareCohortSummaryResponse"
+            },
+            "title": "Icare Cohorts",
+            "type": "array"
+          },
           "icare_target_summaries": {
             "items": {
               "$ref": "#/components/schemas/IcareTargetSummaryResponse"
             },
             "title": "Icare Target Summaries",
+            "type": "array"
+          },
+          "leadership_members": {
+            "items": {
+              "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
+            },
+            "title": "Leadership Members",
             "type": "array"
           },
           "lencioni_averages": {
@@ -3176,6 +3239,18 @@
             },
             "title": "Pcm Phase Distribution",
             "type": "array"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
           },
           "results": {
             "items": {
@@ -3213,6 +3288,7 @@
           "driver_averages",
           "boss_360_averages",
           "icare_target_summaries",
+          "driver_rank_summary",
           "pcm_base_distribution",
           "pcm_phase_distribution",
           "team_lenses",
@@ -3407,6 +3483,56 @@
         "title": "CycleQuestionnaireCompatibilityResponse",
         "type": "object"
       },
+      "DriverRankSummaryResponse": {
+        "properties": {
+          "first_rank": {
+            "items": {
+              "$ref": "#/components/schemas/ReportDistributionResponse"
+            },
+            "title": "First Rank",
+            "type": "array"
+          },
+          "first_rank_tie_breaks": {
+            "minimum": 0.0,
+            "title": "First Rank Tie Breaks",
+            "type": "integer"
+          },
+          "insufficient_driver_score_count": {
+            "description": "Selected completed participants omitted from both rankings because fewer than two driver scores were numeric.",
+            "minimum": 0.0,
+            "title": "Insufficient Driver Score Count",
+            "type": "integer"
+          },
+          "second_rank": {
+            "items": {
+              "$ref": "#/components/schemas/ReportDistributionResponse"
+            },
+            "title": "Second Rank",
+            "type": "array"
+          },
+          "second_rank_tie_breaks": {
+            "minimum": 0.0,
+            "title": "Second Rank Tie Breaks",
+            "type": "integer"
+          },
+          "total_people": {
+            "description": "Participants with at least two numeric driver scores.",
+            "minimum": 0.0,
+            "title": "Total People",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_people",
+          "first_rank",
+          "second_rank",
+          "first_rank_tie_breaks",
+          "second_rank_tie_breaks",
+          "insufficient_driver_score_count"
+        ],
+        "title": "DriverRankSummaryResponse",
+        "type": "object"
+      },
       "EmailDeliveryMetricResponse": {
         "properties": {
           "detail": {
@@ -3484,6 +3610,29 @@
         ],
         "title": "EmailProviderKey",
         "type": "string"
+      },
+      "EmailSendCapacityResponse": {
+        "properties": {
+          "daily_cap": {
+            "title": "Daily Cap",
+            "type": "integer"
+          },
+          "remaining_today": {
+            "title": "Remaining Today",
+            "type": "integer"
+          },
+          "used_today": {
+            "title": "Used Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "daily_cap",
+          "used_today",
+          "remaining_today"
+        ],
+        "title": "EmailSendCapacityResponse",
+        "type": "object"
       },
       "EmailTemplateCreateRequest": {
         "additionalProperties": false,
@@ -4035,8 +4184,46 @@
         "title": "IcareAnswerReviewRowResponse",
         "type": "object"
       },
+      "IcareCohortSummaryResponse": {
+        "properties": {
+          "averages": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAverageResponse"
+            },
+            "title": "Averages",
+            "type": "array"
+          },
+          "cohort": {
+            "enum": [
+              "direct_team",
+              "leadership_peers",
+              "self"
+            ],
+            "title": "Cohort",
+            "type": "string"
+          },
+          "response_count": {
+            "title": "Response Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cohort",
+          "response_count",
+          "averages"
+        ],
+        "title": "IcareCohortSummaryResponse",
+        "type": "object"
+      },
       "IcareTargetSummaryResponse": {
         "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/IcareCohortSummaryResponse"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
           "external_averages": {
             "items": {
               "$ref": "#/components/schemas/ReportAverageResponse"
@@ -4215,6 +4402,19 @@
       },
       "InviteExchangeResponse": {
         "properties": {
+          "access_mode": {
+            "default": "secure_link",
+            "enum": [
+              "account",
+              "secure_link"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
+          "account_type": {
+            "$ref": "#/components/schemas/UserAccountType",
+            "default": "guest"
+          },
           "action": {
             "enum": [
               "secure_link_ready",
@@ -4236,6 +4436,11 @@
               }
             ],
             "title": "Assessment Cycle Id"
+          },
+          "consent_current": {
+            "default": false,
+            "title": "Consent Current",
+            "type": "boolean"
           },
           "destination": {
             "anyOf": [
@@ -4264,6 +4469,29 @@
               }
             ],
             "title": "Project Id"
+          },
+          "terms_accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terms Accepted At"
+          },
+          "terms_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terms Version"
           }
         },
         "required": [
@@ -4303,9 +4531,54 @@
             ],
             "title": "Assignmentroundid"
           },
+          "cycleName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cyclename"
+          },
+          "cycleSequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cyclesequence"
+          },
+          "deadlineLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadlinelabel"
+          },
           "detail": {
             "title": "Detail",
             "type": "string"
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dueat"
           },
           "estimatedMinutes": {
             "title": "Estimatedminutes",
@@ -4342,6 +4615,18 @@
             ],
             "title": "Projectname"
           },
+          "questionnaireDefinitionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questionnairedefinitionid"
+          },
           "questionnaireKey": {
             "title": "Questionnairekey",
             "type": "string"
@@ -4375,10 +4660,23 @@
       },
       "InviteVerifyResponse": {
         "properties": {
+          "access_mode": {
+            "default": "secure_link",
+            "enum": [
+              "account",
+              "secure_link"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
           "account_dashboard_available": {
             "default": false,
             "title": "Account Dashboard Available",
             "type": "boolean"
+          },
+          "account_type": {
+            "$ref": "#/components/schemas/UserAccountType",
+            "default": "guest"
           },
           "already_registered": {
             "title": "Already Registered",
@@ -4394,6 +4692,11 @@
               }
             ],
             "title": "Anonymous Name"
+          },
+          "consent_current": {
+            "default": false,
+            "title": "Consent Current",
+            "type": "boolean"
           },
           "email": {
             "format": "email",
@@ -4476,6 +4779,133 @@
           "tasks"
         ],
         "title": "InviteVerifyResponse",
+        "type": "object"
+      },
+      "LeadershipMemberReportResponse": {
+        "properties": {
+          "assessment_cycle_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Cycle Id"
+          },
+          "driver_averages": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAverageResponse"
+            },
+            "title": "Driver Averages",
+            "type": "array"
+          },
+          "driver_count": {
+            "title": "Driver Count",
+            "type": "integer"
+          },
+          "icare_cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/IcareCohortSummaryResponse"
+            },
+            "title": "Icare Cohorts",
+            "type": "array"
+          },
+          "lencioni_averages": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAverageResponse"
+            },
+            "title": "Lencioni Averages",
+            "type": "array"
+          },
+          "lencioni_count": {
+            "title": "Lencioni Count",
+            "type": "integer"
+          },
+          "member": {
+            "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
+          },
+          "pcm_base": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pcm Base"
+          },
+          "pcm_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pcm Phase"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "member",
+          "lencioni_count",
+          "lencioni_averages",
+          "icare_cohorts",
+          "driver_count",
+          "driver_averages"
+        ],
+        "title": "LeadershipMemberReportResponse",
+        "type": "object"
+      },
+      "LeadershipMemberSummaryResponse": {
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "role_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Group"
+          }
+        },
+        "required": [
+          "participant_profile_id",
+          "full_name"
+        ],
+        "title": "LeadershipMemberSummaryResponse",
         "type": "object"
       },
       "LoginRequest": {
@@ -4983,6 +5413,219 @@
         "title": "ParticipantOnboardingResponse",
         "type": "object"
       },
+      "ParticipantQuestionnaireProject": {
+        "properties": {
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "completed_count": {
+            "title": "Completed Count",
+            "type": "integer"
+          },
+          "deadline_label": {
+            "title": "Deadline Label",
+            "type": "string"
+          },
+          "history_bucket": {
+            "title": "History Bucket",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "participant_profile_id": {
+            "format": "uuid",
+            "title": "Participant Profile Id",
+            "type": "string"
+          },
+          "questionnaires": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantQuestionnaireTask"
+            },
+            "title": "Questionnaires",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "participant_profile_id",
+          "company_name",
+          "name",
+          "status",
+          "history_bucket",
+          "deadline_label",
+          "completed_count",
+          "total_count"
+        ],
+        "title": "ParticipantQuestionnaireProject",
+        "type": "object"
+      },
+      "ParticipantQuestionnaireTask": {
+        "properties": {
+          "assessmentCycleId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessmentcycleid"
+          },
+          "assignmentId": {
+            "title": "Assignmentid",
+            "type": "string"
+          },
+          "assignmentRoundId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignmentroundid"
+          },
+          "cycleName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cyclename"
+          },
+          "cycleSequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cyclesequence"
+          },
+          "deadlineLabel": {
+            "title": "Deadlinelabel",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dueat"
+          },
+          "estimatedMinutes": {
+            "title": "Estimatedminutes",
+            "type": "integer"
+          },
+          "href": {
+            "title": "Href",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectid"
+          },
+          "projectName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectname"
+          },
+          "questionnaireDefinitionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questionnairedefinitionid"
+          },
+          "questionnaireKey": {
+            "title": "Questionnairekey",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "targetLabel": {
+            "title": "Targetlabel",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "detail",
+          "href",
+          "assignmentId",
+          "targetLabel",
+          "estimatedMinutes",
+          "questionnaireKey",
+          "deadlineLabel"
+        ],
+        "title": "ParticipantQuestionnaireTask",
+        "type": "object"
+      },
       "ParticipantReceivedFeedbackDimension": {
         "properties": {
           "average_score": {
@@ -5028,6 +5671,14 @@
           "assignment_round_id": {
             "format": "uuid",
             "title": "Assignment Round Id",
+            "type": "string"
+          },
+          "cohort": {
+            "enum": [
+              "direct_team",
+              "leadership_peers"
+            ],
+            "title": "Cohort",
             "type": "string"
           },
           "completed_count": {
@@ -5100,6 +5751,7 @@
           "assignment_round_id",
           "questionnaire_key",
           "questionnaire_title",
+          "cohort",
           "completed_count",
           "minimum_completed",
           "scale_max",
@@ -5826,6 +6478,13 @@
             "title": "Projects",
             "type": "array"
           },
+          "questionnaire_projects": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantQuestionnaireProject"
+            },
+            "title": "Questionnaire Projects",
+            "type": "array"
+          },
           "received_feedback": {
             "anyOf": [
               {
@@ -6482,6 +7141,17 @@
             "title": "Avg",
             "type": "number"
           },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -6543,6 +7213,7 @@
             "type": "string"
           },
           "value": {
+            "minimum": 0.0,
             "title": "Value",
             "type": "integer"
           }
@@ -7119,6 +7790,11 @@
               }
             ],
             "title": "Avatar Palette Key"
+          },
+          "consent_current": {
+            "default": false,
+            "title": "Consent Current",
+            "type": "boolean"
           },
           "default_workspace": {
             "anyOf": [
@@ -10479,6 +11155,87 @@
           }
         },
         "summary": "Get Email Ops Summary",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/communications/send-capacity": {
+      "get": {
+        "operationId": "get_email_send_capacity_api_communications_send_capacity_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSendCapacityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Email Send Capacity",
         "tags": [
           "communications"
         ]
@@ -15288,6 +16045,136 @@
         "summary": "Permanently Delete Company Project",
         "tags": [
           "companies"
+        ]
+      }
+    },
+    "/api/companies/{company_id}/projects/{project_id}/reports/leadership/{participant_profile_id}": {
+      "get": {
+        "operationId": "get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "participant_profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Participant Profile Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assessment_cycle_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Cycle Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadershipMemberReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Leadership Member Report",
+        "tags": [
+          "assignments"
         ]
       }
     },

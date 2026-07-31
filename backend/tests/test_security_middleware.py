@@ -59,6 +59,10 @@ def create_middleware_test_app(
     async def echo() -> dict[str, bool]:
         return {"ok": True}
 
+    @app.put("/api/forms/secure-links/{token}/assignments/demo/response")
+    async def secure_link_echo(token: str) -> dict[str, str]:
+        return {"token": token}
+
     return app
 
 
@@ -208,6 +212,80 @@ def test_trusted_proxy_uses_forwarded_client_for_rate_limit_key() -> None:
     assert first_client.status_code == 200
     assert second_client.status_code == 200
     assert first_client_again.status_code == 429
+
+
+def test_authenticated_sessions_have_independent_unsafe_request_budgets() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_ip_max_requests=3,
+    )
+    client = TestClient(create_middleware_test_app(settings, limiter))
+
+    client.cookies.set("codrut_session", "session-one")
+    first_session = client.post("/api/echo")
+    client.cookies.set("codrut_session", "session-two")
+    second_session = client.post("/api/echo")
+    second_session_again = client.post("/api/echo")
+
+    assert first_session.status_code == 200
+    assert second_session.status_code == 200
+    assert second_session_again.status_code == 429
+    assert limiter.keys[0] == limiter.keys[2] == limiter.keys[4]
+    assert limiter.keys[1] != limiter.keys[3]
+    assert limiter.keys[3] == limiter.keys[5]
+    assert "session-one" not in "".join(limiter.keys)
+    assert "session-two" not in "".join(limiter.keys)
+
+
+def test_rotating_unverified_session_cookies_cannot_bypass_the_ip_ceiling() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_ip_max_requests=2,
+    )
+    client = TestClient(create_middleware_test_app(settings, limiter))
+
+    client.cookies.set("codrut_session", "unverified-session-one")
+    first_cookie = client.post("/api/echo")
+    client.cookies.set("codrut_session", "unverified-session-two")
+    second_cookie = client.post("/api/echo")
+    client.cookies.set("codrut_session", "unverified-session-three")
+    third_cookie = client.post("/api/echo")
+
+    assert first_cookie.status_code == 200
+    assert second_cookie.status_code == 200
+    assert third_cookie.status_code == 429
+    assert limiter.keys[0] == limiter.keys[2] == limiter.keys[4]
+    assert len(limiter.counts) == 3
+    assert all("unverified-session" not in key for key in limiter.keys)
+
+
+def test_secure_link_participants_have_independent_unsafe_request_budgets() -> None:
+    limiter = PerKeyRateLimiter()
+    settings = Settings(
+        rate_limit_enabled=True,
+        rate_limit_max_requests=1,
+        rate_limit_ip_max_requests=3,
+    )
+    client = TestClient(create_middleware_test_app(settings, limiter))
+
+    first_link = client.put("/api/forms/secure-links/link-one/assignments/demo/response")
+    second_link = client.put("/api/forms/secure-links/link-two/assignments/demo/response")
+    second_link_again = client.put(
+        "/api/forms/secure-links/link-two/assignments/demo/response"
+    )
+
+    assert first_link.status_code == 200
+    assert second_link.status_code == 200
+    assert second_link_again.status_code == 429
+    assert limiter.keys[0] == limiter.keys[2] == limiter.keys[4]
+    assert limiter.keys[1] != limiter.keys[3]
+    assert limiter.keys[3] == limiter.keys[5]
+    assert "link-one" not in "".join(limiter.keys)
+    assert "link-two" not in "".join(limiter.keys)
 
 
 def test_forwarding_chain_stops_at_first_untrusted_peer() -> None:

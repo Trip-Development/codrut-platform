@@ -177,6 +177,10 @@ class ParticipantProfile(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("company_id", "email"),
         UniqueConstraint(
+            "anonymous_name",
+            name="uq_participant_profiles_anonymous_name",
+        ),
+        UniqueConstraint(
             "company_id",
             "id",
             name="uq_participant_profiles_company_id_id",

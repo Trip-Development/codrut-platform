@@ -3,7 +3,6 @@ import { getParticipantWorkspaceSummary } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
 import { ParticipantCompletionState } from "../ParticipantCompletionState";
-import { ParticipantContextSelector } from "../ParticipantContextSelector";
 import { ParticipantTaskList } from "../ParticipantTaskList";
 import {
   participantActiveHref,
@@ -14,7 +13,10 @@ import {
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 import { countAvailableParticipantResults } from "../result-state";
-import { groupParticipantTasks } from "../task-display";
+import {
+  groupParticipantTasksByProject,
+  participantTaskProjectsFromCatalog,
+} from "../task-display";
 
 export default async function ParticipantQuestionnairesPage({
   searchParams,
@@ -32,9 +34,17 @@ export default async function ParticipantQuestionnairesPage({
   const scopeParams = participantScopeParams(summary);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
   const resultsHref = participantScopedHref("/participant/results", scopeParams);
-  const taskGroups = groupParticipantTasks(summary.tasks);
-  const hasTasks = summary.tasks.length > 0;
-  const allTasksComplete = hasTasks && summary.tasks.every((task) => task.status === "completed");
+  const questionnaireProjects =
+    (summary.questionnaireProjects?.length ?? 0) > 0
+      ? participantTaskProjectsFromCatalog(summary.questionnaireProjects ?? [])
+      : groupParticipantTasksByProject(summary.tasks, summary.projects);
+  const allQuestionnaires = questionnaireProjects.flatMap((project) =>
+    project.groups.flatMap((group) => group.tasks),
+  );
+  const hasTasks = allQuestionnaires.length > 0;
+  const allTasksComplete =
+    hasTasks &&
+    allQuestionnaires.every((task) => task.status === "completed");
   const resultCount = countAvailableParticipantResults(summary);
 
   return (
@@ -48,19 +58,15 @@ export default async function ParticipantQuestionnairesPage({
       userLabel={summary.participantFullName.split(/\s+/)[0] || "Participant"}
       session={participant}
     >
-      <ParticipantContextSelector
-        contexts={summary.contexts}
-        selectedProfileId={summary.participantProfileId}
-        selectedProjectId={summary.projectId}
-      />
       {allTasksComplete ? (
         <div className="mb-8">
           <ParticipantCompletionState resultCount={resultCount} resultsHref={resultsHref} />
         </div>
       ) : null}
-      {taskGroups.length > 0 ? (
+      {questionnaireProjects.length > 0 ? (
         <ParticipantTaskList
-          groups={taskGroups}
+          projects={questionnaireProjects}
+          persistenceIdentityKey={`${participant.user.id}:${summary.participantProfileId ?? "all"}`}
           returnTo={questionnairesHref}
           emptyTitle={summary.emptyState.title}
           emptyDescription={summary.emptyState.description}

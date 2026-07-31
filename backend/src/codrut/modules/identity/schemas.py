@@ -42,10 +42,15 @@ class InviteTask(BaseModel):
     targetLabel: str
     estimatedMinutes: int
     questionnaireKey: str
+    questionnaireDefinitionId: UUID | None = None
     projectId: UUID | None = None
     projectName: str | None = None
     assignmentRoundId: UUID | None = None
     assessmentCycleId: UUID | None = None
+    cycleName: str | None = None
+    cycleSequence: int | None = None
+    deadlineLabel: str | None = None
+    dueAt: datetime | None = None
 
 
 class InviteVerifyResponse(BaseModel):
@@ -55,6 +60,9 @@ class InviteVerifyResponse(BaseModel):
     is_leadership: bool
     already_registered: bool
     account_dashboard_available: bool = False
+    account_type: UserAccountType = UserAccountType.guest
+    access_mode: Literal["account", "secure_link"] = "secure_link"
+    consent_current: bool = False
     project_id: UUID | None = None
     project_name: str
     expires_at: datetime
@@ -81,6 +89,11 @@ class InviteExchangeResponse(BaseModel):
     participant_profile_id: UUID
     project_id: UUID | None = None
     assessment_cycle_id: UUID | None = None
+    account_type: UserAccountType = UserAccountType.guest
+    access_mode: Literal["account", "secure_link"] = "secure_link"
+    consent_current: bool = False
+    terms_accepted_at: datetime | None = None
+    terms_version: str | None = None
 
 
 class LoginRequest(StrictRequestModel):
@@ -130,6 +143,7 @@ class SessionPrincipal(BaseModel):
     avatar_palette_key: int | None = None
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None
+    consent_current: bool = False
     session_token: str = Field(exclude=True)
     assignment_invite_id: UUID | None = Field(default=None, exclude=True)
     assignment_ids: tuple[UUID, ...] | None = Field(default=None, exclude=True)
@@ -161,3 +175,5 @@ class AuthResponse(BaseModel):
     avatar_palette_key: int | None = None
     terms_accepted_at: datetime | None = None
     terms_version: str | None = None
+    consent_current: bool = False
+    access_mode: Literal["account", "secure_link"] = "account"

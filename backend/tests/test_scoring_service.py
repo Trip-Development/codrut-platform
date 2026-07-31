@@ -851,6 +851,10 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
             ]
             assert [item.avg for item in aggregate.driver_averages] == [10, 20, 30, 60, 50]
             assert all(item.interpretation is None for item in aggregate.driver_averages)
+            assert aggregate.driver_rank_summary.total_people == 1
+            assert sum(item.value for item in aggregate.driver_rank_summary.first_rank) == 1
+            assert sum(item.value for item in aggregate.driver_rank_summary.second_rank) == 1
+            assert aggregate.driver_rank_summary.insufficient_driver_score_count == 0
             assert aggregate.pcm_base_count == 0
             assert aggregate.pcm_phase_count == 0
             assert aggregate.pcm_base_distribution == []
@@ -1136,11 +1140,11 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
                     ),
                     ScoringResult(
                         assignment_id=baseline_drivers_assignment.id,
-                        scores={"work_signal_a": 10},
+                        scores={"work_signal_a": 10, "work_signal_b": 5},
                     ),
                     ScoringResult(
                         assignment_id=comparison_drivers_assignment.id,
-                        scores={"work_signal_a": 20},
+                        scores={"work_signal_a": 20, "work_signal_b": 15},
                     ),
                 ]
             )
@@ -1161,8 +1165,14 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
             assert compatibility["distress_drivers"].compatible is True
             assert report.baseline.lencioni_averages == []
             assert [item.id for item in report.comparison.lencioni_averages] == ["team_signal_a"]
-            assert [item.id for item in report.baseline.driver_averages] == ["work_signal_a"]
-            assert [item.id for item in report.comparison.driver_averages] == ["work_signal_a"]
+            assert [item.id for item in report.baseline.driver_averages] == [
+                "work_signal_a",
+                "work_signal_b",
+            ]
+            assert [item.id for item in report.comparison.driver_averages] == [
+                "work_signal_a",
+                "work_signal_b",
+            ]
 
             await session.rollback()
     finally:

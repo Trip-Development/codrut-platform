@@ -15,6 +15,7 @@ export type CurrentUser = {
   accessMode?: "account" | "secure_link";
   termsAcceptedAt?: string | null;
   termsVersion?: string | null;
+  consentCurrent?: boolean;
 };
 
 export type SessionState = {
@@ -34,6 +35,7 @@ type AuthApiResponse = {
   access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
   terms_version?: string | null;
+  consent_current?: boolean;
 };
 
 type SessionPrincipalResponse = {
@@ -47,6 +49,7 @@ type SessionPrincipalResponse = {
   access_mode?: "account" | "secure_link";
   terms_accepted_at?: string | null;
   terms_version?: string | null;
+  consent_current?: boolean;
 };
 
 type AuthSessionUnavailableContext = {
@@ -121,6 +124,7 @@ export async function loginWithPassword(email: string, password: string): Promis
       accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
       termsVersion: user.terms_version,
+      consentCurrent: user.consent_current ?? false,
     },
   };
 }
@@ -140,6 +144,7 @@ function sessionStateFromPrincipal(user: SessionPrincipalResponse): SessionState
       accessMode: user.access_mode ?? "account",
       termsAcceptedAt: user.terms_accepted_at,
       termsVersion: user.terms_version,
+      consentCurrent: user.consent_current ?? false,
     },
   };
 }
@@ -227,7 +232,7 @@ export async function changePassword(
   }
 }
 
-export async function acceptCurrentTerms(): Promise<void> {
+export async function acceptCurrentTerms(): Promise<CurrentUser> {
   const response = await apiFetch(`${getApiBaseUrl()}/auth/consent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -243,6 +248,8 @@ export async function acceptCurrentTerms(): Promise<void> {
     const message = payload?.error?.message ?? "Acordul nu a putut fi salvat.";
     throw new Error(message);
   }
+  const user = (await response.json()) as AuthApiResponse;
+  return sessionStateFromPrincipal(user).user;
 }
 
 async function getSessionFromApi(expectedRole: "trainer" | "participant"): Promise<SessionState | null> {

@@ -9,11 +9,46 @@ permissions:
   contents: read
 
 jobs:
+  dispatch-production-check:
+    name: production / dispatch-disk-capacity
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch the environment-bound check from prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh workflow run vps-capacity-check.yml
+          --repo "${GITHUB_REPOSITORY}"
+          --ref prod
+
+  validate-production-ref:
+    name: production / validate-capacity-ref
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require the protected production ref
+        env:
+          CAPACITY_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$CAPACITY_REF" != "refs/heads/prod" ]]; then
+            echo "Production capacity checks must be dispatched from refs/heads/prod."
+            exit 1
+          fi
+
   capacity:
     name: production / disk-capacity
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate-production-ref
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: production
+    environment: prod
     env:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       HETZNER_VPS_IP: ${{ secrets.HETZNER_VPS_IP }}

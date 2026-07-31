@@ -12,7 +12,7 @@ import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/utils/cn";
 import { IconButton } from "./EmailWorkspaceControls";
-import { DEFAULT_ACTION_TOKEN, DEFAULT_VIDEO_TOKEN, MOCK_REPLACEMENTS, parseEmailTemplateEditorDraft } from "./email-template-domain";
+import { DEFAULT_ACTION_TOKEN, DEFAULT_VIDEO_TOKEN, MOCK_REPLACEMENTS, emailTemplateCtaCount, parseEmailTemplateEditorDraft } from "./email-template-domain";
 
 type TemplateOperation = null | "save" | "create" | "version" | "delete";
 type Preview = { subject: string; bodyHtml: string };
@@ -32,6 +32,7 @@ export type TemplatesWorkspaceViewProps = {
   editLane: "transactional" | "campaign";
   preview: Preview;
   previewCalendlyUrl: string;
+  validationMessage: string | null;
   onSearchChange: (value: string) => void;
   onSelectTemplate: (id: string) => void;
   onCreate: () => void;
@@ -124,7 +125,7 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
               <div className="flex flex-wrap justify-end gap-2">
                 {props.isEditing ? (
                   <>
-                    <Button type="button" size="sm" onClick={props.onSave} disabled={props.isLoading}>{props.isLoading ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}{props.isLoading ? "Salvăm" : "Salvează"}</Button>
+                    <Button type="button" size="sm" onClick={props.onSave} disabled={props.isLoading || Boolean(props.validationMessage)}>{props.isLoading ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}{props.isLoading ? "Salvăm" : "Salvează"}</Button>
                     <Button type="button" size="sm" variant="outline" onClick={() => props.setIsEditing(false)} disabled={props.isLoading}>Anulează</Button>
                   </>
                 ) : (
@@ -142,6 +143,14 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
                 title={props.operation === "version" ? "Creăm versiunea nouă" : props.operation === "delete" ? "Pensionăm șablonul" : "Actualizăm șablonul"}
                 detail={props.operation === "version" ? "Clonăm conținutul curent într-o versiune nouă editabilă." : props.operation === "delete" ? "Scoatem șablonul din catalog și păstrăm campaniile existente." : "Sincronizăm conținutul, versiunea și previzualizarea emailului."}
               />
+            ) : null}
+            {props.isEditing && props.validationMessage ? (
+              <div
+                role="alert"
+                className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm font-medium leading-6 text-foreground"
+              >
+                {props.validationMessage}
+              </div>
             ) : null}
             <FieldGroup className="flex-1">
               <Field data-disabled>
@@ -165,7 +174,7 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
               </div>
               <Field data-disabled={!props.isEditing || props.isLoading ? true : undefined}>
                 <FieldLabel htmlFor="template-email-subject">Subiect email</FieldLabel>
-                <Input id="template-email-subject" type="text" disabled={!props.isEditing || props.isLoading} value={props.isEditing ? props.editSubject : selectedTemplate.subject} onChange={(event) => props.setEditSubject(event.target.value)} className="py-3 disabled:opacity-60" />
+                <Input id="template-email-subject" type="text" disabled={!props.isEditing || props.isLoading} value={props.isEditing ? props.editSubject : selectedTemplate.subject} onChange={(event) => props.setEditSubject(event.target.value)} aria-invalid={props.isEditing && !props.editSubject.trim() ? true : undefined} className="py-3 disabled:opacity-60" />
               </Field>
               <Field data-disabled={!props.isEditing || props.isLoading ? true : undefined}>
                 <FieldLabel htmlFor="template-email-heading">Titlu mare în email</FieldLabel>
@@ -175,11 +184,11 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
                 <FieldLabel htmlFor="template-email-body">Corp email</FieldLabel>
                 {props.isEditing ? (
                   <div className="mb-2 flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="xs" onClick={() => props.setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_ACTION_TOKEN}`)} disabled={props.isLoading}>Adaugă buton link</Button>
+                    <Button type="button" variant="outline" size="xs" onClick={() => props.setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_ACTION_TOKEN}`)} disabled={props.isLoading || emailTemplateCtaCount(props.editBody) >= 1}>Adaugă buton link</Button>
                     <Button type="button" variant="outline" size="xs" onClick={() => props.setEditBody((current) => `${current.trim() ? `${current.trim()}\n\n` : ""}${DEFAULT_VIDEO_TOKEN}`)} disabled={props.isLoading}>Adaugă video</Button>
                   </div>
                 ) : null}
-                <Textarea id="template-email-body" disabled={!props.isEditing || props.isLoading} value={props.isEditing ? props.editBody : parseEmailTemplateEditorDraft(selectedTemplate.body, selectedTemplate.subject).body} onChange={(event) => props.setEditBody(event.target.value)} className="min-h-[200px] flex-1 resize-none py-4 font-mono leading-relaxed disabled:opacity-60" />
+                <Textarea id="template-email-body" disabled={!props.isEditing || props.isLoading} value={props.isEditing ? props.editBody : parseEmailTemplateEditorDraft(selectedTemplate.body, selectedTemplate.subject).body} onChange={(event) => props.setEditBody(event.target.value)} aria-invalid={props.isEditing && !props.editBody.trim() ? true : undefined} className="min-h-[200px] flex-1 resize-none py-4 font-mono leading-relaxed disabled:opacity-60" />
               </Field>
             </FieldGroup>
           </section>

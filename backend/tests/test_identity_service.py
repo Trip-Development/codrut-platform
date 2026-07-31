@@ -15,6 +15,8 @@ from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, verify_password
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleStatus,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -74,6 +76,7 @@ async def test_accept_terms_records_secure_invite_audit_context() -> None:
     repository.get_user_by_id = AsyncMock(return_value=user)
     repository.get_session_by_token = AsyncMock(return_value=active_session)
     repository.get_invite_by_id = AsyncMock(return_value=invite)
+    repository.get_latest_consent_acceptance = AsyncMock(return_value=None)
     repository.get_consent_acceptance = AsyncMock(return_value=None)
     repository.add_consent_acceptance = AsyncMock()
     service = IdentityService(AsyncMock())
@@ -95,10 +98,12 @@ async def test_accept_terms_records_secure_invite_audit_context() -> None:
     assert acceptance.source == "secure_invite"
     assert response.terms_version == CURRENT_TERMS_VERSION
     assert response.terms_accepted_at == acceptance.accepted_at
+    assert response.consent_current is True
+    assert response.access_mode == "secure_link"
 
 
 @pytest.mark.asyncio
-async def test_accept_terms_reuses_existing_audit_record_for_same_session() -> None:
+async def test_accept_terms_reuses_existing_acceptance_for_the_same_session() -> None:
     accepted_at = datetime.now(UTC) - timedelta(minutes=5)
     user = User(
         id=uuid.uuid4(),
@@ -124,6 +129,7 @@ async def test_accept_terms_reuses_existing_audit_record_for_same_session() -> N
     repository = MagicMock()
     repository.get_user_by_id = AsyncMock(return_value=user)
     repository.get_session_by_token = AsyncMock(return_value=active_session)
+    repository.get_latest_consent_acceptance = AsyncMock(return_value=existing)
     repository.get_consent_acceptance = AsyncMock(return_value=existing)
     repository.add_consent_acceptance = AsyncMock()
     service = IdentityService(AsyncMock())
@@ -136,6 +142,53 @@ async def test_accept_terms_reuses_existing_audit_record_for_same_session() -> N
     )
 
     repository.add_consent_acceptance.assert_not_awaited()
+    assert user.terms_accepted_at == accepted_at
+
+
+@pytest.mark.asyncio
+async def test_accept_terms_keeps_user_authority_and_records_a_new_session_event() -> None:
+    accepted_at = datetime.now(UTC) - timedelta(days=2)
+    user = User(
+        id=uuid.uuid4(),
+        email="participant@example.com",
+        password_hash=SHADOW_ACCOUNT_PASSWORD_HASH,
+        role=UserRole.participant,
+        account_type=UserAccountType.guest,
+        terms_accepted_at=accepted_at,
+        terms_version=CURRENT_TERMS_VERSION,
+    )
+    active_session = Session(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        token_hash=hash_session_token("new-secure-session"),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    prior = ConsentAcceptance(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        session_id=uuid.uuid4(),
+        terms_version=CURRENT_TERMS_VERSION,
+        source="authenticated",
+        accepted_at=accepted_at,
+    )
+    repository = MagicMock()
+    repository.get_user_by_id = AsyncMock(return_value=user)
+    repository.get_session_by_token = AsyncMock(return_value=active_session)
+    repository.get_latest_consent_acceptance = AsyncMock(return_value=prior)
+    repository.get_consent_acceptance = AsyncMock(return_value=None)
+    repository.add_consent_acceptance = AsyncMock()
+    service = IdentityService(AsyncMock())
+    service.repository = repository
+
+    await service.accept_terms(
+        user.id,
+        ConsentRequest(terms_accepted=True, terms_version=CURRENT_TERMS_VERSION),
+        session_token="new-secure-session",
+    )
+
+    event = repository.add_consent_acceptance.await_args.args[0]
+    assert event.session_id == active_session.id
+    assert event.accepted_at == accepted_at
     assert user.terms_accepted_at == accepted_at
 
 
@@ -158,7 +211,7 @@ async def test_accept_terms_rejects_retired_legal_version() -> None:
 
 
 @pytest.mark.asyncio
-async def test_secure_link_requires_persisted_current_consent() -> None:
+async def test_secure_link_uses_current_user_consent_as_authority() -> None:
     user_id = uuid.uuid4()
     company_id = uuid.uuid4()
     profile = ParticipantProfile(
@@ -191,8 +244,6 @@ async def test_secure_link_requires_persisted_current_consent() -> None:
     repository.session = mock_session
     repository.get_session_by_token = AsyncMock(return_value=active_session)
     repository.get_invite_by_token = AsyncMock(return_value=invite)
-    repository.get_consent_acceptance = AsyncMock(return_value=None)
-    repository.get_latest_consent_acceptance = AsyncMock(return_value=None)
     service = IdentityService(mock_session)
     service.repository = repository
     principal = SessionPrincipal(
@@ -205,15 +256,7 @@ async def test_secure_link_requires_persisted_current_consent() -> None:
         assignment_invite_id=invite.id,
     )
 
-    with pytest.raises(DomainError) as exc_info:
-        await service.require_secure_link_consent(principal, invite.token)
-
-    assert exc_info.value.code == "terms_required"
-    repository.get_consent_acceptance.assert_awaited_once_with(
-        user_id=user_id,
-        terms_version=CURRENT_TERMS_VERSION,
-        session_id=active_session.id,
-    )
+    await service.require_secure_link_consent(principal, invite.token)
 
 
 @pytest.mark.asyncio
@@ -276,11 +319,7 @@ async def test_secure_link_accepts_matching_current_consent() -> None:
 
     await service.require_secure_link_consent(principal, invite.token)
 
-    repository.get_consent_acceptance.assert_awaited_once_with(
-        user_id=user_id,
-        terms_version=CURRENT_TERMS_VERSION,
-        session_id=active_session.id,
-    )
+    repository.get_consent_acceptance.assert_not_awaited()
     repository.get_latest_consent_acceptance.assert_not_awaited()
 
 
@@ -344,10 +383,8 @@ async def test_secure_link_accepts_persisted_current_consent_from_prior_session(
 
     await service.require_secure_link_consent(principal, invite.token)
 
-    repository.get_latest_consent_acceptance.assert_awaited_once_with(
-        user_id=user_id,
-        terms_version=CURRENT_TERMS_VERSION,
-    )
+    repository.get_consent_acceptance.assert_not_awaited()
+    repository.get_latest_consent_acceptance.assert_not_awaited()
 
 
 def _company_result(company_id: uuid.UUID, name: str = "Intake Iunie") -> MagicMock:
@@ -519,17 +556,31 @@ async def test_verify_invite_token_success() -> None:
     mock_result_leadership = MagicMock()
     mock_result_leadership.scalar.return_value = True
 
+    questionnaire_definition_id = uuid.uuid4()
+    cycle_due_at = datetime.now(UTC) + timedelta(days=5)
     mock_assignment = QuestionnaireAssignment(
         id=claims.assignment_ids[0],
         company_id=claims.company_id,
         respondent_profile_id=claims.respondent_profile_id,
         assessment_cycle_id=uuid.uuid4(),
+        questionnaire_definition_id=questionnaire_definition_id,
         questionnaire_key="lencioni",
         target_type=AssignmentTargetType.self_assessment,
         status=AssignmentStatus.invited,
     )
     mock_result_assignments = MagicMock()
     mock_result_assignments.scalars.return_value.all.return_value = [mock_assignment]
+    mock_cycle = AssessmentCycle(
+        id=mock_assignment.assessment_cycle_id,
+        company_id=claims.company_id,
+        project_id=uuid.uuid4(),
+        sequence=2,
+        name="Reevaluare",
+        status=AssessmentCycleStatus.active,
+        due_at=cycle_due_at,
+    )
+    mock_result_cycles = MagicMock()
+    mock_result_cycles.scalars.return_value.all.return_value = [mock_cycle]
     existing_user = User(
         id=uuid.uuid4(),
         email=mock_profile.email,
@@ -544,6 +595,7 @@ async def test_verify_invite_token_success() -> None:
         _company_result(claims.company_id),
         mock_result_leadership,
         mock_result_assignments,
+        mock_result_cycles,
         mock_result_existing_user,
     ]
 
@@ -562,6 +614,11 @@ async def test_verify_invite_token_success() -> None:
     assert len(result.tasks) == 1
     assert result.tasks[0].id == str(mock_assignment.id)
     assert result.tasks[0].assessmentCycleId == mock_assignment.assessment_cycle_id
+    assert result.tasks[0].questionnaireDefinitionId == questionnaire_definition_id
+    assert result.tasks[0].cycleName == "Reevaluare"
+    assert result.tasks[0].cycleSequence == 2
+    assert result.tasks[0].deadlineLabel == cycle_due_at.strftime("%d.%m.%Y")
+    assert result.tasks[0].dueAt == cycle_due_at
     assert result.tasks[0].targetLabel == "Echipa ta"
     assert result.tasks[0].href.endswith(
         f"/participant/tasks/{mock_assignment.id}?access=secure&returnTo=%2Finvite%2F{token}"
@@ -595,7 +652,10 @@ async def test_password_reset_request_sends_link(
     service = IdentityService(AsyncMock())
     service.repository = repository
 
-    await service.request_password_reset(PasswordResetRequest(email=user.email))
+    await service.request_password_reset(
+        PasswordResetRequest(email=user.email),
+        request_id="request-123",
+    )
 
     assert len(repository.tokens) == 1
     assert repository.tokens[0].user_id == user.id
@@ -605,6 +665,7 @@ async def test_password_reset_request_sends_link(
     assert outbox.sends[0].owner_id == user.id
     assert outbox.sends[0].message_payload is not None
     assert "/update-password?token=" in str(outbox.sends[0].message_payload["text_body"])
+    assert outbox.sends[0].message_payload["lifecycle_request_id"] == "request-123"
 
 
 @pytest.mark.asyncio
@@ -656,7 +717,7 @@ async def test_change_password_rejects_wrong_current_password() -> None:
 
 
 @pytest.mark.asyncio
-async def test_password_reset_request_sends_link_for_shadow_user(
+async def test_password_reset_request_skips_guest_even_with_an_active_secure_link(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = User(
@@ -680,17 +741,19 @@ async def test_password_reset_request_sends_link_for_shadow_user(
 
     service = IdentityService(AsyncMock())
     service.repository = repository
-    service._shadow_account_password_reset_allowed = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
-    await service.request_password_reset(PasswordResetRequest(email=user.email))
+    await service.request_password_reset(
+        PasswordResetRequest(email=user.email),
+        request_id="guest-request",
+    )
 
-    assert len(repository.tokens) == 1
+    assert repository.tokens == []
     assert provider.messages == []
-    assert len(outbox.sends) == 1
+    assert outbox.sends == []
 
 
 @pytest.mark.asyncio
-async def test_password_reset_request_skips_shadow_user_after_access_window(
+async def test_password_reset_request_skips_unknown_address(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = User(
@@ -709,84 +772,14 @@ async def test_password_reset_request_skips_shadow_user_after_access_window(
 
     service = IdentityService(AsyncMock())
     service.repository = repository
-    service._shadow_account_password_reset_allowed = AsyncMock(return_value=False)  # type: ignore[method-assign]
 
-    await service.request_password_reset(PasswordResetRequest(email=user.email))
+    await service.request_password_reset(
+        PasswordResetRequest(email="unknown@example.com"),
+        request_id="unknown-request",
+    )
 
     assert repository.tokens == []
     assert provider.messages == []
-
-
-@pytest.mark.asyncio
-async def test_shadow_password_reset_allowed_only_for_open_leadership_assignment_window() -> None:
-    user_id = uuid.uuid4()
-    project_id = uuid.uuid4()
-    expired_assignment = QuestionnaireAssignment(
-        id=uuid.uuid4(),
-        company_id=uuid.uuid4(),
-        respondent_profile_id=uuid.uuid4(),
-        questionnaire_key="lencioni",
-        target_type=AssignmentTargetType.self_assessment,
-        status=AssignmentStatus.invited,
-        due_at=datetime.now(UTC) - timedelta(minutes=1),
-    )
-    closed_project_assignment = QuestionnaireAssignment(
-        id=uuid.uuid4(),
-        company_id=uuid.uuid4(),
-        project_id=project_id,
-        respondent_profile_id=uuid.uuid4(),
-        questionnaire_key="lencioni",
-        target_type=AssignmentTargetType.self_assessment,
-        status=AssignmentStatus.invited,
-        due_at=datetime.now(UTC) + timedelta(days=2),
-    )
-    open_assignment = QuestionnaireAssignment(
-        id=uuid.uuid4(),
-        company_id=uuid.uuid4(),
-        respondent_profile_id=uuid.uuid4(),
-        questionnaire_key="pcm_base",
-        target_type=AssignmentTargetType.self_assessment,
-        status=AssignmentStatus.invited,
-        due_at=datetime.now(UTC) + timedelta(days=1),
-    )
-    closed_project = CompanyProject(
-        id=project_id,
-        company_id=closed_project_assignment.company_id,
-        name="Closed project",
-        form_closes_at=datetime.now(UTC) - timedelta(minutes=1),
-    )
-    query_result = MagicMock()
-    query_result.all.return_value = [
-        (expired_assignment, None),
-        (closed_project_assignment, closed_project),
-        (open_assignment, None),
-    ]
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = query_result
-    service = IdentityService(mock_session)
-
-    assert await service._shadow_account_password_reset_allowed(user_id) is True
-
-
-@pytest.mark.asyncio
-async def test_shadow_password_reset_rejects_when_all_windows_closed() -> None:
-    user_id = uuid.uuid4()
-    expired_assignment = QuestionnaireAssignment(
-        id=uuid.uuid4(),
-        company_id=uuid.uuid4(),
-        respondent_profile_id=uuid.uuid4(),
-        questionnaire_key="lencioni",
-        target_type=AssignmentTargetType.self_assessment,
-        status=AssignmentStatus.invited,
-        due_at=datetime.now(UTC) - timedelta(minutes=1),
-    )
-    query_result = MagicMock()
-    query_result.all.return_value = [(expired_assignment, None)]
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = query_result
-    service = IdentityService(mock_session)
-
-    assert await service._shadow_account_password_reset_allowed(user_id) is False
 
 
 @pytest.mark.asyncio
@@ -845,7 +838,6 @@ async def test_password_reset_confirm_rejects_temporary_shadow_user() -> None:
 
     service = IdentityService(AsyncMock())
     service.repository = repository
-    service._shadow_account_password_reset_allowed = AsyncMock(return_value=False)  # type: ignore[method-assign]
 
     with pytest.raises(DomainError) as exc_info:
         await service.confirm_password_reset(
@@ -1455,6 +1447,8 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
     mock_result_verify_user.scalar_one_or_none.return_value = None
     mock_result_existing_user = MagicMock()
     mock_result_existing_user.scalar_one_or_none.return_value = None
+    mock_result_alias_exists = MagicMock()
+    mock_result_alias_exists.scalar.return_value = False
 
     mock_session.execute.side_effect = [
         mock_result_profile,
@@ -1464,6 +1458,7 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
         mock_result_verify_user,
         mock_result_profile_again,
         mock_result_existing_user,
+        mock_result_alias_exists,
     ]
 
     service = IdentityService(mock_session)
@@ -1473,6 +1468,8 @@ async def test_verify_invite_token_and_create_session_for_low_member() -> None:
     assert result.response.participant_profile_id == mock_profile.id
     assert result.session_token is not None  # Generates a temporary session
     assert mock_profile.user_id is not None  # Shadow user linked
+    assert mock_profile.anonymous_name is not None
+    assert len(mock_profile.anonymous_name.rsplit("-", 1)[-1]) == 6
 
 
 @pytest.mark.asyncio

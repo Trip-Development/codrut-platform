@@ -41,7 +41,9 @@ cd "${repo_dir}"
 "${compose[@]}" exec -T db createdb -U codrut "${database_name}"
 
 run_alembic() {
-    "${compose[@]}" exec -T \
+    # Use a one-off container from this checkout. A long-lived Compose service
+    # may belong to another Git worktree that shares the default project name.
+    "${compose[@]}" run --rm --no-deps -T \
         -e CODRUT_DATABASE_URL="${database_url}" \
         -e CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="${CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID:-}" \
         -e CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET="${suppression_fingerprint_secret}" \
@@ -1119,8 +1121,301 @@ if [[ "${contact_archive_fingerprint}" != "${contact_archive_reupgrade_fingerpri
 fi
 printf '\nContact archive expansion: Pass (history retained, reversible, safe rerun).\n'
 
+run_alembic upgrade 0053_contact_privacy_bridge
+run_psql -c "
+insert into consent_acceptances (
+    id,
+    user_id,
+    session_id,
+    terms_version,
+    source,
+    accepted_at
+) values
+    (
+        '25000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000001',
+        '12000000-0000-4000-8000-000000000001',
+        'privacy-v1',
+        'authenticated',
+        now() - interval '1 day'
+    ),
+    (
+        '25000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000001',
+        '12000000-0000-4000-8000-000000000002',
+        'privacy-v1',
+        'authenticated',
+        now()
+    );
+"
+consent_audits_before_0054="$(
+    run_psql -Atc "select count(*) from consent_acceptances"
+)"
+run_alembic upgrade 0054_identity_consent_submission
+run_psql -c "
+do \$\$
+declare
+    retained_consent_audits integer;
+    session_version_constraints integer;
+    user_version_constraints integer;
+    processing_tables integer;
+begin
+    select count(*) into retained_consent_audits
+    from consent_acceptances;
+
+    select count(*) into session_version_constraints
+    from pg_constraint
+    where conname = 'uq_consent_acceptances_user_session_version';
+
+    select count(*) into user_version_constraints
+    from pg_constraint
+    where conname = 'uq_consent_acceptances_user_version';
+
+    select count(*) into processing_tables
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'submission_processing_jobs';
+
+    if retained_consent_audits <> ${consent_audits_before_0054}
+       or session_version_constraints <> 1
+       or user_version_constraints <> 0
+       or processing_tables <> 1 then
+        raise exception
+            '0054 compatibility failed: consent %, session constraint %, user constraint %, jobs %',
+            retained_consent_audits,
+            session_version_constraints,
+            user_version_constraints,
+            processing_tables;
+    end if;
+end
+\$\$;
+"
+run_alembic downgrade 0053_contact_privacy_bridge
+if [[ "$(run_psql -Atc 'select count(*) from consent_acceptances')" \
+    -ne "${consent_audits_before_0054}" ]]; then
+    printf '0054 rollback changed retained consent audit counts.\n' >&2
+    exit 20
+fi
+run_alembic upgrade 0054_identity_consent_submission
+if [[ "$(run_psql -Atc 'select count(*) from consent_acceptances')" \
+    -ne "${consent_audits_before_0054}" ]]; then
+    printf '0054 re-upgrade changed retained consent audit counts.\n' >&2
+    exit 21
+fi
+printf '\nConsent and submission expansion: Pass (audit history retained, reversible).\n'
+
+run_alembic upgrade 0055_participant_aliases
+run_psql -c "
+update participant_profiles
+set anonymous_name = 'CalmCedar1000'
+where id = '10000000-0000-4000-8000-000000000001';
+
+update participant_profiles
+set anonymous_name = 'CalmCedar1000'
+where id = '10000000-0000-4000-8000-000000000002';
+"
+run_psql -c "
+do \$\$
+declare
+    exact_legacy_aliases integer;
+    widened_legacy_aliases integer;
+    distinct_aliases integer;
+    alias_constraints integer;
+    compatibility_triggers integer;
+begin
+    select count(*) into exact_legacy_aliases
+    from participant_profiles
+    where anonymous_name = 'CalmCedar1000';
+
+    select count(*) into widened_legacy_aliases
+    from participant_profiles
+    where anonymous_name ~ '^CalmCedar1000-[0-9A-F]{12}$';
+
+    select count(distinct anonymous_name) into distinct_aliases
+    from participant_profiles
+    where id in (
+        '10000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000002'
+    );
+
+    select count(*) into alias_constraints
+    from pg_constraint
+    where conname = 'uq_participant_profiles_anonymous_name';
+
+    select count(*) into compatibility_triggers
+    from pg_trigger
+    where tgname = 'trg_participant_profiles_unique_alias'
+      and not tgisinternal;
+
+    if exact_legacy_aliases <> 1
+       or widened_legacy_aliases <> 1
+       or distinct_aliases <> 2
+       or alias_constraints <> 1
+       or compatibility_triggers <> 1 then
+        raise exception
+            '0055 rollback-image compatibility failed: exact %, widened %, distinct %, constraint %, trigger %',
+            exact_legacy_aliases,
+            widened_legacy_aliases,
+            distinct_aliases,
+            alias_constraints,
+            compatibility_triggers;
+    end if;
+end
+\$\$;
+"
+
+run_alembic downgrade 0054_identity_consent_submission
+run_psql -c "
+do \$\$
+declare
+    alias_constraints integer;
+    compatibility_triggers integer;
+begin
+    select count(*) into alias_constraints
+    from pg_constraint
+    where conname = 'uq_participant_profiles_anonymous_name';
+
+    select count(*) into compatibility_triggers
+    from pg_trigger
+    where tgname = 'trg_participant_profiles_unique_alias'
+      and not tgisinternal;
+
+    if alias_constraints <> 0 or compatibility_triggers <> 0 then
+        raise exception
+            '0055 rollback left compatibility objects: constraint %, trigger %',
+            alias_constraints,
+            compatibility_triggers;
+    end if;
+end
+\$\$;
+
+update participant_profiles
+set anonymous_name = 'CalmCedar1000'
+where id = '10000000-0000-4000-8000-000000000002';
+"
+run_alembic upgrade 0055_participant_aliases
+if [[ "$(run_psql -Atc "
+    select count(distinct anonymous_name)
+    from participant_profiles
+    where id in (
+        '10000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000002'
+    )
+")" -ne 2 ]]; then
+    printf '0055 re-upgrade did not repair duplicate legacy aliases.\n' >&2
+    exit 22
+fi
+if [[ "$(run_psql -Atc 'select count(*) from consent_acceptances')" \
+    -ne "${consent_audits_before_0054}" ]]; then
+    printf '0055 rollback and re-upgrade changed retained consent audit counts.\n' >&2
+    exit 23
+fi
+printf '\nParticipant alias expansion: Pass (legacy collisions widened, rollback clean).\n'
+
 run_alembic upgrade head
 run_alembic check
+
+run_psql -c "
+do \$\$
+declare
+    incomplete_existing_suppressions integer;
+    scrubbed_compatibility_values integer;
+    nullable_protected_columns integer;
+    nullable_event_owner_columns integer;
+    legacy_email_indexes integer;
+    privacy_triggers integer;
+begin
+    select count(*) into incomplete_existing_suppressions
+    from email_suppressions
+    where email_fingerprint is null
+       or review_after is null;
+
+    select count(*) into scrubbed_compatibility_values
+    from email_suppressions
+    where email like 'suppressed-%@invalid';
+
+    select count(*) into nullable_protected_columns
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'email_suppressions'
+      and column_name in ('email_fingerprint', 'review_after')
+      and is_nullable = 'YES';
+
+    select count(*) into nullable_event_owner_columns
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'campaign_recipient_events'
+      and column_name = 'owner_id'
+      and is_nullable = 'YES';
+
+    select count(*) into legacy_email_indexes
+    from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'email_suppressions'
+      and indexname = 'uq_email_suppressions_owner_normalized_email';
+
+    select count(*) into privacy_triggers
+    from pg_trigger
+    where tgname = 'trg_email_suppressions_scrub_legacy_email'
+      and not tgisinternal;
+
+    if incomplete_existing_suppressions <> 0
+       or scrubbed_compatibility_values <> 0
+       or nullable_protected_columns <> 2
+       or nullable_event_owner_columns <> 1
+       or legacy_email_indexes <> 1
+       or privacy_triggers <> 0 then
+        raise exception
+            'privacy expand failed: incomplete %, scrubbed %, nullable protected %, nullable owner %, legacy index %, trigger %',
+            incomplete_existing_suppressions,
+            scrubbed_compatibility_values,
+            nullable_protected_columns,
+            nullable_event_owner_columns,
+            legacy_email_indexes,
+            privacy_triggers;
+    end if;
+end
+\$\$;
+"
+
+privacy_bridge_fingerprint="$(
+    run_psql -Atc "
+        select md5(
+            (select string_agg(
+                owner_id::text || ':' || email_fingerprint || ':' || email,
+                '|' order by owner_id, email_fingerprint
+             ) from email_suppressions) || ':' ||
+            (select count(*)::text from campaign_recipient_events) || ':' ||
+            (select count(*)::text from campaign_recipients)
+        )
+    "
+)"
+run_alembic downgrade 0052_contact_archive
+if [[ "$(run_psql -Atc 'select version_num from alembic_version')" \
+    != "0052_contact_archive" ]]; then
+    printf 'Privacy bridge rollback did not restore the 0052 revision.\n' >&2
+    exit 18
+fi
+run_alembic upgrade head
+run_alembic check
+privacy_bridge_reupgrade_fingerprint="$(
+    run_psql -Atc "
+        select md5(
+            (select string_agg(
+                owner_id::text || ':' || email_fingerprint || ':' || email,
+                '|' order by owner_id, email_fingerprint
+             ) from email_suppressions) || ':' ||
+            (select count(*)::text from campaign_recipient_events) || ':' ||
+            (select count(*)::text from campaign_recipients)
+        )
+    "
+)"
+if [[ "${privacy_bridge_fingerprint}" != "${privacy_bridge_reupgrade_fingerprint}" ]]; then
+    printf 'Privacy bridge rollback and re-upgrade changed protected data.\n' >&2
+    exit 19
+fi
+printf '\nPrivacy bridge expansion: Pass (backfilled, rollback-readable, safe rerun).\n'
+printf 'Fingerprint-only scrubbing remains deferred until this image is the retained rollback.\n'
 
 run_psql -c "
 do \$\$
@@ -1227,6 +1522,7 @@ select
     (select count(*) from campaign_recipients) as contacts,
     (select count(*) from campaign_recipient_memberships) as memberships,
     (select count(*) from campaign_recipient_events) as events,
-    (select count(*) from email_sends) as sends;
+    (select count(*) from email_sends) as sends,
+    (select count(*) from consent_acceptances) as consent_audits;
 "
 printf '\nSynthetic production-shaped migration rehearsal: Pass.\n'

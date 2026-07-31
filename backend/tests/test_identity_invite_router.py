@@ -10,6 +10,7 @@ from codrut.core.config import Settings
 from codrut.core.csrf import install_csrf_middleware
 from codrut.core.errors import DomainError, install_exception_handlers
 from codrut.core.rate_limit import RateLimitDecision, install_rate_limit_middleware
+from codrut.core.request_id import REQUEST_ID_HEADER, install_request_id_middleware
 from codrut.modules.identity.models import UserRole
 from codrut.modules.identity.router import router
 from codrut.modules.identity.schemas import (
@@ -24,18 +25,24 @@ from codrut.modules.identity.session_cookie import SESSION_COOKIE_NAME
 class FakeDatabaseSession:
     def __init__(self) -> None:
         self.commit_count = 0
+        self.rollback_count = 0
 
     async def commit(self) -> None:
         self.commit_count += 1
+
+    async def rollback(self) -> None:
+        self.rollback_count += 1
 
 
 class StubIdentityService:
     verify_calls: list[str] = []
     exchange_calls: list[tuple[str, str | None, bool]] = []
     logout_calls: list[str] = []
+    reset_calls: list[tuple[str, str | None]] = []
     exchange_session_token: str | None = "new-session-token"  # noqa: S105
     exchange_action = "secure_link_ready"
     reject_exchange = False
+    reject_reset = False
 
     def __init__(self, _session: FakeDatabaseSession) -> None:
         pass
@@ -68,6 +75,16 @@ class StubIdentityService:
 
     async def logout(self, token: str) -> None:
         self.logout_calls.append(token)
+
+    async def request_password_reset(
+        self,
+        payload,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        self.reset_calls.append((str(payload.email), request_id))
+        if self.reject_reset:
+            raise RuntimeError("simulated outbox failure")
 
 
 class CountingRateLimiter:
@@ -105,18 +122,22 @@ def create_test_app(
     StubIdentityService.verify_calls = []
     StubIdentityService.exchange_calls = []
     StubIdentityService.logout_calls = []
+    StubIdentityService.reset_calls = []
     StubIdentityService.exchange_session_token = "new-session-token"  # noqa: S105
     StubIdentityService.exchange_action = "secure_link_ready"
     StubIdentityService.reject_exchange = False
+    StubIdentityService.reject_reset = False
     monkeypatch.setattr(identity_router, "IdentityService", StubIdentityService)
 
     app = FastAPI()
+    install_request_id_middleware(app)
     if limiter is not None:
         install_rate_limit_middleware(
             app,
             settings=Settings(
                 rate_limit_enabled=True,
                 rate_limit_max_requests=1,
+                rate_limit_invite_exchange_max_requests=1,
                 rate_limit_window_seconds=30,
             ),
             limiter=limiter,
@@ -205,7 +226,9 @@ def test_invite_exchange_post_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -
     assert first.status_code == 200
     assert second.status_code == 429
     assert second.headers["Retry-After"] == "30"
-    assert limiter.count == 2
+    # First request consumes both the shared IP ceiling and its invite-token
+    # budget. The second is rejected by the IP ceiling before the subject key.
+    assert limiter.count == 3
 
 
 def test_invite_exchange_accepts_legacy_replace_flag_without_router_side_effects(
@@ -259,3 +282,45 @@ def test_invite_exchange_allows_unauthenticated_public_use(
     assert database_session.commit_count == 1
     assert StubIdentityService.exchange_calls == [("invite-token", None, False)]
     assert response.cookies[SESSION_COOKIE_NAME] == "new-session-token"
+
+
+def test_password_reset_propagates_request_id_and_returns_generic_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_session = FakeDatabaseSession()
+    client = TestClient(create_test_app(monkeypatch, database_session))
+
+    response = client.post(
+        "/api/auth/reset-password",
+        headers={REQUEST_ID_HEADER: "reset-request-123"},
+        json={"email": "registered@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert response.headers[REQUEST_ID_HEADER] == "reset-request-123"
+    assert StubIdentityService.reset_calls == [
+        ("registered@example.com", "reset-request-123"),
+    ]
+    assert database_session.commit_count == 1
+    assert database_session.rollback_count == 0
+
+
+def test_password_reset_hides_internal_delivery_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_session = FakeDatabaseSession()
+    client = TestClient(create_test_app(monkeypatch, database_session))
+    StubIdentityService.reject_reset = True
+
+    response = client.post(
+        "/api/auth/reset-password",
+        headers={REQUEST_ID_HEADER: "reset-failed-123"},
+        json={"email": "registered@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert response.headers[REQUEST_ID_HEADER] == "reset-failed-123"
+    assert database_session.commit_count == 0
+    assert database_session.rollback_count == 1
