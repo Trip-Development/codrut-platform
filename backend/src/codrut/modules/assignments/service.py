@@ -489,6 +489,18 @@ class AssignmentService:
             if cycle is not None
             else []
         )
+        if cycle is not None:
+            leadership_ids = await self._cycle_icare_leadership_ids(
+                cycle,
+                cycle_assignments,
+            )
+            _require_cycle_icare_self_target(
+                questionnaire_key=questionnaire_key,
+                target_type=payload.target_type,
+                respondent_profile_id=payload.respondent_profile_id,
+                target_person_id=payload.target_person_id,
+                leadership_ids=leadership_ids,
+            )
         assignment = QuestionnaireAssignment(
             company_id=company_id,
             project_id=payload.project_id,
@@ -860,6 +872,15 @@ class AssignmentService:
             payload.project_id,
             payload.assessment_cycle_id,
         )
+        cycle_icare_leadership_ids = (
+            await self._cycle_icare_leadership_ids(
+                cycle,
+                existing_assignments,
+                payload.assignments,
+            )
+            if cycle is not None
+            else set()
+        )
         assignment_round_id = (
             min(
                 (assignment.assignment_round_id for assignment in existing_assignments),
@@ -876,6 +897,7 @@ class AssignmentService:
                 item,
                 assignment_round_id=assignment_round_id,
                 cycle=cycle,
+                cycle_icare_leadership_ids=cycle_icare_leadership_ids,
             )
             if assignment.id in seen_assignment_ids:
                 continue
@@ -933,6 +955,7 @@ class AssignmentService:
         *,
         assignment_round_id: UUID,
         cycle: AssessmentCycle | None,
+        cycle_icare_leadership_ids: set[UUID] | None = None,
     ) -> tuple[QuestionnaireAssignment, bool]:
         definition = await self._definition_for_cycle(cycle, item.questionnaire_key)
         await self._require_company_participant(company_id, item.respondent_profile_id)
@@ -955,6 +978,14 @@ class AssignmentService:
                 project_id,
                 item,
                 cycle=cycle,
+            )
+        if cycle is not None:
+            _require_cycle_icare_self_target(
+                questionnaire_key=item.questionnaire_key.strip(),
+                target_type=item.target_type,
+                respondent_profile_id=item.respondent_profile_id,
+                target_person_id=item.target_person_id,
+                leadership_ids=cycle_icare_leadership_ids or set(),
             )
 
         existing = await self.assignment_repository.get_matching_assignment(
@@ -1161,6 +1192,29 @@ class AssignmentService:
                 )
             )
         return target_team_id
+
+    async def _cycle_icare_leadership_ids(
+        self,
+        cycle: AssessmentCycle,
+        persisted_assignments: list[QuestionnaireAssignment],
+        planned_assignments: list[AssignmentPlanSaveItem] | None = None,
+    ) -> set[UUID]:
+        leadership_ids = (
+            await self.assignment_repository.list_cycle_leadership_participant_ids(
+                cycle.id
+            )
+        )
+        for assignment in [*persisted_assignments, *(planned_assignments or [])]:
+            questionnaire_key = assignment.questionnaire_key.strip()
+            target_person_id = assignment.target_person_id
+            if (
+                questionnaire_key in ICARE_QUESTIONNAIRE_KEYS
+                and assignment.target_type == AssignmentTargetType.person
+                and target_person_id is not None
+                and target_person_id != assignment.respondent_profile_id
+            ):
+                leadership_ids.add(target_person_id)
+        return leadership_ids
 
     async def _snapshot_cycle_team_membership(
         self,
@@ -1518,6 +1572,29 @@ def _validate_target_shape(payload: AssignmentCreateRequest) -> None:
         valid = payload.target_team_id is not None and payload.target_person_id is None
     if not valid:
         raise DomainError("Assignment target does not match target type.", code="invalid_target")
+
+
+def _require_cycle_icare_self_target(
+    *,
+    questionnaire_key: str,
+    target_type: AssignmentTargetType,
+    respondent_profile_id: UUID,
+    target_person_id: UUID | None,
+    leadership_ids: set[UUID],
+) -> None:
+    is_self_target = target_type == AssignmentTargetType.self_assessment or (
+        target_type == AssignmentTargetType.person
+        and target_person_id == respondent_profile_id
+    )
+    if (
+        questionnaire_key in ICARE_QUESTIONNAIRE_KEYS
+        and is_self_target
+        and respondent_profile_id not in leadership_ids
+    ):
+        raise DomainError(
+            "Self-evaluation iCARE is available only for this cycle's leadership cohort.",
+            code="assessment_cycle_icare_self_target_not_leadership",
+        )
 
 
 def _validate_cycle_dates(

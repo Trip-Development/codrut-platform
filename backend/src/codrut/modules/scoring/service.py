@@ -222,6 +222,7 @@ class ScoringService:
             company_id,
             project_id,
             assessment_cycle_id,
+            assignment_results,
         )
         pcm_values = (
             _pcm_values_from_responses(
@@ -285,6 +286,11 @@ class ScoringService:
             if assessment_cycle_id is not None
             else None
         )
+        if team_snapshot is not None:
+            team_snapshot = _with_persisted_icare_cohorts(
+                team_snapshot,
+                assignment_results,
+            )
         icare_cohorts = _build_icare_cohort_summaries(
             assignment_results,
             participants,
@@ -387,10 +393,16 @@ class ScoringService:
             assessment_cycle_id,
         )
         assert project_id is not None
+        assignment_results = await self.repository.list_company_assignment_results_with_definitions(
+            company_id,
+            project_id,
+            assessment_cycle_id,
+        )
         participants = await self._list_report_participants(
             company_id,
             project_id,
             assessment_cycle_id,
+            assignment_results,
         )
         participant_by_id = {participant.id: participant for participant in participants}
         hierarchy = build_organization_hierarchy(
@@ -401,6 +413,11 @@ class ScoringService:
             if assessment_cycle_id is not None
             else None
         )
+        if team_snapshot is not None:
+            team_snapshot = _with_persisted_icare_cohorts(
+                team_snapshot,
+                assignment_results,
+            )
         member = participant_by_id.get(participant_profile_id)
         leadership_ids = (
             set(team_snapshot.leadership_ids)
@@ -413,11 +430,6 @@ class ScoringService:
                 code="leadership_member_not_found",
             )
 
-        assignment_results = await self.repository.list_company_assignment_results_with_definitions(
-            company_id,
-            project_id,
-            assessment_cycle_id,
-        )
         pcm_values = (
             _pcm_values_from_responses(
                 await self.repository.list_company_pcm_responses(
@@ -820,8 +832,10 @@ class ScoringService:
         company_id: UUID,
         project_id: UUID | None,
         assessment_cycle_id: UUID | None = None,
+        assignment_results: Iterable[AssignmentResultWithDefinition] = (),
     ) -> list[ReportParticipant]:
         if project_id is not None and assessment_cycle_id is not None:
+            assignment_result_rows = list(assignment_results)
             rows = (
                 await self.session.execute(
                     select(ParticipantProfile, ProjectMembership)
@@ -857,6 +871,44 @@ class ScoringService:
                         else _report_participant_from_profile(participant)
                     ),
                 )
+            persisted_participant_ids = {
+                participant_id
+                for assignment, _result, _definition in assignment_result_rows
+                for participant_id in (
+                    assignment.respondent_profile_id,
+                    _icare_target_id(assignment),
+                )
+                if participant_id is not None
+            }
+            missing_participant_ids = (
+                persisted_participant_ids - participants_by_id.keys()
+            )
+            if missing_participant_ids:
+                missing_rows = (
+                    await self.session.execute(
+                        select(ParticipantProfile, ProjectMembership)
+                        .outerjoin(
+                            ProjectMembership,
+                            and_(
+                                ProjectMembership.company_id == company_id,
+                                ProjectMembership.project_id == project_id,
+                                ProjectMembership.participant_profile_id
+                                == ParticipantProfile.id,
+                            ),
+                        )
+                        .where(
+                            ParticipantProfile.company_id == company_id,
+                            ParticipantProfile.id.in_(missing_participant_ids),
+                        )
+                        .order_by(ParticipantProfile.full_name)
+                    )
+                ).all()
+                for participant, membership in missing_rows:
+                    participants_by_id[participant.id] = (
+                        _report_participant_from_membership(membership, participant)
+                        if membership is not None
+                        else _report_participant_from_profile(participant)
+                    )
             return list(participants_by_id.values())
         if project_id is not None:
             memberships = await self.company_repository.list_project_memberships(
@@ -1569,6 +1621,47 @@ def _icare_target_id(assignment: QuestionnaireAssignment) -> UUID | None:
 
 
 ICARE_COHORT_ORDER = ("direct_team", "leadership_peers", "self")
+
+
+def _with_persisted_icare_cohorts(
+    team_snapshot: AssessmentCycleTeamSnapshot,
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+) -> AssessmentCycleTeamSnapshot:
+    icare_assignments = [
+        assignment
+        for assignment, _result, _definition in assignment_results
+        if assignment.questionnaire_key in BOSS_360_REPORT_KEYS
+    ]
+    derived_leadership_ids = {
+        target_id
+        for assignment in icare_assignments
+        if (target_id := _icare_target_id(assignment)) is not None
+        and assignment.respondent_profile_id != target_id
+    }
+    leadership_ids = team_snapshot.leadership_ids | derived_leadership_ids
+    direct_report_ids_by_leader_id = {
+        leader_id: set(direct_report_ids)
+        for leader_id, direct_report_ids in team_snapshot.direct_report_ids_by_leader_id.items()
+    }
+    for assignment in icare_assignments:
+        target_id = _icare_target_id(assignment)
+        respondent_id = assignment.respondent_profile_id
+        if (
+            target_id in leadership_ids
+            and respondent_id != target_id
+            and respondent_id not in leadership_ids
+        ):
+            direct_report_ids_by_leader_id.setdefault(target_id, set()).add(
+                respondent_id
+            )
+    return AssessmentCycleTeamSnapshot(
+        leadership_ids=leadership_ids,
+        direct_report_ids_by_leader_id={
+            leader_id: frozenset(direct_report_ids)
+            for leader_id, direct_report_ids in direct_report_ids_by_leader_id.items()
+        },
+        teams=team_snapshot.teams,
+    )
 
 
 def _icare_score_scale(

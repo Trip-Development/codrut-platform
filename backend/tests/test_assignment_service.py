@@ -220,6 +220,22 @@ class FakeAssignmentRepository:
             and membership.team_id == team_id
         ]
 
+    async def list_cycle_leadership_participant_ids(
+        self,
+        assessment_cycle_id: uuid.UUID,
+    ) -> set[uuid.UUID]:
+        leadership_team_ids = {
+            team_id
+            for team_id, team in self.teams.items()
+            if team.type == TeamType.leadership
+        }
+        return {
+            membership.participant_profile_id
+            for membership in self.cycle_team_memberships
+            if membership.assessment_cycle_id == assessment_cycle_id
+            and membership.team_id in leadership_team_ids
+        }
+
     async def add_cycle_team_memberships(
         self,
         memberships: list[AssessmentCycleTeamMembership],
@@ -2061,6 +2077,106 @@ async def test_assessment_cycle_plan_is_cycle_scoped_and_uses_pinned_definition(
     assert second_save.created_count == 0
     assert second_save.existing_count == 1
     assert second_save.assignments[0].id == saved.id
+
+
+async def test_cycle_icare_self_assignment_requires_persisted_leadership_target() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        reviewer_id,
+        leader_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    forms_repository = cast(FakeFormsRepository, service.forms_repository)
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="iCARE cycle",
+    )
+    company_repository.project_memberships.extend(
+        [
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=participant_id,
+                role_group="individual",
+                active=True,
+            )
+            for participant_id in (reviewer_id, leader_id)
+        ]
+    )
+    forms_repository.active_keys.add("boss_360")
+    definition = await forms_repository.get_definition("boss_360")
+    assert definition is not None
+    forms_repository.definitions_by_id[definition.id] = definition
+    cycle = await assignment_repository.add_assessment_cycle(
+        AssessmentCycle(
+            company_id=company_id,
+            project_id=project_id,
+            sequence=1,
+            name="Ciclul iCARE",
+            status=AssessmentCycleStatus.draft,
+            created_by_user_id=user_id,
+        )
+    )
+    await assignment_repository.add_assignment(
+        QuestionnaireAssignment(
+            company_id=company_id,
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            cycle_shape_guard=cycle.id,
+            assignment_round_id=uuid.uuid4(),
+            respondent_profile_id=reviewer_id,
+            questionnaire_key="boss_360",
+            questionnaire_definition_id=definition.id,
+            target_type=AssignmentTargetType.person,
+            target_person_id=leader_id,
+            status=AssignmentStatus.assigned,
+        )
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.save_assignment_plan(
+            user_id,
+            company_id,
+            AssignmentPlanSaveRequest(
+                project_id=project_id,
+                assessment_cycle_id=cycle.id,
+                assignments=[
+                    AssignmentPlanSaveItem(
+                        respondent_profile_id=reviewer_id,
+                        questionnaire_key="boss_360",
+                        target_type=AssignmentTargetType.person,
+                        target_person_id=reviewer_id,
+                    )
+                ],
+            ),
+        )
+    assert exc_info.value.code == "assessment_cycle_icare_self_target_not_leadership"
+
+    saved = await service.save_assignment_plan(
+        user_id,
+        company_id,
+        AssignmentPlanSaveRequest(
+            project_id=project_id,
+            assessment_cycle_id=cycle.id,
+            assignments=[
+                AssignmentPlanSaveItem(
+                    respondent_profile_id=leader_id,
+                    questionnaire_key="boss_360",
+                    target_type=AssignmentTargetType.person,
+                    target_person_id=leader_id,
+                )
+            ],
+        ),
+    )
+
+    assert saved.created_count == 1
+    assert saved.assignments[0].respondent_profile_id == leader_id
 
 
 async def test_followup_plan_preview_uses_current_roster_without_source_assignments() -> None:
