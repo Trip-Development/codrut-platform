@@ -683,6 +683,114 @@ if [[ "${memberships_after_owner_repair}" -gt "${memberships_before_owner_repair
     exit 10
 fi
 
+run_alembic stamp 0050_identity_account_types
+run_psql -c "
+update campaigns
+set owner_id = null
+where id in (
+    '00000000-0000-4000-8000-000000000303',
+    '00000000-0000-4000-8000-000000000304'
+);
+
+update email_sends
+set owner_id = null
+where campaign_id in (
+    '00000000-0000-4000-8000-000000000303',
+    '00000000-0000-4000-8000-000000000304'
+);
+
+update email_sends
+set
+    owner_id = '00000000-0000-4000-8000-000000000002',
+    campaign_recipient_id = null
+where id = '70000000-0000-4000-8000-000000000001';
+"
+
+owner_repair_recovery_shape="$(
+    run_psql -Atc "
+        select concat_ws(
+            ':',
+            (select count(*) from campaigns where owner_id is null),
+            (
+                select count(*)
+                from campaign_recipient_memberships membership
+                join campaigns campaign on campaign.id = membership.campaign_id
+                where campaign.owner_id is null
+            ),
+            (
+                select count(*)
+                from email_sends send
+                join campaigns campaign on campaign.id = send.campaign_id
+                where campaign.owner_id is null
+            ),
+            (select count(*) from campaign_recipients where owner_id is null)
+        )
+    "
+)"
+if [[ "${owner_repair_recovery_shape}" != "2:56:61:0" ]]; then
+    printf 'Unexpected 0051 recovery shape: %s\n' \
+        "${owner_repair_recovery_shape}" >&2
+    exit 19
+fi
+
+set +e
+invalid_send_owner_output="$(
+    CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
+        run_alembic upgrade 0051_contact_owner_repair 2>&1
+)"
+invalid_send_owner_status=$?
+set -e
+if [[ ${invalid_send_owner_status} -eq 0 ]] \
+    || [[ "${invalid_send_owner_output}" != *"campaign contact ownership repair failed"* ]] \
+    || [[ "$(run_psql -Atc 'select version_num from alembic_version')" != "0050_identity_account_types" ]]; then
+    printf '0051 did not reject a campaign send with a stale owner:\n%s\n' \
+        "${invalid_send_owner_output}" >&2
+    exit 20
+fi
+
+run_psql -c "
+update email_sends
+set owner_id = null
+where id = '70000000-0000-4000-8000-000000000001';
+"
+CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
+    run_alembic upgrade 0051_contact_owner_repair
+
+owner_repair_recovery_result="$(
+    run_psql -Atc "
+        select concat_ws(
+            ':',
+            (select count(*) from campaigns where owner_id is null),
+            (
+                select count(*)
+                from campaign_recipient_memberships membership
+                join campaigns campaign on campaign.id = membership.campaign_id
+                join campaign_recipients recipient
+                  on recipient.id = membership.recipient_id
+                where campaign.owner_id is distinct from recipient.owner_id
+            ),
+            (
+                select count(*)
+                from email_sends send
+                join campaigns campaign on campaign.id = send.campaign_id
+                left join campaign_recipients recipient
+                  on recipient.id = send.campaign_recipient_id
+                where send.owner_id is distinct from campaign.owner_id
+                   or (
+                       send.campaign_recipient_id is not null
+                       and send.owner_id is distinct from recipient.owner_id
+                   )
+            ),
+            (select count(*) from campaign_recipients where owner_id is null)
+        )
+    "
+)"
+if [[ "${owner_repair_recovery_result}" != "0:0:0:0" ]]; then
+    printf '0051 recovery rehearsal failed: %s\n' \
+        "${owner_repair_recovery_result}" >&2
+    exit 21
+fi
+
 owner_repair_fingerprint="$(
     run_psql -Atc "
         select md5(
@@ -720,7 +828,7 @@ if [[ ${owner_repair_rollback_status} -eq 0 ]] \
         "${owner_repair_rollback_output}" >&2
     exit 12
 fi
-printf '\nContact ownership repair: Pass (865 rows, 27 conflicts, safe rerun).\n'
+printf '\nCampaign/contact ownership repair: Pass (fresh, recovery, stale-send guard, safe rerun).\n'
 
 run_alembic upgrade 0052_contact_archive
 

@@ -170,6 +170,7 @@ def test_campaign_contact_owner_repair_contains_required_history_rewiring() -> N
     assert "campaign_contact_owner_repair" in normalized
     assert "update campaigns" in normalized
     assert "set owner_id = campaign.owner_id" in normalized
+    assert "left join campaign_recipients recipient" in normalized
     assert "insert into campaign_recipient_memberships" in normalized
     assert "delete from campaign_recipient_memberships" in normalized
     assert "update email_sends send" in normalized

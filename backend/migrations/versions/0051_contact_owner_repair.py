@@ -470,12 +470,18 @@ def _validate_repair(bind: sa.Connection) -> None:
                 select count(*) into cross_owner_sends
                 from email_sends send
                 join campaigns campaign on campaign.id = send.campaign_id
-                join campaign_recipients recipient
+                left join campaign_recipients recipient
                   on recipient.id = send.campaign_recipient_id
                 where send.owner_id is null
                    or campaign.owner_id is null
                    or send.owner_id <> campaign.owner_id
-                   or send.owner_id <> recipient.owner_id;
+                   or (
+                       send.campaign_recipient_id is not null
+                       and (
+                           recipient.id is null
+                           or send.owner_id <> recipient.owner_id
+                       )
+                   );
 
                 select count(*) into suppression_owner_mismatches
                 from email_suppressions suppression

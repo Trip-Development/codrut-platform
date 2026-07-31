@@ -124,6 +124,10 @@ jobs:
             CODRUT_DB_VOLUME_PATH
           )
 
+          if [[ "${DEPLOY_ENVIRONMENT}" == "prod" ]]; then
+            required_vars+=(CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID)
+          fi
+
           for var_name in "${required_vars[@]}"; do
             if [[ -z "${!var_name:-}" ]]; then
               echo "${var_name} is required for ${DEPLOY_ENVIRONMENT} deployment."
