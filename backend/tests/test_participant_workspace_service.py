@@ -866,6 +866,7 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 email=user.email,
                 pcm_base="harmonizer",
                 pcm_phase="thinker",
+                reports_to_name="Mara Manager",
                 role_group="leadership",
             )
             manager = ParticipantProfile(
@@ -873,6 +874,7 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                 company_id=company.id,
                 full_name="Mara Manager",
                 email=f"manager-{uuid.uuid4().hex[:8]}@example.com",
+                role_group="leadership",
             )
             reviewer_one = ParticipantProfile(
                 id=uuid.uuid4(),
@@ -1077,6 +1079,69 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
                     )
                 )
             ).scalar_one()
+
+            reviewer_two.role_group = "individual"
+            await session.flush()
+            privacy_split = await ParticipantWorkspaceService(
+                session
+            ).get_workspace_summary(user.id)
+            assert len(privacy_split.received_feedback_groups) == 2
+            assert all(
+                feedback.visible is False
+                and feedback.unavailable_reason == "privacy_threshold"
+                for feedback in privacy_split.received_feedback_groups
+            )
+            reviewer_two.role_group = "leadership"
+            await session.flush()
+
+            participant_service = ParticipantWorkspaceService(session)
+            no_dimensions = await participant_service._build_received_feedback_cohort_summary(
+                [received_assignment_one, received_assignment_two],
+                publication=publication,
+                project_id=project.id,
+                project_name=project.name,
+                cohort="leadership_peers",
+                minimum_completed=2,
+                allowed_dimensions=set(),
+                labels=_definition_score_labels(feedback_definition),
+                questionnaire_title=feedback_definition.title,
+                score_unit="grade_1_to_5",
+                scale_min=1,
+                scale_max=5,
+            )
+            assert no_dimensions is not None
+            assert no_dimensions.visible is False
+            assert no_dimensions.unavailable_reason == "no_eligible_dimensions"
+
+            missing_score = (
+                await session.execute(
+                    select(ScoringResult).where(
+                        ScoringResult.assignment_id == received_assignment_one.id
+                    )
+                )
+            ).scalar_one()
+            await session.delete(missing_score)
+            await session.flush()
+            scoring_unavailable = (
+                await participant_service._build_received_feedback_cohort_summary(
+                    [received_assignment_one, received_assignment_two],
+                    publication=publication,
+                    project_id=project.id,
+                    project_name=project.name,
+                    cohort="leadership_peers",
+                    minimum_completed=2,
+                    allowed_dimensions={"feedback_signal_a", "feedback_signal_b"},
+                    labels=_definition_score_labels(feedback_definition),
+                    questionnaire_title=feedback_definition.title,
+                    score_unit="grade_1_to_5",
+                    scale_min=1,
+                    scale_max=5,
+                )
+            )
+            assert scoring_unavailable is not None
+            assert scoring_unavailable.visible is False
+            assert scoring_unavailable.unavailable_reason == "scoring_unavailable"
+
             publication.source_count = 3
             stale_publication = await ParticipantWorkspaceService(
                 session

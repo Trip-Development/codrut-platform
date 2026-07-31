@@ -5,8 +5,13 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from codrut.modules.assignments.models import AssignmentStatus, AssignmentTargetType
+from codrut.modules.assignments.models import (
+    AssignmentStatus,
+    AssignmentTargetType,
+    TeamType,
+)
 from codrut.modules.companies.hierarchy import HierarchyIssue
+from codrut.modules.forms.models import SubmissionProcessingStatus
 from codrut.modules.scoring.schemas import (
     DriverRankSummaryResponse,
     ReportDistributionResponse,
@@ -26,12 +31,15 @@ from codrut.modules.scoring.service import (
     _format_pcm_label,
     _get_pcm_color,
     _interpretation_from_rules,
+    _leadership_ids_for_report,
+    _leadership_member_lencioni_summary,
     _non_empty_string,
     _pcm_profile_key,
     _prettify_score_key,
     _private_definition_schema,
     _report_dimensions,
     _report_hierarchy_issue,
+    _reportable_score_availability,
     _select_latest_completed_driver_rows,
     _valid_interpretation_rules,
 )
@@ -54,6 +62,7 @@ def _assignment(
     target_type: AssignmentTargetType = AssignmentTargetType.person,
     assignment_id: uuid.UUID | None = None,
     created_at: datetime | None = None,
+    target_team_id: uuid.UUID | None = None,
 ) -> SimpleNamespace:
     respondent_id = respondent_profile_id or uuid.uuid4()
     return SimpleNamespace(
@@ -63,6 +72,7 @@ def _assignment(
         status=status,
         respondent_profile_id=respondent_id,
         target_person_id=target_person_id or uuid.uuid4(),
+        target_team_id=target_team_id,
         target_type=target_type,
     )
 
@@ -233,6 +243,156 @@ def test_score_accumulation_and_summary_exclude_unusable_results() -> None:
         1,
         1,
     )
+
+
+def test_reportable_score_availability_distinguishes_queue_failure_and_orphan() -> None:
+    scored = _assignment("lencioni")
+    pending = _assignment("icare")
+    failed = _assignment("distress_drivers")
+    orphaned = _assignment("lencioni")
+    response_derived = _assignment("pcm_base")
+    rows = [
+        (scored, _result({"signal": 1}), None),
+        (pending, None, None),
+        (failed, None, None),
+        (orphaned, None, None),
+        (response_derived, None, None),
+    ]
+    jobs = [
+        SimpleNamespace(
+            assignment_id=pending.id,
+            status=SubmissionProcessingStatus.processing,
+        ),
+        SimpleNamespace(
+            assignment_id=failed.id,
+            status=SubmissionProcessingStatus.failed,
+        ),
+    ]
+
+    availability = _reportable_score_availability(rows, jobs)  # type: ignore[arg-type]
+
+    assert availability.scored == 1
+    assert availability.pending == 1
+    assert availability.failed == 1
+    assert availability.orphaned == 1
+
+
+def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    member_one_id = uuid.uuid4()
+    member_two_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    hierarchy = SimpleNamespace(
+        ambiguous_name=None,
+        top_level_ids={chief_id},
+        leadership_ids={chief_id, leader_id},
+        direct_reports_by_manager_id={
+            chief_id: [SimpleNamespace(id=leader_id)],
+            leader_id: [
+                SimpleNamespace(id=member_one_id),
+                SimpleNamespace(id=member_two_id),
+            ],
+        },
+    )
+    rows = [
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=chief_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=leadership_team_id,
+            ),
+            _result({"trust": 2}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=leader_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=leadership_team_id,
+            ),
+            _result({"trust": 4}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=member_one_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=functional_team_id,
+            ),
+            _result({"trust": 8}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=member_two_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=functional_team_id,
+            ),
+            _result({"trust": 10}),
+            None,
+        ),
+    ]
+
+    team_types = {
+        leadership_team_id: TeamType.leadership,
+        functional_team_id: TeamType.functional,
+    }
+    chief = _leadership_member_lencioni_summary(  # type: ignore[arg-type]
+        chief_id,
+        hierarchy,
+        rows,
+        team_types_by_id=team_types,
+    )
+    leader = _leadership_member_lencioni_summary(  # type: ignore[arg-type]
+        leader_id,
+        hierarchy,
+        rows,
+        team_types_by_id=team_types,
+    )
+
+    assert chief.lencioni_count == 2
+    assert chief.lencioni_averages[0].avg == 3
+    assert leader.lencioni_count == 2
+    assert leader.lencioni_averages[0].avg == 9
+
+
+def test_ambiguous_hierarchy_keeps_explicit_leaders_for_individual_reports() -> None:
+    explicit_leader_id = uuid.uuid4()
+    inferred_leader_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=explicit_leader_id,
+            full_name="Explicit Leader",
+            reports_to_name="Alex Dup",
+            role_group="manager",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=inferred_leader_id,
+            full_name="Inferred Leader",
+            reports_to_name=None,
+            role_group=None,
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    ambiguous_hierarchy = SimpleNamespace(
+        ambiguous_name="Alex Dup",
+        leadership_ids=set(),
+    )
+
+    assert _leadership_ids_for_report(ambiguous_hierarchy, participants) == {
+        explicit_leader_id
+    }
 
 
 def test_driver_feedback_comes_from_the_pinned_definition() -> None:

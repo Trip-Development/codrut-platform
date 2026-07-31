@@ -162,6 +162,8 @@ class CompanyReportAggregateResponse(BaseModel):
     total_completed: int
     reportable_scored_count: int
     reportable_pending_score_count: int
+    reportable_failed_score_count: int
+    reportable_orphaned_score_count: int
     completion_rate: int
     lencioni_count: int
     driver_count: int

@@ -14,6 +14,8 @@ from codrut.modules.assignments.models import (
     AssessmentCycleStatus,
     AssignmentStatus,
     QuestionnaireAssignment,
+    Team,
+    TeamType,
 )
 from codrut.modules.companies.hierarchy import (
     HierarchyIssue,
@@ -30,6 +32,8 @@ from codrut.modules.forms.models import (
     QuestionnaireDefinition,
     QuestionnaireKey,
     QuestionnaireResponse,
+    SubmissionProcessingJob,
+    SubmissionProcessingStatus,
 )
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
@@ -154,6 +158,14 @@ class IcareScoreScale:
     scale_max: float
 
 
+@dataclass(frozen=True)
+class ReportableScoreAvailability:
+    scored: int = 0
+    pending: int = 0
+    failed: int = 0
+    orphaned: int = 0
+
+
 @dataclass
 class ReportDimensionAccumulator:
     label: str
@@ -221,6 +233,33 @@ class ScoringService:
                 continue
 
             results.append(ScoringResultResponse.model_validate(result))
+        missing_reportable_assignment_ids = {
+            assignment.id
+            for assignment, result, _definition in assignment_results
+            if assignment.questionnaire_key
+            in (LENCIONI_REPORT_KEYS | DISTRESS_DRIVER_REPORT_KEYS | BOSS_360_REPORT_KEYS)
+            and assignment.status in COMPLETED_STATUSES
+            and result is None
+        }
+        processing_jobs = (
+            list(
+                (
+                    await self.session.execute(
+                        select(SubmissionProcessingJob).where(
+                            SubmissionProcessingJob.assignment_id.in_(
+                                missing_reportable_assignment_ids
+                            )
+                        )
+                    )
+                ).scalars()
+            )
+            if missing_reportable_assignment_ids
+            else []
+        )
+        score_availability = _reportable_score_availability(
+            assignment_results,
+            processing_jobs,
+        )
         driver_selection = _select_latest_completed_driver_rows(assignment_results)
         score_summary = _build_score_summary(
             assignment_results,
@@ -261,22 +300,10 @@ class ScoringService:
             assessment_cycle_id=assessment_cycle_id,
             total_assigned=total_assigned,
             total_completed=total_completed,
-            reportable_scored_count=sum(
-                1
-                for assignment, result, _definition in assignment_results
-                if assignment.questionnaire_key
-                in (LENCIONI_REPORT_KEYS | DISTRESS_DRIVER_REPORT_KEYS | BOSS_360_REPORT_KEYS)
-                and assignment.status in COMPLETED_STATUSES
-                and result is not None
-            ),
-            reportable_pending_score_count=sum(
-                1
-                for assignment, result, _definition in assignment_results
-                if assignment.questionnaire_key
-                in (LENCIONI_REPORT_KEYS | DISTRESS_DRIVER_REPORT_KEYS | BOSS_360_REPORT_KEYS)
-                and assignment.status in COMPLETED_STATUSES
-                and result is None
-            ),
+            reportable_scored_count=score_availability.scored,
+            reportable_pending_score_count=score_availability.pending,
+            reportable_failed_score_count=score_availability.failed,
+            reportable_orphaned_score_count=score_availability.orphaned,
             completion_rate=round((total_completed / total_assigned) * 100)
             if total_assigned > 0
             else 0,
@@ -326,7 +353,8 @@ class ScoringService:
             [_hierarchy_participant_from_report(participant) for participant in participants]
         )
         member = participant_by_id.get(participant_profile_id)
-        if member is None or participant_profile_id not in hierarchy.leadership_ids:
+        leadership_ids = _leadership_ids_for_report(hierarchy, participants)
+        if member is None or participant_profile_id not in leadership_ids:
             raise DomainError(
                 "Leadership member not found in this project.",
                 code="leadership_member_not_found",
@@ -353,14 +381,28 @@ class ScoringService:
             for row in assignment_results
             if row[0].respondent_profile_id == participant_profile_id
         ]
-        team_lenses = _build_team_lenses(participants, assignment_results, pcm_values)
-        manager_team = next(
-            (
-                team
-                for team in team_lenses.team_lenses
-                if team.id == f"manager:{participant_profile_id}"
-            ),
-            None,
+        target_team_ids = {
+            assignment.target_team_id
+            for assignment, _result, _definition in assignment_results
+            if assignment.target_team_id is not None
+        }
+        team_types_by_id = (
+            {
+                team_id: team_type
+                for team_id, team_type in (
+                    await self.session.execute(
+                        select(Team.id, Team.type).where(Team.id.in_(target_team_ids))
+                    )
+                ).all()
+            }
+            if target_team_ids
+            else {}
+        )
+        lencioni_summary = _leadership_member_lencioni_summary(
+            participant_profile_id,
+            hierarchy,
+            assignment_results,
+            team_types_by_id=team_types_by_id,
         )
         target_summary = next(
             (
@@ -388,8 +430,8 @@ class ScoringService:
             ),
             pcm_base=cycle_pcm.get("pcm_base", member.pcm_base),
             pcm_phase=cycle_pcm.get("pcm_phase", member.pcm_phase),
-            lencioni_count=manager_team.lencioni_count if manager_team is not None else 0,
-            lencioni_averages=(manager_team.lencioni_averages if manager_team is not None else []),
+            lencioni_count=lencioni_summary.lencioni_count,
+            lencioni_averages=lencioni_summary.lencioni_averages,
             icare_cohorts=target_summary.cohorts if target_summary is not None else [],
             driver_count=driver_summary.driver_count,
             driver_averages=[
@@ -1171,6 +1213,84 @@ def _build_score_summary(
     )
 
 
+def _leadership_member_lencioni_summary(
+    member_id: UUID,
+    hierarchy: Any,
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+    *,
+    team_types_by_id: dict[UUID, TeamType] | None = None,
+) -> ScoreSummary:
+    if hierarchy.ambiguous_name is not None:
+        return _build_score_summary([])
+    is_top_leader = member_id in hierarchy.top_level_ids
+    if is_top_leader:
+        respondent_ids = set(hierarchy.leadership_ids)
+    else:
+        respondent_ids = {
+            participant.id
+            for participant in hierarchy.direct_reports_by_manager_id.get(member_id, [])
+            if participant.id not in hierarchy.leadership_ids
+        }
+    candidate_rows = [
+        row
+        for row in assignment_results
+        if row[0].questionnaire_key in LENCIONI_REPORT_KEYS
+        and row[0].status in COMPLETED_STATUSES
+        and row[1] is not None
+        and _enum_value(row[0].target_type) == "team"
+        and row[0].target_team_id is not None
+        and row[0].respondent_profile_id in respondent_ids
+        and (
+            not team_types_by_id
+            or team_types_by_id.get(row[0].target_team_id)
+            == (TeamType.leadership if is_top_leader else TeamType.functional)
+        )
+    ]
+    rows_by_team_id: dict[UUID, list[AssignmentResultWithDefinition]] = {}
+    for row in candidate_rows:
+        target_team_id = row[0].target_team_id
+        assert target_team_id is not None
+        rows_by_team_id.setdefault(target_team_id, []).append(row)
+    if not rows_by_team_id:
+        return _build_score_summary([])
+    selected_team_id = min(
+        rows_by_team_id,
+        key=lambda team_id: (-len(rows_by_team_id[team_id]), str(team_id)),
+    )
+    return _build_score_summary(rows_by_team_id[selected_team_id])
+
+
+def _reportable_score_availability(
+    assignment_results: Iterable[AssignmentResultWithDefinition],
+    processing_jobs: Iterable[SubmissionProcessingJob],
+) -> ReportableScoreAvailability:
+    jobs_by_assignment_id = {job.assignment_id: job for job in processing_jobs}
+    scored = pending = failed = orphaned = 0
+    for assignment, result, _definition in assignment_results:
+        if (
+            assignment.questionnaire_key
+            not in (LENCIONI_REPORT_KEYS | DISTRESS_DRIVER_REPORT_KEYS | BOSS_360_REPORT_KEYS)
+            or assignment.status not in COMPLETED_STATUSES
+        ):
+            continue
+        if result is not None:
+            scored += 1
+            continue
+        job = jobs_by_assignment_id.get(assignment.id)
+        if job is None or job.status == SubmissionProcessingStatus.completed:
+            orphaned += 1
+        elif job.status == SubmissionProcessingStatus.failed:
+            failed += 1
+        else:
+            pending += 1
+    return ReportableScoreAvailability(
+        scored=scored,
+        pending=pending,
+        failed=failed,
+        orphaned=orphaned,
+    )
+
+
 def _is_self_boss_assignment(assignment: QuestionnaireAssignment) -> bool:
     if assignment.questionnaire_key not in BOSS_360_REPORT_KEYS:
         return False
@@ -1544,8 +1664,7 @@ def _build_leadership_members(
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
-    if hierarchy.ambiguous_name is not None:
-        return []
+    leadership_ids = _leadership_ids_for_report(hierarchy, participants)
     participant_by_id = {participant.id: participant for participant in participants}
     return [
         LeadershipMemberSummaryResponse(
@@ -1555,7 +1674,7 @@ def _build_leadership_members(
             role_group=participant.role_group,
         )
         for participant_id in sorted(
-            hierarchy.leadership_ids,
+            leadership_ids,
             key=lambda value: (
                 participant_by_id.get(value).full_name.casefold()
                 if participant_by_id.get(value) is not None
@@ -1564,6 +1683,23 @@ def _build_leadership_members(
         )
         if (participant := participant_by_id.get(participant_id)) is not None
     ]
+
+
+def _explicit_leadership_ids(participants: Iterable[ReportParticipant]) -> set[UUID]:
+    return {
+        participant.id
+        for participant in participants
+        if (participant.role_group or "").strip().casefold() in {"leadership", "manager"}
+    }
+
+
+def _leadership_ids_for_report(
+    hierarchy: Any,
+    participants: Iterable[ReportParticipant],
+) -> set[UUID]:
+    if hierarchy.ambiguous_name is None:
+        return set(hierarchy.leadership_ids)
+    return _explicit_leadership_ids(participants)
 
 
 def _without_incompatible_overlay_dimensions(

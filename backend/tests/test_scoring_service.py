@@ -832,7 +832,9 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
             assert aggregate.total_assigned == 5
             assert aggregate.total_completed == 5
             assert aggregate.reportable_scored_count == 4
-            assert aggregate.reportable_pending_score_count == 1
+            assert aggregate.reportable_pending_score_count == 0
+            assert aggregate.reportable_failed_score_count == 0
+            assert aggregate.reportable_orphaned_score_count == 1
             assert aggregate.completion_rate == 100
             assert aggregate.lencioni_count == 2
             assert aggregate.driver_count == 1

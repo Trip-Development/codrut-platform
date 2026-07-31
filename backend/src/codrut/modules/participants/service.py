@@ -521,8 +521,6 @@ class ParticipantWorkspaceService:
             for dimension_id in policy.get("dimension_ids", [])
             if isinstance(dimension_id, str) and dimension_id.strip()
         }
-        if publication.source_count < minimum_completed or not allowed_dimensions:
-            return []
         labels = _definition_score_labels(definition)
         questionnaire_title = definition.title
         score_unit, scale_min, scale_max = _definition_score_scale(definition)
@@ -589,14 +587,13 @@ class ParticipantWorkspaceService:
         )
         scoring_results = list(scoring_result.scalars().all())
         completed_count = len(completed_assignments)
-        if len(scoring_results) != completed_count:
-            return None
+        scoring_unavailable = len(scoring_results) != completed_count
         visible = completed_count >= minimum_completed
 
         dimension_values: dict[str, list[float]] = {}
-        for scoring in scoring_results if visible else []:
+        for scoring in scoring_results if visible and not scoring_unavailable else []:
             for dimension_id, value in scoring.scores.items():
-                if allowed_dimensions and dimension_id not in allowed_dimensions:
+                if dimension_id not in allowed_dimensions:
                     continue
                 score = _extract_numeric_score(value)
                 if score is None:
@@ -618,6 +615,13 @@ class ParticipantWorkspaceService:
             )
             for dimension_id, values in visible_dimension_values.items()
         ]
+        unavailable_reason = None
+        if scoring_unavailable:
+            unavailable_reason = "scoring_unavailable"
+        elif not visible:
+            unavailable_reason = "privacy_threshold"
+        elif not dimensions:
+            unavailable_reason = "no_eligible_dimensions"
         return ParticipantReceivedFeedbackSummary(
             project_id=project_id,
             project_name=project_name,
@@ -632,6 +636,7 @@ class ParticipantWorkspaceService:
             scale_min=scale_min,
             scale_max=scale_max,
             visible=visible and bool(dimensions),
+            unavailable_reason=unavailable_reason,  # type: ignore[arg-type]
             overall_average=(
                 round(sum(visible_scores) / len(visible_scores), 1) if visible_scores else None
             ),
