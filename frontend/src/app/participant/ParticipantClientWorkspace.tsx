@@ -580,10 +580,11 @@ function PcmResultChip({ label, value }: { label: string; value?: string | null 
 function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
   const kind = resultKind(result.questionnaireKey);
   const items = scoreItemsForResult(result);
-  const max = maxScoreForKind(kind);
+  const scale = resultScoreScale(result, kind);
   const average = averageScore(items);
-  const scaleLabel = scaleLabelForKind(kind, max);
   const highlightedItems = items.filter((item) => kind === "drivers" && item.score > 50 && item.explanation);
+  const scaleUnavailable = result.scoreScaleCompatible === false
+    || result.unavailableReason === "incompatible_score_scales";
 
   return (
     <article className="px-5 py-6">
@@ -595,14 +596,25 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
             {[result.projectName, result.targetLabel].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <dl className="flex flex-wrap gap-x-8 gap-y-3">
-          <ResultStat label="Dimensiuni" value={String(items.length)} />
-          <ResultStat label="Scor mediu" value={average === null ? "N/A" : formatScore(average)} />
-          <ResultStat label="Scală" value={scaleLabel.replace("scală ", "")} />
-        </dl>
+        {!scaleUnavailable ? (
+          <dl className="flex flex-wrap gap-x-8 gap-y-3">
+            <ResultStat label="Dimensiuni" value={String(items.length)} />
+            <ResultStat
+              label="Scor mediu"
+              value={average === null ? "N/A" : `${formatScore(average)}${scale.suffix}`}
+            />
+            <ResultStat label="Scală" value={`${scale.min}-${scale.max}`} />
+          </dl>
+        ) : null}
       </div>
 
-      {result.primaryResult ? (
+      {scaleUnavailable ? (
+        <p className="mt-6 text-sm leading-6 text-muted-foreground">
+          Acest rezultat folosește dimensiuni cu scale diferite sau fără o scală definită. Nu îl afișăm pe o scară aproximativă.
+        </p>
+      ) : null}
+
+      {!scaleUnavailable && result.primaryResult ? (
         <p className="mt-5 text-sm text-muted-foreground">
           Rezultat principal:{" "}
           <strong className="text-foreground">
@@ -611,7 +623,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
         </p>
       ) : null}
 
-      {highlightedItems.length > 0 ? (
+      {!scaleUnavailable && highlightedItems.length > 0 ? (
         <section className="mt-7 border-l-2 border-destructive pl-5" aria-labelledby={`guidance-${result.assignmentId}`}>
           <div className="flex items-center gap-2 text-destructive">
             <MessageSquareTextIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
@@ -625,11 +637,20 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
         </section>
       ) : null}
 
-      <div className="mt-7 divide-y divide-border border-t border-border" aria-label="Scoruri detaliate">
-        {items.map((item) => (
-          <ScoreRow key={item.id} item={item} max={max} showSignal={kind === "drivers" && item.score > 50} />
-        ))}
-      </div>
+      {!scaleUnavailable ? (
+        <div className="mt-7 divide-y divide-border border-t border-border" aria-label="Scoruri detaliate">
+          {items.map((item) => (
+            <ScoreRow
+              key={item.id}
+              item={item}
+              min={scale.min}
+              max={scale.max}
+              suffix={scale.suffix}
+              showSignal={kind === "drivers" && item.score > 50}
+            />
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -737,14 +758,17 @@ function resultKindLabel(kind: ResultKind): string {
   return "Chestionar";
 }
 
-function maxScoreForKind(kind: ResultKind): number {
-  if (kind === "lencioni") return 10;
-  return 100;
-}
-
-function scaleLabelForKind(kind: ResultKind, max: number): string {
-  if (kind === "icare") return "scor procentual";
-  return `scală 0-${max}`;
+function resultScoreScale(
+  result: ParticipantWorkspaceResult,
+  kind: ResultKind,
+): { min: number; max: number; suffix: string } {
+  const fallbackMax = kind === "lencioni" ? 10 : 100;
+  const min = result.scaleMin ?? 0;
+  const max = result.scaleMax ?? fallbackMax;
+  if (result.scoreUnit === "percent") return { min, max, suffix: "%" };
+  if (result.scoreUnit === "grade_1_to_5") return { min, max, suffix: ` din ${max}` };
+  if (result.scoreUnit && result.scaleMax != null) return { min, max, suffix: ` / ${max}` };
+  return { min, max, suffix: "" };
 }
 
 function scoreItemsForResult(result: ParticipantWorkspaceResult): ScoreItem[] {

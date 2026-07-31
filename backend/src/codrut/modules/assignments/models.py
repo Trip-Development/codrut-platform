@@ -38,6 +38,12 @@ class AssignmentAccessMode(StrEnum):
     account_link = "account_link"
 
 
+class IcareCohort(StrEnum):
+    direct_team = "direct_team"
+    leadership_peers = "leadership_peers"
+    self = "self"
+
+
 class AssignmentStatus(StrEnum):
     assigned = "assigned"
     invited = "invited"
@@ -198,6 +204,11 @@ class QuestionnaireAssignment(TimestampMixin, Base):
             "reminder_count >= 0 and reminder_count <= 2",
             name="reminder_count_bounds",
         ),
+        CheckConstraint(
+            "icare_cohort is null or icare_cohort in "
+            "('direct_team', 'leadership_peers', 'self')",
+            name="questionnaire_assignment_icare_cohort",
+        ),
         Index(
             "uq_questionnaire_assignments_cycle_shape",
             "cycle_shape_guard",
@@ -261,6 +272,7 @@ class QuestionnaireAssignment(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    icare_cohort: Mapped[IcareCohort | None] = mapped_column(String(32), nullable=True)
     access_mode: Mapped[AssignmentAccessMode] = mapped_column(
         Enum(AssignmentAccessMode),
         nullable=False,

@@ -23,6 +23,11 @@ class ParticipantWorkspaceResult(BaseModel):
     target_label: str
     scores: dict
     primary_result: str | None = None
+    score_unit: str | None = None
+    scale_min: float | None = None
+    scale_max: float | None = None
+    score_scale_compatible: bool = True
+    unavailable_reason: Literal["incompatible_score_scales"] | None = None
 
 
 class ParticipantReceivedFeedbackDimension(BaseModel):

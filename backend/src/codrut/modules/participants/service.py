@@ -50,6 +50,7 @@ from codrut.modules.scoring.models import (
     ScoringResult,
 )
 from codrut.modules.scoring.publication import definition_publication_checksum
+from codrut.modules.scoring.scale import derive_definition_score_scale
 
 COMPLETED_ASSIGNMENT_STATUSES = {
     AssignmentStatus.submitted,
@@ -523,7 +524,13 @@ class ParticipantWorkspaceService:
         }
         labels = _definition_score_labels(definition)
         questionnaire_title = definition.title
-        score_unit, scale_min, scale_max = _definition_score_scale(definition)
+        score_scale = _definition_score_scale(
+            definition,
+            dimension_ids=allowed_dimensions,
+        )
+        if score_scale is None:
+            return []
+        score_unit, scale_min, scale_max = score_scale
 
         completed_assignments = [
             assignment
@@ -537,6 +544,7 @@ class ParticipantWorkspaceService:
             profile,
             publication.project_id,
             completed_assignments,
+            assessment_cycle_id=publication.assessment_cycle_id,
         )
         summaries: list[ParticipantReceivedFeedbackSummary] = []
         for cohort in ("direct_team", "leadership_peers"):
@@ -648,7 +656,29 @@ class ParticipantWorkspaceService:
         profile: ParticipantProfile,
         project_id: UUID | None,
         assignments: list[QuestionnaireAssignment],
+        *,
+        assessment_cycle_id: UUID | None = None,
     ) -> dict[str, list[QuestionnaireAssignment]]:
+        cycle_scoped_assignments = [
+            assignment for assignment in assignments if assignment.assessment_cycle_id is not None
+        ]
+        legacy_assignments = [
+            assignment for assignment in assignments if assignment.assessment_cycle_id is None
+        ]
+        persisted = {
+            "direct_team": [
+                assignment
+                for assignment in cycle_scoped_assignments
+                if assignment.icare_cohort == "direct_team"
+            ],
+            "leadership_peers": [
+                assignment
+                for assignment in cycle_scoped_assignments
+                if assignment.icare_cohort == "leadership_peers"
+            ],
+        }
+        if not legacy_assignments:
+            return persisted
         if project_id is not None:
             rows = (
                 await self.session.execute(
@@ -696,21 +726,21 @@ class ParticipantWorkspaceService:
             ]
         hierarchy = build_organization_hierarchy(participants)
         if hierarchy.ambiguous_name is not None:
-            return {"direct_team": [], "leadership_peers": []}
+            return persisted
         direct_report_ids = {
             participant.id
             for participant in hierarchy.direct_reports_by_manager_id.get(profile.id, [])
         }
         return {
-            "direct_team": [
+            "direct_team": persisted["direct_team"] + [
                 assignment
-                for assignment in assignments
+                for assignment in legacy_assignments
                 if assignment.respondent_profile_id in direct_report_ids
                 and assignment.respondent_profile_id not in hierarchy.leadership_ids
             ],
-            "leadership_peers": [
+            "leadership_peers": persisted["leadership_peers"] + [
                 assignment
-                for assignment in assignments
+                for assignment in legacy_assignments
                 if assignment.respondent_profile_id in hierarchy.leadership_ids
                 and profile.id in hierarchy.leadership_ids
                 and assignment.respondent_profile_id != profile.id
@@ -1441,6 +1471,11 @@ class ParticipantWorkspaceService:
 
         if not public_scores:
             return None
+        derived_scale = derive_definition_score_scale(
+            definition,
+            dimension_ids=public_scores.keys(),
+        )
+        score_scale = derived_scale.scale if derived_scale.compatible else None
         task = self._assignment_to_task(
             assignment=assignment,
             teams=teams,
@@ -1463,6 +1498,15 @@ class ParticipantWorkspaceService:
             target_label=task.targetLabel,
             scores=public_scores,
             primary_result=primary_result,
+            score_unit=score_scale.score_unit if score_scale is not None else None,
+            scale_min=score_scale.scale_min if score_scale is not None else None,
+            scale_max=score_scale.scale_max if score_scale is not None else None,
+            score_scale_compatible=derived_scale.compatible and score_scale is not None,
+            unavailable_reason=(
+                None
+                if derived_scale.compatible and score_scale is not None
+                else "incompatible_score_scales"
+            ),
         )
 
     def _workspace_project(
@@ -1657,75 +1701,25 @@ def _definition_score_feedback(
 
 def _definition_score_scale(
     definition: QuestionnaireDefinition,
-) -> tuple[str, float, float]:
-    explicit = definition.feedback_policy.get("scale_max")
-    if isinstance(explicit, (int, float)) and not isinstance(explicit, bool) and explicit > 0:
-        explicit_min = definition.feedback_policy.get("scale_min", 0)
-        minimum = (
-            float(explicit_min)
-            if isinstance(explicit_min, (int, float)) and not isinstance(explicit_min, bool)
-            else 0.0
-        )
-        unit = definition.feedback_policy.get("score_unit", "score")
-        return str(unit), minimum, float(explicit)
-
-    schemas = (definition.schema, (definition.private_config or {}).get("schema"))
-    for schema in schemas:
-        if not isinstance(schema, dict):
-            continue
-        scoring = schema.get("scoring")
-        if not isinstance(scoring, dict):
-            continue
-        if scoring.get("method") == "average_statement_scores_by_section":
-            score_unit = str(scoring.get("score_unit", "percent"))
-            if score_unit != "grade_1_to_5":
-                return score_unit, 0.0, 100.0
-            scale_min = scoring.get("scale_min", 1)
-            scale_max = scoring.get("scale_max")
-            if (
-                isinstance(scale_min, (int, float))
-                and not isinstance(scale_min, bool)
-                and isinstance(scale_max, (int, float))
-                and not isinstance(scale_max, bool)
-                and scale_max > scale_min
-            ):
-                return score_unit, float(scale_min), float(scale_max)
-        normalize_to = scoring.get("normalize_to")
-        if (
-            isinstance(normalize_to, (int, float))
-            and not isinstance(normalize_to, bool)
-            and normalize_to > 0
-        ):
-            return "score", 0.0, float(normalize_to)
-
-    numeric_values: list[float] = []
-    for schema in schemas:
-        if not isinstance(schema, dict):
-            continue
-        for section in schema.get("sections", []):
-            if not isinstance(section, dict):
-                continue
-            for question in section.get("questions", []):
-                if not isinstance(question, dict):
-                    continue
-                scales = [question.get("scale", [])]
-                scales.extend(
-                    statement.get("scale", [])
-                    for statement in question.get("statements", [])
-                    if isinstance(statement, dict)
-                )
-                for scale in scales:
-                    if not isinstance(scale, list):
-                        continue
-                    for option in scale:
-                        value = option.get("value") if isinstance(option, dict) else None
-                        if isinstance(value, (int, float)) and not isinstance(value, bool):
-                            numeric_values.append(float(value))
-    return "score", 0.0, max(numeric_values, default=5.0)
+    *,
+    dimension_ids: set[str] | None = None,
+) -> tuple[str, float, float] | None:
+    derived = derive_definition_score_scale(
+        definition,
+        dimension_ids=dimension_ids,
+    )
+    if not derived.compatible or derived.scale is None:
+        return None
+    return (
+        derived.scale.score_unit,
+        derived.scale.scale_min,
+        derived.scale.scale_max,
+    )
 
 
-def _definition_scale_max(definition: QuestionnaireDefinition) -> float:
-    return _definition_score_scale(definition)[2]
+def _definition_scale_max(definition: QuestionnaireDefinition) -> float | None:
+    scale = _definition_score_scale(definition)
+    return scale[2] if scale is not None else None
 
 
 def _prettify_score_key(value: str) -> str:

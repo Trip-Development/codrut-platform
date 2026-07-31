@@ -103,6 +103,7 @@ def test_health_ready_fails_closed_for_required_components(
         "0054_identity_consent_submission",
         "0055_participant_aliases",
         "0056_email_send_sandbox_scope",
+        "0057_icare_assignment_cohorts",
     ],
 )
 def test_migration_readiness_accepts_only_reviewed_forward_compatible_heads(

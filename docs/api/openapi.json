@@ -3163,6 +3163,9 @@
           "driver_rank_summary": {
             "$ref": "#/components/schemas/DriverRankSummaryResponse"
           },
+          "driver_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
           "hierarchy_ambiguity_message": {
             "anyOf": [
               {
@@ -3200,6 +3203,23 @@
             "title": "Icare Target Summaries",
             "type": "array"
           },
+          "icare_unclassified_reason": {
+            "anyOf": [
+              {
+                "const": "historical_cohort_unavailable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icare Unclassified Reason"
+          },
+          "icare_unclassified_response_count": {
+            "default": 0,
+            "title": "Icare Unclassified Response Count",
+            "type": "integer"
+          },
           "leadership_members": {
             "items": {
               "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
@@ -3217,6 +3237,9 @@
           "lencioni_count": {
             "title": "Lencioni Count",
             "type": "integer"
+          },
+          "lencioni_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
           },
           "pcm_base_count": {
             "title": "Pcm Base Count",
@@ -3305,7 +3328,9 @@
           "pcm_base_count",
           "pcm_phase_count",
           "lencioni_averages",
+          "lencioni_scale",
           "driver_averages",
+          "driver_scale",
           "boss_360_averages",
           "icare_target_summaries",
           "driver_rank_summary",
@@ -4324,6 +4349,23 @@
             "format": "uuid",
             "title": "Target Profile Id",
             "type": "string"
+          },
+          "unclassified_reason": {
+            "anyOf": [
+              {
+                "const": "historical_cohort_unavailable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unclassified Reason"
+          },
+          "unclassified_response_count": {
+            "default": 0,
+            "title": "Unclassified Response Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -4876,12 +4918,32 @@
             "title": "Driver Count",
             "type": "integer"
           },
+          "driver_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
           "icare_cohorts": {
             "items": {
               "$ref": "#/components/schemas/IcareCohortSummaryResponse"
             },
             "title": "Icare Cohorts",
             "type": "array"
+          },
+          "icare_unclassified_reason": {
+            "anyOf": [
+              {
+                "const": "historical_cohort_unavailable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icare Unclassified Reason"
+          },
+          "icare_unclassified_response_count": {
+            "default": 0,
+            "title": "Icare Unclassified Response Count",
+            "type": "integer"
           },
           "lencioni_averages": {
             "items": {
@@ -4893,6 +4955,25 @@
           "lencioni_count": {
             "title": "Lencioni Count",
             "type": "integer"
+          },
+          "lencioni_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
+          "lencioni_team_ambiguity_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lencioni Team Ambiguity Message"
+          },
+          "lencioni_team_ambiguous": {
+            "default": false,
+            "title": "Lencioni Team Ambiguous",
+            "type": "boolean"
           },
           "member": {
             "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
@@ -4930,9 +5011,11 @@
           "member",
           "lencioni_count",
           "lencioni_averages",
+          "lencioni_scale",
           "icare_cohorts",
           "driver_count",
-          "driver_averages"
+          "driver_averages",
+          "driver_scale"
         ],
         "title": "LeadershipMemberReportResponse",
         "type": "object"
@@ -6370,6 +6453,44 @@
             "title": "Questionnaire Key",
             "type": "string"
           },
+          "scale_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Max"
+          },
+          "scale_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Min"
+          },
+          "score_scale_compatible": {
+            "default": true,
+            "title": "Score Scale Compatible",
+            "type": "boolean"
+          },
+          "score_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Unit"
+          },
           "scores": {
             "additionalProperties": true,
             "title": "Scores",
@@ -6382,6 +6503,18 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "const": "incompatible_score_scales",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
           }
         },
         "required": [
@@ -7374,6 +7507,62 @@
         "title": "ReportHierarchyIssueResponse",
         "type": "object"
       },
+      "ReportScoreScaleResponse": {
+        "properties": {
+          "scale_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Max"
+          },
+          "scale_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Min"
+          },
+          "score_scale_compatible": {
+            "default": true,
+            "title": "Score Scale Compatible",
+            "type": "boolean"
+          },
+          "score_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Unit"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "const": "incompatible_score_scales",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "title": "ReportScoreScaleResponse",
+        "type": "object"
+      },
       "ReportTeamLensResponse": {
         "properties": {
           "assigned_count": {
@@ -7425,6 +7614,9 @@
             "title": "Lencioni Count",
             "type": "integer"
           },
+          "lencioni_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
           "member_count": {
             "title": "Member Count",
             "type": "integer"
@@ -7469,6 +7661,7 @@
           "pcm_base_count",
           "pcm_phase_count",
           "lencioni_averages",
+          "lencioni_scale",
           "driver_averages",
           "boss_360_averages",
           "pcm_base_distribution",
