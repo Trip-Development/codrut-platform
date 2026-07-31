@@ -4908,6 +4908,22 @@
           "lencioni_scale": {
             "$ref": "#/components/schemas/ReportScoreScaleResponse"
           },
+          "lencioni_team_ambiguity_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lencioni Team Ambiguity Message"
+          },
+          "lencioni_team_ambiguous": {
+            "default": false,
+            "title": "Lencioni Team Ambiguous",
+            "type": "boolean"
+          },
           "member": {
             "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
           },

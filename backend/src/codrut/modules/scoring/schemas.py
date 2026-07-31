@@ -160,6 +160,8 @@ class LeadershipMemberReportResponse(BaseModel):
     lencioni_count: int
     lencioni_averages: list[ReportAverageResponse]
     lencioni_scale: ReportScoreScaleResponse
+    lencioni_team_ambiguous: bool = False
+    lencioni_team_ambiguity_message: str | None = None
     icare_cohorts: list[IcareCohortSummaryResponse]
     driver_count: int
     driver_averages: list[ReportAverageResponse]

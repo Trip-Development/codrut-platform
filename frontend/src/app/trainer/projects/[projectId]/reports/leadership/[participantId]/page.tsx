@@ -91,19 +91,29 @@ export default async function LeadershipMemberReportPage({
       </Card>
 
       <ResultSection id="lencioni" title="Lencioni" description="Rezultatul echipei coordonate de această persoană.">
-        <Card className="px-5 [--card-spacing:--spacing(5)]">
-          <AverageList
-            count={report.lencioni_count}
-            items={report.lencioni_averages}
-            min={lencioniScale.min}
-            max={lencioniScale.max}
-            suffix={lencioniScale.suffix}
-            empty={reportScaleEmptyCopy(
-              report.lencioni_scale,
-              "Nu există încă un rezultat Lencioni pentru această echipă.",
-            )}
-          />
-        </Card>
+        {report.lencioni_team_ambiguous ? (
+          <Card className="px-5 [--card-spacing:--spacing(5)]">
+            <p className="font-semibold text-foreground">Echipa istorică nu poate fi stabilită sigur</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {report.lencioni_team_ambiguity_message ??
+                "Rezultatele rămân separate până când putem confirma echipa corectă pentru acest ciclu."}
+            </p>
+          </Card>
+        ) : (
+          <Card className="px-5 [--card-spacing:--spacing(5)]">
+            <AverageList
+              count={report.lencioni_count}
+              items={report.lencioni_averages}
+              min={lencioniScale.min}
+              max={lencioniScale.max}
+              suffix={lencioniScale.suffix}
+              empty={reportScaleEmptyCopy(
+                report.lencioni_scale,
+                "Nu există încă un rezultat Lencioni pentru această echipă.",
+              )}
+            />
+          </Card>
+        )}
       </ResultSection>
 
       <ResultSection id="icare" title="iCARE" description="Cele trei perspective sunt păstrate separat.">

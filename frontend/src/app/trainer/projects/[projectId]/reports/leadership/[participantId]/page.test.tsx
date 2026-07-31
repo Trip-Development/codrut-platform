@@ -105,4 +105,22 @@ describe("leadership member report", () => {
     expect(screen.getByText("0%")).toBeTruthy();
     expect(screen.getByText("0% este scorul minim valid pe această scală, nu un rezultat lipsă.")).toBeTruthy();
   });
+
+  it("explains when a legacy cycle cannot identify the historical Lencioni team", async () => {
+    const report = await api.getLeadershipMemberReport();
+    api.getLeadershipMemberReport.mockResolvedValueOnce({
+      ...report,
+      lencioni_team_ambiguous: true,
+      lencioni_team_ambiguity_message: "Echipa istorică are două rezultate posibile.",
+    } as never);
+    const ui = await LeadershipMemberReportPage({
+      params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText("Echipa istorică nu poate fi stabilită sigur")).toBeTruthy();
+    expect(screen.getByText("Echipa istorică are două rezultate posibile.")).toBeTruthy();
+    expect(screen.queryByText("7 din 10")).toBeNull();
+  });
 });

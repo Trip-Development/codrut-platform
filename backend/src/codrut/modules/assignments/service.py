@@ -647,6 +647,10 @@ class AssignmentService:
             manager_ids,
             key=lambda item: participant_by_id[item].full_name,
         )
+        top_leader_ids = set(hierarchy.top_level_ids) & manager_ids
+        leadership_team_leader_id = (
+            next(iter(top_leader_ids)) if len(top_leader_ids) == 1 else None
+        )
         if leadership_ids:
             leadership_team = teams_by_name.get("leadership")
             scopes.append(
@@ -669,7 +673,7 @@ class AssignmentService:
                         team_name="Leadership",
                         team_type=TeamType.leadership,
                         team_member_ids=leadership_ids,
-                        team_leader_id=None,
+                        team_leader_id=leadership_team_leader_id,
                     )
                 )
 

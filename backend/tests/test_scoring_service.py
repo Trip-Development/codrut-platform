@@ -84,7 +84,17 @@ async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
     functional = await service._resolve_member_lencioni_team_id(
         uuid.uuid4(),
         uuid.uuid4(),
-        [],
+        [
+            (
+                SimpleNamespace(
+                    questionnaire_key="lencioni",
+                    status=AssignmentStatus.scored,
+                    target_team_id=functional_team_id,
+                ),
+                SimpleNamespace(scores={"trust": 8}),
+                None,
+            )
+        ],  # type: ignore[arg-type]
         prefer_leadership=True,
     )
 
@@ -111,6 +121,63 @@ async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
 
     assert functional == functional_team_id
     assert leadership == leadership_team_id
+
+
+@pytest.mark.asyncio
+async def test_legacy_cycle_flags_ambiguous_top_leader_without_guessing() -> None:
+    member_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                all=lambda: [
+                    (
+                        leadership_team_id,
+                        TeamType.leadership,
+                        TeamMembershipRole.member,
+                    ),
+                    (
+                        functional_team_id,
+                        TeamType.functional,
+                        TeamMembershipRole.leader,
+                    ),
+                ]
+            )
+        )
+    )
+    service = ScoringService(session)  # type: ignore[arg-type]
+    assignment_results = [
+        (
+            SimpleNamespace(
+                questionnaire_key="lencioni",
+                status=AssignmentStatus.scored,
+                target_team_id=leadership_team_id,
+            ),
+            SimpleNamespace(scores={"trust": 3}),
+            None,
+        ),
+        (
+            SimpleNamespace(
+                questionnaire_key="lencioni",
+                status=AssignmentStatus.scored,
+                target_team_id=functional_team_id,
+            ),
+            SimpleNamespace(scores={"trust": 8}),
+            None,
+        ),
+    ]
+
+    resolution = await service._resolve_member_lencioni_team(
+        member_id,
+        uuid.uuid4(),
+        assignment_results,  # type: ignore[arg-type]
+        prefer_leadership=False,
+    )
+
+    assert resolution.team_id is None
+    assert resolution.ambiguous is True
+    assert "istoric Lencioni" in (resolution.ambiguity_message or "")
 
 
 @pytest.mark.asyncio

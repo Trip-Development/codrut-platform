@@ -535,6 +535,8 @@ export type LeadershipMemberReport = {
   lencioni_count: number;
   lencioni_averages: ReportAverage[];
   lencioni_scale?: ReportScoreScale | null;
+  lencioni_team_ambiguous: boolean;
+  lencioni_team_ambiguity_message?: string | null;
   icare_cohorts: IcareCohortSummary[];
   driver_count: number;
   driver_averages: ReportAverage[];

@@ -1236,7 +1236,9 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
                 active=True,
             )
         )
-    assignment_repository.teams[uuid.uuid4()] = Team(
+    leadership_team_id = uuid.uuid4()
+    assignment_repository.teams[leadership_team_id] = Team(
+        id=leadership_team_id,
         company_id=company_id,
         name="Leadership",
         type=TeamType.leadership,
@@ -1246,6 +1248,12 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
 
     leadership_scope = next(scope for scope in plan.scopes if scope.type == "leadership_team")
     assert leadership_scope.participant_ids == [respondent_id, ilinca_id, target_id]
+    leadership_assignments = [
+        item for item in plan.assignments if item.scope_type == "leadership_team"
+    ]
+    assert {item.target_team_leader_id for item in leadership_assignments} == {
+        respondent_id
+    }
 
     manager_team_scopes = [scope.name for scope in plan.scopes if scope.type == "manager_team"]
     assert manager_team_scopes == ["Echipa Mara Ionescu", "Echipa Sorin Pavel"]
@@ -1317,6 +1325,94 @@ async def test_default_assignment_plan_uses_leadership_peers_and_actual_manager_
         for item in plan_without_pcm_gap.assignments
         if item.questionnaire_key == "pcm_base" and item.respondent_profile_id == respondent_id
     ]
+
+
+async def test_planner_snapshots_top_leader_in_leadership_team() -> None:
+    (
+        service,
+        assignment_repository,
+        company_repository,
+        user_id,
+        company_id,
+        leader_id,
+        member_id,
+        _outside_participant_id,
+    ) = seed_assignment_scope()
+    project_id = uuid.uuid4()
+    company_repository.projects[project_id] = CompanyProject(
+        id=project_id,
+        company_id=company_id,
+        name="Top leader snapshot",
+    )
+    company_repository.participants[leader_id].full_name = "Ana Top Leader"
+    company_repository.participants[leader_id].role_group = "leadership"
+    company_repository.participants[member_id].full_name = "Bogdan Member"
+    company_repository.participants[member_id].role_group = "individual"
+    company_repository.reporting_relationships.append(
+        ParticipantReportingRelationship(
+            company_id=company_id,
+            manager_profile_id=leader_id,
+            participant_profile_id=member_id,
+        )
+    )
+    company_repository.project_memberships.extend(
+        [
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=leader_id,
+                reports_to_name=None,
+                role_group="leadership",
+                active=True,
+            ),
+            ProjectMembership(
+                company_id=company_id,
+                project_id=project_id,
+                participant_profile_id=member_id,
+                reports_to_name="AnaTopLeader",
+                role_group="individual",
+                active=True,
+            ),
+        ]
+    )
+    leadership_team_id = uuid.uuid4()
+    assignment_repository.teams[leadership_team_id] = Team(
+        id=leadership_team_id,
+        company_id=company_id,
+        name="Leadership",
+        type=TeamType.leadership,
+    )
+
+    plan = await service.build_default_assignment_plan(user_id, company_id, project_id)
+    leadership_item = next(
+        item for item in plan.assignments if item.scope_type == "leadership_team"
+    )
+    assert leadership_item.target_team_leader_id == leader_id
+    cycle = AssessmentCycle(
+        id=uuid.uuid4(),
+        company_id=company_id,
+        project_id=project_id,
+        sequence=1,
+        name="Planner snapshot",
+        status=AssessmentCycleStatus.draft,
+    )
+    await service._snapshot_cycle_team_membership(
+        cycle,
+        leadership_team_id,
+        AssignmentPlanSaveItem.model_validate(leadership_item.model_dump()),
+    )
+
+    snapshot = await assignment_repository.list_cycle_team_memberships(
+        cycle.id,
+        leadership_team_id,
+    )
+    roles_by_participant_id = {
+        membership.participant_profile_id: membership.role for membership in snapshot
+    }
+    assert roles_by_participant_id == {
+        leader_id: TeamMembershipRole.leader,
+        member_id: TeamMembershipRole.member,
+    }
 
 
 async def test_default_assignment_plan_treats_matrix_suffix_as_participant_name() -> None:

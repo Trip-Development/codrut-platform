@@ -3139,6 +3139,13 @@ export interface components {
             /** Lencioni Count */
             lencioni_count: number;
             lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
+            /** Lencioni Team Ambiguity Message */
+            lencioni_team_ambiguity_message?: string | null;
+            /**
+             * Lencioni Team Ambiguous
+             * @default false
+             */
+            lencioni_team_ambiguous: boolean;
             member: components["schemas"]["LeadershipMemberSummaryResponse"];
             /** Pcm Base */
             pcm_base?: string | null;

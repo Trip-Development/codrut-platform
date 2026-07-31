@@ -147,6 +147,13 @@ class TeamLensBuildResult:
     hierarchy_issues: list[ReportHierarchyIssueResponse]
 
 
+@dataclass(frozen=True)
+class MemberLencioniTeamResolution:
+    team_id: UUID | None
+    ambiguous: bool = False
+    ambiguity_message: str | None = None
+
+
 AssignmentResultWithDefinition = tuple[
     QuestionnaireAssignment,
     ScoringResult | None,
@@ -423,7 +430,7 @@ class ScoringService:
             for row in assignment_results
             if row[0].respondent_profile_id == participant_profile_id
         ]
-        lencioni_team_id = await self._resolve_member_lencioni_team_id(
+        lencioni_team = await self._resolve_member_lencioni_team(
             participant_profile_id,
             assessment_cycle_id,
             assignment_results,
@@ -434,7 +441,7 @@ class ScoringService:
         )
         lencioni_summary = _leadership_member_lencioni_summary(
             assignment_results,
-            target_team_id=lencioni_team_id,
+            target_team_id=lencioni_team.team_id,
         )
         target_summary = next(
             (
@@ -466,6 +473,8 @@ class ScoringService:
             lencioni_count=lencioni_summary.lencioni_count,
             lencioni_averages=lencioni_summary.lencioni_averages,
             lencioni_scale=lencioni_summary.lencioni_scale,
+            lencioni_team_ambiguous=lencioni_team.ambiguous,
+            lencioni_team_ambiguity_message=lencioni_team.ambiguity_message,
             icare_cohorts=target_summary.cohorts if target_summary is not None else [],
             driver_count=driver_summary.driver_count,
             driver_averages=[
@@ -483,6 +492,24 @@ class ScoringService:
         *,
         prefer_leadership: bool,
     ) -> UUID | None:
+        return (
+            await self._resolve_member_lencioni_team(
+                member_id,
+                assessment_cycle_id,
+                assignment_results,
+                prefer_leadership=prefer_leadership,
+            )
+        ).team_id
+
+    async def _resolve_member_lencioni_team(
+        self,
+        member_id: UUID,
+        assessment_cycle_id: UUID | None,
+        assignment_results: Iterable[AssignmentResultWithDefinition],
+        *,
+        prefer_leadership: bool,
+    ) -> MemberLencioniTeamResolution:
+        assignment_result_rows = list(assignment_results)
         if assessment_cycle_id is not None:
             rows = (
                 await self.session.execute(
@@ -520,22 +547,53 @@ class ScoringService:
             for team_id, team_type, role in rows
             if team_type == TeamType.functional and role == TeamMembershipRole.leader
         )
-        if assessment_cycle_id is not None and leadership_leader_ids:
-            return leadership_leader_ids[0]
+        if assessment_cycle_id is not None and len(leadership_leader_ids) == 1:
+            return MemberLencioniTeamResolution(leadership_leader_ids[0])
+        if assessment_cycle_id is not None and len(leadership_leader_ids) > 1:
+            return MemberLencioniTeamResolution(
+                team_id=None,
+                ambiguous=True,
+                ambiguity_message=(
+                    "Ciclul istoric conține mai mulți lideri pentru echipa de leadership."
+                ),
+            )
         if assessment_cycle_id is None and prefer_leadership and leadership_ids:
-            return leadership_ids[0]
+            return MemberLencioniTeamResolution(leadership_ids[0])
+        if assessment_cycle_id is not None and leadership_ids and functional_leader_ids:
+            # Older cycle snapshots did not record the top leader. Current hierarchy
+            # is intentionally not consulted: only scored targets already scoped to
+            # this cycle can resolve a single unambiguous historical team.
+            candidate_ids = set(leadership_ids) | set(functional_leader_ids)
+            result_target_ids = {
+                assignment.target_team_id
+                for assignment, result, _definition in assignment_result_rows
+                if assignment.questionnaire_key in LENCIONI_REPORT_KEYS
+                and assignment.status in COMPLETED_STATUSES
+                and result is not None
+                and assignment.target_team_id in candidate_ids
+            }
+            if len(result_target_ids) == 1:
+                return MemberLencioniTeamResolution(next(iter(result_target_ids)))
+            return MemberLencioniTeamResolution(
+                team_id=None,
+                ambiguous=True,
+                ambiguity_message=(
+                    "Nu putem stabili sigur dacă rezultatul istoric Lencioni aparține "
+                    "echipei de leadership sau echipei funcționale."
+                ),
+            )
         if functional_leader_ids:
-            return functional_leader_ids[0]
+            return MemberLencioniTeamResolution(functional_leader_ids[0])
         if leadership_ids:
-            return leadership_ids[0]
+            return MemberLencioniTeamResolution(leadership_ids[0])
 
         # Legacy projects may predate team snapshots. This fallback is intentionally
         # restricted to a team the member personally evaluated in the already scoped
         # assignment set, so it cannot pull rows from another project or cycle.
-        return min(
+        fallback_team_id = min(
             (
                 assignment.target_team_id
-                for assignment, result, _definition in assignment_results
+                for assignment, result, _definition in assignment_result_rows
                 if assignment.questionnaire_key in LENCIONI_REPORT_KEYS
                 and assignment.respondent_profile_id == member_id
                 and result is not None
@@ -543,6 +601,7 @@ class ScoringService:
             ),
             default=None,
         )
+        return MemberLencioniTeamResolution(fallback_team_id)
 
     async def get_icare_answer_review(
         self,
