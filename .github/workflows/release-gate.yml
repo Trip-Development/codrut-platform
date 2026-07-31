@@ -9,6 +9,7 @@ on:
       - edited
       - synchronize
       - reopened
+      - ready_for_review
 
 permissions:
   actions: read
@@ -21,14 +22,14 @@ concurrency:
 jobs:
   candidate:
     name: release / validated-candidate
-    if: github.head_ref == 'dev'
+    if: github.event.pull_request.draft == false && github.head_ref == 'dev'
     uses: ./.github/workflows/_staging-promotion-check.yml
     with:
       release_sha: ${{ github.event.pull_request.head.sha }}
 
   tree:
     name: release / exact-dev-tree
-    if: github.head_ref == 'dev'
+    if: github.event.pull_request.draft == false && github.head_ref == 'dev'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,7 +48,7 @@ jobs:
     name: release / required
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    if: always()
+    if: always() && github.event.pull_request.draft == false
     needs:
       - candidate
       - tree

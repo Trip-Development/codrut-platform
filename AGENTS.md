@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This is a primarily single-maintainer product repository. Optimize for fast,
-clear delivery without weakening user-data, privacy, migration, or production
-recovery boundaries. Festival and campaign tools are optional unless the user
-explicitly chooses them.
+Optimize for fast, clear delivery without weakening user-data, privacy,
+migration, or production recovery boundaries. Festival and campaign tools are
+optional unless the work is already linked to one or the user explicitly
+chooses them.
 
 ## Working loop
 
