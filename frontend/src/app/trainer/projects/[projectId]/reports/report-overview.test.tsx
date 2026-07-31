@@ -177,6 +177,54 @@ describe("project report overview", () => {
     expect(screen.queryByText("4.2%")).toBeNull();
   });
 
+  it("renders Lencioni and TA averages on their declared definition scales", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        lencioni_scale: { score_unit: "score", scale_min: 0, scale_max: 12 },
+        driver_scale: { score_unit: "percent", scale_min: 0, scale_max: 80 },
+      },
+      assignments: [],
+      participants: [],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText("7.2 / 12")).toBeTruthy();
+    const driverValue = screen.getByText("64%");
+    const driverBar = driverValue.parentElement?.nextElementSibling?.firstElementChild;
+    expect(driverBar?.getAttribute("style")).toContain("width: 80%");
+  });
+
+  it("does not present mixed scale averages as missing results", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        lencioni_averages: [],
+        lencioni_scale: {
+          score_scale_compatible: false,
+          unavailable_reason: "incompatible_score_scales",
+        },
+      },
+      assignments: [],
+      participants: [],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText(/Aceste rezultate folosesc scale diferite/)).toBeTruthy();
+  });
+
   it("explains that a displayed zero is a valid minimum, not a missing result", async () => {
     data.getProjectReportWorkspaceData.mockResolvedValue({
       aggregate: {

@@ -58,6 +58,7 @@ from codrut.modules.scoring.schemas import (
     ReportAverageResponse,
     ReportDistributionResponse,
     ReportHierarchyIssueResponse,
+    ReportScoreScaleResponse,
     ReportTeamLensResponse,
     ScoringResultResponse,
 )
@@ -132,7 +133,9 @@ class ScoreSummary:
     driver_count: int
     boss_360_count: int
     lencioni_averages: list[ReportAverageResponse]
+    lencioni_scale: ReportScoreScaleResponse
     driver_averages: list[ReportAverageResponse]
+    driver_scale: ReportScoreScaleResponse
     boss_360_averages: list[ReportAverageResponse]
 
 
@@ -159,7 +162,7 @@ class DriverRowSelection:
 
 
 @dataclass(frozen=True)
-class IcareScoreScale:
+class ReportScoreScale:
     score_unit: str
     scale_min: float
     scale_max: float
@@ -327,7 +330,9 @@ class ScoringService:
             pcm_base_count=_distribution_count(pcm_base_distribution),
             pcm_phase_count=_distribution_count(pcm_phase_distribution),
             lencioni_averages=score_summary.lencioni_averages,
+            lencioni_scale=score_summary.lencioni_scale,
             driver_averages=score_summary.driver_averages,
+            driver_scale=score_summary.driver_scale,
             boss_360_averages=score_summary.boss_360_averages,
             icare_target_summaries=icare_target_summaries,
             icare_cohorts=icare_cohorts,
@@ -451,12 +456,14 @@ class ScoringService:
             pcm_phase=cycle_pcm.get("pcm_phase", member.pcm_phase),
             lencioni_count=lencioni_summary.lencioni_count,
             lencioni_averages=lencioni_summary.lencioni_averages,
+            lencioni_scale=lencioni_summary.lencioni_scale,
             icare_cohorts=target_summary.cohorts if target_summary is not None else [],
             driver_count=driver_summary.driver_count,
             driver_averages=[
                 average.model_copy(update={"feedback": driver_feedback.get(average.id)})
                 for average in driver_summary.driver_averages
             ],
+            driver_scale=driver_summary.driver_scale,
         )
 
     async def _resolve_member_lencioni_team_id(
@@ -477,8 +484,7 @@ class ScoringService:
                     )
                     .join(Team, Team.id == AssessmentCycleTeamMembership.team_id)
                     .where(
-                        AssessmentCycleTeamMembership.assessment_cycle_id
-                        == assessment_cycle_id,
+                        AssessmentCycleTeamMembership.assessment_cycle_id == assessment_cycle_id,
                         AssessmentCycleTeamMembership.participant_profile_id == member_id,
                     )
                 )
@@ -1258,6 +1264,110 @@ def _report_participant_from_membership(
     )
 
 
+def _definition_report_score_scale(
+    definition: QuestionnaireDefinition | None,
+) -> ReportScoreScale | None:
+    if definition is None:
+        return None
+
+    feedback_policy = getattr(definition, "feedback_policy", None)
+    if isinstance(feedback_policy, dict):
+        explicit_maximum = _coerce_score(feedback_policy.get("scale_max"))
+        explicit_minimum = _coerce_score(feedback_policy.get("scale_min"))
+        explicit_minimum = explicit_minimum if explicit_minimum is not None else 0.0
+        if explicit_maximum is not None and explicit_maximum > explicit_minimum:
+            return ReportScoreScale(
+                _non_empty_string(feedback_policy.get("score_unit")) or "score",
+                explicit_minimum,
+                explicit_maximum,
+            )
+
+    for schema in (
+        _private_definition_schema(definition),
+        getattr(definition, "schema", None),
+    ):
+        if not isinstance(schema, dict):
+            continue
+        scoring = schema.get("scoring")
+        if not isinstance(scoring, dict):
+            continue
+        method = scoring.get("method")
+        score_unit = _non_empty_string(scoring.get("score_unit"))
+
+        if method == "average_statement_scores_by_section":
+            if score_unit != "grade_1_to_5":
+                return ReportScoreScale(score_unit or "percent", 0.0, 100.0)
+            minimum = _coerce_score(scoring.get("scale_min"))
+            maximum = _coerce_score(scoring.get("scale_max"))
+            if minimum is not None and maximum is not None and maximum > minimum:
+                return ReportScoreScale(score_unit, minimum, maximum)
+
+        minimum = _coerce_score(scoring.get("scale_min"))
+        maximum = _coerce_score(scoring.get("scale_max"))
+        if maximum is not None and maximum > (minimum if minimum is not None else 0):
+            return ReportScoreScale(score_unit or "score", minimum or 0.0, maximum)
+
+        normalize_to = _coerce_score(scoring.get("normalize_to"))
+        if normalize_to is not None and normalize_to > 0:
+            normalized_unit = score_unit or ("percent" if normalize_to == 100 else "score")
+            return ReportScoreScale(normalized_unit, 0.0, normalize_to)
+
+        if method == "sum_by_group":
+            rules = list(_valid_interpretation_rules(scoring.get("interpretation")))
+            for group in scoring.get("groups", []):
+                if isinstance(group, dict):
+                    rules.extend(_valid_interpretation_rules(group.get("interpretation")))
+            minima = [
+                value for rule in rules if (value := _coerce_score(rule.get("min"))) is not None
+            ]
+            maxima = [
+                value for rule in rules if (value := _coerce_score(rule.get("max"))) is not None
+            ]
+            if minima and maxima and max(maxima) > min(minima):
+                return ReportScoreScale(score_unit or "score", min(minima), max(maxima))
+    return None
+
+
+def _score_scale_response(
+    scales: set[ReportScoreScale],
+    *,
+    has_unknown_scale: bool,
+) -> ReportScoreScaleResponse:
+    compatible = len(scales) <= 1 and not (scales and has_unknown_scale)
+    scale = next(iter(scales), None) if compatible else None
+    return ReportScoreScaleResponse(
+        score_unit=scale.score_unit if scale is not None else None,
+        scale_min=scale.scale_min if scale is not None else None,
+        scale_max=scale.scale_max if scale is not None else None,
+        score_scale_compatible=compatible,
+        unavailable_reason=None if compatible else "incompatible_score_scales",
+    )
+
+
+def _summarize_report_rows(
+    rows: Iterable[AssignmentResultWithDefinition],
+) -> tuple[int, list[ReportAverageResponse], ReportScoreScaleResponse]:
+    dimensions: dict[str, ReportDimensionAccumulator] = {}
+    scales: set[ReportScoreScale] = set()
+    has_unknown_scale = False
+    count = 0
+    for _assignment, result, definition in rows:
+        assert result is not None
+        if not _accumulate_scores(dimensions, result, definition):
+            continue
+        count += 1
+        scale = _definition_report_score_scale(definition)
+        if scale is None:
+            has_unknown_scale = True
+        else:
+            scales.add(scale)
+    scale_response = _score_scale_response(scales, has_unknown_scale=has_unknown_scale)
+    averages = (
+        _averages_from_accumulators(dimensions) if scale_response.score_scale_compatible else []
+    )
+    return count, averages, scale_response
+
+
 def _build_score_summary(
     assignment_results: Iterable[AssignmentResultWithDefinition],
     *,
@@ -1269,35 +1379,31 @@ def _build_score_summary(
         if driver_rows is not None
         else list(_select_latest_completed_driver_rows(assignment_result_rows).average_rows)
     )
-    lencioni_dimensions: dict[str, ReportDimensionAccumulator] = {}
-    driver_dimensions: dict[str, ReportDimensionAccumulator] = {}
     boss_360_dimensions: dict[str, ReportDimensionAccumulator] = {}
-    lencioni_count = 0
-    driver_count = 0
     boss_360_count = 0
+    lencioni_rows: list[AssignmentResultWithDefinition] = []
 
     for assignment, result, definition in assignment_result_rows:
         if assignment.status not in COMPLETED_STATUSES or result is None:
             continue
         if assignment.questionnaire_key in LENCIONI_REPORT_KEYS:
-            if _accumulate_scores(lencioni_dimensions, result, definition):
-                lencioni_count += 1
+            lencioni_rows.append((assignment, result, definition))
         elif assignment.questionnaire_key in BOSS_360_REPORT_KEYS:
             if _is_self_boss_assignment(assignment):
                 continue
             if _accumulate_scores(boss_360_dimensions, result, definition):
                 boss_360_count += 1
-    for _assignment, result, definition in selected_driver_rows:
-        assert result is not None
-        if _accumulate_scores(driver_dimensions, result, definition):
-            driver_count += 1
+    lencioni_count, lencioni_averages, lencioni_scale = _summarize_report_rows(lencioni_rows)
+    driver_count, driver_averages, driver_scale = _summarize_report_rows(selected_driver_rows)
 
     return ScoreSummary(
         lencioni_count=lencioni_count,
         driver_count=driver_count,
         boss_360_count=boss_360_count,
-        lencioni_averages=_averages_from_accumulators(lencioni_dimensions),
-        driver_averages=_averages_from_accumulators(driver_dimensions),
+        lencioni_averages=lencioni_averages,
+        lencioni_scale=lencioni_scale,
+        driver_averages=driver_averages,
+        driver_scale=driver_scale,
         boss_360_averages=_averages_from_accumulators(boss_360_dimensions),
     )
 
@@ -1379,7 +1485,7 @@ ICARE_COHORT_ORDER = ("direct_team", "leadership_peers", "self")
 
 def _icare_score_scale(
     definition: QuestionnaireDefinition | None,
-) -> IcareScoreScale | None:
+) -> ReportScoreScale | None:
     if definition is None:
         return None
     for schema in (
@@ -1396,9 +1502,9 @@ def _icare_score_scale(
             minimum = _coerce_score(scoring.get("scale_min"))
             maximum = _coerce_score(scoring.get("scale_max"))
             if minimum is not None and maximum is not None and maximum > minimum:
-                return IcareScoreScale(unit, minimum, maximum)
+                return ReportScoreScale(unit, minimum, maximum)
         else:
-            return IcareScoreScale(unit, 0.0, 100.0)
+            return ReportScoreScale(unit, 0.0, 100.0)
     return None
 
 
@@ -1485,8 +1591,7 @@ def _build_icare_cohort_summaries(
     definition_ids = {
         definition_id
         for _assignment, _result, definition, _cohort in classified_rows
-        if definition is not None
-        and (definition_id := getattr(definition, "id", None)) is not None
+        if definition is not None and (definition_id := getattr(definition, "id", None)) is not None
     }
     if len(scales) > 1 or len(definition_ids) > 1:
         return [
@@ -1915,9 +2020,7 @@ def _build_team_lenses(
         if manager is None:
             continue
         direct_reports = direct_reports_by_manager_id.get(manager.id, [])
-        direct_report_ids = {
-            direct_report.id for direct_report in direct_reports
-        }
+        direct_report_ids = {direct_report.id for direct_report in direct_reports}
         if not direct_report_ids:
             continue
 
@@ -2007,6 +2110,7 @@ def _build_team_lens(
         pcm_base_count=_distribution_count(pcm_base_distribution),
         pcm_phase_count=_distribution_count(pcm_phase_distribution),
         lencioni_averages=score_summary.lencioni_averages,
+        lencioni_scale=score_summary.lencioni_scale,
         driver_averages=score_summary.driver_averages,
         boss_360_averages=score_summary.boss_360_averages,
         pcm_base_distribution=pcm_base_distribution,

@@ -12,6 +12,7 @@ import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
 import { ScaledBar } from "@/components/reports/native-charts";
+import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Card } from "@/components/ui/card";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { buildProjectReportQuery } from "../../report-cycle";
@@ -53,6 +54,14 @@ export default async function LeadershipMemberReportPage({
   const overviewHref = `/trainer/projects/${project.id}/reports${buildProjectReportQuery({
     cycle: query.cycle,
   })}`;
+  const lencioniScale = resolveReportScoreScale(
+    report.lencioni_scale,
+    { min: 0, max: 10, suffix: "" },
+  );
+  const driverScale = resolveReportScoreScale(
+    report.driver_scale,
+    { min: 0, max: 100, suffix: "%" },
+  );
 
   return (
     <div className="flex flex-col gap-10">
@@ -86,8 +95,13 @@ export default async function LeadershipMemberReportPage({
           <AverageList
             count={report.lencioni_count}
             items={report.lencioni_averages}
-            max={10}
-            empty="Nu există încă un rezultat Lencioni pentru această echipă."
+            min={lencioniScale.min}
+            max={lencioniScale.max}
+            suffix={lencioniScale.suffix}
+            empty={reportScaleEmptyCopy(
+              report.lencioni_scale,
+              "Nu există încă un rezultat Lencioni pentru această echipă.",
+            )}
           />
         </Card>
       </ResultSection>
@@ -135,11 +149,15 @@ export default async function LeadershipMemberReportPage({
           <AverageList
             count={report.driver_count}
             items={report.driver_averages}
-            max={100}
-            suffix="%"
+            min={driverScale.min}
+            max={driverScale.max}
+            suffix={driverScale.suffix}
             dangerAbove={50}
             showFeedback
-            empty="Nu există încă un rezultat TA pentru această persoană."
+            empty={reportScaleEmptyCopy(
+              report.driver_scale,
+              "Nu există încă un rezultat TA pentru această persoană.",
+            )}
           />
         </Card>
       </ResultSection>

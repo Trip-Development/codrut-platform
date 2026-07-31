@@ -25,6 +25,7 @@ from codrut.modules.scoring.service import (
     _build_driver_rank_summary,
     _build_icare_cohort_summaries,
     _build_score_summary,
+    _definition_report_score_scale,
     _distribution_count,
     _distribution_from_completed_pcm_assignments,
     _driver_feedback_by_dimension,
@@ -176,6 +177,88 @@ def test_report_dimensions_use_public_labels_rules_and_safe_fallbacks() -> None:
     assert _report_dimensions(  # type: ignore[arg-type]
         _definition({}), {"valid_score": "7", "private": None}
     ) == {"valid_score": ("Valid Score", ())}
+
+
+def test_report_scale_is_derived_from_pinned_definition_scoring() -> None:
+    lencioni = _definition(
+        {
+            "scoring": {
+                "method": "sum_by_group",
+                "interpretation": [
+                    {"min": 0, "max": 4, "label": "Low"},
+                    {"min": 5, "max": 12, "label": "High"},
+                ],
+            }
+        }
+    )
+    drivers = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "normalize_to": 80,
+            }
+        }
+    )
+    percent_drivers = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "normalize_to": 100,
+            }
+        }
+    )
+
+    lencioni_scale = _definition_report_score_scale(lencioni)  # type: ignore[arg-type]
+    driver_scale = _definition_report_score_scale(drivers)  # type: ignore[arg-type]
+    percent_driver_scale = _definition_report_score_scale(  # type: ignore[arg-type]
+        percent_drivers
+    )
+    assert lencioni_scale is not None
+    assert (lencioni_scale.score_unit, lencioni_scale.scale_min, lencioni_scale.scale_max) == (
+        "score",
+        0,
+        12,
+    )
+    assert driver_scale is not None
+    assert (driver_scale.score_unit, driver_scale.scale_min, driver_scale.scale_max) == (
+        "score",
+        0,
+        80,
+    )
+    assert percent_driver_scale is not None
+    assert percent_driver_scale.score_unit == "percent"
+
+
+def test_score_summary_suppresses_averages_from_incompatible_pinned_scales() -> None:
+    ten_point = _definition(
+        {
+            "scoring": {
+                "method": "sum_by_group",
+                "scale_min": 0,
+                "scale_max": 10,
+            }
+        }
+    )
+    five_point = _definition(
+        {
+            "scoring": {
+                "method": "sum_by_group",
+                "scale_min": 0,
+                "scale_max": 5,
+            }
+        }
+    )
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        [
+            (_assignment("lencioni"), _result({"trust": 8}), ten_point),
+            (_assignment("lencioni"), _result({"trust": 4}), five_point),
+        ]
+    )
+
+    assert summary.lencioni_count == 2
+    assert summary.lencioni_averages == []
+    assert summary.lencioni_scale.score_scale_compatible is False
+    assert summary.lencioni_scale.unavailable_reason == "incompatible_score_scales"
 
 
 def test_interpretation_and_average_helpers_ignore_invalid_rules() -> None:
@@ -370,9 +453,7 @@ def test_ambiguous_hierarchy_keeps_explicit_leaders_for_individual_reports() -> 
         leadership_ids=set(),
     )
 
-    assert _leadership_ids_for_report(ambiguous_hierarchy, participants) == {
-        explicit_leader_id
-    }
+    assert _leadership_ids_for_report(ambiguous_hierarchy, participants) == {explicit_leader_id}
 
 
 def test_driver_feedback_comes_from_the_pinned_definition() -> None:

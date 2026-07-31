@@ -22,6 +22,14 @@ class ReportAverageResponse(BaseModel):
     feedback: str | None = None
 
 
+class ReportScoreScaleResponse(BaseModel):
+    score_unit: str | None = None
+    scale_min: float | None = None
+    scale_max: float | None = None
+    score_scale_compatible: bool = True
+    unavailable_reason: Literal["incompatible_score_scales"] | None = None
+
+
 class ReportDistributionResponse(BaseModel):
     id: str
     label: str
@@ -42,6 +50,7 @@ class ReportTeamLensResponse(BaseModel):
     pcm_base_count: int
     pcm_phase_count: int
     lencioni_averages: list[ReportAverageResponse]
+    lencioni_scale: ReportScoreScaleResponse
     driver_averages: list[ReportAverageResponse]
     boss_360_averages: list[ReportAverageResponse]
     pcm_base_distribution: list[ReportDistributionResponse]
@@ -150,9 +159,11 @@ class LeadershipMemberReportResponse(BaseModel):
     pcm_phase: str | None = None
     lencioni_count: int
     lencioni_averages: list[ReportAverageResponse]
+    lencioni_scale: ReportScoreScaleResponse
     icare_cohorts: list[IcareCohortSummaryResponse]
     driver_count: int
     driver_averages: list[ReportAverageResponse]
+    driver_scale: ReportScoreScaleResponse
 
 
 class CompanyReportAggregateResponse(BaseModel):
@@ -171,7 +182,9 @@ class CompanyReportAggregateResponse(BaseModel):
     pcm_base_count: int
     pcm_phase_count: int
     lencioni_averages: list[ReportAverageResponse]
+    lencioni_scale: ReportScoreScaleResponse
     driver_averages: list[ReportAverageResponse]
+    driver_scale: ReportScoreScaleResponse
     boss_360_averages: list[ReportAverageResponse]
     icare_target_summaries: list[IcareTargetSummaryResponse]
     icare_cohorts: list[IcareCohortSummaryResponse] = Field(default_factory=list)

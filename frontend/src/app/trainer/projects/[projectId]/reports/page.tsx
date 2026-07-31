@@ -10,6 +10,7 @@ import type {
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
 import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
+import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { getProjectAssessmentCyclesData, getProjectReportWorkspaceData } from "../project-data";
@@ -63,6 +64,14 @@ export default async function ProjectReportsPage({
   const driverPieEmptyLabel = aggregate.driver_rank_summary.insufficient_driver_score_count > 0
     ? "Nu există rezultate TA care pot fi incluse în aceste grafice."
     : undefined;
+  const lencioniScale = resolveReportScoreScale(
+    aggregate.lencioni_scale,
+    { min: 0, max: 10, suffix: "" },
+  );
+  const driverScale = resolveReportScoreScale(
+    aggregate.driver_scale,
+    { min: 0, max: 100, suffix: "%" },
+  );
 
   return (
     <div className="flex flex-col gap-10">
@@ -99,7 +108,13 @@ export default async function ProjectReportsPage({
           title="Rezultatul întregului proiect"
           count={aggregate.lencioni_count}
           items={aggregate.lencioni_averages}
-          max={10}
+          min={lencioniScale.min}
+          max={lencioniScale.max}
+          suffix={lencioniScale.suffix}
+          empty={reportScaleEmptyCopy(
+            aggregate.lencioni_scale,
+            "Nu există încă rezultate Lencioni scorate pentru acest proiect.",
+          )}
         />
         {aggregate.hierarchy_ambiguous ? (
           <HierarchyDiagnosticsPanel
@@ -181,8 +196,13 @@ export default async function ProjectReportsPage({
           title="Media procentuală"
           count={aggregate.driver_count}
           items={aggregate.driver_averages}
-          max={100}
-          suffix="%"
+          min={driverScale.min}
+          max={driverScale.max}
+          suffix={driverScale.suffix}
+          empty={reportScaleEmptyCopy(
+            aggregate.driver_scale,
+            "Nu există încă rezultate TA scorate pentru acest proiect.",
+          )}
         />
         <div>
           <h3 className="text-lg font-semibold text-foreground">Driverii întâlniți cel mai des</h3>

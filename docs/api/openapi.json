@@ -3163,6 +3163,9 @@
           "driver_rank_summary": {
             "$ref": "#/components/schemas/DriverRankSummaryResponse"
           },
+          "driver_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
           "hierarchy_ambiguity_message": {
             "anyOf": [
               {
@@ -3217,6 +3220,9 @@
           "lencioni_count": {
             "title": "Lencioni Count",
             "type": "integer"
+          },
+          "lencioni_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
           },
           "pcm_base_count": {
             "title": "Pcm Base Count",
@@ -3305,7 +3311,9 @@
           "pcm_base_count",
           "pcm_phase_count",
           "lencioni_averages",
+          "lencioni_scale",
           "driver_averages",
+          "driver_scale",
           "boss_360_averages",
           "icare_target_summaries",
           "driver_rank_summary",
@@ -4876,6 +4884,9 @@
             "title": "Driver Count",
             "type": "integer"
           },
+          "driver_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
           "icare_cohorts": {
             "items": {
               "$ref": "#/components/schemas/IcareCohortSummaryResponse"
@@ -4893,6 +4904,9 @@
           "lencioni_count": {
             "title": "Lencioni Count",
             "type": "integer"
+          },
+          "lencioni_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
           },
           "member": {
             "$ref": "#/components/schemas/LeadershipMemberSummaryResponse"
@@ -4930,9 +4944,11 @@
           "member",
           "lencioni_count",
           "lencioni_averages",
+          "lencioni_scale",
           "icare_cohorts",
           "driver_count",
-          "driver_averages"
+          "driver_averages",
+          "driver_scale"
         ],
         "title": "LeadershipMemberReportResponse",
         "type": "object"
@@ -7389,6 +7405,62 @@
         "title": "ReportHierarchyIssueResponse",
         "type": "object"
       },
+      "ReportScoreScaleResponse": {
+        "properties": {
+          "scale_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Max"
+          },
+          "scale_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Min"
+          },
+          "score_scale_compatible": {
+            "default": true,
+            "title": "Score Scale Compatible",
+            "type": "boolean"
+          },
+          "score_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Unit"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "const": "incompatible_score_scales",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "title": "ReportScoreScaleResponse",
+        "type": "object"
+      },
       "ReportTeamLensResponse": {
         "properties": {
           "assigned_count": {
@@ -7440,6 +7512,9 @@
             "title": "Lencioni Count",
             "type": "integer"
           },
+          "lencioni_scale": {
+            "$ref": "#/components/schemas/ReportScoreScaleResponse"
+          },
           "member_count": {
             "title": "Member Count",
             "type": "integer"
@@ -7484,6 +7559,7 @@
           "pcm_base_count",
           "pcm_phase_count",
           "lencioni_averages",
+          "lencioni_scale",
           "driver_averages",
           "boss_360_averages",
           "pcm_base_distribution",

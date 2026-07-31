@@ -19,12 +19,14 @@ const api = vi.hoisted(() => ({
     pcm_phase: "persister",
     lencioni_count: 2,
     lencioni_averages: [{ id: "trust", label: "Încredere", avg: 7 }],
+    lencioni_scale: { score_unit: "score", scale_min: 0, scale_max: 12 },
     icare_cohorts: [
       { cohort: "direct_team", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 4.2 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
       { cohort: "leadership_peers", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 4 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
       { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 3.8 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
     ],
     driver_count: 1,
+    driver_scale: { score_unit: "percent", scale_min: 0, scale_max: 80 },
     driver_averages: [{
       id: "perfect",
       label: "Fii perfect",
@@ -60,6 +62,8 @@ describe("leadership member report", () => {
     expect(pcm.compareDocumentPosition(lencioni) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(lencioni.compareDocumentPosition(icare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(icare.compareDocumentPosition(drivers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("7 / 12")).toBeTruthy();
+    expect(screen.getByText("62%")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum te vede echipa ta" })).toBeTruthy();
     expect(screen.getByText("4.2 din 5")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Cum te văd colegii din leadership: 2 răspunsuri" }));

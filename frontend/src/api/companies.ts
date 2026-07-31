@@ -406,6 +406,14 @@ export type ReportAverage = {
   feedback?: string | null;
 };
 
+export type ReportScoreScale = {
+  score_unit?: string | null;
+  scale_min?: number | null;
+  scale_max?: number | null;
+  score_scale_compatible?: boolean;
+  unavailable_reason?: "incompatible_score_scales" | null;
+};
+
 export type ReportDistribution = {
   id: string;
   label: string;
@@ -426,6 +434,7 @@ export type ReportTeamLens = {
   pcm_base_count: number;
   pcm_phase_count: number;
   lencioni_averages: ReportAverage[];
+  lencioni_scale?: ReportScoreScale | null;
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
   pcm_base_distribution: ReportDistribution[];
@@ -463,7 +472,9 @@ export type CompanyReportAggregate = {
   pcm_base_count: number;
   pcm_phase_count: number;
   lencioni_averages: ReportAverage[];
+  lencioni_scale?: ReportScoreScale | null;
   driver_averages: ReportAverage[];
+  driver_scale?: ReportScoreScale | null;
   boss_360_averages: ReportAverage[];
   icare_target_summaries: IcareTargetSummary[];
   icare_cohorts: IcareCohortSummary[];
@@ -523,9 +534,11 @@ export type LeadershipMemberReport = {
   pcm_phase?: string | null;
   lencioni_count: number;
   lencioni_averages: ReportAverage[];
+  lencioni_scale?: ReportScoreScale | null;
   icare_cohorts: IcareCohortSummary[];
   driver_count: number;
   driver_averages: ReportAverage[];
+  driver_scale?: ReportScoreScale | null;
 };
 
 export type CompanyReportComparison = {
