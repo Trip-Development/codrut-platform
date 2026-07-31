@@ -1178,11 +1178,11 @@ def _icare_assignment_cohort(
     *,
     hierarchy: Any,
 ) -> str | None:
+    target_id = _icare_target_id(assignment)
+    if target_id is None or target_id not in hierarchy.leadership_ids:
+        return None
     if _is_self_boss_assignment(assignment):
         return "self"
-    target_id = _icare_target_id(assignment)
-    if target_id is None:
-        return None
     respondent_id = assignment.respondent_profile_id
     direct_report_ids = {
         participant.id for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])

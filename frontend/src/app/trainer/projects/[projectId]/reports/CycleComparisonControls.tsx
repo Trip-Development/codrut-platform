@@ -5,6 +5,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AssessmentCycle } from "@/api/companies";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const CYCLE_STATUS_LABELS: Record<AssessmentCycle["status"], string> = {
+  active: "În desfășurare",
+  closed: "Finalizată",
+  draft: "În pregătire",
+};
+
 export function CycleComparisonControls({
   cycles,
   cycleId,
@@ -49,16 +55,16 @@ function CycleSelect({
   onValueChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1.5 text-xs font-semibold text-muted-foreground">
+    <label className="grid w-full max-w-72 gap-1.5 text-xs font-semibold text-muted-foreground">
       {label}
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className="h-9 w-52 bg-surface" aria-label={label}>
+        <SelectTrigger className="h-9 w-full bg-surface" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {cycles.map((cycle) => (
             <SelectItem key={cycle.id} value={cycle.id}>
-              {cycle.name}
+              {cycle.name} · {CYCLE_STATUS_LABELS[cycle.status]}
             </SelectItem>
           ))}
         </SelectContent>
