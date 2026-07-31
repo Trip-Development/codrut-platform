@@ -910,7 +910,9 @@ async def test_registered_user_must_log_in_before_claiming_unlinked_profile() ->
         email="known.member@example.com",
         password_hash="existing",  # noqa: S106
         role=UserRole.participant,
+        account_type=UserAccountType.registered,
     )
+    original_password_hash = existing_user.password_hash
     assignment = QuestionnaireAssignment(
         id=assignment_id,
         company_id=company_id,
@@ -937,6 +939,8 @@ async def test_registered_user_must_log_in_before_claiming_unlinked_profile() ->
     assert result.response.action == "login_required"
     assert result.session_token is None
     assert profile.user_id is None
+    assert existing_user.account_type is UserAccountType.registered
+    assert existing_user.password_hash == original_password_hash
     assert not any(isinstance(model, User) for model in session.added_models)
     assert not any(isinstance(model, Session) for model in session.added_models)
 
@@ -979,7 +983,9 @@ async def test_registered_linked_user_must_log_in_before_dashboard_access() -> N
         email="linked.member@example.com",
         password_hash="existing",  # noqa: S106
         role=UserRole.participant,
+        account_type=UserAccountType.registered,
     )
+    original_password_hash = linked_user.password_hash
     assignment = QuestionnaireAssignment(
         id=assignment_id,
         company_id=company_id,
@@ -1006,6 +1012,8 @@ async def test_registered_linked_user_must_log_in_before_dashboard_access() -> N
     assert result.response.action == "login_required"
     assert result.session_token is None
     assert profile.user_id == user_id
+    assert linked_user.account_type is UserAccountType.registered
+    assert linked_user.password_hash == original_password_hash
     assert not any(isinstance(model, User) for model in session.added_models)
     assert not any(isinstance(model, Session) for model in session.added_models)
 

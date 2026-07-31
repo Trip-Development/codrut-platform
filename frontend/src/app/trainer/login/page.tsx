@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { completeLoginNavigation } from "@/lib/auth-navigation";
 import { safeTrainerReturnTo } from "@/lib/auth-return";
 
 function requestedTrainerRoute(): string {
@@ -73,8 +74,7 @@ export default function TrainerLoginPage() {
       if (!canAccessWorkspace(session.user, "trainer")) {
         throw new Error("Acest cont nu are acces la portalul de trainer.");
       }
-      router.push(requestedTrainerRoute());
-      router.refresh();
+      completeLoginNavigation(requestedTrainerRoute());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");
       submittingRef.current = false;
