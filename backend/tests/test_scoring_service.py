@@ -961,6 +961,16 @@ async def test_company_report_aggregate_is_scoped_and_uses_only_scored_results(
                 key: questionnaire_definition_factory(key)
                 for key in ("lencioni", "distress_drivers", "boss_360")
             }
+            definitions["lencioni"].feedback_policy = {
+                "score_unit": "score",
+                "scale_min": 0,
+                "scale_max": 15,
+            }
+            definitions["distress_drivers"].feedback_policy = {
+                "score_unit": "percent",
+                "scale_min": 0,
+                "scale_max": 100,
+            }
             session.add_all(definitions.values())
             await session.flush()
 
@@ -1310,6 +1320,17 @@ async def test_cycle_comparison_exposes_pinned_definition_compatibility_and_hide
             baseline_lencioni = questionnaire_definition_factory("lencioni")
             comparison_lencioni = questionnaire_definition_factory("lencioni")
             shared_drivers = questionnaire_definition_factory("distress_drivers")
+            for definition in (baseline_lencioni, comparison_lencioni):
+                definition.feedback_policy = {
+                    "score_unit": "score",
+                    "scale_min": 0,
+                    "scale_max": 10,
+                }
+            shared_drivers.feedback_policy = {
+                "score_unit": "percent",
+                "scale_min": 0,
+                "scale_max": 100,
+            }
             baseline_cycle = AssessmentCycle(
                 id=uuid.uuid4(),
                 company_id=company.id,

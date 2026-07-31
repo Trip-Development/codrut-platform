@@ -529,6 +529,11 @@ def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> No
             ),
         ),
     )
+    lencioni_definition = SimpleNamespace(
+        private_config={},
+        schema={},
+        feedback_policy={"score_unit": "score", "scale_min": 0, "scale_max": 10},
+    )
     rows = [
         (
             _assignment(
@@ -538,7 +543,7 @@ def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> No
                 target_team_id=leadership_team_id,
             ),
             _result({"trust": 2}),
-            None,
+            lencioni_definition,
         ),
         (
             _assignment(
@@ -548,7 +553,7 @@ def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> No
                 target_team_id=leadership_team_id,
             ),
             _result({"trust": 4}),
-            None,
+            lencioni_definition,
         ),
         (
             _assignment(
@@ -558,7 +563,7 @@ def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> No
                 target_team_id=functional_team_id,
             ),
             _result({"trust": 8}),
-            None,
+            lencioni_definition,
         ),
         (
             _assignment(
@@ -568,7 +573,7 @@ def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> No
                 target_team_id=functional_team_id,
             ),
             _result({"trust": 10}),
-            None,
+            lencioni_definition,
         ),
         (
             _assignment(
