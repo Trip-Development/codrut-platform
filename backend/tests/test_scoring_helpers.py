@@ -258,6 +258,48 @@ def test_report_scale_is_derived_from_pinned_definition_scoring() -> None:
     assert percent_driver_scale.score_unit == "percent"
 
 
+def test_percent_feedback_policy_without_unit_matches_normalized_driver_scale() -> None:
+    policy_definition = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "normalize_to": 100,
+                "drivers": [{"id": "hurry_up", "label": "Grăbește-te"}],
+            }
+        }
+    )
+    policy_definition.feedback_policy = {"scale_min": 0, "scale_max": 100}
+    schema_definition = _definition(
+        {
+            "scoring": {
+                "method": "sum_statement_scores_by_driver",
+                "normalize_to": 100,
+                "drivers": [{"id": "hurry_up", "label": "Grăbește-te"}],
+            }
+        }
+    )
+
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        [
+            (
+                _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+                _result({"hurry_up": 40}),
+                policy_definition,
+            ),
+            (
+                _assignment("distress_drivers", respondent_profile_id=uuid.uuid4()),
+                _result({"hurry_up": 80}),
+                schema_definition,
+            ),
+        ]
+    )
+
+    assert summary.driver_scale.score_unit == "percent"
+    assert summary.driver_scale.score_scale_compatible is True
+    assert summary.driver_count == 2
+    assert summary.driver_averages[0].avg == 60
+
+
 def test_score_summary_marks_unknown_only_scales_unavailable() -> None:
     summary = _build_score_summary(  # type: ignore[arg-type]
         [(_assignment("lencioni"), _result({"trust": 7}), None)]
