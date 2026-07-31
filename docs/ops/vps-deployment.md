@@ -99,6 +99,29 @@ For PRs into `prod`, require:
 
 - `release / required`
 
+Feature PR checks are risk-scoped instead of running every suite for every
+change:
+
+- backend changes run Ruff, a fresh migration, and backend tests without the
+  slower coverage pass;
+- database changes additionally run Alembic drift validation;
+- API contract changes additionally verify the OpenAPI snapshot and generated
+  frontend types;
+- frontend changes run lint, type checking, and unit tests; the production
+  build is proven once by the immutable `dev` candidate;
+- workflow/script changes run only the automation helper tests plus shell and
+  workflow-YAML parsing;
+- representative PR E2E runs only when E2E infrastructure changes or the PR is
+  labeled `ci:e2e`; `ci:full` remains an explicit escape hatch for unusually
+  risky changes.
+
+The `Dev Candidate` remains the single post-merge integration gate: it builds
+the deployable images once and runs production-shape E2E once. Coverage reports
+are local/on-demand evidence, not a blocking pass repeated on every PR.
+Native CodeQL remains the code-scanning gate. The duplicate Copilot
+every-push/draft review ruleset is disabled; human/Codex review is requested
+when the diff benefits from it instead of running another automatic scan.
+
 Use strict required status checks for `dev` and loose required status checks
 for `prod`. `app-ci / required`, `policy / required`, `security / required`,
 and native CodeQL run only on feature PRs into `dev`.
@@ -117,9 +140,10 @@ The deployment workflows separate build and deploy work:
 - `_image-build.yml` builds backend/frontend images with BuildKit cache.
   `Dev Candidate` uses it to push the SHA-tagged release candidate once.
 - `_deploy-vps.yml` runs behind the selected GitHub Environment, consumes the exact
-  candidate image refs, writes the VPS `.env`, pulls those images,
-  migrates, recreates app services, asserts running image refs, and checks
-  health.
+  candidate image refs, pre-pulls both images, stages `.env.next`, migrates,
+  atomically promotes the staged environment, recreates app services, asserts
+  running image refs, and checks health. Compose commands inside the SSH
+  heredoc close stdin so they cannot consume the remaining deployment script.
 - `deploy-vps.yml` is the production caller. `deploy-staging.yml` is the staging
   caller.
 
@@ -245,18 +269,28 @@ Before using real participant data, verify:
 The `Dev Candidate` workflow validates `compose.yaml` plus `compose.prod.yaml`
 before an image can be promoted. The production workflow refuses to rebuild a
 missing candidate. The `deploy-vps` job copies both Compose files to
-`/opt/codrut-platform`, writes the production `.env`, validates Compose again on
-the VPS, pulls the SHA-tagged images, runs migrations, and force-recreates only
-the app services
+`/opt/codrut-platform`, checks capacity, pulls the SHA-tagged images, and stages
+the candidate configuration as `.env.next`. It validates Compose and runs
+migrations against that staged configuration before atomically replacing the
+live `.env` and force-recreating only the app services
 (`backend`, `worker`, and `frontend`) with
 `docker compose up -d --force-recreate --no-build --pull never --wait backend worker frontend`
 when the installed Compose version supports it. `--no-build --pull never` makes
 the rollout use the exact images that were just pulled instead of rebuilding or
 implicitly changing refs during startup. The database, Redis, and Traefik
 containers are not force-recreated during ordinary app rollouts. The migration
-step disables container stdin so it cannot consume the remaining SSH deploy
-script before the app service recreate runs. Alembic applies transaction-local
-PostgreSQL lock and statement timeouts before running any online migration.
+step and every Compose exec disable container stdin so they cannot consume the
+remaining SSH deploy script before the app service recreate runs. Alembic
+applies transaction-local PostgreSQL lock and statement timeouts before running
+any online migration.
+
+Rollback refs are captured from the images of the running backend, worker, and
+frontend containers before `.env.next` is staged. The workflow does not trust a
+possibly stale image ref inside `.env` as evidence of the live release. It
+preserves the complete prior configuration as mode-`0600` `.env.rollback`, with
+its image refs corrected from the actual containers. After cutover, a separate
+SSH command reasserts all three running image refs before public readiness can
+pass.
 
 Before promotion, `backend/rehearse-production-shape.sh` can recreate the
 synthetic `0033` legacy shape, prove bounded lock failure, upgrade through
@@ -293,6 +327,11 @@ After startup, the workflow checks:
 
 The workflow summary records the deployed release SHA, deployed image refs, and
 the previous frontend/backend image refs from the deploy job.
+
+Image retention runs after readiness as best-effort housekeeping. A retention
+failure produces a warning and leaves all images in place; it does not turn a
+healthy application deployment into a failed release. The daily capacity check
+will still expose accumulating disk use.
 
 Only after both internal and public readiness pass, the deploy runs
 `.github/scripts/retain_codrut_images.sh`. It first proves that all current and

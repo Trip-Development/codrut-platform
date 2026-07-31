@@ -23,10 +23,12 @@ accidental local or staging seed from being mistaken for normal test fixtures.
 
 ## What it proves
 
-The seed creates one uniquely tagged company and project, one versioned,
-supported Lencioni scoring fixture, and exactly 1,000 guest users. Each participant has
-one profile, one project membership, one assignment, one signed secure-link
-invite, one held invitation outbox row, and current synthetic consent state.
+The seed creates one uniquely tagged company and project, one versioned generic
+scoring fixture, and exactly 1,000 guest users. The assignment key and pinned
+definition key are identical, preserving the same production integrity
+constraint as normal questionnaires. Each participant has one profile, one
+project membership, one assignment, one signed secure-link invite, one held
+invitation outbox row, and current synthetic consent state.
 The seed holds every outbox row in the future so the normal worker cannot drain
 it before the measured run begins.
 
@@ -127,19 +129,19 @@ stop_monitor() {
 }
 trap stop_monitor EXIT INT TERM
 
-if ! docker compose "${COMPOSE_ARGS[@]}" run --rm \
+if ! docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --user "$(id -u):$(id -g)" \
   -v "$LOAD_PROOF_DIR:$CONTAINER_PROOF_DIR" \
   backend python -m codrut.tools.launch_load_proof seed \
   --run-id "$RUN_ID" \
   --manifest "$MANIFEST" \
-  --ack "$ACK"; then
+  --ack "$ACK" </dev/null; then
   stop_monitor
   trap - EXIT INT TERM
   exit 1
 fi
 
-docker compose "${COMPOSE_ARGS[@]}" run --rm \
+docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --user "$(id -u):$(id -g)" \
   -v "$LOAD_PROOF_DIR:$CONTAINER_PROOF_DIR" \
   backend python -m codrut.tools.launch_load_proof run \
@@ -150,7 +152,7 @@ docker compose "${COMPOSE_ARGS[@]}" run --rm \
   --base-url https://codrut.andreivacaru.ro \
   --ramp-seconds 60 \
   --read-interval-seconds 5 \
-  --ack "$ACK"
+  --ack "$ACK" </dev/null
 
 RUN_STATUS=$?
 stop_monitor
@@ -165,13 +167,13 @@ After collecting the report, clean only that exact run while maintenance and
 Brevo sandbox remain enabled:
 
 ```bash
-docker compose "${COMPOSE_ARGS[@]}" run --rm \
+docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --user "$(id -u):$(id -g)" \
   -v "$LOAD_PROOF_DIR:$CONTAINER_PROOF_DIR" \
   backend python -m codrut.tools.launch_load_proof cleanup \
   --run-id "$RUN_ID" \
   --manifest "$MANIFEST" \
-  --ack "$ACK"
+  --ack "$ACK" </dev/null
 CLEANUP_STATUS=$?
 
 test "$RUN_STATUS" -eq 0 && test "$CLEANUP_STATUS" -eq 0

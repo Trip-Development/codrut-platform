@@ -6,13 +6,18 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 
+from codrut.core.config import get_settings
+from codrut.core.database import SessionLocal
+from codrut.modules.assignments.models import QuestionnaireAssignment
 from codrut.modules.communications.models import EmailSendStatus
+from codrut.modules.forms.models import QuestionnaireDefinition
 from codrut.modules.identity.session_cookie import SESSION_COOKIE_NAME
+from codrut.tools import launch_load_proof
 from codrut.tools.launch_load_proof import (
     ACKNOWLEDGEMENT,
     CSRF_COOKIE_NAME,
@@ -32,10 +37,12 @@ from codrut.tools.launch_load_proof import (
     _runtime_evidence_failure,
     _summarize_outbox_statuses,
     _write_private_json,
+    cleanup_synthetic_tenant,
     evaluate_acceptance,
     evaluate_live_thresholds,
     exercise_participant,
     require_guard,
+    seed_synthetic_tenant,
     synthetic_tag,
     validate_manifest,
     validate_manifest_runtime,
@@ -125,6 +132,47 @@ def test_manifest_runtime_must_match_environment_and_database() -> None:
         validate_manifest_runtime(replace(manifest, environment="production"), settings)
     with pytest.raises(RuntimeError, match="database"):
         validate_manifest_runtime(replace(manifest, database_name="other"), settings)
+
+
+@pytest.mark.asyncio
+async def test_seed_pins_assignment_to_its_synthetic_definition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_id = f"integrity-{uuid4().hex[:12]}"
+    manifest_path = tmp_path / "manifest.json"
+    settings = get_settings()
+    monkeypatch.setattr(launch_load_proof, "PARTICIPANT_COUNT", 1)
+
+    manifest = await seed_synthetic_tenant(
+        settings=settings,
+        run_id=run_id,
+        acknowledgement=ACKNOWLEDGEMENT,
+        manifest_path=manifest_path,
+    )
+    try:
+        async with SessionLocal() as session:
+            assignment = await session.get(
+                QuestionnaireAssignment,
+                UUID(manifest.participants[0].assignment_id),
+            )
+            definition = await session.get(
+                QuestionnaireDefinition,
+                UUID(manifest.definition_id),
+            )
+
+        assert assignment is not None
+        assert definition is not None
+        assert assignment.questionnaire_definition_id == definition.id
+        assert assignment.questionnaire_key == definition.key
+        assert definition.key == manifest.definition_key
+    finally:
+        await cleanup_synthetic_tenant(
+            settings=settings,
+            manifest=manifest,
+            run_id=run_id,
+            acknowledgement=ACKNOWLEDGEMENT,
+        )
 
 
 def test_runtime_evidence_is_fresh_and_fails_on_restart_timeout_or_oom(
@@ -377,7 +425,7 @@ async def test_participant_flow_exercises_security_and_submission_endpoints() ->
         if path == "/api/auth/invite/verify":
             return httpx.Response(
                 200,
-                json={"tasks": [{"assignment_id": participant.assignment_id}]},
+                json={"tasks": [{"assignmentId": participant.assignment_id}]},
             )
         if path == "/api/auth/invite/exchange":
             return httpx.Response(
