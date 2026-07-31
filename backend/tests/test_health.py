@@ -13,6 +13,7 @@ from codrut.modules.health.service import (
     check_migration_head,
     check_outbox_backlog,
     check_redis,
+    migration_heads_are_compatible,
     outbox_backlog_status,
     worker_heartbeat_status,
 )
@@ -93,6 +94,74 @@ def test_health_ready_fails_closed_for_required_components(
             "details": [{"component": component, "code": code}],
         }
     }
+
+
+@pytest.mark.parametrize(
+    "database_head",
+    [
+        "0053_contact_privacy_bridge",
+        "0054_identity_consent_submission",
+        "0055_participant_aliases",
+        "0056_email_send_sandbox_scope",
+    ],
+)
+def test_migration_readiness_accepts_only_reviewed_forward_compatible_heads(
+    database_head: str,
+) -> None:
+    assert migration_heads_are_compatible(
+        frozenset({"0052_contact_archive"}),
+        frozenset({database_head}),
+    )
+
+
+def test_migration_readiness_accepts_exact_head() -> None:
+    assert migration_heads_are_compatible(
+        frozenset({"0052_contact_archive"}),
+        frozenset({"0052_contact_archive"}),
+    )
+    assert migration_heads_are_compatible(
+        frozenset({"0056_email_send_sandbox_scope"}),
+        frozenset({"0056_email_send_sandbox_scope"}),
+    )
+
+
+@pytest.mark.parametrize(
+    ("expected_heads", "database_heads"),
+    [
+        (frozenset(), frozenset({"0052_contact_archive"})),
+        (frozenset({"0052_contact_archive"}), frozenset()),
+        (
+            frozenset({"0052_contact_archive"}),
+            frozenset({"0057_unreviewed_migration"}),
+        ),
+        (
+            frozenset({"0051_contact_owner_repair"}),
+            frozenset({"0052_contact_archive"}),
+        ),
+        (
+            frozenset({"0052_contact_archive", "other_packaged_head"}),
+            frozenset({"0052_contact_archive", "other_packaged_head"}),
+        ),
+        (
+            frozenset({"0052_contact_archive", "other_packaged_head"}),
+            frozenset({"0056_email_send_sandbox_scope"}),
+        ),
+        (
+            frozenset({"0052_contact_archive"}),
+            frozenset(
+                {
+                    "0055_participant_aliases",
+                    "0056_email_send_sandbox_scope",
+                }
+            ),
+        ),
+    ],
+)
+def test_migration_readiness_rejects_unreviewed_or_divergent_heads(
+    expected_heads: frozenset[str],
+    database_heads: frozenset[str],
+) -> None:
+    assert not migration_heads_are_compatible(expected_heads, database_heads)
 
 
 def test_worker_heartbeat_rejects_missing_invalid_future_and_stale_values() -> None:
