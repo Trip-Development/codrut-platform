@@ -2,208 +2,107 @@
 
 ## Purpose
 
-This repository is the product implementation workspace for Codrut Platform.
-Agents started directly in this repository must be able to inspect, implement,
-verify, review, and ship normal software changes without depending on the
-parent campaign repository or Festival.
+This is a primarily single-maintainer product repository. Optimize for fast,
+clear delivery without weakening user-data, privacy, migration, or production
+recovery boundaries. Festival and campaign tools are optional unless the user
+explicitly chooses them.
 
-Festival, `camp`, intents, and campaign artifacts are optional planning tools.
-Do not require or initialize them for ordinary implementation work unless the
-user explicitly asks for that workflow.
+## Working loop
 
-## Engineering Role
+1. Inspect the affected code and existing pattern once.
+2. Make the smallest coherent change that fixes the actual problem.
+3. Review the combined diff once, findings first.
+4. Run the smallest checks that directly cover the changed risk.
+5. Ship one coherent implementation PR with explicit remaining risk.
 
-- Act as a critical engineering partner, reviewer, and implementation agent.
-- Optimize for correctness, maintainability, security, simplicity,
-  verifiability, and clear user-facing behavior.
-- Inspect the actual code, schemas, manifests, tests, runtime state, and Git
-  history before recommending or changing behavior.
-- Challenge fragile assumptions and identify hidden coupling, authorization
-  gaps, data-loss risks, race conditions, and missing tests directly.
-- Prefer boring, explicit, testable solutions over clever abstractions.
+Do not add ceremony to small changes. Do not create custom infrastructure,
+frameworks, or dependencies when a direct implementation is enough.
 
-## Standard Workflow
+## Diff discipline
 
-Use this sequence for non-trivial work:
+- Keep one user request on one branch and implementation PR unless a slice
+  genuinely needs independent deployment or rollback.
+- Prefer small logical commits inside that PR.
+- When authored changes approach roughly 1,000 lines, pause and explain why the
+  design cannot be smaller before adding more code. Generated contracts and
+  release-transport diffs are reported separately from authored code.
+- Do not compensate for a broad change with exhaustive branch tests. Add one
+  focused regression test per changed behavior; reserve deeper matrices for
+  authorization, privacy, migrations, concurrency, and data integrity.
+- Prototype one representative UI section before repeating a new presentation
+  pattern across the application.
 
-1. **Map** — identify the real problem, affected routes, data flow, contracts,
-   persistence, permissions, existing tests, and relevant runtime constraints.
-2. **Strike** — make the smallest coherent change that fixes the root cause and
-   follows existing project patterns.
-3. **Gate** — review the diff for correctness, security, regressions,
-   compatibility, accessibility, and maintainability.
-4. **Proof** — run the smallest meaningful checks first, then broaden checks for
-   the specific high-risk boundary changed. Do not repeat an unchanged suite
-   locally, in review, and again in CI without a concrete reason.
-5. **Ship** — summarize the behavior change, verification evidence, rollout
-   risks, and any intentionally unfinished work.
+## Verification
 
-Do not add process ceremony to tiny changes. Do not use subagents unless the
-user explicitly asks for delegation or parallel agent work.
+- No Playwright or universal end-to-end gate. Use focused browser inspection
+  for changed routes when visual or interaction behavior matters.
+- Run each meaningful check once. Rerun only the proof affected by a correction.
+- Broaden beyond targeted tests only when changing shared APIs,
+  authentication/authorization, persistence, migrations, build configuration,
+  or another demonstrated cross-cutting boundary.
+- Coverage, full builds, and full suites are optional diagnostics, not default
+  PR requirements.
+- CI remains path-scoped: backend changes run Ruff, migrations, and pytest;
+  frontend changes run lint, typecheck, and Vitest; public contract changes
+  verify generated OpenAPI types; infrastructure changes validate Compose.
 
-## Fast Delivery Default
-
-- Treat one coherent user request as one implementation branch and one PR.
-  Split it only when a slice must deploy, roll back, or be reviewed
-  independently.
-- Inspect once, implement in coherent slices, review the combined diff, and run
-  each meaningful proof once. Do not restart discovery or rerun broad checks at
-  every small edit.
-- During implementation, use the narrowest test or static check that can catch
-  the regression. Let CI run only the product surfaces touched by the diff.
-- Ordinary PRs do not need repeated coverage collection, production builds, or
-  representative E2E. The immutable post-merge `dev` candidate builds the
-  production images and runs production-shape E2E once.
-- Use `ci:e2e` when a PR changes an end-to-end journey or its test
-  infrastructure. Use `ci:full` only when an unusual cross-cutting risk is not
-  represented by the detected paths.
-- Keep security, authorization, migration, data-integrity, and release
-  boundaries strict. Speed comes from removing duplicate evidence, not from
-  skipping the proof relevant to the risk.
-
-## Repository and Branch Rules
-
-- `dev` is the integration branch and `prod` is the production branch.
-- Never implement directly on `dev` or `prod`.
-- Start feature and fix branches from an up-to-date `origin/dev`.
-- Use descriptive branch names without a `codex/` prefix.
-- Give each concurrent agent its own branch and worktree. Keep the main checkout
-  on a clean, current `dev`; do not share a mutable worktree between agents.
-- Preserve unrelated user changes and dirty worktree content.
-- Deliver changes to `dev` through a pull request.
-- Feature PRs into `dev` use squash merge. Promotions from `dev` to `prod` use
-  merge commits.
-- Do not back-merge routine production merge commits into `dev`. Production
-  protection intentionally uses loose required status checks so the next
-  `dev` promotion does not need ancestry synchronization. The release gate
-  must prove that the exact `dev` SHA has a successful immutable candidate and
-  that merging it produces exactly the `dev` tree.
-- `prod` accepts normal releases only from `dev`. Route urgent fixes through a
-  focused PR into `dev` and promote them normally; a production-only hotfix
-  would reintroduce drift and require an explicit back-merge.
-- Finish the coherent local diff and focused proof before opening the PR. Use a
-  draft only when human design feedback is genuinely needed; do not use draft
-  PRs as remote test runners.
-- For an authorized ready feature PR, prefer GitHub native auto-merge over
-  repeated check polling. Production promotion remains an explicit,
-  authorized merge after the immutable `dev` candidate passes.
-- Merged remote feature branches are deleted automatically. Do not infer
-  permission to delete local branches or worktrees.
-- PR titles follow Conventional Commits.
-- PR bodies must include an issue reference such as `Refs #123` or
-  `Closes #123` unless the repository policy explicitly exempts the PR.
-- Dependabot version updates are grouped weekly for patch/minor changes. Treat
-  major upgrades as planned issues with compatibility and rollback evidence;
-  triage security alerts immediately.
-- GitHub CodeQL default setup scans Actions, JavaScript/TypeScript, and Python.
-  A native code-scanning ruleset protects `dev`; `prod` reuses the exact
-  validated `dev` candidate. Keep classic branch protection tied to the stable
-  aggregate checks rather than dynamic language-specific check names.
-- Do not merge, deploy, weaken branch protection, or delete active work unless
-  the user has authorized that action.
-- Before deleting a squash-merged branch, verify its PR state and exact head or
-  tree equivalence. Do not infer safety only from Git ancestry.
-
-## Development Environment
-
-- Use the configured devcontainer and Docker Compose stack as the default
-  development and verification environment.
-- Prefer container-backed dependency installs, migrations, tests, builds, and
-  integration checks.
-- Use host tools only for quick read-only diagnostics or when explicitly
-  requested.
-- Inspect `compose.yaml`, `compose.dev.yaml`, package manifests, and CI
-  workflows before inventing commands.
-- Do not assume a running service is healthy. Check Compose health and relevant
-  logs when browser or integration behavior is involved.
-
-Useful verification commands include:
+Useful container-backed commands:
 
 ```sh
-docker compose exec -T backend uv run ruff check src tests migrations
-docker compose exec -T backend uv run pytest -q
-docker compose exec -T frontend pnpm lint
+docker compose exec -T backend uv run ruff check <changed paths>
+docker compose exec -T backend uv run pytest -q <focused tests>
+docker compose exec -T frontend pnpm exec eslint <changed paths>
 docker compose exec -T frontend pnpm typecheck
-docker compose exec -T frontend pnpm test --run
-docker compose exec -T frontend pnpm build
+docker compose exec -T frontend pnpm test --run <focused tests>
 ```
 
-Choose targeted checks first. Broaden only for the high-risk boundary actually
-changed: authentication/authorization, migrations, shared contracts, or
-release automation. Do not automatically combine every listed command.
+## Git and release
 
-## Backend and Data Rules
+- Never implement directly on `dev` or `prod`; branch from current
+  `origin/dev` and preserve unrelated work.
+- Deliver application changes through one PR into `dev`. Conventional Commit
+  titles are preferred but are not enforced by a metadata gate. Issue links are
+  optional.
+- Squash feature PRs into `dev`. The post-merge candidate builds immutable
+  backend/frontend images once.
+- Production accepts only an exact tested `dev` promotion. Keep the release
+  tree check, deployed-image proof, migration, readiness, disk retention, and
+  rollback reference. Do not rebuild during promotion.
+- Do not back-merge routine production merge commits into `dev`.
+- Do not merge, deploy, or delete active work without user authorization.
 
-- Treat authentication, authorization, invitations, sessions, participant
-  identity, questionnaire responses, scoring, publication, and deletion as
-  security- and data-integrity-sensitive.
-- Authorization must be enforced server-side. Frontend guards are additional
-  UX protection, never the trust boundary.
-- Make identity transitions monotonic and explicit. Never silently replace
-  credentials, roles, account ownership, answers, projects, or results.
-- Use database constraints, transactions, row locks, and idempotency where
-  concurrent claims or retries can occur.
-- Add an Alembic migration for schema changes and verify upgrade behavior.
-- Avoid logging tokens, passwords, questionnaire answers, confidential
-  respondent data, or other sensitive payloads.
-- Preserve backward compatibility deliberately and document temporary
-  compatibility fields or rollout windows.
+## Safety boundaries
 
-## Frontend Rules
+- Enforce authorization and tenant ownership on the backend; frontend guards
+  are UX only.
+- Treat invitations, sessions, identities, questionnaire answers, results,
+  communications, and deletion as sensitive data flows.
+- Use transactions, constraints, locks, and idempotency where retries or
+  concurrent claims can occur.
+- Add and verify an Alembic migration for schema changes. Back up and rehearse
+  material production-data changes before mutation.
+- Never log or commit secrets, tokens, passwords, questionnaire answers, or
+  confidential respondent data.
+- Keep OpenAPI and `frontend/src/api/generated/schema.d.ts` synchronized when a
+  public router or schema changes; never hand-edit generated output.
 
-- Frontend work must be responsive, accessible, visually consistent,
-  state-safe, and error-aware.
+## Frontend
+
+- Reuse established components and semantic tokens before creating new UI.
 - Check loading, empty, error, disabled, keyboard, focus, narrow viewport, and
-  stale-session states when relevant.
-- Avoid identity or navigation flicker caused by route-local placeholder data.
-- Prefer server-backed authorization and stable session state over client-only
-  routing assumptions.
-- Tests should use user-visible roles, names, and durable attributes rather than
-  brittle selectors or fixed sleeps.
+  stale-session behavior when relevant.
+- Prefer user-visible test locators and avoid fixed sleeps.
 
-## API and Generated Contracts
+## Environment and cleanup
 
-- Keep `docs/api/openapi.json` synchronized with the backend.
-- Regenerate `frontend/src/api/generated/schema.d.ts` from the committed OpenAPI
-  snapshot; do not hand-edit generated output.
-- The committed generated file must match the generator byte-for-byte because
-  CI compares it directly.
-- Preserve temporary legacy response fields only when a compatibility window is
-  intentional and tested.
+- Prefer the configured devcontainer and Compose stack for dependency installs,
+  services, migrations, and application checks. Host tools are fine for quick
+  read-only diagnostics.
+- Use `rg` for discovery. Keep edits localized and avoid unrelated formatting.
+- Never discard user work or use broad destructive cleanup. Resolve exact
+  branches, worktrees, images, and paths before removal.
 
-## Testing and Review Bar
+## Handoff
 
-- Tests verify behavior, authorization boundaries, persistence, edge cases, and
-  regressions—not implementation trivia.
-- For a bug, add a regression test that fails for the original behavior when a
-  reasonable test path exists.
-- Reviews are findings-first: correctness, security/data loss, broken
-  assumptions, compatibility, performance, missing tests, then style.
-- Do not delete useful tests or resolve genuine review findings merely to make
-  a PR green. Coverage is a diagnostic and periodic quality signal, not a
-  universal blocking pass on every PR.
-- Stale automated findings may be resolved only after inspecting the exact
-  thread and proving they are false positives.
-- For route-sensitive work, explicitly inspect the main affected routes in a
-  real browser in addition to automated tests.
-
-## File and Cleanup Safety
-
-- Use `rg` and `rg --files` for discovery.
-- Keep edits localized and avoid formatting churn or unrelated refactors.
-- Never overwrite or delete user work to obtain a clean tree.
-- Treat dependency directories, build outputs, test caches, and tool caches as
-  reproducible only after confirming they contain no source or uncommitted work.
-- Resolve exact branch, worktree, and directory targets before destructive
-  cleanup.
-- Prefer explicit targets over broad globs or unresolved variables.
-
-## Communication
-
-- Lead with the outcome and concrete evidence.
-- For longer tasks, provide short updates only when new facts, blockers, or
-  decisions emerge.
-- Ask only when a missing decision materially changes product behavior,
-  security, data handling, architecture, cost, or scope.
-- Final implementation handoffs must state what changed, why it is correct,
-  what was verified, rollout risks, and what remains.
+State what changed, why it is correct, what focused proof ran, and what remains.
+Explain unusually large diffs plainly instead of hiding them behind process.

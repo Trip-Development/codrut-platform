@@ -17,7 +17,7 @@ Production releases follow the repo branch policy:
 
 1. Merge feature PRs into `dev`.
 2. Open the release PR from `dev` into `prod`.
-3. Let the required aggregate checks pass before merging.
+3. Let the release tree and exact-candidate checks pass.
 4. Merge the `dev -> prod` PR. The `VPS Deployment` workflow deploys only from
    `refs/heads/prod`.
 
@@ -36,11 +36,8 @@ The deploy workflow also allows `workflow_dispatch`, but the run must execute
 from `refs/heads/prod` and requires `confirm_prod_ref=prod`. Dispatching the
 workflow from another branch fails before images are built.
 
-Treat the `prod` GitHub Environment as the final approval and secret boundary.
-Use the acceptance checklist before opening the release PR; do not use manual
-dispatch to promote unmerged feature refs or branches other than `dev`. The staging
-workflow exists but is optional/deferred for the current client-ready push unless
-`ENABLE_STAGING_DEPLOY=true` is intentionally enabled.
+Treat the `prod` GitHub Environment as the secret boundary. Do not use manual
+dispatch to promote unmerged feature refs or branches other than `dev`.
 
 ## Current Production Checkpoint
 
@@ -64,25 +61,6 @@ Core workflow verification for that checkpoint covered:
 - Questionnaire save/submit.
 - Lencioni, Distress Drivers, and 360 iCARE scoring/aggregation.
 
-## Staging
-
-`VPS Staging Deployment` runs from `dev` when the repository variable
-`ENABLE_STAGING_DEPLOY` is set to `true`, and it can also be started manually
-with `workflow_dispatch`. It uses the `staging` GitHub Environment, so staging
-must have its own environment secrets before automatic deploys are enabled.
-Manual staging dispatch is guarded to `refs/heads/dev` by default; use the
-`allow_non_dev_ref=true` input only for an explicit test deployment from another
-branch.
-
-If staging shares the same VPS host as production, set these staging-only
-environment secrets so it does not overwrite production Compose state:
-
-- `CODRUT_DEPLOY_DIR`, for example `/opt/codrut-platform-staging`
-- `CODRUT_COMPOSE_PROJECT_NAME`, for example `codrut-platform-staging`
-
-Prefer a separate staging host or database before real client data enters the
-system.
-
 ## Required Checks
 
 Use the aggregate job names in GitHub branch protection or rulesets. They are
@@ -92,7 +70,6 @@ jobs does not silently weaken the policy.
 For PRs into `dev`, require:
 
 - `app-ci / required`
-- `policy / required`
 - `security / required`
 
 For PRs into `prod`, require:
@@ -111,26 +88,22 @@ change:
   build is proven once by the immutable `dev` candidate;
 - workflow/script changes run only the automation helper tests plus shell and
   workflow-YAML parsing;
-- representative PR E2E runs only when E2E infrastructure changes or the PR is
-  labeled `ci:e2e`; `ci:full` remains an explicit escape hatch for unusually
-  risky changes.
+- public API contract generation runs only for router, schema, application
+  entrypoint, dependency, or committed contract changes.
 
-The `Dev Candidate` remains the single post-merge integration gate: it builds
-the deployable images once and runs production-shape E2E once. Coverage reports
-are local/on-demand evidence, not a blocking pass repeated on every PR.
-Native CodeQL remains the code-scanning gate. The duplicate Copilot
-every-push/draft review ruleset is disabled; human/Codex review is requested
+The `Dev Candidate` has one job: build the deployable immutable images once.
+Coverage, full builds, broad suites, and browser automation are local/on-demand
+diagnostics, not blocking passes repeated on every PR.
+Native CodeQL remains the code-scanning gate. Human/Codex review is requested
 when the diff benefits from it instead of running another automatic scan.
 
-Use strict required status checks for `dev` and loose required status checks
-for `prod`. `app-ci / required`, `policy / required`, `security / required`,
-and native CodeQL run only on feature PRs into `dev`.
+Use loose required status checks for `dev` and `prod`. `app-ci / required`,
+`security / required`, and native CodeQL run only on feature PRs into `dev`.
 
 After a change lands on `dev`, `Dev Candidate` builds SHA-tagged images once,
-runs representative Playwright E2E against those images, and validates the
-production Compose configuration. The production PR does not rerun those
-checks or rebuild images. `release / required` accepts only `dev`, locates the
-successful candidate for the exact proposed SHA, and verifies that the
+without running a second application test layer. The production PR does not
+rerun checks or rebuild images. `release / required` accepts only `dev`, locates
+the successful candidate for the exact proposed SHA, and verifies that the
 `prod + dev` merge tree equals the `dev` tree.
 
 ## Images
@@ -144,8 +117,8 @@ The deployment workflows separate build and deploy work:
   atomically promotes the staged environment, recreates app services, asserts
   running image refs, and checks health. Compose commands inside the SSH
   heredoc close stdin so they cannot consume the remaining deployment script.
-- `deploy-vps.yml` is the production caller. `deploy-staging.yml` is the staging
-  caller.
+- `deploy-vps.yml` is the production caller. `deploy-staging.yml` retains its
+  historical filename but now only builds the immutable `dev` candidate.
 
 Backend and frontend images are tagged with immutable `sha-<commit>` refs:
 
@@ -262,13 +235,13 @@ Before using real participant data, verify:
 - Postgres backup and restore.
 - Redis persistence expectations.
 - Application logs and restart policy.
-- Internal staging acceptance from the June release checklist.
+- Production Compose validation against the staged candidate configuration.
 
 ## Deployment Checks
 
-The `Dev Candidate` workflow validates `compose.yaml` plus `compose.prod.yaml`
-before an image can be promoted. The production workflow refuses to rebuild a
-missing candidate. The `deploy-vps` job copies both Compose files to
+PR infrastructure checks validate `compose.yaml` plus `compose.prod.yaml`.
+The `Dev Candidate` workflow builds immutable images, and the production
+workflow refuses to rebuild a missing candidate. The `deploy-vps` job copies both Compose files to
 `/opt/codrut-platform`, checks capacity, pulls the SHA-tagged images, and stages
 the candidate configuration as `.env.next`. It validates Compose and runs
 migrations against that staged configuration before atomically replacing the
