@@ -815,6 +815,9 @@ async def test_participant_results_require_active_matching_publication_snapshot(
             published = await ParticipantWorkspaceService(session).get_workspace_summary(user.id)
             assert len(published.results) == 1
             assert published.results[0].scores["feedback_signal_a"]["score"] == 4.3
+            assert published.results[0].score_unit == "grade_1_to_5"
+            assert published.results[0].scale_min == 1.0
+            assert published.results[0].scale_max == 5.0
 
             publication = (
                 await session.execute(

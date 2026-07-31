@@ -23,6 +23,9 @@ class ParticipantWorkspaceResult(BaseModel):
     target_label: str
     scores: dict
     primary_result: str | None = None
+    score_unit: str
+    scale_min: float
+    scale_max: float
 
 
 class ParticipantReceivedFeedbackDimension(BaseModel):

@@ -6370,6 +6370,18 @@
             "title": "Questionnaire Key",
             "type": "string"
           },
+          "scale_max": {
+            "title": "Scale Max",
+            "type": "number"
+          },
+          "scale_min": {
+            "title": "Scale Min",
+            "type": "number"
+          },
+          "score_unit": {
+            "title": "Score Unit",
+            "type": "string"
+          },
           "scores": {
             "additionalProperties": true,
             "title": "Scores",
@@ -6389,7 +6401,10 @@
           "questionnaire_key",
           "title",
           "target_label",
-          "scores"
+          "scores",
+          "score_unit",
+          "scale_min",
+          "scale_max"
         ],
         "title": "ParticipantWorkspaceResult",
         "type": "object"

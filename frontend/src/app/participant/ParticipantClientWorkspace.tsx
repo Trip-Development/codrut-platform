@@ -580,9 +580,10 @@ function PcmResultChip({ label, value }: { label: string; value?: string | null 
 function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
   const kind = resultKind(result.questionnaireKey);
   const items = scoreItemsForResult(result);
-  const max = maxScoreForKind(kind);
+  const { min, max } = resultScale(result, kind);
+  const scoreSuffix = resultScoreSuffix(result);
   const average = averageScore(items);
-  const scaleLabel = scaleLabelForKind(kind, max);
+  const scaleLabel = resultScaleLabel(result);
   const highlightedItems = items.filter((item) => kind === "drivers" && item.score > 50 && item.explanation);
 
   return (
@@ -597,7 +598,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
         </div>
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
           <ResultStat label="Dimensiuni" value={String(items.length)} />
-          <ResultStat label="Scor mediu" value={average === null ? "N/A" : formatScore(average)} />
+          <ResultStat label="Scor mediu" value={average === null ? "N/A" : `${formatScore(average)}${scoreSuffix}`} />
           <ResultStat label="Scală" value={scaleLabel.replace("scală ", "")} />
         </dl>
       </div>
@@ -627,7 +628,14 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
 
       <div className="mt-7 divide-y divide-border border-t border-border" aria-label="Scoruri detaliate">
         {items.map((item) => (
-          <ScoreRow key={item.id} item={item} max={max} showSignal={kind === "drivers" && item.score > 50} />
+          <ScoreRow
+            key={item.id}
+            item={item}
+            min={min}
+            max={max}
+            suffix={scoreSuffix}
+            showSignal={kind === "drivers" && item.score > 50}
+          />
         ))}
       </div>
     </article>
@@ -737,14 +745,29 @@ function resultKindLabel(kind: ResultKind): string {
   return "Chestionar";
 }
 
-function maxScoreForKind(kind: ResultKind): number {
-  if (kind === "lencioni") return 10;
-  return 100;
+function resultScoreSuffix(result: ParticipantWorkspaceResult): string {
+  if (result.scoreUnit === "percent") return "%";
+  if (result.scoreUnit === "grade_1_to_5" && result.scaleMax !== undefined) {
+    return ` din ${formatScore(result.scaleMax)}`;
+  }
+  return "";
 }
 
-function scaleLabelForKind(kind: ResultKind, max: number): string {
-  if (kind === "icare") return "scor procentual";
-  return `scală 0-${max}`;
+function resultScaleLabel(result: ParticipantWorkspaceResult): string {
+  if (result.scoreUnit === "percent") return "scor procentual";
+  const kind = resultKind(result.questionnaireKey);
+  const { min, max } = resultScale(result, kind);
+  return `scală ${formatScore(min)}-${formatScore(max)}`;
+}
+
+function resultScale(
+  result: ParticipantWorkspaceResult,
+  kind: ResultKind,
+): { min: number; max: number } {
+  const fallbackMax = kind === "lencioni" ? 10 : 100;
+  const min = Number.isFinite(result.scaleMin) ? Number(result.scaleMin) : 0;
+  const max = Number.isFinite(result.scaleMax) ? Number(result.scaleMax) : fallbackMax;
+  return max > min ? { min, max } : { min: 0, max: fallbackMax };
 }
 
 function scoreItemsForResult(result: ParticipantWorkspaceResult): ScoreItem[] {

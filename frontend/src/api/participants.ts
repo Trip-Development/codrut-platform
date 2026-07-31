@@ -89,6 +89,9 @@ export type ParticipantWorkspaceResult = {
   targetLabel: string;
   scores: Record<string, unknown>;
   primaryResult?: string | null;
+  scoreUnit?: string;
+  scaleMin?: number;
+  scaleMax?: number;
 };
 
 export type ParticipantReceivedFeedbackDimension = {
@@ -197,6 +200,9 @@ type BackendParticipantWorkspaceResult = {
   target_label: string;
   scores: Record<string, unknown>;
   primary_result?: string | null;
+  score_unit: string;
+  scale_min: number;
+  scale_max: number;
 };
 
 type BackendParticipantReceivedFeedbackDimension = {
@@ -387,6 +393,9 @@ function mapParticipantWorkspaceResult(
     targetLabel: result.target_label,
     scores: result.scores,
     primaryResult: result.primary_result,
+    scoreUnit: result.score_unit,
+    scaleMin: result.scale_min,
+    scaleMax: result.scale_max,
   };
 }
 

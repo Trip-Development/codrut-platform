@@ -533,6 +533,34 @@ describe("ParticipantResultsPanel", () => {
     ).toContain("width: 87.5%");
   });
 
+  it("renders the participant's own iCARE result against its published scale", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[
+          {
+            assignmentId: "icare-self",
+            questionnaireKey: "boss_360",
+            title: "Autoevaluare iCARE",
+            targetLabel: "Autoevaluare",
+            scoreUnit: "grade_1_to_5",
+            scaleMin: 1,
+            scaleMax: 5,
+            scores: {
+              clarity: { score: 4.5, label: "Claritate" },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("4.5 din 5")).toHaveLength(2);
+    expect(screen.getByText("1-5")).toBeDefined();
+    const clarity = screen.getByRole("meter", { name: "Scor Claritate" });
+    expect(clarity.getAttribute("aria-valuemin")).toBe("1");
+    expect(clarity.getAttribute("aria-valuemax")).toBe("5");
+    expect(clarity.firstElementChild?.getAttribute("style")).toContain("width: 87.5%");
+  });
+
   it("defends against a stale raw scale when feedback scores are percentages", () => {
     render(
       <ParticipantResultsPanel

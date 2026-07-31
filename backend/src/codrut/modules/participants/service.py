@@ -1453,6 +1453,7 @@ class ParticipantWorkspaceService:
             if include_primary and result.primary_result in public_scores
             else None
         )
+        score_unit, scale_min, scale_max = _definition_score_scale(definition)
         return ParticipantWorkspaceResult(
             assignment_id=assignment.id,
             assessment_cycle_id=getattr(assignment, "assessment_cycle_id", None),
@@ -1463,6 +1464,9 @@ class ParticipantWorkspaceService:
             target_label=task.targetLabel,
             scores=public_scores,
             primary_result=primary_result,
+            score_unit=score_unit,
+            scale_min=scale_min,
+            scale_max=scale_max,
         )
 
     def _workspace_project(

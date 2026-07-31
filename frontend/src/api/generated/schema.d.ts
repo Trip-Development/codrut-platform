@@ -3613,6 +3613,12 @@ export interface components {
             project_name?: string | null;
             /** Questionnaire Key */
             questionnaire_key: string;
+            /** Scale Max */
+            scale_max: number;
+            /** Scale Min */
+            scale_min: number;
+            /** Score Unit */
+            score_unit: string;
             /** Scores */
             scores: {
                 [key: string]: unknown;
