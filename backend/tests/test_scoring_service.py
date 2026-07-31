@@ -402,6 +402,7 @@ async def test_icare_only_cycle_derives_report_roster_and_leader_from_assignment
                     questionnaire_definition_id=definition.id,
                     target_type=AssignmentTargetType.person,
                     target_person_id=leader.id,
+                    icare_cohort="direct_team",
                     status=AssignmentStatus.scored,
                 )
                 for reviewer in reviewers
@@ -418,6 +419,7 @@ async def test_icare_only_cycle_derives_report_roster_and_leader_from_assignment
                     questionnaire_definition_id=definition.id,
                     target_type=AssignmentTargetType.person,
                     target_person_id=leader.id,
+                    icare_cohort="self",
                     status=AssignmentStatus.scored,
                 )
             )
