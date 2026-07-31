@@ -8,7 +8,6 @@ import type {
   ReportHierarchyIssue,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
-import { EmptyState } from "@/components/presentation/empty-state";
 import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -58,15 +57,6 @@ export default async function ProjectReportsPage({
     ? "Nu există rezultate TA care pot fi incluse în aceste grafice."
     : undefined;
 
-  if (aggregate.hierarchy_ambiguous) {
-    return (
-      <EmptyState
-        title="Structura echipelor are nume ambigue."
-        description={aggregate.hierarchy_ambiguity_message ?? "Există nume duplicate în organigramă. Corectează rosterul înainte de a deschide rezultatele."}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-10">
       <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
@@ -87,12 +77,14 @@ export default async function ProjectReportsPage({
         />
       ) : null}
 
-      {aggregate.hierarchy_issues.length > 0 ? (
-        <HierarchyDiagnosticsPanel issues={aggregate.hierarchy_issues} />
-      ) : null}
+      <ScoringAvailabilityAlert
+        pending={aggregate.reportable_pending_score_count}
+        failed={aggregate.reportable_failed_score_count}
+        orphaned={aggregate.reportable_orphaned_score_count}
+      />
 
       <ResultSection
-        eyebrow="01"
+        id="lencioni"
         title="Lencioni"
         description="Imaginea de ansamblu a proiectului, cu acces separat la fiecare echipă."
       >
@@ -102,31 +94,59 @@ export default async function ProjectReportsPage({
           items={aggregate.lencioni_averages}
           max={10}
         />
-        <Link
-          href={`${reportsPath}/lencioni${reportQuery}`}
-          className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-burgundy hover:underline"
-        >
-          Vezi rezultatele pe echipe
-          <ArrowRightIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
-        </Link>
+        {aggregate.hierarchy_ambiguous ? (
+          <HierarchyDiagnosticsPanel
+            title="Rezultatele pe echipe sunt momentan indisponibile"
+            description="Rezultatul întregului proiect rămâne corect. Verifică relațiile din organigramă pentru a deschide defalcarea pe echipe."
+            issues={aggregate.hierarchy_issues}
+          />
+        ) : (
+          <Link
+            href={`${reportsPath}/lencioni${reportQuery}`}
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-burgundy hover:underline"
+          >
+            Vezi rezultatele pe echipe
+            <ArrowRightIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
+          </Link>
+        )}
       </ResultSection>
 
       <ResultSection
-        eyebrow="02"
+        id="icare"
         title="iCARE"
         description="Trei perspective separate, fără a amesteca echipa, colegii și autoevaluarea."
       >
+        {aggregate.hierarchy_ambiguous ? (
+          <HierarchyDiagnosticsPanel
+            title="Perspectivele bazate pe organigramă sunt momentan indisponibile"
+            description={aggregate.hierarchy_ambiguity_message ?? "Corectează relațiile ambigue din organigramă. Autoevaluările rămân disponibile mai jos."}
+            issues={aggregate.hierarchy_issues}
+          />
+        ) : null}
         <div className="grid gap-4 xl:grid-cols-3">
           {(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = aggregate.icare_cohorts.find((item) => item.cohort === cohort);
+            if (aggregate.hierarchy_ambiguous && cohort !== "self") {
+              return (
+                <Card key={cohort} asChild className="px-5 text-muted-foreground [--card-spacing:--spacing(5)]">
+                  <article>
+                    <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
+                    <p>Perspectiva va apărea după corectarea relațiilor din organigramă.</p>
+                  </article>
+                </Card>
+              );
+            }
+            const scale = icareScale(summary);
             return (
               <AveragePanel
                 key={cohort}
                 title={ICARE_LABELS[cohort]}
                 count={summary?.response_count ?? 0}
                 items={summary?.averages ?? []}
-                max={100}
-                suffix="%"
+                min={scale.min}
+                max={scale.max}
+                suffix={scale.suffix}
+                empty={icareEmptyCopy(summary)}
               />
             );
           })}
@@ -134,7 +154,7 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <ResultSection
-        eyebrow="03"
+        id="ta-drivers"
         title="TA Drivers"
         description="Media procentuală și frecvența primilor doi driveri pentru fiecare persoană."
       >
@@ -193,7 +213,7 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <ResultSection
-        eyebrow="04"
+        id="leadership"
         title="Echipa de leadership"
         description="Deschide raportul unei persoane pentru profilul și rezultatele sale complete."
       >
@@ -213,26 +233,23 @@ export default async function ProjectReportsPage({
 }
 
 function ResultSection({
-  eyebrow,
+  id,
   title,
   description,
   children,
 }: {
-  eyebrow: string;
+  id: string;
   title: string;
   description: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-6 border-b border-border pb-10" aria-labelledby={`result-section-${eyebrow}`}>
-      <div className="grid gap-2 md:grid-cols-[3rem_minmax(0,1fr)]">
-        <p className="font-mono text-sm font-semibold text-burgundy">{eyebrow}</p>
-        <div>
-          <h2 id={`result-section-${eyebrow}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
-        </div>
+    <section className="grid gap-6 border-b border-border pb-10" aria-labelledby={`result-section-${id}`}>
+      <div>
+        <h2 id={`result-section-${id}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
       </div>
-      <div className="grid gap-5 md:pl-12">{children}</div>
+      <div className="grid gap-5">{children}</div>
     </section>
   );
 }
@@ -241,14 +258,18 @@ function AveragePanel({
   title,
   count,
   items,
+  min = 0,
   max,
   suffix = "",
+  empty = "Rezultatele apar după completare și scorare.",
 }: {
   title: string;
   count: number;
   items: ReportAverage[];
+  min?: number;
   max: number;
   suffix?: string;
+  empty?: string;
 }) {
   return (
     <Card asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
@@ -267,7 +288,7 @@ function AveragePanel({
                   <span className="min-w-0 font-semibold text-foreground">{item.label}</span>
                   <span className="font-mono font-semibold tabular-nums text-foreground">{item.avg}{suffix}</span>
                 </div>
-                <ScaledBar value={item.avg} max={max} />
+                <ScaledBar value={item.avg} min={min} max={max} />
                 {item.interpretation ? (
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.interpretation}</p>
                 ) : null}
@@ -275,7 +296,7 @@ function AveragePanel({
             ))}
           </div>
         ) : (
-          <p className="mt-5 text-sm text-muted-foreground">Rezultatele apar după completare și scorare.</p>
+          <p className="mt-5 text-sm text-muted-foreground">{empty}</p>
         )}
       </article>
     </Card>
@@ -328,18 +349,81 @@ function LeadershipMembers({
   );
 }
 
-function HierarchyDiagnosticsPanel({ issues }: { issues: ReportHierarchyIssue[] }) {
+function HierarchyDiagnosticsPanel({
+  title,
+  description,
+  issues,
+}: {
+  title: string;
+  description: string;
+  issues: ReportHierarchyIssue[];
+}) {
   return (
     <Alert className="status-warning px-5 py-4">
-      <AlertTitle>Unele relații din organigramă nu au putut fi asociate.</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
-        Verifică persoanele și managerii indicați înainte de a interpreta rezultatele pe echipe.
-        <ul className="mt-2 list-disc pl-5">
-          {issues.slice(0, 4).map((issue, index) => (
-            <li key={`${issue.code}-${issue.participant_id ?? index}`}>{issue.message}</li>
-          ))}
+        {description}
+        {issues.length > 0 ? (
+          <ul className="mt-2 list-disc pl-5">
+            {issues.slice(0, 4).map((issue, index) => (
+              <li key={`${issue.code}-${issue.participant_id ?? index}`}>{issue.message}</li>
+            ))}
+          </ul>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function ScoringAvailabilityAlert({
+  pending,
+  failed,
+  orphaned,
+}: {
+  pending: number;
+  failed: number;
+  orphaned: number;
+}) {
+  if (pending + failed + orphaned === 0) return null;
+  const title = orphaned > 0
+    ? "Unele rezultate nu pot fi asociate cu evaluarea"
+    : failed > 0
+      ? "Unele rezultate nu au putut fi pregătite"
+      : "Unele rezultate sunt încă în curs de pregătire";
+  return (
+    <Alert className="status-warning px-5 py-4">
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>
+        <ul className="list-disc pl-5">
+          {pending > 0 ? (
+            <li>{pending === 1 ? "Un răspuns trimis este încă în curs de procesare." : `${pending} răspunsuri trimise sunt încă în curs de procesare.`}</li>
+          ) : null}
+          {failed > 0 ? (
+            <li>{failed === 1 ? "Un răspuns este păstrat, dar rezultatul nu a putut fi pregătit. Participantul nu trebuie să îl completeze din nou." : `${failed} răspunsuri sunt păstrate, dar rezultatele nu au putut fi pregătite. Participanții nu trebuie să le completeze din nou.`}</li>
+          ) : null}
+          {orphaned > 0 ? (
+            <li>{orphaned === 1 ? "Un răspuns trimis este păstrat, dar nu are încă un rezultat asociat." : `${orphaned} răspunsuri trimise sunt păstrate, dar nu au încă rezultate asociate.`}</li>
+          ) : null}
         </ul>
       </AlertDescription>
     </Alert>
   );
+}
+
+function icareScale(summary?: IcareCohortSummary): { min: number; max: number; suffix: string } {
+  if (summary?.score_unit === "percent") {
+    return { min: summary.scale_min ?? 0, max: summary.scale_max ?? 100, suffix: "%" };
+  }
+  if (summary?.score_unit === "grade_1_to_5") {
+    const max = summary.scale_max ?? 5;
+    return { min: summary.scale_min ?? 1, max, suffix: ` din ${max}` };
+  }
+  return { min: summary?.scale_min ?? 0, max: summary?.scale_max ?? 100, suffix: "" };
+}
+
+function icareEmptyCopy(summary?: IcareCohortSummary): string {
+  if (summary?.unavailable_reason === "incompatible_score_scales" || summary?.score_scale_compatible === false) {
+    return "Aceste răspunsuri folosesc scale diferite și nu pot fi afișate împreună. Selectează o singură evaluare.";
+  }
+  return "Nu există încă un rezultat iCARE scorabil pentru această perspectivă.";
 }

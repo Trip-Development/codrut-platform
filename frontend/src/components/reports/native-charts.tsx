@@ -188,14 +188,17 @@ export function DonutChart({
 
 export function ScaledBar({
   value,
+  min = 0,
   max,
   colorClassName = "bg-burgundy",
 }: {
   value: number;
+  min?: number;
   max: number;
   colorClassName?: string;
 }) {
-  const width = max > 0 ? clamp((value / max) * 100, 0, 100) : 0;
+  const range = max - min;
+  const width = range > 0 ? clamp(((value - min) / range) * 100, 0, 100) : 0;
 
   return (
     <div className="mt-1.5 h-2 rounded-full bg-surface-muted" aria-hidden="true">

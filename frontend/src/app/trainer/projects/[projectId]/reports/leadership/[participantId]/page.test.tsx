@@ -20,9 +20,9 @@ const api = vi.hoisted(() => ({
     lencioni_count: 2,
     lencioni_averages: [{ id: "trust", label: "Încredere", avg: 7 }],
     icare_cohorts: [
-      { cohort: "direct_team", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 80 }] },
-      { cohort: "leadership_peers", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 75 }] },
-      { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 70 }] },
+      { cohort: "direct_team", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 4.2 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
+      { cohort: "leadership_peers", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 4 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
+      { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 3.8 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
     ],
     driver_count: 1,
     driver_averages: [{
@@ -63,6 +63,9 @@ describe("leadership member report", () => {
     expect(screen.getByText("Cum te vede echipa ta")).toBeTruthy();
     expect(screen.getByText("Cum te văd colegii din leadership")).toBeTruthy();
     expect(screen.getByText("Cum te evaluezi")).toBeTruthy();
+    expect(screen.getByText("4.2 din 5")).toBeTruthy();
+    expect(screen.queryByText("01")).toBeNull();
+    expect(pcm.closest("[data-slot='card']")).toBeTruthy();
     const feedback = screen.getByText("Lasă loc și pentru o variantă suficient de bună.");
     expect(feedback.closest("[data-tone]")?.getAttribute("data-tone")).toBe("danger");
     expect(

@@ -2528,6 +2528,14 @@ export interface components {
             pcm_phase_distribution: components["schemas"]["ReportDistributionResponse"][];
             /** Project Id */
             project_id?: string | null;
+            /** Reportable Failed Score Count */
+            reportable_failed_score_count: number;
+            /** Reportable Orphaned Score Count */
+            reportable_orphaned_score_count: number;
+            /** Reportable Pending Score Count */
+            reportable_pending_score_count: number;
+            /** Reportable Scored Count */
+            reportable_scored_count: number;
             /** Results */
             results: components["schemas"]["ScoringResultResponse"][];
             /** Team Lenses */
@@ -2887,6 +2895,19 @@ export interface components {
             cohort: "direct_team" | "leadership_peers" | "self";
             /** Response Count */
             response_count: number;
+            /** Scale Max */
+            scale_max?: number | null;
+            /** Scale Min */
+            scale_min?: number | null;
+            /**
+             * Score Scale Compatible
+             * @default true
+             */
+            score_scale_compatible: boolean;
+            /** Score Unit */
+            score_unit?: string | null;
+            /** Unavailable Reason */
+            unavailable_reason?: "incompatible_score_scales" | null;
         };
         /** IcareTargetSummaryResponse */
         IcareTargetSummaryResponse: {
@@ -3426,6 +3447,12 @@ export interface components {
             questionnaire_title: string;
             /** Scale Max */
             scale_max: number;
+            /** Scale Min */
+            scale_min: number;
+            /** Score Unit */
+            score_unit: string;
+            /** Unavailable Reason */
+            unavailable_reason?: ("privacy_threshold" | "no_eligible_dimensions" | "scoring_unavailable") | null;
             /** Visible */
             visible: boolean;
         };
