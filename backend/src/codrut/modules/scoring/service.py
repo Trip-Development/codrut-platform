@@ -44,6 +44,7 @@ from codrut.modules.forms.models import (
 )
 from codrut.modules.scoring.models import ScoringResult
 from codrut.modules.scoring.repository import ScoringRepository
+from codrut.modules.scoring.scale import ScoreScale, derive_definition_score_scale
 from codrut.modules.scoring.schemas import (
     CompanyReportAggregateResponse,
     CompanyReportComparisonResponse,
@@ -166,13 +167,6 @@ class DriverRowSelection:
     average_rows: tuple[AssignmentResultWithDefinition, ...]
     rankable_rows: tuple[AssignmentResultWithDefinition, ...]
     insufficient_driver_score_count: int
-
-
-@dataclass(frozen=True)
-class ReportScoreScale:
-    score_unit: str
-    scale_min: float
-    scale_max: float
 
 
 @dataclass(frozen=True)
@@ -1370,76 +1364,12 @@ def _report_participant_from_membership(
     )
 
 
-def _definition_report_score_scale(
-    definition: QuestionnaireDefinition | None,
-) -> ReportScoreScale | None:
-    if definition is None:
-        return None
-
-    feedback_policy = getattr(definition, "feedback_policy", None)
-    if isinstance(feedback_policy, dict):
-        explicit_maximum = _coerce_score(feedback_policy.get("scale_max"))
-        explicit_minimum = _coerce_score(feedback_policy.get("scale_min"))
-        explicit_minimum = explicit_minimum if explicit_minimum is not None else 0.0
-        if explicit_maximum is not None and explicit_maximum > explicit_minimum:
-            return ReportScoreScale(
-                _non_empty_string(feedback_policy.get("score_unit")) or "score",
-                explicit_minimum,
-                explicit_maximum,
-            )
-
-    for schema in (
-        _private_definition_schema(definition),
-        getattr(definition, "schema", None),
-    ):
-        if not isinstance(schema, dict):
-            continue
-        scoring = schema.get("scoring")
-        if not isinstance(scoring, dict):
-            continue
-        method = scoring.get("method")
-        score_unit = _non_empty_string(scoring.get("score_unit"))
-
-        if method == "average_statement_scores_by_section":
-            if score_unit != "grade_1_to_5":
-                return ReportScoreScale(score_unit or "percent", 0.0, 100.0)
-            minimum = _coerce_score(scoring.get("scale_min"))
-            maximum = _coerce_score(scoring.get("scale_max"))
-            if minimum is not None and maximum is not None and maximum > minimum:
-                return ReportScoreScale(score_unit, minimum, maximum)
-
-        minimum = _coerce_score(scoring.get("scale_min"))
-        maximum = _coerce_score(scoring.get("scale_max"))
-        if maximum is not None and maximum > (minimum if minimum is not None else 0):
-            return ReportScoreScale(score_unit or "score", minimum or 0.0, maximum)
-
-        normalize_to = _coerce_score(scoring.get("normalize_to"))
-        if normalize_to is not None and normalize_to > 0:
-            normalized_unit = score_unit or ("percent" if normalize_to == 100 else "score")
-            return ReportScoreScale(normalized_unit, 0.0, normalize_to)
-
-        if method == "sum_by_group":
-            rules = list(_valid_interpretation_rules(scoring.get("interpretation")))
-            for group in scoring.get("groups", []):
-                if isinstance(group, dict):
-                    rules.extend(_valid_interpretation_rules(group.get("interpretation")))
-            minima = [
-                value for rule in rules if (value := _coerce_score(rule.get("min"))) is not None
-            ]
-            maxima = [
-                value for rule in rules if (value := _coerce_score(rule.get("max"))) is not None
-            ]
-            if minima and maxima and max(maxima) > min(minima):
-                return ReportScoreScale(score_unit or "score", min(minima), max(maxima))
-    return None
-
-
 def _score_scale_response(
-    scales: set[ReportScoreScale],
+    scales: set[ScoreScale],
     *,
     has_unknown_scale: bool,
 ) -> ReportScoreScaleResponse:
-    compatible = len(scales) <= 1 and not (scales and has_unknown_scale)
+    compatible = len(scales) <= 1 and not has_unknown_scale
     scale = next(iter(scales), None) if compatible else None
     return ReportScoreScaleResponse(
         score_unit=scale.score_unit if scale is not None else None,
@@ -1454,7 +1384,7 @@ def _summarize_report_rows(
     rows: Iterable[AssignmentResultWithDefinition],
 ) -> tuple[int, list[ReportAverageResponse], ReportScoreScaleResponse]:
     dimensions: dict[str, ReportDimensionAccumulator] = {}
-    scales: set[ReportScoreScale] = set()
+    scales: set[ScoreScale] = set()
     has_unknown_scale = False
     count = 0
     for _assignment, result, definition in rows:
@@ -1462,11 +1392,19 @@ def _summarize_report_rows(
         if not _accumulate_scores(dimensions, result, definition):
             continue
         count += 1
-        scale = _definition_report_score_scale(definition)
-        if scale is None:
+        dimension_ids = {
+            dimension_id
+            for dimension_id in _report_dimensions(definition, result.scores)
+            if _coerce_score(result.scores.get(dimension_id)) is not None
+        }
+        derived_scale = derive_definition_score_scale(
+            definition,
+            dimension_ids=dimension_ids,
+        )
+        if not derived_scale.compatible or derived_scale.scale is None:
             has_unknown_scale = True
         else:
-            scales.add(scale)
+            scales.add(derived_scale.scale)
     scale_response = _score_scale_response(scales, has_unknown_scale=has_unknown_scale)
     averages = (
         _averages_from_accumulators(dimensions) if scale_response.score_scale_compatible else []
@@ -1591,7 +1529,7 @@ ICARE_COHORT_ORDER = ("direct_team", "leadership_peers", "self")
 
 def _icare_score_scale(
     definition: QuestionnaireDefinition | None,
-) -> ReportScoreScale | None:
+) -> ScoreScale | None:
     if definition is None:
         return None
     for schema in (
@@ -1608,9 +1546,9 @@ def _icare_score_scale(
             minimum = _coerce_score(scoring.get("scale_min"))
             maximum = _coerce_score(scoring.get("scale_max"))
             if minimum is not None and maximum is not None and maximum > minimum:
-                return ReportScoreScale(unit, minimum, maximum)
+                return ScoreScale(unit, minimum, maximum)
         else:
-            return ReportScoreScale(unit, 0.0, 100.0)
+            return ScoreScale(unit, 0.0, 100.0)
     return None
 
 

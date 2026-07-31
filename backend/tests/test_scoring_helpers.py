@@ -16,6 +16,7 @@ from codrut.modules.assignments.team_snapshot import (
 )
 from codrut.modules.companies.hierarchy import HierarchyIssue
 from codrut.modules.forms.models import SubmissionProcessingStatus
+from codrut.modules.scoring.scale import derive_definition_score_scale
 from codrut.modules.scoring.schemas import (
     DriverRankSummaryResponse,
     ReportDistributionResponse,
@@ -30,7 +31,6 @@ from codrut.modules.scoring.service import (
     _build_icare_cohort_summaries,
     _build_score_summary,
     _build_team_lenses,
-    _definition_report_score_scale,
     _distribution_count,
     _distribution_from_completed_pcm_assignments,
     _driver_feedback_by_dimension,
@@ -185,15 +185,28 @@ def test_report_dimensions_use_public_labels_rules_and_safe_fallbacks() -> None:
 
 
 def test_report_scale_is_derived_from_pinned_definition_scoring() -> None:
+    scale = [
+        {"value": 1, "label": "Low"},
+        {"value": 2, "label": "Middle"},
+        {"value": 3, "label": "High"},
+    ]
     lencioni = _definition(
         {
+            "sections": [
+                {
+                    "questions": [
+                        {"id": "q1", "scale": scale},
+                        {"id": "q2", "scale": scale},
+                        {"id": "q3", "scale": scale},
+                    ]
+                }
+            ],
             "scoring": {
                 "method": "sum_by_group",
-                "interpretation": [
-                    {"min": 0, "max": 4, "label": "Low"},
-                    {"min": 5, "max": 12, "label": "High"},
+                "groups": [
+                    {"id": "trust", "question_ids": ["q1", "q2", "q3"]},
                 ],
-            }
+            },
         }
     )
     drivers = _definition(
@@ -213,16 +226,22 @@ def test_report_scale_is_derived_from_pinned_definition_scoring() -> None:
         }
     )
 
-    lencioni_scale = _definition_report_score_scale(lencioni)  # type: ignore[arg-type]
-    driver_scale = _definition_report_score_scale(drivers)  # type: ignore[arg-type]
-    percent_driver_scale = _definition_report_score_scale(  # type: ignore[arg-type]
+    lencioni_result = derive_definition_score_scale(  # type: ignore[arg-type]
+        lencioni,
+        dimension_ids={"trust"},
+    )
+    driver_result = derive_definition_score_scale(drivers)  # type: ignore[arg-type]
+    percent_driver_result = derive_definition_score_scale(  # type: ignore[arg-type]
         percent_drivers
     )
+    lencioni_scale = lencioni_result.scale
+    driver_scale = driver_result.scale
+    percent_driver_scale = percent_driver_result.scale
     assert lencioni_scale is not None
     assert (lencioni_scale.score_unit, lencioni_scale.scale_min, lencioni_scale.scale_max) == (
         "score",
-        0,
-        12,
+        3,
+        9,
     )
     assert driver_scale is not None
     assert (driver_scale.score_unit, driver_scale.scale_min, driver_scale.scale_max) == (
@@ -232,6 +251,17 @@ def test_report_scale_is_derived_from_pinned_definition_scoring() -> None:
     )
     assert percent_driver_scale is not None
     assert percent_driver_scale.score_unit == "percent"
+
+
+def test_score_summary_marks_unknown_only_scales_unavailable() -> None:
+    summary = _build_score_summary(  # type: ignore[arg-type]
+        [(_assignment("lencioni"), _result({"trust": 7}), None)]
+    )
+
+    assert summary.lencioni_count == 1
+    assert summary.lencioni_averages == []
+    assert summary.lencioni_scale.score_scale_compatible is False
+    assert summary.lencioni_scale.unavailable_reason == "incompatible_score_scales"
 
 
 def test_score_summary_suppresses_averages_from_incompatible_pinned_scales() -> None:
@@ -372,6 +402,15 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
     member_two_id = uuid.uuid4()
     leadership_team_id = uuid.uuid4()
     functional_team_id = uuid.uuid4()
+    definition = _definition(
+        {
+            "scoring": {
+                "method": "sum_by_group",
+                "scale_min": 0,
+                "scale_max": 10,
+            }
+        }
+    )
     rows = [
         (
             _assignment(
@@ -381,7 +420,7 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
                 target_team_id=leadership_team_id,
             ),
             _result({"trust": 2}),
-            None,
+            definition,
         ),
         (
             _assignment(
@@ -391,7 +430,7 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
                 target_team_id=leadership_team_id,
             ),
             _result({"trust": 4}),
-            None,
+            definition,
         ),
         (
             _assignment(
@@ -401,7 +440,7 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
                 target_team_id=functional_team_id,
             ),
             _result({"trust": 8}),
-            None,
+            definition,
         ),
         (
             _assignment(
@@ -411,7 +450,7 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
                 target_team_id=functional_team_id,
             ),
             _result({"trust": 10}),
-            None,
+            definition,
         ),
     ]
 
@@ -1080,6 +1119,7 @@ def _driver_definition() -> SimpleNamespace:
         {
             "scoring": {
                 "method": "sum_statement_scores_by_driver",
+                "normalize_to": 100,
                 "drivers": [
                     {"id": "be_perfect", "label": "Fii perfect"},
                     {"id": "hurry_up", "label": "Grăbește-te"},

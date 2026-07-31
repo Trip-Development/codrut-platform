@@ -37,6 +37,7 @@ from codrut.modules.participants.service import (
     _definition_scale_max,
     _definition_score_feedback,
     _definition_score_labels,
+    _definition_score_scale,
 )
 from codrut.modules.scoring.models import (
     ResultPublication,
@@ -217,6 +218,89 @@ async def test_received_feedback_cycle_snapshot_ignores_current_organigram() -> 
         "leadership_peers": [peer_assignment],
     }
 
+def test_lencioni_scale_sums_each_pinned_question_range() -> None:
+    scale = [
+        {"value": 1, "label": "Rareori"},
+        {"value": 2, "label": "Uneori"},
+        {"value": 3, "label": "De obicei"},
+    ]
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key="lencioni",
+        version=1,
+        title="Lencioni",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "sections": [
+                    {
+                        "questions": [
+                            {"id": "q1", "scale": scale},
+                            {"id": "q2", "scale": scale},
+                            {"id": "q3", "scale": scale},
+                        ]
+                    }
+                ],
+                "scoring": {
+                    "method": "sum_by_group",
+                    "groups": [
+                        {"id": "trust", "question_ids": ["q1", "q2", "q3"]},
+                    ],
+                },
+            }
+        },
+        feedback_policy={"scale_min": 0, "scale_max": 10},
+        content_checksum=uuid.uuid4().hex * 2,
+        active=True,
+    )
+
+    assert _definition_score_scale(definition, dimension_ids={"trust"}) == (
+        "score",
+        3.0,
+        9.0,
+    )
+
+
+def test_lencioni_heterogeneous_visible_group_ranges_are_unavailable() -> None:
+    scale = [{"value": 1}, {"value": 2}, {"value": 3}]
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key="lencioni",
+        version=1,
+        title="Lencioni",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "sections": [
+                    {
+                        "questions": [
+                            {"id": "q1", "scale": scale},
+                            {"id": "q2", "scale": scale},
+                            {"id": "q3", "scale": scale},
+                        ]
+                    }
+                ],
+                "scoring": {
+                    "method": "sum_by_group",
+                    "groups": [
+                        {"id": "trust", "question_ids": ["q1", "q2", "q3"]},
+                        {"id": "conflict", "question_ids": ["q1", "q2"]},
+                    ],
+                },
+            }
+        },
+        feedback_policy={},
+        content_checksum=uuid.uuid4().hex * 2,
+        active=True,
+    )
+
+    assert (
+        _definition_score_scale(
+            definition,
+            dimension_ids={"trust", "conflict"},
+        )
+        is None
+    )
 
 def test_driver_feedback_is_read_from_the_pinned_questionnaire_definition() -> None:
     definition = QuestionnaireDefinition(
@@ -902,6 +986,7 @@ async def test_participant_results_require_active_matching_publication_snapshot(
             assert published.results[0].score_unit == "grade_1_to_5"
             assert published.results[0].scale_min == 1.0
             assert published.results[0].scale_max == 5.0
+            assert published.results[0].score_scale_compatible is True
 
             publication = (
                 await session.execute(

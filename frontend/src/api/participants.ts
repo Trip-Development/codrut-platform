@@ -89,9 +89,11 @@ export type ParticipantWorkspaceResult = {
   targetLabel: string;
   scores: Record<string, unknown>;
   primaryResult?: string | null;
-  scoreUnit?: string;
-  scaleMin?: number;
-  scaleMax?: number;
+  scoreUnit?: string | null;
+  scaleMin?: number | null;
+  scaleMax?: number | null;
+  scoreScaleCompatible?: boolean;
+  unavailableReason?: "incompatible_score_scales" | null;
 };
 
 export type ParticipantReceivedFeedbackDimension = {
@@ -200,9 +202,11 @@ type BackendParticipantWorkspaceResult = {
   target_label: string;
   scores: Record<string, unknown>;
   primary_result?: string | null;
-  score_unit: string;
-  scale_min: number;
-  scale_max: number;
+  score_unit?: string | null;
+  scale_min?: number | null;
+  scale_max?: number | null;
+  score_scale_compatible?: boolean;
+  unavailable_reason?: "incompatible_score_scales" | null;
 };
 
 type BackendParticipantReceivedFeedbackDimension = {
@@ -396,6 +400,8 @@ function mapParticipantWorkspaceResult(
     scoreUnit: result.score_unit,
     scaleMin: result.scale_min,
     scaleMax: result.scale_max,
+    scoreScaleCompatible: result.score_scale_compatible,
+    unavailableReason: result.unavailable_reason,
   };
 }
 

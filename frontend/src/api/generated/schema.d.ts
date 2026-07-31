@@ -3625,11 +3625,16 @@ export interface components {
             /** Questionnaire Key */
             questionnaire_key: string;
             /** Scale Max */
-            scale_max: number;
+            scale_max?: number | null;
             /** Scale Min */
-            scale_min: number;
+            scale_min?: number | null;
+            /**
+             * Score Scale Compatible
+             * @default true
+             */
+            score_scale_compatible: boolean;
             /** Score Unit */
-            score_unit: string;
+            score_unit?: string | null;
             /** Scores */
             scores: {
                 [key: string]: unknown;
@@ -3638,6 +3643,8 @@ export interface components {
             target_label: string;
             /** Title */
             title: string;
+            /** Unavailable Reason */
+            unavailable_reason?: "incompatible_score_scales" | null;
         };
         /** ParticipantWorkspaceSummary */
         ParticipantWorkspaceSummary: {

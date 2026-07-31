@@ -741,6 +741,8 @@ describe("frontend API adapter stubs", () => {
             score_unit: "percent",
             scale_min: 0,
             scale_max: 100,
+            score_scale_compatible: true,
+            unavailable_reason: null,
           },
         ],
         received_feedback: {
@@ -780,6 +782,7 @@ describe("frontend API adapter stubs", () => {
           scoreUnit: "percent",
           scaleMin: 0,
           scaleMax: 100,
+          scoreScaleCompatible: true,
         }),
       ],
       receivedFeedback: {

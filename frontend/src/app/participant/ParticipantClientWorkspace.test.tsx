@@ -411,6 +411,57 @@ describe("ParticipantResultsPanel", () => {
     expect(lencioniHeading.parentElement?.querySelector("[data-slot='card']")).toBeTruthy();
   });
 
+  it("uses the pinned Lencioni sum range for labels and bars", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase={null}
+        pcmPhase={null}
+        results={[{
+          assignmentId: "lencioni",
+          questionnaireKey: "lencioni",
+          title: "Lencioni",
+          targetLabel: "Echipa ta",
+          scores: {
+            trust: { score: 6, label: "Încredere" },
+          },
+          scoreUnit: "score",
+          scaleMin: 3,
+          scaleMax: 9,
+          scoreScaleCompatible: true,
+        }]}
+      />,
+    );
+
+    expect(screen.getByText("3-9")).toBeTruthy();
+    expect(screen.getAllByText("6 / 9")).toHaveLength(2);
+    const meter = screen.getByRole("meter", { name: "Scor Încredere" });
+    expect(meter.getAttribute("aria-valuemin")).toBe("3");
+    expect(meter.getAttribute("aria-valuemax")).toBe("9");
+    expect(meter.firstElementChild?.getAttribute("style")).toContain("width: 50%");
+  });
+
+  it("does not guess a participant scale when the published groups are incompatible", () => {
+    render(
+      <ParticipantResultsPanel
+        pcmBase={null}
+        pcmPhase={null}
+        results={[{
+          assignmentId: "lencioni",
+          questionnaireKey: "lencioni",
+          title: "Lencioni",
+          targetLabel: "Echipa ta",
+          scores: { trust: { score: 6, label: "Încredere" } },
+          scoreScaleCompatible: false,
+          unavailableReason: "incompatible_score_scales",
+        }]}
+      />,
+    );
+
+    expect(screen.getByText(/dimensiuni cu scale diferite/)).toBeTruthy();
+    expect(screen.queryByRole("meter")).toBeNull();
+    expect(screen.queryByText("0-10")).toBeNull();
+  });
+
   it("shows anonymous received iCARE averages after the privacy threshold", () => {
     render(
       <ParticipantResultsPanel

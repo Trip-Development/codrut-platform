@@ -6403,16 +6403,42 @@
             "type": "string"
           },
           "scale_max": {
-            "title": "Scale Max",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Max"
           },
           "scale_min": {
-            "title": "Scale Min",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Min"
+          },
+          "score_scale_compatible": {
+            "default": true,
+            "title": "Score Scale Compatible",
+            "type": "boolean"
           },
           "score_unit": {
-            "title": "Score Unit",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Unit"
           },
           "scores": {
             "additionalProperties": true,
@@ -6426,6 +6452,18 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "const": "incompatible_score_scales",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
           }
         },
         "required": [
@@ -6433,10 +6471,7 @@
           "questionnaire_key",
           "title",
           "target_label",
-          "scores",
-          "score_unit",
-          "scale_min",
-          "scale_max"
+          "scores"
         ],
         "title": "ParticipantWorkspaceResult",
         "type": "object"
