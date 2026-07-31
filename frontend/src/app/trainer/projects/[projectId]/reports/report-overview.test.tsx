@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const data = vi.hoisted(() => ({
@@ -97,7 +97,11 @@ describe("project report overview", () => {
     expect(lencioni.compareDocumentPosition(icare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(icare.compareDocumentPosition(drivers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum vede echipa leadershipul" })).toBeTruthy();
+    const peersTab = screen.getByRole("tab", { name: "Cum se văd colegii din leadership: 1 răspuns" });
+    const selfTab = screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" });
+    fireEvent.click(peersTab);
     expect(screen.getByRole("heading", { name: "Cum se văd colegii din leadership" })).toBeTruthy();
+    fireEvent.click(selfTab);
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
     expect(screen.getByRole("img", { name: /Primul driver dominant.*3 persoane incluse/ })).toBeTruthy();
     expect(screen.getByRole("img", { name: /Al doilea driver dominant.*3 persoane incluse/ })).toBeTruthy();
@@ -137,6 +141,7 @@ describe("project report overview", () => {
     expect(screen.getByText("Perspectivele bazate pe organigramă sunt momentan indisponibile")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Rezultatul întregului proiect" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "TA Drivers" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" }));
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Vezi rezultatele pe echipe/ })).toBeNull();
   });
@@ -164,8 +169,35 @@ describe("project report overview", () => {
     });
     render(ui);
 
-    expect(screen.getAllByText("4.2 din 5")).toHaveLength(3);
+    expect(screen.getByRole("tabpanel").textContent).toContain("4.2 din 5");
+    fireEvent.click(screen.getByRole("tab", { name: "Cum se văd colegii din leadership: 1 răspuns" }));
+    expect(screen.getByRole("tabpanel").textContent).toContain("4.2 din 5");
+    fireEvent.click(screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" }));
+    expect(screen.getByRole("tabpanel").textContent).toContain("4.2 din 5");
     expect(screen.queryByText("4.2%")).toBeNull();
+  });
+
+  it("explains that a displayed zero is a valid minimum, not a missing result", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        icare_cohorts: aggregate.icare_cohorts.map((summary) => summary.cohort === "direct_team"
+          ? { ...summary, averages: [{ id: "clarity", label: "Claritate", avg: 0 }] }
+          : summary),
+      },
+      assignments: [],
+      participants: [],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText("0%")).toBeTruthy();
+    expect(screen.getByText("0% este scorul minim valid pe această scală, nu un rezultat lipsă.")).toBeTruthy();
   });
 
   it("explains pending scores without hiding available results", async () => {

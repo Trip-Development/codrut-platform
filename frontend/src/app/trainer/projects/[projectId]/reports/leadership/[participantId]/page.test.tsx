@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -60,10 +60,14 @@ describe("leadership member report", () => {
     expect(pcm.compareDocumentPosition(lencioni) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(lencioni.compareDocumentPosition(icare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(icare.compareDocumentPosition(drivers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText("Cum te vede echipa ta")).toBeTruthy();
-    expect(screen.getByText("Cum te văd colegii din leadership")).toBeTruthy();
-    expect(screen.getByText("Cum te evaluezi")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cum te vede echipa ta" })).toBeTruthy();
     expect(screen.getByText("4.2 din 5")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Cum te văd colegii din leadership: 2 răspunsuri" }));
+    expect(screen.getByRole("heading", { name: "Cum te văd colegii din leadership" })).toBeTruthy();
+    expect(screen.getByText("4 din 5")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Cum te evaluezi: 1 răspuns" }));
+    expect(screen.getByRole("heading", { name: "Cum te evaluezi" })).toBeTruthy();
+    expect(screen.getByText("3.8 din 5")).toBeTruthy();
     expect(screen.queryByText("01")).toBeNull();
     expect(pcm.closest("[data-slot='card']")).toBeTruthy();
     const feedback = screen.getByText("Lasă loc și pentru o variantă suficient de bună.");
@@ -71,5 +75,30 @@ describe("leadership member report", () => {
     expect(
       screen.getByRole("link", { name: /Înapoi la rezultatele proiectului/ }).getAttribute("href"),
     ).toBe("/trainer/projects/project-1/reports?cycle=cycle-2");
+  });
+
+  it("explains a valid minimum iCARE score on the individual report", async () => {
+    const report = await api.getLeadershipMemberReport();
+    api.getLeadershipMemberReport.mockResolvedValueOnce({
+      ...report,
+      icare_cohorts: report.icare_cohorts.map((summary) => summary.cohort === "direct_team"
+        ? {
+            ...summary,
+            averages: [{ id: "clarity", label: "Claritate", avg: 0 }],
+            score_unit: "percent",
+            scale_min: 0,
+            scale_max: 100,
+          }
+        : summary),
+    });
+
+    const ui = await LeadershipMemberReportPage({
+      params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText("0%")).toBeTruthy();
+    expect(screen.getByText("0% este scorul minim valid pe această scală, nu un rezultat lipsă.")).toBeTruthy();
   });
 });

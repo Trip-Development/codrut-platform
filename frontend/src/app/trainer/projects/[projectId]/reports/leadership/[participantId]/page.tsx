@@ -10,6 +10,7 @@ import {
 } from "@/api/companies";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
 import { ScaledBar } from "@/components/reports/native-charts";
 import { Card } from "@/components/ui/card";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
@@ -19,6 +20,12 @@ const ICARE_LABELS: Record<IcareCohortSummary["cohort"], string> = {
   direct_team: "Cum te vede echipa ta",
   leadership_peers: "Cum te văd colegii din leadership",
   self: "Cum te evaluezi",
+};
+
+const ICARE_TAB_LABELS: Record<IcareCohortSummary["cohort"], string> = {
+  direct_team: "Echipa",
+  leadership_peers: "Colegii din leadership",
+  self: "Autoevaluare",
 };
 
 export default async function LeadershipMemberReportPage({
@@ -86,33 +93,41 @@ export default async function LeadershipMemberReportPage({
       </ResultSection>
 
       <ResultSection id="icare" title="iCARE" description="Cele trei perspective sunt păstrate separat.">
-        <div className="grid gap-5 lg:grid-cols-3">
-          {(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
+        <IcarePerspectiveTabs
+          ariaLabel="Perspective iCARE pentru această persoană"
+          perspectives={(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = report.icare_cohorts.find((item) => item.cohort === cohort);
             const scale = icareScale(summary);
-            return (
-              <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
-                <article>
-                  <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {summary?.response_count ?? 0} {(summary?.response_count ?? 0) === 1 ? "răspuns" : "răspunsuri"}
-                  </p>
-                  <div className="mt-4">
-                    <AverageList
-                      count={summary?.response_count ?? 0}
-                      items={summary?.averages ?? []}
-                      min={scale.min}
-                      max={scale.max}
-                      suffix={scale.suffix}
-                      showCount={false}
-                      empty={icareEmptyCopy(summary)}
-                    />
-                  </div>
-                </article>
-              </Card>
-            );
+            return {
+              id: cohort,
+              label: ICARE_LABELS[cohort],
+              tabLabel: ICARE_TAB_LABELS[cohort],
+              responseCount: summary?.response_count ?? 0,
+              content: (
+                <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
+                  <article>
+                    <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {summary?.response_count ?? 0} {(summary?.response_count ?? 0) === 1 ? "răspuns" : "răspunsuri"}
+                    </p>
+                    <div className="mt-4">
+                      <AverageList
+                        count={summary?.response_count ?? 0}
+                        items={summary?.averages ?? []}
+                        min={scale.min}
+                        max={scale.max}
+                        suffix={scale.suffix}
+                        showCount={false}
+                        empty={icareEmptyCopy(summary)}
+                        note={icareMinimumScoreCopy(summary)}
+                      />
+                    </div>
+                  </article>
+                </Card>
+              ),
+            };
           })}
-        </div>
+        />
       </ResultSection>
 
       <ResultSection id="ta-drivers" title="TA Drivers" description="Rezultatul individual, fără comparații sau detalii de echipă.">
@@ -189,6 +204,19 @@ function icareEmptyCopy(summary?: IcareCohortSummary): string {
   return "Nu există încă un rezultat iCARE scorabil pentru această perspectivă.";
 }
 
+function icareMinimumScoreCopy(summary?: IcareCohortSummary): string | null {
+  if (!summary || summary.averages.length === 0) return null;
+  const minimum = summary.scale_min ?? (summary.score_unit === "grade_1_to_5" ? 1 : 0);
+  if (!summary.averages.some((item) => Math.abs(item.avg - minimum) < 0.05)) return null;
+  if (summary.score_unit === "percent") {
+    return "0% este scorul minim valid pe această scală, nu un rezultat lipsă.";
+  }
+  if (summary.score_unit === "grade_1_to_5") {
+    return `${minimum} din ${summary.scale_max ?? 5} este scorul minim valid pe această scală, nu un rezultat lipsă.`;
+  }
+  return null;
+}
+
 function AverageList({
   count,
   items,
@@ -199,6 +227,7 @@ function AverageList({
   showCount = true,
   dangerAbove,
   showFeedback = false,
+  note,
 }: {
   count: number;
   items: ReportAverage[];
@@ -209,6 +238,7 @@ function AverageList({
   showCount?: boolean;
   dangerAbove?: number;
   showFeedback?: boolean;
+  note?: string | null;
 }) {
   if (items.length === 0) {
     return <p className="text-sm text-muted-foreground">{empty}</p>;
@@ -241,6 +271,7 @@ function AverageList({
             </div>
           );
         })}
+        {note ? <p className="text-xs leading-5 text-muted-foreground">{note}</p> : null}
       </div>
     </div>
   );
