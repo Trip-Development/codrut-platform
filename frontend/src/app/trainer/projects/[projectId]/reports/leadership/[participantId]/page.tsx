@@ -10,6 +10,7 @@ import {
 } from "@/api/companies";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
 import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
 import { ScaledBar } from "@/components/reports/native-charts";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
@@ -117,6 +118,10 @@ export default async function LeadershipMemberReportPage({
       </ResultSection>
 
       <ResultSection id="icare" title="iCARE" description="Cele trei perspective sunt păstrate separat.">
+        <HistoricalIcareNotice
+          count={report.icare_unclassified_response_count}
+          reason={report.icare_unclassified_reason}
+        />
         <IcarePerspectiveTabs
           ariaLabel="Perspective iCARE pentru această persoană"
           perspectives={(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
@@ -209,7 +214,7 @@ function ResultSection({
         <h2 id={`member-result-${id}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
-      <div>{children}</div>
+      <div className="grid gap-5">{children}</div>
     </section>
   );
 }

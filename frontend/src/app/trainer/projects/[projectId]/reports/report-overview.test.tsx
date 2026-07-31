@@ -42,6 +42,8 @@ const aggregate = {
     { cohort: "leadership_peers", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 72 }], score_unit: "percent", scale_min: 0, scale_max: 100, score_scale_compatible: true, unavailable_reason: null },
     { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 68 }], score_unit: "percent", scale_min: 0, scale_max: 100, score_scale_compatible: true, unavailable_reason: null },
   ],
+  icare_unclassified_response_count: 0,
+  icare_unclassified_reason: null,
   driver_rank_summary: {
     total_people: 3,
     first_rank: [
@@ -144,6 +146,29 @@ describe("project report overview", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" }));
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Vezi rezultatele pe echipe/ })).toBeNull();
+  });
+
+  it("explains why historical iCARE responses are kept outside the perspectives", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        icare_unclassified_response_count: 2,
+        icare_unclassified_reason: "historical_cohort_unavailable",
+      },
+      assignments: [],
+      participants: [{ id: "participant-1" }],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    const notice = screen.getByRole("note", { name: "Despre răspunsurile iCARE mai vechi" });
+    expect(notice.textContent).toContain("2 răspunsuri mai vechi");
+    expect(notice.textContent).toContain("fără să ghicim perspectiva");
   });
 
   it("renders iCARE grades on their declared scale", async () => {

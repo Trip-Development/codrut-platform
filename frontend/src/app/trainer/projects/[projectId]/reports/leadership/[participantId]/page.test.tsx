@@ -25,6 +25,8 @@ const api = vi.hoisted(() => ({
       { cohort: "leadership_peers", response_count: 2, averages: [{ id: "clarity", label: "Claritate", avg: 4 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
       { cohort: "self", response_count: 1, averages: [{ id: "clarity", label: "Claritate", avg: 3.8 }], score_unit: "grade_1_to_5", scale_min: 1, scale_max: 5, score_scale_compatible: true, unavailable_reason: null },
     ],
+    icare_unclassified_response_count: 0,
+    icare_unclassified_reason: null as "historical_cohort_unavailable" | null,
     driver_count: 1,
     driver_scale: { score_unit: "percent", scale_min: 0, scale_max: 80 },
     driver_averages: [{
@@ -113,6 +115,7 @@ describe("leadership member report", () => {
       lencioni_team_ambiguous: true,
       lencioni_team_ambiguity_message: "Echipa istorică are două rezultate posibile.",
     } as never);
+
     const ui = await LeadershipMemberReportPage({
       params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
       searchParams: Promise.resolve({ cycle: "cycle-2" }),
@@ -122,5 +125,24 @@ describe("leadership member report", () => {
     expect(screen.getByText("Echipa istorică nu poate fi stabilită sigur")).toBeTruthy();
     expect(screen.getByText("Echipa istorică are două rezultate posibile.")).toBeTruthy();
     expect(screen.queryByText("7 din 10")).toBeNull();
+  });
+
+  it("keeps an unclassified historical response outside the member perspectives", async () => {
+    const report = await api.getLeadershipMemberReport();
+    api.getLeadershipMemberReport.mockResolvedValueOnce({
+      ...report,
+      icare_unclassified_response_count: 1,
+      icare_unclassified_reason: "historical_cohort_unavailable",
+    });
+
+    const ui = await LeadershipMemberReportPage({
+      params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    const notice = screen.getByRole("note", { name: "Despre răspunsurile iCARE mai vechi" });
+    expect(notice.textContent).toContain("Un răspuns mai vechi");
+    expect(notice.textContent).toContain("Îl păstrăm separat");
   });
 });

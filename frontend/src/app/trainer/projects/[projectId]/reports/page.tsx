@@ -8,6 +8,7 @@ import type {
   ReportHierarchyIssue,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
 import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
 import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
@@ -138,6 +139,10 @@ export default async function ProjectReportsPage({
         title="iCARE"
         description="Trei perspective separate, fără a amesteca echipa, colegii și autoevaluarea."
       >
+        <HistoricalIcareNotice
+          count={aggregate.icare_unclassified_response_count}
+          reason={aggregate.icare_unclassified_reason}
+        />
         {aggregate.hierarchy_ambiguous ? (
           <HierarchyDiagnosticsPanel
             title="Perspectivele bazate pe organigramă sunt momentan indisponibile"
