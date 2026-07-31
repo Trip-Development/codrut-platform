@@ -31,8 +31,8 @@ const aggregate = {
   lencioni_count: 3,
   driver_count: 3,
   boss_360_count: 5,
-  pcm_base_count: 0,
-  pcm_phase_count: 0,
+  pcm_base_count: 3,
+  pcm_phase_count: 3,
   lencioni_averages: [{ id: "trust", label: "Încredere", avg: 7.2 }],
   driver_averages: [{ id: "perfect", label: "Fii perfect", avg: 64 }],
   boss_360_averages: [],
@@ -58,8 +58,11 @@ const aggregate = {
   leadership_members: [
     { participant_profile_id: "leader-1", full_name: "Ana Lider", position: "Director" },
   ],
-  pcm_base_distribution: [],
-  pcm_phase_distribution: [],
+  pcm_base_distribution: [
+    { id: "thinker", label: "Gânditor", value: 2, color: "#2563eb" },
+    { id: "harmonizer", label: "Armonizator", value: 1, color: "#f97316" },
+  ],
+  pcm_phase_distribution: [{ id: "persister", label: "Perseverent", value: 3, color: "#7c3aed" }],
   team_lenses: [],
   hierarchy_ambiguous: false,
   hierarchy_ambiguity_message: null,
@@ -93,9 +96,11 @@ describe("project report overview", () => {
     });
     render(ui);
 
+    const pcm = screen.getByRole("heading", { name: "PCM" });
     const lencioni = screen.getByRole("heading", { name: "Lencioni" });
     const icare = screen.getByRole("heading", { name: "iCARE" });
     const drivers = screen.getByRole("heading", { name: "TA Drivers" });
+    expect(pcm.compareDocumentPosition(lencioni) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(lencioni.compareDocumentPosition(icare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(icare.compareDocumentPosition(drivers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum vede echipa leadershipul" })).toBeTruthy();
@@ -103,6 +108,8 @@ describe("project report overview", () => {
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
     expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.getByRole("img", { name: /Primul driver dominant.*3 persoane incluse/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Distribuție PCM bază.*Gânditor: 67%.*Armonizator: 33%/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Distribuție PCM fază.*Perseverent: 100%/ })).toBeTruthy();
     expect(screen.getByRole("img", { name: /Al doilea driver dominant.*3 persoane incluse/ })).toBeTruthy();
     expect(screen.getByText("2 persoane · 67%")).toBeTruthy();
     expect(screen.getByText("3 persoane · 100%")).toBeTruthy();

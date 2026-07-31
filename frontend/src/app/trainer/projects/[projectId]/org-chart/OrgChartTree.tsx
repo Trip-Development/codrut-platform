@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { AlertTriangleIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/utils/cn";
 import type { OrgChartModel, OrgChartNode, OrgChartWarning } from "./org-chart-model";
 
@@ -36,13 +37,13 @@ export function OrgChartTree({ model }: OrgChartTreeProps) {
           Nu există încă un root valid pentru organigramă. Corectează managerii marcați în atenționări pentru a reconstrui arborele.
         </p>
       ) : (
-        <div className="overflow-x-auto border-y border-border bg-surface">
-          <ol aria-label="Organigramă proiect" className="flex min-w-[62rem] flex-col gap-3 py-4">
+        <Card className="gap-0 p-3 sm:p-4">
+          <ol aria-label="Organigramă proiect" className="flex min-w-0 flex-col gap-3">
             {model.roots.map((root) => (
-              <OrgChartNodeItem key={root.id} node={root} expandedIds={expandedIds} onToggle={toggleNode} />
+              <OrgChartNodeItem key={root.id} node={root} depth={0} expandedIds={expandedIds} onToggle={toggleNode} />
             ))}
           </ol>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -85,10 +86,12 @@ function OrgChartWarningPanel({ warnings }: { warnings: OrgChartWarning[] }) {
 
 function OrgChartNodeItem({
   node,
+  depth,
   expandedIds,
   onToggle,
 }: {
   node: OrgChartNode;
+  depth: number;
   expandedIds: Set<string>;
   onToggle: (nodeId: string) => void;
 }) {
@@ -98,10 +101,16 @@ function OrgChartNodeItem({
 
   return (
     <li>
-      <article className={cn("border-l-2 border-border bg-muted/25 px-4 py-3", hasChildren && "border-primary/35 bg-surface")}>
+      <article
+        className={cn(
+          "rounded-lg border bg-muted/20 px-3 py-3 transition-colors sm:px-4",
+          hasChildren && "bg-surface",
+          depth === 0 && "border-primary/30 shadow-sm",
+        )}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <NodeMark name={node.fullName} />
+            <NodeMark name={node.fullName} depth={depth} />
             <div className="min-w-0">
               <p className="break-words font-semibold text-foreground">{node.fullName}</p>
               <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">
@@ -118,6 +127,7 @@ function OrgChartNodeItem({
               type="button"
               variant="outline"
               size="sm"
+              className="w-full justify-center sm:w-auto"
               aria-controls={childrenId}
               aria-expanded={expanded}
               aria-label={`${expanded ? "Ascunde" : "Arată"} raportorii pentru ${node.fullName}`}
@@ -136,13 +146,13 @@ function OrgChartNodeItem({
 
       {hasChildren ? (
         expanded ? (
-          <ol id={childrenId} className="ml-7 mt-3 flex flex-col gap-3 border-l pl-5">
+          <ol id={childrenId} className="relative ml-3 mt-3 flex flex-col gap-3 border-l border-border pl-3 sm:ml-5 sm:pl-5">
             {node.children.map((child) => (
-              <OrgChartNodeItem key={child.id} node={child} expandedIds={expandedIds} onToggle={onToggle} />
+              <OrgChartNodeItem key={child.id} node={child} depth={depth + 1} expandedIds={expandedIds} onToggle={onToggle} />
             ))}
           </ol>
         ) : (
-          <p className="ml-7 mt-2 border-l border-border px-3 py-2 text-xs font-semibold text-muted-foreground">
+          <p className="ml-3 mt-2 border-l border-border px-3 py-2 text-xs font-semibold text-muted-foreground sm:ml-5">
             {node.descendantCount} raportori ascunși sub {node.fullName}.
           </p>
         )
@@ -165,13 +175,17 @@ function collectDefaultExpandedIds(roots: OrgChartNode[]): Set<string> {
   return expandedIds;
 }
 
-function NodeMark({ name }: { name: string }) {
+function NodeMark({ name, depth }: { name: string; depth: number }) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white",
-        nodeMarkClass(name),
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold ring-1 ring-inset",
+        depth === 0
+          ? "bg-primary text-primary-foreground ring-primary/20"
+          : depth === 1
+            ? "bg-foreground text-background ring-foreground/15"
+            : "bg-muted text-foreground ring-border",
       )}
     >
       {nodeInitials(name)}
@@ -187,17 +201,6 @@ function NodeChip({ children }: { children: ReactNode }) {
   );
 }
 
-function nodeMarkClass(seed: string): string {
-  const classes = [
-    "bg-primary",
-    "bg-foreground",
-    "bg-muted-foreground",
-    "bg-success-ink",
-    "bg-burgundy-800",
-  ];
-  return classes[Math.abs(hashString(seed)) % classes.length];
-}
-
 function nodeInitials(name: string): string {
   const words = name
     .trim()
@@ -206,14 +209,6 @@ function nodeInitials(name: string): string {
   if (words.length === 0) return "OR";
   if (words.length === 1) return words[0].slice(0, 2).toLocaleUpperCase("ro");
   return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toLocaleUpperCase("ro");
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-  return hash;
 }
 
 function warningReasonLabel(reason: OrgChartWarning["reason"]): string {
