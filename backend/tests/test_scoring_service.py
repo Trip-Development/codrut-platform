@@ -14,6 +14,8 @@ from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
+    TeamMembershipRole,
+    TeamType,
 )
 from codrut.modules.companies.models import (
     Company,
@@ -51,6 +53,47 @@ class FakeScoringRepository:
     async def delete_by_assignment(self, assignment_id: uuid.UUID) -> None:
         if assignment_id in self.results:
             del self.results[assignment_id]
+
+
+@pytest.mark.asyncio
+async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
+    functional_team_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                all=lambda: [
+                    (
+                        leadership_team_id,
+                        TeamType.leadership,
+                        TeamMembershipRole.member,
+                    ),
+                    (
+                        functional_team_id,
+                        TeamType.functional,
+                        TeamMembershipRole.leader,
+                    ),
+                ]
+            )
+        )
+    )
+    service = ScoringService(session)  # type: ignore[arg-type]
+
+    functional = await service._resolve_member_lencioni_team_id(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        [],
+        prefer_leadership=False,
+    )
+    top_leader = await service._resolve_member_lencioni_team_id(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        [],
+        prefer_leadership=True,
+    )
+
+    assert functional == functional_team_id
+    assert top_leader == leadership_team_id
 
 
 @pytest.mark.asyncio

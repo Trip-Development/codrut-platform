@@ -220,7 +220,7 @@ describe("project report overview", () => {
 
     expect(screen.getByText("Unele rezultate nu pot fi asociate cu evaluarea")).toBeTruthy();
     expect(screen.getByText(/2 răspunsuri sunt păstrate, dar rezultatele nu au putut fi pregătite/)).toBeTruthy();
-    expect(screen.getByText(/Un rezultat există, dar nu poate fi legat de chestionarul potrivit/)).toBeTruthy();
+    expect(screen.getByText(/Un răspuns trimis este păstrat, dar nu are încă un rezultat asociat/)).toBeTruthy();
     expect(screen.queryByText(/în curs de procesare/)).toBeNull();
   });
 

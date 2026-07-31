@@ -143,6 +143,7 @@ export default async function ProjectReportsPage({
                 title={ICARE_LABELS[cohort]}
                 count={summary?.response_count ?? 0}
                 items={summary?.averages ?? []}
+                min={scale.min}
                 max={scale.max}
                 suffix={scale.suffix}
                 empty={icareEmptyCopy(summary)}
@@ -257,6 +258,7 @@ function AveragePanel({
   title,
   count,
   items,
+  min = 0,
   max,
   suffix = "",
   empty = "Rezultatele apar după completare și scorare.",
@@ -264,6 +266,7 @@ function AveragePanel({
   title: string;
   count: number;
   items: ReportAverage[];
+  min?: number;
   max: number;
   suffix?: string;
   empty?: string;
@@ -285,7 +288,7 @@ function AveragePanel({
                   <span className="min-w-0 font-semibold text-foreground">{item.label}</span>
                   <span className="font-mono font-semibold tabular-nums text-foreground">{item.avg}{suffix}</span>
                 </div>
-                <ScaledBar value={item.avg} max={max} />
+                <ScaledBar value={item.avg} min={min} max={max} />
                 {item.interpretation ? (
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.interpretation}</p>
                 ) : null}
@@ -399,7 +402,7 @@ function ScoringAvailabilityAlert({
             <li>{failed === 1 ? "Un răspuns este păstrat, dar rezultatul nu a putut fi pregătit. Participantul nu trebuie să îl completeze din nou." : `${failed} răspunsuri sunt păstrate, dar rezultatele nu au putut fi pregătite. Participanții nu trebuie să le completeze din nou.`}</li>
           ) : null}
           {orphaned > 0 ? (
-            <li>{orphaned === 1 ? "Un rezultat există, dar nu poate fi legat de chestionarul potrivit." : `${orphaned} rezultate există, dar nu pot fi legate de chestionarele potrivite.`}</li>
+            <li>{orphaned === 1 ? "Un răspuns trimis este păstrat, dar nu are încă un rezultat asociat." : `${orphaned} răspunsuri trimise sunt păstrate, dar nu au încă rezultate asociate.`}</li>
           ) : null}
         </ul>
       </AlertDescription>
@@ -407,15 +410,15 @@ function ScoringAvailabilityAlert({
   );
 }
 
-function icareScale(summary?: IcareCohortSummary): { max: number; suffix: string } {
+function icareScale(summary?: IcareCohortSummary): { min: number; max: number; suffix: string } {
   if (summary?.score_unit === "percent") {
-    return { max: summary.scale_max ?? 100, suffix: "%" };
+    return { min: summary.scale_min ?? 0, max: summary.scale_max ?? 100, suffix: "%" };
   }
   if (summary?.score_unit === "grade_1_to_5") {
     const max = summary.scale_max ?? 5;
-    return { max, suffix: ` din ${max}` };
+    return { min: summary.scale_min ?? 1, max, suffix: ` din ${max}` };
   }
-  return { max: summary?.scale_max ?? 100, suffix: "" };
+  return { min: summary?.scale_min ?? 0, max: summary?.scale_max ?? 100, suffix: "" };
 }
 
 function icareEmptyCopy(summary?: IcareCohortSummary): string {

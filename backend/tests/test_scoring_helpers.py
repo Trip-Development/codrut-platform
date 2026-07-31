@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
-    TeamType,
 )
 from codrut.modules.companies.hierarchy import HierarchyIssue
 from codrut.modules.forms.models import SubmissionProcessingStatus
@@ -284,18 +283,6 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
     member_two_id = uuid.uuid4()
     leadership_team_id = uuid.uuid4()
     functional_team_id = uuid.uuid4()
-    hierarchy = SimpleNamespace(
-        ambiguous_name=None,
-        top_level_ids={chief_id},
-        leadership_ids={chief_id, leader_id},
-        direct_reports_by_manager_id={
-            chief_id: [SimpleNamespace(id=leader_id)],
-            leader_id: [
-                SimpleNamespace(id=member_one_id),
-                SimpleNamespace(id=member_two_id),
-            ],
-        },
-    )
     rows = [
         (
             _assignment(
@@ -339,21 +326,13 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
         ),
     ]
 
-    team_types = {
-        leadership_team_id: TeamType.leadership,
-        functional_team_id: TeamType.functional,
-    }
     chief = _leadership_member_lencioni_summary(  # type: ignore[arg-type]
-        chief_id,
-        hierarchy,
         rows,
-        team_types_by_id=team_types,
+        target_team_id=leadership_team_id,
     )
     leader = _leadership_member_lencioni_summary(  # type: ignore[arg-type]
-        leader_id,
-        hierarchy,
         rows,
-        team_types_by_id=team_types,
+        target_team_id=functional_team_id,
     )
 
     assert chief.lencioni_count == 2
@@ -912,7 +891,7 @@ def test_driver_rank_summary_top_two_tie_only_counts_first_tie_break() -> None:
     assert ranking.second_rank_tie_breaks == 0
 
 
-def test_latest_driver_row_uses_assignment_id_and_aligns_average_population() -> None:
+def test_driver_average_keeps_all_rows_while_pies_use_latest_person_result() -> None:
     participant_id = uuid.uuid4()
     same_created_at = datetime(2026, 7, 30, tzinfo=UTC)
     lower_id = uuid.UUID(int=1)
@@ -944,10 +923,11 @@ def test_latest_driver_row_uses_assignment_id_and_aligns_average_population() ->
     summary = _build_score_summary(rows)  # type: ignore[arg-type]
 
     assert [row[0].id for row in selection.rankable_rows] == [higher_id]
-    assert summary.driver_count == ranking.total_people == 1
+    assert summary.driver_count == 2
+    assert ranking.total_people == 1
     assert {item.id: item.avg for item in summary.driver_averages} == {
-        "be_perfect": 90,
-        "hurry_up": 30,
+        "be_perfect": 47.5,
+        "hurry_up": 62.5,
         "try_hard": 10,
     }
     assert [item.id for item in ranking.first_rank] == ["be_perfect"]
@@ -986,10 +966,12 @@ def test_latest_valid_driver_row_ignores_a_newer_malformed_result() -> None:
 
     assert [row[0].id for row in selection.rankable_rows] == [older_id]
     assert selection.insufficient_driver_score_count == 0
-    assert summary.driver_count == 1
+    assert summary.driver_count == 2
     assert ranking.total_people == 1
     assert {item.id: item.avg for item in summary.driver_averages} == {
-        "be_perfect": 99,
+        "be_perfect": 89.5,
+        "hurry_up": 60,
+        "try_hard": 20,
     }
     assert [item.id for item in ranking.first_rank] == ["be_perfect"]
     assert [item.id for item in ranking.second_rank] == ["hurry_up"]

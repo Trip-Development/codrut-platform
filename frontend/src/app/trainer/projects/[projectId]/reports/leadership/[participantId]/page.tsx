@@ -101,6 +101,7 @@ export default async function LeadershipMemberReportPage({
                     <AverageList
                       count={summary?.response_count ?? 0}
                       items={summary?.averages ?? []}
+                      min={scale.min}
                       max={scale.max}
                       suffix={scale.suffix}
                       showCount={false}
@@ -170,15 +171,15 @@ function ResultSection({
   );
 }
 
-function icareScale(summary?: IcareCohortSummary): { max: number; suffix: string } {
+function icareScale(summary?: IcareCohortSummary): { min: number; max: number; suffix: string } {
   if (summary?.score_unit === "percent") {
-    return { max: summary.scale_max ?? 100, suffix: "%" };
+    return { min: summary.scale_min ?? 0, max: summary.scale_max ?? 100, suffix: "%" };
   }
   if (summary?.score_unit === "grade_1_to_5") {
     const max = summary.scale_max ?? 5;
-    return { max, suffix: ` din ${max}` };
+    return { min: summary.scale_min ?? 1, max, suffix: ` din ${max}` };
   }
-  return { max: summary?.scale_max ?? 100, suffix: "" };
+  return { min: summary?.scale_min ?? 0, max: summary?.scale_max ?? 100, suffix: "" };
 }
 
 function icareEmptyCopy(summary?: IcareCohortSummary): string {
@@ -191,6 +192,7 @@ function icareEmptyCopy(summary?: IcareCohortSummary): string {
 function AverageList({
   count,
   items,
+  min = 0,
   max,
   suffix = "",
   empty,
@@ -200,6 +202,7 @@ function AverageList({
 }: {
   count: number;
   items: ReportAverage[];
+  min?: number;
   max: number;
   suffix?: string;
   empty: string;
@@ -228,6 +231,7 @@ function AverageList({
               </div>
               <ScaledBar
                 value={item.avg}
+                min={min}
                 max={max}
                 colorClassName={isDanger ? "bg-destructive" : undefined}
               />

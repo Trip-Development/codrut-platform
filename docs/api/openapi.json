@@ -3252,6 +3252,22 @@
             ],
             "title": "Project Id"
           },
+          "reportable_failed_score_count": {
+            "title": "Reportable Failed Score Count",
+            "type": "integer"
+          },
+          "reportable_orphaned_score_count": {
+            "title": "Reportable Orphaned Score Count",
+            "type": "integer"
+          },
+          "reportable_pending_score_count": {
+            "title": "Reportable Pending Score Count",
+            "type": "integer"
+          },
+          "reportable_scored_count": {
+            "title": "Reportable Scored Count",
+            "type": "integer"
+          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/ScoringResultResponse"
@@ -3278,6 +3294,10 @@
         "required": [
           "total_assigned",
           "total_completed",
+          "reportable_scored_count",
+          "reportable_pending_score_count",
+          "reportable_failed_score_count",
+          "reportable_orphaned_score_count",
           "completion_rate",
           "lencioni_count",
           "driver_count",
@@ -4205,6 +4225,56 @@
           "response_count": {
             "title": "Response Count",
             "type": "integer"
+          },
+          "scale_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Max"
+          },
+          "scale_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Min"
+          },
+          "score_scale_compatible": {
+            "default": true,
+            "title": "Score Scale Compatible",
+            "type": "boolean"
+          },
+          "score_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Unit"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "const": "incompatible_score_scales",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
           }
         },
         "required": [
@@ -5742,6 +5812,30 @@
             "title": "Scale Max",
             "type": "number"
           },
+          "scale_min": {
+            "title": "Scale Min",
+            "type": "number"
+          },
+          "score_unit": {
+            "title": "Score Unit",
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "privacy_threshold",
+                  "no_eligible_dimensions",
+                  "scoring_unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
           "visible": {
             "title": "Visible",
             "type": "boolean"
@@ -5754,6 +5848,8 @@
           "cohort",
           "completed_count",
           "minimum_completed",
+          "score_unit",
+          "scale_min",
           "scale_max",
           "visible"
         ],

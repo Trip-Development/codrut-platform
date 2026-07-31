@@ -12,9 +12,12 @@ from codrut.modules.assignments.models import (
     AssessmentCycle,
     AssessmentCycleQuestionnaire,
     AssessmentCycleStatus,
+    AssessmentCycleTeamMembership,
     AssignmentStatus,
     QuestionnaireAssignment,
     Team,
+    TeamMembership,
+    TeamMembershipRole,
     TeamType,
 )
 from codrut.modules.companies.hierarchy import (
@@ -381,28 +384,15 @@ class ScoringService:
             for row in assignment_results
             if row[0].respondent_profile_id == participant_profile_id
         ]
-        target_team_ids = {
-            assignment.target_team_id
-            for assignment, _result, _definition in assignment_results
-            if assignment.target_team_id is not None
-        }
-        team_types_by_id = (
-            {
-                team_id: team_type
-                for team_id, team_type in (
-                    await self.session.execute(
-                        select(Team.id, Team.type).where(Team.id.in_(target_team_ids))
-                    )
-                ).all()
-            }
-            if target_team_ids
-            else {}
+        lencioni_team_id = await self._resolve_member_lencioni_team_id(
+            participant_profile_id,
+            assessment_cycle_id,
+            assignment_results,
+            prefer_leadership=participant_profile_id in hierarchy.top_level_ids,
         )
         lencioni_summary = _leadership_member_lencioni_summary(
-            participant_profile_id,
-            hierarchy,
             assignment_results,
-            team_types_by_id=team_types_by_id,
+            target_team_id=lencioni_team_id,
         )
         target_summary = next(
             (
@@ -438,6 +428,69 @@ class ScoringService:
                 average.model_copy(update={"feedback": driver_feedback.get(average.id)})
                 for average in driver_summary.driver_averages
             ],
+        )
+
+    async def _resolve_member_lencioni_team_id(
+        self,
+        member_id: UUID,
+        assessment_cycle_id: UUID | None,
+        assignment_results: Iterable[AssignmentResultWithDefinition],
+        *,
+        prefer_leadership: bool,
+    ) -> UUID | None:
+        if assessment_cycle_id is not None:
+            rows = (
+                await self.session.execute(
+                    select(
+                        AssessmentCycleTeamMembership.team_id,
+                        Team.type,
+                        AssessmentCycleTeamMembership.role,
+                    )
+                    .join(Team, Team.id == AssessmentCycleTeamMembership.team_id)
+                    .where(
+                        AssessmentCycleTeamMembership.assessment_cycle_id
+                        == assessment_cycle_id,
+                        AssessmentCycleTeamMembership.participant_profile_id == member_id,
+                    )
+                )
+            ).all()
+        else:
+            rows = (
+                await self.session.execute(
+                    select(TeamMembership.team_id, Team.type, TeamMembership.role)
+                    .join(Team, Team.id == TeamMembership.team_id)
+                    .where(TeamMembership.participant_profile_id == member_id)
+                )
+            ).all()
+
+        leadership_ids = sorted(
+            team_id for team_id, team_type, _role in rows if team_type == TeamType.leadership
+        )
+        functional_leader_ids = sorted(
+            team_id
+            for team_id, team_type, role in rows
+            if team_type == TeamType.functional and role == TeamMembershipRole.leader
+        )
+        if prefer_leadership and leadership_ids:
+            return leadership_ids[0]
+        if functional_leader_ids:
+            return functional_leader_ids[0]
+        if leadership_ids:
+            return leadership_ids[0]
+
+        # Legacy projects may predate team snapshots. This fallback is intentionally
+        # restricted to a team the member personally evaluated in the already scoped
+        # assignment set, so it cannot pull rows from another project or cycle.
+        return min(
+            (
+                assignment.target_team_id
+                for assignment, result, _definition in assignment_results
+                if assignment.questionnaire_key in LENCIONI_REPORT_KEYS
+                and assignment.respondent_profile_id == member_id
+                and result is not None
+                and assignment.target_team_id is not None
+            ),
+            default=None,
         )
 
     async def get_icare_answer_review(
@@ -1214,50 +1267,22 @@ def _build_score_summary(
 
 
 def _leadership_member_lencioni_summary(
-    member_id: UUID,
-    hierarchy: Any,
     assignment_results: Iterable[AssignmentResultWithDefinition],
     *,
-    team_types_by_id: dict[UUID, TeamType] | None = None,
+    target_team_id: UUID | None,
 ) -> ScoreSummary:
-    if hierarchy.ambiguous_name is not None:
+    if target_team_id is None:
         return _build_score_summary([])
-    is_top_leader = member_id in hierarchy.top_level_ids
-    if is_top_leader:
-        respondent_ids = set(hierarchy.leadership_ids)
-    else:
-        respondent_ids = {
-            participant.id
-            for participant in hierarchy.direct_reports_by_manager_id.get(member_id, [])
-            if participant.id not in hierarchy.leadership_ids
-        }
-    candidate_rows = [
+    rows = [
         row
         for row in assignment_results
         if row[0].questionnaire_key in LENCIONI_REPORT_KEYS
         and row[0].status in COMPLETED_STATUSES
         and row[1] is not None
         and _enum_value(row[0].target_type) == "team"
-        and row[0].target_team_id is not None
-        and row[0].respondent_profile_id in respondent_ids
-        and (
-            not team_types_by_id
-            or team_types_by_id.get(row[0].target_team_id)
-            == (TeamType.leadership if is_top_leader else TeamType.functional)
-        )
+        and row[0].target_team_id == target_team_id
     ]
-    rows_by_team_id: dict[UUID, list[AssignmentResultWithDefinition]] = {}
-    for row in candidate_rows:
-        target_team_id = row[0].target_team_id
-        assert target_team_id is not None
-        rows_by_team_id.setdefault(target_team_id, []).append(row)
-    if not rows_by_team_id:
-        return _build_score_summary([])
-    selected_team_id = min(
-        rows_by_team_id,
-        key=lambda team_id: (-len(rows_by_team_id[team_id]), str(team_id)),
-    )
-    return _build_score_summary(rows_by_team_id[selected_team_id])
+    return _build_score_summary(rows)
 
 
 def _reportable_score_availability(
@@ -1540,7 +1565,7 @@ def _select_latest_completed_driver_rows(
     assignment_results: Iterable[AssignmentResultWithDefinition],
 ) -> DriverRowSelection:
     participants_with_results: set[UUID] = set()
-    latest_average_by_participant: dict[UUID, AssignmentResultWithDefinition] = {}
+    average_rows: list[AssignmentResultWithDefinition] = []
     latest_valid_by_participant: dict[UUID, AssignmentResultWithDefinition] = {}
     for row in assignment_results:
         assignment, result, definition = row
@@ -1554,11 +1579,7 @@ def _select_latest_completed_driver_rows(
         participants_with_results.add(participant_id)
         ranked_scores = _ranked_driver_scores(result, definition)
         if ranked_scores:
-            current_average = latest_average_by_participant.get(participant_id)
-            if current_average is None or _driver_assignment_order_key(
-                row
-            ) > _driver_assignment_order_key(current_average):
-                latest_average_by_participant[participant_id] = row
+            average_rows.append(row)
         if len(ranked_scores) < 2:
             continue
         current = latest_valid_by_participant.get(participant_id)
@@ -1566,10 +1587,6 @@ def _select_latest_completed_driver_rows(
             current
         ):
             latest_valid_by_participant[participant_id] = row
-    average_rows = [
-        latest_average_by_participant[participant_id]
-        for participant_id in sorted(latest_average_by_participant, key=str)
-    ]
     rankable_rows = [
         latest_valid_by_participant[participant_id]
         for participant_id in sorted(latest_valid_by_participant, key=str)
