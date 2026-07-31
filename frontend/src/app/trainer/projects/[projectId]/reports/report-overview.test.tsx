@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const data = vi.hoisted(() => ({
@@ -99,12 +99,9 @@ describe("project report overview", () => {
     expect(lencioni.compareDocumentPosition(icare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(icare.compareDocumentPosition(drivers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum vede echipa leadershipul" })).toBeTruthy();
-    const peersTab = screen.getByRole("tab", { name: "Cum se văd colegii din leadership: 1 răspuns" });
-    const selfTab = screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" });
-    fireEvent.click(peersTab);
     expect(screen.getByRole("heading", { name: "Cum se văd colegii din leadership" })).toBeTruthy();
-    fireEvent.click(selfTab);
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
+    expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.getByRole("img", { name: /Primul driver dominant.*3 persoane incluse/ })).toBeTruthy();
     expect(screen.getByRole("img", { name: /Al doilea driver dominant.*3 persoane incluse/ })).toBeTruthy();
     expect(screen.getByText("2 persoane · 67%")).toBeTruthy();
@@ -143,7 +140,6 @@ describe("project report overview", () => {
     expect(screen.getByText("Perspectivele bazate pe organigramă sunt momentan indisponibile")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Rezultatul întregului proiect" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "TA Drivers" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" }));
     expect(screen.getByRole("heading", { name: "Cum se evaluează liderii" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Vezi rezultatele pe echipe/ })).toBeNull();
   });
@@ -194,11 +190,7 @@ describe("project report overview", () => {
     });
     render(ui);
 
-    expect(screen.getByRole("tabpanel").textContent).toContain("4.2 din 5");
-    fireEvent.click(screen.getByRole("tab", { name: "Cum se văd colegii din leadership: 1 răspuns" }));
-    expect(screen.getByRole("tabpanel").textContent).toContain("4.2 din 5");
-    fireEvent.click(screen.getByRole("tab", { name: "Cum se evaluează liderii: 1 răspuns" }));
-    expect(screen.getByRole("tabpanel").textContent).toContain("4.2 din 5");
+    expect(screen.getAllByText("4.2 din 5")).toHaveLength(3);
     expect(screen.queryByText("4.2%")).toBeNull();
   });
 

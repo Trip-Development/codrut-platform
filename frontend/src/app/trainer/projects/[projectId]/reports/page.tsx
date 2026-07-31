@@ -9,7 +9,7 @@ import type {
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
-import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
+import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
 import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,12 +23,6 @@ const ICARE_LABELS: Record<IcareCohortSummary["cohort"], string> = {
   direct_team: "Cum vede echipa leadershipul",
   leadership_peers: "Cum se văd colegii din leadership",
   self: "Cum se evaluează liderii",
-};
-
-const ICARE_TAB_LABELS: Record<IcareCohortSummary["cohort"], string> = {
-  direct_team: "Echipa",
-  leadership_peers: "Colegii din leadership",
-  self: "Autoevaluare",
 };
 
 function tieBreakLabel(count: number): string {
@@ -150,14 +144,13 @@ export default async function ProjectReportsPage({
             issues={aggregate.hierarchy_issues}
           />
         ) : null}
-        <IcarePerspectiveTabs
+        <IcarePerspectiveGrid
           perspectives={(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = aggregate.icare_cohorts.find((item) => item.cohort === cohort);
             if (aggregate.hierarchy_ambiguous && cohort !== "self") {
               return {
                 id: cohort,
                 label: ICARE_LABELS[cohort],
-                tabLabel: ICARE_TAB_LABELS[cohort],
                 responseCount: summary?.response_count ?? 0,
                 content: (
                   <Card key={cohort} asChild className="px-5 text-muted-foreground [--card-spacing:--spacing(5)]">
@@ -173,7 +166,6 @@ export default async function ProjectReportsPage({
             return {
               id: cohort,
               label: ICARE_LABELS[cohort],
-              tabLabel: ICARE_TAB_LABELS[cohort],
               responseCount: summary?.response_count ?? 0,
               content: (
                 <AveragePanel

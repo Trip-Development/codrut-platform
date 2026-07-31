@@ -11,7 +11,7 @@ import {
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
-import { IcarePerspectiveTabs } from "@/components/reports/IcarePerspectiveTabs";
+import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
 import { ScaledBar } from "@/components/reports/native-charts";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Card } from "@/components/ui/card";
@@ -22,12 +22,6 @@ const ICARE_LABELS: Record<IcareCohortSummary["cohort"], string> = {
   direct_team: "Cum te vede echipa ta",
   leadership_peers: "Cum te văd colegii din leadership",
   self: "Cum te evaluezi",
-};
-
-const ICARE_TAB_LABELS: Record<IcareCohortSummary["cohort"], string> = {
-  direct_team: "Echipa",
-  leadership_peers: "Colegii din leadership",
-  self: "Autoevaluare",
 };
 
 export default async function LeadershipMemberReportPage({
@@ -122,7 +116,7 @@ export default async function LeadershipMemberReportPage({
           count={report.icare_unclassified_response_count}
           reason={report.icare_unclassified_reason}
         />
-        <IcarePerspectiveTabs
+        <IcarePerspectiveGrid
           ariaLabel="Perspective iCARE pentru această persoană"
           perspectives={(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = report.icare_cohorts.find((item) => item.cohort === cohort);
@@ -130,7 +124,6 @@ export default async function LeadershipMemberReportPage({
             return {
               id: cohort,
               label: ICARE_LABELS[cohort],
-              tabLabel: ICARE_TAB_LABELS[cohort],
               responseCount: summary?.response_count ?? 0,
               content: (
                 <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">

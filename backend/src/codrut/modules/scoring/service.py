@@ -450,10 +450,7 @@ class ScoringService:
             participant_profile_id,
             assessment_cycle_id,
             assignment_results,
-            prefer_leadership=(
-                assessment_cycle_id is None
-                and participant_profile_id in hierarchy.top_level_ids
-            ),
+            prefer_leadership=participant_profile_id in hierarchy.top_level_ids,
         )
         lencioni_summary = _leadership_member_lencioni_summary(
             assignment_results,
@@ -624,6 +621,10 @@ class ScoringService:
             }
             if len(result_target_ids) == 1:
                 return MemberLencioniTeamResolution(next(iter(result_target_ids)))
+            if prefer_leadership and len(leadership_ids) == 1:
+                return MemberLencioniTeamResolution(leadership_ids[0])
+            if not prefer_leadership and len(functional_leader_ids) == 1:
+                return MemberLencioniTeamResolution(functional_leader_ids[0])
             return MemberLencioniTeamResolution(
                 team_id=None,
                 ambiguous=True,

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -68,12 +68,11 @@ describe("leadership member report", () => {
     expect(screen.getByText("62%")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Cum te vede echipa ta" })).toBeTruthy();
     expect(screen.getByText("4.2 din 5")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Cum te văd colegii din leadership: 2 răspunsuri" }));
     expect(screen.getByRole("heading", { name: "Cum te văd colegii din leadership" })).toBeTruthy();
     expect(screen.getByText("4 din 5")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Cum te evaluezi: 1 răspuns" }));
     expect(screen.getByRole("heading", { name: "Cum te evaluezi" })).toBeTruthy();
     expect(screen.getByText("3.8 din 5")).toBeTruthy();
+    expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.queryByText("01")).toBeNull();
     expect(pcm.closest("[data-slot='card']")).toBeTruthy();
     const feedback = screen.getByText("Lasă loc și pentru o variantă suficient de bună.");
