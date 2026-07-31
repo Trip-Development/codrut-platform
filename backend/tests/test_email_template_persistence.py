@@ -353,8 +353,9 @@ class FakeCommunicationsRepository:
         *,
         owner_id: uuid.UUID,
         email_fingerprints: set[str],
+        normalized_emails: set[str] | None = None,
     ) -> list[object]:
-        del owner_id, email_fingerprints
+        del owner_id, email_fingerprints, normalized_emails
         return []
 
     async def suppress_email(
@@ -549,7 +550,11 @@ class FakeCommunicationsRepository:
                 )
 
     async def count_accepted_sends_since(self, _since: object) -> int:
-        return sum(1 for send in self.sends if send.status == EmailSendStatus.accepted)
+        return sum(
+            1
+            for send in self.sends
+            if send.status != EmailSendStatus.cancelled
+        )
 
     async def delete_campaign_recipient_memberships(
         self,

@@ -11,6 +11,7 @@ from codrut.modules.communications.models import (
     CampaignRecipientSegment,
     CampaignRecipientStatus,
     EmailSendStatus,
+    EmailSuppression,
 )
 from codrut.modules.communications.repository import CommunicationsRepository
 
@@ -32,6 +33,55 @@ class RowResult:
 
     def all(self) -> list[tuple[object, object]]:
         return self.rows
+
+
+@pytest.mark.asyncio
+async def test_suppression_reads_fall_back_to_rollback_email_rows() -> None:
+    owner_id = uuid4()
+    legacy = EmailSuppression(
+        owner_id=owner_id,
+        legacy_email="ana@example.com",
+        email_fingerprint=None,
+        reason="hard_bounce",
+        review_after=None,
+    )
+    empty = MagicMock()
+    empty.scalar_one_or_none.return_value = None
+    legacy_result = MagicMock()
+    legacy_result.scalar_one_or_none.return_value = legacy
+    session = MagicMock()
+    session.execute = AsyncMock(
+        side_effect=[empty, empty, legacy_result]
+    )
+    repository = CommunicationsRepository(session)
+
+    suppression = await repository.get_email_suppression(
+        owner_id=owner_id,
+        email_fingerprint="f" * 64,
+        email=" ANA@Example.com ",
+    )
+
+    assert suppression is legacy
+    fallback_statement = str(session.execute.await_args_list[-1].args[0])
+    assert "email_suppressions.owner_id =" in fallback_statement
+    assert "lower(email_suppressions.email) =" in fallback_statement
+
+
+@pytest.mark.asyncio
+async def test_bulk_suppression_reads_include_rollback_email_rows() -> None:
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=EmptyResult())
+    repository = CommunicationsRepository(session)
+
+    await repository.list_email_suppressions_by_fingerprints(
+        owner_id=uuid4(),
+        email_fingerprints={"f" * 64},
+        normalized_emails={" ANA@Example.com "},
+    )
+
+    suppression_statement = str(session.execute.await_args_list[0].args[0])
+    assert "email_suppressions.email_fingerprint IN" in suppression_statement
+    assert "lower(email_suppressions.email) IN" in suppression_statement
 
 
 @pytest.mark.asyncio
@@ -60,7 +110,8 @@ async def test_contact_catalog_and_mutations_are_owner_scoped() -> None:
     assert "campaign_recipients.owner_id =" in email_statement
     assert "campaign_recipients.owner_id =" in ids_statement
     assert "campaign_recipient_events.owner_id =" in events_statement
-    assert "campaign_recipients" not in events_statement
+    assert "campaign_recipient_events.owner_id IS NULL" in events_statement
+    assert "campaign_recipients.owner_id =" in events_statement
 
     with pytest.raises(ValueError, match="owner_id is required"):
         await repository.list_campaign_recipients(owner_id=None)

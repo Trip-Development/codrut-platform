@@ -847,6 +847,31 @@ async def test_suppression_reason_never_downgrades_unsubscribe() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_suppression_dual_writes_rollback_email_and_fingerprint() -> None:
+    review_after = datetime.now(UTC) + timedelta(days=365)
+    session = MagicMock()
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    repository = CommunicationsRepository(cast(Any, session))
+    repository.get_email_suppression = AsyncMock(return_value=None)
+
+    created = await repository.suppress_email(
+        owner_id=OWNER_ID,
+        email=" ANA@Example.Test ",
+        email_fingerprint="b" * 64,
+        reason="hard_bounce",
+        source_email_send_id=uuid.uuid4(),
+        review_after=review_after,
+    )
+
+    assert isinstance(created, EmailSuppression)
+    assert created.legacy_email == "ana@example.test"
+    assert created.email_fingerprint == "b" * 64
+    session.add.assert_called_once_with(created)
+    session.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_due_suppression_review_audits_retention_and_manual_review() -> None:
     now = datetime.now(UTC)
     retained = EmailSuppression(

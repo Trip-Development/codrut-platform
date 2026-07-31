@@ -2161,6 +2161,10 @@ describe("EmailWorkspace campaign contacts", () => {
     emailApiMocks.archiveCampaignRecipientOnServer.mockReturnValueOnce(deleteRequest.promise);
 
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready") }));
+    await waitFor(() => {
+      expect(emailApiMocks.getEmailOpsSummary).toHaveBeenCalledWith({ catalogScope: "archived" });
+    });
+    emailApiMocks.getEmailOpsSummary.mockRejectedValue(new Error("refresh unavailable"));
 
     fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
     fireEvent.click(await screen.findByRole("button", { name: "Arhivează ioana@example.com" }));
@@ -2184,6 +2188,52 @@ describe("EmailWorkspace campaign contacts", () => {
     await waitFor(() => {
       expect(screen.queryByText("Arhivezi contactul?")).toBeNull();
     });
+    expect(screen.queryByRole("button", { name: "Arhivează ioana@example.com" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
+    expect(await screen.findByText("ioana@example.com")).toBeTruthy();
+    expect(screen.getByText("Arhivat")).toBeTruthy();
+  });
+
+  it("ignores a stale refresh that started before a successful archive", async () => {
+    const staleActiveSummary = createDeferred<EmailOpsSummary>();
+
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready") }));
+    await waitFor(() => {
+      expect(emailApiMocks.getEmailOpsSummary).toHaveBeenCalledWith({ catalogScope: "archived" });
+    });
+
+    let activeRefreshCalls = 0;
+    emailApiMocks.getEmailOpsSummary.mockImplementation(({ catalogScope } = {}) => {
+      if (catalogScope === "active" && activeRefreshCalls++ === 0) {
+        return staleActiveSummary.promise;
+      }
+      return Promise.reject(new Error("refresh unavailable"));
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => {
+      expect(emailApiMocks.getEmailOpsSummary).toHaveBeenCalledWith({ catalogScope: "active" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Arhivează ioana@example.com" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Arhivează" }));
+    await waitFor(() => {
+      expect(emailApiMocks.archiveCampaignRecipientOnServer).toHaveBeenCalledWith("recipient-1");
+    });
+
+    await act(async () => {
+      staleActiveSummary.resolve(makeEmailSummary("ready"));
+      await staleActiveSummary.promise;
+    });
+
+    expect(await screen.findByText("Contactul a fost arhivat.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Arhivează ioana@example.com" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
+    expect(await screen.findByText("ioana@example.com")).toBeTruthy();
+    expect(screen.getByText("Arhivat")).toBeTruthy();
   });
 
   it("reconciles partial bulk deletion and keeps only failed contacts selected", async () => {
@@ -2285,6 +2335,7 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(await screen.findByText("Arhivat")).toBeTruthy();
     expect(screen.getByText("Înainte: Adresă respinsă")).toBeTruthy();
     expect(screen.getByText("Curățare automată: 29 august 2026")).toBeTruthy();
+    emailApiMocks.getEmailOpsSummary.mockRejectedValue(new Error("refresh unavailable"));
     fireEvent.click(screen.getByRole("button", { name: "Restaurează" }));
 
     expect(await screen.findByText(/adresa respinsă rămâne blocată/i)).toBeTruthy();
@@ -2315,6 +2366,7 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Șterge definitiv" }));
+    emailApiMocks.getEmailOpsSummary.mockRejectedValue(new Error("refresh unavailable"));
     expect(screen.getByText("Ștergi definitiv contactul?")).toBeTruthy();
     const deleteButtons = screen.getAllByRole("button", { name: "Șterge definitiv" });
     fireEvent.click(deleteButtons[deleteButtons.length - 1]);

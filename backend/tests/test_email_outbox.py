@@ -150,6 +150,41 @@ async def test_duplicate_enqueue_returns_existing_outbox_row() -> None:
         await cleanup_send(first.id)
 
 
+async def test_daily_capacity_survives_terminal_delivery_transitions() -> None:
+    window_start = datetime(2100, 1, 1, tzinfo=UTC)
+    counted_sends = [
+        outbox_send(status=EmailSendStatus.delivered),
+        outbox_send(status=EmailSendStatus.bounced),
+        outbox_send(status=EmailSendStatus.indeterminate),
+        outbox_send(status=EmailSendStatus.failed),
+    ]
+    cancelled_send = outbox_send(status=EmailSendStatus.cancelled)
+    expired_send = outbox_send(status=EmailSendStatus.accepted)
+    for send in [*counted_sends, cancelled_send]:
+        send.created_at = window_start + timedelta(minutes=1)
+    expired_send.created_at = window_start - timedelta(days=2)
+    all_sends = [*counted_sends, cancelled_send, expired_send]
+    try:
+        async with SessionLocal() as session:
+            session.add_all(all_sends)
+            await session.commit()
+
+            used_today = await CommunicationsRepository(
+                session
+            ).count_accepted_sends_since(window_start)
+
+            assert used_today == len(counted_sends)
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(
+                delete(EmailSend).where(
+                    EmailSend.id.in_([send.id for send in all_sends])
+                )
+            )
+            await session.commit()
+        await engine.dispose()
+
+
 async def test_payload_conflict_is_rejected_for_existing_idempotency_key() -> None:
     original = outbox_send()
 

@@ -1318,17 +1318,21 @@ run_alembic check
 run_psql -c "
 do \$\$
 declare
-    unsafe_suppression_values integer;
+    incomplete_existing_suppressions integer;
+    scrubbed_compatibility_values integer;
     nullable_protected_columns integer;
     nullable_event_owner_columns integer;
     legacy_email_indexes integer;
     privacy_triggers integer;
 begin
-    select count(*) into unsafe_suppression_values
+    select count(*) into incomplete_existing_suppressions
     from email_suppressions
     where email_fingerprint is null
-       or review_after is null
-       or email <> 'suppressed-' || email_fingerprint || '@invalid';
+       or review_after is null;
+
+    select count(*) into scrubbed_compatibility_values
+    from email_suppressions
+    where email like 'suppressed-%@invalid';
 
     select count(*) into nullable_protected_columns
     from information_schema.columns
@@ -1355,14 +1359,16 @@ begin
     where tgname = 'trg_email_suppressions_scrub_legacy_email'
       and not tgisinternal;
 
-    if unsafe_suppression_values <> 0
-       or nullable_protected_columns <> 0
-       or nullable_event_owner_columns <> 0
-       or legacy_email_indexes <> 0
-       or privacy_triggers <> 1 then
+    if incomplete_existing_suppressions <> 0
+       or scrubbed_compatibility_values <> 0
+       or nullable_protected_columns <> 2
+       or nullable_event_owner_columns <> 1
+       or legacy_email_indexes <> 1
+       or privacy_triggers <> 0 then
         raise exception
-            'privacy bridge failed: unsafe %, nullable protected %, nullable owner %, legacy index %, trigger %',
-            unsafe_suppression_values,
+            'privacy expand failed: incomplete %, scrubbed %, nullable protected %, nullable owner %, legacy index %, trigger %',
+            incomplete_existing_suppressions,
+            scrubbed_compatibility_values,
             nullable_protected_columns,
             nullable_event_owner_columns,
             legacy_email_indexes,
@@ -1408,7 +1414,8 @@ if [[ "${privacy_bridge_fingerprint}" != "${privacy_bridge_reupgrade_fingerprint
     printf 'Privacy bridge rollback and re-upgrade changed protected data.\n' >&2
     exit 19
 fi
-printf '\nPrivacy bridge: Pass (scrubbed compatibility values, reversible, safe rerun).\n'
+printf '\nPrivacy bridge expansion: Pass (backfilled, rollback-readable, safe rerun).\n'
+printf 'Fingerprint-only scrubbing remains deferred until this image is the retained rollback.\n'
 
 run_psql -c "
 do \$\$

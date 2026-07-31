@@ -32,10 +32,13 @@ The default Archive recovery window is 30 days, configured by
    old unsubscribe links and late permanent provider events work without
    recovering the email address or retaining event type/timestamps per row.
 
-`CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` defaults to `true` after the contact
-privacy contract migration. The bridge migration scrubs rollback-compatible
-suppression values before the final contract removes the compatibility column,
-so purge never depends on a retained full email.
+`CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` defaults to `true` in the
+fingerprint-aware application. During the expand window, suppression rows also
+retain the normalized email solely so the immediately previous image can still
+honour bounces and unsubscribes. Treat that compatibility value as direct
+personal data with restricted access. The later contract release scrubs it
+only after the fingerprint-aware application is itself the retained rollback
+image.
 `CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS` defaults to seven days.
 `CODRUT_CAMPAIGN_DELIVERY_TOMBSTONE_RETENTION_DAYS` separately defaults to
 365 days. Delivery and deduplication receipts are deleted at that deadline even
@@ -127,40 +130,53 @@ Before promoting a release that introduces or changes this lifecycle:
 
 ## Expand/contract rollback window
 
-The archive release first adds the fingerprint and review fields, then the
-privacy bridge backfills and enforces them. The database retains the legacy
-`email` column only as a rollback-compatibility field. The bridge replaces every
-value with a deterministic `@invalid` placeholder and a trigger prevents a real
-address from being stored there again. The application model and all lookups use
-the keyed owner-scoped fingerprint, never the compatibility value.
+The archive release first adds the fingerprint and review fields. Migration
+`0053_contact_privacy_bridge` is the expand phase: it backfills those fields but
+retains the legacy `email` value and normalized-email index, and leaves expand
+columns nullable. The fingerprint-aware application dual-reads and dual-writes
+both representations so suppressions created by either current or rollback
+code remain effective.
 
-Permanent and scheduled purge can run after the bridge migration succeeds.
+Permanent and scheduled contact purge can run after the expand migration
+succeeds. This does not mean the suppression catalog is fingerprint-only yet:
+compatibility emails remain protected direct personal data until the contract
+release.
 Archiving, restoring, membership removal, queued-send cancellation, and the
 reviewable retention timestamps remain available throughout the rollout.
 
 Archive also stores the prior delivery status and changes an active archived
-contact to `suppressed`. The immediately previous image does not understand
-`archived_at`, but it therefore still treats every archived contact as
-non-sendable. The fingerprint-aware image restores the prior status only when
-no bounce or unsubscribe suppression was recorded while the contact was
-archived.
+contact to `suppressed`. Both the immediately previous `0052` archive image and
+the dual-read application understand `archived_at`, keep archived contacts out
+of sendable catalogs, and retain their non-sendable status. Restore returns the
+prior status only when no bounce or unsubscribe suppression was recorded while
+the contact was archived.
 
 An emergency rollback to the previous image remains service recovery, not a
 normal campaign-operations window. Archived contacts can appear as inactive in
-that older UI, so avoid contact catalog mutations until the fingerprint-aware
-image is restored. Existing archive state cannot silently become sendable, and
-participant flows and health checks remain available.
+that older UI, but both legacy-email and fingerprint lookups continue to block
+bounced or unsubscribed addresses. Avoid contact catalog mutations until the
+fingerprint-aware image is restored. Existing archive state cannot silently
+become sendable, and participant flows and health checks remain available.
 
-The bridge migration:
+The expand migration:
 
 1. backfills any rows written by the previous image;
-2. makes fingerprint, review date, and event owner non-null;
-3. removes the legacy full-email uniqueness index;
-4. scrubs the compatibility column and installs its enforcement trigger; and
-5. enables permanent and scheduled purge in the fingerprint-aware application.
+2. preserves the legacy full-email uniqueness index and nullable expand fields;
+3. keeps the previous image able to read and write suppressions; and
+4. enables the fingerprint-aware application to dual-read and dual-write during
+   the rollback window.
 
-Do not remove the compatibility column while a retained rollback image still
-maps it. A future cleanup may drop it only after both current and previous
-images have been proven not to map the field. That cleanup is storage hygiene,
-not a privacy dependency: no full address remains in the column after the
-bridge.
+The later contract release, only after the fingerprint-aware image is both the
+current and retained rollback application:
+
+1. takes and restores a fresh production backup;
+2. proves both retained images read and write fingerprints;
+3. backfills rows written during the expand window;
+4. makes fingerprint, review date, and event owner non-null;
+5. removes the legacy full-email uniqueness index; and
+6. scrubs or drops the compatibility email and prevents new direct values.
+
+Do not scrub or remove the compatibility value while a retained rollback image
+still depends on it. The launch is not fingerprint-only, and must not be
+described that way in the privacy notice or retention register, until the
+contract proof and migration complete.

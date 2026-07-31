@@ -51,6 +51,7 @@ from codrut.modules.communications.models import (
     EmailEventType,
     EmailSend,
     EmailSendStatus,
+    EmailSuppression,
     EmailSuppressionReview,
     EmailTemplate,
 )
@@ -764,6 +765,11 @@ class CommunicationsService:
             suppressions = await repository.list_email_suppressions_by_fingerprints(
                 owner_id=delivery_owner_id,
                 email_fingerprints=active_email_fingerprints,
+                normalized_emails={
+                    email
+                    for email, recipient in recipients_by_email.items()
+                    if recipient.status == CampaignRecipientStatus.active
+                },
             )
             if suppressions:
                 raise DomainError(
@@ -2447,27 +2453,43 @@ async def _campaign_recipient_activation_allowed_by_id(
     owner_id: UUID,
     settings: Settings,
 ) -> dict[UUID, bool]:
-    fingerprint_by_recipient_id = {
-        recipient.id: email_suppression_fingerprint(
-            owner_id=owner_id,
-            email=recipient.email,
-            secret=settings.effective_email_suppression_fingerprint_secret,
-        )
+    normalized_email_by_recipient_id = {
+        recipient.id: recipient.email.strip().casefold()
         for recipient in recipients
         if recipient.owner_id == owner_id
         and recipient.archived_at is None
         and recipient.status != CampaignRecipientStatus.unsubscribed
         and recipient.email is not None
     }
+    fingerprint_by_recipient_id = {
+        recipient_id: email_suppression_fingerprint(
+            owner_id=owner_id,
+            email=normalized_email,
+            secret=settings.effective_email_suppression_fingerprint_secret,
+        )
+        for recipient_id, normalized_email in normalized_email_by_recipient_id.items()
+    }
     suppressions = await repository.list_email_suppressions_by_fingerprints(
         owner_id=owner_id,
         email_fingerprints=set(fingerprint_by_recipient_id.values()),
+        normalized_emails=set(normalized_email_by_recipient_id.values()),
     )
     blocked_fingerprints = {
-        suppression.email_fingerprint for suppression in suppressions
+        suppression.email_fingerprint
+        for suppression in suppressions
+        if suppression.email_fingerprint is not None
+    }
+    blocked_legacy_emails = {
+        suppression.legacy_email.strip().casefold()
+        for suppression in suppressions
+        if isinstance(suppression, EmailSuppression)
     }
     return {
-        recipient_id: fingerprint not in blocked_fingerprints
+        recipient_id: (
+            fingerprint not in blocked_fingerprints
+            and normalized_email_by_recipient_id[recipient_id]
+            not in blocked_legacy_emails
+        )
         for recipient_id, fingerprint in fingerprint_by_recipient_id.items()
     }
 

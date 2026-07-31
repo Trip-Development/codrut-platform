@@ -199,6 +199,12 @@ class EmailSuppression(TimestampMixin, Base):
     __tablename__ = "email_suppressions"
     __table_args__ = (
         Index(
+            "uq_email_suppressions_owner_normalized_email",
+            "owner_id",
+            sa_text("lower(email)"),
+            unique=True,
+        ),
+        Index(
             "uq_email_suppressions_owner_fingerprint",
             "owner_id",
             "email_fingerprint",
@@ -212,19 +218,20 @@ class EmailSuppression(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    # Rollback-compatibility storage only. Migration 0053 forces this physical
-    # column to a synthetic value derived from the fingerprint on every write;
-    # application code must never use it to look up or expose an address.
+    # Rollback-compatibility storage for the expand window. The current
+    # application dual-writes this value and the fingerprint, and uses this
+    # value only as a fallback for rows written by the retained rollback image.
+    # A later contract release may scrub/drop it once this image is the rollback.
     legacy_email: Mapped[str] = mapped_column("email", String(320), nullable=False)
-    email_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    email_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str] = mapped_column(String(64), nullable=False)
     source_email_send_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("email_sends.id", ondelete="SET NULL"),
         nullable=True,
     )
-    review_after: Mapped[datetime] = mapped_column(
+    review_after: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        nullable=True,
     )
     last_reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -469,9 +476,11 @@ class CampaignRecipientEvent(TimestampMixin, Base):
     __tablename__ = "campaign_recipient_events"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_id: Mapped[uuid.UUID] = mapped_column(
+    # Nullable during the expand window because the retained production image
+    # creates events without either of the new ownership fields.
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     campaign_id: Mapped[uuid.UUID | None] = mapped_column(

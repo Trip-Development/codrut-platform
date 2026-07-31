@@ -289,9 +289,23 @@ class CommunicationsRepository:
         owner_id: UUID | None,
     ) -> list[CampaignRecipientEvent]:
         _require_owner_id(owner_id)
-        stmt = select(CampaignRecipientEvent).where(
-            CampaignRecipientEvent.owner_id == owner_id
-        ).order_by(CampaignRecipientEvent.occurred_at.desc())
+        stmt = (
+            select(CampaignRecipientEvent)
+            .outerjoin(
+                CampaignRecipient,
+                CampaignRecipient.id == CampaignRecipientEvent.recipient_id,
+            )
+            .where(
+                or_(
+                    CampaignRecipientEvent.owner_id == owner_id,
+                    and_(
+                        CampaignRecipientEvent.owner_id.is_(None),
+                        CampaignRecipient.owner_id == owner_id,
+                    ),
+                )
+            )
+            .order_by(CampaignRecipientEvent.occurred_at.desc())
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -564,16 +578,11 @@ class CommunicationsRepository:
     async def count_accepted_sends_since(self, since: datetime) -> int:
         result = await self.session.execute(
             select(func.count(EmailSend.id))
-            .where(
-                EmailSend.status.in_(
-                    (
-                        EmailSendStatus.queued,
-                        EmailSendStatus.dispatching,
-                        EmailSendStatus.accepted,
-                        EmailSendStatus.delivered,
-                    )
-                )
-            )
+            # Capacity is reserved by creating an outbox row. Delivery status is
+            # mutable: accepted messages may later bounce and uncertain provider
+            # requests become indeterminate. Neither transition restores daily
+            # capacity. Only work cancelled before delivery is released.
+            .where(EmailSend.status != EmailSendStatus.cancelled)
             .where(EmailSend.created_at >= since)
         )
         return int(result.scalar_one() or 0)
@@ -690,20 +699,47 @@ class CommunicationsRepository:
             .limit(1)
         )
         tombstone = tombstone_result.scalar_one_or_none()
-        return tombstone
+        if tombstone is not None or email is None:
+            return tombstone
+        legacy_result = await self.session.execute(
+            select(EmailSuppression)
+            .where(
+                EmailSuppression.owner_id == owner_id,
+                func.lower(EmailSuppression.legacy_email)
+                == email.strip().casefold(),
+            )
+            .limit(1)
+        )
+        return legacy_result.scalar_one_or_none()
 
     async def list_email_suppressions_by_fingerprints(
         self,
         *,
         owner_id: UUID,
         email_fingerprints: set[str],
+        normalized_emails: set[str] | None = None,
     ) -> list[EmailSuppression | CampaignContactTombstone]:
-        if not email_fingerprints:
+        normalized_emails = {
+            email.strip().casefold()
+            for email in (normalized_emails or set())
+            if email.strip()
+        }
+        if not email_fingerprints and not normalized_emails:
             return []
+        suppression_match = EmailSuppression.email_fingerprint.in_(
+            email_fingerprints
+        )
+        if normalized_emails:
+            suppression_match = or_(
+                suppression_match,
+                func.lower(EmailSuppression.legacy_email).in_(
+                    normalized_emails
+                ),
+            )
         result = await self.session.execute(
             select(EmailSuppression).where(
                 EmailSuppression.owner_id == owner_id,
-                EmailSuppression.email_fingerprint.in_(email_fingerprints),
+                suppression_match,
             )
         )
         tombstone_result = await self.session.execute(
@@ -743,6 +779,7 @@ class CommunicationsRepository:
         if suppression is None:
             suppression = EmailSuppression(
                 owner_id=owner_id,
+                legacy_email=email.strip().casefold(),
                 email_fingerprint=email_fingerprint,
                 reason=reason,
                 source_email_send_id=source_email_send_id,

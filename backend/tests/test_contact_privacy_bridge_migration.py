@@ -60,14 +60,15 @@ def test_contact_privacy_bridge_requires_secret_only_for_late_rows(
         migration._suppression_secret(1)
 
 
-def test_contact_privacy_bridge_scrubs_identifiers_and_enforces_contract() -> None:
+def test_contact_privacy_bridge_remains_rollback_compatible_expand_phase() -> None:
     normalized = _migration_path().read_text().lower()
 
     assert "where email_fingerprint is null or review_after is null" in normalized
     assert "where owner_id is null" in normalized
-    assert "'suppressed-' || new.email_fingerprint || '@invalid'" in normalized
-    assert "'suppressed-' || email_fingerprint || '@invalid'" in normalized
-    assert "before insert or update on email_suppressions" in normalized
-    assert '"uq_email_suppressions_owner_normalized_email"' in normalized
-    assert normalized.count("nullable=false") >= 3
-    assert "email_suppressions.email_fingerprint is required" in normalized
+    assert "destructive fingerprint-only contract" in normalized
+    assert "later release" in normalized
+    assert "suppressed-" not in normalized
+    assert "create trigger" not in normalized
+    assert "drop_index" not in normalized
+    assert "alter_column" not in normalized
+    assert "nullable=false" not in normalized

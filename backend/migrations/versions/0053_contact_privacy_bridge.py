@@ -1,8 +1,17 @@
-"""enforce the contact privacy bridge contract
+"""backfill the contact privacy bridge without closing the rollback window
 
 Revision ID: 0053_contact_privacy_bridge
 Revises: 0052_contact_archive
 Create Date: 2026-07-30
+
+This release must remain compatible with the retained pre-contract,
+fingerprint-aware archive application image. It therefore backfills the expand
+fields but deliberately keeps the real-email compatibility column, its unique
+index, and the nullable fingerprint/review/event-owner columns.
+
+The destructive fingerprint-only contract (scrubbing or dropping ``email`` and
+making the expand fields non-null) belongs in a later release, after this
+dual-read/dual-write application has become the retained rollback image.
 """
 
 from __future__ import annotations
@@ -24,8 +33,6 @@ depends_on: str | Sequence[str] | None = None
 
 SUPPRESSION_SECRET_ENV = "CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET"  # noqa: S105
 SUPPRESSION_REVIEW_DAYS_ENV = "CODRUT_EMAIL_SUPPRESSION_REVIEW_DAYS"
-SCRUB_FUNCTION = "scrub_email_suppression_legacy_email"
-SCRUB_TRIGGER = "trg_email_suppressions_scrub_legacy_email"
 
 
 def _suppression_secret(row_count: int) -> str:
@@ -35,7 +42,7 @@ def _suppression_secret(row_count: int) -> str:
     if len(secret) < 32:
         raise RuntimeError(
             f"{SUPPRESSION_SECRET_ENV} must be configured with at least 32 characters "
-            "before contracting email suppressions."
+            "before backfilling email suppressions."
         )
     return secret
 
@@ -131,85 +138,13 @@ def upgrade() -> None:
             f"{unresolved_event_owners} campaign event owners unresolved."
         )
 
-    op.drop_index(
-        "uq_email_suppressions_owner_normalized_email",
-        table_name="email_suppressions",
-    )
-    op.execute(
-        """
-        create or replace function scrub_email_suppression_legacy_email()
-        returns trigger
-        language plpgsql
-        as $$
-        begin
-            if new.email_fingerprint is null then
-                raise exception
-                    'email_suppressions.email_fingerprint is required';
-            end if;
-            new.email :=
-                'suppressed-' || new.email_fingerprint || '@invalid';
-            return new;
-        end;
-        $$
-        """
-    )
-    op.execute(
-        """
-        create trigger trg_email_suppressions_scrub_legacy_email
-        before insert or update on email_suppressions
-        for each row execute function scrub_email_suppression_legacy_email()
-        """
-    )
-    op.execute(
-        """
-        update email_suppressions
-        set email = 'suppressed-' || email_fingerprint || '@invalid'
-        """
-    )
-    op.alter_column(
-        "email_suppressions",
-        "email_fingerprint",
-        existing_type=sa.String(length=64),
-        nullable=False,
-    )
-    op.alter_column(
-        "email_suppressions",
-        "review_after",
-        existing_type=sa.DateTime(timezone=True),
-        nullable=False,
-    )
-    op.alter_column(
-        "campaign_recipient_events",
-        "owner_id",
-        existing_type=sa.Uuid(),
-        nullable=False,
-    )
+    # Do not contract the schema here. The retained production image reads and
+    # writes ``email`` and does not provide the new expand fields. A later
+    # migration may enforce the fingerprint-only contract only after this
+    # application is itself the rollback image.
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "campaign_recipient_events",
-        "owner_id",
-        existing_type=sa.Uuid(),
-        nullable=True,
-    )
-    op.alter_column(
-        "email_suppressions",
-        "review_after",
-        existing_type=sa.DateTime(timezone=True),
-        nullable=True,
-    )
-    op.alter_column(
-        "email_suppressions",
-        "email_fingerprint",
-        existing_type=sa.String(length=64),
-        nullable=True,
-    )
-    op.execute(f"drop trigger if exists {SCRUB_TRIGGER} on email_suppressions")
-    op.execute(f"drop function if exists {SCRUB_FUNCTION}()")
-    op.create_index(
-        "uq_email_suppressions_owner_normalized_email",
-        "email_suppressions",
-        ["owner_id", sa.text("lower(email)")],
-        unique=True,
-    )
+    # Upgrade only backfills data in columns owned by 0052. Keeping those values
+    # makes downgrade/re-upgrade idempotent and preserves suppression coverage.
+    pass

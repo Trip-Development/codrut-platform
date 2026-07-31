@@ -210,15 +210,13 @@ export function QuestionnaireRunner({
   const autosaveInFlightRef = useRef(false);
   const autosaveInFlightPromiseRef = useRef<Promise<void> | null>(null);
   const queuedAutosaveRef = useRef<{ assignmentId: string; sequence: number } | null>(null);
-  const exitSubmittingRef = useRef(false);
-  const finalSubmittingRef = useRef(false);
+  const terminalOperationRef = useRef<"exit" | "submit" | null>(null);
 
   useEffect(() => {
     const nextAnswers = initialAnswers ?? {};
     saveSequenceRef.current += 1;
     queuedAutosaveRef.current = null;
-    exitSubmittingRef.current = false;
-    finalSubmittingRef.current = false;
+    terminalOperationRef.current = null;
     latestAnswersRef.current = nextAnswers;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -349,14 +347,13 @@ export function QuestionnaireRunner({
   }
 
   async function saveDraftAndExit() {
-    if (exitSubmittingRef.current) return;
-
     if (!assignmentId || isComplete) {
       router.push(returnHref);
       return;
     }
+    if (terminalOperationRef.current) return;
 
-    exitSubmittingRef.current = true;
+    terminalOperationRef.current = "exit";
     setIsExiting(true);
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -382,7 +379,7 @@ export function QuestionnaireRunner({
       setSaveError(null);
       router.push(returnHref);
     } catch (error) {
-      exitSubmittingRef.current = false;
+      terminalOperationRef.current = null;
       setIsExiting(false);
       setSaveState("error");
       setActiveOperation(null);
@@ -396,9 +393,9 @@ export function QuestionnaireRunner({
   }
 
   async function confirmSubmit() {
-    if (finalSubmittingRef.current) return;
+    if (terminalOperationRef.current) return;
     if (!canSubmit || !assignmentId) return;
-    finalSubmittingRef.current = true;
+    terminalOperationRef.current = "submit";
     setSubmitConfirmOpen(false);
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -424,7 +421,7 @@ export function QuestionnaireRunner({
       setSaveError(null);
       router.refresh();
     } catch (error) {
-      finalSubmittingRef.current = false;
+      terminalOperationRef.current = null;
       setSaveState("error");
       setActiveOperation(null);
       setSaveError(errorMessage(error, "A apărut o eroare la trimiterea răspunsurilor."));
@@ -442,7 +439,7 @@ export function QuestionnaireRunner({
               size="sm"
               onClick={() => void saveDraftAndExit()}
               aria-label={returnLabel}
-              disabled={isExiting}
+              disabled={isExiting || activeOperation === "submit"}
               className="-ml-2 text-muted-foreground hover:text-burgundy"
             >
               {isExiting ? (

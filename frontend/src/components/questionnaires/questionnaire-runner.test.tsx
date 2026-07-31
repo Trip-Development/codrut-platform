@@ -740,6 +740,44 @@ describe("QuestionnaireRunner", () => {
     expect(routerPush).not.toHaveBeenCalled();
   });
 
+  it("does not save a competing draft or navigate back while final submission is pending", async () => {
+    let resolveSubmit!: () => void;
+    const submitPromise = new Promise<Awaited<ReturnType<typeof submitQuestionnaireResponse>>>((resolve) => {
+      resolveSubmit = () => resolve({ status: "submitted" } as Awaited<ReturnType<typeof submitQuestionnaireResponse>>);
+    });
+    vi.mocked(submitQuestionnaireResponse).mockReturnValueOnce(submitPromise);
+
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        returnHref="/participant/questionnaires"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+
+    const backButton = await screen.findByRole("button", { name: "Înapoi la chestionare" });
+    expect((backButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(backButton);
+
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSubmit();
+      await submitPromise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Răspunsurile au fost trimise")).toBeTruthy();
+    });
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
   it("offers the next 360 review before returning to the task list", () => {
     render(
       <QuestionnaireRunner

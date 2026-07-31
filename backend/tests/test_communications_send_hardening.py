@@ -80,7 +80,10 @@ class MemoryCommunicationsRepository:
         ]
 
     async def count_accepted_sends_since(self, _since: datetime) -> int:
-        return sum(send.status == EmailSendStatus.accepted for send in self.sends)
+        return sum(
+            send.status != EmailSendStatus.cancelled
+            for send in self.sends
+        )
 
     async def get_email_suppression(
         self,
