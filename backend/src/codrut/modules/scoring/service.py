@@ -314,6 +314,7 @@ class ScoringService:
             participants,
             assignment_results,
             pcm_values,
+            team_snapshot=team_snapshot,
         )
 
         return CompanyReportAggregateResponse(
@@ -2027,7 +2028,27 @@ def _build_team_lenses(
     participants: list[ReportParticipant],
     assignment_results: list[AssignmentResultWithDefinition],
     pcm_values: dict[UUID, dict[str, str]] | None = None,
+    *,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> TeamLensBuildResult:
+    if team_snapshot is not None:
+        return TeamLensBuildResult(
+            team_lenses=[
+                _build_team_lens(
+                    str(team.id),
+                    team.name,
+                    set(team.member_ids),
+                    participants,
+                    assignment_results,
+                    pcm_values,
+                    lencioni_target_team_id=team.id,
+                )
+                for team in team_snapshot.teams
+            ],
+            hierarchy_ambiguous=False,
+            hierarchy_ambiguity_message=None,
+            hierarchy_issues=[],
+        )
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
@@ -2113,11 +2134,24 @@ def _build_team_lens(
     participants: list[ReportParticipant],
     assignment_results: list[AssignmentResultWithDefinition],
     pcm_values: dict[UUID, dict[str, str]] | None = None,
+    *,
+    lencioni_target_team_id: UUID | None = None,
 ) -> ReportTeamLensResponse:
     team_assignment_results = [
         (assignment, result, definition)
         for assignment, result, definition in assignment_results
-        if assignment.respondent_profile_id in member_ids
+        if (
+            assignment.questionnaire_key in LENCIONI_REPORT_KEYS
+            and lencioni_target_team_id is not None
+            and assignment.target_team_id == lencioni_target_team_id
+        )
+        or (
+            assignment.respondent_profile_id in member_ids
+            and (
+                lencioni_target_team_id is None
+                or assignment.questionnaire_key not in LENCIONI_REPORT_KEYS
+            )
+        )
     ]
     team_assignments = [assignment for assignment, _result, _definition in team_assignment_results]
     assigned_count = len(team_assignments)

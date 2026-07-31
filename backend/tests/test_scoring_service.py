@@ -1074,9 +1074,24 @@ async def test_cycle_report_derives_and_enforces_its_project_scope(
                 full_name="Carmen Outside",
                 email=f"carmen-{uuid.uuid4().hex[:8]}@example.com",
             )
+            leadership_team = Team(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                name=f"Leadership {uuid.uuid4().hex[:8]}",
+                type=TeamType.leadership,
+            )
             session.add(company)
             await session.flush()
-            session.add_all([project, other_project, leader, direct_report, outside_participant])
+            session.add_all(
+                [
+                    project,
+                    other_project,
+                    leader,
+                    direct_report,
+                    outside_participant,
+                    leadership_team,
+                ]
+            )
             await session.flush()
             session.add_all(
                 [
@@ -1109,13 +1124,27 @@ async def test_cycle_report_derives_and_enforces_its_project_scope(
             )
             session.add_all([definition, cycle])
             await session.flush()
-            session.add(
-                AssessmentCycleQuestionnaire(
-                    assessment_cycle_id=cycle.id,
-                    questionnaire_definition_id=definition.id,
-                    questionnaire_key="lencioni",
-                    display_order=0,
-                )
+            session.add_all(
+                [
+                    AssessmentCycleQuestionnaire(
+                        assessment_cycle_id=cycle.id,
+                        questionnaire_definition_id=definition.id,
+                        questionnaire_key="lencioni",
+                        display_order=0,
+                    ),
+                    AssessmentCycleTeamMembership(
+                        assessment_cycle_id=cycle.id,
+                        team_id=leadership_team.id,
+                        participant_profile_id=leader.id,
+                        role=TeamMembershipRole.leader,
+                    ),
+                    AssessmentCycleTeamMembership(
+                        assessment_cycle_id=cycle.id,
+                        team_id=leadership_team.id,
+                        participant_profile_id=direct_report.id,
+                        role=TeamMembershipRole.member,
+                    ),
+                ]
             )
 
             aggregate = await ScoringService(session).get_company_report_aggregate(
@@ -1125,7 +1154,9 @@ async def test_cycle_report_derives_and_enforces_its_project_scope(
 
             assert aggregate.assessment_cycle_id == cycle.id
             leadership_lens = next(
-                team for team in aggregate.team_lenses if team.id == "leadership"
+                team
+                for team in aggregate.team_lenses
+                if team.id == str(leadership_team.id)
             )
             assert leadership_lens.member_count == 2
             with pytest.raises(DomainError) as wrong_project:

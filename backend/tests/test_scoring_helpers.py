@@ -8,8 +8,12 @@ from pydantic import ValidationError
 from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
+    TeamType,
 )
-from codrut.modules.assignments.team_snapshot import AssessmentCycleTeamSnapshot
+from codrut.modules.assignments.team_snapshot import (
+    AssessmentCycleTeam,
+    AssessmentCycleTeamSnapshot,
+)
 from codrut.modules.companies.hierarchy import HierarchyIssue
 from codrut.modules.forms.models import SubmissionProcessingStatus
 from codrut.modules.scoring.schemas import (
@@ -25,6 +29,7 @@ from codrut.modules.scoring.service import (
     _build_driver_rank_summary,
     _build_icare_cohort_summaries,
     _build_score_summary,
+    _build_team_lenses,
     _definition_report_score_scale,
     _distribution_count,
     _distribution_from_completed_pcm_assignments,
@@ -423,6 +428,129 @@ def test_individual_lencioni_uses_target_team_and_top_leader_scope() -> None:
     assert chief.lencioni_averages[0].avg == 3
     assert leader.lencioni_count == 2
     assert leader.lencioni_averages[0].avg == 9
+
+
+def test_cycle_team_lenses_use_snapshot_targets_without_multi_team_bleed() -> None:
+    leader_id = uuid.uuid4()
+    leadership_peer_id = uuid.uuid4()
+    functional_member_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=leader_id,
+            full_name="Alex Dup",
+            reports_to_name=None,
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=leadership_peer_id,
+            full_name="Alex Dup",
+            reports_to_name=None,
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=functional_member_id,
+            full_name="Carmen Member",
+            reports_to_name="Alex Dup",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    snapshot = AssessmentCycleTeamSnapshot(
+        leadership_ids=frozenset({leader_id, leadership_peer_id}),
+        direct_report_ids_by_leader_id={
+            leader_id: frozenset({functional_member_id})
+        },
+        teams=(
+            AssessmentCycleTeam(
+                id=leadership_team_id,
+                name="Leadership istoric",
+                type=TeamType.leadership,
+                member_ids=frozenset({leader_id, leadership_peer_id}),
+            ),
+            AssessmentCycleTeam(
+                id=functional_team_id,
+                name="Echipa istorică",
+                type=TeamType.functional,
+                member_ids=frozenset({leader_id, functional_member_id}),
+            ),
+        ),
+    )
+    rows = [
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=leader_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=leadership_team_id,
+            ),
+            _result({"trust": 2}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=leadership_peer_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=leadership_team_id,
+            ),
+            _result({"trust": 4}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=leader_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=functional_team_id,
+            ),
+            _result({"trust": 8}),
+            None,
+        ),
+        (
+            _assignment(
+                "lencioni",
+                respondent_profile_id=functional_member_id,
+                target_type=AssignmentTargetType.team,
+                target_team_id=functional_team_id,
+            ),
+            _result({"trust": 10}),
+            None,
+        ),
+        (
+            _assignment(
+                "distress_drivers",
+                respondent_profile_id=functional_member_id,
+            ),
+            _result({"hurry": 60}),
+            None,
+        ),
+    ]
+
+    result = _build_team_lenses(  # type: ignore[arg-type]
+        participants,
+        rows,
+        team_snapshot=snapshot,
+    )
+    by_id = {team.id: team for team in result.team_lenses}
+
+    assert result.hierarchy_ambiguous is False
+    assert result.hierarchy_issues == []
+    assert by_id[str(leadership_team_id)].lencioni_count == 2
+    assert by_id[str(leadership_team_id)].lencioni_averages[0].avg == 3
+    assert by_id[str(leadership_team_id)].driver_count == 0
+    assert by_id[str(functional_team_id)].lencioni_count == 2
+    assert by_id[str(functional_team_id)].lencioni_averages[0].avg == 9
+    assert by_id[str(functional_team_id)].driver_count == 1
 
 
 def test_ambiguous_hierarchy_keeps_explicit_leaders_for_individual_reports() -> None:

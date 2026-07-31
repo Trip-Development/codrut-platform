@@ -153,24 +153,28 @@ async def test_received_feedback_cycle_snapshot_ignores_current_organigram() -> 
                         leader_id,
                         TeamMembershipRole.leader,
                         TeamType.leadership,
+                        "Leadership",
                     ),
                     (
                         leadership_team_id,
                         peer_id,
                         TeamMembershipRole.member,
                         TeamType.leadership,
+                        "Leadership",
                     ),
                     (
                         functional_team_id,
                         leader_id,
                         TeamMembershipRole.leader,
                         TeamType.functional,
+                        "Echipa Ana",
                     ),
                     (
                         functional_team_id,
                         direct_report_id,
                         TeamMembershipRole.member,
                         TeamType.functional,
+                        "Echipa Ana",
                     ),
                 ]
             )
