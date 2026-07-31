@@ -179,6 +179,27 @@ class DeploySafeguardTests(unittest.TestCase):
         )
         self.assertNotIn("docker system prune", workflow)
 
+    def test_prod_requires_explicit_legacy_campaign_owner(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID: "
+            "${{ vars.CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID }}",
+            workflow,
+        )
+        self.assertIn(
+            'if [[ "${DEPLOY_ENVIRONMENT}" == "prod" ]]; then\n'
+            "            required_vars+=(CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID)",
+            workflow,
+        )
+        self.assertIn(
+            "CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="
+            "$CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID",
+            workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

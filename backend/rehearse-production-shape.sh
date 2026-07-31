@@ -302,6 +302,41 @@ insert into result_publications (
 "
 
 run_psql -c "
+insert into campaigns (
+    id,
+    owner_id,
+    name,
+    segment,
+    status,
+    subject,
+    html_body,
+    text_body,
+    recipient_memberships_initialized
+)
+values
+    (
+        '00000000-0000-4000-8000-000000000303',
+        null,
+        'Legacy Ownerless Campaign One',
+        'past_customer',
+        'completed',
+        'Legacy ownerless subject one',
+        '<p>Legacy ownerless body one</p>',
+        'Legacy ownerless body one',
+        true
+    ),
+    (
+        '00000000-0000-4000-8000-000000000304',
+        null,
+        'Legacy Ownerless Campaign Two',
+        'past_customer',
+        'completed',
+        'Legacy ownerless subject two',
+        '<p>Legacy ownerless body two</p>',
+        'Legacy ownerless body two',
+        true
+    );
+
 insert into campaign_recipients (
     id,
     owner_id,
@@ -340,7 +375,14 @@ insert into campaign_recipient_memberships (
 )
 select
     gen_random_uuid(),
-    '00000000-0000-4000-8000-000000000301'::uuid,
+    case
+        when series <= 53 then
+            '00000000-0000-4000-8000-000000000303'::uuid
+        when series <= 56 then
+            '00000000-0000-4000-8000-000000000304'::uuid
+        else
+            '00000000-0000-4000-8000-000000000301'::uuid
+    end,
     ('60000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,
     'production-owner-repair-rehearsal'
 from generate_series(1, 865) as series;
@@ -393,7 +435,14 @@ select
     1,
     'fake',
     'accepted',
-    '00000000-0000-4000-8000-000000000301'::uuid,
+    case
+        when series <= 58 then
+            '00000000-0000-4000-8000-000000000303'::uuid
+        when series <= 61 then
+            '00000000-0000-4000-8000-000000000304'::uuid
+        else
+            '00000000-0000-4000-8000-000000000301'::uuid
+    end,
     ('60000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,
     'owner-repair-rehearsal-' || series
 from generate_series(1, 195) as series;
@@ -437,7 +486,15 @@ sends_before_owner_repair="$(run_psql -Atc 'select count(*) from email_sends')"
 printf '\nPre-0051 owner repair shape:\n'
 run_psql -P pager=off -c "
 select
-    (select count(*) from campaign_recipients where owner_id is null) as ownerless,
+    (select count(*) from campaigns where owner_id is null) as ownerless_campaigns,
+    (select count(*) from campaign_recipient_memberships membership
+        join campaigns campaign on campaign.id = membership.campaign_id
+        where campaign.owner_id is null) as ownerless_campaign_memberships,
+    (select count(*) from email_sends send
+        join campaigns campaign on campaign.id = send.campaign_id
+        where campaign.owner_id is null) as ownerless_campaign_sends,
+    (select count(*) from campaign_recipients where owner_id is null)
+        as ownerless_contacts,
     (
         select count(*)
         from campaign_recipients legacy
@@ -454,12 +511,54 @@ select
     ) as ownerless_sends;
 "
 
+owner_repair_shape="$(
+    run_psql -Atc "
+        select concat_ws(
+            ':',
+            (select count(*) from campaigns where owner_id is null),
+            (
+                select count(*)
+                from campaign_recipient_memberships membership
+                join campaigns campaign on campaign.id = membership.campaign_id
+                where campaign.owner_id is null
+            ),
+            (
+                select count(*)
+                from email_sends send
+                join campaigns campaign on campaign.id = send.campaign_id
+                where campaign.owner_id is null
+            ),
+            (select count(*) from campaign_recipients where owner_id is null),
+            (
+                select count(*)
+                from campaign_recipients legacy
+                join campaign_recipients owned
+                  on owned.owner_id = '00000000-0000-4000-8000-000000000001'
+                 and lower(owned.email) = lower(legacy.email)
+                where legacy.owner_id is null
+            ),
+            (
+                select count(*)
+                from email_sends
+                where campaign_recipient_id is not null
+                  and owner_id is null
+            )
+        )
+    "
+)"
+if [[ "${owner_repair_shape}" != "2:56:61:865:27:195" ]]; then
+    printf 'Unexpected pre-0051 campaign/contact shape: %s\n' \
+        "${owner_repair_shape}" >&2
+    exit 18
+fi
+
 CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
     run_alembic upgrade 0051_contact_owner_repair
 
 run_psql -c "
 do \$\$
 declare
+    ownerless_campaigns integer;
     ownerless_contacts integer;
     duplicate_contacts integer;
     cross_owner_memberships integer;
@@ -467,7 +566,12 @@ declare
     conflict_events integer;
     unique_events integer;
     repaired_suppressions integer;
+    repaired_legacy_campaigns integer;
 begin
+    select count(*) into ownerless_campaigns
+    from campaigns
+    where owner_id is null;
+
     select count(*) into ownerless_contacts
     from campaign_recipients
     where owner_id is null;
@@ -515,12 +619,23 @@ begin
           'synthetic.contact.2@example.invalid'
       );
 
-    if ownerless_contacts <> 0
+    select count(*) into repaired_legacy_campaigns
+    from campaigns
+    where id in (
+        '00000000-0000-4000-8000-000000000303',
+        '00000000-0000-4000-8000-000000000304'
+    )
+      and owner_id = '00000000-0000-4000-8000-000000000001'
+      and status = 'completed';
+
+    if ownerless_campaigns <> 0
+       or ownerless_contacts <> 0
        or duplicate_contacts <> 0
        or cross_owner_memberships <> 0
        or cross_owner_sends <> 0 then
         raise exception
-            '0051 owner repair failed: ownerless %, duplicates %, memberships %, sends %',
+            '0051 owner repair failed: campaigns %, contacts %, duplicates %, memberships %, sends %',
+            ownerless_campaigns,
             ownerless_contacts,
             duplicate_contacts,
             cross_owner_memberships,
@@ -535,6 +650,10 @@ begin
     if repaired_suppressions <> 2 then
         raise exception '0051 suppression owner repair expected 2, found %',
             repaired_suppressions;
+    end if;
+    if repaired_legacy_campaigns <> 2 then
+        raise exception '0051 expected 2 completed repaired campaigns, found %',
+            repaired_legacy_campaigns;
     end if;
     if (
         select status
@@ -562,6 +681,114 @@ if [[ "${memberships_after_owner_repair}" -gt "${memberships_before_owner_repair
     || [[ "${sends_after_owner_repair}" -ne "${sends_before_owner_repair}" ]]; then
     printf '0051 changed protected history counts unexpectedly.\n' >&2
     exit 10
+fi
+
+run_alembic stamp 0050_identity_account_types
+run_psql -c "
+update campaigns
+set owner_id = null
+where id in (
+    '00000000-0000-4000-8000-000000000303',
+    '00000000-0000-4000-8000-000000000304'
+);
+
+update email_sends
+set owner_id = null
+where campaign_id in (
+    '00000000-0000-4000-8000-000000000303',
+    '00000000-0000-4000-8000-000000000304'
+);
+
+update email_sends
+set
+    owner_id = '00000000-0000-4000-8000-000000000002',
+    campaign_recipient_id = null
+where id = '70000000-0000-4000-8000-000000000001';
+"
+
+owner_repair_recovery_shape="$(
+    run_psql -Atc "
+        select concat_ws(
+            ':',
+            (select count(*) from campaigns where owner_id is null),
+            (
+                select count(*)
+                from campaign_recipient_memberships membership
+                join campaigns campaign on campaign.id = membership.campaign_id
+                where campaign.owner_id is null
+            ),
+            (
+                select count(*)
+                from email_sends send
+                join campaigns campaign on campaign.id = send.campaign_id
+                where campaign.owner_id is null
+            ),
+            (select count(*) from campaign_recipients where owner_id is null)
+        )
+    "
+)"
+if [[ "${owner_repair_recovery_shape}" != "2:56:61:0" ]]; then
+    printf 'Unexpected 0051 recovery shape: %s\n' \
+        "${owner_repair_recovery_shape}" >&2
+    exit 19
+fi
+
+set +e
+invalid_send_owner_output="$(
+    CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
+        run_alembic upgrade 0051_contact_owner_repair 2>&1
+)"
+invalid_send_owner_status=$?
+set -e
+if [[ ${invalid_send_owner_status} -eq 0 ]] \
+    || [[ "${invalid_send_owner_output}" != *"campaign contact ownership repair failed"* ]] \
+    || [[ "$(run_psql -Atc 'select version_num from alembic_version')" != "0050_identity_account_types" ]]; then
+    printf '0051 did not reject a campaign send with a stale owner:\n%s\n' \
+        "${invalid_send_owner_output}" >&2
+    exit 20
+fi
+
+run_psql -c "
+update email_sends
+set owner_id = null
+where id = '70000000-0000-4000-8000-000000000001';
+"
+CODRUT_LEGACY_CAMPAIGN_CONTACT_OWNER_ID="00000000-0000-4000-8000-000000000001" \
+    run_alembic upgrade 0051_contact_owner_repair
+
+owner_repair_recovery_result="$(
+    run_psql -Atc "
+        select concat_ws(
+            ':',
+            (select count(*) from campaigns where owner_id is null),
+            (
+                select count(*)
+                from campaign_recipient_memberships membership
+                join campaigns campaign on campaign.id = membership.campaign_id
+                join campaign_recipients recipient
+                  on recipient.id = membership.recipient_id
+                where campaign.owner_id is distinct from recipient.owner_id
+            ),
+            (
+                select count(*)
+                from email_sends send
+                join campaigns campaign on campaign.id = send.campaign_id
+                left join campaign_recipients recipient
+                  on recipient.id = send.campaign_recipient_id
+                where send.owner_id is distinct from campaign.owner_id
+                   or (
+                       send.campaign_recipient_id is not null
+                       and send.owner_id is distinct from recipient.owner_id
+                   )
+            ),
+            (select count(*) from campaign_recipients where owner_id is null)
+        )
+    "
+)"
+if [[ "${owner_repair_recovery_result}" != "0:0:0:0" ]]; then
+    printf '0051 recovery rehearsal failed: %s\n' \
+        "${owner_repair_recovery_result}" >&2
+    exit 21
 fi
 
 owner_repair_fingerprint="$(
@@ -601,7 +828,7 @@ if [[ ${owner_repair_rollback_status} -eq 0 ]] \
         "${owner_repair_rollback_output}" >&2
     exit 12
 fi
-printf '\nContact ownership repair: Pass (865 rows, 27 conflicts, safe rerun).\n'
+printf '\nCampaign/contact ownership repair: Pass (fresh, recovery, stale-send guard, safe rerun).\n'
 
 run_alembic upgrade 0052_contact_archive
 
