@@ -71,6 +71,7 @@ from codrut.modules.scoring.models import ResultPublication, ScoringResult
 FORMAT_VERSION = "codrut-launch-load-proof/v1"
 PARTICIPANT_COUNT = 1_000
 HOLD_SECONDS = 300
+PRODUCTION_READ_INTERVAL_SECONDS = 5.0
 ACKNOWLEDGEMENT = "I_UNDERSTAND_CODEX_SYNTHETIC_LOAD_PROOF_V1"
 RUN_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{7,47}$")
 TAG_PREFIX = "codrut-load-proof:v1:"
@@ -1294,6 +1295,10 @@ async def run_load_proof(
         raise RuntimeError("Ramp must be between 1 and 300 seconds.")
     if not 1.0 <= read_interval_seconds <= 30.0:
         raise RuntimeError("Read interval must be between 1 and 30 seconds.")
+    if settings.is_production and read_interval_seconds != PRODUCTION_READ_INTERVAL_SECONDS:
+        raise RuntimeError(
+            "Production proof requires a 5-second read interval (400 read requests/second)."
+        )
     if report_path.exists():
         raise RuntimeError("Refusing to overwrite an existing load-proof report.")
     runtime_baseline = _read_runtime_evidence(
@@ -1384,13 +1389,19 @@ async def run_load_proof(
                         client,
                         path=result[1],
                         auth_headers=result[0],
+                        hold_started_at=hold_starts,
                         hold_ends=hold_ends,
+                        initial_offset_seconds=_steady_state_stagger_seconds(
+                            ordinal,
+                            participant_count=PARTICIPANT_COUNT,
+                            read_interval_seconds=read_interval_seconds,
+                        ),
                         read_interval_seconds=read_interval_seconds,
                         recorder=recorder,
                         abort=abort,
                     )
                 )
-                for result in initial_results
+                for ordinal, result in enumerate(initial_results)
                 if isinstance(result, tuple)
             ]
             trainer_task = asyncio.create_task(
@@ -1428,7 +1439,10 @@ async def run_load_proof(
                 "synthetic provider requests remained in flight after the abort deadline"
             )
     metrics = recorder.report()
-    acceptance_failures = evaluate_acceptance(metrics)
+    acceptance_failures = evaluate_acceptance(
+        metrics,
+        read_interval_seconds=read_interval_seconds,
+    )
     if abort.reason:
         acceptance_failures.insert(0, abort.reason)
     if abort_outbox["in_flight"]:
@@ -1467,6 +1481,11 @@ async def run_load_proof(
         "participant_count": PARTICIPANT_COUNT,
         "ramp_seconds": ramp_seconds,
         "hold_seconds": HOLD_SECONDS,
+        "read_interval_seconds": read_interval_seconds,
+        "target_read_requests_per_second": round(
+            PARTICIPANT_COUNT * 2 / read_interval_seconds,
+            3,
+        ),
         "started_at": started_at.isoformat(),
         "completed_at": completed_at.isoformat(),
         "elapsed_seconds": round(time.monotonic() - started, 3),
@@ -1884,12 +1903,26 @@ async def _hold_reads(
     *,
     path: str,
     auth_headers: dict[str, str],
+    hold_started_at: float,
     hold_ends: float,
+    initial_offset_seconds: float,
     read_interval_seconds: float,
     recorder: MetricsRecorder,
     abort: AbortController,
 ) -> None:
-    while time.monotonic() < hold_ends and not abort.event.is_set():
+    next_slot = hold_started_at + initial_offset_seconds
+    while next_slot < hold_ends and not abort.event.is_set():
+        wait_seconds = max(0.0, next_slot - time.monotonic())
+        if wait_seconds:
+            try:
+                await asyncio.wait_for(
+                    abort.event.wait(),
+                    timeout=wait_seconds,
+                )
+            except TimeoutError:
+                pass
+        if abort.event.is_set():
+            return
         await _request(
             client,
             recorder,
@@ -1908,10 +1941,29 @@ async def _hold_reads(
             f"{path}/response",
             headers=auth_headers,
         )
-        try:
-            await asyncio.wait_for(abort.event.wait(), timeout=read_interval_seconds)
-        except TimeoutError:
-            continue
+        next_slot += read_interval_seconds
+
+
+def _steady_state_stagger_seconds(
+    ordinal: int,
+    *,
+    participant_count: int,
+    read_interval_seconds: float,
+) -> float:
+    if participant_count <= 0:
+        raise ValueError("participant_count must be positive")
+    if not 0 <= ordinal < participant_count:
+        raise ValueError("ordinal must identify a participant")
+    return ordinal * read_interval_seconds / participant_count
+
+
+def _expected_hold_reads(
+    *,
+    participant_count: int,
+    hold_seconds: float,
+    read_interval_seconds: float,
+) -> int:
+    return math.ceil(hold_seconds * participant_count / read_interval_seconds)
 
 
 async def _monitor(
@@ -2037,7 +2089,11 @@ def evaluate_live_thresholds(metrics: dict[str, Any]) -> str | None:
     return None
 
 
-def evaluate_acceptance(metrics: dict[str, Any]) -> list[str]:
+def evaluate_acceptance(
+    metrics: dict[str, Any],
+    *,
+    read_interval_seconds: float = PRODUCTION_READ_INTERVAL_SECONDS,
+) -> list[str]:
     failures: list[str] = []
     aggregate = metrics["aggregate"]
     if aggregate["error_rate"] >= 0.01:
@@ -2067,6 +2123,21 @@ def evaluate_acceptance(metrics: dict[str, Any]) -> list[str]:
     )
     if missing:
         failures.append(f"exact 1,000-operation proof missing for: {', '.join(missing)}")
+    expected_hold_reads = _expected_hold_reads(
+        participant_count=PARTICIPANT_COUNT,
+        hold_seconds=HOLD_SECONDS,
+        read_interval_seconds=read_interval_seconds,
+    )
+    incomplete_hold_reads = sorted(
+        name
+        for name in ("hold_definition_read", "hold_response_read")
+        if operations.get(name, {}).get("count") != expected_hold_reads
+    )
+    if incomplete_hold_reads:
+        failures.append(
+            f"exact {expected_hold_reads:,}-operation steady hold missing for: "
+            f"{', '.join(incomplete_hold_reads)}"
+        )
     for name, operation in operations.items():
         limit = _p95_limit(name)
         if limit is not None and operation["count"] and operation["p95_ms"] >= limit:
@@ -2266,7 +2337,11 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--report", required=True, type=Path)
     run.add_argument("--base-url", required=True)
     run.add_argument("--ramp-seconds", type=int, default=60)
-    run.add_argument("--read-interval-seconds", type=float, default=5.0)
+    run.add_argument(
+        "--read-interval-seconds",
+        type=float,
+        default=PRODUCTION_READ_INTERVAL_SECONDS,
+    )
     run.add_argument("--runtime-evidence", type=Path)
     run.add_argument("--ack", required=True)
     return parser
