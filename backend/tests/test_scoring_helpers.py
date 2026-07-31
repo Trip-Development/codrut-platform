@@ -9,6 +9,7 @@ from codrut.modules.assignments.models import (
     AssignmentStatus,
     AssignmentTargetType,
 )
+from codrut.modules.assignments.team_snapshot import AssessmentCycleTeamSnapshot
 from codrut.modules.companies.hierarchy import HierarchyIssue
 from codrut.modules.forms.models import SubmissionProcessingStatus
 from codrut.modules.scoring.schemas import (
@@ -555,6 +556,87 @@ def test_icare_leadership_direct_report_is_a_peer_before_direct_team() -> None:
     assert by_cohort["leadership_peers"].score_unit == "grade_1_to_5"
     assert by_cohort["leadership_peers"].scale_min == 1
     assert by_cohort["leadership_peers"].scale_max == 5
+
+
+def test_icare_cycle_snapshot_ignores_current_organigram_changes() -> None:
+    leader_id = uuid.uuid4()
+    peer_id = uuid.uuid4()
+    direct_report_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=leader_id,
+            full_name="Ana Leader",
+            reports_to_name=None,
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=peer_id,
+            full_name="Bogdan Peer",
+            reports_to_name=None,
+            role_group="individual",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=direct_report_id,
+            full_name="Carmen Direct",
+            reports_to_name="Alt manager",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    snapshot = AssessmentCycleTeamSnapshot(
+        leadership_ids=frozenset({leader_id, peer_id}),
+        direct_report_ids_by_leader_id={leader_id: frozenset({direct_report_id})},
+    )
+    rows = [
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=leader_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 3}),
+            None,
+        ),
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=peer_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 4}),
+            None,
+        ),
+        (
+            _assignment(
+                "icare",
+                respondent_profile_id=direct_report_id,
+                target_person_id=leader_id,
+            ),
+            _result({"clarity": 5}),
+            None,
+        ),
+    ]
+
+    cohorts = _build_icare_cohort_summaries(  # type: ignore[arg-type]
+        rows,
+        participants,
+        team_snapshot=snapshot,
+    )
+
+    assert [(item.cohort, item.response_count) for item in cohorts] == [
+        ("direct_team", 1),
+        ("leadership_peers", 1),
+        ("self", 1),
+    ]
+    assert [item.averages[0].avg for item in cohorts] == [5, 4, 3]
 
 
 def test_icare_cohorts_suppress_incompatible_score_scales() -> None:

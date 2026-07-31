@@ -83,17 +83,32 @@ async def test_member_lencioni_team_uses_selected_cycle_snapshot() -> None:
         uuid.uuid4(),
         uuid.uuid4(),
         [],
-        prefer_leadership=False,
-    )
-    top_leader = await service._resolve_member_lencioni_team_id(
-        uuid.uuid4(),
-        uuid.uuid4(),
-        [],
         prefer_leadership=True,
     )
 
+    session.execute.return_value = SimpleNamespace(
+        all=lambda: [
+            (
+                leadership_team_id,
+                TeamType.leadership,
+                TeamMembershipRole.leader,
+            ),
+            (
+                functional_team_id,
+                TeamType.functional,
+                TeamMembershipRole.leader,
+            ),
+        ]
+    )
+    leadership = await service._resolve_member_lencioni_team_id(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        [],
+        prefer_leadership=False,
+    )
+
     assert functional == functional_team_id
-    assert top_leader == leadership_team_id
+    assert leadership == leadership_team_id
 
 
 @pytest.mark.asyncio

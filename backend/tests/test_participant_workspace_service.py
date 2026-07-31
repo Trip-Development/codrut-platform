@@ -1,5 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -14,6 +16,7 @@ from codrut.modules.assignments.models import (
     AssignmentTargetType,
     QuestionnaireAssignment,
     Team,
+    TeamMembershipRole,
     TeamType,
 )
 from codrut.modules.companies.models import (
@@ -132,6 +135,83 @@ def test_received_feedback_scale_uses_the_scoring_output_unit() -> None:
     assert _definition_scale_max(definition) == 100.0
     scoring["score_unit"] = "grade_1_to_5"
     assert _definition_scale_max(definition) == 5.0
+
+
+@pytest.mark.asyncio
+async def test_received_feedback_cycle_snapshot_ignores_current_organigram() -> None:
+    leader_id = uuid.uuid4()
+    peer_id = uuid.uuid4()
+    direct_report_id = uuid.uuid4()
+    leadership_team_id = uuid.uuid4()
+    functional_team_id = uuid.uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                all=lambda: [
+                    (
+                        leadership_team_id,
+                        leader_id,
+                        TeamMembershipRole.leader,
+                        TeamType.leadership,
+                    ),
+                    (
+                        leadership_team_id,
+                        peer_id,
+                        TeamMembershipRole.member,
+                        TeamType.leadership,
+                    ),
+                    (
+                        functional_team_id,
+                        leader_id,
+                        TeamMembershipRole.leader,
+                        TeamType.functional,
+                    ),
+                    (
+                        functional_team_id,
+                        direct_report_id,
+                        TeamMembershipRole.member,
+                        TeamType.functional,
+                    ),
+                ]
+            )
+        )
+    )
+    service = ParticipantWorkspaceService(session)  # type: ignore[arg-type]
+    profile = ParticipantProfile(
+        id=leader_id,
+        company_id=uuid.uuid4(),
+        full_name="Ana Leader",
+        role_group="individual",
+        reports_to_name="Alt manager",
+    )
+    peer_assignment = QuestionnaireAssignment(
+        respondent_profile_id=peer_id,
+        company_id=profile.company_id,
+        questionnaire_key="icare",
+        questionnaire_definition_id=uuid.uuid4(),
+        target_type=AssignmentTargetType.person,
+        target_person_id=leader_id,
+    )
+    direct_assignment = QuestionnaireAssignment(
+        respondent_profile_id=direct_report_id,
+        company_id=profile.company_id,
+        questionnaire_key="icare",
+        questionnaire_definition_id=uuid.uuid4(),
+        target_type=AssignmentTargetType.person,
+        target_person_id=leader_id,
+    )
+
+    cohorts = await service._split_received_feedback_cohorts(
+        profile,
+        uuid.uuid4(),
+        [peer_assignment, direct_assignment],
+        assessment_cycle_id=uuid.uuid4(),
+    )
+
+    assert cohorts == {
+        "direct_team": [direct_assignment],
+        "leadership_peers": [peer_assignment],
+    }
 
 
 def test_driver_feedback_is_read_from_the_pinned_questionnaire_definition() -> None:

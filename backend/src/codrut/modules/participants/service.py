@@ -13,6 +13,9 @@ from codrut.modules.assignments.models import (
     QuestionnaireAssignment,
     Team,
 )
+from codrut.modules.assignments.team_snapshot import (
+    load_assessment_cycle_team_snapshot,
+)
 from codrut.modules.companies.anonymous import allocate_anonymous_name
 from codrut.modules.companies.hierarchy import (
     HierarchyParticipant,
@@ -537,6 +540,7 @@ class ParticipantWorkspaceService:
             profile,
             publication.project_id,
             completed_assignments,
+            assessment_cycle_id=publication.assessment_cycle_id,
         )
         summaries: list[ParticipantReceivedFeedbackSummary] = []
         for cohort in ("direct_team", "leadership_peers"):
@@ -648,7 +652,33 @@ class ParticipantWorkspaceService:
         profile: ParticipantProfile,
         project_id: UUID | None,
         assignments: list[QuestionnaireAssignment],
+        *,
+        assessment_cycle_id: UUID | None = None,
     ) -> dict[str, list[QuestionnaireAssignment]]:
+        if assessment_cycle_id is not None:
+            snapshot = await load_assessment_cycle_team_snapshot(
+                self.session,
+                assessment_cycle_id,
+            )
+            direct_report_ids = snapshot.direct_report_ids_by_leader_id.get(
+                profile.id,
+                frozenset(),
+            )
+            return {
+                "direct_team": [
+                    assignment
+                    for assignment in assignments
+                    if assignment.respondent_profile_id in direct_report_ids
+                    and assignment.respondent_profile_id not in snapshot.leadership_ids
+                ],
+                "leadership_peers": [
+                    assignment
+                    for assignment in assignments
+                    if assignment.respondent_profile_id in snapshot.leadership_ids
+                    and profile.id in snapshot.leadership_ids
+                    and assignment.respondent_profile_id != profile.id
+                ],
+            }
         if project_id is not None:
             rows = (
                 await self.session.execute(

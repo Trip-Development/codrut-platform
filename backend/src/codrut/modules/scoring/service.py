@@ -20,6 +20,10 @@ from codrut.modules.assignments.models import (
     TeamMembershipRole,
     TeamType,
 )
+from codrut.modules.assignments.team_snapshot import (
+    AssessmentCycleTeamSnapshot,
+    load_assessment_cycle_team_snapshot,
+)
 from codrut.modules.companies.hierarchy import (
     HierarchyIssue,
     HierarchyParticipant,
@@ -268,13 +272,20 @@ class ScoringService:
             assignment_results,
             driver_rows=driver_selection.average_rows,
         )
+        team_snapshot = (
+            await load_assessment_cycle_team_snapshot(self.session, assessment_cycle_id)
+            if assessment_cycle_id is not None
+            else None
+        )
         icare_cohorts = _build_icare_cohort_summaries(
             assignment_results,
             participants,
+            team_snapshot=team_snapshot,
         )
         icare_target_summaries = _build_icare_target_summaries(
             assignment_results,
             participants,
+            team_snapshot=team_snapshot,
         )
         driver_rank_summary = _build_driver_rank_summary(
             driver_selection.rankable_rows,
@@ -321,7 +332,12 @@ class ScoringService:
             icare_target_summaries=icare_target_summaries,
             icare_cohorts=icare_cohorts,
             driver_rank_summary=driver_rank_summary,
-            leadership_members=_build_leadership_members(participants),
+            leadership_members=_build_leadership_members(
+                participants,
+                leadership_ids=(
+                    set(team_snapshot.leadership_ids) if team_snapshot is not None else None
+                ),
+            ),
             pcm_base_distribution=pcm_base_distribution,
             pcm_phase_distribution=pcm_phase_distribution,
             team_lenses=team_lens_result.team_lenses,
@@ -355,8 +371,17 @@ class ScoringService:
         hierarchy = build_organization_hierarchy(
             [_hierarchy_participant_from_report(participant) for participant in participants]
         )
+        team_snapshot = (
+            await load_assessment_cycle_team_snapshot(self.session, assessment_cycle_id)
+            if assessment_cycle_id is not None
+            else None
+        )
         member = participant_by_id.get(participant_profile_id)
-        leadership_ids = _leadership_ids_for_report(hierarchy, participants)
+        leadership_ids = (
+            set(team_snapshot.leadership_ids)
+            if team_snapshot is not None
+            else _leadership_ids_for_report(hierarchy, participants)
+        )
         if member is None or participant_profile_id not in leadership_ids:
             raise DomainError(
                 "Leadership member not found in this project.",
@@ -388,7 +413,10 @@ class ScoringService:
             participant_profile_id,
             assessment_cycle_id,
             assignment_results,
-            prefer_leadership=participant_profile_id in hierarchy.top_level_ids,
+            prefer_leadership=(
+                assessment_cycle_id is None
+                and participant_profile_id in hierarchy.top_level_ids
+            ),
         )
         lencioni_summary = _leadership_member_lencioni_summary(
             assignment_results,
@@ -400,6 +428,7 @@ class ScoringService:
                 for summary in _build_icare_target_summaries(
                     assignment_results,
                     participants,
+                    team_snapshot=team_snapshot,
                 )
                 if summary.target_profile_id == participant_profile_id
             ),
@@ -466,12 +495,19 @@ class ScoringService:
         leadership_ids = sorted(
             team_id for team_id, team_type, _role in rows if team_type == TeamType.leadership
         )
+        leadership_leader_ids = sorted(
+            team_id
+            for team_id, team_type, role in rows
+            if team_type == TeamType.leadership and role == TeamMembershipRole.leader
+        )
         functional_leader_ids = sorted(
             team_id
             for team_id, team_type, role in rows
             if team_type == TeamType.functional and role == TeamMembershipRole.leader
         )
-        if prefer_leadership and leadership_ids:
+        if assessment_cycle_id is not None and leadership_leader_ids:
+            return leadership_leader_ids[0]
+        if assessment_cycle_id is None and prefer_leadership and leadership_ids:
             return leadership_ids[0]
         if functional_leader_ids:
             return functional_leader_ids[0]
@@ -1370,19 +1406,30 @@ def _icare_assignment_cohort(
     assignment: QuestionnaireAssignment,
     *,
     hierarchy: Any,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> str | None:
     target_id = _icare_target_id(assignment)
-    if target_id is None or target_id not in hierarchy.leadership_ids:
+    leadership_ids = (
+        team_snapshot.leadership_ids
+        if team_snapshot is not None
+        else hierarchy.leadership_ids
+    )
+    if target_id is None or target_id not in leadership_ids:
         return None
     if _is_self_boss_assignment(assignment):
         return "self"
     respondent_id = assignment.respondent_profile_id
-    if respondent_id in hierarchy.leadership_ids and respondent_id != target_id:
+    if respondent_id in leadership_ids and respondent_id != target_id:
         return "leadership_peers"
-    direct_report_ids = {
-        participant.id for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
-    }
-    if respondent_id in direct_report_ids and respondent_id not in hierarchy.leadership_ids:
+    direct_report_ids = (
+        team_snapshot.direct_report_ids_by_leader_id.get(target_id, frozenset())
+        if team_snapshot is not None
+        else {
+            participant.id
+            for participant in hierarchy.direct_reports_by_manager_id.get(target_id, [])
+        }
+    )
+    if respondent_id in direct_report_ids and respondent_id not in leadership_ids:
         return "direct_team"
     return None
 
@@ -1392,6 +1439,7 @@ def _build_icare_cohort_summaries(
     participants: list[ReportParticipant],
     *,
     target_profile_id: UUID | None = None,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> list[IcareCohortSummaryResponse]:
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
@@ -1411,6 +1459,12 @@ def _build_icare_cohort_summaries(
     }
 
     def cohort_for_row(assignment: QuestionnaireAssignment) -> str | None:
+        if team_snapshot is not None:
+            return _icare_assignment_cohort(
+                assignment,
+                hierarchy=hierarchy,
+                team_snapshot=team_snapshot,
+            )
         if hierarchy.ambiguous_name is None:
             return _icare_assignment_cohort(assignment, hierarchy=hierarchy)
         target_id = _icare_target_id(assignment)
@@ -1469,6 +1523,8 @@ def _build_icare_cohort_summaries(
 def _build_icare_target_summaries(
     assignment_results: Iterable[AssignmentResultWithDefinition],
     participants: list[ReportParticipant],
+    *,
+    team_snapshot: AssessmentCycleTeamSnapshot | None = None,
 ) -> list[IcareTargetSummaryResponse]:
     assignment_result_rows = list(assignment_results)
     participant_names = {participant.id: participant.full_name for participant in participants}
@@ -1476,14 +1532,18 @@ def _build_icare_target_summaries(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
     leadership_ids = (
-        hierarchy.leadership_ids
-        if hierarchy.ambiguous_name is None
-        else {
-            participant.id
-            for participant in participants
-            if (participant.role_group or "").strip().casefold()
-            in {"leadership", "manager"}
-        }
+        team_snapshot.leadership_ids
+        if team_snapshot is not None
+        else (
+            hierarchy.leadership_ids
+            if hierarchy.ambiguous_name is None
+            else {
+                participant.id
+                for participant in participants
+                if (participant.role_group or "").strip().casefold()
+                in {"leadership", "manager"}
+            }
+        )
     )
     grouped: dict[
         UUID,
@@ -1533,6 +1593,7 @@ def _build_icare_target_summaries(
                 assignment_result_rows,
                 participants,
                 target_profile_id=target_id,
+                team_snapshot=team_snapshot,
             ),
         )
         for target_id, (
@@ -1677,11 +1738,17 @@ def _build_driver_rank_summary(
 
 def _build_leadership_members(
     participants: list[ReportParticipant],
+    *,
+    leadership_ids: set[UUID] | None = None,
 ) -> list[LeadershipMemberSummaryResponse]:
     hierarchy = build_organization_hierarchy(
         [_hierarchy_participant_from_report(participant) for participant in participants]
     )
-    leadership_ids = _leadership_ids_for_report(hierarchy, participants)
+    leadership_ids = (
+        leadership_ids
+        if leadership_ids is not None
+        else _leadership_ids_for_report(hierarchy, participants)
+    )
     participant_by_id = {participant.id: participant for participant in participants}
     return [
         LeadershipMemberSummaryResponse(
