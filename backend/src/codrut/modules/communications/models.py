@@ -144,6 +144,12 @@ class EmailSend(TimestampMixin, Base):
     )
     payload_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     message_payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    sandbox_required: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     next_attempt_at: Mapped[datetime | None] = mapped_column(
@@ -212,9 +218,10 @@ class EmailSuppression(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    # Kept only through the expand/contract rollback window. The application
-    # never exposes it and the follow-up contract migration removes it after
-    # the fingerprint-aware release becomes the rollback image.
+    # Rollback-compatibility storage for the expand window. The current
+    # application dual-writes this value and the fingerprint, and uses this
+    # value only as a fallback for rows written by the retained rollback image.
+    # A later contract release may scrub/drop it once this image is the rollback.
     legacy_email: Mapped[str] = mapped_column("email", String(320), nullable=False)
     email_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -469,9 +476,8 @@ class CampaignRecipientEvent(TimestampMixin, Base):
     __tablename__ = "campaign_recipient_events"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    # Nullable only for the expand/contract rollback window. Migration 0052
-    # backfills every existing row; the follow-up contract migration makes
-    # this non-null once the expand release is the rollback image.
+    # Nullable during the expand window because the retained production image
+    # creates events without either of the new ownership fields.
     owner_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,

@@ -34,7 +34,6 @@ PROMOTIONAL_SHELL_CLOSE = (
 
 BODY_COPY_STYLE = 'style="margin:0 0 18px;font-size:15px;line-height:1.65;"'
 GREETING_STYLE = 'style="margin:0 0 14px;font-size:15px;line-height:1.65;"'
-HELP_TEXT_STYLE = 'style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;"'
 HEADING_STYLE = 'style="margin:0 0 16px;font-size:24px;line-height:1.25;"'
 PRIMARY_BUTTON_STYLE = (
     "display:inline-block;background:#890505;color:#ffffff;text-decoration:none;"
@@ -85,7 +84,7 @@ EVALUATION_TEMPLATES: tuple[CatalogEmailTemplate, ...] = ()
 TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] = {
     TransactionalTemplateKey.account_setup: TransactionalTemplate(
         key=TransactionalTemplateKey.account_setup,
-        version=4,
+        version=5,
         subject="Andrei Văcaru: activează contul pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
@@ -96,8 +95,6 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
             + "contului. După înregistrare vei vedea dashboardul și sarcinile proiectului.</p>"
             + '<p style="margin:24px 0;"><a href="${action_url}" '
             + f'style="{PRIMARY_BUTTON_STYLE}">Activează contul</a></p>'
-            + f"<p {HELP_TEXT_STYLE}>Dacă butonul nu funcționează, copiază linkul în "
-            + "browser. Linkul este personal și nu trebuie redirecționat: ${action_url}</p>"
             + EMAIL_SHELL_CLOSE
         ),
         text_body=(
@@ -112,7 +109,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     ),
     TransactionalTemplateKey.assignment_bundle: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_bundle,
-        version=4,
+        version=5,
         subject="Andrei Văcaru: ai ${task_count} chestionare pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
@@ -123,8 +120,6 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
             + "Răspunsurile sunt confidențiale și sunt folosite în evaluarea proiectului.</p>"
             + '<p style="margin:24px 0;"><a href="${action_url}" '
             + f'style="{PRIMARY_BUTTON_STYLE}">Deschide chestionarele</a></p>'
-            + f"<p {HELP_TEXT_STYLE}>Dacă butonul nu funcționează, copiază linkul în "
-            + "browser. Linkul este personal și nu trebuie redirecționat: ${action_url}</p>"
             + EMAIL_SHELL_CLOSE
         ),
         text_body=(
@@ -139,7 +134,7 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
     ),
     TransactionalTemplateKey.assignment_reminder: TransactionalTemplate(
         key=TransactionalTemplateKey.assignment_reminder,
-        version=1,
+        version=2,
         subject="Reminder: ai chestionare de completat pentru ${company_name}",
         html_body=(
             EMAIL_SHELL_OPEN
@@ -149,8 +144,6 @@ TRANSACTIONAL_TEMPLATES: dict[TransactionalTemplateKey, TransactionalTemplate] =
             + "${company_name}. Poți continua de unde ai rămas folosind linkul personal.</p>"
             + '<p style="margin:24px 0;"><a href="${action_url}" '
             + f'style="{PRIMARY_BUTTON_STYLE}">Continuă completarea</a></p>'
-            + f"<p {HELP_TEXT_STYLE}>Linkul este personal și nu trebuie redirecționat: "
-            + "${action_url}</p>"
             + EMAIL_SHELL_CLOSE
         ),
         text_body=(

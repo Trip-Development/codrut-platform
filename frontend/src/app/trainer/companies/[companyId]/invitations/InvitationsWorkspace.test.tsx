@@ -25,6 +25,7 @@ import {
   saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
 } from "@/api/companies";
+import { getEmailSendCapacity } from "@/api/email";
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
 import { AssignmentWorkspace, buildCyclePreviewPlan } from "./AssignmentWorkspace";
 import {
@@ -55,6 +56,14 @@ vi.mock("@/api/questionnaires", async (importOriginal) => {
   return {
     ...original,
     listQuestionnaireDefinitionStubs: vi.fn(),
+  };
+});
+
+vi.mock("@/api/email", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/email")>();
+  return {
+    ...original,
+    getEmailSendCapacity: vi.fn(),
   };
 });
 
@@ -183,6 +192,11 @@ describe("buildInvitationRows", () => {
     vi.mocked(getAssessmentCycles).mockResolvedValue([initialCycle]);
     vi.mocked(getCompanyAssignments).mockResolvedValue(assignments);
     vi.mocked(getCompanyInvitationStatuses).mockResolvedValue(invitationStatuses);
+    vi.mocked(getEmailSendCapacity).mockResolvedValue({
+      daily_cap: 2000,
+      used_today: 0,
+      remaining_today: 2000,
+    });
   });
 
   afterEach(() => {

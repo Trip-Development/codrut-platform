@@ -350,8 +350,8 @@ describe("QuestionnaireRunner", () => {
       await vi.advanceTimersByTimeAsync(450);
     });
 
-    expect(screen.getAllByText("Salvăm draftul")).toHaveLength(1);
-    expect((screen.getByRole("button", { name: "Salvăm draftul" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Se salvează…")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Se salvează" }) as HTMLButtonElement).disabled).toBe(true);
     expect(optionButton.disabled).toBe(false);
 
     await act(async () => {
@@ -577,7 +577,9 @@ describe("QuestionnaireRunner", () => {
       await vi.advanceTimersByTimeAsync(450);
     });
 
-    expect(screen.getByText("Serverul nu a putut salva draftul.")).toBeTruthy();
+    expect(
+      screen.getByText(/Nu s-a salvat\. Poți reîncerca\. Serverul nu a putut salva draftul\./),
+    ).toBeTruthy();
   });
 
   it("merges rapid answers from different questions before the debounced save", async () => {
@@ -661,7 +663,8 @@ describe("QuestionnaireRunner", () => {
     fireEvent.click(backButton);
     fireEvent.click(backButton);
 
-    expect(await screen.findAllByText("Salvăm draftul")).toHaveLength(2);
+    expect(await screen.findByText("Se salvează…")).toBeTruthy();
+    expect(screen.getAllByText("Se salvează")).toHaveLength(2);
     expect(screen.queryByText("Salvăm draftul înainte de ieșire")).toBeNull();
     expect(optionButton.disabled).toBe(true);
     expect(saveQuestionnaireResponse).toHaveBeenCalledTimes(1);
@@ -720,7 +723,8 @@ describe("QuestionnaireRunner", () => {
     fireEvent.click(confirmButton);
     fireEvent.click(confirmButton);
 
-    expect((await screen.findByRole("button", { name: "Trimitem răspunsurile" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((await screen.findByRole("button", { name: "Trimitem" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Trimitem răspunsurile…")).toBeTruthy();
     expect(screen.queryByText("Trimitem răspunsurile finale")).toBeNull();
     expect(optionButton.disabled).toBe(true);
     expect(submitQuestionnaireResponse).toHaveBeenCalledTimes(1);
@@ -733,6 +737,44 @@ describe("QuestionnaireRunner", () => {
     await waitFor(() => {
       expect(screen.getByText("Răspunsurile au fost trimise")).toBeTruthy();
     });
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it("does not save a competing draft or navigate back while final submission is pending", async () => {
+    let resolveSubmit!: () => void;
+    const submitPromise = new Promise<Awaited<ReturnType<typeof submitQuestionnaireResponse>>>((resolve) => {
+      resolveSubmit = () => resolve({ status: "submitted" } as Awaited<ReturnType<typeof submitQuestionnaireResponse>>);
+    });
+    vi.mocked(submitQuestionnaireResponse).mockReturnValueOnce(submitPromise);
+
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 2 }}
+        returnHref="/participant/questionnaires"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trimite răspunsurile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
+
+    const backButton = await screen.findByRole("button", { name: "Înapoi la chestionare" });
+    expect((backButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(backButton);
+
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSubmit();
+      await submitPromise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Răspunsurile au fost trimise")).toBeTruthy();
+    });
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
   });
 

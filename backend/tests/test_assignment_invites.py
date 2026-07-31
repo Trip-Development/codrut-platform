@@ -292,6 +292,9 @@ async def test_project_scoped_invites_and_sessions_are_independent(
             assert [task.assignmentId for task in workspace.tasks] == [str(assignment_b.id)]
             assert workspace.tasks[0].projectId == project_b.id
             assert workspace.tasks[0].projectName == project_b.name
+            assert [project.id for project in workspace.questionnaire_projects] == [
+                project_b.id
+            ]
 
             with pytest.raises(DomainError) as exc_info:
                 await FormsService(session).get_assignment_response(
@@ -695,12 +698,18 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
     )
 
     class ScopedFakeSession(FakeSession):
+        scope_checked = False
+
         async def execute(self, query: Any) -> Any:
-            if len(self.side_effects) == 2:
-                where_text = " ".join(str(clause) for clause in query._where_criteria)
+            where_text = " ".join(str(clause) for clause in query._where_criteria)
+            if (
+                "participant_profiles.id" in where_text
+                and "participant_profiles.company_id" in where_text
+            ):
                 assert "participant_profiles.email" not in where_text
                 assert "participant_profiles.id" in where_text
                 assert "participant_profiles.company_id" in where_text
+                self.scope_checked = True
             return await super().execute(query)
 
     session = ScopedFakeSession()
@@ -713,6 +722,7 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
         FakeScalarResult(None),
         FakeScalarResult(profile),
         FakeScalarResult(None),
+        FakeScalarResult(False),
     ]
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)
@@ -720,6 +730,7 @@ async def test_verify_invite_for_non_leadership_creates_scoped_shadow_session() 
     assert result.response.action == "secure_link_ready"
     assert result.response.participant_profile_id == profile.id
     assert result.session_token
+    assert session.scope_checked
     assert profile.user_id is not None
     assert any(isinstance(model, User) for model in session.added_models)
     assert any(isinstance(model, Session) for model in session.added_models)
@@ -787,6 +798,7 @@ async def test_verify_invite_for_project_uses_project_close_as_effective_expiry(
         FakeScalarResult(None),
         FakeScalarResult(profile),
         FakeScalarResult(None),
+        FakeScalarResult(False),
     ]
 
     result = await IdentityService(session).verify_invite_token_and_create_session(token)

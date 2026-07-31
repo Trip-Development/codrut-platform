@@ -91,6 +91,9 @@ describe("SecureTaskRunnerPage", () => {
       anonymousName: "SignalPilot",
       isLeadership: false,
       alreadyRegistered: false,
+      accountType: "guest",
+      accessMode: "secure_link",
+      consentCurrent: true,
       deadlineLabel: "31 iulie",
       tasks: [
         {

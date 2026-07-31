@@ -11,7 +11,12 @@ import {
   UsersIcon,
 } from "lucide-react";
 
-import type { CampaignRecipientRow, CampaignSendResponse, EmailCampaign } from "@/api/email";
+import type {
+  CampaignRecipientRow,
+  CampaignSendResponse,
+  EmailCampaign,
+  EmailSendCapacity,
+} from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +50,7 @@ export type CampaignsWorkspaceViewProps = {
   membershipCompanySelections: Record<string, string>;
   membershipErrors: Record<string, string>;
   sendResults: Record<string, CampaignSendResponse>;
+  sendCapacity: EmailSendCapacity | null;
   openCampaignId: string | null;
   sendingCampaignId: string | null;
   sendingMode: CampaignSendMode | null;
@@ -105,7 +111,14 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
           const isSending = props.sendingCampaignId === campaign.id;
           const sendMode = sendModes[campaign.id] ?? "selected";
           const readinessError = campaignSendReadinessError(campaign);
-          const sendBlockedReason = campaignSendBlockedReason({
+          const plannedSendCount = sendMode === "all"
+            ? activeMemberIds.length
+            : sendableMemberIds.length;
+          const capacityBlockedReason = props.sendCapacity
+            && plannedSendCount > props.sendCapacity.remaining_today
+              ? `Mai sunt disponibile ${props.sendCapacity.remaining_today} emailuri astăzi, iar această trimitere are ${plannedSendCount}.`
+              : null;
+          const sendBlockedReason = capacityBlockedReason ?? campaignSendBlockedReason({
             campaign,
             mode: sendMode,
             sendableRecipientCount: sendableMemberIds.length,
@@ -224,7 +237,12 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                                         type="button"
                                         size="xs"
                                         variant="outline"
-                                        disabled={isSending || props.savingMembershipId === campaign.id}
+                                        disabled={
+                                          isSending
+                                          || props.savingMembershipId === campaign.id
+                                          || (props.sendCapacity !== null
+                                            && props.sendCapacity.remaining_today < 1)
+                                        }
                                         onClick={() => props.sendRecipient(campaign, recipient, recipientAction)}
                                         className="absolute right-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                                         aria-label={`${recipientActionLabel} campania ${campaign.name} către ${recipient.email}`}
@@ -250,6 +268,11 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                   <aside className="flex min-w-0 flex-col justify-between gap-4 border-t border-[var(--border)] bg-surface-muted p-4 xl:border-l xl:border-t-0">
                     <div className="space-y-3">
                       <dl className="divide-y divide-[var(--border)] text-xs"><div className="flex items-baseline justify-between gap-3 py-2"><dt className="font-semibold text-muted-foreground">În lista de trimitere</dt><dd className="text-xl font-semibold tabular-nums text-foreground">{activeMemberIds.length}</dd></div><div className="flex items-baseline justify-between gap-3 py-2"><dt className="font-semibold text-muted-foreground">Pregătiți de trimis</dt><dd className="text-xl font-semibold tabular-nums text-foreground">{sendableMemberIds.length}</dd></div><div className="flex items-baseline justify-between gap-3 py-2"><dt className="font-semibold text-muted-foreground">Afișați de filtre</dt><dd className="text-xl font-semibold tabular-nums text-foreground">{visibleEligibleRecipients.length}</dd></div></dl>
+                      <p className="rounded-md border border-[var(--border)] bg-background px-3 py-2 text-[11px] font-semibold leading-5 text-foreground/70">
+                        {props.sendCapacity
+                          ? `${props.sendCapacity.remaining_today} din ${props.sendCapacity.daily_cap} emailuri disponibile astăzi`
+                          : "Verificăm capacitatea de trimitere…"}
+                      </p>
                       <p className="text-[11px] leading-5 text-muted-foreground">Filtrele schimbă doar contactele afișate, nu lista de trimitere.</p>
                       {latestSendResult ? <p className="rounded-md border border-burgundy/15 bg-burgundy/5 px-3 py-2 text-[11px] font-semibold leading-5 text-burgundy">{campaignSendResultSummary(latestSendResult)}{latestSendFailure ? ` — ${latestSendFailure}` : ""}</p> : null}
                       {readinessError ? <InlineFeedback tone="danger" className="px-3 py-2" descriptionClassName="text-xs leading-5">{readinessError}</InlineFeedback> : null}

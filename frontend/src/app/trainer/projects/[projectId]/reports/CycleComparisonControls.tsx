@@ -7,43 +7,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export function CycleComparisonControls({
   cycles,
-  baselineCycleId,
-  comparisonCycleId,
+  cycleId,
 }: {
   cycles: AssessmentCycle[];
-  baselineCycleId: string;
-  comparisonCycleId: string;
+  cycleId: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const orderedCycles = [...cycles].sort((left, right) => left.sequence - right.sequence);
-  const baseline = orderedCycles.find((cycle) => cycle.id === baselineCycleId);
-  const comparison = orderedCycles.find((cycle) => cycle.id === comparisonCycleId);
 
-  function selectCycle(key: "baseline" | "cycle", value: string) {
+  function selectCycle(value: string) {
     const params = new URLSearchParams(searchParams.toString());
-    params.set(key, value);
+    params.set("cycle", value);
+    params.delete("baseline");
+    params.delete("compare");
     router.push(`${pathname}?${params.toString()}`);
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3" aria-label="Compară evaluări">
+    <div className="flex flex-wrap items-end gap-3" aria-label="Alege evaluarea">
       <CycleSelect
-        label="Referință"
-        cycles={orderedCycles.filter(
-          (cycle) => comparison === undefined || cycle.sequence < comparison.sequence,
-        )}
-        value={baselineCycleId}
-        onValueChange={(value) => selectCycle("baseline", value)}
-      />
-      <CycleSelect
-        label="Comparație"
-        cycles={orderedCycles.filter(
-          (cycle) => baseline === undefined || cycle.sequence > baseline.sequence,
-        )}
-        value={comparisonCycleId}
-        onValueChange={(value) => selectCycle("cycle", value)}
+        label="Evaluare"
+        cycles={orderedCycles}
+        value={cycleId}
+        onValueChange={selectCycle}
       />
     </div>
   );

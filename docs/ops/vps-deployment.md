@@ -168,9 +168,11 @@ Optional environment secrets:
   total execution time of any migration statement.
 - `CODRUT_CAMPAIGN_RECIPIENT_ARCHIVE_RETENTION_DAYS` defaults to `30`.
 - `CODRUT_CAMPAIGN_RECIPIENT_DELIVERY_RECONCILIATION_DAYS` defaults to `7`.
-- `CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` stays `false` for the expand
-  release and becomes `true` only after the contract migration removes the
-  rollback-only full-email suppression column.
+- `CODRUT_CAMPAIGN_RECIPIENT_PURGE_ENABLED` defaults to `true` for the
+  fingerprint-aware application. During its expand rollout, suppression rows
+  still retain normalized emails for compatibility with the previous image;
+  the later contract release removes them only after this application becomes
+  the retained rollback.
 - `CODRUT_CAMPAIGN_DELIVERY_TOMBSTONE_RETENTION_DAYS` defaults to `365` and
   bounds late-provider lookup receipts independently of do-not-contact review.
 - `CODRUT_EMAIL_SUPPRESSION_REVIEW_DAYS` defaults to `365`.
@@ -306,9 +308,41 @@ Rollback is manual and image-ref based:
 
 1. Open the failed `VPS Deployment` run summary and copy the previous
    `FRONTEND_IMAGE` and `BACKEND_IMAGE` values.
-2. SSH into the VPS and edit `/opt/codrut-platform/.env` so those two variables
+2. When reverting a database at `0056_email_send_sandbox_scope` to the retained
+   `0052_contact_archive` bridge image, announce maintenance and block
+   participant and trainer mutations. Leave the current worker running until
+   both compatibility counts are zero:
+
+   ```sh
+   cd /opt/codrut-platform
+   docker compose -f compose.yaml -f compose.prod.yaml exec -T db sh -lc '
+     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -tAc "
+       select '\''sandbox_outbox'\'', count(*)
+       from email_sends
+       where sandbox_required
+         and status in ('\''queued'\'', '\''dispatching'\'')
+       union all
+       select '\''submission_jobs'\'', count(*)
+       from submission_processing_jobs
+       where status in ('\''queued'\'', '\''processing'\'');
+     "
+   '
+   ```
+
+   The result must be `0` for both rows. The bridge worker cannot honor
+   per-message sandbox delivery and does not process asynchronous submission
+   jobs. A nonzero count blocks rollback: resolve sandbox work and let
+   submission processing drain under the current image, then rerun the query.
+   Once both counts are zero, stop the current worker to close the race before
+   changing image refs:
+
+   ```sh
+   docker compose -f compose.yaml -f compose.prod.yaml stop worker
+   ```
+
+3. SSH into the VPS and edit `/opt/codrut-platform/.env` so those two variables
    point at the previous image refs.
-3. Validate and restart:
+4. Validate and restart:
 
    ```sh
    cd /opt/codrut-platform
@@ -323,7 +357,7 @@ Rollback is manual and image-ref based:
    docker compose -f compose.yaml -f compose.prod.yaml up -d --force-recreate --no-build --pull never --remove-orphans backend worker frontend
    ```
 
-4. Verify image refs and health:
+5. Verify image refs and health:
 
    ```sh
    docker compose -f compose.yaml -f compose.prod.yaml ps backend worker frontend
@@ -338,14 +372,24 @@ Rollback is manual and image-ref based:
    The backend and worker image refs must match `BACKEND_IMAGE`; the frontend
    image ref must match `FRONTEND_IMAGE`.
 
-5. Before allowing a later deploy to delete older image tags, exercise the
+6. Before allowing a later deploy to delete older image tags, exercise the
    rollback once in the maintenance environment: switch to the recorded
    previous refs, recreate the three app services, verify internal and public
    readiness, then switch back to the candidate and repeat the checks. Confirm
    both pairs remain visible with `docker image inspect`.
 
-Rollback to an older application image does not undo database migrations. Check
-the migration notes before rolling back across schema changes.
+Rollback to an older application image does not undo database migrations.
+Migration `0053_contact_privacy_bridge` deliberately remains expand-only: it
+backfills fingerprints while preserving the legacy suppression email and
+normalized-email index. The current application dual-reads and dual-writes
+both forms, so the immediately previous image can continue to enforce existing
+and newly created restrictions during emergency rollback.
+
+Do not run the destructive fingerprint-only contract while an older retained
+image still reads or writes the legacy email. Promote and prove the
+fingerprint-aware application first, keep it as the rollback image for the
+contract release, take and restore a fresh backup, and only then scrub or drop
+the compatibility value.
 
 For the contact-archive expand release, archived active contacts are persisted
 as `suppressed` with their prior status in the additive schema. The previous

@@ -34,6 +34,7 @@ from codrut.modules.communications.schemas import (
     CampaignSendResponse,
     CampaignUpdateRequest,
     EmailOpsSummaryResponse,
+    EmailSendCapacityResponse,
     EmailTemplateCreateRequest,
     EmailTemplateResponse,
     EmailTemplateUpdateRequest,
@@ -288,6 +289,19 @@ async def get_email_ops_summary(
     )
     await session.commit()
     return summary
+
+
+@router.get("/send-capacity", response_model=EmailSendCapacityResponse)
+async def get_email_send_capacity(
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> EmailSendCapacityResponse:
+    _require_trainer(principal)
+    capacity = await CommunicationsService(session).get_email_send_capacity(
+        settings,
+    )
+    return EmailSendCapacityResponse(**capacity)
 
 
 @router.post("/campaigns/recipients/bulk")

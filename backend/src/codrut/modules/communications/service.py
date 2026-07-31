@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass, replace
@@ -50,6 +51,7 @@ from codrut.modules.communications.models import (
     EmailEventType,
     EmailSend,
     EmailSendStatus,
+    EmailSuppression,
     EmailSuppressionReview,
     EmailTemplate,
 )
@@ -84,6 +86,8 @@ from codrut.modules.communications.templates import (
     get_transactional_template,
 )
 from codrut.modules.companies.models import ParticipantProfile
+
+logger = logging.getLogger(__name__)
 
 TEMPLATE_VARIABLE_PATTERN = re.compile(r"(?a:[_a-z][_a-z0-9]*)", re.IGNORECASE)
 
@@ -541,12 +545,7 @@ class CommunicationsService:
             key,
         )
 
-        has_sends = await repository.has_sent_emails(
-            key,
-            template.version,
-            owner_id=owner_id,
-        )
-        if has_sends or (owner_id is not None and template.owner_id is None):
+        if owner_id is not None and template.owner_id is None:
             owner_latest_version = await repository.get_latest_version(
                 key,
                 owner_id=owner_id,
@@ -766,6 +765,11 @@ class CommunicationsService:
             suppressions = await repository.list_email_suppressions_by_fingerprints(
                 owner_id=delivery_owner_id,
                 email_fingerprints=active_email_fingerprints,
+                normalized_emails={
+                    email
+                    for email, recipient in recipients_by_email.items()
+                    if recipient.status == CampaignRecipientStatus.active
+                },
             )
             if suppressions:
                 raise DomainError(
@@ -1676,6 +1680,8 @@ class CommunicationsService:
                 )
 
         results: list[CampaignSendRecipientResult] = []
+        if not payload.dry_run and hasattr(repository, "acquire_email_capacity_lock"):
+            await repository.acquire_email_capacity_lock()
         remaining_sends = await _remaining_email_sends_today(repository, settings)
         for recipient in recipients:
             _require_campaign_delivery_ownership(
@@ -2161,6 +2167,14 @@ class CommunicationsService:
                 for recipient_id, variant_key in campaign_variant_result.all()
                 if variant_key
             }
+        activation_allowed_by_recipient_id = (
+            await _campaign_recipient_activation_allowed_by_id(
+                repository,
+                campaign_recipients,
+                owner_id=_require_delivery_owner_id(owner_id),
+                settings=Settings(),
+            )
+        )
 
         # 4. Process rows
         rows = []
@@ -2315,6 +2329,15 @@ class CommunicationsService:
                 "outcome": None,
                 "archivedAt": recipient.archived_at,
                 "purgeAfter": recipient.purge_after,
+                "statusBeforeArchive": (
+                    recipient.status_before_archive.value
+                    if recipient.status_before_archive is not None
+                    else None
+                ),
+                "activationAllowed": activation_allowed_by_recipient_id.get(
+                    recipient.id,
+                    False,
+                ),
             }
             for recipient in campaign_recipients
         ]
@@ -2364,6 +2387,17 @@ class CommunicationsService:
             "campaign": campaign,
         }
 
+    async def get_email_send_capacity(self, settings: Settings) -> dict[str, int]:
+        remaining = await _remaining_email_sends_today(
+            self._require_repository(),
+            settings,
+        )
+        return {
+            "daily_cap": settings.email_daily_send_cap,
+            "used_today": max(settings.email_daily_send_cap - remaining, 0),
+            "remaining_today": remaining,
+        }
+
 
 def _first_name(full_name: str | None) -> str | None:
     if not full_name:
@@ -2410,6 +2444,54 @@ def _campaign_recipient_membership_row(
         membershipSource=None,
         campaignDelivery=campaign_delivery,
     )
+
+
+async def _campaign_recipient_activation_allowed_by_id(
+    repository: CommunicationsRepository,
+    recipients: list[CampaignRecipient],
+    *,
+    owner_id: UUID,
+    settings: Settings,
+) -> dict[UUID, bool]:
+    normalized_email_by_recipient_id = {
+        recipient.id: recipient.email.strip().casefold()
+        for recipient in recipients
+        if recipient.owner_id == owner_id
+        and recipient.archived_at is None
+        and recipient.status != CampaignRecipientStatus.unsubscribed
+        and recipient.email is not None
+    }
+    fingerprint_by_recipient_id = {
+        recipient_id: email_suppression_fingerprint(
+            owner_id=owner_id,
+            email=normalized_email,
+            secret=settings.effective_email_suppression_fingerprint_secret,
+        )
+        for recipient_id, normalized_email in normalized_email_by_recipient_id.items()
+    }
+    suppressions = await repository.list_email_suppressions_by_fingerprints(
+        owner_id=owner_id,
+        email_fingerprints=set(fingerprint_by_recipient_id.values()),
+        normalized_emails=set(normalized_email_by_recipient_id.values()),
+    )
+    blocked_fingerprints = {
+        suppression.email_fingerprint
+        for suppression in suppressions
+        if suppression.email_fingerprint is not None
+    }
+    blocked_legacy_emails = {
+        suppression.legacy_email.strip().casefold()
+        for suppression in suppressions
+        if isinstance(suppression, EmailSuppression)
+    }
+    return {
+        recipient_id: (
+            fingerprint not in blocked_fingerprints
+            and normalized_email_by_recipient_id[recipient_id]
+            not in blocked_legacy_emails
+        )
+        for recipient_id, fingerprint in fingerprint_by_recipient_id.items()
+    }
 
 
 async def _campaign_delivery_by_recipient_id(
@@ -2840,6 +2922,12 @@ class AssignmentInvitationContext:
     task_count: int = 1
 
 
+@dataclass(frozen=True)
+class AssignmentInvitationQueueResult:
+    delivery: EmailSendResult
+    created: bool
+
+
 class TransactionalEmailService:
     def __init__(
         self,
@@ -2863,6 +2951,27 @@ class TransactionalEmailService:
         assignment_ids: list[UUID] | None = None,
         reminder_assignment_ids: list[UUID] | None = None,
     ) -> EmailSendResult:
+        queued = await self.enqueue_assignment_invitation(
+            assignment,
+            respondent,
+            context,
+            idempotency_key=idempotency_key,
+            assignment_ids=assignment_ids,
+            reminder_assignment_ids=reminder_assignment_ids,
+        )
+        return queued.delivery
+
+    async def enqueue_assignment_invitation(
+        self,
+        assignment: QuestionnaireAssignment,
+        respondent: ParticipantProfile,
+        context: AssignmentInvitationContext,
+        *,
+        idempotency_key: str | None = None,
+        assignment_ids: list[UUID] | None = None,
+        reminder_assignment_ids: list[UUID] | None = None,
+        allow_new: bool = True,
+    ) -> AssignmentInvitationQueueResult:
         if self.session is None:
             raise RuntimeError("Durable invitation delivery requires a database session")
         owner_id = _require_delivery_owner_id(self.owner_id)
@@ -2933,9 +3042,7 @@ class TransactionalEmailService:
         )
         now = datetime.now(UTC)
         repository = CommunicationsRepository(self.session)
-        email_send, _created = await _enqueue_email_send(
-            repository,
-            EmailSend(
+        candidate = EmailSend(
                 owner_id=owner_id,
                 assignment_id=assignment.id,
                 recipient_email=respondent.email,
@@ -2953,10 +3060,22 @@ class TransactionalEmailService:
                 lease_expires_at=None,
                 status=EmailSendStatus.queued,
                 last_event_at=now,
-            ),
-        )
+            )
+        if allow_new:
+            email_send, created = await _enqueue_email_send(repository, candidate)
+        else:
+            email_send = await repository.get_email_send_by_idempotency_key(stable_key)
+            if email_send is None:
+                raise DomainError(
+                    "Daily email send cap reached.",
+                    code="daily_send_cap_reached",
+                )
+            created = False
         _require_matching_email_send_payload(email_send, payload_fingerprint)
-        return _email_result_from_existing_send(email_send, respondent.email)
+        return AssignmentInvitationQueueResult(
+            delivery=_email_result_from_existing_send(email_send, respondent.email),
+            created=created,
+        )
 
     async def enqueue_transactional_message(
         self,
@@ -2966,6 +3085,7 @@ class TransactionalEmailService:
         template_version: int,
         idempotency_key: str,
         delivery_kind: str,
+        lifecycle_request_id: str | None = None,
     ) -> EmailSendResult:
         if self.session is None:
             raise RuntimeError("Durable transactional delivery requires a database session")
@@ -2973,6 +3093,7 @@ class TransactionalEmailService:
         message_payload = _email_outbox_payload(
             message,
             delivery_kind=delivery_kind,
+            lifecycle_request_id=lifecycle_request_id,
             default_from_address=getattr(
                 getattr(self.provider, "from_address", None),
                 "value",
@@ -3014,6 +3135,12 @@ class EmailOutboxBatchResult:
     indeterminate: int = 0
 
 
+@dataclass(frozen=True)
+class EmailOutboxClaim:
+    send_id: UUID
+    lease_token: str
+
+
 class EmailOutboxProcessor:
     def __init__(
         self,
@@ -3027,6 +3154,15 @@ class EmailOutboxProcessor:
         self.repository = CommunicationsRepository(session)
 
     async def process_due(self, *, limit: int = 10) -> EmailOutboxBatchResult:
+        claims, housekeeping = await self.claim_due(limit=limit)
+        outcomes = [await self.process_claim(claim) for claim in claims]
+        return email_outbox_batch_with_outcomes(housekeeping, outcomes)
+
+    async def claim_due(
+        self,
+        *,
+        limit: int,
+    ) -> tuple[list[EmailOutboxClaim], EmailOutboxBatchResult]:
         now = datetime.now(UTC)
         indeterminate_sends = await self.repository.mark_stale_provider_requests_indeterminate(
             now=now
@@ -3041,32 +3177,50 @@ class EmailOutboxProcessor:
         )
         await self.session.commit()
 
-        accepted = 0
-        retried = 0
-        failed = len(exhausted)
-        cancelled = 0
-        indeterminate = len(indeterminate_sends)
-        for send in claimed:
-            outcome = await self._process_claimed(send)
-            accepted += outcome == "accepted"
-            retried += outcome == "retried"
-            failed += outcome == "failed"
-            cancelled += outcome == "cancelled"
-            indeterminate += outcome == "indeterminate"
-        return EmailOutboxBatchResult(
+        claims = [
+            EmailOutboxClaim(send_id=send.id, lease_token=send.lease_token)
+            for send in claimed
+            if send.lease_token is not None
+        ]
+        return claims, EmailOutboxBatchResult(
             claimed=len(claimed),
-            accepted=accepted,
-            retried=retried,
-            failed=failed,
-            cancelled=cancelled,
-            indeterminate=indeterminate,
+            failed=len(exhausted),
+            indeterminate=len(indeterminate_sends),
         )
+
+    async def process_claim(self, claim: EmailOutboxClaim) -> str:
+        send = await self.repository.get_claimed_email_send(
+            claim.send_id,
+            claim.lease_token,
+        )
+        if send is None:
+            await self.session.rollback()
+            return "failed"
+        return await self._process_claimed(send)
 
     async def _process_claimed(self, send: EmailSend) -> str:
         send_id = send.id
         lease_token = send.lease_token
         if lease_token is None:
             return "failed"
+
+        if (
+            send.campaign_id is not None
+            or send.campaign_recipient_id is not None
+        ) and not await self.repository.campaign_send_ownership_is_valid(send):
+            current = await self.repository.get_claimed_email_send(send.id, lease_token)
+            if current is None:
+                await self.session.rollback()
+                return "cancelled"
+            current.error_details = (
+                "Campaign, contact, and queued delivery ownership do not match."
+            )
+            await self.repository.mark_email_send_cancelled(
+                current,
+                now=datetime.now(UTC),
+            )
+            await self.session.commit()
+            return "cancelled"
 
         if (
             send.campaign_recipient_id is not None
@@ -3125,7 +3279,11 @@ class EmailOutboxProcessor:
             await self.session.rollback()
             return "failed"
         await self.session.commit()
-        message = replace(message, provider_idempotency_key=provider_idempotency_key)
+        message = replace(
+            message,
+            provider_idempotency_key=provider_idempotency_key,
+            provider_sandbox=send.sandbox_required,
+        )
 
         try:
             result = await self.provider.send(message)
@@ -3187,6 +3345,7 @@ class EmailOutboxProcessor:
                 provider=result.provider,
                 provider_message_id=result.message_id,
             )
+        _log_password_reset_delivery(current, outcome="provider_accepted")
         return "accepted"
 
     async def _record_failure(
@@ -3227,6 +3386,7 @@ class EmailOutboxProcessor:
                 occurred_at=now,
             )
             await self.session.commit()
+            _log_password_reset_delivery(current, outcome="provider_retry_scheduled")
             return "retried"
 
         current.status = EmailSendStatus.failed
@@ -3240,6 +3400,7 @@ class EmailOutboxProcessor:
         )
         await self._complete_campaign_if_idle(current.campaign_id)
         await self.session.commit()
+        _log_password_reset_delivery(current, outcome="provider_failed")
         return "failed"
 
     async def _record_indeterminate(
@@ -3274,6 +3435,7 @@ class EmailOutboxProcessor:
             occurred_at=now,
         )
         await self.session.commit()
+        _log_password_reset_delivery(current, outcome="provider_indeterminate")
         return "indeterminate"
 
     async def _mark_invitation_assignments_accepted(
@@ -3305,9 +3467,16 @@ class EmailOutboxProcessor:
     async def _complete_campaign_if_idle(self, campaign_id: UUID | None) -> None:
         if campaign_id is None:
             return
+        campaign = await self.repository.get_campaign(
+            campaign_id,
+            for_update=True,
+        )
+        if campaign is None:
+            return
         outstanding = await self.session.execute(
             select(func.count(EmailSend.id)).where(
                 EmailSend.campaign_id == campaign_id,
+                EmailSend.owner_id == campaign.owner_id,
                 EmailSend.status.in_(
                     (
                         EmailSendStatus.queued,
@@ -3322,14 +3491,13 @@ class EmailOutboxProcessor:
         accepted = await self.session.execute(
             select(func.count(EmailSend.id)).where(
                 EmailSend.campaign_id == campaign_id,
+                EmailSend.owner_id == campaign.owner_id,
                 EmailSend.status.in_((EmailSendStatus.accepted, EmailSendStatus.delivered)),
             )
         )
         if int(accepted.scalar_one() or 0) == 0:
             return
-        campaign = await self.repository.get_campaign(campaign_id)
-        if campaign is not None:
-            campaign.status = CampaignStatus.completed
+        campaign.status = CampaignStatus.completed
 
 
 def _email_outbox_payload(
@@ -3338,6 +3506,7 @@ def _email_outbox_payload(
     assignment_ids: list[UUID] | None = None,
     reminder_assignment_ids: list[UUID] | None = None,
     delivery_kind: str | None = None,
+    lifecycle_request_id: str | None = None,
     default_from_address: str | None = None,
 ) -> dict[str, object]:
     from_address = (
@@ -3354,7 +3523,41 @@ def _email_outbox_payload(
         "assignment_ids": [str(value) for value in (assignment_ids or [])],
         "reminder_assignment_ids": [str(value) for value in (reminder_assignment_ids or [])],
         "delivery_kind": delivery_kind,
+        "lifecycle_request_id": lifecycle_request_id,
     }
+
+
+def email_outbox_batch_with_outcomes(
+    base: EmailOutboxBatchResult,
+    outcomes: list[str],
+) -> EmailOutboxBatchResult:
+    return EmailOutboxBatchResult(
+        claimed=base.claimed,
+        accepted=base.accepted + outcomes.count("accepted"),
+        retried=base.retried + outcomes.count("retried"),
+        failed=base.failed + outcomes.count("failed"),
+        cancelled=base.cancelled + outcomes.count("cancelled"),
+        indeterminate=base.indeterminate + outcomes.count("indeterminate"),
+    )
+
+
+def _log_password_reset_delivery(send: EmailSend, *, outcome: str) -> None:
+    payload = send.message_payload
+    if (
+        send.template_key != "password_reset"
+        or not isinstance(payload, dict)
+        or not isinstance(payload.get("lifecycle_request_id"), str)
+    ):
+        return
+    logger.info(
+        "Password reset delivery lifecycle changed.",
+        extra={
+            "auth_event": f"password_reset_{outcome}",
+            "request_id": payload["lifecycle_request_id"],
+            "email_send_id": str(send.id),
+            "provider": send.provider,
+        },
+    )
 
 
 def _email_message_from_outbox_payload(payload: dict[str, object] | None) -> EmailMessage:

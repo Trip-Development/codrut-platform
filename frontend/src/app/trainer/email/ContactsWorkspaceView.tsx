@@ -77,9 +77,6 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
           {props.visibleSelectedIds.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-burgundy/20 bg-burgundy/5 px-2 py-1.5">
               <span className="px-1 text-[11px] font-bold text-burgundy">{props.visibleSelectedIds.length} selectate</span>
-              <Button type="button" onClick={() => props.updateSelectedStatus("active")} disabled={props.bulkAction !== null || props.selectedContactBeingEdited} variant="outline" size="sm" className="border-success/30 bg-success/10 text-success-ink hover:border-success/45 hover:bg-success/15">
-                {props.bulkAction === "activate" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} /> : null}{props.bulkAction === "activate" ? "Activăm contactele" : "Activează"}
-              </Button>
               <Button type="button" onClick={() => props.updateSelectedStatus("suppressed")} disabled={props.bulkAction !== null || props.selectedContactBeingEdited} variant="outline" size="sm">
                 {props.bulkAction === "suppress" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} /> : null}{props.bulkAction === "suppress" ? "Oprim trimiterile" : "Oprește trimiterea"}
               </Button>
@@ -100,6 +97,8 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
               const draft = props.drafts[recipient.id] ?? campaignRecipientDraft(recipient);
               const isUnsubscribed = recipient.status === "unsubscribed";
               const isActive = recipient.status !== "suppressed" && !isUnsubscribed;
+              const canActivate =
+                recipient.status !== "suppressed" || recipient.activationAllowed === true;
               const isPastCustomer = recipient.clientType === "tip_1";
               const SegmentIcon = isPastCustomer ? Building2Icon : CircleDashedIcon;
               return (
@@ -117,7 +116,7 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                   </td>
                   <td className={cn("min-w-[11rem] px-4 py-2.5 align-middle", isEditing && "align-top")}>
                     {isEditing ? (
-                      <div className="flex flex-col gap-2"><SelectControl label={`Segment pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.segment} onChange={(event) => props.updateDraft(recipient.id, "segment", event.target.value as CampaignContactDraft["segment"])} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="potential_customer">Prospect</option><option value="past_customer">Client existent</option></SelectControl><SelectControl label={`Status campanie pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.status} onChange={(event) => props.updateDraft(recipient.id, "status", event.target.value as CampaignContactDraft["status"])} disabled={isUnsubscribed} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="active">Activ</option><option value="suppressed">Adresă respinsă</option>{isUnsubscribed ? <option value="unsubscribed">Dezabonat</option> : null}</SelectControl></div>
+                      <div className="flex flex-col gap-2"><SelectControl label={`Segment pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.segment} onChange={(event) => props.updateDraft(recipient.id, "segment", event.target.value as CampaignContactDraft["segment"])} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="potential_customer">Prospect</option><option value="past_customer">Client existent</option></SelectControl><SelectControl label={`Status campanie pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.status} onChange={(event) => props.updateDraft(recipient.id, "status", event.target.value as CampaignContactDraft["status"])} disabled={isUnsubscribed} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="active" disabled={!canActivate}>Activ</option><option value="suppressed">Adresă respinsă</option>{isUnsubscribed ? <option value="unsubscribed">Dezabonat</option> : null}</SelectControl>{recipient.status === "suppressed" && !canActivate ? <p className="text-[11px] leading-4 text-muted-foreground">Corectează și salvează mai întâi adresa de email. Apoi poți activa explicit contactul.</p> : null}</div>
                     ) : (
                       <div className="flex min-w-[9rem] items-start gap-2.5">
                         <SegmentIcon aria-hidden="true" className={cn("mt-0.5 size-4 shrink-0", isPastCustomer ? "text-zinc-600" : "text-burgundy")} strokeWidth={1.8} />

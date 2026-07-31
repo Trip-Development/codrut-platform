@@ -2,22 +2,18 @@ import Link from "next/link";
 import {
   AlertTriangleIcon,
   ArrowRightIcon,
-  CheckIcon,
 } from "lucide-react";
 
 import {
-  inviteStatusLabel,
   inviteTaskProgress,
-  participantTaskTypeLabel,
   resolveInviteBundle,
   type InviteBundle,
   type InviteTask,
 } from "@/api/invites";
 import {
-  groupParticipantTasks,
-  participantTaskGroupHref,
+  groupParticipantTasksByProject,
 } from "@/app/participant/task-display";
-import { CURRENT_TERMS_VERSION } from "@/api/terms";
+import { ParticipantTaskList } from "@/app/participant/ParticipantTaskList";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { cn } from "@/utils/cn";
@@ -34,7 +30,7 @@ type InvitePageProps = {
 };
 
 function hasServerConsent(bundle: ValidInviteBundle): boolean {
-  return bundle.termsVersion === CURRENT_TERMS_VERSION && Boolean(bundle.termsAcceptedAt);
+  return bundle.consentCurrent;
 }
 
 async function resolveInviteSafely(token: string): Promise<InviteBundle> {
@@ -147,7 +143,13 @@ function InviteTasksView({
           </div>
         </div>
 
-        <InviteTaskQueue tasks={data.tasks} returnTo={returnTo} inviteToken={token} />
+        <InviteTaskQueue
+          tasks={data.tasks}
+          projectName={data.projectName}
+          deadlineLabel={data.deadlineLabel}
+          returnTo={returnTo}
+          inviteToken={token}
+        />
 
         <div className="mt-7 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
           {!data.alreadyRegistered ? (
@@ -164,10 +166,14 @@ function InviteTasksView({
 
 function InviteTaskQueue({
   tasks,
+  projectName,
+  deadlineLabel,
   returnTo,
   inviteToken,
 }: {
   tasks: InviteTask[];
+  projectName: string;
+  deadlineLabel: string;
   returnTo: string;
   inviteToken: string;
 }) {
@@ -180,74 +186,36 @@ function InviteTaskQueue({
     );
   }
 
-  const groups = groupParticipantTasks(tasks);
+  const projectId =
+    tasks.find((task) => task.projectId)?.projectId ??
+    `secure:${tasks.map((task) => task.assignmentId).sort().join(":")}`;
+  const scopedTasks = tasks.map((task) => ({
+    ...task,
+    projectId: task.projectId ?? projectId,
+    projectName: task.projectName ?? projectName,
+    deadlineLabel: task.deadlineLabel ?? deadlineLabel,
+  }));
+  const projects = groupParticipantTasksByProject(scopedTasks, [
+    {
+      id: projectId,
+      name: projectName,
+      deadlineLabel,
+    },
+  ]);
 
   return (
-    <section className="divide-y divide-border" aria-label="Chestionare disponibile">
-      {groups.map((group) => {
-        const isComplete = group.status === "completed";
-        const task = group.actionTask ?? group.tasks[0];
-        const href = participantTaskGroupHref(group, { returnTo, inviteToken });
-        const targetLabel =
-          group.kind === "review360"
-            ? group.targetSummary
-            : safeInviteTarget(task);
-
-        return (
-          <article key={group.id} className="grid gap-4 py-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-            <div className="flex min-w-0 items-start gap-3">
-              <span
-                aria-hidden="true"
-                className={isComplete ? "mt-1.5 size-2.5 shrink-0 rounded-full bg-success" : "mt-1.5 size-2.5 shrink-0 rounded-full bg-burgundy"}
-              />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h2 className="text-base font-semibold text-foreground">{group.title}</h2>
-                  <span className={isComplete ? "text-xs font-semibold text-success" : "text-xs font-semibold text-burgundy"}>
-                    {inviteStatusLabel(group.status)}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {targetLabel || participantTaskTypeLabel(task.questionnaireKey)} · {group.estimatedMinutes} min
-                </p>
-                {group.kind === "review360" ? (
-                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                    {group.completedCount}/{group.totalCount} review-uri finalizate
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            {isComplete ? (
-              <span className="inline-flex items-center gap-2 text-sm font-semibold text-success">
-                <CheckIcon aria-hidden="true" className="size-4" strokeWidth={2.2} />
-                Finalizat
-              </span>
-            ) : href ? (
-              <Link href={href} className={serverLinkButtonClassName({ variant: "outline", className: "w-fit" })}>
-                {group.kind === "review360" && group.status === "in_progress" ? "Continuă" : "Deschide"}
-                <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
-              </Link>
-            ) : null}
-          </article>
-        );
-      })}
-    </section>
+    <ParticipantTaskList
+      projects={projects}
+      persistenceIdentityKey={`secure:${tasks
+        .map((task) => task.assignmentId)
+        .sort()
+        .join(":")}`}
+      returnTo={returnTo}
+      inviteToken={inviteToken}
+      emptyTitle="Nu ai chestionare disponibile"
+      emptyDescription="Cere trainerului să verifice invitația."
+    />
   );
-}
-
-function safeInviteTarget(task: InviteTask): string {
-  if (task.questionnaireKey === "lencioni" || task.questionnaireKey === "lencioni_en") {
-    return "Echipa ta";
-  }
-  const isReview = task.questionnaireKey === "boss_360" || task.questionnaireKey === "boss_360_en" || task.questionnaireKey === "icare";
-  if (!isReview) return task.targetLabel;
-
-  const cleaned = task.targetLabel.trim().replace(/\s+/g, " ");
-  if (!cleaned || cleaned.includes("@")) return "Persoana indicată";
-  if (/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(cleaned)) {
-    return "Persoana indicată";
-  }
-  return cleaned;
 }
 
 function InviteFrame({

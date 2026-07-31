@@ -1,6 +1,12 @@
 "use client";
 
-import { ArchiveIcon, Loader2Icon, RotateCcwIcon, SearchIcon } from "lucide-react";
+import {
+  ArchiveIcon,
+  Loader2Icon,
+  RotateCcwIcon,
+  SearchIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import type { CampaignRecipientRow } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
@@ -10,7 +16,7 @@ import { campaignRecipientName, campaignRecipientStatusLabel } from "./campaign-
 
 type ArchiveAction = {
   recipientId: string;
-  kind: "restore";
+  kind: "restore" | "delete";
 } | null;
 
 export function ArchivedContactsWorkspaceView({
@@ -20,6 +26,7 @@ export function ArchivedContactsWorkspaceView({
   action,
   setSearch,
   restoreContact,
+  deleteContact,
 }: {
   message: string | null;
   contacts: CampaignRecipientRow[];
@@ -27,6 +34,7 @@ export function ArchivedContactsWorkspaceView({
   action: ArchiveAction;
   setSearch: (value: string) => void;
   restoreContact: (recipient: CampaignRecipientRow) => void;
+  deleteContact: (recipient: CampaignRecipientRow) => void;
 }) {
   return (
     <div className="p-5">
@@ -52,8 +60,9 @@ export function ArchivedContactsWorkspaceView({
           />
         </label>
         <p className="text-xs leading-5 text-muted-foreground md:text-right">
-          Contactele rămân în siguranță în Arhivă și nu pot fi folosite în campanii.{" "}
-          Ștergerea definitivă va deveni disponibilă după următoarea actualizare de confidențialitate.
+          Contactele arhivate nu mai pot fi folosite în campanii. Le poți restaura înainte
+          de curățarea automată sau le poți șterge definitiv acum. Păstrăm doar protecția
+          necesară ca o adresă respinsă ori dezabonată să nu primească alte mesaje.
         </p>
       </div>
 
@@ -62,7 +71,7 @@ export function ArchivedContactsWorkspaceView({
           <thead className="border-b border-[var(--border)] bg-surface-muted text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/50">
             <tr>
               <th className="min-w-[22rem] px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Status și curățare</th>
               <th className="px-4 py-3 text-right">Acțiuni</th>
             </tr>
           </thead>
@@ -70,6 +79,7 @@ export function ArchivedContactsWorkspaceView({
             {contacts.length > 0 ? contacts.map((recipient) => {
               const name = campaignRecipientName(recipient);
               const restoring = action?.recipientId === recipient.id && action.kind === "restore";
+              const deleting = action?.recipientId === recipient.id && action.kind === "delete";
               const disabled = action !== null;
               return (
                 <tr key={recipient.id} className="transition-colors hover:bg-surface-muted/70">
@@ -90,9 +100,17 @@ export function ArchivedContactsWorkspaceView({
                       <ArchiveIcon aria-hidden="true" className="size-4 text-muted-foreground" strokeWidth={1.8} />
                       {campaignRecipientStatusLabel("archived")}
                     </span>
+                    <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+                      Înainte: {archivedProtectionLabel(recipient.statusBeforeArchive)}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      {recipient.purgeAfter
+                        ? `Curățare automată: ${formatArchiveDate(recipient.purgeAfter)}`
+                        : "Data curățării nu este disponibilă"}
+                    </p>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -104,6 +122,18 @@ export function ArchivedContactsWorkspaceView({
                           ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} />
                           : <RotateCcwIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
                         {restoring ? "Restaurăm" : "Restaurează"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => deleteContact(recipient)}
+                      >
+                        {deleting
+                          ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" strokeWidth={1.8} />
+                          : <Trash2Icon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
+                        {deleting ? "Ștergem" : "Șterge definitiv"}
                       </Button>
                     </div>
                   </td>
@@ -122,4 +152,24 @@ export function ArchivedContactsWorkspaceView({
       </div>
     </div>
   );
+}
+
+function archivedProtectionLabel(
+  status: CampaignRecipientRow["statusBeforeArchive"],
+): string {
+  if (status === "suppressed") return "Adresă respinsă";
+  if (status === "unsubscribed") return "Dezabonat";
+  if (status === "active") return "Activ";
+  return "Status indisponibil";
+}
+
+function formatArchiveDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "dată indisponibilă";
+  return new Intl.DateTimeFormat("ro-RO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/Bucharest",
+  }).format(date);
 }

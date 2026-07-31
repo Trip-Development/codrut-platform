@@ -17,10 +17,10 @@ from codrut.core.database import engine
 from codrut.modules.communications.models import EmailSend, EmailSendStatus
 
 _FORWARD_COMPATIBLE_DATABASE_HEADS: dict[str, frozenset[str]] = {
-    # This release packages 0052, but the next launch release only adds
-    # backward-compatible schema through 0056. Keeping this allowlist explicit
-    # preserves a healthy rollback image while still failing closed for every
-    # unreviewed migration.
+    # The retained bridge image packages 0052, while the launch release only
+    # adds backward-compatible schema through 0056. Keeping this allowlist
+    # explicit preserves that rollback image while still failing closed for
+    # every unreviewed migration.
     "0052_contact_archive": frozenset(
         {
             "0053_contact_privacy_bridge",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { InviteTask, InviteTaskStatus } from "@/api/invites";
-import { nextPendingReviewTask } from "./task-display";
+import { groupParticipantTasks, nextPendingReviewTask } from "./task-display";
 
 function reviewTask(id: string, status: InviteTaskStatus): InviteTask {
   return {
@@ -42,5 +42,25 @@ describe("nextPendingReviewTask", () => {
     const other = reviewTask("other", "completed");
 
     expect(nextPendingReviewTask([current, other], current.assignmentId)).toBeUndefined();
+  });
+
+  it("keeps iCARE variants and pinned definitions in separate groups", () => {
+    const boss = {
+      ...reviewTask("boss", "not_started"),
+      questionnaireKey: "boss_360",
+      questionnaireDefinitionId: "definition-boss",
+    };
+    const icare = {
+      ...reviewTask("icare", "not_started"),
+      questionnaireKey: "icare",
+      questionnaireDefinitionId: "definition-icare",
+    };
+    const newerBossDefinition = {
+      ...reviewTask("boss-new", "not_started"),
+      questionnaireKey: "boss_360",
+      questionnaireDefinitionId: "definition-boss-v2",
+    };
+
+    expect(groupParticipantTasks([boss, icare, newerBossDefinition])).toHaveLength(3);
   });
 });

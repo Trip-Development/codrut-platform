@@ -9,7 +9,6 @@ const projectTabs = [
   { key: "/assignments", label: "Asignări" },
   { key: "/invitations", label: "Invitații" },
   { key: "/org-chart", label: "Organigramă" },
-  { key: "/teams", label: "Echipe" },
   { key: "/reports", label: "Rezultate" },
   { key: "/settings", label: "Setări" },
 ];

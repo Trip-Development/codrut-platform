@@ -13,9 +13,15 @@ export type InviteTask = {
   targetLabel: string;
   estimatedMinutes: number;
   questionnaireKey: string;
+  questionnaireDefinitionId?: string | null;
   projectId?: string | null;
   projectName?: string | null;
   assignmentRoundId?: string;
+  assessmentCycleId?: string | null;
+  cycleName?: string | null;
+  cycleSequence?: number | null;
+  deadlineLabel?: string | null;
+  dueAt?: string | null;
 };
 
 const questionnaireLabels: Record<string, string> = {
@@ -41,6 +47,9 @@ export type InviteBundle =
       isLeadership: boolean;
       alreadyRegistered: boolean;
       accountDashboardAvailable?: boolean;
+      accountType: "guest" | "registered";
+      accessMode: "account" | "secure_link";
+      consentCurrent: boolean;
       deadlineLabel: string;
       expiresAt?: string;
       termsAcceptedAt?: string | null;
@@ -67,6 +76,9 @@ type BackendInviteVerifyResponse = {
   is_leadership: boolean;
   already_registered: boolean;
   account_dashboard_available?: boolean;
+  account_type: "guest" | "registered";
+  access_mode: "account" | "secure_link";
+  consent_current: boolean;
   project_id?: string;
   project_name: string;
   expires_at?: string;
@@ -93,6 +105,11 @@ export type InviteExchangeResult = {
   participantProfileId: string;
   projectId?: string | null;
   assessmentCycleId?: string | null;
+  accountType: "guest" | "registered";
+  accessMode: "account" | "secure_link";
+  consentCurrent: boolean;
+  termsAcceptedAt?: string | null;
+  termsVersion?: string | null;
 };
 
 type BackendInviteExchangeResponse = {
@@ -101,6 +118,11 @@ type BackendInviteExchangeResponse = {
   participant_profile_id: string;
   project_id?: string | null;
   assessment_cycle_id?: string | null;
+  account_type: "guest" | "registered";
+  access_mode: "account" | "secure_link";
+  consent_current: boolean;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
 };
 
 const inviteFailureMessages: Record<string, string> = {
@@ -169,6 +191,9 @@ export async function resolveInviteBundle(token: string): Promise<InviteBundle> 
       isLeadership: false,
       alreadyRegistered: false,
       accountDashboardAvailable: false,
+      accountType: "guest",
+      accessMode: "secure_link",
+      consentCurrent: true,
       deadlineLabel: "deadline-ul proiectului",
       tasks: normalizeInviteTasks([
         {
@@ -231,6 +256,9 @@ export async function exchangeInviteSession(
       action: "secure_link_ready",
       destination: `/invite/${token}`,
       participantProfileId: "demo-participant",
+      accountType: "guest",
+      accessMode: "secure_link",
+      consentCurrent: true,
     };
   }
 
@@ -275,6 +303,11 @@ export async function exchangeInviteSession(
     participantProfileId: data.participant_profile_id,
     projectId: data.project_id,
     assessmentCycleId: data.assessment_cycle_id,
+    accountType: data.account_type,
+    accessMode: data.access_mode,
+    consentCurrent: data.consent_current,
+    termsAcceptedAt: data.terms_accepted_at,
+    termsVersion: data.terms_version,
   };
 }
 
@@ -317,6 +350,9 @@ async function resolveBackendInviteBundle(token: string): Promise<InviteBundle> 
     isLeadership: data.is_leadership,
     alreadyRegistered: data.already_registered,
     accountDashboardAvailable: data.account_dashboard_available ?? false,
+    accountType: data.account_type,
+    accessMode: data.access_mode,
+    consentCurrent: data.consent_current,
     deadlineLabel: data.expires_at ? formatInviteDeadline(data.expires_at) : "finalul evaluării",
     expiresAt: data.expires_at,
     termsAcceptedAt: data.terms_accepted_at,

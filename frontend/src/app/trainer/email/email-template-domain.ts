@@ -26,6 +26,17 @@ export const MOCK_REPLACEMENTS: Record<string, string> = {
 export const DEFAULT_ACTION_TOKEN = "{action_button:Deschide chestionarele|{action_url}}";
 export const DEFAULT_VIDEO_TOKEN = "{video_block}";
 
+export function emailTemplateCtaCount(body: string): number {
+  return body
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter((block) =>
+      /^\{action_button:[^|]+\|.+\}$/.test(block)
+      || /^\{calendly_button:[^}]+\}$/.test(block),
+    )
+    .length;
+}
+
 const EMAIL_PREVIEW_SHELL_OPEN =
   '<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:0 auto;padding:28px;color:#2b211f;"><div style="border:1px solid #eadfdb;border-radius:18px;padding:28px;background:#fffdfb;"><p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#890505;letter-spacing:.08em;text-transform:uppercase;">Andrei Văcaru</p>';
 const EMAIL_PREVIEW_SHELL_CLOSE = "</div></div>";
@@ -38,6 +49,75 @@ const EMAIL_BUTTON_STYLE = "display:inline-block;background:#890505;color:#fffff
 export function detectedPlaceholders(subject: string, body: string): string[] {
   const placeholderRegex = /\{[a-z0-9_]+\}/gi;
   return Array.from(new Set(`${subject} ${body}`.match(placeholderRegex) || []));
+}
+
+const CAMPAIGN_PLACEHOLDERS = new Set([
+  "{calendly_url}",
+  "{company_name}",
+  "{contact_name}",
+  "{email}",
+  "{first_name}",
+  "{landing_page_url}",
+  "{last_name}",
+  "{legal_address}",
+  "{organization_name}",
+  "{thumbnail_url}",
+  "{unsubscribe_url}",
+  "{video_url}",
+]);
+
+const REQUIRED_TEMPLATE_PLACEHOLDERS: Record<string, string[]> = {
+  account_setup: ["{participant_name}", "{trainer_name}", "{company_name}", "{action_url}"],
+  assignment_bundle: ["{participant_name}", "{company_name}", "{task_count}", "{action_url}"],
+  assignment_reminder: ["{participant_name}", "{company_name}", "{action_url}"],
+};
+
+const PLACEHOLDER_LABELS: Record<string, string> = {
+  "{action_url}": "linkul de acces",
+  "{company_name}": "numele companiei",
+  "{participant_name}": "numele participantului",
+  "{task_count}": "numărul de chestionare",
+  "{trainer_name}": "numele trainerului",
+};
+
+export function emailTemplateDraftValidation({
+  baseKey,
+  lane,
+  subject,
+  body,
+}: {
+  baseKey: string;
+  lane: "transactional" | "campaign";
+  subject: string;
+  body: string;
+}): string | null {
+  if (!subject.trim()) return "Adaugă un subiect înainte de salvare.";
+  if (!body.trim()) return "Scrie mesajul emailului înainte de salvare.";
+
+  const placeholders = detectedPlaceholders(subject, body);
+  if (lane === "campaign") {
+    const unsupported = placeholders.filter((placeholder) => !CAMPAIGN_PLACEHOLDERS.has(placeholder));
+    if (unsupported.length > 0) {
+      return `Codrut nu recunoaște ${unsupported.join(", ")} în emailurile de campanie. Folosește etichetele afișate pentru acest șablon.`;
+    }
+  }
+
+  const required = REQUIRED_TEMPLATE_PLACEHOLDERS[baseKey] ?? [];
+  const missing = required.filter((placeholder) => !placeholders.includes(placeholder));
+  if (missing.length > 0) {
+    const friendly = missing.map((placeholder) => PLACEHOLDER_LABELS[placeholder] ?? placeholder);
+    return `Păstrează în mesaj ${friendly.join(", ")}. Codrut le completează automat pentru fiecare persoană.`;
+  }
+
+  const ctaCount = emailTemplateCtaCount(body);
+  if (ctaCount === 0) {
+    return "Adaugă un singur buton principal înainte de salvare.";
+  }
+  if (ctaCount > 1) {
+    return "Păstrează un singur buton principal în email.";
+  }
+
+  return null;
 }
 
 function escapeHtml(value: string): string {
@@ -118,13 +198,10 @@ function emailParagraphHtml(value: string): string {
 function emailButtonHtml(
   label: string,
   href: string,
-  { includeFallbackLink }: { includeFallbackLink: boolean },
 ): string {
   const safeHref = escapeHtmlAttribute(sanitizePreviewHref(href));
   const safeLabel = escapeHtml(label.trim() || "Deschide linkul");
-  const button = `<p style="margin:24px 0;"><a href="${safeHref}" style="${EMAIL_BUTTON_STYLE}">${safeLabel}</a></p>`;
-  if (!includeFallbackLink) return button;
-  return `${button}<p style="margin:0;font-size:13px;line-height:1.6;color:#6d5f5b;">Link platformă: <a href="${safeHref}" style="color:#890505;text-decoration:underline;">${safeHref}</a></p>`;
+  return `<p style="margin:24px 0;"><a href="${safeHref}" style="${EMAIL_BUTTON_STYLE}">${safeLabel}</a></p>`;
 }
 
 function emailVideoBlockHtml(): string {
@@ -143,9 +220,7 @@ function emailBulletTableHtml(lines: string[]): string {
 
 function friendlyEmailBlocksToHtml(
   body: string,
-  lane: "transactional" | "campaign",
 ): string {
-  const buttonOptions = { includeFallbackLink: lane === "transactional" };
   return body
     .split(/\n{2,}/)
     .map((block) => block.trim())
@@ -153,10 +228,10 @@ function friendlyEmailBlocksToHtml(
     .map((block) => {
       if (block === DEFAULT_VIDEO_TOKEN) return emailVideoBlockHtml();
       const actionMatch = block.match(/^\{action_button:([^|]+)\|(.+)\}$/);
-      if (actionMatch) return emailButtonHtml(actionMatch[1], actionMatch[2], buttonOptions);
+      if (actionMatch) return emailButtonHtml(actionMatch[1], actionMatch[2]);
       const calendlyMatch = block.match(/^\{calendly_button:([^}]+)\}$/);
       if (calendlyMatch) {
-        return emailButtonHtml(calendlyMatch[1], "{calendly_url}", buttonOptions);
+        return emailButtonHtml(calendlyMatch[1], "{calendly_url}");
       }
       const lines = block.split(/\r?\n/);
       if (lines.every((line) => /^\s*[•✓✗*-]\s+/.test(line))) {
@@ -180,7 +255,7 @@ export function buildStyledEmailTemplateBody({
     ? `<h1 style="${EMAIL_HEADING_STYLE}">${emailInlineMarkdownToHtml(heading.trim())}</h1>`
     : "";
   const shellClose = lane === "campaign" ? PROMOTIONAL_EMAIL_PREVIEW_SHELL_CLOSE : EMAIL_PREVIEW_SHELL_CLOSE;
-  return `${EMAIL_PREVIEW_SHELL_OPEN}${headingHtml}${friendlyEmailBlocksToHtml(body, lane)}${shellClose}`;
+  return `${EMAIL_PREVIEW_SHELL_OPEN}${headingHtml}${friendlyEmailBlocksToHtml(body)}${shellClose}`;
 }
 
 export function parseEmailTemplateEditorDraft(body: string, fallbackHeading: string): { heading: string; body: string } {

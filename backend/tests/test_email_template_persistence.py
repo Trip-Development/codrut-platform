@@ -353,8 +353,9 @@ class FakeCommunicationsRepository:
         *,
         owner_id: uuid.UUID,
         email_fingerprints: set[str],
+        normalized_emails: set[str] | None = None,
     ) -> list[object]:
-        del owner_id, email_fingerprints
+        del owner_id, email_fingerprints, normalized_emails
         return []
 
     async def suppress_email(
@@ -549,7 +550,11 @@ class FakeCommunicationsRepository:
                 )
 
     async def count_accepted_sends_since(self, _since: object) -> int:
-        return sum(1 for send in self.sends if send.status == EmailSendStatus.accepted)
+        return sum(
+            1
+            for send in self.sends
+            if send.status != EmailSendStatus.cancelled
+        )
 
     async def delete_campaign_recipient_memberships(
         self,
@@ -2171,7 +2176,7 @@ async def test_update_template_mutates_unused_version() -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_template_versions_used_template() -> None:
+async def test_update_template_keeps_used_trainer_version_stable() -> None:
     template = persisted_template()
     repository = FakeCommunicationsRepository([template])
     repository.sent_versions.add(("account_setup", 1))
@@ -2185,11 +2190,11 @@ async def test_update_template_versions_used_template() -> None:
         ),
     )
 
-    assert result.version == 2
+    assert result.version == 1
     assert result.active is True
-    assert template.active is False
-    assert template.subject == "Setup account for ${company_name}"
-    assert repository.templates[1].subject == "New Setup for ${company_name}"
+    assert template.active is True
+    assert template.subject == "New Setup for ${company_name}"
+    assert len(repository.templates) == 1
 
 
 @pytest.mark.asyncio

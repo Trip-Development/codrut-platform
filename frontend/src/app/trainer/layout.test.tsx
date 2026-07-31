@@ -20,6 +20,7 @@ vi.mock("@/api/auth-server", () => ({
 }));
 
 vi.mock("@/api/auth", () => ({
+  canAccessWorkspace: vi.fn(() => true),
   dashboardHrefForRole: vi.fn((role: string) => `/${role}`),
   isAuthRoleMismatchError: vi.fn(() => false),
   isAuthSessionUnavailableError: vi.fn(() => false),
@@ -45,7 +46,7 @@ describe("TrainerLayout", () => {
     );
   });
 
-  it("renders trainer login without resolving a protected session", async () => {
+  it("renders trainer login only after confirming there is no active session", async () => {
     vi.mocked(headers).mockResolvedValue(
       new Headers({ "x-codrut-pathname": "/trainer/login" }) as never,
     );
@@ -55,6 +56,29 @@ describe("TrainerLayout", () => {
     );
 
     expect(markup).toContain("Autentificare");
-    expect(getTrainerSession).not.toHaveBeenCalled();
+    expect(getTrainerSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects an authenticated trainer away from login exactly once", async () => {
+    vi.mocked(headers).mockResolvedValue(
+      new Headers({
+        "x-codrut-pathname": "/trainer/login",
+        "x-codrut-search": "?returnTo=%2Ftrainer%2Fprojects%2Fproject-2",
+      }) as never,
+    );
+    vi.mocked(getTrainerSession).mockResolvedValue({
+      state: "authenticated",
+      user: {
+        id: "trainer-1",
+        name: "trainer",
+        role: "trainer",
+        availableWorkspaces: ["trainer"],
+      },
+    });
+
+    await expect(
+      TrainerLayout({ children: <main>Autentificare</main> }),
+    ).rejects.toThrow("redirect:/trainer/projects/project-2");
+    expect(getTrainerSession).toHaveBeenCalledTimes(1);
   });
 });

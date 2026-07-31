@@ -101,12 +101,20 @@ def test_campaign_recipient_model_separates_promotional_contacts() -> None:
     assert next(iter(owner_column.foreign_keys)).ondelete == "CASCADE"
 
 
-def test_contact_archive_expand_keeps_recipient_owner_required_but_event_owner_nullable() -> None:
+def test_contact_privacy_expand_keeps_only_recipient_owner_contracted() -> None:
     recipient_owner = Base.metadata.tables["campaign_recipients"].columns["owner_id"]
     event_owner = Base.metadata.tables["campaign_recipient_events"].columns["owner_id"]
+    suppression_table = Base.metadata.tables["email_suppressions"]
+    suppression_columns = suppression_table.columns
+    suppression_index_names = {index.name for index in suppression_table.indexes}
 
     assert not recipient_owner.nullable
     assert event_owner.nullable
+    assert suppression_columns["email_fingerprint"].nullable
+    assert suppression_columns["review_after"].nullable
+    assert not suppression_columns["email"].nullable
+    assert "uq_email_suppressions_owner_normalized_email" in suppression_index_names
+    assert "uq_email_suppressions_owner_fingerprint" in suppression_index_names
 
 
 def test_contact_tombstones_retain_only_pseudonymous_delivery_lookups() -> None:

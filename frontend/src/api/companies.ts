@@ -195,6 +195,7 @@ export type CompanyProjectPayload = {
 
 export type CompanyAssignment = {
   id: string;
+  created_at?: string;
   company_id: string;
   project_id: string | null;
   assessment_cycle_id?: string | null;
@@ -402,6 +403,7 @@ export type ReportAverage = {
   avg: number;
   interpretation?: string | null;
   range_label?: string | null;
+  feedback?: string | null;
 };
 
 export type ReportDistribution = {
@@ -446,6 +448,8 @@ export type CompanyScoringResult = {
 };
 
 export type CompanyReportAggregate = {
+  project_id?: string | null;
+  assessment_cycle_id?: string | null;
   total_assigned: number;
   total_completed: number;
   completion_rate: number;
@@ -458,6 +462,9 @@ export type CompanyReportAggregate = {
   driver_averages: ReportAverage[];
   boss_360_averages: ReportAverage[];
   icare_target_summaries: IcareTargetSummary[];
+  icare_cohorts: IcareCohortSummary[];
+  driver_rank_summary: DriverRankSummary;
+  leadership_members: LeadershipMemberSummary[];
   pcm_base_distribution: ReportDistribution[];
   pcm_phase_distribution: ReportDistribution[];
   team_lenses: ReportTeamLens[];
@@ -474,6 +481,42 @@ export type IcareTargetSummary = {
   self_response_count: number;
   external_averages: ReportAverage[];
   self_averages: ReportAverage[];
+  cohorts: IcareCohortSummary[];
+};
+
+export type IcareCohortSummary = {
+  cohort: "direct_team" | "leadership_peers" | "self";
+  response_count: number;
+  averages: ReportAverage[];
+};
+
+export type DriverRankSummary = {
+  total_people: number;
+  first_rank: ReportDistribution[];
+  second_rank: ReportDistribution[];
+  first_rank_tie_breaks: number;
+  second_rank_tie_breaks: number;
+  insufficient_driver_score_count: number;
+};
+
+export type LeadershipMemberSummary = {
+  participant_profile_id: string;
+  full_name: string;
+  position?: string | null;
+  role_group?: string | null;
+};
+
+export type LeadershipMemberReport = {
+  project_id: string;
+  assessment_cycle_id?: string | null;
+  member: LeadershipMemberSummary;
+  pcm_base?: string | null;
+  pcm_phase?: string | null;
+  lencioni_count: number;
+  lencioni_averages: ReportAverage[];
+  icare_cohorts: IcareCohortSummary[];
+  driver_count: number;
+  driver_averages: ReportAverage[];
 };
 
 export type CompanyReportComparison = {
@@ -607,6 +650,31 @@ function fallbackCompanyRecord(companyId: string): { id: string; name: string } 
 
 function shouldUseSeededCompanyFallback(companyId: string): boolean {
   return isLocalSeededDemoFallbackEnabled() && fallbackCompanyRecord(companyId) !== null;
+}
+
+function fallbackAssessmentCycles(companyId: string, projectId: string): AssessmentCycle[] {
+  const project = fallbackCompanyProjects(companyId).find((item) => item.id === projectId);
+  if (!project) return [];
+  return [
+    {
+      id: `${projectId}-cycle-1`,
+      company_id: companyId,
+      project_id: projectId,
+      sequence: 1,
+      name: "Evaluarea curentă",
+      status: project.status === "completed" || project.status === "archived" ? "closed" : "active",
+      source_cycle_id: null,
+      starts_at: project.starts_at,
+      due_at: project.due_at,
+      closed_at: project.status === "completed" || project.status === "archived"
+        ? project.updated_at
+        : null,
+      created_by_user_id: null,
+      created_at: project.created_at,
+      updated_at: project.updated_at,
+      questionnaires: [],
+    },
+  ];
 }
 
 function fallbackCompanyDetail(company: { id: string; name: string }): CompanyDetail {
@@ -851,6 +919,7 @@ function fallbackAssignment(
   const completedAt = ["submitted", "validated", "scored"].includes(status) ? "2026-06-20T10:00:00.000Z" : null;
   return {
     id,
+    created_at: "2026-06-16T08:00:00.000Z",
     company_id: companyId,
     project_id: projectId,
     respondent_profile_id: respondentProfileId,
@@ -887,10 +956,12 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
   const pcmBaseDistribution = fallbackPcmDistribution(participants, assignments, "pcm_base");
   const pcmPhaseDistribution = fallbackPcmDistribution(participants, assignments, "pcm_phase");
   const lencioniAverages = fallbackAverages(assignments, results, "lencioni");
-  const driverAverages = fallbackAverages(assignments, results, "distress_drivers");
+  const driverAggregate = buildFallbackDriverAggregate(assignments, results);
+  const driverAverages = driverAggregate.driverAverages;
   const boss360Averages = fallbackAverages(assignments, results, "boss_360");
   const lencioniCount = fallbackReportCount(assignments, results, "lencioni");
-  const driverCount = fallbackReportCount(assignments, results, "distress_drivers");
+  const driverRankSummary = driverAggregate.driverRankSummary;
+  const driverCount = driverAggregate.driverCount;
   const boss360Count = fallbackReportCount(assignments, results, "boss_360");
 
   return {
@@ -906,6 +977,9 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
     driver_averages: driverAverages,
     boss_360_averages: boss360Averages,
     icare_target_summaries: [],
+    icare_cohorts: [],
+    driver_rank_summary: driverRankSummary,
+    leadership_members: [],
     pcm_base_distribution: pcmBaseDistribution,
     pcm_phase_distribution: pcmPhaseDistribution,
     team_lenses: fallbackReportTeamLenses({
@@ -994,6 +1068,150 @@ function fallbackDistributionCount(distribution: ReportDistribution[]): number {
   return distribution.reduce((total, item) => total + item.value, 0);
 }
 
+const FALLBACK_TA_DRIVERS = [
+  { id: "be_perfect", label: "Fii perfect" },
+  { id: "hurry_up", label: "Grăbește-te" },
+  { id: "try_hard", label: "Străduiește-te" },
+] as const;
+
+type RankedFallbackDriver = (typeof FALLBACK_TA_DRIVERS)[number] & {
+  index: number;
+  score: number;
+};
+
+type FallbackDriverRow = {
+  assignment: CompanyAssignment;
+  result: CompanyScoringResult;
+  ranked: RankedFallbackDriver[];
+};
+
+function rankedFallbackDrivers(result: CompanyScoringResult): RankedFallbackDriver[] {
+  return FALLBACK_TA_DRIVERS
+    .map((driver, index) => ({
+      ...driver,
+      index,
+      score: coerceFallbackScore(result.scores[driver.id]),
+    }))
+    .filter((driver): driver is RankedFallbackDriver => driver.score !== null)
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+}
+
+function fallbackAssignmentIsNewer(
+  candidate: CompanyAssignment,
+  current: CompanyAssignment,
+): boolean {
+  const candidateCreatedAt = candidate.created_at ?? "";
+  const currentCreatedAt = current.created_at ?? "";
+  return candidateCreatedAt > currentCreatedAt
+    || (candidateCreatedAt === currentCreatedAt && candidate.id > current.id);
+}
+
+function selectFallbackDriverRows(
+  assignments: CompanyAssignment[],
+  results: CompanyScoringResult[],
+): {
+  rows: FallbackDriverRow[];
+  insufficientDriverScoreCount: number;
+} {
+  const resultByAssignmentId = new Map(results.map((result) => [result.assignment_id, result]));
+  const participantsWithResults = new Set<string>();
+  const latestValidByParticipant = new Map<string, FallbackDriverRow>();
+
+  for (const assignment of assignments) {
+    const result = resultByAssignmentId.get(assignment.id);
+    if (
+      assignment.questionnaire_key !== "distress_drivers"
+      || !isCompletedAssignment(assignment)
+      || !result
+    ) {
+      continue;
+    }
+    participantsWithResults.add(assignment.respondent_profile_id);
+    const ranked = rankedFallbackDrivers(result);
+    if (ranked.length < 2) {
+      continue;
+    }
+    const current = latestValidByParticipant.get(assignment.respondent_profile_id);
+    if (!current || fallbackAssignmentIsNewer(assignment, current.assignment)) {
+      latestValidByParticipant.set(assignment.respondent_profile_id, {
+        assignment,
+        result,
+        ranked,
+      });
+    }
+  }
+
+  return {
+    rows: [...latestValidByParticipant.values()].sort((left, right) =>
+      left.assignment.respondent_profile_id.localeCompare(right.assignment.respondent_profile_id)),
+    insufficientDriverScoreCount: participantsWithResults.size - latestValidByParticipant.size,
+  };
+}
+
+function fallbackDriverRankSummary(
+  selection: ReturnType<typeof selectFallbackDriverRows>,
+): DriverRankSummary {
+  const firstCounts = new Map<string, number>();
+  const secondCounts = new Map<string, number>();
+  let firstRankTieBreaks = 0;
+  let secondRankTieBreaks = 0;
+
+  for (const { ranked } of selection.rows) {
+    const [first, second] = ranked;
+    firstCounts.set(first.id, (firstCounts.get(first.id) ?? 0) + 1);
+    secondCounts.set(second.id, (secondCounts.get(second.id) ?? 0) + 1);
+    if (ranked.filter((driver) => driver.score === first.score).length > 1) {
+      firstRankTieBreaks += 1;
+    }
+    if (ranked.slice(1).filter((driver) => driver.score === second.score).length > 1) {
+      secondRankTieBreaks += 1;
+    }
+  }
+
+  const distribution = (counts: Map<string, number>): ReportDistribution[] =>
+    FALLBACK_TA_DRIVERS
+      .filter((driver) => counts.has(driver.id))
+      .map((driver) => ({
+        id: driver.id,
+        label: driver.label,
+        value: counts.get(driver.id) ?? 0,
+      }))
+      .sort((left, right) => right.value - left.value);
+  const totalPeople = [...firstCounts.values()].reduce((total, count) => total + count, 0);
+
+  return {
+    total_people: totalPeople,
+    first_rank: distribution(firstCounts),
+    second_rank: distribution(secondCounts),
+    first_rank_tie_breaks: firstRankTieBreaks,
+    second_rank_tie_breaks: secondRankTieBreaks,
+    insufficient_driver_score_count: selection.insufficientDriverScoreCount,
+  };
+}
+
+export function buildFallbackDriverAggregate(
+  assignments: CompanyAssignment[],
+  results: CompanyScoringResult[],
+): {
+  driverAverages: ReportAverage[];
+  driverCount: number;
+  driverRankSummary: DriverRankSummary;
+} {
+  const selection = selectFallbackDriverRows(assignments, results);
+  const selectedAssignments = selection.rows.map((row) => row.assignment);
+  const selectedResults = selection.rows.map((row) => row.result);
+  const driverRankSummary = fallbackDriverRankSummary(selection);
+  return {
+    driverAverages: fallbackAverages(
+      selectedAssignments,
+      selectedResults,
+      "distress_drivers",
+    ),
+    driverCount: driverRankSummary.total_people,
+    driverRankSummary,
+  };
+}
+
 function fallbackReportTeamLenses({
   participants,
   assignments,
@@ -1048,6 +1266,8 @@ function coerceFallbackScore(value: unknown): number | null {
 }
 
 function fallbackScoreLabel(value: string): string {
+  const driver = FALLBACK_TA_DRIVERS.find((item) => item.id === value);
+  if (driver) return driver.label;
   return value
     .replace(/_/g, " ")
     .split(/\s+/)
@@ -1058,10 +1278,16 @@ function fallbackScoreLabel(value: string): string {
 
 function fallbackScoresForAssignment(assignment: CompanyAssignment): Record<string, unknown> {
   if (assignment.questionnaire_key === "distress_drivers") {
+    const participantScores: Record<string, Record<string, number>> = {
+      "alex-dima": { be_perfect: 72, hurry_up: 44, try_hard: 54 },
+      "mara-ionescu": { be_perfect: 38, hurry_up: 66, try_hard: 54 },
+      "sorin-pavel": { be_perfect: 48, hurry_up: 45, try_hard: 75 },
+      "teodor-marin": { be_perfect: 72, hurry_up: 44, try_hard: 61 },
+      "claudia-neagu": { be_perfect: 38, hurry_up: 66, try_hard: 54 },
+    };
     return {
-      personal_signal_a: ["mihai-matei", "teodor-marin"].includes(assignment.respondent_profile_id) ? 72 : 38,
-      personal_signal_b: ["ana-stan", "claudia-neagu"].includes(assignment.respondent_profile_id) ? 66 : 44,
-      personal_signal_c: assignment.respondent_profile_id === "teodor-marin" ? 61 : 54,
+      ...(participantScores[assignment.respondent_profile_id]
+        ?? { be_perfect: 55, hurry_up: 48, try_hard: 62 }),
     };
   }
   if (assignment.questionnaire_key === "boss_360") {
@@ -1272,6 +1498,29 @@ export async function getCompanyReportComparison(
     throw new Error(formatApiError(data, `Backend refuzat (${response.status})`));
   }
   return (await response.json()) as CompanyReportComparison;
+}
+
+export async function getLeadershipMemberReport(
+  companyId: string,
+  projectId: string,
+  participantProfileId: string,
+  options: ApiRequestOptions = {},
+  scope: Pick<ProjectScopeOptions, "assessmentCycleId"> = {},
+): Promise<LeadershipMemberReport> {
+  const params = new URLSearchParams();
+  if (scope.assessmentCycleId) {
+    params.set("assessment_cycle_id", scope.assessmentCycleId);
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await apiFetch(
+    `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/reports/leadership/${participantProfileId}${query}`,
+    { cache: "no-store", credentials: "include", ...options },
+  );
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(formatApiError(data, `Backend refuzat (${response.status})`));
+  }
+  return (await response.json()) as LeadershipMemberReport;
 }
 
 export async function getIcareAnswerReview(
@@ -1621,6 +1870,9 @@ export async function getAssessmentCycles(
   projectId: string,
   options: ApiRequestOptions = {},
 ): Promise<AssessmentCycle[]> {
+  if (shouldUseSeededCompanyFallback(companyId)) {
+    return fallbackAssessmentCycles(companyId, projectId);
+  }
   const response = await apiFetch(assessmentCycleBaseUrl(companyId, projectId), {
     cache: "no-store",
     credentials: "include",

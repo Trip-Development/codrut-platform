@@ -21,6 +21,7 @@ export type ParticipantWorkspaceSummary = {
   contexts: ParticipantWorkspaceContext[];
   cycles: ParticipantWorkspaceCycle[];
   projects: ParticipantWorkspaceProject[];
+  questionnaireProjects?: ParticipantQuestionnaireProject[];
   companyName: string;
   participantEmail: string;
   deadlineLabel: string;
@@ -54,6 +55,19 @@ export type ParticipantWorkspaceCycle = {
   startsAt?: string | null;
   dueAt?: string | null;
   closedAt?: string | null;
+};
+
+export type ParticipantQuestionnaireProject = {
+  id: string;
+  participantProfileId: string;
+  companyName: string;
+  name: string;
+  status: "active" | "completed" | "archived";
+  historyBucket: "current" | "history";
+  deadlineLabel: string;
+  completedCount: number;
+  totalCount: number;
+  questionnaires: InviteTask[];
 };
 
 export type ParticipantWorkspaceContext = {
@@ -91,6 +105,7 @@ export type ParticipantReceivedFeedbackSummary = {
   assessmentCycleId?: string | null;
   questionnaireKey?: string;
   questionnaireTitle?: string;
+  cohort: "direct_team" | "leadership_peers";
   completedCount: number;
   minimumCompleted: number;
   scaleMax?: number;
@@ -115,6 +130,7 @@ type BackendParticipantWorkspaceSummary = {
   contexts?: BackendParticipantWorkspaceContext[];
   cycles?: BackendParticipantWorkspaceCycle[];
   projects?: BackendParticipantWorkspaceProject[];
+  questionnaire_projects?: BackendParticipantQuestionnaireProject[];
   deadline_label: string;
   deadline_at?: string | null;
   tasks: InviteTask[];
@@ -144,6 +160,19 @@ type BackendParticipantWorkspaceCycle = {
   starts_at?: string | null;
   due_at?: string | null;
   closed_at?: string | null;
+};
+
+type BackendParticipantQuestionnaireProject = {
+  id: string;
+  participant_profile_id: string;
+  company_name: string;
+  name: string;
+  status: "active" | "completed" | "archived";
+  history_bucket: "current" | "history";
+  deadline_label: string;
+  completed_count: number;
+  total_count: number;
+  questionnaires?: InviteTask[];
 };
 
 type BackendParticipantWorkspaceContext = {
@@ -181,6 +210,7 @@ type BackendParticipantReceivedFeedbackSummary = {
   assessment_cycle_id?: string | null;
   questionnaire_key?: string;
   questionnaire_title?: string;
+  cohort?: "direct_team" | "leadership_peers";
   completed_count: number;
   minimum_completed: number;
   scale_max?: number;
@@ -262,6 +292,9 @@ function mapParticipantWorkspaceSummary(
     contexts: (data.contexts ?? []).map(mapParticipantWorkspaceContext),
     cycles: (data.cycles ?? []).map(mapParticipantWorkspaceCycle),
     projects: (data.projects ?? []).map(mapParticipantWorkspaceProject),
+    questionnaireProjects: (data.questionnaire_projects ?? []).map(
+      mapParticipantQuestionnaireProject,
+    ),
     companyName: data.company_name ?? "",
     participantEmail: data.participant_email ?? "",
     deadlineLabel: data.deadline_label,
@@ -271,6 +304,23 @@ function mapParticipantWorkspaceSummary(
     receivedFeedbackGroups: (data.received_feedback_groups ?? []).map(mapParticipantReceivedFeedback),
     cards: data.cards,
     emptyState: data.empty_state,
+  };
+}
+
+function mapParticipantQuestionnaireProject(
+  project: BackendParticipantQuestionnaireProject,
+): ParticipantQuestionnaireProject {
+  return {
+    id: project.id,
+    participantProfileId: project.participant_profile_id,
+    companyName: project.company_name,
+    name: project.name,
+    status: project.status,
+    historyBucket: project.history_bucket,
+    deadlineLabel: project.deadline_label,
+    completedCount: project.completed_count,
+    totalCount: project.total_count,
+    questionnaires: project.questionnaires ?? [],
   };
 }
 
@@ -344,6 +394,7 @@ function mapParticipantReceivedFeedback(
     assessmentCycleId: feedback.assessment_cycle_id,
     questionnaireKey: feedback.questionnaire_key,
     questionnaireTitle: feedback.questionnaire_title,
+    cohort: feedback.cohort ?? "leadership_peers",
     completedCount: feedback.completed_count,
     minimumCompleted: feedback.minimum_completed,
     scaleMax: feedback.scale_max,
@@ -420,6 +471,27 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
         ],
       },
     ],
+    questionnaireProjects: tasks.length > 0
+      ? [
+          {
+            id: "synthetic-leadership-project",
+            participantProfileId: "participant-local",
+            companyName: "Atlas Mobility",
+            name: demoProjectName,
+            status: "active",
+            historyBucket: "current",
+            deadlineLabel:
+              bundle.state === "valid"
+                ? bundle.deadlineLabel
+                : "deadline-ul proiectului",
+            completedCount: tasks.filter(
+              (task) => task.status === "completed",
+            ).length,
+            totalCount: tasks.length,
+            questionnaires: tasks,
+          },
+        ]
+      : [],
     companyName: "Atlas Mobility",
     participantEmail: bundle.state === "valid" ? bundle.participantEmail : "participant.demo@example.com",
     deadlineLabel: bundle.state === "valid" ? bundle.deadlineLabel : "deadline-ul proiectului",
@@ -428,6 +500,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
       projectId: "synthetic-leadership-project",
       projectName: "Leadership operațional Q3",
       assessmentCycleId: "synthetic-cycle-current",
+      cohort: "leadership_peers",
       completedCount: 3,
       minimumCompleted: 2,
       visible: true,
@@ -443,6 +516,7 @@ async function getDemoParticipantWorkspaceSummary(): Promise<ParticipantWorkspac
         projectId: "synthetic-leadership-project",
         projectName: "Leadership operațional Q3",
         assessmentCycleId: "synthetic-cycle-current",
+        cohort: "leadership_peers",
         completedCount: 3,
         minimumCompleted: 2,
         visible: true,
@@ -549,6 +623,7 @@ function getUnavailableParticipantWorkspaceSummary(reason?: string): Participant
     contexts: [],
     cycles: [],
     projects: [],
+    questionnaireProjects: [],
     companyName: "Neasociată",
     participantEmail: "",
     deadlineLabel: "Fără termen",

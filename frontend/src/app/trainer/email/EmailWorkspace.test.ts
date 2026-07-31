@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CampaignPersistenceError,
+  htmlToPlainText,
   type CampaignAssetUpload,
   type EmailCampaign,
   type EmailOpsSummary,
@@ -14,6 +15,8 @@ import {
 } from "./EmailWorkspace";
 import {
   buildStyledEmailTemplateBody,
+  emailTemplateCtaCount,
+  emailTemplateDraftValidation,
   parseEmailTemplateEditorDraft,
   renderCampaignEmailPreviewShell,
   renderEmailTemplatePreviewBody,
@@ -36,9 +39,11 @@ const emailApiMocks = vi.hoisted(() => ({
   deleteCampaignOnServer: vi.fn(),
   deleteEmailTemplateOnServer: vi.fn(),
   getEmailOpsSummary: vi.fn(),
+  getEmailSendCapacity: vi.fn(),
   listCampaignRecipientMembershipOnServer: vi.fn(),
   listCampaignsOnServer: vi.fn(),
   listEmailTemplatesOnServer: vi.fn(),
+  permanentlyDeleteCampaignRecipientOnServer: vi.fn(),
   replaceCampaignRecipientMembershipOnServer: vi.fn(),
   restoreCampaignRecipientOnServer: vi.fn(),
   sendCampaignOnServer: vi.fn(),
@@ -99,9 +104,11 @@ vi.mock("@/api/email", async (importOriginal) => {
     deleteCampaignOnServer: emailApiMocks.deleteCampaignOnServer,
     deleteEmailTemplateOnServer: emailApiMocks.deleteEmailTemplateOnServer,
     getEmailOpsSummary: emailApiMocks.getEmailOpsSummary,
+    getEmailSendCapacity: emailApiMocks.getEmailSendCapacity,
     listCampaignRecipientMembershipOnServer: emailApiMocks.listCampaignRecipientMembershipOnServer,
     listCampaignsOnServer: emailApiMocks.listCampaignsOnServer,
     listEmailTemplatesOnServer: emailApiMocks.listEmailTemplatesOnServer,
+    permanentlyDeleteCampaignRecipientOnServer: emailApiMocks.permanentlyDeleteCampaignRecipientOnServer,
     replaceCampaignRecipientMembershipOnServer: emailApiMocks.replaceCampaignRecipientMembershipOnServer,
     restoreCampaignRecipientOnServer: emailApiMocks.restoreCampaignRecipientOnServer,
     sendCampaignOnServer: emailApiMocks.sendCampaignOnServer,
@@ -153,6 +160,11 @@ beforeEach(() => {
       ? makeEmailSummary("archived", [])
       : makeEmailSummary()),
   );
+  emailApiMocks.getEmailSendCapacity.mockResolvedValue({
+    daily_cap: 2000,
+    used_today: 0,
+    remaining_today: 2000,
+  });
   emailApiMocks.archiveCampaignRecipientOnServer.mockResolvedValue({
     id: "recipient-1",
     status: "archived",
@@ -167,6 +179,12 @@ beforeEach(() => {
     status: "active",
     archived_at: null,
     purge_after: null,
+  });
+  emailApiMocks.permanentlyDeleteCampaignRecipientOnServer.mockResolvedValue({
+    id: "recipient-1",
+    status: "deleted",
+    cancelled: 0,
+    anonymized_sends: 0,
   });
   emailApiMocks.updateCampaignRecipientOnServer.mockResolvedValue({});
 });
@@ -189,6 +207,7 @@ function makeCampaignRecipient(overrides: Partial<CampaignRecipient> = {}): Camp
     email: "ioana@example.com",
     clientType: "tip_2",
     status: "suppressed",
+    activationAllowed: false,
     openCount: 0,
     clickCount: 0,
     viewCount: 0,
@@ -248,7 +267,11 @@ function makeTemplate(overrides: Partial<EmailTemplate> = {}): EmailTemplate {
     version: 1,
     name: "Invitație inițială",
     subject: "Bună, {first_name}",
-    body: "<p>Bună.</p>",
+    body: buildStyledEmailTemplateBody({
+      heading: "Bună",
+      body: "Salut {first_name}.\n\n{calendly_button:Deschide linkul}",
+      lane: "campaign",
+    }),
     lane: "campaign",
     placeholders: ["{first_name}", "{action_url}"],
     ...overrides,
@@ -358,7 +381,7 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(html).toContain("Andrei Văcaru");
   });
 
-  it("uses rich actions without redundant links in campaign HTML", () => {
+  it("uses one CTA in HTML and preserves one URL in transactional plain text", () => {
     const campaignHtml = buildStyledEmailTemplateBody({
       heading: "Mesaj pentru lideri",
       body: "{video_block}\n\n{calendly_button:Alege un slot}",
@@ -374,7 +397,9 @@ describe("renderEmailTemplatePreviewBody", () => {
     expect(campaignHtml).toContain('src="{thumbnail_url}"');
     expect(campaignHtml).toContain('href="{calendly_url}"');
     expect(campaignHtml).not.toContain("Link platformă:");
-    expect(transactionalHtml).toContain("Link platformă:");
+    expect(transactionalHtml).toContain('href="{action_url}"');
+    expect(transactionalHtml).not.toContain("Link platformă:");
+    expect(htmlToPlainText(transactionalHtml).match(/\{action_url\}/g)).toHaveLength(1);
   });
 
   it("keeps legacy campaign content when the footer shares its wrapper", () => {
@@ -397,7 +422,77 @@ describe("renderEmailTemplatePreviewBody", () => {
   });
 });
 
+describe("emailTemplateDraftValidation", () => {
+  it("explains missing system fields without backend terminology", () => {
+    expect(emailTemplateDraftValidation({
+      baseKey: "account_setup",
+      lane: "transactional",
+      subject: "Contul tău",
+      body: "Salut {participant_name}.",
+    })).toContain("linkul de acces");
+  });
+
+  it("rejects unknown campaign labels before saving", () => {
+    expect(emailTemplateDraftValidation({
+      baseKey: "promo_custom",
+      lane: "campaign",
+      subject: "Salut {first_name}",
+      body: "Mesaj pentru {unknown_value}",
+    })).toContain("{unknown_value}");
+  });
+
+  it("requires exactly one primary CTA", () => {
+    expect(emailTemplateDraftValidation({
+      baseKey: "promo_custom",
+      lane: "campaign",
+      subject: "Salut {first_name}",
+      body: "Programare: {calendly_url}",
+    })).toContain("un singur buton principal");
+    expect(emailTemplateDraftValidation({
+      baseKey: "promo_custom",
+      lane: "campaign",
+      subject: "Salut {first_name}",
+      body: "{calendly_button:Alege un slot}",
+    })).toBeNull();
+    expect(emailTemplateDraftValidation({
+      baseKey: "promo_custom",
+      lane: "campaign",
+      subject: "Salut {first_name}",
+      body: "{calendly_button:Alege un slot}\n\n{action_button:Vezi detalii|{landing_page_url}}",
+    })).toContain("Păstrează un singur");
+    expect(emailTemplateCtaCount("{calendly_button:Alege un slot}")).toBe(1);
+    expect(emailTemplateCtaCount("Text {calendly_button:Alege un slot}")).toBe(0);
+  });
+});
+
 describe("EmailWorkspace campaign contacts", () => {
+  it("keeps a refreshed contact summary when capacity cannot be refreshed", async () => {
+    render(React.createElement(EmailWorkspace, {
+      initialSummary: makeEmailSummary("ready", []),
+    }));
+    await waitFor(() => expect(emailApiMocks.getEmailSendCapacity).toHaveBeenCalled());
+
+    emailApiMocks.getEmailSendCapacity.mockRejectedValue(new Error("capacity unavailable"));
+    emailApiMocks.getEmailOpsSummary.mockImplementation(({ catalogScope } = {}) =>
+      Promise.resolve(
+        catalogScope === "archived"
+          ? makeEmailSummary("archived", [])
+          : makeEmailSummary("ready", [
+            makeCampaignRecipient({
+              id: "fresh-contact",
+              email: "fresh@example.com",
+              status: "ready",
+            }),
+          ]),
+      ),
+    );
+
+    fireEvent.focus(window);
+    fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
+
+    expect(await screen.findByText("fresh@example.com")).toBeTruthy();
+  });
+
   it("shows template catalog load failures instead of dropping the error", async () => {
     emailApiMocks.listEmailTemplatesOnServer.mockRejectedValueOnce(new Error("Șabloanele nu au putut fi citite."));
 
@@ -1925,8 +2020,38 @@ describe("EmailWorkspace campaign contacts", () => {
     });
   });
 
-  it("renders contact status as text and changes it only through edit mode", async () => {
-    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+  it("requires saving a corrected rejected email before explicitly activating it", async () => {
+    let serverRecipient = makeCampaignRecipient({
+      status: "suppressed",
+      activationAllowed: false,
+    });
+    emailApiMocks.getEmailOpsSummary.mockImplementation(({ catalogScope } = {}) =>
+      Promise.resolve(
+        catalogScope === "archived"
+          ? makeEmailSummary("archived", [])
+          : makeEmailSummary(serverRecipient.status, [serverRecipient]),
+      ),
+    );
+    emailApiMocks.updateCampaignRecipientOnServer.mockImplementation(
+      async (_recipientId: string, payload: { email?: string; status?: string }) => {
+        const previousEmail = serverRecipient.email;
+        const nextStatus = payload.status ?? "suppressed";
+        serverRecipient = {
+          ...serverRecipient,
+          email: payload.email ?? serverRecipient.email,
+          status: nextStatus === "active" ? "ready" : "suppressed",
+          activationAllowed:
+            nextStatus === "suppressed"
+            && Boolean(payload.email)
+            && payload.email !== previousEmail,
+        };
+        return serverRecipient;
+      },
+    );
+
+    render(React.createElement(EmailWorkspace, {
+      initialSummary: makeEmailSummary(serverRecipient.status, [serverRecipient]),
+    }));
 
     fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
     fireEvent.click(await screen.findByRole("button", { name: "Arată restricționate (1)" }));
@@ -1934,67 +2059,93 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(await screen.findByText("Adresă respinsă")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Adresă respinsă în campanii/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Editează ioana@example.com" }));
-    fireEvent.change(screen.getByLabelText("Status campanie pentru Ioana Popescu"), {
-      target: { value: "active" },
+    expect(
+      (screen.getByRole("option", { name: "Activ" }) as HTMLOptionElement).disabled,
+    ).toBe(true);
+    expect(screen.getByText(/Corectează și salvează/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("email@companie.ro"), {
+      target: { value: "ioana.corect@example.com" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Salvează ioana@example.com" }));
 
     await waitFor(() => {
       expect(emailApiMocks.updateCampaignRecipientOnServer).toHaveBeenCalledWith(
         "recipient-1",
-        expect.objectContaining({ status: "active" }),
+        expect.objectContaining({
+          email: "ioana.corect@example.com",
+          status: "suppressed",
+        }),
       );
     });
-    expect(screen.getByText("Activ")).toBeTruthy();
+    expect(await screen.findByText("ioana.corect@example.com")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Editează ioana.corect@example.com" }));
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("option", { name: "Activ" }) as HTMLOptionElement).disabled,
+      ).toBe(false);
+    });
+    fireEvent.change(screen.getByLabelText("Status campanie pentru Ioana Popescu"), {
+      target: { value: "active" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează ioana.corect@example.com" }));
+
+    await waitFor(() => {
+      expect(emailApiMocks.updateCampaignRecipientOnServer).toHaveBeenLastCalledWith(
+        "recipient-1",
+        expect.objectContaining({
+          email: "ioana.corect@example.com",
+          status: "active",
+        }),
+      );
+    });
+    expect(screen.getAllByText("Activ").length).toBeGreaterThan(1);
   });
 
-  it("prevents duplicate bulk contact status updates", async () => {
+  it("prevents duplicate bulk contact suppression updates", async () => {
     const updateRequest = createDeferred<Record<string, never>>();
     emailApiMocks.updateCampaignRecipientOnServer.mockReturnValueOnce(updateRequest.promise);
 
-    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready") }));
 
     fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Arată restricționate (1)" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "Selectează ioana@example.com" }));
 
-    const activateButton = screen.getByRole("button", { name: "Activează" });
-    fireEvent.click(activateButton);
-    fireEvent.click(activateButton);
+    const stopButton = screen.getByRole("button", { name: "Oprește trimiterea" });
+    fireEvent.click(stopButton);
+    fireEvent.click(stopButton);
 
-    expect(await screen.findByText("Activăm contactele")).toBeTruthy();
+    expect(await screen.findByText("Oprim trimiterile")).toBeTruthy();
     expect(emailApiMocks.updateCampaignRecipientOnServer).toHaveBeenCalledTimes(1);
 
     updateRequest.resolve({});
 
     await waitFor(() => {
-      expect(screen.queryByText("Activăm contactele")).toBeNull();
+      expect(screen.queryByText("Oprim trimiterile")).toBeNull();
     });
   });
 
   it("reconciles partial bulk status updates and keeps only failed contacts selected", async () => {
     const recipients = [
-      makeCampaignRecipient({ id: "recipient-1", email: "one@example.com" }),
-      makeCampaignRecipient({ id: "recipient-2", email: "two@example.com" }),
+      makeCampaignRecipient({ id: "recipient-1", email: "one@example.com", status: "ready" }),
+      makeCampaignRecipient({ id: "recipient-2", email: "two@example.com", status: "ready" }),
     ];
     emailApiMocks.updateCampaignRecipientOnServer
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new Error("temporary failure"));
-    emailApiMocks.getEmailOpsSummary.mockResolvedValue(makeEmailSummary("suppressed", [
-      { ...recipients[0], status: "ready" },
+    emailApiMocks.getEmailOpsSummary.mockResolvedValue(makeEmailSummary("ready", [
+      { ...recipients[0], status: "suppressed" },
       recipients[1],
     ]));
 
-    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("suppressed", recipients) }));
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready", recipients) }));
     fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Arată restricționate (2)" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Selectează one@example.com" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Selectează two@example.com" }));
-    fireEvent.click(screen.getByRole("button", { name: "Activează" }));
+    fireEvent.click(screen.getByRole("button", { name: "Oprește trimiterea" }));
 
     expect(await screen.findByText(/1 reușite, 1 eșuate/)).toBeTruthy();
     expectCheckboxState(screen.getByRole("checkbox", { name: "Selectează two@example.com" }), true);
-    expectCheckboxState(screen.getByRole("checkbox", { name: "Selectează one@example.com" }), false);
+    expect(screen.queryByRole("checkbox", { name: "Selectează one@example.com" })).toBeNull();
   });
 
   it("prevents duplicate contact delete confirmations", async () => {
@@ -2010,6 +2161,10 @@ describe("EmailWorkspace campaign contacts", () => {
     emailApiMocks.archiveCampaignRecipientOnServer.mockReturnValueOnce(deleteRequest.promise);
 
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready") }));
+    await waitFor(() => {
+      expect(emailApiMocks.getEmailOpsSummary).toHaveBeenCalledWith({ catalogScope: "archived" });
+    });
+    emailApiMocks.getEmailOpsSummary.mockRejectedValue(new Error("refresh unavailable"));
 
     fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
     fireEvent.click(await screen.findByRole("button", { name: "Arhivează ioana@example.com" }));
@@ -2033,6 +2188,52 @@ describe("EmailWorkspace campaign contacts", () => {
     await waitFor(() => {
       expect(screen.queryByText("Arhivezi contactul?")).toBeNull();
     });
+    expect(screen.queryByRole("button", { name: "Arhivează ioana@example.com" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
+    expect(await screen.findByText("ioana@example.com")).toBeTruthy();
+    expect(screen.getByText("Arhivat")).toBeTruthy();
+  });
+
+  it("ignores a stale refresh that started before a successful archive", async () => {
+    const staleActiveSummary = createDeferred<EmailOpsSummary>();
+
+    render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready") }));
+    await waitFor(() => {
+      expect(emailApiMocks.getEmailOpsSummary).toHaveBeenCalledWith({ catalogScope: "archived" });
+    });
+
+    let activeRefreshCalls = 0;
+    emailApiMocks.getEmailOpsSummary.mockImplementation(({ catalogScope } = {}) => {
+      if (catalogScope === "active" && activeRefreshCalls++ === 0) {
+        return staleActiveSummary.promise;
+      }
+      return Promise.reject(new Error("refresh unavailable"));
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => {
+      expect(emailApiMocks.getEmailOpsSummary).toHaveBeenCalledWith({ catalogScope: "active" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Contacte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Arhivează ioana@example.com" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Arhivează" }));
+    await waitFor(() => {
+      expect(emailApiMocks.archiveCampaignRecipientOnServer).toHaveBeenCalledWith("recipient-1");
+    });
+
+    await act(async () => {
+      staleActiveSummary.resolve(makeEmailSummary("ready"));
+      await staleActiveSummary.promise;
+    });
+
+    expect(await screen.findByText("Contactul a fost arhivat.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Arhivează ioana@example.com" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
+    expect(await screen.findByText("ioana@example.com")).toBeTruthy();
+    expect(screen.getByText("Arhivat")).toBeTruthy();
   });
 
   it("reconciles partial bulk deletion and keeps only failed contacts selected", async () => {
@@ -2087,7 +2288,6 @@ describe("EmailWorkspace campaign contacts", () => {
 
     expect(screen.getByLabelText("Segment pentru Ioana Popescu").getAttribute("data-slot")).toBe("select");
     expect(screen.getByLabelText("Status campanie pentru Ioana Popescu").getAttribute("data-slot")).toBe("select");
-    expect((screen.getByRole("button", { name: "Activează" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Oprește trimiterea" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Arhivează contactele selectate" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -2111,6 +2311,7 @@ describe("EmailWorkspace campaign contacts", () => {
   it("restores a protected contact from the Archive without silently reactivating it", async () => {
     let archivedRecipients = [makeCampaignRecipient({
       status: "archived",
+      statusBeforeArchive: "suppressed",
       purgeAfter: "2026-08-29T12:00:00Z",
     })];
     emailApiMocks.getEmailOpsSummary.mockImplementation(({ catalogScope } = {}) =>
@@ -2132,6 +2333,9 @@ describe("EmailWorkspace campaign contacts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
 
     expect(await screen.findByText("Arhivat")).toBeTruthy();
+    expect(screen.getByText("Înainte: Adresă respinsă")).toBeTruthy();
+    expect(screen.getByText("Curățare automată: 29 august 2026")).toBeTruthy();
+    emailApiMocks.getEmailOpsSummary.mockRejectedValue(new Error("refresh unavailable"));
     fireEvent.click(screen.getByRole("button", { name: "Restaurează" }));
 
     expect(await screen.findByText(/adresa respinsă rămâne blocată/i)).toBeTruthy();
@@ -2141,21 +2345,39 @@ describe("EmailWorkspace campaign contacts", () => {
     });
   });
 
-  it("keeps permanent deletion unavailable while the privacy migration gate is closed", async () => {
-    const archivedRecipients = [makeCampaignRecipient({ status: "archived" })];
+  it("permanently deletes an archived contact only after explicit confirmation", async () => {
+    let archivedRecipients = [makeCampaignRecipient({ status: "archived" })];
     emailApiMocks.getEmailOpsSummary.mockImplementation(({ catalogScope } = {}) =>
       Promise.resolve(catalogScope === "archived"
         ? makeEmailSummary("archived", archivedRecipients)
         : makeEmailSummary("ready", [])),
     );
+    emailApiMocks.permanentlyDeleteCampaignRecipientOnServer.mockImplementation(async () => {
+      archivedRecipients = [];
+      return {
+        id: "recipient-1",
+        status: "deleted",
+        cancelled: 0,
+        anonymized_sends: 0,
+      };
+    });
 
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary("ready", []) }));
     fireEvent.click(screen.getByRole("button", { name: "Arhivă" }));
 
-    expect(await screen.findByText(/Contactele rămân în siguranță în Arhivă/)).toBeTruthy();
-    expect(screen.getByText(/Ștergerea definitivă va deveni disponibilă/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Șterge definitiv" })).toBeNull();
-    expect(screen.queryByText("Ștergere automată")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Șterge definitiv" }));
+    emailApiMocks.getEmailOpsSummary.mockRejectedValue(new Error("refresh unavailable"));
+    expect(screen.getByText("Ștergi definitiv contactul?")).toBeTruthy();
+    const deleteButtons = screen.getAllByRole("button", { name: "Șterge definitiv" });
+    fireEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(emailApiMocks.permanentlyDeleteCampaignRecipientOnServer).toHaveBeenCalledWith(
+        "recipient-1",
+      );
+    });
+    expect(await screen.findByText("Contactul a fost șters definitiv.")).toBeTruthy();
+    expect(screen.queryByText("ioana@example.com")).toBeNull();
   });
 
   it("refreshes contacts, campaigns and summary on focus and every ten visible seconds", async () => {

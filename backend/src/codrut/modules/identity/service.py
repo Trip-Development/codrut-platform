@@ -2,7 +2,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -14,7 +14,7 @@ from codrut.core.errors import DomainError
 from codrut.core.security import hash_password, new_session_token, verify_password
 from codrut.modules.communications.email_provider import build_email_provider
 from codrut.modules.communications.service import TransactionalEmailService
-from codrut.modules.companies.anonymous import new_anonymous_name
+from codrut.modules.companies.anonymous import allocate_anonymous_name
 from codrut.modules.identity.models import (
     SHADOW_ACCOUNT_PASSWORD_HASH,
     AssignmentInvite,
@@ -87,6 +87,10 @@ def _invite_task_copy(questionnaire_key: str) -> tuple[str, str, int]:
             2,
         )
     return ("Chestionar", "Completează formularul atribuit.", 10)
+
+
+def _invite_deadline_label(value: datetime | None) -> str | None:
+    return value.strftime("%d.%m.%Y") if value is not None else None
 
 
 class IdentityService:
@@ -321,6 +325,21 @@ class IdentityService:
             if project_id is not None and assignment_project_ids == {project_id}
             else await self._project_names(claims.company_id, assignment_project_ids)
         )
+        cycle_ids = {
+            assignment.assessment_cycle_id
+            for assignment in assignments
+            if assignment.assessment_cycle_id is not None
+        }
+        cycles_by_id: dict[UUID, AssessmentCycle] = {}
+        if cycle_ids:
+            cycles_result = await self.repository.session.execute(
+                select(AssessmentCycle)
+                .where(AssessmentCycle.id.in_(cycle_ids))
+                .where(AssessmentCycle.company_id == claims.company_id)
+            )
+            cycles_by_id = {
+                cycle.id: cycle for cycle in cycles_result.scalars().all()
+            }
 
         tasks = []
         return_to = quote(f"/invite/{token}", safe="")
@@ -360,6 +379,12 @@ class IdentityService:
             }
             task_status = status_map.get(ass.status.value, "not_started")
             title, detail, est_minutes = _invite_task_copy(ass.questionnaire_key)
+            cycle = (
+                cycles_by_id.get(ass.assessment_cycle_id)
+                if ass.assessment_cycle_id is not None
+                else None
+            )
+            deadline_at = ass.due_at or (cycle.due_at if cycle is not None else None)
 
             tasks.append(
                 InviteTask(
@@ -372,10 +397,15 @@ class IdentityService:
                     targetLabel=target_label,
                     estimatedMinutes=est_minutes,
                     questionnaireKey=ass.questionnaire_key,
+                    questionnaireDefinitionId=ass.questionnaire_definition_id,
                     projectId=ass.project_id,
                     projectName=project_names.get(ass.project_id),
                     assignmentRoundId=ass.assignment_round_id,
                     assessmentCycleId=ass.assessment_cycle_id,
+                    cycleName=cycle.name if cycle is not None else None,
+                    cycleSequence=cycle.sequence if cycle is not None else None,
+                    deadlineLabel=_invite_deadline_label(deadline_at),
+                    dueAt=deadline_at,
                 )
             )
 
@@ -396,6 +426,13 @@ class IdentityService:
                 is_leadership=is_leadership,
                 already_registered=already_registered,
                 account_dashboard_available=account_dashboard_available,
+                account_type=(
+                    user.account_type or UserAccountType.registered
+                    if user is not None
+                    else UserAccountType.guest
+                ),
+                access_mode="account" if already_registered else "secure_link",
+                consent_current=_has_current_consent(user),
                 project_id=project_id,
                 project_name=project_name,
                 expires_at=effective_expires_at,
@@ -670,6 +707,21 @@ class IdentityService:
                     ),
                     participant_profile_id=profile.id,
                     project_id=verify_result.project_id,
+                    account_type=(
+                        user.account_type or UserAccountType.registered
+                        if user is not None
+                        else UserAccountType.guest
+                    ),
+                    access_mode=(
+                        "account"
+                        if user is not None and user.is_registered
+                        else "secure_link"
+                    ),
+                    consent_current=_has_current_consent(user),
+                    terms_accepted_at=(
+                        user.terms_accepted_at if user is not None else None
+                    ),
+                    terms_version=user.terms_version if user is not None else None,
                 ),
                 session_token=None,
             )
@@ -687,6 +739,11 @@ class IdentityService:
                         participant_profile_id=profile.id,
                         project_id=verify_result.project_id,
                         assessment_cycle_id=cycle_id,
+                        account_type=UserAccountType.registered,
+                        access_mode="account",
+                        consent_current=_has_current_consent(user),
+                        terms_accepted_at=user.terms_accepted_at,
+                        terms_version=user.terms_version,
                     ),
                     session_token=None,
                 )
@@ -704,13 +761,20 @@ class IdentityService:
                     participant_profile_id=profile.id,
                     project_id=verify_result.project_id,
                     assessment_cycle_id=cycle_id,
+                    account_type=UserAccountType.registered,
+                    access_mode="account",
+                    consent_current=_has_current_consent(user),
+                    terms_accepted_at=user.terms_accepted_at,
+                    terms_version=user.terms_version,
                 ),
                 session_token=session_token,
             )
 
         if not verify_result.is_leadership:
             if not profile.anonymous_name:
-                profile.anonymous_name = new_anonymous_name()
+                profile.anonymous_name = await allocate_anonymous_name(
+                    self.repository.anonymous_name_exists
+                )
                 verify_result.anonymous_name = profile.anonymous_name
         if user is None:
             user = User(
@@ -745,6 +809,11 @@ class IdentityService:
                 participant_profile_id=profile.id,
                 project_id=verify_result.project_id,
                 assessment_cycle_id=cycle_id,
+                account_type=UserAccountType.guest,
+                access_mode="secure_link",
+                consent_current=_has_current_consent(user),
+                terms_accepted_at=user.terms_accepted_at,
+                terms_version=user.terms_version,
             ),
             session_token=session_token,
         )
@@ -756,13 +825,30 @@ class IdentityService:
         token = await self._create_session(user)
         return AuthResult(response=await self._response(user), session_token=token)
 
-    async def request_password_reset(self, payload: PasswordResetRequest) -> None:
+    async def request_password_reset(
+        self,
+        payload: PasswordResetRequest,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        logger.info(
+            "Password reset requested.",
+            extra={
+                "auth_event": "password_reset_requested",
+                "request_id": request_id,
+            },
+        )
         user = await self.repository.get_user_by_email(payload.email)
-        if user is None:
-            return
-        if not user.is_registered and not await self._shadow_account_password_reset_allowed(
-            user.id
-        ):
+        eligible = bool(user is not None and user.is_registered)
+        logger.info(
+            "Password reset eligibility resolved.",
+            extra={
+                "auth_event": "password_reset_eligibility",
+                "request_id": request_id,
+                "eligible": eligible,
+            },
+        )
+        if not eligible or user is None:
             return
 
         raw_token = new_session_token()
@@ -794,57 +880,36 @@ class IdentityService:
             ),
         )
         provider = build_email_provider(settings)
-        await TransactionalEmailService(
-            provider,
-            self.session,
-            owner_id=user.id,
-        ).enqueue_transactional_message(
-            message,
-            template_key="password_reset",
-            template_version=2,
-            idempotency_key=f"password-reset:{reset_token.id}",
-            delivery_kind="password_reset",
-        )
-
-    async def _shadow_account_password_reset_allowed(self, user_id: UUID) -> bool:
-        from sqlalchemy import select
-
-        from codrut.modules.assignments.models import (
-            QuestionnaireAssignment,
-            Team,
-            TeamMembership,
-            TeamType,
-        )
-        from codrut.modules.companies.models import CompanyProject, ParticipantProfile
-
-        now = datetime.now(UTC)
-        result = await self.repository.session.execute(
-            select(QuestionnaireAssignment, CompanyProject)
-            .join(
-                ParticipantProfile,
-                ParticipantProfile.id == QuestionnaireAssignment.respondent_profile_id,
+        try:
+            await TransactionalEmailService(
+                provider,
+                self.session,
+                owner_id=user.id,
+            ).enqueue_transactional_message(
+                message,
+                template_key="password_reset",
+                template_version=2,
+                idempotency_key=f"password-reset:{reset_token.id}",
+                delivery_kind="password_reset",
+                lifecycle_request_id=request_id,
             )
-            .join(
-                TeamMembership,
-                TeamMembership.participant_profile_id == ParticipantProfile.id,
+        except Exception:
+            logger.exception(
+                "Password reset outbox enqueue failed.",
+                extra={
+                    "auth_event": "password_reset_enqueue_failed",
+                    "request_id": request_id,
+                },
             )
-            .join(Team, Team.id == TeamMembership.team_id)
-            .outerjoin(CompanyProject, CompanyProject.id == QuestionnaireAssignment.project_id)
-            .where(ParticipantProfile.user_id == user_id)
-            .where(Team.type == TeamType.leadership)
+            raise
+        logger.info(
+            "Password reset enqueued.",
+            extra={
+                "auth_event": "password_reset_enqueued",
+                "request_id": request_id,
+                "delivery_id": str(reset_token.id),
+            },
         )
-
-        for assignment, project in result.all():
-            if assignment.due_at is not None and assignment.due_at <= now:
-                continue
-            if project is not None:
-                try:
-                    _validate_project_access_window(project, now=now)
-                except DomainError:
-                    continue
-            return True
-
-        return False
 
     async def confirm_password_reset(self, payload: PasswordResetConfirmRequest) -> None:
         reset_token = await self.repository.get_active_password_reset_token(payload.token)
@@ -857,9 +922,7 @@ class IdentityService:
         user = await self.repository.get_user_by_id(reset_token.user_id)
         if user is None:
             raise DomainError("Contul nu mai există.", code="user_not_found")
-        if not user.is_registered and not await self._shadow_account_password_reset_allowed(
-            user.id
-        ):
+        if not user.is_registered:
             raise DomainError(
                 "Temporary invite accounts cannot be converted through password reset.",
                 code="password_reset_forbidden",
@@ -911,7 +974,7 @@ class IdentityService:
                 code="terms_version_outdated",
             )
 
-        user = await self.repository.get_user_by_id(user_id)
+        user = await self.repository.get_user_by_id(user_id, for_update=True)
         if user is None:
             raise DomainError("Authenticated user was not found.", code="user_not_found")
 
@@ -922,13 +985,24 @@ class IdentityService:
         if active_session is not None and active_session.assignment_invite_id is not None:
             invite = await self.repository.get_invite_by_id(active_session.assignment_invite_id)
 
-        existing = await self.repository.get_consent_acceptance(
+        existing = await self.repository.get_latest_consent_acceptance(
+            user_id=user_id,
+            terms_version=payload.terms_version,
+        )
+        accepted_at = (
+            user.terms_accepted_at
+            if user.terms_version == payload.terms_version
+            and user.terms_accepted_at is not None
+            else existing.accepted_at
+            if existing is not None
+            else datetime.now(UTC)
+        )
+        session_acceptance = await self.repository.get_consent_acceptance(
             user_id=user_id,
             terms_version=payload.terms_version,
             session_id=active_session.id if active_session is not None else None,
         )
-        accepted_at = existing.accepted_at if existing is not None else datetime.now(UTC)
-        if existing is None:
+        if session_acceptance is None:
             source = (
                 "secure_invite"
                 if invite is not None
@@ -953,7 +1027,15 @@ class IdentityService:
 
         user.terms_accepted_at = accepted_at
         user.terms_version = payload.terms_version
-        return await self._response(user)
+        return await self._response(
+            user,
+            access_mode=(
+                "secure_link"
+                if active_session is not None
+                and active_session.assignment_invite_id is not None
+                else "account"
+            ),
+        )
 
     async def require_secure_link_consent(
         self,
@@ -1010,33 +1092,6 @@ class IdentityService:
                 code="task_link_scope_mismatch",
             )
 
-        acceptance = await self.repository.get_consent_acceptance(
-            user_id=principal.user_id,
-            terms_version=CURRENT_TERMS_VERSION,
-            session_id=active_session.id,
-        )
-        if acceptance is None:
-            acceptance = await self.repository.get_latest_consent_acceptance(
-                user_id=principal.user_id,
-                terms_version=CURRENT_TERMS_VERSION,
-            )
-        if acceptance is None:
-            raise DomainError(
-                "Privacy and confidentiality terms must be accepted.",
-                code="terms_required",
-            )
-        if acceptance.session_id == active_session.id and (
-            acceptance.assignment_invite_id not in {None, invite.id}
-            or (
-                acceptance.respondent_profile_id is not None
-                and acceptance.respondent_profile_id != invite.respondent_profile_id
-            )
-        ):
-            raise DomainError(
-                "Consent does not match the active invitation.",
-                code="task_link_scope_mismatch",
-            )
-
     async def principal_from_session_token(self, token: str) -> SessionPrincipal | None:
         active_session = await self.repository.get_session_by_token(token)
         if active_session is None:
@@ -1084,6 +1139,7 @@ class IdentityService:
             avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
+            consent_current=_has_current_consent(user),
             session_token=token,
             assignment_invite_id=active_session.assignment_invite_id,
             assignment_ids=assignment_ids,
@@ -1112,6 +1168,7 @@ class IdentityService:
             avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
+            consent_current=_has_current_consent(user),
             session_token=f"local-development:{role.value}",
         )
 
@@ -1145,7 +1202,12 @@ class IdentityService:
             workspaces.append(UserRole.participant)
         return tuple(workspaces)
 
-    async def _response(self, user: User) -> AuthResponse:
+    async def _response(
+        self,
+        user: User,
+        *,
+        access_mode: Literal["account", "secure_link"] = "account",
+    ) -> AuthResponse:
         return AuthResponse(
             user_id=user.id,
             email=user.email,
@@ -1156,6 +1218,8 @@ class IdentityService:
             avatar_palette_key=user.avatar_palette_key,
             terms_accepted_at=user.terms_accepted_at,
             terms_version=user.terms_version,
+            consent_current=_has_current_consent(user),
+            access_mode=access_mode,
         )
 
     async def create_invite(
@@ -1347,6 +1411,14 @@ def _min_datetime(*values: datetime | None) -> datetime:
     if not candidates:
         raise ValueError("at least one datetime is required")
     return min(candidates)
+
+
+def _has_current_consent(user: User | None) -> bool:
+    return bool(
+        user is not None
+        and user.terms_accepted_at is not None
+        and user.terms_version == CURRENT_TERMS_VERSION
+    )
 
 
 def _validate_project_access_window(project: "CompanyProject", *, now: datetime) -> None:

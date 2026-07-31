@@ -32,15 +32,18 @@ from codrut.modules.identity.models import User, UserRole
 from codrut.modules.participants.service import (
     ParticipantWorkspaceService,
     _definition_scale_max,
+    _definition_score_feedback,
     _definition_score_labels,
-    _required_feedback_count,
 )
 from codrut.modules.scoring.models import (
     ResultPublication,
     ResultPublicationKind,
     ScoringResult,
 )
-from codrut.modules.scoring.publication import ResultPublicationService
+from codrut.modules.scoring.publication import (
+    ResultPublicationService,
+    required_feedback_count,
+)
 
 
 def _feedback_definition() -> QuestionnaireDefinition:
@@ -93,9 +96,9 @@ def _feedback_definition() -> QuestionnaireDefinition:
     )
 
 
-def test_received_feedback_threshold_requires_two_or_three_reviewers() -> None:
+def test_received_feedback_threshold_is_always_two_distinct_reviewers() -> None:
     assert (
-        _required_feedback_count(
+        required_feedback_count(
             eligible_count=1,
             minimum_completed=2,
             target_completed=3,
@@ -103,7 +106,7 @@ def test_received_feedback_threshold_requires_two_or_three_reviewers() -> None:
         == 2
     )
     assert (
-        _required_feedback_count(
+        required_feedback_count(
             eligible_count=2,
             minimum_completed=2,
             target_completed=3,
@@ -111,12 +114,12 @@ def test_received_feedback_threshold_requires_two_or_three_reviewers() -> None:
         == 2
     )
     assert (
-        _required_feedback_count(
+        required_feedback_count(
             eligible_count=3,
             minimum_completed=2,
             target_completed=3,
         )
-        == 3
+        == 2
     )
 
 
@@ -127,9 +130,37 @@ def test_received_feedback_scale_uses_the_scoring_output_unit() -> None:
     scoring["score_unit"] = "percent"
 
     assert _definition_scale_max(definition) == 100.0
-
     scoring["score_unit"] = "grade_1_to_5"
     assert _definition_scale_max(definition) == 5.0
+
+
+def test_driver_feedback_is_read_from_the_pinned_questionnaire_definition() -> None:
+    definition = QuestionnaireDefinition(
+        id=uuid.uuid4(),
+        key="distress_drivers",
+        version=1,
+        title="TA",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "scoring": {
+                    "method": "sum_statement_scores_by_driver",
+                    "drivers": [
+                        {
+                            "id": "be_perfect",
+                            "label": "Fii perfect",
+                            "feedback_above_50": "Verifică standardele imposibile.",
+                        }
+                    ],
+                }
+            }
+        },
+        active=True,
+    )
+
+    assert _definition_score_feedback(definition) == {
+        "be_perfect": "Verifică standardele imposibile."
+    }
 
 
 def test_result_labels_prefer_participant_schema_copy() -> None:
@@ -171,12 +202,12 @@ def test_result_labels_prefer_participant_schema_copy() -> None:
         "feedback_signal_b": "Colaborare",
     }
     assert (
-        _required_feedback_count(
+        required_feedback_count(
             eligible_count=9,
             minimum_completed=2,
             target_completed=3,
         )
-        == 3
+        == 2
     )
 
 
@@ -349,6 +380,28 @@ async def test_workspace_requires_context_for_multi_profile_account_and_scopes_c
                 profile_a.id,
                 profile_b.id,
             }
+            assert {
+                project.name: project.total_count
+                for project in selection.questionnaire_projects
+            } == {
+                project_a.name: 1,
+                project_b.name: 2,
+            }
+            program_b = next(
+                project
+                for project in selection.questionnaire_projects
+                if project.id == project_b.id
+            )
+            assert {
+                (task.cycleName, task.cycleSequence)
+                for task in program_b.questionnaires
+            } == {
+                ("Evaluare inițială", 1),
+                ("Reevaluare 1", 2),
+            }
+            assert {
+                task.deadlineLabel for task in program_b.questionnaires
+            } == {"finalul evaluării"}
             assert selected.context_selection_required is False
             assert selected.participant_profile_id == profile_b.id
             assert selected.project_id == project_b.id
@@ -982,6 +1035,7 @@ async def test_participant_workspace_summary_uses_persisted_profile_and_assignme
             assert summary.tasks[1].status == "completed"
             assert summary.results == []
             assert summary.received_feedback is not None
+            assert summary.received_feedback.cohort == "leadership_peers"
             assert summary.received_feedback.completed_count == 2
             assert summary.received_feedback.minimum_completed == 2
             assert summary.received_feedback.scale_max == 5.0

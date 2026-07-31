@@ -13,6 +13,7 @@ from codrut.contracts.emails import (
     EmailProviderKey,
     EmailSendResult,
 )
+from codrut.core.config import Settings
 from codrut.core.database import SessionLocal, engine
 from codrut.core.errors import DomainError
 from codrut.core.security import hash_password
@@ -344,6 +345,12 @@ class FakeCompanyRepository:
         audit.id = uuid.uuid4()
         self.account_link_audits.append(audit)
         return audit
+
+    async def anonymous_name_exists(self, anonymous_name: str) -> bool:
+        return any(
+            participant.anonymous_name == anonymous_name
+            for participant in self.participants
+        )
 
     async def list_project_memberships(
         self,
@@ -2409,11 +2416,102 @@ async def test_import_roster_creates_invites_and_rank_specific_email_flows(
 
 
 @pytest.mark.asyncio
+async def test_invitation_capacity_does_not_charge_idempotent_replay_before_new_send(
+    monkeypatch: pytest.MonkeyPatch,
+    questionnaire_definition_factory,
+) -> None:
+    await engine.dispose()
+    provider = LocalEmailProvider()
+    settings = Settings(_env_file=None, email_daily_send_cap=2)
+    monkeypatch.setattr("codrut.core.config.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "codrut.modules.communications.email_provider.build_email_provider",
+        lambda _settings: provider,
+    )
+
+    async with SessionLocal() as session:
+        trainer = User(
+            id=uuid.uuid4(),
+            email=f"trainer-{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("trainer-password-123"),
+            role=UserRole.trainer,
+        )
+        company = Company(id=uuid.uuid4(), name=f"Capacity replay {uuid.uuid4().hex[:8]}")
+        definition = questionnaire_definition_factory("lencioni")
+        first = ParticipantProfile(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            full_name="Prima participantă",
+            email=f"first-{uuid.uuid4().hex[:8]}@example.com",
+        )
+        second = ParticipantProfile(
+            id=uuid.uuid4(),
+            company_id=company.id,
+            full_name="A doua participantă",
+            email=f"second-{uuid.uuid4().hex[:8]}@example.com",
+        )
+        session.add_all([trainer, company, definition, first, second])
+        await session.flush()
+        session.add(
+            CompanyMembership(
+                company_id=company.id,
+                user_id=trainer.id,
+                role=CompanyMembershipRole.owner,
+            )
+        )
+        session.add_all(
+            [
+                QuestionnaireAssignment(
+                    company_id=company.id,
+                    respondent_profile_id=participant.id,
+                    questionnaire_key="lencioni",
+                    questionnaire_definition_id=definition.id,
+                    target_type=AssignmentTargetType.self_assessment,
+                    status=AssignmentStatus.assigned,
+                )
+                for participant in (first, second)
+            ]
+        )
+        await session.flush()
+        service = CompanyService(session)
+        request_key = "capacity-boundary-request"
+
+        initial = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(
+                participant_ids=[first.id],
+                mode="email",
+                target_mode="selected",
+            ),
+            idempotency_key=request_key,
+        )
+        replay_and_new = await service.send_participant_invites(
+            trainer.id,
+            company.id,
+            ParticipantInviteBatchRequest(
+                participant_ids=[first.id, second.id],
+                mode="email",
+                target_mode="selected",
+            ),
+            idempotency_key=request_key,
+        )
+
+        assert initial.emails_queued == 1
+        assert replay_and_new.emails_queued == 2
+        assert replay_and_new.emails_failed == 0
+        sends = list((await session.execute(select(EmailSend))).scalars().all())
+        assert len(sends) == 2
+        await session.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_invitation_batch_rolls_back_failed_recipient_and_continues(
     monkeypatch: pytest.MonkeyPatch,
     questionnaire_definition_factory,
 ) -> None:
-    original_send = TransactionalEmailService.send_assignment_invitation
+    original_send = TransactionalEmailService.enqueue_assignment_invitation
     call_count = 0
 
     async def fail_first_send(self, *args, **kwargs):
@@ -2426,7 +2524,7 @@ async def test_invitation_batch_rolls_back_failed_recipient_and_continues(
 
     monkeypatch.setattr(
         TransactionalEmailService,
-        "send_assignment_invitation",
+        "enqueue_assignment_invitation",
         fail_first_send,
     )
 

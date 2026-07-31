@@ -104,6 +104,7 @@ class BrevoEmailProvider:
         self.api_key = settings.email_brevo_api_key.get_secret_value()
         self.from_address = EmailAddress(settings.email_from_address)
         self.from_name = settings.email_from_name
+        self.sandbox_allowed = settings.email_brevo_sandbox_enabled
         self.client = client
 
     async def send(self, message: EmailMessage) -> EmailSendResult:
@@ -119,8 +120,18 @@ class BrevoEmailProvider:
         }
         if message.reply_to is not None:
             payload["replyTo"] = {"email": message.reply_to.value}
+        provider_headers: dict[str, str] = {}
         if message.provider_idempotency_key is not None:
-            payload["headers"] = {"idempotencyKey": message.provider_idempotency_key}
+            provider_headers["idempotencyKey"] = message.provider_idempotency_key
+        if message.provider_sandbox and not self.sandbox_allowed:
+            raise DomainError(
+                "This message requires Brevo sandbox mode.",
+                code="email_sandbox_required",
+            )
+        if message.provider_sandbox:
+            provider_headers["X-Sib-Sandbox"] = "drop"
+        if provider_headers:
+            payload["headers"] = provider_headers
 
         headers = {
             "accept": "application/json",
@@ -204,7 +215,11 @@ def _retry_after_seconds(response: httpx.Response) -> int | None:
     return None
 
 
-def build_email_provider(settings: Settings) -> EmailProvider:
+def build_email_provider(
+    settings: Settings,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> EmailProvider:
     try:
         provider = EmailProviderKey(settings.email_provider)
     except ValueError as exc:
@@ -224,5 +239,5 @@ def build_email_provider(settings: Settings) -> EmailProvider:
             )
         return SmtpEmailProvider(settings)
     if provider == EmailProviderKey.brevo:
-        return BrevoEmailProvider(settings)
+        return BrevoEmailProvider(settings, client=client)
     raise DomainError("Unsupported email provider.", code="email_provider_unsupported")

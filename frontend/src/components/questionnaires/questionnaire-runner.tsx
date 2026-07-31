@@ -148,7 +148,10 @@ function DiscreteScaleSlider({
         thumbLabel={label}
         thumbDescriptionId={selectedDescriptionId}
         thumbValueText={valueText}
-        className="py-2"
+        ticks={layout.tickLabels.map((tickLabel, index) => ({
+          value: layout.sliderMin + index,
+          label: tickLabel,
+        }))}
       />
       {showTaAnchors && layout.sliderMin === 0 && layout.sliderMax === 10 ? (
         <div className="mt-1 grid grid-cols-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -157,14 +160,6 @@ function DiscreteScaleSlider({
           <span className="text-right">Cel mai adevărat</span>
         </div>
       ) : null}
-      <div
-        className="mt-2 grid text-center text-[11px] font-bold text-muted-foreground"
-        style={{ gridTemplateColumns: `repeat(${layout.tickLabels.length}, minmax(0, 1fr))` }}
-      >
-        {scale.map((option, index) => (
-          <span key={String(option.value)}>{layout.tickLabels[index]}</span>
-        ))}
-      </div>
       <div id={selectedDescriptionId} className="mt-3 min-h-10 rounded-lg border border-border bg-muted px-3 py-2 text-sm">
         {selectedOption ? (
           <>
@@ -215,11 +210,13 @@ export function QuestionnaireRunner({
   const autosaveInFlightRef = useRef(false);
   const autosaveInFlightPromiseRef = useRef<Promise<void> | null>(null);
   const queuedAutosaveRef = useRef<{ assignmentId: string; sequence: number } | null>(null);
-  const exitSubmittingRef = useRef(false);
-  const finalSubmittingRef = useRef(false);
+  const terminalOperationRef = useRef<"exit" | "submit" | null>(null);
 
   useEffect(() => {
     const nextAnswers = initialAnswers ?? {};
+    saveSequenceRef.current += 1;
+    queuedAutosaveRef.current = null;
+    terminalOperationRef.current = null;
     latestAnswersRef.current = nextAnswers;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -229,6 +226,8 @@ export function QuestionnaireRunner({
     setActiveOperation(null);
     setSaveError(null);
     setAnswers(nextAnswers);
+    setIsExiting(false);
+    setSubmitConfirmOpen(false);
   }, [initialAnswers, initialStatus, assignmentId]);
 
   useEffect(() => () => {
@@ -348,14 +347,13 @@ export function QuestionnaireRunner({
   }
 
   async function saveDraftAndExit() {
-    if (exitSubmittingRef.current) return;
-
     if (!assignmentId || isComplete) {
       router.push(returnHref);
       return;
     }
+    if (terminalOperationRef.current) return;
 
-    exitSubmittingRef.current = true;
+    terminalOperationRef.current = "exit";
     setIsExiting(true);
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -381,7 +379,7 @@ export function QuestionnaireRunner({
       setSaveError(null);
       router.push(returnHref);
     } catch (error) {
-      exitSubmittingRef.current = false;
+      terminalOperationRef.current = null;
       setIsExiting(false);
       setSaveState("error");
       setActiveOperation(null);
@@ -395,9 +393,9 @@ export function QuestionnaireRunner({
   }
 
   async function confirmSubmit() {
-    if (finalSubmittingRef.current) return;
+    if (terminalOperationRef.current) return;
     if (!canSubmit || !assignmentId) return;
-    finalSubmittingRef.current = true;
+    terminalOperationRef.current = "submit";
     setSubmitConfirmOpen(false);
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -423,7 +421,7 @@ export function QuestionnaireRunner({
       setSaveError(null);
       router.refresh();
     } catch (error) {
-      finalSubmittingRef.current = false;
+      terminalOperationRef.current = null;
       setSaveState("error");
       setActiveOperation(null);
       setSaveError(errorMessage(error, "A apărut o eroare la trimiterea răspunsurilor."));
@@ -441,7 +439,7 @@ export function QuestionnaireRunner({
               size="sm"
               onClick={() => void saveDraftAndExit()}
               aria-label={returnLabel}
-              disabled={isExiting}
+              disabled={isExiting || activeOperation === "submit"}
               className="-ml-2 text-muted-foreground hover:text-burgundy"
             >
               {isExiting ? (
@@ -449,7 +447,7 @@ export function QuestionnaireRunner({
               ) : (
                 <ArrowLeftIcon aria-hidden="true" strokeWidth={2.3} />
               )}
-              <span aria-hidden="true">{isExiting ? "Salvăm draftul" : "Înapoi"}</span>
+              <span aria-hidden="true">{isExiting ? "Se salvează" : "Înapoi"}</span>
             </Button>
           </div>
 
@@ -608,10 +606,15 @@ export function QuestionnaireRunner({
             onClick={submit}
           >
             {saveState === "saving" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : null}
-            {saveState === "saving" ? (activeOperation === "submit" ? "Trimitem răspunsurile" : "Salvăm draftul") : "Trimite răspunsurile"}
+            {saveState === "saving" ? (activeOperation === "submit" ? "Trimitem" : "Se salvează") : "Trimite răspunsurile"}
           </Button>
         </div>
-        <AutosaveStatus assignmentId={assignmentId} state={saveState} error={saveError} />
+        <AutosaveStatus
+          assignmentId={assignmentId}
+          state={saveState}
+          operation={activeOperation}
+          error={saveError}
+        />
       </aside>
       {submitConfirmOpen ? (
         <ModalLayer
@@ -719,12 +722,27 @@ function safeReviewTargetLabel(value?: string): string {
 function AutosaveStatus({
   assignmentId,
   state,
+  operation,
   error,
 }: {
   assignmentId?: string;
   state: SaveState;
+  operation: ActiveOperation;
   error: string | null;
 }) {
+  if (state === "saving") {
+    return (
+      <p className="mt-3 text-xs font-semibold text-muted-foreground" role="status">
+        {operation === "submit" ? "Trimitem răspunsurile…" : "Se salvează…"}
+      </p>
+    );
+  }
+  if (state === "saved") {
+    return <p className="mt-3 text-xs font-semibold text-success" role="status">Salvat</p>;
+  }
+  if (state === "submitted") {
+    return <p className="mt-3 text-xs font-semibold text-success" role="status">Trimis</p>;
+  }
   if (state !== "error") return null;
   const message = assignmentId
     ? error || "A apărut o eroare la salvare."
@@ -738,7 +756,7 @@ function AutosaveStatus({
     >
       <span className="flex items-start gap-2">
         <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-destructive" />
-        <span>{message}</span>
+        <span>Nu s-a salvat. Poți reîncerca. {message}</span>
       </span>
     </InlineFeedback>
   );
@@ -771,7 +789,8 @@ function CompletionPanel({
       <div className="status-success-soft mx-auto flex size-14 items-center justify-center rounded-full text-xl font-semibold">
         <CheckIcon />
       </div>
-      <h3 className="mt-5 text-2xl font-semibold text-foreground">Răspunsurile au fost trimise</h3>
+      <p className="text-sm font-semibold text-success" role="status">Trimis</p>
+      <h3 className="mt-2 text-2xl font-semibold text-foreground">Răspunsurile au fost trimise</h3>
       <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
         Am înregistrat {answeredCount}/{total} răspunsuri pentru această sarcină. Persoana evaluată nu vede răspunsuri
         individuale; trainerul lucrează cu raportarea configurată pentru proiect.

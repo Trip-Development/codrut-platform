@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+from time import monotonic
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
+from codrut.modules.communications.service import (
+    EmailOutboxBatchResult,
+    EmailOutboxClaim,
+)
 from codrut.workers import main as worker
 
 
@@ -32,6 +39,164 @@ class SessionFactory:
         session = SimpleNamespace(commit=AsyncMock())
         self.sessions.append(session)
         return AsyncSessionContext(session)
+
+
+class AsyncClientContext:
+    async def __aenter__(self) -> object:
+        return object()
+
+    async def __aexit__(
+        self,
+        _exc_type: object,
+        _exc: object,
+        _traceback: object,
+    ) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_email_worker_uses_bounded_isolated_claim_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory = SessionFactory()
+    claims = [
+        EmailOutboxClaim(send_id=uuid4(), lease_token=f"lease-{index}")
+        for index in range(3)
+    ]
+    active = 0
+    maximum_active = 0
+    coordinator = SimpleNamespace(
+        claim_due=AsyncMock(
+            return_value=(
+                claims,
+                EmailOutboxBatchResult(claimed=len(claims)),
+            )
+        )
+    )
+
+    class ClaimProcessor:
+        async def process_claim(self, _claim: EmailOutboxClaim) -> str:
+            nonlocal active, maximum_active
+            active += 1
+            maximum_active = max(maximum_active, active)
+            await asyncio.sleep(0)
+            active -= 1
+            return "accepted"
+
+    processor_count = 0
+
+    def processor_factory(*_args: object) -> object:
+        nonlocal processor_count
+        processor_count += 1
+        return coordinator if processor_count == 1 else ClaimProcessor()
+
+    monkeypatch.setattr(worker, "SessionLocal", factory)
+    monkeypatch.setattr(worker, "EmailOutboxProcessor", processor_factory)
+    monkeypatch.setattr(worker, "build_email_provider", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(worker.httpx, "AsyncClient", lambda **_kwargs: AsyncClientContext())
+    monkeypatch.setattr(
+        worker,
+        "get_settings",
+        lambda: SimpleNamespace(
+            email_outbox_batch_size=100,
+            email_outbox_concurrency=2,
+        ),
+    )
+
+    result = await worker.process_email_outbox({})
+
+    assert result == {
+        "claimed": 3,
+        "accepted": 3,
+        "retried": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "indeterminate": 0,
+    }
+    assert coordinator.claim_due.await_args.kwargs == {"limit": 100}
+    assert maximum_active == 2
+    assert len(factory.sessions) == 4
+
+
+@pytest.mark.asyncio
+async def test_email_worker_drains_one_thousand_unique_sandbox_claims_well_within_five_minutes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory = SessionFactory()
+    pending = [
+        EmailOutboxClaim(send_id=uuid4(), lease_token=f"lease-{index}")
+        for index in range(1_000)
+    ]
+    processed: list[EmailOutboxClaim] = []
+    active = 0
+    maximum_active = 0
+
+    class ThroughputProcessor:
+        async def claim_due(
+            self,
+            *,
+            limit: int,
+        ) -> tuple[list[EmailOutboxClaim], EmailOutboxBatchResult]:
+            claims = pending[:limit]
+            del pending[:limit]
+            return claims, EmailOutboxBatchResult(claimed=len(claims))
+
+        async def process_claim(self, claim: EmailOutboxClaim) -> str:
+            nonlocal active, maximum_active
+            active += 1
+            maximum_active = max(maximum_active, active)
+            await asyncio.sleep(0)
+            processed.append(claim)
+            active -= 1
+            return "accepted"
+
+    processor = ThroughputProcessor()
+    monkeypatch.setattr(worker, "SessionLocal", factory)
+    monkeypatch.setattr(worker, "EmailOutboxProcessor", lambda *_args: processor)
+    monkeypatch.setattr(worker, "build_email_provider", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(worker.httpx, "AsyncClient", lambda **_kwargs: AsyncClientContext())
+    monkeypatch.setattr(
+        worker,
+        "get_settings",
+        lambda: SimpleNamespace(
+            email_outbox_batch_size=100,
+            email_outbox_concurrency=8,
+        ),
+    )
+
+    started_at = monotonic()
+    totals = [
+        await worker.process_email_outbox({})
+        for _batch_number in range(10)
+    ]
+    elapsed_seconds = monotonic() - started_at
+
+    assert pending == []
+    assert sum(result["claimed"] for result in totals) == 1_000
+    assert sum(result["accepted"] for result in totals) == 1_000
+    assert len({claim.send_id for claim in processed}) == 1_000
+    assert maximum_active == 8
+    assert elapsed_seconds < 300
+
+
+def test_email_outbox_cron_is_unique_per_scheduled_run() -> None:
+    cron_job = next(
+        job
+        for job in worker.WorkerSettings.cron_jobs
+        if job.coroutine is worker.process_email_outbox
+    )
+
+    assert cron_job.unique is True
+    assert cron_job.job_id is None
+
+
+def test_worker_max_jobs_stays_within_validated_database_pool_budget() -> None:
+    settings = worker.WorkerSettings.settings
+
+    assert worker.WorkerSettings.max_jobs == settings.worker_max_jobs
+    assert settings.email_outbox_concurrency + worker.WorkerSettings.max_jobs - 1 <= (
+        settings.db_pool_size + settings.db_max_overflow
+    )
 
 
 @pytest.mark.asyncio
