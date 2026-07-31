@@ -9,6 +9,9 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CAPACITY_SCRIPT = REPOSITORY_ROOT / ".github/scripts/check_vps_capacity.sh"
 RETENTION_SCRIPT = REPOSITORY_ROOT / ".github/scripts/retain_codrut_images.sh"
+CAPTURE_ROLLBACK_SCRIPT = (
+    REPOSITORY_ROOT / ".github/scripts/capture_codrut_rollback.sh"
+)
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -191,6 +194,73 @@ class DeploySafeguardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("outside the Codrut backend repository", result.stderr)
 
+    def test_rollback_capture_uses_live_refs_and_preserves_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            (temp_path / ".env").write_text(
+                "COMPOSE_PROJECT_NAME=codrut-platform\n"
+                "BACKEND_IMAGE=stale-backend\n"
+                "FRONTEND_IMAGE=stale-frontend\n"
+                "CODRUT_SESSION_SECRET=preserved-secret\n",
+                encoding="utf-8",
+            )
+            _write_executable(
+                temp_path / "docker",
+                "#!/bin/sh\n"
+                "case \"$1:$2\" in\n"
+                "  ps:-a)\n"
+                "    case \"$*\" in\n"
+                "      *service=backend*) printf 'backend-id\\n' ;;\n"
+                "      *service=worker*) printf 'worker-id\\n' ;;\n"
+                "      *service=frontend*) printf 'frontend-id\\n' ;;\n"
+                "    esac\n"
+                "    ;;\n"
+                "  inspect:--format)\n"
+                "    for argument in \"$@\"; do last=\"$argument\"; done\n"
+                "    case \"$last\" in\n"
+                "      backend-id|worker-id) printf 'backend:sha-live\\n' ;;\n"
+                "      frontend-id) printf 'frontend:sha-live\\n' ;;\n"
+                "    esac\n"
+                "    ;;\n"
+                "  image:inspect) exit 0 ;;\n"
+                "  *) exit 64 ;;\n"
+                "esac\n",
+            )
+            result = subprocess.run(
+                [
+                    str(CAPTURE_ROLLBACK_SCRIPT),
+                    "previous-images.env",
+                    ".env.rollback",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=temp_path,
+                env={
+                    **os.environ,
+                    "PATH": f"{temp_path}:{os.environ['PATH']}",
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (temp_path / "previous-images.env").read_text(encoding="utf-8"),
+                "BACKEND_IMAGE=backend:sha-live\n"
+                "FRONTEND_IMAGE=frontend:sha-live\n",
+            )
+            rollback_environment = (temp_path / ".env.rollback").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("BACKEND_IMAGE=backend:sha-live", rollback_environment)
+            self.assertIn("FRONTEND_IMAGE=frontend:sha-live", rollback_environment)
+            self.assertIn(
+                "CODRUT_SESSION_SECRET=preserved-secret", rollback_environment
+            )
+            self.assertEqual(
+                stat.S_IMODE((temp_path / ".env.rollback").stat().st_mode),
+                0o600,
+            )
+
     def test_retention_occurs_only_after_public_readiness(self) -> None:
         workflow = (
             REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
@@ -198,13 +268,93 @@ class DeploySafeguardTests(unittest.TestCase):
 
         self.assertLess(
             workflow.index("check_vps_capacity.sh preflight"),
-            workflow.index('"${compose[@]}" pull'),
+            workflow.index("\"docker pull '${BACKEND_IMAGE}'"),
         )
         self.assertLess(
             workflow.index("Public health check passed"),
             workflow.index("bash ./retain_codrut_images.sh"),
         )
         self.assertNotIn("docker system prune", workflow)
+
+    def test_candidate_images_and_environment_are_staged_before_cutover(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        backend_pull = workflow.index("\"docker pull '${BACKEND_IMAGE}'")
+        next_environment = workflow.index("${DEPLOY_DIR}/.env.next")
+        cutover = workflow.index("mv .env.next .env")
+        restart = workflow.index("--wait backend worker frontend")
+
+        self.assertLess(backend_pull, next_environment)
+        self.assertLess(next_environment, cutover)
+        self.assertLess(cutover, restart)
+        self.assertNotIn("${DEPLOY_DIR}/.env\"", workflow)
+
+    def test_rollback_refs_come_from_running_containers(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+        capture_script = (
+            REPOSITORY_ROOT / ".github/scripts/capture_codrut_rollback.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertLess(
+            workflow.index(
+                "capture_codrut_rollback.sh previous-images.env .env.rollback"
+            ),
+            workflow.index("${DEPLOY_DIR}/.env.next"),
+        )
+        self.assertIn("docker inspect --format '{{.Config.Image}}'", capture_script)
+        self.assertIn("com.docker.compose.service=", capture_script)
+        self.assertNotIn("BACKEND_IMAGE\" { print", capture_script)
+        self.assertIn("docker ps -a", capture_script)
+        self.assertIn("rollback_environment_path", capture_script)
+        self.assertIn("Cannot capture rollback environment", capture_script)
+
+    def test_public_readiness_follows_a_separate_release_ref_assertion(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertLess(
+            workflow.index("bash ./assert_codrut_release.sh"),
+            workflow.index('HEALTH_URL="${CODRUT_PUBLIC_APP_URL%/}'),
+        )
+
+    def test_ssh_compose_exec_calls_cannot_consume_the_deploy_heredoc(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "'psql -At -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" "
+            '-c "select version_num from alembic_version"\' \\\n'
+            "              </dev/null",
+            workflow,
+        )
+        self.assertIn(
+            "assert hasattr(EmailSuppression, 'email_fingerprint')\" \\\n"
+            "              </dev/null",
+            workflow,
+        )
+        self.assertIn(
+            "urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', "
+            'timeout=10).read()" \\\n'
+            "            </dev/null",
+            workflow,
+        )
+
+    def test_retention_warns_without_invalidating_a_healthy_deploy(self) -> None:
+        workflow = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("if ! bash ./retain_codrut_images.sh", workflow)
+        self.assertIn(
+            "deployment is healthy, but image retention needs manual cleanup",
+            workflow,
+        )
 
     def test_deploy_verifies_active_log_rotation_for_every_service(self) -> None:
         workflow = (

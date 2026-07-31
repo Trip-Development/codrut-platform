@@ -33,12 +33,33 @@ Use this sequence for non-trivial work:
 3. **Gate** — review the diff for correctness, security, regressions,
    compatibility, accessibility, and maintainability.
 4. **Proof** — run the smallest meaningful checks first, then broaden checks for
-   auth, persistence, migrations, public APIs, or cross-cutting changes.
+   the specific high-risk boundary changed. Do not repeat an unchanged suite
+   locally, in review, and again in CI without a concrete reason.
 5. **Ship** — summarize the behavior change, verification evidence, rollout
    risks, and any intentionally unfinished work.
 
 Do not add process ceremony to tiny changes. Do not use subagents unless the
 user explicitly asks for delegation or parallel agent work.
+
+## Fast Delivery Default
+
+- Treat one coherent user request as one implementation branch and one PR.
+  Split it only when a slice must deploy, roll back, or be reviewed
+  independently.
+- Inspect once, implement in coherent slices, review the combined diff, and run
+  each meaningful proof once. Do not restart discovery or rerun broad checks at
+  every small edit.
+- During implementation, use the narrowest test or static check that can catch
+  the regression. Let CI run only the product surfaces touched by the diff.
+- Ordinary PRs do not need repeated coverage collection, production builds, or
+  representative E2E. The immutable post-merge `dev` candidate builds the
+  production images and runs production-shape E2E once.
+- Use `ci:e2e` when a PR changes an end-to-end journey or its test
+  infrastructure. Use `ci:full` only when an unusual cross-cutting risk is not
+  represented by the detected paths.
+- Keep security, authorization, migration, data-integrity, and release
+  boundaries strict. Speed comes from removing duplicate evidence, not from
+  skipping the proof relevant to the risk.
 
 ## Repository and Branch Rules
 
@@ -60,9 +81,9 @@ user explicitly asks for delegation or parallel agent work.
 - `prod` accepts normal releases only from `dev`. Route urgent fixes through a
   focused PR into `dev` and promote them normally; a production-only hotfix
   would reintroduce drift and require an explicit back-merge.
-- Keep iterative PRs in draft while running targeted devcontainer checks. Mark
-  a PR ready only after its diff and focused proof are ready for the full
-  GitHub gate.
+- Finish the coherent local diff and focused proof before opening the PR. Use a
+  draft only when human design feedback is genuinely needed; do not use draft
+  PRs as remote test runners.
 - For an authorized ready feature PR, prefer GitHub native auto-merge over
   repeated check polling. Production promotion remains an explicit,
   authorized merge after the immutable `dev` candidate passes.
@@ -107,8 +128,9 @@ docker compose exec -T frontend pnpm test --run
 docker compose exec -T frontend pnpm build
 ```
 
-Choose targeted checks first. Run the full relevant suites for authentication,
-authorization, migrations, shared contracts, or release-sensitive changes.
+Choose targeted checks first. Broaden only for the high-risk boundary actually
+changed: authentication/authorization, migrations, shared contracts, or
+release automation. Do not automatically combine every listed command.
 
 ## Backend and Data Rules
 
@@ -157,8 +179,9 @@ authorization, migrations, shared contracts, or release-sensitive changes.
   reasonable test path exists.
 - Reviews are findings-first: correctness, security/data loss, broken
   assumptions, compatibility, performance, missing tests, then style.
-- Do not lower coverage, disable checks, or resolve genuine review findings to
-  make a PR green.
+- Do not delete useful tests or resolve genuine review findings merely to make
+  a PR green. Coverage is a diagnostic and periodic quality signal, not a
+  universal blocking pass on every PR.
 - Stale automated findings may be resolved only after inspecting the exact
   thread and proving they are false positives.
 - For route-sensitive work, explicitly inspect the main affected routes in a

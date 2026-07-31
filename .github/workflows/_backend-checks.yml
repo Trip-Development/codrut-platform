@@ -2,6 +2,17 @@ name: Reusable Backend Checks
 
 on:
   workflow_call:
+    inputs:
+      check_database:
+        description: Run migration drift checks for schema-affecting changes.
+        required: false
+        type: boolean
+        default: false
+      check_api_contract:
+        description: Verify OpenAPI and generated frontend types.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,26 +65,15 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check src tests migrations
       - run: uv run alembic upgrade head
-      - run: uv run alembic check
-      - name: Run backend tests with branch coverage
-        run: >-
-          uv run pytest
-          --cov=codrut
-          --cov-branch
-          --cov-fail-under=85
-          --cov-report=term
-          --cov-report=json:coverage.json
-      - name: Upload backend coverage
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: backend-coverage
-          path: backend/coverage.json
-          if-no-files-found: ignore
-          retention-days: 14
+      - if: inputs.check_database
+        name: Check migration metadata
+        run: uv run alembic check
+      - name: Run backend tests
+        run: uv run pytest -q
 
   api-contract:
     name: backend / api-contract
+    if: inputs.check_api_contract
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:

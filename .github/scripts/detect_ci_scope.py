@@ -13,11 +13,11 @@ def _matches(path: str, prefixes: tuple[str, ...], exact: tuple[str, ...] = ()) 
 
 def detect_scope(paths: list[str]) -> dict[str, bool]:
     normalized = [str(PurePosixPath(path.strip())) for path in paths if path.strip()]
-    workflow_change = any(
+    automation = any(
         path.startswith((".github/workflows/", ".github/scripts/")) for path in normalized
     )
 
-    backend = workflow_change or any(
+    backend = any(
         _matches(
             path,
             ("backend/", "infra/backup/"),
@@ -30,7 +30,7 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
         )
         for path in normalized
     )
-    frontend = workflow_change or any(
+    frontend = any(
         _matches(
             path,
             ("frontend/",),
@@ -42,7 +42,7 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
         )
         for path in normalized
     )
-    infra = workflow_change or any(
+    infra = any(
         _matches(
             path,
             ("infra/",),
@@ -59,33 +59,40 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
         for path in normalized
     )
 
-    runtime_change = any(
+    database = any(
         _matches(
             path,
             (
-                "backend/src/",
                 "backend/migrations/",
-                "frontend/src/",
-                "frontend/app/",
-                "frontend/e2e/",
             ),
             (
-                "backend/pyproject.toml",
-                "backend/uv.lock",
-                "frontend/package.json",
-                "frontend/pnpm-lock.yaml",
-                "frontend/next.config.mjs",
-                "frontend/playwright.config.ts",
-                ".dockerignore",
-                "compose.backup.yaml",
-                "compose.yaml",
-                "compose.dev.yaml",
-                "compose.e2e.yaml",
-                "infra/docker/Dockerfile.backend",
-                "infra/docker/Dockerfile.frontend",
-                ".github/workflows/_e2e-playwright.yml",
+                "backend/alembic.ini",
+                "backend/src/codrut/core/database.py",
             ),
         )
+        or path.endswith("/models.py")
+        for path in normalized
+    )
+
+    contract = any(
+        path in {
+            "backend/pyproject.toml",
+            "backend/uv.lock",
+            "docs/api/openapi.json",
+            "frontend/src/api/generated/schema.d.ts",
+        }
+        or path.startswith("backend/src/codrut/")
+        for path in normalized
+    )
+
+    e2e = any(
+        path.startswith("frontend/e2e/")
+        or path
+        in {
+            "compose.e2e.yaml",
+            "frontend/playwright.config.ts",
+            ".github/workflows/_e2e-playwright.yml",
+        }
         for path in normalized
     )
 
@@ -93,7 +100,10 @@ def detect_scope(paths: list[str]) -> dict[str, bool]:
         "backend": backend,
         "frontend": frontend,
         "infra": infra,
-        "e2e": workflow_change or runtime_change,
+        "automation": automation,
+        "database": database,
+        "contract": contract,
+        "e2e": e2e,
     }
 
 
