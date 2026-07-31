@@ -29,12 +29,14 @@ from codrut.tools.launch_load_proof import (
     ParticipantManifest,
     ResourceExtrema,
     ResourceSample,
+    _expected_hold_reads,
     _read_runtime_evidence,
     _request,
     _require_no_unrelated_outbox_activity,
     _require_outbox_capacity,
     _resource_evidence_failure,
     _runtime_evidence_failure,
+    _steady_state_stagger_seconds,
     _summarize_outbox_statuses,
     _write_private_json,
     cleanup_synthetic_tenant,
@@ -365,11 +367,65 @@ def test_acceptance_requires_each_initial_operation_exactly_1_000_times() -> Non
         expected_count = 1 if operation == "trainer_aggregate_result_read" else PARTICIPANT_COUNT
         for _ in range(expected_count):
             recorder.record(operation, 10.0, 200)
+    for operation in ("hold_definition_read", "hold_response_read"):
+        for _ in range(60_000):
+            recorder.record(operation, 10.0, 200)
 
     assert evaluate_acceptance(recorder.report()) == []
 
     recorder.record("submit", 10.0, 200)
     assert any("submit" in failure for failure in evaluate_acceptance(recorder.report()))
+
+
+def test_steady_state_reads_are_evenly_staggered_across_one_interval() -> None:
+    delays = [
+        _steady_state_stagger_seconds(
+            ordinal,
+            participant_count=PARTICIPANT_COUNT,
+            read_interval_seconds=5.0,
+        )
+        for ordinal in range(PARTICIPANT_COUNT)
+    ]
+
+    assert delays[0] == 0
+    assert delays[1] == pytest.approx(0.005)
+    assert delays[-1] == pytest.approx(4.995)
+    assert all(
+        later - earlier == pytest.approx(0.005)
+        for earlier, later in zip(delays[:-1], delays[1:], strict=True)
+    )
+    assert (
+        _expected_hold_reads(
+            participant_count=PARTICIPANT_COUNT,
+            hold_seconds=300,
+            read_interval_seconds=5.0,
+        )
+        == 60_000
+    )
+
+
+def test_acceptance_rejects_an_under_driven_steady_hold() -> None:
+    recorder = MetricsRecorder()
+    for operation in (
+        "invite_verify",
+        "invite_exchange",
+        "definition_read",
+        "task_read",
+        "autosave",
+        "submit",
+        "post_submit_read",
+    ):
+        for _ in range(PARTICIPANT_COUNT):
+            recorder.record(operation, 10.0, 200)
+    recorder.record("trainer_aggregate_result_read", 10.0, 200)
+    for operation in ("hold_definition_read", "hold_response_read"):
+        for _ in range(59_999):
+            recorder.record(operation, 10.0, 200)
+
+    assert evaluate_acceptance(recorder.report()) == [
+        "exact 60,000-operation steady hold missing for: "
+        "hold_definition_read, hold_response_read"
+    ]
 
 
 def test_outbox_summary_requires_all_1_000_sandbox_sends_to_succeed() -> None:
