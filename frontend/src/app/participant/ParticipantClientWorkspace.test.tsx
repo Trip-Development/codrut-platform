@@ -461,6 +461,7 @@ describe("ParticipantResultsPanel", () => {
           cohort: "direct_team",
           completedCount: 1,
           minimumCompleted: 2,
+          unavailableReason: "privacy_threshold",
           visible: false,
           overallAverage: null,
           dimensions: [],
@@ -473,6 +474,29 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText(/Pentru confidențialitate, mai avem nevoie de cel puțin 1 răspuns/)).toBeDefined();
     expect(screen.queryByText("Claritate")).toBeNull();
     expect(screen.queryByText("4.5")).toBeNull();
+  });
+
+  it.each([
+    ["no_eligible_dimensions" as const, "Acest chestionar nu are încă dimensiuni care pot fi afișate în rezultat."],
+    ["scoring_unavailable" as const, "Răspunsurile au fost trimise, dar rezultatul nu este disponibil momentan. Nu trebuie completate din nou."],
+  ])("explains unavailable iCARE feedback without presenting it as a privacy threshold", (unavailableReason, copy) => {
+    render(
+      <ParticipantResultsPanel
+        results={[]}
+        receivedFeedback={{
+          cohort: "leadership_peers",
+          completedCount: 2,
+          minimumCompleted: 2,
+          unavailableReason,
+          visible: false,
+          overallAverage: null,
+          dimensions: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(copy)).toBeDefined();
+    expect(screen.queryByText(/Pentru confidențialitate/)).toBeNull();
   });
 
   it("renders iCARE averages against the questionnaire scale instead of a percentage", () => {
@@ -501,11 +525,12 @@ describe("ParticipantResultsPanel", () => {
     );
 
     expect(screen.getByText("4.5 din 5")).toBeDefined();
+    expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemin")).toBe("1");
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuemax")).toBe("5");
     expect(screen.getByRole("meter", { name: "Scor Claritate" }).getAttribute("aria-valuenow")).toBe("4.5");
     expect(
       screen.getByRole("meter", { name: "Scor Claritate" }).firstElementChild?.getAttribute("style"),
-    ).toContain("width: 90%");
+    ).toContain("width: 87.5%");
   });
 
   it("defends against a stale raw scale when feedback scores are percentages", () => {

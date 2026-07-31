@@ -454,6 +454,8 @@ export type CompanyReportAggregate = {
   total_completed: number;
   reportable_scored_count: number;
   reportable_pending_score_count: number;
+  reportable_failed_score_count: number;
+  reportable_orphaned_score_count: number;
   completion_rate: number;
   lencioni_count: number;
   driver_count: number;
@@ -976,6 +978,8 @@ function fallbackCompanyReportAggregate(companyId: string, projectId?: string | 
     total_completed: completedAssignments.length,
     reportable_scored_count: lencioniCount + driverCount + boss360Count,
     reportable_pending_score_count: 0,
+    reportable_failed_score_count: 0,
+    reportable_orphaned_score_count: 0,
     completion_rate: assignments.length > 0 ? Math.round((completedAssignments.length / assignments.length) * 100) : 0,
     lencioni_count: lencioniCount,
     driver_count: driverCount,

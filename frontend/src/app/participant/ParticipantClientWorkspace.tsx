@@ -479,6 +479,7 @@ function PcmInlineValue({ label, value }: { label: string; value?: string | null
 
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
   const visible = feedback.visible;
+  const scaleMin = feedback.scaleMin ?? 0;
   const scaleMax = receivedFeedbackScaleMax(feedback);
   const scoreSuffix = receivedFeedbackScoreSuffix(feedback, scaleMax);
   const cohortTitle = feedback.cohort === "direct_team"
@@ -514,6 +515,7 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
                 label: dimension.label,
                 score: dimension.averageScore,
               }}
+              min={scaleMin}
               max={scaleMax}
               suffix={scoreSuffix}
               showSignal={false}
@@ -522,12 +524,22 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
         </div>
       ) : !visible ? (
         <p className="mt-6 border-l-2 border-burgundy bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
-          Pentru confidențialitate, mai avem nevoie de cel puțin {Math.max(feedback.minimumCompleted - feedback.completedCount, 1)}{" "}
-          {feedback.minimumCompleted - feedback.completedCount === 1 ? "răspuns" : "răspunsuri"} înainte să putem afișa media grupului.
+          {receivedFeedbackUnavailableCopy(feedback)}
         </p>
       ) : null}
     </article>
   );
+}
+
+function receivedFeedbackUnavailableCopy(feedback: ParticipantReceivedFeedbackSummary): string {
+  if (feedback.unavailableReason === "no_eligible_dimensions") {
+    return "Acest chestionar nu are încă dimensiuni care pot fi afișate în rezultat.";
+  }
+  if (feedback.unavailableReason === "scoring_unavailable") {
+    return "Răspunsurile au fost trimise, dar rezultatul nu este disponibil momentan. Nu trebuie completate din nou.";
+  }
+  const missing = Math.max(feedback.minimumCompleted - feedback.completedCount, 1);
+  return `Pentru confidențialitate, mai avem nevoie de cel puțin ${missing} ${missing === 1 ? "răspuns" : "răspunsuri"} înainte să putem afișa media grupului.`;
 }
 
 function receivedFeedbackScaleMax(feedback: ParticipantReceivedFeedbackSummary): number {
@@ -647,16 +659,19 @@ function GuidanceBlock({ item }: { item: ScoreItem }) {
 
 function ScoreRow({
   item,
+  min = 0,
   max,
   suffix = "",
   showSignal,
 }: {
   item: ScoreItem;
+  min?: number;
   max: number;
   suffix?: string;
   showSignal: boolean;
 }) {
-  const width = Math.max(0, Math.min(100, (item.score / max) * 100));
+  const range = Math.max(max - min, Number.EPSILON);
+  const width = Math.max(0, Math.min(100, ((item.score - min) / range) * 100));
   const tone = showSignal ? "bg-destructive" : "bg-foreground";
 
   return (
@@ -678,7 +693,7 @@ function ScoreRow({
             className="h-1.5 overflow-hidden rounded-full bg-muted"
             role="meter"
             aria-label={`Scor ${item.label}`}
-            aria-valuemin={0}
+            aria-valuemin={min}
             aria-valuemax={max}
             aria-valuenow={item.score}
           >

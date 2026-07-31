@@ -111,6 +111,7 @@ export type ParticipantReceivedFeedbackSummary = {
   scoreUnit?: string | null;
   scaleMin?: number | null;
   scaleMax?: number;
+  unavailableReason?: "privacy_threshold" | "no_eligible_dimensions" | "scoring_unavailable" | null;
   visible: boolean;
   overallAverage?: number | null;
   dimensions: ParticipantReceivedFeedbackDimension[];
@@ -218,6 +219,7 @@ type BackendParticipantReceivedFeedbackSummary = {
   score_unit?: string | null;
   scale_min?: number | null;
   scale_max?: number;
+  unavailable_reason?: "privacy_threshold" | "no_eligible_dimensions" | "scoring_unavailable" | null;
   visible: boolean;
   overall_average?: number | null;
   dimensions?: BackendParticipantReceivedFeedbackDimension[];
@@ -404,6 +406,7 @@ function mapParticipantReceivedFeedback(
     scoreUnit: feedback.score_unit,
     scaleMin: feedback.scale_min,
     scaleMax: feedback.scale_max,
+    unavailableReason: feedback.unavailable_reason,
     visible: feedback.visible,
     overallAverage: feedback.overall_average,
     dimensions: (feedback.dimensions ?? []).map((dimension) => ({

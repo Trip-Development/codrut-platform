@@ -25,6 +25,8 @@ const aggregate = {
   total_completed: 10,
   reportable_scored_count: 10,
   reportable_pending_score_count: 0,
+  reportable_failed_score_count: 0,
+  reportable_orphaned_score_count: 0,
   completion_rate: 83,
   lencioni_count: 3,
   driver_count: 3,
@@ -192,10 +194,34 @@ describe("project report overview", () => {
     });
     render(ui);
 
-    expect(screen.getByText("Unele rezultate sunt încă în curs de procesare")).toBeTruthy();
-    expect(screen.getByText(/Un răspuns trimis nu are încă un rezultat disponibil/)).toBeTruthy();
+    expect(screen.getByText("Unele rezultate sunt încă în curs de pregătire")).toBeTruthy();
+    expect(screen.getByText(/Un răspuns trimis este încă în curs de procesare/)).toBeTruthy();
     expect(screen.getByText(/Aceste răspunsuri folosesc scale diferite/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "TA Drivers" })).toBeTruthy();
+  });
+
+  it("separates failed and unassociated results from work still processing", async () => {
+    data.getProjectReportWorkspaceData.mockResolvedValue({
+      aggregate: {
+        ...aggregate,
+        reportable_failed_score_count: 2,
+        reportable_orphaned_score_count: 1,
+      },
+      assignments: [],
+      participants: [],
+      project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({ cycle: "cycle-2" }),
+    });
+    render(ui);
+
+    expect(screen.getByText("Unele rezultate nu pot fi asociate cu evaluarea")).toBeTruthy();
+    expect(screen.getByText(/2 răspunsuri sunt păstrate, dar rezultatele nu au putut fi pregătite/)).toBeTruthy();
+    expect(screen.getByText(/Un rezultat există, dar nu poate fi legat de chestionarul potrivit/)).toBeTruthy();
+    expect(screen.queryByText(/în curs de procesare/)).toBeNull();
   });
 
   it("defaults reports to the latest non-draft cycle", async () => {

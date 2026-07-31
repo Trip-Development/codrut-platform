@@ -77,16 +77,11 @@ export default async function ProjectReportsPage({
         />
       ) : null}
 
-      {aggregate.reportable_pending_score_count > 0 ? (
-        <Alert className="status-warning px-5 py-4">
-          <AlertTitle>Unele rezultate sunt încă în curs de procesare</AlertTitle>
-          <AlertDescription>
-            {aggregate.reportable_pending_score_count === 1
-              ? "Un răspuns trimis nu are încă un rezultat disponibil. Poate fi reprocesat în siguranță."
-              : `${aggregate.reportable_pending_score_count} răspunsuri trimise nu au încă rezultate disponibile. Pot fi reprocesate în siguranță.`}
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      <ScoringAvailabilityAlert
+        pending={aggregate.reportable_pending_score_count}
+        failed={aggregate.reportable_failed_score_count}
+        orphaned={aggregate.reportable_orphaned_score_count}
+      />
 
       <ResultSection
         id="lencioni"
@@ -372,6 +367,41 @@ function HierarchyDiagnosticsPanel({
             ))}
           </ul>
         ) : null}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function ScoringAvailabilityAlert({
+  pending,
+  failed,
+  orphaned,
+}: {
+  pending: number;
+  failed: number;
+  orphaned: number;
+}) {
+  if (pending + failed + orphaned === 0) return null;
+  const title = orphaned > 0
+    ? "Unele rezultate nu pot fi asociate cu evaluarea"
+    : failed > 0
+      ? "Unele rezultate nu au putut fi pregătite"
+      : "Unele rezultate sunt încă în curs de pregătire";
+  return (
+    <Alert className="status-warning px-5 py-4">
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>
+        <ul className="list-disc pl-5">
+          {pending > 0 ? (
+            <li>{pending === 1 ? "Un răspuns trimis este încă în curs de procesare." : `${pending} răspunsuri trimise sunt încă în curs de procesare.`}</li>
+          ) : null}
+          {failed > 0 ? (
+            <li>{failed === 1 ? "Un răspuns este păstrat, dar rezultatul nu a putut fi pregătit. Participantul nu trebuie să îl completeze din nou." : `${failed} răspunsuri sunt păstrate, dar rezultatele nu au putut fi pregătite. Participanții nu trebuie să le completeze din nou.`}</li>
+          ) : null}
+          {orphaned > 0 ? (
+            <li>{orphaned === 1 ? "Un rezultat există, dar nu poate fi legat de chestionarul potrivit." : `${orphaned} rezultate există, dar nu pot fi legate de chestionarele potrivite.`}</li>
+          ) : null}
+        </ul>
       </AlertDescription>
     </Alert>
   );

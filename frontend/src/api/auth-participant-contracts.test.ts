@@ -333,6 +333,7 @@ describe("invite and participant adapter contracts", () => {
           received_feedback: {
             completed_count: 1,
             minimum_completed: 2,
+            unavailable_reason: "privacy_threshold",
             visible: false,
           },
           cards: [],
@@ -362,6 +363,7 @@ describe("invite and participant adapter contracts", () => {
       receivedFeedback: {
         completedCount: 1,
         minimumCompleted: 2,
+        unavailableReason: "privacy_threshold",
         visible: false,
         dimensions: [],
       },
