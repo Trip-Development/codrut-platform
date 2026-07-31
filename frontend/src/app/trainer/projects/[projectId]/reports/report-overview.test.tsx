@@ -66,8 +66,8 @@ describe("project report overview", () => {
     vi.clearAllMocks();
     data.getProjectAssessmentCyclesData.mockResolvedValue({
       assessmentCycles: [
-        { id: "cycle-1", name: "Evaluare inițială", sequence: 1 },
-        { id: "cycle-2", name: "Reevaluare", sequence: 2 },
+        { id: "cycle-1", name: "Evaluare inițială", sequence: 1, status: "closed" },
+        { id: "cycle-2", name: "Reevaluare", sequence: 2, status: "active" },
       ],
     });
     data.getProjectReportWorkspaceData.mockResolvedValue({
@@ -129,6 +129,30 @@ describe("project report overview", () => {
 
     expect(screen.getByText("Structura echipelor are nume ambigue.")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "TA Drivers" })).toBeNull();
+  });
+
+  it("defaults reports to the latest non-draft cycle", async () => {
+    data.getProjectAssessmentCyclesData.mockResolvedValue({
+      assessmentCycles: [
+        { id: "cycle-1", name: "Evaluare inițială", sequence: 1, status: "closed" },
+        { id: "cycle-2", name: "Reevaluare", sequence: 2, status: "active" },
+        { id: "cycle-3", name: "Evaluare în pregătire", sequence: 3, status: "draft" },
+      ],
+    });
+
+    const ui = await ProjectReportsPage({
+      params: Promise.resolve({ projectId: "project-1" }),
+      searchParams: Promise.resolve({}),
+    });
+    render(ui);
+
+    expect(data.getProjectReportWorkspaceData).toHaveBeenCalledWith(
+      "project-1",
+      expect.anything(),
+      { assessmentCycleId: "cycle-2" },
+    );
+    expect(screen.getByText("Evaluare selectată: cycle-2")).toBeTruthy();
+    expect(screen.queryByText("Evaluare selectată: cycle-3")).toBeNull();
   });
 
   it("explains when a person has no completed TA result that can be ranked", async () => {

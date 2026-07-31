@@ -11,6 +11,7 @@ import { getServerApiRequestOptions } from "@/api/server-request";
 import { EmptyState } from "@/components/presentation/empty-state";
 import { ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 import { getProjectAssessmentCyclesData, getProjectReportWorkspaceData } from "../project-data";
 import { CycleComparisonControls } from "./CycleComparisonControls";
 import { ReportPrintButton } from "./ReportPrintButton";
@@ -40,7 +41,10 @@ export default async function ProjectReportsPage({
   ]);
   const cycleData = await getProjectAssessmentCyclesData(projectId, requestOptions);
   const cycles = [...cycleData.assessmentCycles].sort((left, right) => left.sequence - right.sequence);
-  const selectedCycle = cycles.find((cycle) => cycle.id === query.cycle) ?? cycles.at(-1) ?? null;
+  const selectedCycle = cycles.find((cycle) => cycle.id === query.cycle)
+    ?? cycles.filter((cycle) => cycle.status !== "draft").at(-1)
+    ?? cycles.at(-1)
+    ?? null;
   const { project, participants, aggregate } = await getProjectReportWorkspaceData(
     projectId,
     requestOptions,
@@ -247,41 +251,45 @@ function AveragePanel({
   suffix?: string;
 }) {
   return (
-    <article className="border-y border-border bg-surface px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-        <span className="shrink-0 text-xs font-semibold text-muted-foreground">
-          {count} {count === 1 ? "răspuns" : "răspunsuri"}
-        </span>
-      </div>
-      {items.length > 0 ? (
-        <div className="mt-5 grid gap-4">
-          {items.map((item) => (
-            <div key={item.id}>
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="font-semibold text-foreground">{item.label}</span>
-                <span className="font-mono font-semibold tabular-nums text-foreground">{item.avg}{suffix}</span>
-              </div>
-              <ScaledBar value={item.avg} max={max} />
-              {item.interpretation ? (
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.interpretation}</p>
-              ) : null}
-            </div>
-          ))}
+    <Card asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
+      <article>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <h3 className="min-w-0 text-lg font-semibold text-foreground">{title}</h3>
+          <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+            {count} {count === 1 ? "răspuns" : "răspunsuri"}
+          </span>
         </div>
-      ) : (
-        <p className="mt-5 text-sm text-muted-foreground">Rezultatele apar după completare și scorare.</p>
-      )}
-    </article>
+        {items.length > 0 ? (
+          <div className="mt-5 grid gap-4">
+            {items.map((item) => (
+              <div key={item.id}>
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 font-semibold text-foreground">{item.label}</span>
+                  <span className="font-mono font-semibold tabular-nums text-foreground">{item.avg}{suffix}</span>
+                </div>
+                <ScaledBar value={item.avg} max={max} />
+                {item.interpretation ? (
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.interpretation}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-5 text-sm text-muted-foreground">Rezultatele apar după completare și scorare.</p>
+        )}
+      </article>
+    </Card>
   );
 }
 
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <article className="border-y border-border bg-surface px-5 py-5">
-      <h3 className="text-base font-semibold text-foreground">{title}</h3>
-      <div className="mt-5">{children}</div>
-    </article>
+    <Card asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
+      <article>
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <div className="mt-5">{children}</div>
+      </article>
+    </Card>
   );
 }
 
@@ -295,15 +303,19 @@ function LeadershipMembers({
   query: string;
 }) {
   if (members.length === 0) {
-    return <p className="border-y border-border py-8 text-sm text-muted-foreground">Nu există încă membri de leadership în organigramă.</p>;
+    return (
+      <Card asChild className="px-5 text-muted-foreground [--card-spacing:--spacing(6)]">
+        <p>Nu există încă membri de leadership în organigramă.</p>
+      </Card>
+    );
   }
   return (
-    <div className="divide-y divide-border border-y border-border">
+    <Card className="gap-0 divide-y divide-border py-0">
       {members.map((member) => (
         <Link
           key={member.participant_profile_id}
           href={`${reportsPath}/leadership/${member.participant_profile_id}${query}`}
-          className="group flex items-center justify-between gap-4 py-4"
+          className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45"
         >
           <span>
             <span className="block font-semibold text-foreground group-hover:text-burgundy">{member.full_name}</span>
@@ -312,7 +324,7 @@ function LeadershipMembers({
           <ArrowRightIcon aria-hidden="true" className="size-4 text-muted-foreground group-hover:text-burgundy" strokeWidth={1.8} />
         </Link>
       ))}
-    </div>
+    </Card>
   );
 }
 

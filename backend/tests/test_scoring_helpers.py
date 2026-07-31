@@ -363,6 +363,80 @@ def test_icare_cohorts_keep_single_trainer_responses_visible_and_separate() -> N
     assert [item.averages[0].avg for item in cohorts] == [90, 80, 70]
 
 
+def test_icare_cohorts_exclude_non_leadership_targets() -> None:
+    chief_id = uuid.uuid4()
+    leader_id = uuid.uuid4()
+    member_id = uuid.uuid4()
+    direct_report_id = uuid.uuid4()
+    participants = [
+        ReportParticipant(
+            id=chief_id,
+            full_name="Ana Chief",
+            reports_to_name=None,
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=leader_id,
+            full_name="Bogdan Leader",
+            reports_to_name="Ana Chief",
+            role_group="leadership",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=member_id,
+            full_name="Carmen Member",
+            reports_to_name="Bogdan Leader",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+        ReportParticipant(
+            id=direct_report_id,
+            full_name="Dan Direct",
+            reports_to_name="Carmen Member",
+            role_group="member",
+            pcm_base=None,
+            pcm_phase=None,
+            user_id=None,
+        ),
+    ]
+    rows = [
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=member_id,
+                target_person_id=member_id,
+            ),
+            _result({"clarity": 70}),
+            None,
+        ),
+        (
+            _assignment(
+                "boss_360",
+                respondent_profile_id=direct_report_id,
+                target_person_id=member_id,
+            ),
+            _result({"clarity": 90}),
+            None,
+        ),
+    ]
+
+    cohorts = _build_icare_cohort_summaries(rows, participants)  # type: ignore[arg-type]
+
+    assert [(item.cohort, item.response_count) for item in cohorts] == [
+        ("direct_team", 0),
+        ("leadership_peers", 0),
+        ("self", 0),
+    ]
+    assert all(item.averages == [] for item in cohorts)
+
+
 def _driver_definition() -> SimpleNamespace:
     return _definition(
         {

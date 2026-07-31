@@ -11,6 +11,7 @@ import {
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { ScaledBar } from "@/components/reports/native-charts";
+import { Card } from "@/components/ui/card";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { buildProjectReportQuery } from "../../report-cycle";
 
@@ -72,12 +73,14 @@ export default async function LeadershipMemberReportPage({
       </section>
 
       <OrderedSection number="01" title="Lencioni" description="Rezultatul echipei coordonate de această persoană.">
-        <AverageList
-          count={report.lencioni_count}
-          items={report.lencioni_averages}
-          max={10}
-          empty="Nu există încă un rezultat Lencioni pentru această echipă."
-        />
+        <Card className="px-5 [--card-spacing:--spacing(5)]">
+          <AverageList
+            count={report.lencioni_count}
+            items={report.lencioni_averages}
+            max={10}
+            empty="Nu există încă un rezultat Lencioni pentru această echipă."
+          />
+        </Card>
       </OrderedSection>
 
       <OrderedSection number="02" title="iCARE" description="Cele trei perspective sunt păstrate separat.">
@@ -85,37 +88,41 @@ export default async function LeadershipMemberReportPage({
           {(["direct_team", "leadership_peers", "self"] as const).map((cohort) => {
             const summary = report.icare_cohorts.find((item) => item.cohort === cohort);
             return (
-              <article key={cohort} className="border-y border-border px-5 py-5">
-                <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {summary?.response_count ?? 0} {(summary?.response_count ?? 0) === 1 ? "răspuns" : "răspunsuri"}
-                </p>
-                <div className="mt-4">
-                  <AverageList
-                    count={summary?.response_count ?? 0}
-                    items={summary?.averages ?? []}
-                    max={100}
-                    suffix="%"
-                    showCount={false}
-                    empty="Nu există încă rezultate pentru această perspectivă."
-                  />
-                </div>
-              </article>
+              <Card key={cohort} asChild className="gap-0 px-5 [--card-spacing:--spacing(5)]">
+                <article>
+                  <h3 className="font-semibold text-foreground">{ICARE_LABELS[cohort]}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {summary?.response_count ?? 0} {(summary?.response_count ?? 0) === 1 ? "răspuns" : "răspunsuri"}
+                  </p>
+                  <div className="mt-4">
+                    <AverageList
+                      count={summary?.response_count ?? 0}
+                      items={summary?.averages ?? []}
+                      max={100}
+                      suffix="%"
+                      showCount={false}
+                      empty="Nu există încă rezultate pentru această perspectivă."
+                    />
+                  </div>
+                </article>
+              </Card>
             );
           })}
         </div>
       </OrderedSection>
 
       <OrderedSection number="03" title="TA Drivers" description="Rezultatul individual, fără comparații sau detalii de echipă.">
-        <AverageList
-          count={report.driver_count}
-          items={report.driver_averages}
-          max={100}
-          suffix="%"
-          dangerAbove={50}
-          showFeedback
-          empty="Nu există încă un rezultat TA pentru această persoană."
-        />
+        <Card className="px-5 [--card-spacing:--spacing(5)]">
+          <AverageList
+            count={report.driver_count}
+            items={report.driver_averages}
+            max={100}
+            suffix="%"
+            dangerAbove={50}
+            showFeedback
+            empty="Nu există încă un rezultat TA pentru această persoană."
+          />
+        </Card>
       </OrderedSection>
     </div>
   );
@@ -198,7 +205,7 @@ function AverageList({
           return (
             <div key={item.id} data-tone={isDanger ? "danger" : "default"}>
               <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="font-semibold text-foreground">{item.label}</span>
+                <span className="min-w-0 font-semibold text-foreground">{item.label}</span>
                 <span className={isDanger ? "font-mono font-semibold tabular-nums text-destructive" : "font-mono font-semibold tabular-nums text-foreground"}>{item.avg}{suffix}</span>
               </div>
               <ScaledBar
