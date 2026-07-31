@@ -821,6 +821,7 @@ async def test_suppression_reason_never_downgrades_unsubscribe() -> None:
     review_after = datetime.now(UTC) + timedelta(days=365)
     existing = EmailSuppression(
         owner_id=OWNER_ID,
+        legacy_email="ana@example.test",
         email_fingerprint="a" * 64,
         reason="unsubscribed",
         source_email_send_id=None,
@@ -877,6 +878,7 @@ async def test_due_suppression_review_audits_retention_and_manual_review() -> No
     retained = EmailSuppression(
         id=uuid.uuid4(),
         owner_id=OWNER_ID,
+        legacy_email="retained@example.test",
         email_fingerprint="a" * 64,
         reason="hard_bounce",
         source_email_send_id=None,
@@ -885,6 +887,7 @@ async def test_due_suppression_review_audits_retention_and_manual_review() -> No
     needs_review = EmailSuppression(
         id=uuid.uuid4(),
         owner_id=OWNER_ID,
+        legacy_email="review@example.test",
         email_fingerprint="b" * 64,
         reason="soft_bounce",
         source_email_send_id=None,
@@ -932,6 +935,7 @@ async def test_due_suppression_review_quarantines_unknown_reason_for_manual_revi
     unknown = EmailSuppression(
         id=uuid.uuid4(),
         owner_id=OWNER_ID,
+        legacy_email="unknown@example.test",
         email_fingerprint="c" * 64,
         reason="legacy_provider_reject",
         source_email_send_id=None,

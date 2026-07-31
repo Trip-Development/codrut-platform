@@ -683,20 +683,21 @@ async def test_owner_suppression_blocks_only_that_owners_delivery() -> None:
         async with SessionLocal() as session:
             session.add_all([owner_a, owner_b])
             await session.flush()
-            session.add(
-                EmailSuppression(
+            repository = CommunicationsRepository(session)
+            await repository.suppress_email(
+                owner_id=owner_a.id,
+                email="ANA@example.com",
+                email_fingerprint=email_suppression_fingerprint(
                     owner_id=owner_a.id,
-                    email_fingerprint=email_suppression_fingerprint(
-                        owner_id=owner_a.id,
-                        email="ANA@example.com",
-                        secret=Settings().effective_email_suppression_fingerprint_secret,
-                    ),
-                    reason="hard_bounce",
-                    review_after=datetime.now(UTC) + timedelta(days=365),
-                )
+                    email="ANA@example.com",
+                    secret=Settings().effective_email_suppression_fingerprint_secret,
+                ),
+                reason="hard_bounce",
+                source_email_send_id=None,
+                review_after=datetime.now(UTC) + timedelta(days=365),
             )
-            await CommunicationsRepository(session).enqueue_email_send(suppressed_send)
-            await CommunicationsRepository(session).enqueue_email_send(permitted_send)
+            await repository.enqueue_email_send(suppressed_send)
+            await repository.enqueue_email_send(permitted_send)
             await session.commit()
 
             result = await EmailOutboxProcessor(session, provider).process_due(limit=10)
