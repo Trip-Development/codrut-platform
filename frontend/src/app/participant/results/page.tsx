@@ -6,6 +6,7 @@ import {
 } from "@/api/participants";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { AppShell } from "@/components/shell/app-shell";
+import { cycleAccent } from "@/components/reports/cycle-accents";
 import { cn } from "@/utils/cn";
 import { redirect } from "next/navigation";
 import { ParticipantResultsPanel } from "../ParticipantClientWorkspace";
@@ -17,13 +18,6 @@ import {
   participantWorkspaceRequestOptions,
   type ParticipantRouteSearchParams,
 } from "../participant-context";
-
-const CYCLE_ACCENTS = [
-  { dot: "bg-burgundy", rail: "border-burgundy" },
-  { dot: "bg-ochre", rail: "border-ochre" },
-  { dot: "bg-foreground", rail: "border-foreground" },
-  { dot: "bg-muted-foreground", rail: "border-muted-foreground" },
-] as const;
 
 export default async function ParticipantResultsPage({
   searchParams,
@@ -85,7 +79,7 @@ export default async function ParticipantResultsPage({
           <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-3" aria-label="Legendă cicluri de evaluare">
             {orderedCycles.map((cycle, index) => (
               <li key={cycle.id} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <span aria-hidden="true" className={cn("size-2.5 rounded-full", CYCLE_ACCENTS[index % CYCLE_ACCENTS.length].dot)} />
+                <span aria-hidden="true" className={cn("size-2.5 rounded-full", cycleAccent(index).dot)} />
                 Ciclul {cycle.sequence}: {cycle.name}
               </li>
             ))}
@@ -96,7 +90,7 @@ export default async function ParticipantResultsPage({
       <div className="grid gap-14">
         {cycleSummaries.map((summary, index) => {
           const cycle = orderedCycles[index];
-          const accent = CYCLE_ACCENTS[index % CYCLE_ACCENTS.length];
+          const accent = cycleAccent(index);
           return (
             <article
               key={cycle?.id ?? "current"}
