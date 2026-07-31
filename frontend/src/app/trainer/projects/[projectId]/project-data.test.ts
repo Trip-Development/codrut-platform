@@ -18,6 +18,7 @@ import {
   getProjectAssessmentCyclesData,
   getProjectInvitationWorkspaceData,
   getProjectReportAggregateData,
+  getProjectReportHistoryData,
   getProjectReportWorkspaceData,
   resolveProjectAssessmentCycle,
 } from "./project-data";
@@ -134,6 +135,46 @@ describe("project report data", () => {
       project.company_id,
       requestOptions,
       { projectId: project.id, assessmentCycleId: undefined },
+    );
+  });
+
+  it("loads every reportable cycle by default and one cycle when filtered", async () => {
+    api.getAssessmentCycles.mockResolvedValue([
+      { id: "cycle-2", sequence: 2, status: "active" },
+      { id: "cycle-3", sequence: 3, status: "draft" },
+      { id: "cycle-1", sequence: 1, status: "closed" },
+    ]);
+    api.getCompanyReportAggregate.mockImplementation(
+      async (_companyId: string, _options: unknown, scope: { assessmentCycleId?: string }) => ({
+        assessment_cycle_id: scope.assessmentCycleId,
+      }),
+    );
+
+    const allCycles = await getProjectReportHistoryData(project.id, requestOptions);
+
+    expect(allCycles.cycleReports.map(({ cycle }) => cycle?.id)).toEqual(["cycle-1", "cycle-2"]);
+    expect(api.getCompanyReportAggregate).toHaveBeenNthCalledWith(
+      1,
+      project.company_id,
+      requestOptions,
+      { projectId: project.id, assessmentCycleId: "cycle-1" },
+    );
+    expect(api.getCompanyReportAggregate).toHaveBeenNthCalledWith(
+      2,
+      project.company_id,
+      requestOptions,
+      { projectId: project.id, assessmentCycleId: "cycle-2" },
+    );
+
+    api.getCompanyReportAggregate.mockClear();
+    const filtered = await getProjectReportHistoryData(project.id, requestOptions, "cycle-2");
+
+    expect(filtered.cycleReports.map(({ cycle }) => cycle?.id)).toEqual(["cycle-2"]);
+    expect(api.getCompanyReportAggregate).toHaveBeenCalledTimes(1);
+    expect(api.getCompanyReportAggregate).toHaveBeenCalledWith(
+      project.company_id,
+      requestOptions,
+      { projectId: project.id, assessmentCycleId: "cycle-2" },
     );
   });
 });

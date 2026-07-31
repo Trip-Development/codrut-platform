@@ -11,12 +11,14 @@ const CYCLE_STATUS_LABELS: Record<AssessmentCycle["status"], string> = {
   draft: "În pregătire",
 };
 
+const ALL_CYCLES_VALUE = "all";
+
 export function CycleComparisonControls({
   cycles,
   cycleId,
 }: {
   cycles: AssessmentCycle[];
-  cycleId: string;
+  cycleId: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -25,10 +27,15 @@ export function CycleComparisonControls({
 
   function selectCycle(value: string) {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("cycle", value);
+    if (value === ALL_CYCLES_VALUE) {
+      params.delete("cycle");
+    } else {
+      params.set("cycle", value);
+    }
     params.delete("baseline");
     params.delete("compare");
-    router.push(`${pathname}?${params.toString()}`);
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
   }
 
   return (
@@ -36,7 +43,7 @@ export function CycleComparisonControls({
       <CycleSelect
         label="Evaluare"
         cycles={orderedCycles}
-        value={cycleId}
+        value={cycleId ?? ALL_CYCLES_VALUE}
         onValueChange={selectCycle}
       />
     </div>
@@ -62,6 +69,7 @@ function CycleSelect({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
+          <SelectItem value={ALL_CYCLES_VALUE}>Toate evaluările</SelectItem>
           {cycles.map((cycle) => (
             <SelectItem key={cycle.id} value={cycle.id}>
               {cycle.name} · {CYCLE_STATUS_LABELS[cycle.status]}

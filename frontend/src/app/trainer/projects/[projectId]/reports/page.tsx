@@ -2,19 +2,23 @@ import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
 
 import type {
+  AssessmentCycle,
+  CompanyReportAggregate,
   IcareCohortSummary,
   LeadershipMemberSummary,
   ReportAverage,
   ReportHierarchyIssue,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { cycleAccent } from "@/components/reports/cycle-accents";
 import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
 import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
 import { DonutChart, ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
-import { getProjectAssessmentCyclesData, getProjectReportWorkspaceData } from "../project-data";
+import { cn } from "@/utils/cn";
+import { getProjectReportHistoryData } from "../project-data";
 import { CycleComparisonControls } from "./CycleComparisonControls";
 import { ReportPrintButton } from "./ReportPrintButton";
 import { buildProjectReportQuery } from "./report-cycle";
@@ -41,21 +45,82 @@ export default async function ProjectReportsPage({
     searchParams,
     getServerApiRequestOptions(),
   ]);
-  const cycleData = await getProjectAssessmentCyclesData(projectId, requestOptions);
-  const cycles = [...cycleData.assessmentCycles].sort((left, right) => left.sequence - right.sequence);
-  const selectedCycle = cycles.find((cycle) => cycle.id === query.cycle)
-    ?? cycles.filter((cycle) => cycle.status !== "draft").at(-1)
-    ?? cycles.at(-1)
-    ?? null;
-  const { project, participants, aggregate } = await getProjectReportWorkspaceData(
+  const { project, participants, assessmentCycles, cycleReports } = await getProjectReportHistoryData(
     projectId,
     requestOptions,
-    { assessmentCycleId: selectedCycle?.id },
+    query.cycle,
   );
+  const availableCycles = [...assessmentCycles]
+    .filter((cycle) => cycle.status !== "draft")
+    .sort((left, right) => left.sequence - right.sequence);
+  const selectedCycle = availableCycles.find((cycle) => cycle.id === query.cycle) ?? null;
+
+  return (
+    <div className="flex flex-col gap-10">
+      <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-burgundy">Rezultate proiect</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{project.name}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {selectedCycle
+              ? `${selectedCycle.name} · afișare individuală`
+              : availableCycles.length > 0
+                ? `${availableCycles.length} ${availableCycles.length === 1 ? "evaluare" : "evaluări"} · rezultatele sunt păstrate separat pentru comparație`
+              : "Rezultatele disponibile pentru proiect"}
+          </p>
+          {availableCycles.length > 0 ? (
+            <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-3" aria-label="Legendă cicluri de evaluare">
+              {availableCycles.map((cycle, index) => (
+                <li key={cycle.id} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <span aria-hidden="true" className={cn("size-2.5 rounded-full", cycleAccent(index).dot)} />
+                  Ciclul {cycle.sequence}: {cycle.name}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <ReportPrintButton />
+      </header>
+
+      {availableCycles.length > 1 ? (
+        <CycleComparisonControls cycles={availableCycles} cycleId={selectedCycle?.id ?? null} />
+      ) : null}
+
+      <div className="grid gap-14">
+        {cycleReports.map(({ cycle, aggregate }) => (
+          <ProjectCycleResults
+            key={cycle?.id ?? "legacy"}
+            cycle={cycle}
+            aggregate={aggregate}
+            participantCount={participants.length}
+            projectId={projectId}
+            accentIndex={Math.max(0, availableCycles.findIndex((item) => item.id === cycle?.id))}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProjectCycleResults({
+  cycle,
+  aggregate,
+  participantCount,
+  projectId,
+  accentIndex,
+}: {
+  cycle: AssessmentCycle | null;
+  aggregate: CompanyReportAggregate;
+  participantCount: number;
+  projectId: string;
+  accentIndex: number;
+}) {
   const reportQuery = buildProjectReportQuery({
-    cycle: selectedCycle?.id,
+    cycle: cycle?.id,
   });
   const reportsPath = `/trainer/projects/${projectId}/reports`;
+  const cycleKey = cycle?.id ?? "legacy";
+  const accent = cycleAccent(accentIndex);
   const driverPieEmptyLabel = aggregate.driver_rank_summary.insufficient_driver_score_count > 0
     ? "Nu există rezultate TA care pot fi incluse în aceste grafice."
     : undefined;
@@ -69,24 +134,28 @@ export default async function ProjectReportsPage({
   );
 
   return (
-    <div className="flex flex-col gap-10">
-      <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+    <article
+      className={cn("flex flex-col gap-10 border-l-2 pl-5 sm:pl-7", accent.rail)}
+      aria-labelledby={`project-cycle-${cycleKey}`}
+    >
+      <header className="flex flex-col gap-2 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-burgundy">Rezultate proiect</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{project.name}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {selectedCycle?.name ?? "Toate evaluările"} · {aggregate.total_completed} din {aggregate.total_assigned} răspunsuri
+          <p className="text-xs font-semibold text-muted-foreground">
+            {cycle ? `Ciclul ${cycle.sequence}` : "Evaluare"}
+          </p>
+          <h2 id={`project-cycle-${cycleKey}`} className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+            {cycle?.name ?? "Rezultatele proiectului"}
+          </h2>
+        </div>
+        <div className="text-left sm:text-right">
+          {cycle ? (
+            <p className="text-xs font-semibold text-muted-foreground">{cycleStatusLabel(cycle.status)}</p>
+          ) : null}
+          <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
+            {aggregate.total_completed} din {aggregate.total_assigned} răspunsuri
           </p>
         </div>
-        <ReportPrintButton />
       </header>
-
-      {cycles.length > 1 && selectedCycle ? (
-        <CycleComparisonControls
-          cycles={cycles}
-          cycleId={selectedCycle.id}
-        />
-      ) : null}
 
       <ScoringAvailabilityAlert
         pending={aggregate.reportable_pending_score_count}
@@ -95,7 +164,7 @@ export default async function ProjectReportsPage({
       />
 
       <ResultSection
-        id="pcm"
+        id={`${cycleKey}-pcm`}
         title="PCM"
         description="Distribuția profilurilor de bază și de fază pentru participanții proiectului."
       >
@@ -124,7 +193,7 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <ResultSection
-        id="lencioni"
+        id={`${cycleKey}-lencioni`}
         title="Lencioni"
         description="Imaginea de ansamblu a proiectului, cu acces separat la fiecare echipă."
       >
@@ -158,7 +227,7 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <ResultSection
-        id="icare"
+        id={`${cycleKey}-icare`}
         title="iCARE"
         description="Trei perspective separate, fără a amesteca echipa, colegii și autoevaluarea."
       >
@@ -214,7 +283,7 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <ResultSection
-        id="ta-drivers"
+        id={`${cycleKey}-ta-drivers`}
         title="TA Drivers"
         description="Media procentuală și frecvența primilor doi driveri pentru fiecare persoană."
       >
@@ -278,7 +347,7 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <ResultSection
-        id="leadership"
+        id={`${cycleKey}-leadership`}
         title="Echipa de leadership"
         description="Deschide raportul unei persoane pentru profilul și rezultatele sale complete."
       >
@@ -290,11 +359,17 @@ export default async function ProjectReportsPage({
       </ResultSection>
 
       <footer className="border-t border-border pt-5 text-sm text-muted-foreground">
-        {participants.length} {participants.length === 1 ? "participant" : "participanți"} în proiect ·{" "}
+        {participantCount} {participantCount === 1 ? "participant" : "participanți"} în proiect ·{" "}
         {aggregate.completion_rate}% completat
       </footer>
-    </div>
+    </article>
   );
+}
+
+function cycleStatusLabel(status: AssessmentCycle["status"]): string {
+  if (status === "active") return "În desfășurare";
+  if (status === "closed") return "Finalizată";
+  return "În pregătire";
 }
 
 function ResultSection({
