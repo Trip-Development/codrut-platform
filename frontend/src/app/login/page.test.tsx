@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getAuthenticatedSession, loginWithPassword, type SessionState } from "@/api/auth";
+import { completeLoginNavigation } from "@/lib/auth-navigation";
 import LoginPage from "./page";
 
 const router = {
@@ -20,6 +21,10 @@ vi.mock("@/api/auth", () => ({
   ),
   getAuthenticatedSession: vi.fn(),
   loginWithPassword: vi.fn(),
+}));
+
+vi.mock("@/lib/auth-navigation", () => ({
+  completeLoginNavigation: vi.fn(),
 }));
 
 describe("LoginPage", () => {
@@ -84,7 +89,7 @@ describe("LoginPage", () => {
     });
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith("/participant");
+      expect(completeLoginNavigation).toHaveBeenCalledWith("/participant");
     });
   });
 

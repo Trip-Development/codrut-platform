@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getAuthenticatedSession, loginWithPassword, type SessionState } from "@/api/auth";
+import { completeLoginNavigation } from "@/lib/auth-navigation";
 import TrainerLoginPage from "./page";
 
 const router = {
@@ -29,6 +30,10 @@ vi.mock("@/api/auth", () => ({
   ),
   getAuthenticatedSession: vi.fn(),
   loginWithPassword: vi.fn(),
+}));
+
+vi.mock("@/lib/auth-navigation", () => ({
+  completeLoginNavigation: vi.fn(),
 }));
 
 describe("TrainerLoginPage", () => {
@@ -94,8 +99,7 @@ describe("TrainerLoginPage", () => {
     });
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith("/trainer");
-      expect(router.refresh).toHaveBeenCalled();
+      expect(completeLoginNavigation).toHaveBeenCalledWith("/trainer");
     });
   });
 
@@ -116,7 +120,9 @@ describe("TrainerLoginPage", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Intră în portal" }).closest("form")!);
 
     await waitFor(() => {
-      expect(router.push).toHaveBeenCalledWith("/trainer/projects/project-1?tab=results");
+      expect(completeLoginNavigation).toHaveBeenCalledWith(
+        "/trainer/projects/project-1?tab=results",
+      );
     });
   });
 

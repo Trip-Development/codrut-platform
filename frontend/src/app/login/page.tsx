@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { completeLoginNavigation } from "@/lib/auth-navigation";
 import { safeParticipantReturnTo } from "@/lib/auth-return";
 
 function requestedParticipantRoute(): string {
@@ -74,12 +75,11 @@ export default function LoginPage() {
 
     try {
       const session = await loginWithPassword(email, password);
-      router.push(
+      completeLoginNavigation(
         requestedParticipantRoute() === "/participant"
           ? dashboardHrefForRole(session.user.defaultWorkspace ?? session.user.role)
           : requestedParticipantRoute(),
       );
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Autentificarea a eșuat.");
       submittingRef.current = false;
