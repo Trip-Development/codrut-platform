@@ -79,6 +79,24 @@ describe("native report charts", () => {
     ).toBeTruthy();
   });
 
+  it("renders two participants in one shared driver category", () => {
+    render(
+      <ParticipantFrequencyPie
+        title="Primul driver dominant"
+        totalPeople={2}
+        data={[{ id: "hurry_up", label: "Grăbește-te", value: 2 }]}
+      />,
+    );
+
+    expect(screen.getByText("2 persoane incluse")).toBeTruthy();
+    expect(screen.getByText("2 persoane · 100%")).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "Primul driver dominant. 2 persoane incluse. Grăbește-te: 2 persoane, 100%.",
+      }),
+    ).toBeTruthy();
+  });
+
   it("uses the same driver color across both frequency pies", () => {
     render(
       <>

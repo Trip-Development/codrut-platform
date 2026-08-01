@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ArrowLeftIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 
@@ -61,10 +60,10 @@ export default async function LeadershipMemberReportPage({
   return (
     <div className="flex flex-col gap-10">
       <header className="border-b border-border pb-6">
-        <Link href={overviewHref} className={serverLinkButtonClassName({ variant: "ghost", className: "mb-5 w-fit" })}>
+        <a href={overviewHref} className={serverLinkButtonClassName({ variant: "ghost", className: "mb-5 w-fit" })}>
           <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
           Înapoi la rezultatele proiectului
-        </Link>
+        </a>
         <p className="text-sm font-semibold text-burgundy">Raport individual</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{report.member.full_name}</h1>
         <p className="mt-2 text-sm text-muted-foreground">

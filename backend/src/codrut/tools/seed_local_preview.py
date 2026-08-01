@@ -14,6 +14,7 @@ from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssessmentCycleTeamMembership,
     AssignmentStatus,
     AssignmentTargetType,
     QuestionnaireAssignment,
@@ -276,6 +277,14 @@ async def _clear_preview_data(
         )
     )
     if company_ids:
+        participant_ids = select(ParticipantProfile.id).where(
+            ParticipantProfile.company_id.in_(company_ids)
+        )
+        await session.execute(
+            delete(AssessmentCycleTeamMembership).where(
+                AssessmentCycleTeamMembership.participant_profile_id.in_(participant_ids)
+            )
+        )
         await session.execute(delete(Company).where(Company.id.in_(company_ids)))
     await session.flush()
 
