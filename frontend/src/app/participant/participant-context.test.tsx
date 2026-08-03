@@ -6,6 +6,7 @@ import { ParticipantContextSelector } from "./ParticipantContextSelector";
 import { ParticipantResultCycleControls } from "./ParticipantContextSelector";
 import {
   participantScopeParams,
+  participantDefaultContext,
   participantScopedHref,
   participantWorkspaceRequestOptions,
 } from "./participant-context";
@@ -106,7 +107,7 @@ describe("participant workspace context", () => {
     });
   });
 
-  it("shows one Program selector only when multiple programs exist", async () => {
+  it("shows one searchable project selector only when multiple projects exist", async () => {
     const contexts = [{
       participantProfileId: "profile-1",
       participantFullName: "Ana Participant",
@@ -131,12 +132,12 @@ describe("participant workspace context", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("combobox", { name: "Program" }));
-    await waitFor(() => expect(screen.getByRole("searchbox", { name: "Caută în program" })).toBeDefined());
+    fireEvent.click(screen.getByRole("combobox", { name: "Proiect" }));
+    await waitFor(() => expect(screen.getByRole("searchbox", { name: "Caută în proiect" })).toBeDefined());
     fireEvent.click(screen.getByRole("option", { name: /Program avansat/ }));
 
     expect(navigation.push).toHaveBeenCalledWith(
-      "/participant/questionnaires?source=menu&profile=profile-1&project=project-2&cycle=cycle-2",
+      "/participant/questionnaires?source=menu&profile=profile-1&project=project-2",
     );
   });
 
@@ -165,8 +166,8 @@ describe("participant workspace context", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("combobox", { name: "Program" }));
-    await waitFor(() => expect(screen.getByRole("searchbox", { name: "Caută în program" })).toBeDefined());
+    fireEvent.click(screen.getByRole("combobox", { name: "Proiect" }));
+    await waitFor(() => expect(screen.getByRole("searchbox", { name: "Caută în proiect" })).toBeDefined());
     fireEvent.click(screen.getByRole("option", { name: /Meridian · Program nou/ }));
 
     const destination = String(navigation.push.mock.calls[0]?.[0]);
@@ -176,7 +177,7 @@ describe("participant workspace context", () => {
     expect(destination).not.toContain("compare=");
   });
 
-  it("groups current programs separately from read-only history", async () => {
+  it("groups current projects separately from read-only history", async () => {
     render(
       <ParticipantContextSelector
         contexts={[{
@@ -208,7 +209,7 @@ describe("participant workspace context", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("combobox", { name: "Program" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Proiect" }));
 
     expect(await screen.findByText("În desfășurare")).toBeDefined();
     expect(screen.getByText("Istoric")).toBeDefined();
@@ -219,7 +220,58 @@ describe("participant workspace context", () => {
     await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
   });
 
-  it("enters, changes, and closes a two-cycle comparison", async () => {
+  it("defaults to the newest current project and its newest active cycle", () => {
+    expect(participantDefaultContext([{
+      participantProfileId: "profile-1",
+      participantFullName: "Ana Participant",
+      companyId: "company-1",
+      companyName: "Atlas",
+      projects: [
+        {
+          id: "history",
+          name: "Istoric",
+          historyBucket: "history",
+          deadlineLabel: "",
+          deadlineAt: "2026-12-01T00:00:00Z",
+          cycles: [],
+        },
+        {
+          id: "older-current",
+          name: "Curent vechi",
+          historyBucket: "current",
+          deadlineLabel: "",
+          cycles: [{
+            id: "older-cycle",
+            projectId: "older-current",
+            sequence: 1,
+            name: "Inițială",
+            status: "active",
+            startsAt: "2026-01-01T00:00:00Z",
+          }],
+        },
+        {
+          id: "new-current",
+          name: "Curent nou",
+          historyBucket: "current",
+          deadlineLabel: "",
+          cycles: [{
+            id: "new-cycle",
+            projectId: "new-current",
+            sequence: 2,
+            name: "Reevaluare",
+            status: "active",
+            startsAt: "2026-08-01T00:00:00Z",
+          }],
+        },
+      ],
+    }])).toMatchObject({
+      participantProfileId: "profile-1",
+      projectId: "new-current",
+      cycleId: "new-cycle",
+    });
+  });
+
+  it("uses comparison by default and switches to an individual evaluation", async () => {
     navigation.search = "profile=profile-1&project=project-1";
     const cycles = [
       { id: "cycle-1", projectId: "project-1", sequence: 1, name: "Evaluare inițială", status: "closed" as const },
@@ -229,29 +281,35 @@ describe("participant workspace context", () => {
     const { rerender } = render(
       <ParticipantResultCycleControls
         cycles={cycles}
-        currentCycleId="cycle-2"
-        canCompare
+        cycleId={null}
+        baselineId="cycle-1"
+        compareId="cycle-3"
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Vezi evoluția" }));
+    expect(screen.getByRole("combobox", { name: "Evaluare" }).textContent).toContain("Compară evaluări");
+    expect(screen.getByRole("combobox", { name: "Evaluare de bază" }).textContent).toContain("Evaluare inițială");
+    expect(screen.getByRole("combobox", { name: "Evaluare comparată" }).textContent).toContain("Reevaluare 2");
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Evaluare" }));
+    fireEvent.click(screen.getByRole("option", { name: "Reevaluare 1 · Finalizată" }));
     expect(navigation.push).toHaveBeenCalledWith(
-      "/participant/questionnaires?profile=profile-1&project=project-1&baseline=cycle-1&compare=cycle-2&cycle=cycle-2",
+      "/participant/questionnaires?profile=profile-1&project=project-1&cycle=cycle-2",
     );
 
     navigation.push.mockReset();
     rerender(
       <ParticipantResultCycleControls
         cycles={cycles}
-        currentCycleId="cycle-3"
-        baselineCycleId="cycle-1"
-        comparisonCycleId="cycle-3"
-        canCompare
+        cycleId="cycle-2"
+        baselineId="cycle-1"
+        compareId="cycle-3"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Închide comparația" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Evaluare" }));
+    fireEvent.click(screen.getByRole("option", { name: "Compară evaluări" }));
     expect(navigation.push).toHaveBeenCalledWith(
-      "/participant/questionnaires?profile=profile-1&project=project-1",
+      "/participant/questionnaires?profile=profile-1&project=project-1&baseline=cycle-1&compare=cycle-3",
     );
   });
 
@@ -274,8 +332,9 @@ describe("participant workspace context", () => {
     rerender(
       <ParticipantResultCycleControls
         cycles={[{ id: "cycle-1", projectId: "project-1", sequence: 1, name: "Inițial", status: "active" }]}
-        currentCycleId="cycle-1"
-        canCompare={false}
+        cycleId="cycle-1"
+        baselineId="cycle-1"
+        compareId="cycle-1"
       />,
     );
     expect(container.childElementCount).toBe(0);

@@ -7,13 +7,21 @@ import type {
   IcareCohortSummary,
   LeadershipMemberSummary,
   ReportAverage,
+  ReportDistribution,
   ReportHierarchyIssue,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import {
+  CycleComparisonBars,
+  CycleDistributionPies,
+  type CycleComparisonRow,
+  type CycleDistributionSeries,
+} from "@/components/reports/CycleComparisonBars";
 import { cycleAccent } from "@/components/reports/cycle-accents";
 import { HistoricalIcareNotice } from "@/components/reports/HistoricalIcareNotice";
 import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
 import { DonutChart, ParticipantFrequencyPie, ScaledBar } from "@/components/reports/native-charts";
+import { ReportSection as SharedReportSection } from "@/components/reports/ReportSection";
 import { reportScaleEmptyCopy, resolveReportScoreScale } from "@/components/reports/score-scale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -29,6 +37,23 @@ const ICARE_LABELS: Record<IcareCohortSummary["cohort"], string> = {
   self: "Cum se evaluează liderii",
 };
 
+const DRIVER_COLORS: Record<string, string> = {
+  be_perfect: "var(--chart-1)",
+  perfect: "var(--chart-1)",
+  be_strong: "var(--chart-2)",
+  strong: "var(--chart-2)",
+  please_people: "var(--chart-3)",
+  hurry_up: "var(--chart-4)",
+  try_hard: "var(--chart-5)",
+};
+const DISTRIBUTION_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
 function tieBreakLabel(count: number): string {
   return count === 1 ? "o departajare" : `${count} departajări`;
 }
@@ -38,7 +63,7 @@ export default async function ProjectReportsPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ baseline?: string; cycle?: string }>;
+  searchParams: Promise<{ baseline?: string; compare?: string; cycle?: string }>;
 }) {
   const [{ projectId }, query, requestOptions] = await Promise.all([
     params,
@@ -54,23 +79,44 @@ export default async function ProjectReportsPage({
     .filter((cycle) => cycle.status !== "draft")
     .sort((left, right) => left.sequence - right.sequence);
   const selectedCycle = availableCycles.find((cycle) => cycle.id === query.cycle) ?? null;
+  const defaultBaselineCycle = availableCycles[0] ?? null;
+  const defaultCompareCycle = availableCycles.at(-1) ?? defaultBaselineCycle;
+  const baselineCycle = availableCycles.find((cycle) => cycle.id === query.baseline)
+    ?? defaultBaselineCycle;
+  const compareCycleCandidate = availableCycles.find((cycle) => cycle.id === query.compare);
+  const compareCycle = compareCycleCandidate && compareCycleCandidate.id !== baselineCycle?.id
+    ? compareCycleCandidate
+    : [...availableCycles].reverse().find((cycle) => cycle.id !== baselineCycle?.id) ?? defaultCompareCycle;
+  const comparedCycles = selectedCycle
+    ? [selectedCycle]
+    : [baselineCycle, compareCycle].filter(
+        (cycle, index, cycles): cycle is AssessmentCycle => Boolean(cycle)
+          && cycles.findIndex((candidate) => candidate?.id === cycle?.id) === index,
+      );
+  const reportsByCycle = new Map(cycleReports.map((report) => [report.cycle?.id, report]));
+  const comparedReports = comparedCycles.flatMap((cycle) => {
+    const report = reportsByCycle.get(cycle.id);
+    return report ? [report] : [];
+  });
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-burgundy">Rezultate proiect</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{project.name}</h1>
+          <p className="text-sm font-semibold text-burgundy">{project.name}</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+            {selectedCycle ? selectedCycle.name : "Evoluția proiectului"}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {selectedCycle
-              ? `${selectedCycle.name} · afișare individuală`
-              : availableCycles.length > 0
-                ? `${availableCycles.length} ${availableCycles.length === 1 ? "evaluare" : "evaluări"} · rezultatele sunt păstrate separat pentru comparație`
+              ? "Rezultatele disponibile pentru evaluarea selectată"
+              : comparedCycles.length === 2
+                ? `${comparedCycles[0].name} comparată cu ${comparedCycles[1].name}`
               : "Rezultatele disponibile pentru proiect"}
           </p>
           {availableCycles.length > 0 ? (
             <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-3" aria-label="Legendă cicluri de evaluare">
-              {availableCycles.map((cycle, index) => (
+              {comparedCycles.map((cycle, index) => (
                 <li key={cycle.id} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                   <span aria-hidden="true" className={cn("size-2.5 rounded-full", cycleAccent(index).dot)} />
                   Ciclul {cycle.sequence}: {cycle.name}
@@ -83,23 +129,344 @@ export default async function ProjectReportsPage({
       </header>
 
       {availableCycles.length > 1 ? (
-        <CycleComparisonControls cycles={availableCycles} cycleId={selectedCycle?.id ?? null} />
+        <CycleComparisonControls
+          cycles={availableCycles}
+          cycleId={selectedCycle?.id ?? null}
+          baselineId={baselineCycle?.id ?? availableCycles[0].id}
+          compareId={compareCycle?.id ?? availableCycles.at(-1)?.id ?? availableCycles[0].id}
+        />
       ) : null}
 
-      <div className="grid gap-14">
-        {cycleReports.map(({ cycle, aggregate }) => (
-          <ProjectCycleResults
-            key={cycle?.id ?? "legacy"}
-            cycle={cycle}
-            aggregate={aggregate}
-            participantCount={participants.length}
-            projectId={projectId}
-            accentIndex={Math.max(0, availableCycles.findIndex((item) => item.id === cycle?.id))}
-          />
-        ))}
-      </div>
+      {selectedCycle || cycleReports.length <= 1 ? (
+        <div className="grid gap-14">
+          {cycleReports.map(({ cycle, aggregate }) => (
+            <ProjectCycleResults
+              key={cycle?.id ?? "legacy"}
+              cycle={cycle}
+              aggregate={aggregate}
+              participantCount={participants.length}
+              projectId={projectId}
+              accentIndex={Math.max(0, availableCycles.findIndex((item) => item.id === cycle?.id))}
+            />
+          ))}
+        </div>
+      ) : (
+        <ProjectCyclesComparison
+          reports={comparedReports}
+          participantCount={participants.length}
+          projectId={projectId}
+        />
+      )}
     </div>
   );
+}
+
+type ProjectCycleReport = {
+  cycle: AssessmentCycle | null;
+  aggregate: CompanyReportAggregate;
+};
+
+function ProjectCyclesComparison({
+  reports,
+  participantCount,
+  projectId,
+}: {
+  reports: ProjectCycleReport[];
+  participantCount: number;
+  projectId: string;
+}) {
+  const reportsPath = `/trainer/projects/${projectId}/reports`;
+  const latest = reports.at(-1)?.aggregate;
+  const lencioniScale = sharedCycleScale(
+    reports.map(({ aggregate }) => resolveReportScoreScale(
+      aggregate.lencioni_scale,
+      { min: 3, max: 9, suffix: "" },
+    )),
+    { min: 3, max: 9, suffix: "" },
+  );
+  const driverScale = sharedCycleScale(
+    reports.map(({ aggregate }) => resolveReportScoreScale(
+      aggregate.driver_scale,
+      { min: 0, max: 100, suffix: "%" },
+    )),
+    { min: 0, max: 100, suffix: "%" },
+  );
+  const hierarchyIssues = reports.flatMap(({ aggregate }) => aggregate.hierarchy_issues);
+  const hierarchyAmbiguous = reports.some(({ aggregate }) => aggregate.hierarchy_ambiguous);
+  const unclassifiedCount = reports.reduce(
+    (sum, { aggregate }) => sum + aggregate.icare_unclassified_response_count,
+    0,
+  );
+
+  return (
+    <article className="flex flex-col gap-10" aria-label="Comparație între evaluări">
+      <ScoringAvailabilityAlert
+        pending={reports.reduce((sum, { aggregate }) => sum + aggregate.reportable_pending_score_count, 0)}
+        failed={reports.reduce((sum, { aggregate }) => sum + aggregate.reportable_failed_score_count, 0)}
+        orphaned={reports.reduce((sum, { aggregate }) => sum + aggregate.reportable_orphaned_score_count, 0)}
+      />
+
+      <CycleComparisonBars
+        title="Participare"
+        rows={[{
+          id: "completion",
+          label: "Răspunsuri finalizate",
+          values: reports.map(({ cycle, aggregate }, index) => ({
+            cycleId: cycle?.id ?? `cycle-${index}`,
+            cycleLabel: cycle?.name ?? "Evaluare",
+            color: cycleAccent(index).color,
+            value: aggregate.completion_rate,
+            valueLabel: `${aggregate.total_completed}/${aggregate.total_assigned} · ${aggregate.completion_rate}%`,
+          })),
+        }]}
+        max={100}
+        deltaUnit="pp"
+        higherIsBetter
+      />
+
+      <SharedReportSection
+        id="comparison-pcm"
+        title="PCM"
+        description="Profilurile de bază și de fază ale participanților."
+      >
+        <div className="grid gap-5">
+          <CycleDistributionPies
+            title="Profil de bază"
+            series={distributionPieSeries(reports, (aggregate) => aggregate.pcm_base_distribution)}
+          />
+          <CycleDistributionPies
+            title="Profil de fază"
+            series={distributionPieSeries(reports, (aggregate) => aggregate.pcm_phase_distribution)}
+          />
+        </div>
+      </SharedReportSection>
+
+      <SharedReportSection
+        id="comparison-lencioni"
+        title="Lencioni"
+        description="Cele cinci dimensiuni care susțin funcționarea unei echipe."
+      >
+        <CycleComparisonBars
+          title="Rezultatul întregului proiect"
+          rows={averageComparisonRows(reports, (aggregate) => aggregate.lencioni_averages, lencioniScale.suffix)}
+          min={lencioniScale.min}
+          max={lencioniScale.max}
+          deltaUnit="points"
+          higherIsBetter
+          empty={reportScaleEmptyCopy(
+            latest?.lencioni_scale,
+            "Nu există încă rezultate Lencioni comparabile pentru acest proiect.",
+          )}
+        />
+        {!hierarchyAmbiguous ? (
+          <Link
+            href={`${reportsPath}/lencioni`}
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-burgundy hover:underline"
+          >
+            Vezi rezultatele pe echipe
+            <ArrowRightIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
+          </Link>
+        ) : (
+          <HierarchyDiagnosticsPanel
+            title="Rezultatele pe echipe sunt momentan indisponibile"
+            description="Rezultatele proiectului rămân vizibile. Verifică relațiile din organigramă pentru detaliile pe echipe."
+            issues={hierarchyIssues}
+          />
+        )}
+      </SharedReportSection>
+
+      <SharedReportSection
+        id="comparison-icare"
+        title="iCARE"
+        description="Comportamentele de leadership observate din trei perspective."
+      >
+        <HistoricalIcareNotice count={unclassifiedCount} reason={unclassifiedCount > 0 ? "historical_cohort_unavailable" : null} />
+        {hierarchyAmbiguous ? (
+          <HierarchyDiagnosticsPanel
+            title="Unele perspective bazate pe organigramă sunt momentan indisponibile"
+            description="Corectează relațiile ambigue din organigramă. Autoevaluările disponibile rămân vizibile."
+            issues={hierarchyIssues}
+          />
+        ) : null}
+        <IcarePerspectiveGrid
+          perspectives={(Object.keys(ICARE_LABELS) as IcareCohortSummary["cohort"][]).map((cohort) => {
+            const summaries = reports.map(({ aggregate }) =>
+              aggregate.icare_cohorts.find((item) => item.cohort === cohort));
+            const scale = sharedCycleScale(summaries.map((summary) => icareScale(summary)));
+            return {
+              id: cohort,
+              label: ICARE_LABELS[cohort],
+              responseCount: summaries.reduce((sum, summary) => sum + (summary?.response_count ?? 0), 0),
+              content: (
+                <CycleComparisonBars
+                  title={ICARE_LABELS[cohort]}
+                  rows={icareComparisonRows(reports, cohort)}
+                  min={scale.min}
+                  max={scale.max}
+                  deltaUnit={scale.suffix === "%" ? "pp" : "points"}
+                  higherIsBetter
+                  empty="Nu există încă rezultate comparabile pentru această perspectivă."
+                />
+              ),
+            };
+          })}
+        />
+      </SharedReportSection>
+
+      <SharedReportSection
+        id="comparison-ta-drivers"
+        title="TA Drivers"
+        description="Driverii comportamentali care se pot activa în situații de stres."
+      >
+        <CycleComparisonBars
+          title="Media procentuală"
+          rows={averageComparisonRows(reports, (aggregate) => aggregate.driver_averages, driverScale.suffix)}
+          min={driverScale.min}
+          max={driverScale.max}
+          deltaUnit={driverScale.suffix === "%" ? "pp" : "points"}
+          higherIsBetter={false}
+          empty={reportScaleEmptyCopy(
+            latest?.driver_scale,
+            "Nu există încă rezultate TA comparabile pentru acest proiect.",
+          )}
+        />
+        <div className="grid gap-5">
+          <CycleDistributionPies
+            title="Primul driver dominant"
+            series={rankPieSeries(reports, "first_rank")}
+          />
+          <CycleDistributionPies
+            title="Al doilea driver dominant"
+            series={rankPieSeries(reports, "second_rank")}
+          />
+        </div>
+      </SharedReportSection>
+
+      <SharedReportSection
+        id="comparison-leadership"
+        title="Echipa de leadership"
+        description="Lista curentă este afișată o singură dată; raportul individual păstrează selectorul de evaluare."
+      >
+        <LeadershipMembers members={latest?.leadership_members ?? []} reportsPath={reportsPath} query="" />
+      </SharedReportSection>
+
+      <footer className="border-t border-border pt-5 text-sm text-muted-foreground">
+        {participantCount} {participantCount === 1 ? "participant" : "participanți"} în proiect
+      </footer>
+    </article>
+  );
+}
+
+function sharedCycleScale(
+  scales: Array<{ min: number; max: number; suffix: string }>,
+  fallback = { min: 0, max: 100, suffix: "%" },
+) {
+  if (scales.length === 0) return fallback;
+  return {
+    min: Math.min(...scales.map((scale) => scale.min)),
+    max: Math.max(...scales.map((scale) => scale.max)),
+    suffix: new Set(scales.map((scale) => scale.suffix)).size === 1 ? scales[0]?.suffix ?? "" : "",
+  };
+}
+
+function averageComparisonRows(
+  reports: ProjectCycleReport[],
+  select: (aggregate: CompanyReportAggregate) => ReportAverage[],
+  suffix: string,
+): CycleComparisonRow[] {
+  const dimensions = new Map<string, string>();
+  reports.forEach(({ aggregate }) => select(aggregate).forEach((item) => dimensions.set(item.id, item.label)));
+  return [...dimensions].map(([id, label]) => ({
+    id,
+    label,
+    values: reports.flatMap(({ cycle, aggregate }, index) => {
+      const item = select(aggregate).find((candidate) => candidate.id === id);
+      return item ? [{
+        cycleId: cycle?.id ?? `cycle-${index}`,
+        cycleLabel: cycle?.name ?? "Evaluare",
+        color: cycleAccent(index).color,
+        value: item.avg,
+        valueLabel: `${item.avg}${suffix}`,
+      }] : [];
+    }),
+  }));
+}
+
+function distributionPieSeries(
+  reports: ProjectCycleReport[],
+  select: (aggregate: CompanyReportAggregate) => ReportDistribution[],
+): CycleDistributionSeries[] {
+  const colors = distributionColors(reports.flatMap(({ aggregate }) => select(aggregate)));
+  return reports.map(({ cycle, aggregate }, index) => ({
+    cycleId: cycle?.id ?? `cycle-${index}`,
+    cycleLabel: cycle?.name ?? "Evaluare",
+    segments: select(aggregate).map((item) => ({
+      ...item,
+      color: item.color ?? colors.get(item.id) ?? DISTRIBUTION_COLORS[0],
+    })),
+  }));
+}
+
+function icareComparisonRows(
+  reports: ProjectCycleReport[],
+  cohort: IcareCohortSummary["cohort"],
+): CycleComparisonRow[] {
+  const dimensions = new Map<string, string>();
+  reports.forEach(({ aggregate }) => {
+    aggregate.icare_cohorts
+      .find((summary) => summary.cohort === cohort)
+      ?.averages.forEach((item) => dimensions.set(item.id, item.label));
+  });
+  return [...dimensions].map(([id, label]) => ({
+    id: `${cohort}-${id}`,
+    label,
+    values: reports.flatMap(({ cycle, aggregate }, index) => {
+      const summary = aggregate.icare_cohorts.find((item) => item.cohort === cohort);
+      const item = summary?.averages.find((average) => average.id === id);
+      if (!item) return [];
+      const scale = icareScale(summary);
+      return [{
+        cycleId: cycle?.id ?? `cycle-${index}`,
+        cycleLabel: cycle?.name ?? "Evaluare",
+        color: cycleAccent(index).color,
+        value: item.avg,
+        valueLabel: `${item.avg}${scale.suffix}`,
+      }];
+    }),
+  }));
+}
+
+function rankPieSeries(
+  reports: ProjectCycleReport[],
+  rank: "first_rank" | "second_rank",
+): CycleDistributionSeries[] {
+  const colors = new Map<string, string>();
+  reports.flatMap(({ aggregate }) => aggregate.driver_rank_summary[rank]).forEach((item) => {
+    if (!colors.has(item.id)) {
+      colors.set(
+        item.id,
+        item.color ?? DRIVER_COLORS[item.id] ?? DISTRIBUTION_COLORS[colors.size % DISTRIBUTION_COLORS.length],
+      );
+    }
+  });
+  return reports.map(({ cycle, aggregate }, index) => ({
+    cycleId: cycle?.id ?? `cycle-${index}`,
+    cycleLabel: cycle?.name ?? "Evaluare",
+    segments: aggregate.driver_rank_summary[rank].map((item, itemIndex) => ({
+      ...item,
+      color: colors.get(item.id) ?? DISTRIBUTION_COLORS[itemIndex % DISTRIBUTION_COLORS.length],
+    })),
+  }));
+}
+
+function distributionColors(items: ReportDistribution[]): Map<string, string> {
+  const colors = new Map<string, string>();
+  items.forEach((item) => {
+    if (!colors.has(item.id)) {
+      colors.set(item.id, item.color ?? DISTRIBUTION_COLORS[colors.size % DISTRIBUTION_COLORS.length]);
+    }
+  });
+  return colors;
 }
 
 function ProjectCycleResults({
@@ -126,7 +493,7 @@ function ProjectCycleResults({
     : undefined;
   const lencioniScale = resolveReportScoreScale(
     aggregate.lencioni_scale,
-    { min: 0, max: 10, suffix: "" },
+    { min: 3, max: 9, suffix: "" },
   );
   const driverScale = resolveReportScoreScale(
     aggregate.driver_scale,
@@ -163,10 +530,10 @@ function ProjectCycleResults({
         orphaned={aggregate.reportable_orphaned_score_count}
       />
 
-      <ResultSection
+      <SharedReportSection
         id={`${cycleKey}-pcm`}
         title="PCM"
-        description="Distribuția profilurilor de bază și de fază pentru participanții proiectului."
+        description="Profilurile de bază și de fază ale participanților."
       >
         <div className="grid gap-5 lg:grid-cols-2">
           <ChartPanel title="Profil de bază">
@@ -190,12 +557,12 @@ function ProjectCycleResults({
             />
           </ChartPanel>
         </div>
-      </ResultSection>
+      </SharedReportSection>
 
-      <ResultSection
+      <SharedReportSection
         id={`${cycleKey}-lencioni`}
         title="Lencioni"
-        description="Imaginea de ansamblu a proiectului, cu acces separat la fiecare echipă."
+        description="Cele cinci dimensiuni care susțin funcționarea unei echipe."
       >
         <AveragePanel
           title="Rezultatul întregului proiect"
@@ -224,12 +591,12 @@ function ProjectCycleResults({
             <ArrowRightIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
           </Link>
         )}
-      </ResultSection>
+      </SharedReportSection>
 
-      <ResultSection
+      <SharedReportSection
         id={`${cycleKey}-icare`}
         title="iCARE"
-        description="Trei perspective separate, fără a amesteca echipa, colegii și autoevaluarea."
+        description="Comportamentele de leadership observate din trei perspective."
       >
         <HistoricalIcareNotice
           count={aggregate.icare_unclassified_response_count}
@@ -280,12 +647,12 @@ function ProjectCycleResults({
             };
           })}
         />
-      </ResultSection>
+      </SharedReportSection>
 
-      <ResultSection
+      <SharedReportSection
         id={`${cycleKey}-ta-drivers`}
         title="TA Drivers"
-        description="Media procentuală și frecvența primilor doi driveri pentru fiecare persoană."
+        description="Driverii comportamentali care se pot activa în situații de stres."
       >
         <AveragePanel
           title="Media procentuală"
@@ -344,9 +711,9 @@ function ProjectCycleResults({
               : `${aggregate.driver_rank_summary.insufficient_driver_score_count} persoane nu au putut fi incluse, deoarece nu au un rezultat TA finalizat cu suficiente scoruri pentru a stabili primii doi driveri.`}
           </p>
         ) : null}
-      </ResultSection>
+      </SharedReportSection>
 
-      <ResultSection
+      <SharedReportSection
         id={`${cycleKey}-leadership`}
         title="Echipa de leadership"
         description="Deschide raportul unei persoane pentru profilul și rezultatele sale complete."
@@ -356,7 +723,7 @@ function ProjectCycleResults({
           reportsPath={reportsPath}
           query={reportQuery}
         />
-      </ResultSection>
+      </SharedReportSection>
 
       <footer className="border-t border-border pt-5 text-sm text-muted-foreground">
         {participantCount} {participantCount === 1 ? "participant" : "participanți"} în proiect ·{" "}
@@ -370,28 +737,6 @@ function cycleStatusLabel(status: AssessmentCycle["status"]): string {
   if (status === "active") return "În desfășurare";
   if (status === "closed") return "Finalizată";
   return "În pregătire";
-}
-
-function ResultSection({
-  id,
-  title,
-  description,
-  children,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="grid gap-6 border-b border-border pb-10" aria-labelledby={`result-section-${id}`}>
-      <div>
-        <h2 id={`result-section-${id}`} className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-      <div className="grid gap-5">{children}</div>
-    </section>
-  );
 }
 
 function AveragePanel({

@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getCompanyProjectById: vi.fn(async () => ({
@@ -7,6 +7,26 @@ const api = vi.hoisted(() => ({
     company_id: "company-1",
     name: "Proiect Atlas",
   })),
+  getAssessmentCycles: vi.fn(async () => [
+    {
+      id: "cycle-1",
+      company_id: "company-1",
+      project_id: "project-1",
+      sequence: 1,
+      name: "Evaluare inițială",
+      status: "closed",
+      questionnaires: [],
+    },
+    {
+      id: "cycle-2",
+      company_id: "company-1",
+      project_id: "project-1",
+      sequence: 2,
+      name: "Reevaluare",
+      status: "active",
+      questionnaires: [],
+    },
+  ]),
   getLeadershipMemberReport: vi.fn(async () => ({
     project_id: "project-1",
     assessment_cycle_id: "cycle-2",
@@ -49,6 +69,35 @@ vi.mock("@/api/server-request", () => ({
 import LeadershipMemberReportPage from "./page";
 
 describe("leadership member report", () => {
+  afterEach(cleanup);
+
+  it("compares the first and latest evaluation by default", async () => {
+    const ui = await LeadershipMemberReportPage({
+      params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
+      searchParams: Promise.resolve({}),
+    });
+    render(ui);
+
+    expect(screen.getByRole("combobox", { name: "Evaluare" }).textContent).toContain("Compară evaluări");
+    expect(screen.getByRole("heading", { name: "Evoluție PCM" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Evoluția dimensiunilor" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Evoluția driverilor de stres" })).toBeTruthy();
+    expect(api.getLeadershipMemberReport).toHaveBeenCalledWith(
+      "company-1",
+      "project-1",
+      "leader-1",
+      expect.anything(),
+      { assessmentCycleId: "cycle-1" },
+    );
+    expect(api.getLeadershipMemberReport).toHaveBeenCalledWith(
+      "company-1",
+      "project-1",
+      "leader-1",
+      expect.anything(),
+      { assessmentCycleId: "cycle-2" },
+    );
+  });
+
   it("keeps profile, Lencioni, iCARE, and TA in the approved order", async () => {
     const ui = await LeadershipMemberReportPage({
       params: Promise.resolve({ projectId: "project-1", participantId: "leader-1" }),
@@ -77,6 +126,7 @@ describe("leadership member report", () => {
     expect(pcm.closest("[data-slot='card']")).toBeTruthy();
     const feedback = screen.getByText("Lasă loc și pentru o variantă suficient de bună.");
     expect(feedback.closest("[data-tone]")?.getAttribute("data-tone")).toBe("danger");
+    expect(screen.getByText("De urmărit")).toBeTruthy();
     expect(
       screen.getByRole("link", { name: /Înapoi la rezultatele proiectului/ }).getAttribute("href"),
     ).toBe("/trainer/projects/project-1/reports?cycle=cycle-2");
