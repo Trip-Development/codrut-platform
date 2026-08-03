@@ -12,8 +12,8 @@ vi.mock("@/api/server-request", () => ({
 }));
 vi.mock("../project-data", () => data);
 vi.mock("./CycleComparisonControls", () => ({
-  CycleComparisonControls: ({ cycleId }: { cycleId: string | null }) => (
-    <div>Evaluare selectată: {cycleId ?? "all"}</div>
+  CycleComparisonControls: ({ cycleId, baselineId, compareId }: { cycleId: string | null; baselineId: string; compareId: string }) => (
+    <div>Evaluare selectată: {cycleId ?? "compare"} · {baselineId} → {compareId}</div>
   ),
 }));
 vi.mock("./ReportPrintButton", () => ({ ReportPrintButton: () => null }));
@@ -138,7 +138,7 @@ describe("project report overview", () => {
     expect(screen.getByText("2 persoane · 67%")).toBeTruthy();
     expect(screen.getByText("3 persoane · 100%")).toBeTruthy();
     expect(screen.getByText(/o departajare pentru primul driver/)).toBeTruthy();
-    expect(screen.getByText("Evaluare selectată: cycle-2")).toBeTruthy();
+    expect(screen.getByText("Evaluare selectată: cycle-2 · cycle-1 → cycle-2")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Ana Lider/ }).getAttribute("href")).toBe(
       "/trainer/projects/project-1/reports/leadership/leader-1?cycle=cycle-2",
     );
@@ -352,11 +352,12 @@ describe("project report overview", () => {
     expect(screen.queryByText(/în curs de procesare/)).toBeNull();
   });
 
-  it("shows all reportable evaluations by default and excludes drafts", async () => {
+  it("defaults a multi-cycle project to its first and latest reportable evaluations", async () => {
     const cycles = [
       { id: "cycle-1", name: "Evaluare inițială", sequence: 1, status: "closed" },
-      { id: "cycle-2", name: "Reevaluare", sequence: 2, status: "active" },
-      { id: "cycle-3", name: "Evaluare în pregătire", sequence: 3, status: "draft" },
+      { id: "cycle-2", name: "Evaluare intermediară", sequence: 2, status: "closed" },
+      { id: "cycle-3", name: "Reevaluare", sequence: 3, status: "active" },
+      { id: "cycle-4", name: "Evaluare în pregătire", sequence: 4, status: "draft" },
     ];
     data.getProjectReportHistoryData.mockResolvedValue({
       project: { id: "project-1", company_id: "company-1", name: "Proiect Atlas" },
@@ -364,7 +365,8 @@ describe("project report overview", () => {
       assessmentCycles: cycles,
       cycleReports: [
         { cycle: cycles[0], aggregate: { ...aggregate, assessment_cycle_id: "cycle-1" } },
-        { cycle: cycles[1], aggregate },
+        { cycle: cycles[1], aggregate: { ...aggregate, assessment_cycle_id: "cycle-2" } },
+        { cycle: cycles[2], aggregate: { ...aggregate, assessment_cycle_id: "cycle-3" } },
       ],
     });
 
@@ -379,13 +381,17 @@ describe("project report overview", () => {
       expect.anything(),
       undefined,
     );
-    expect(screen.getByText("Evaluare selectată: all")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Evaluare inițială" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Reevaluare" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Evaluare inițială" }).closest("article")?.className).toContain("border-burgundy");
-    expect(screen.getByRole("heading", { name: "Reevaluare" }).closest("article")?.className).toContain("border-ochre");
-    expect(screen.queryByRole("heading", { name: "Evaluare în pregătire" })).toBeNull();
-    expect(screen.getByText("2 evaluări · rezultatele sunt păstrate separat pentru comparație")).toBeTruthy();
+    expect(screen.getByText("Evaluare selectată: compare · cycle-1 → cycle-3")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Evoluția proiectului" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Lencioni" })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { name: "TA Drivers" })).toHaveLength(1);
+    expect(screen.getAllByText("Evaluare inițială").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reevaluare").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Evaluare intermediară")).toBeNull();
+    expect(screen.queryByText("Evaluare în pregătire")).toBeNull();
+    expect(screen.getByText("Evaluare inițială comparată cu Reevaluare")).toBeTruthy();
+    expect(screen.getAllByRole("img", { name: /Evaluare inițială\./ })).toHaveLength(4);
+    expect(screen.getAllByRole("img", { name: /Reevaluare\./ })).toHaveLength(4);
   });
 
   it("explains when a person has no completed TA result that can be ranked", async () => {

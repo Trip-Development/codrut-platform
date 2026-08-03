@@ -1,4 +1,7 @@
-import type { ParticipantWorkspaceSummary } from "@/api/participants";
+import type {
+  ParticipantWorkspaceContext,
+  ParticipantWorkspaceSummary,
+} from "@/api/participants";
 import { participantNavItems, type ShellNavItem } from "@/components/shell/nav";
 
 export type ParticipantRouteSearchParams = {
@@ -51,3 +54,27 @@ export function firstValue(value: string | string[] | undefined): string | undef
   return Array.isArray(value) ? value[0] : value;
 }
 
+export function participantDefaultContext(contexts: ParticipantWorkspaceContext[]) {
+  const candidates = contexts.flatMap((context) => context.projects.map((project) => {
+    const orderedCycles = [...(project.cycles ?? [])].sort((left, right) => right.sequence - left.sequence);
+    const cycle = orderedCycles.find((item) => item.status === "active") ?? orderedCycles[0];
+    const recency = Date.parse(
+      cycle?.dueAt
+      ?? cycle?.closedAt
+      ?? project.deadlineAt
+      ?? cycle?.startsAt
+      ?? "",
+    );
+    return {
+      participantProfileId: context.participantProfileId,
+      projectId: project.id,
+      cycleId: cycle?.id,
+      current: project.historyBucket !== "history",
+      recency: Number.isNaN(recency) ? 0 : recency,
+    };
+  }));
+  return candidates.sort((left, right) => (
+    Number(right.current) - Number(left.current)
+    || right.recency - left.recency
+  ))[0] ?? null;
+}

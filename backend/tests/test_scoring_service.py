@@ -810,11 +810,9 @@ async def test_compute_and_save_score_lencioni() -> None:
 
     schema = PREVIEW_DEFINITIONS["lencioni"].schema
     answers = {
-        "team_sample_1": 3,
-        "team_sample_2": 2,
-        "team_sample_3": 1,
-        "team_sample_4": 2,
-        "team_sample_5": 3,
+        f"team_sample_{group}_{item}": value
+        for group, value in enumerate((3, 2, 1, 2, 3), start=1)
+        for item in range(1, 4)
     }
 
     result = await service.compute_and_save_score(
@@ -825,14 +823,14 @@ async def test_compute_and_save_score_lencioni() -> None:
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["team_signal_a"]["score"] == 3
-    assert result.scores["team_signal_a"]["interpretation"] == "Rezultat demonstrativ."
-    assert result.scores["team_signal_b"]["score"] == 2
-    assert result.scores["team_signal_c"]["score"] == 1
-    assert result.scores["team_signal_e"]["score"] == 3
-    assert result.scores["team_signal_d"]["score"] == 2
+    assert result.scores["claritate"]["score"] == 9
+    assert result.scores["claritate"]["interpretation"] == "Rezultat demonstrativ."
+    assert result.scores["dialog"]["score"] == 6
+    assert result.scores["decizii"]["score"] == 3
+    assert result.scores["rezultate"]["score"] == 9
+    assert result.scores["responsabilitate"]["score"] == 6
 
-    assert result.primary_result == "team_signal_c"
+    assert result.primary_result == "decizii"
 
 
 @pytest.mark.asyncio
@@ -851,7 +849,7 @@ async def test_compute_and_save_score_distress_drivers() -> None:
             for statement in question.get("statements", []):
                 s_id = statement["id"]
                 driver = statement["scoring"]["driver"]
-                answers[f"{q_id}:{s_id}"] = 5 if driver == "work_signal_a" else 1
+                answers[f"{q_id}:{s_id}"] = 5 if driver == "autonomie" else 1
 
     result = await service.compute_and_save_score(
         assignment_id=assignment_id,
@@ -861,9 +859,9 @@ async def test_compute_and_save_score_distress_drivers() -> None:
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["work_signal_a"] == 100
-    assert result.scores["work_signal_b"] == 20
-    assert result.primary_result == "work_signal_a"
+    assert result.scores["autonomie"] == 100
+    assert result.scores["rigoare"] == 20
+    assert result.primary_result == "autonomie"
 
 
 @pytest.mark.asyncio
@@ -878,7 +876,7 @@ async def test_compute_and_save_score_normalizes_short_distress_sample() -> None
     for question in schema["sections"][0]["questions"]:
         for statement in question["statements"]:
             answers[f"{question['id']}:{statement['id']}"] = (
-                5 if statement["scoring"]["driver"] == "work_signal_a" else 2
+                5 if statement["scoring"]["driver"] == "autonomie" else 2
             )
 
     result = await service.compute_and_save_score(
@@ -888,9 +886,9 @@ async def test_compute_and_save_score_normalizes_short_distress_sample() -> None
         definition_schema=schema,
     )
 
-    assert result.scores["work_signal_a"] == 100
-    assert result.scores["work_signal_b"] == 40
-    assert result.primary_result == "work_signal_a"
+    assert result.scores["autonomie"] == 100
+    assert result.scores["rigoare"] == 40
+    assert result.primary_result == "autonomie"
 
 
 @pytest.mark.asyncio
@@ -906,7 +904,7 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
     for section in schema.get("sections", []):
         for question in section.get("questions", []):
             for statement in question.get("statements", []):
-                score = 1 if question["id"] == "feedback_signal_c" else 4
+                score = 1 if question["id"] == "claritate" else 4
                 answers[f"{question['id']}:{statement['id']}"] = score
 
     result = await service.compute_and_save_score(
@@ -917,18 +915,17 @@ async def test_compute_and_save_score_boss_360_averages_icare_sections() -> None
     )
 
     assert result.assignment_id == assignment_id
-    assert result.scores["feedback_signal_a"] == {
+    assert result.scores["dezvoltare"] == {
         "score": 100.0,
         "raw_avg": 4.0,
         "answered": 2,
     }
-    assert result.scores["feedback_signal_c"] == {
-        "score": 0.0,
+    assert result.scores["claritate"] == {
+        "score": 25.0,
         "raw_avg": 1.0,
         "answered": 2,
     }
-    assert result.scores["feedback_section_3"]["score"] == 0.0
-    assert result.primary_result == "feedback_signal_c"
+    assert result.primary_result == "claritate"
 
 
 async def test_icare_answer_review_returns_project_scoped_source_answers() -> None:

@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { InviteTask } from "@/api/invites";
 
-import { ParticipantClientWorkspace, ParticipantResultsPanel } from "./ParticipantClientWorkspace";
+import {
+  ParticipantClientWorkspace,
+  ParticipantResultsHistory,
+  ParticipantResultsPanel,
+} from "./ParticipantClientWorkspace";
 import { ParticipantTaskList } from "./ParticipantTaskList";
 import {
   groupParticipantTasksByProject,
@@ -353,7 +357,9 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("Semnal de lucru B")).toBeDefined();
     expect(screen.getByText("Semnal de lucru C")).toBeDefined();
     expect(screen.getByText(/Observă acest tipar/)).toBeDefined();
-    expect(screen.getByText("Textul de lucru păstrat din definiția chestionarului.")).toBeDefined();
+    const guidance = screen.getByText("Textul de lucru păstrat din definiția chestionarului.");
+    expect(guidance).toBeDefined();
+    expect(guidance.closest(".grid")?.textContent).toContain("Semnal de lucru A");
     expect(screen.getAllByText("De urmărit").length).toBeGreaterThan(0);
     expect(screen.queryByText("work_signal_a")).toBeNull();
   });
@@ -719,6 +725,133 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.getByText("Profil personal")).toBeDefined();
     expect(screen.getByRole("heading", { name: "PCM" }).closest("[data-slot='card']")).toBeTruthy();
     expect(screen.queryByText("Nu există rezultate disponibile încă")).toBeNull();
+  });
+});
+
+describe("ParticipantResultsHistory", () => {
+  afterEach(cleanup);
+
+  it("aligns cycles once and keeps all three iCARE perspectives side by side", () => {
+    render(
+      <ParticipantResultsHistory
+        cycles={[
+          {
+            cycle: { id: "cycle-1", projectId: "project-1", sequence: 1, name: "Evaluare inițială", status: "closed" },
+            pcmBase: "thinker",
+            pcmPhase: "persister",
+            results: [
+              {
+                assignmentId: "ta-1",
+                questionnaireKey: "distress_drivers",
+                title: "TA",
+                targetLabel: "Autoevaluare",
+                scoreUnit: "percent",
+                scaleMin: 0,
+                scaleMax: 100,
+                scores: {
+                  perfect: { score: 62, label: "Fii perfect", feedback: "Acceptă și o variantă suficient de bună." },
+                  strong: { score: 50, label: "Fii puternic", feedback: "Acest text nu trebuie afișat la prag." },
+                },
+              },
+              {
+                assignmentId: "self-1",
+                questionnaireKey: "boss_360",
+                title: "iCARE",
+                targetLabel: "Autoevaluare",
+                scoreUnit: "percent",
+                scaleMin: 0,
+                scaleMax: 100,
+                scores: { clarity: { score: 70, label: "Claritate" } },
+              },
+            ],
+            receivedFeedbackGroups: [{
+              cohort: "direct_team",
+              completedCount: 2,
+              minimumCompleted: 2,
+              visible: true,
+              scoreUnit: "percent",
+              scaleMin: 0,
+              scaleMax: 100,
+              overallAverage: 74,
+              dimensions: [{ id: "clarity", label: "Claritate", averageScore: 74, completedCount: 2 }],
+            }],
+          },
+          {
+            cycle: { id: "cycle-2", projectId: "project-1", sequence: 2, name: "Reevaluare", status: "active" },
+            pcmBase: "thinker",
+            pcmPhase: "promoter",
+            results: [{
+              assignmentId: "ta-2",
+              questionnaireKey: "distress_drivers",
+              title: "TA",
+              targetLabel: "Autoevaluare",
+              scoreUnit: "percent",
+              scaleMin: 0,
+              scaleMax: 100,
+              scores: { perfect: { score: 55, label: "Fii perfect", feedback: "Acceptă și o variantă suficient de bună." } },
+            }],
+            receivedFeedbackGroups: [{
+              cohort: "leadership_peers",
+              completedCount: 2,
+              minimumCompleted: 2,
+              visible: true,
+              scoreUnit: "percent",
+              scaleMin: 0,
+              scaleMax: 100,
+              overallAverage: 76,
+              dimensions: [{ id: "clarity", label: "Claritate", averageScore: 76, completedCount: 2 }],
+            }],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("region", { name: "Comparația rezultatelor" })).toBeTruthy();
+    expect(screen.getAllByText("Evaluare inițială").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reevaluare").length).toBeGreaterThan(0);
+    expect(screen.getByRole("group", { name: /Cum te vede echipa ta/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /Cum te văd colegii din leadership/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /Cum te evaluezi/ })).toBeTruthy();
+    expect(screen.getByText("Acceptă și o variantă suficient de bună.")).toBeTruthy();
+    expect(screen.queryByText("Acest text nu trebuie afișat la prag.")).toBeNull();
+  });
+
+  it("uses raw points instead of percentage points for a 1-to-5 iCARE scale", () => {
+    render(
+      <ParticipantResultsHistory
+        cycles={[
+          {
+            cycle: { id: "cycle-1", projectId: "project-1", sequence: 1, name: "Evaluare inițială", status: "closed" },
+            results: [{
+              assignmentId: "icare-1",
+              questionnaireKey: "boss_360",
+              title: "iCARE",
+              targetLabel: "Autoevaluare",
+              scoreUnit: "grade_1_to_5",
+              scaleMin: 1,
+              scaleMax: 5,
+              scores: { clarity: { score: 3, label: "Claritate" } },
+            }],
+          },
+          {
+            cycle: { id: "cycle-2", projectId: "project-1", sequence: 2, name: "Reevaluare", status: "active" },
+            results: [{
+              assignmentId: "icare-2",
+              questionnaireKey: "boss_360",
+              title: "iCARE",
+              targetLabel: "Autoevaluare",
+              scoreUnit: "grade_1_to_5",
+              scaleMin: 1,
+              scaleMax: 5,
+              scores: { clarity: { score: 4, label: "Claritate" } },
+            }],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("+1 punct")).toBeTruthy();
+    expect(screen.queryByText("+1 pp")).toBeNull();
   });
 });
 

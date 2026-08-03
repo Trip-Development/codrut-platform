@@ -19,7 +19,6 @@ import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { cn } from "@/utils/cn";
 import {
   InviteConsentGate,
-  InviteRegisterPrimaryAction,
   InviteSessionExchange,
 } from "./InviteClientActions";
 
@@ -152,9 +151,6 @@ function InviteTasksView({
         />
 
         <div className="mt-7 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
-          {!data.alreadyRegistered ? (
-            <InviteRegisterPrimaryAction token={token} bundle={data} />
-          ) : null}
           <Link href="/" className={serverLinkButtonClassName({ variant: "ghost", className: "sm:ml-auto" })}>
             Pagina principală
           </Link>

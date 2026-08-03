@@ -113,8 +113,10 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Andrei" }));
 
     const accountMenu = document.querySelector("[data-sidebar-account-menu]");
+    const sidebar = document.querySelector("[data-codrut-sidebar]");
     expect(accountMenu).not.toBeNull();
     expect(accountMenu?.className).toContain("w-64");
+    expect(sidebar?.className).toContain("md:z-30");
     expect(screen.getAllByRole("combobox", { name: "Temă" })[0]?.className).toContain("w-full");
   });
 

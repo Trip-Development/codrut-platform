@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRightIcon, Loader2Icon } from "lucide-react";
+import { Loader2Icon } from "lucide-react";
 
 import { acceptCurrentTerms, getAuthenticatedSession } from "@/api/auth";
 import { apiFetch, ensureCsrfToken } from "@/api/http";
@@ -19,7 +19,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 import { cn } from "@/utils/cn";
 
 type ValidInviteBundle = Extract<InviteBundle, { state: "valid" }>;
@@ -57,7 +56,21 @@ function safeInviteDestination(destination: string | null | undefined, fallback:
     : fallback;
 }
 
-async function signOutForInviteSwitch(token: string, participantEmail: string): Promise<void> {
+export function inviteSwitchDestination(
+  token: string,
+  participantEmail: string,
+  alreadyRegistered: boolean,
+): string {
+  if (!alreadyRegistered) return `/invite/${token}`;
+  const returnTo = encodeURIComponent(`/invite/${token}`);
+  return `/login?returnTo=${returnTo}&email=${encodeURIComponent(participantEmail)}`;
+}
+
+async function signOutForInviteSwitch(
+  token: string,
+  participantEmail: string,
+  alreadyRegistered: boolean,
+): Promise<void> {
   await ensureCsrfToken();
   const response = await apiFetch(`${getApiBaseUrl()}/auth/logout`, {
     method: "POST",
@@ -66,36 +79,7 @@ async function signOutForInviteSwitch(token: string, participantEmail: string): 
   if (!response.ok && response.status !== 401) {
     throw new Error("Nu am putut închide sesiunea curentă.");
   }
-  const returnTo = encodeURIComponent(`/invite/${token}`);
-  window.location.assign(
-    `/login?returnTo=${returnTo}&email=${encodeURIComponent(participantEmail)}`,
-  );
-}
-
-export function InviteRegistrationLink({
-  token,
-  bundle,
-  children,
-  className,
-}: {
-  token: string;
-  bundle: ValidInviteBundle;
-  children: ReactNode;
-  className?: string;
-}) {
-  useEffect(() => {
-    storeInviteForRegistration(token, bundle);
-  }, [bundle, token]);
-
-  return (
-    <Link
-      href="/register"
-      className={className ?? serverLinkButtonClassName({ size: "lg" })}
-      onClick={() => storeInviteForRegistration(token, bundle)}
-    >
-      {children}
-    </Link>
-  );
+  window.location.assign(inviteSwitchDestination(token, participantEmail, alreadyRegistered));
 }
 
 export function InviteSessionExchange({
@@ -163,7 +147,7 @@ export function InviteSessionExchange({
     setState("pending");
     setError(null);
     try {
-      await signOutForInviteSwitch(token, bundle.participantEmail);
+      await signOutForInviteSwitch(token, bundle.participantEmail, bundle.alreadyRegistered);
     } catch (exchangeError) {
       setError(
         exchangeError instanceof Error
@@ -278,7 +262,7 @@ export function InviteConsentGate({
     setConsentSubmitting(true);
     setConsentError(null);
     try {
-      await signOutForInviteSwitch(token, bundle.participantEmail);
+      await signOutForInviteSwitch(token, bundle.participantEmail, bundle.alreadyRegistered);
     } catch (err) {
       setConsentError(
         err instanceof Error ? err.message : "Nu am putut schimba sesiunea activă.",
@@ -377,21 +361,6 @@ export function InviteConsentGate({
         </Button>
       </InvitePanel>
     </InviteFrame>
-  );
-}
-
-export function InviteRegisterPrimaryAction({
-  token,
-  bundle,
-}: {
-  token: string;
-  bundle: ValidInviteBundle;
-}) {
-  return (
-    <InviteRegistrationLink token={token} bundle={bundle}>
-      Creează cont permanent
-      <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
-    </InviteRegistrationLink>
   );
 }
 

@@ -338,7 +338,7 @@ export function AppShell({
         aria-label="Navigare principală"
         data-codrut-sidebar
         className={cn(
-          "hidden h-[100dvh] shrink-0 border-r bg-sidebar text-sidebar-foreground md:sticky md:top-0 md:flex md:flex-col",
+          "hidden h-[100dvh] shrink-0 border-r bg-sidebar text-sidebar-foreground md:sticky md:top-0 md:z-30 md:flex md:flex-col",
           isSidebarWidthTransitioning ? "transition-[width] duration-200 ease-out" : "transition-none",
           isSidebarCollapsed ? "w-14" : "w-48",
         )}

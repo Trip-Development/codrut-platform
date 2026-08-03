@@ -26,10 +26,22 @@ vi.mock("@/components/shell/app-shell", () => ({
 }));
 vi.mock("../ParticipantContextSelector", () => ({
   ParticipantContextSelector: () => <div>Selectare proiect</div>,
+  ParticipantResultCycleControls: () => <div>Compară evaluări</div>,
 }));
 vi.mock("../ParticipantClientWorkspace", () => ({
   ParticipantResultsPanel: ({ results }: { results: Array<{ title: string }> }) => (
     <div>{results.map((result) => <p key={result.title}>{result.title}</p>)}</div>
+  ),
+  ParticipantResultsHistory: ({ cycles }: { cycles: Array<{ cycle: { name: string }; results: Array<{ title: string }> }> }) => (
+    <section>
+      <h2>Evoluția rezultatelor</h2>
+      {cycles.map(({ cycle, results }) => (
+        <div key={cycle.name}>
+          <span>{cycle.name}</span>
+          {results.map((result) => <p key={result.title}>{result.title}</p>)}
+        </div>
+      ))}
+    </section>
   ),
 }));
 
@@ -71,13 +83,13 @@ describe("participant result history", () => {
       });
   });
 
-  it("loads and labels every cycle instead of hiding history behind a selector", async () => {
+  it("loads the first and latest cycles into the default unified comparison", async () => {
     const ui = await ParticipantResultsPage({
       searchParams: Promise.resolve({ profile: "profile-1", project: "project-1" }),
     });
     render(ui);
 
-    expect(screen.getByRole("heading", { name: "Istoricul rezultatelor" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Evoluția rezultatelor", level: 1 })).toBeTruthy();
     expect(screen.getAllByText(/Ciclul 1/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Ciclul 2/).length).toBeGreaterThan(0);
     expect(screen.getByText("Lencioni inițial")).toBeTruthy();

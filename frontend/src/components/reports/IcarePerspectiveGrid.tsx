@@ -19,7 +19,7 @@ export function IcarePerspectiveGrid({
   return (
     <section
       aria-label={ariaLabel}
-      className="grid items-start gap-4 lg:grid-cols-3"
+      className="grid items-stretch gap-4 lg:grid-cols-3"
     >
       {perspectives.map((perspective) => {
         const responseCopy = `${perspective.responseCount} ${perspective.responseCount === 1 ? "răspuns" : "răspunsuri"}`;
@@ -27,7 +27,7 @@ export function IcarePerspectiveGrid({
           <div
             key={perspective.id}
             aria-label={`${perspective.label}: ${responseCopy}`}
-            className="min-w-0"
+            className="h-full min-w-0 [&>[data-slot=card]]:h-full"
             role="group"
           >
             {perspective.content}

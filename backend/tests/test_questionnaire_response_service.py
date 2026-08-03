@@ -1064,7 +1064,8 @@ async def test_submit_rejects_answers_outside_question_scale() -> None:
     assignment = make_assignment()
     service = make_service(FakeFormsRepository(assignment))
     answers = complete_lencioni_answers()
-    answers["team_sample_1"] = 999
+    question_id = PREVIEW_DEFINITIONS["lencioni"].schema["sections"][0]["questions"][0]["id"]
+    answers[question_id] = 999
 
     with pytest.raises(DomainError, match="outside the allowed scale"):
         await service.save_assignment_response(
