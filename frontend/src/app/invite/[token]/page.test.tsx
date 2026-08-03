@@ -9,6 +9,7 @@ import {
   type InviteBundle,
 } from "@/api/invites";
 import InvitePage from "./page";
+import { inviteSwitchDestination } from "./InviteClientActions";
 
 const routerReplace = vi.fn();
 const routerRefresh = vi.fn();
@@ -160,8 +161,8 @@ describe("InvitePage", () => {
       action: "account_switch_required",
       destination: "/login?returnTo=%2Finvite%2Fdemo-token",
       participantProfileId: "participant-1",
-      accountType: "registered",
-      accessMode: "account",
+      accountType: "guest",
+      accessMode: "secure_link",
       consentCurrent: true,
     });
 
@@ -173,6 +174,21 @@ describe("InvitePage", () => {
     expect(screen.getByRole("button", { name: "Intră cu contul invitat" })).toBeTruthy();
     expect(exchangeInviteSession).toHaveBeenCalledTimes(1);
     expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
+  });
+
+  it("returns a temporary invite to its secure link after switching sessions", () => {
+    expect(inviteSwitchDestination(
+      "demo-token",
+      "participant.demo@example.com",
+      false,
+    )).toBe("/invite/demo-token");
+    expect(inviteSwitchDestination(
+      "demo-token",
+      "participant.demo@example.com",
+      true,
+    )).toBe(
+      "/login?returnTo=%2Finvite%2Fdemo-token&email=participant.demo%40example.com",
+    );
   });
 
   it("persists anonymous invite consent before showing secure tasks", async () => {
@@ -253,7 +269,7 @@ describe("InvitePage", () => {
     expect(window.localStorage.getItem("codrut_invite_consent:privacy-2026-07-16:demo-token")).toBeNull();
   });
 
-  it("lets an invite-only leadership participant stay guest and optionally register", async () => {
+  it("keeps an invite-only leadership participant in the secure task flow", async () => {
     vi.mocked(resolveInviteBundle).mockResolvedValue({
       ...validBundle,
       isLeadership: true,
@@ -265,10 +281,7 @@ describe("InvitePage", () => {
     await renderInvitePage();
 
     await screen.findByRole("heading", { name: "Chestionarele tale" });
-    await waitFor(() => {
-      expect(window.sessionStorage.getItem("codrut_invite")).toContain("participant.demo@example.com");
-    });
-    expect(screen.getByRole("link", { name: /Creează cont permanent/ }).getAttribute("href")).toBe("/register");
+    expect(screen.queryByRole("link", { name: /Creează cont permanent/ })).toBeNull();
     expect(exchangeInviteSession).toHaveBeenCalledWith("demo-token");
   });
 
