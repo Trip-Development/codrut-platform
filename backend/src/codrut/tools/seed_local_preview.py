@@ -14,8 +14,13 @@ from codrut.core.config import get_settings
 from codrut.core.database import SessionLocal
 from codrut.core.security import hash_password
 from codrut.modules.assignments.models import (
+    AssessmentCycle,
+    AssessmentCycleQuestionnaire,
+    AssessmentCycleStatus,
+    AssessmentCycleTeamMembership,
     AssignmentStatus,
     AssignmentTargetType,
+    IcareCohort,
     QuestionnaireAssignment,
     Team,
     TeamMembership,
@@ -85,6 +90,12 @@ PREVIEW_CAMPAIGN_NAMES = (
 )
 PREVIEW_EMAIL_TEMPLATES = build_preview_email_templates()
 LEGACY_PREVIEW_CAMPAIGN_PREFIX = "Local QA campaign "
+PREVIEW_ID_NAMESPACE = uuid.UUID("6f7488d7-4bc4-4a46-97cd-2f8bb7f623da")
+
+
+def _preview_uuid(*parts: object) -> uuid.UUID:
+    """Return a stable UUID for one semantic local-preview record."""
+    return uuid.uuid5(PREVIEW_ID_NAMESPACE, ":".join(str(part) for part in parts))
 
 
 @dataclass(frozen=True)
@@ -106,6 +117,7 @@ class CompanyContext:
     projects: tuple[CompanyProject, ...]
     participants: list[ParticipantProfile]
     team: Team
+    cycles: tuple[AssessmentCycle, ...]
 
 
 async def seed_local_preview() -> PreviewSeedResult:
@@ -150,7 +162,12 @@ async def seed_local_preview() -> PreviewSeedResult:
 
         await _clear_preview_data(session, trainer, participant_user)
         definitions = await _replace_preview_definitions(session)
-        contexts = await _seed_company_contexts(session, trainer, participant_user)
+        contexts = await _seed_company_contexts(
+            session,
+            trainer,
+            participant_user,
+            definitions,
+        )
         assignments = await _seed_assignments(session, contexts, definitions)
         await ResultPublicationService(session).reconcile_all()
         await _seed_invites_and_delivery(session, trainer, contexts, assignments)
@@ -181,7 +198,7 @@ async def _upsert_user(
     user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if user is None:
         user = User(
-            id=uuid.uuid4(),
+            id=_preview_uuid("user", email),
             email=email,
             password_hash=hash_password(password),
             role=role,
@@ -253,6 +270,16 @@ async def _clear_preview_data(
     )
     contact_ids = [contact.id for contact in contacts]
 
+    event_filters = []
+    if campaign_ids:
+        event_filters.append(CampaignRecipientEvent.campaign_id.in_(campaign_ids))
+    if contact_ids:
+        event_filters.append(CampaignRecipientEvent.recipient_id.in_(contact_ids))
+    if event_filters:
+        await session.execute(
+            delete(CampaignRecipientEvent).where(or_(*event_filters))
+        )
+
     send_filters = []
     if assignment_ids:
         send_filters.append(EmailSend.assignment_id.in_(assignment_ids))
@@ -276,6 +303,14 @@ async def _clear_preview_data(
         )
     )
     if company_ids:
+        participant_ids = select(ParticipantProfile.id).where(
+            ParticipantProfile.company_id.in_(company_ids)
+        )
+        await session.execute(
+            delete(AssessmentCycleTeamMembership).where(
+                AssessmentCycleTeamMembership.participant_profile_id.in_(participant_ids)
+            )
+        )
         await session.execute(delete(Company).where(Company.id.in_(company_ids)))
     await session.flush()
 
@@ -344,7 +379,11 @@ async def _replace_preview_definitions(
             }
         )
         model = QuestionnaireDefinition(
-            id=uuid.uuid4(),
+            id=_preview_uuid(
+                "questionnaire-definition",
+                definition.key,
+                PREVIEW_DEFINITION_VERSION,
+            ),
             key=definition.key,
             version=PREVIEW_DEFINITION_VERSION,
             title=definition.title,
@@ -364,6 +403,7 @@ async def _seed_company_contexts(
     session: AsyncSession,
     trainer: User,
     participant_user: User,
+    definitions: dict[str, QuestionnaireDefinition],
 ) -> list[CompanyContext]:
     now = datetime.now(UTC)
     company_specs = (
@@ -444,12 +484,12 @@ async def _seed_company_contexts(
 
     contexts: list[CompanyContext] = []
     for company_index, (company_name, project_name, participant_specs) in enumerate(company_specs):
-        company = Company(id=uuid.uuid4(), name=company_name)
+        company = Company(id=_preview_uuid("company", company_name), name=company_name)
         session.add(company)
         await session.flush()
         session.add(
             CompanyMembership(
-                id=uuid.uuid4(),
+                id=_preview_uuid("company-membership", company.id, trainer.id),
                 company_id=company.id,
                 user_id=trainer.id,
                 role=CompanyMembershipRole.owner,
@@ -457,13 +497,13 @@ async def _seed_company_contexts(
         )
 
         project = CompanyProject(
-            id=uuid.uuid4(),
+            id=_preview_uuid("project", company.id, project_name),
             company_id=company.id,
             name=project_name,
             description="Program de leadership pentru aliniere managerială și feedback aplicat.",
             project_type="leadership_program",
             status=CompanyProjectStatus.active,
-            starts_at=now - timedelta(days=14 + company_index * 7),
+            starts_at=now - timedelta(days=5 + company_index * 7),
             due_at=now + timedelta(days=21 + company_index * 7),
             form_opens_at=now - timedelta(days=14),
             form_closes_at=now + timedelta(days=21 + company_index * 7),
@@ -474,19 +514,19 @@ async def _seed_company_contexts(
             projects.extend(
                 [
                     CompanyProject(
-                        id=uuid.uuid4(),
+                        id=_preview_uuid("project", company.id, "Coaching managerial aplicat"),
                         company_id=company.id,
                         name="Coaching managerial aplicat",
                         description="Practică managerială și feedback între sesiuni.",
                         project_type="leadership_program",
                         status=CompanyProjectStatus.active,
-                        starts_at=now - timedelta(days=5),
-                        due_at=now + timedelta(days=35),
+                        starts_at=now - timedelta(days=30),
+                        due_at=now + timedelta(days=10),
                         form_opens_at=now - timedelta(days=5),
-                        form_closes_at=now + timedelta(days=35),
+                        form_closes_at=now + timedelta(days=10),
                     ),
                     CompanyProject(
-                        id=uuid.uuid4(),
+                        id=_preview_uuid("project", company.id, "Pregătire cohortă retail"),
                         company_id=company.id,
                         name="Pregătire cohortă retail",
                         description="Cohortă în pregătire.",
@@ -495,7 +535,7 @@ async def _seed_company_contexts(
                         starts_at=now + timedelta(days=35),
                     ),
                     CompanyProject(
-                        id=uuid.uuid4(),
+                        id=_preview_uuid("project", company.id, "Pilot leadership 2025"),
                         company_id=company.id,
                         name="Pilot leadership 2025",
                         description="Program încheiat, păstrat pentru raportare.",
@@ -509,7 +549,7 @@ async def _seed_company_contexts(
             session.add_all(projects[1:])
 
         team = Team(
-            id=uuid.uuid4(),
+            id=_preview_uuid("team", company.id, "Echipa de leadership"),
             company_id=company.id,
             name="Echipa de leadership",
             type=TeamType.leadership,
@@ -521,7 +561,7 @@ async def _seed_company_contexts(
         for participant_index, (name, email, user, position) in enumerate(participant_specs):
             manager_name = None if participant_index == 0 else participant_specs[0][0]
             profile = ParticipantProfile(
-                id=uuid.uuid4(),
+                id=_preview_uuid("participant-profile", company.id, email or name),
                 company_id=company.id,
                 user_id=user.id if user is not None else None,
                 full_name=name,
@@ -541,7 +581,7 @@ async def _seed_company_contexts(
             session.add_all(
                 [
                     ProjectMembership(
-                        id=uuid.uuid4(),
+                        id=_preview_uuid("project-membership", project.id, profile.id),
                         company_id=company.id,
                         project_id=project.id,
                         participant_profile_id=profile.id,
@@ -552,7 +592,7 @@ async def _seed_company_contexts(
                         active=True,
                     ),
                     TeamMembership(
-                        id=uuid.uuid4(),
+                        id=_preview_uuid("team-membership", team.id, profile.id),
                         team_id=team.id,
                         participant_profile_id=profile.id,
                         role=(
@@ -567,7 +607,7 @@ async def _seed_company_contexts(
             if company_index == 0 and participant_index < 3:
                 session.add(
                     ProjectMembership(
-                        id=uuid.uuid4(),
+                        id=_preview_uuid("project-membership", projects[1].id, profile.id),
                         company_id=company.id,
                         project_id=projects[1].id,
                         participant_profile_id=profile.id,
@@ -582,12 +622,84 @@ async def _seed_company_contexts(
         for profile in participants[1:]:
             session.add(
                 ParticipantReportingRelationship(
-                    id=uuid.uuid4(),
+                    id=_preview_uuid(
+                        "reporting-relationship",
+                        company.id,
+                        profile.id,
+                        participants[0].id,
+                    ),
                     company_id=company.id,
                     participant_profile_id=profile.id,
                     manager_profile_id=participants[0].id,
                 )
             )
+
+        cycle_specs = (
+            (
+                1,
+                "Evaluare inițială",
+                AssessmentCycleStatus.closed,
+                now - timedelta(days=75),
+                now - timedelta(days=45),
+            ),
+            (
+                2,
+                "Reevaluare",
+                AssessmentCycleStatus.active,
+                now - timedelta(days=14),
+                None,
+            ),
+        ) if company_index == 0 else (
+            (
+                1,
+                "Evaluare curentă",
+                AssessmentCycleStatus.active,
+                now - timedelta(days=14),
+                None,
+            ),
+        )
+        cycles: list[AssessmentCycle] = []
+        for sequence, name, status, starts_at, closed_at in cycle_specs:
+            cycle = AssessmentCycle(
+                id=_preview_uuid("assessment-cycle", project.id, sequence),
+                company_id=company.id,
+                project_id=project.id,
+                sequence=sequence,
+                name=name,
+                status=status,
+                source_cycle_id=cycles[-1].id if cycles else None,
+                starts_at=starts_at,
+                due_at=(closed_at or now + timedelta(days=21)),
+                closed_at=closed_at,
+                created_by_user_id=trainer.id,
+            )
+            session.add(cycle)
+            cycles.append(cycle)
+            await session.flush()
+            for display_order, (key, definition) in enumerate(definitions.items(), start=1):
+                session.add(
+                    AssessmentCycleQuestionnaire(
+                        id=_preview_uuid("cycle-questionnaire", cycle.id, key),
+                        assessment_cycle_id=cycle.id,
+                        questionnaire_definition_id=definition.id,
+                        questionnaire_key=key,
+                        display_order=display_order,
+                    )
+                )
+            for participant_index, profile in enumerate(participants):
+                session.add(
+                    AssessmentCycleTeamMembership(
+                        id=_preview_uuid("cycle-team-membership", cycle.id, team.id, profile.id),
+                        assessment_cycle_id=cycle.id,
+                        team_id=team.id,
+                        participant_profile_id=profile.id,
+                        role=(
+                            TeamMembershipRole.leader
+                            if participant_index == 0
+                            else TeamMembershipRole.member
+                        ),
+                    )
+                )
         contexts.append(
             CompanyContext(
                 company=company,
@@ -595,6 +707,7 @@ async def _seed_company_contexts(
                 projects=tuple(projects),
                 participants=participants,
                 team=team,
+                cycles=tuple(cycles),
             )
         )
 
@@ -610,6 +723,7 @@ async def _seed_assignments(
     now = datetime.now(UTC)
     assignments: list[QuestionnaireAssignment] = []
     assignment_rounds: dict[uuid.UUID, uuid.UUID] = {}
+    assignment_identity_counts: dict[str, int] = {}
 
     def add_assignment(
         context: CompanyContext,
@@ -621,24 +735,45 @@ async def _seed_assignments(
         target_person: ParticipantProfile | None = None,
         target_team: Team | None = None,
         project: CompanyProject | None = None,
+        cycle: AssessmentCycle | None = None,
+        icare_cohort: IcareCohort | None = None,
     ) -> QuestionnaireAssignment:
         assignment_project = project or context.project
+        round_key = cycle.id if cycle is not None else assignment_project.id
+        identity = ":".join(
+            str(part)
+            for part in (
+                assignment_project.id,
+                cycle.id if cycle is not None else "legacy",
+                respondent.id,
+                key,
+                target_type.value,
+                target_person.id if target_person is not None else "no-person",
+                target_team.id if target_team is not None else "no-team",
+                icare_cohort.value if icare_cohort is not None else "no-cohort",
+            )
+        )
+        occurrence = assignment_identity_counts.get(identity, 0)
+        assignment_identity_counts[identity] = occurrence + 1
         assignment = QuestionnaireAssignment(
-            id=uuid.uuid4(),
+            id=_preview_uuid("assignment", identity, occurrence),
             company_id=context.company.id,
             project_id=assignment_project.id,
             assignment_round_id=assignment_rounds.setdefault(
-                assignment_project.id,
-                uuid.uuid4(),
+                round_key,
+                _preview_uuid("assignment-round", round_key),
             ),
+            assessment_cycle_id=cycle.id if cycle is not None else None,
+            cycle_shape_guard=cycle.id if cycle is not None else None,
             respondent_profile_id=respondent.id,
             questionnaire_key=key,
             questionnaire_definition_id=definitions[key].id,
             target_type=target_type,
             target_person_id=target_person.id if target_person is not None else None,
             target_team_id=target_team.id if target_team is not None else None,
+            icare_cohort=icare_cohort,
             status=status,
-            due_at=now + timedelta(days=14),
+            due_at=cycle.due_at if cycle is not None else now + timedelta(days=14),
             invited_at=now - timedelta(days=3) if status == AssignmentStatus.invited else None,
             started_at=now - timedelta(days=2) if status == AssignmentStatus.started else None,
         )
@@ -646,87 +781,129 @@ async def _seed_assignments(
         assignments.append(assignment)
         return assignment
 
+    def lencioni_answers(scores: tuple[int, int, int, int, int]) -> dict[str, int]:
+        answer_sets = {
+            3: (1, 1, 1),
+            4: (1, 1, 2),
+            5: (1, 2, 2),
+            6: (2, 2, 2),
+            7: (2, 2, 3),
+            8: (2, 3, 3),
+            9: (3, 3, 3),
+        }
+        return {
+            f"team_sample_{group_index}_{item_index}": value
+            for group_index, score in enumerate(scores, start=1)
+            for item_index, value in enumerate(answer_sets[score], start=1)
+        }
+
+    def driver_answers(values: tuple[int, int, int, int, int]) -> dict[str, int]:
+        return {
+            f"style_set:style_{driver_index}_{item_index}": value
+            for driver_index, value in enumerate(values, start=1)
+            for item_index in range(1, 3)
+        }
+
+    completed: list[tuple[QuestionnaireAssignment, dict[str, object], int]] = []
+
+    def queue_completed(
+        assignment: QuestionnaireAssignment,
+        answers: dict[str, object],
+        *,
+        age_days: int,
+    ) -> None:
+        completed.append((assignment, answers, age_days))
+
     main = contexts[0]
     demo, manager, people_lead, sales_lead, product_lead, coordinator = main.participants
-    draft_assignment = add_assignment(
-        main,
-        demo,
-        "lencioni",
-        status=AssignmentStatus.started,
-        target_type=AssignmentTargetType.team,
-        target_team=main.team,
+    lencioni_cycle_scores = (
+        ((5, 6, 4, 5, 6), (6, 5, 5, 4, 6), (5, 6, 5, 5, 7)),
+        ((7, 7, 5, 6, 8), (6, 7, 6, 6, 7), (7, 6, 6, 7, 8)),
     )
-    completed_demo_assignment = add_assignment(
-        main,
-        demo,
-        "distress_drivers",
-        status=AssignmentStatus.scored,
+    driver_cycle_values = (
+        ((3, 5, 3, 2, 4), (2, 5, 4, 3, 3)),
+        ((4, 4, 3, 3, 4), (3, 5, 3, 2, 4)),
     )
-    add_assignment(
-        main,
-        demo,
-        "boss_360",
-        status=AssignmentStatus.assigned,
-        target_type=AssignmentTargetType.person,
-        target_person=manager,
-    )
-    add_assignment(
-        main,
-        demo,
-        "boss_360",
-        status=AssignmentStatus.invited,
-        target_type=AssignmentTargetType.person,
-        target_person=people_lead,
-    )
-    add_assignment(
-        main,
-        demo,
-        "boss_360",
-        status=AssignmentStatus.assigned,
-        target_type=AssignmentTargetType.person,
-        target_person=sales_lead,
-    )
-    icare_draft_assignment = add_assignment(
-        main,
-        demo,
-        "boss_360",
-        status=AssignmentStatus.started,
-        target_type=AssignmentTargetType.person,
-        target_person=product_lead,
-    )
-    completed_specs = (
-        (manager, "lencioni", AssignmentTargetType.team, None, main.team, 1),
-        (people_lead, "lencioni", AssignmentTargetType.team, None, main.team, 3),
-        (sales_lead, "lencioni", AssignmentTargetType.team, None, main.team, 4),
-        (people_lead, "distress_drivers", AssignmentTargetType.self_assessment, None, None, 2),
-        (sales_lead, "boss_360", AssignmentTargetType.person, demo, None, 1),
-        (product_lead, "boss_360", AssignmentTargetType.person, demo, None, 2),
-    )
-    completed_assignments: list[tuple[QuestionnaireAssignment, int]] = [
-        (completed_demo_assignment, 0)
-    ]
-    for respondent, key, target_type, target_person, target_team, offset in completed_specs:
-        assignment = add_assignment(
+    for cycle_index, cycle in enumerate(main.cycles):
+        age_days = 50 if cycle_index == 0 else 3
+        for respondent, scores in zip(
+            (demo, manager, people_lead),
+            lencioni_cycle_scores[cycle_index],
+            strict=True,
+        ):
+            queue_completed(
+                add_assignment(
+                    main,
+                    respondent,
+                    "lencioni",
+                    status=AssignmentStatus.scored,
+                    target_type=AssignmentTargetType.team,
+                    target_team=main.team,
+                    cycle=cycle,
+                ),
+                lencioni_answers(scores),
+                age_days=age_days,
+            )
+        for respondent, values in zip(
+            (demo, manager),
+            driver_cycle_values[cycle_index],
+            strict=True,
+        ):
+            queue_completed(
+                add_assignment(
+                    main,
+                    respondent,
+                    "distress_drivers",
+                    status=AssignmentStatus.scored,
+                    cycle=cycle,
+                ),
+                driver_answers(values),
+                age_days=age_days,
+            )
+        pcm_assignment = add_assignment(
             main,
-            respondent,
-            key,
-            status=AssignmentStatus.scored,
-            target_type=target_type,
-            target_person=target_person,
-            target_team=target_team,
+            demo,
+            "pcm_base",
+            status=AssignmentStatus.submitted,
+            cycle=cycle,
         )
-        completed_assignments.append((assignment, offset))
-    add_assignment(
-        main,
-        coordinator,
-        "lencioni",
-        status=AssignmentStatus.invited,
-        target_type=AssignmentTargetType.team,
-        target_team=main.team,
-    )
+        queue_completed(
+            pcm_assignment,
+            {
+                "pcm_base": "thinker",
+                "pcm_phase": "persister" if cycle_index == 0 else "harmonizer",
+            },
+            age_days=age_days,
+        )
+        icare_specs = (
+            (demo, IcareCohort.self),
+            (manager, IcareCohort.leadership_peers),
+            (people_lead, IcareCohort.leadership_peers),
+            (sales_lead, IcareCohort.direct_team),
+            (product_lead, IcareCohort.direct_team),
+            (coordinator, IcareCohort.direct_team),
+        )
+        for response_index, (respondent, cohort) in enumerate(icare_specs):
+            queue_completed(
+                add_assignment(
+                    main,
+                    respondent,
+                    "boss_360",
+                    status=AssignmentStatus.scored,
+                    target_type=AssignmentTargetType.person,
+                    target_person=demo,
+                    cycle=cycle,
+                    icare_cohort=cohort,
+                ),
+                build_sample_answers(
+                    definitions["boss_360"].schema,
+                    offset=response_index + cycle_index + 1,
+                ),
+                age_days=age_days,
+            )
 
     secondary_project = main.projects[1]
-    add_assignment(
+    draft_assignment = add_assignment(
         main,
         demo,
         "distress_drivers",
@@ -743,27 +920,34 @@ async def _seed_assignments(
         project=secondary_project,
     )
     for reviewer, offset in ((manager, 4), (people_lead, 5)):
-        assignment = add_assignment(
-            main,
-            reviewer,
-            "boss_360",
-            status=AssignmentStatus.scored,
-            target_type=AssignmentTargetType.person,
-            target_person=demo,
-            project=secondary_project,
+        queue_completed(
+            add_assignment(
+                main,
+                reviewer,
+                "boss_360",
+                status=AssignmentStatus.scored,
+                target_type=AssignmentTargetType.person,
+                target_person=demo,
+                project=secondary_project,
+            ),
+            build_sample_answers(definitions["boss_360"].schema, offset=offset),
+            age_days=offset + 4,
         )
-        completed_assignments.append((assignment, offset))
 
     atlas, nova = contexts[1], contexts[2]
-    atlas_completed = add_assignment(
-        atlas,
-        atlas.participants[0],
-        "lencioni",
-        status=AssignmentStatus.scored,
-        target_type=AssignmentTargetType.team,
-        target_team=atlas.team,
+    queue_completed(
+        add_assignment(
+            atlas,
+            atlas.participants[0],
+            "lencioni",
+            status=AssignmentStatus.scored,
+            target_type=AssignmentTargetType.team,
+            target_team=atlas.team,
+            cycle=atlas.cycles[0],
+        ),
+        lencioni_answers((6, 5, 7, 6, 6)),
+        age_days=2,
     )
-    completed_assignments.append((atlas_completed, 2))
     add_assignment(
         atlas,
         atlas.participants[1],
@@ -771,14 +955,20 @@ async def _seed_assignments(
         status=AssignmentStatus.invited,
         target_type=AssignmentTargetType.person,
         target_person=atlas.participants[0],
+        cycle=atlas.cycles[0],
+        icare_cohort=IcareCohort.direct_team,
     )
-    nova_completed = add_assignment(
-        nova,
-        nova.participants[0],
-        "distress_drivers",
-        status=AssignmentStatus.scored,
+    queue_completed(
+        add_assignment(
+            nova,
+            nova.participants[0],
+            "distress_drivers",
+            status=AssignmentStatus.scored,
+            cycle=nova.cycles[0],
+        ),
+        driver_answers((5, 3, 2, 4, 3)),
+        age_days=3,
     )
-    completed_assignments.append((nova_completed, 3))
     add_assignment(
         nova,
         nova.participants[1],
@@ -786,38 +976,27 @@ async def _seed_assignments(
         status=AssignmentStatus.invited,
         target_type=AssignmentTargetType.team,
         target_team=nova.team,
+        cycle=nova.cycles[0],
     )
     await session.flush()
 
     session.add(
         QuestionnaireResponse(
-            id=uuid.uuid4(),
+            id=_preview_uuid("questionnaire-response", draft_assignment.id),
             assignment_id=draft_assignment.id,
             questionnaire_key=draft_assignment.questionnaire_key,
             questionnaire_version=PREVIEW_DEFINITION_VERSION,
             status=QuestionnaireResponseStatus.draft,
-            answers=build_sample_answers(definitions["lencioni"].schema, limit=3),
-        )
-    )
-    session.add(
-        QuestionnaireResponse(
-            id=uuid.uuid4(),
-            assignment_id=icare_draft_assignment.id,
-            questionnaire_key=icare_draft_assignment.questionnaire_key,
-            questionnaire_version=PREVIEW_DEFINITION_VERSION,
-            status=QuestionnaireResponseStatus.draft,
-            answers=build_sample_answers(definitions["boss_360"].schema, limit=2),
+            answers=build_sample_answers(definitions["distress_drivers"].schema, limit=3),
         )
     )
 
     scoring_service = ScoringService(session)
-    for assignment, offset in completed_assignments:
-        definition = definitions[assignment.questionnaire_key]
-        answers = build_sample_answers(definition.schema, offset=offset)
-        submitted_at = now - timedelta(days=offset + 1)
+    for assignment, answers, age_days in completed:
+        submitted_at = now - timedelta(days=age_days)
         session.add(
             QuestionnaireResponse(
-                id=uuid.uuid4(),
+                id=_preview_uuid("questionnaire-response", assignment.id),
                 assignment_id=assignment.id,
                 questionnaire_key=assignment.questionnaire_key,
                 questionnaire_version=PREVIEW_DEFINITION_VERSION,
@@ -827,6 +1006,9 @@ async def _seed_assignments(
             )
         )
         assignment.submitted_at = submitted_at
+        if assignment.questionnaire_key == "pcm_base":
+            assignment.status = AssignmentStatus.submitted
+            continue
         assignment.scored_at = submitted_at
         await session.flush()
         await scoring_service.compute_and_save_score(
@@ -834,7 +1016,7 @@ async def _seed_assignments(
             assignment.questionnaire_key,
             answers,
             questionnaire_version=PREVIEW_DEFINITION_VERSION,
-            definition_schema=definition.schema,
+            definition_schema=definitions[assignment.questionnaire_key].schema,
         )
 
     await session.flush()
@@ -864,7 +1046,11 @@ async def _seed_invites_and_delivery(
             profile_assignments = assignments_by_profile.get(profile.id, [])
             active_by_project: dict[uuid.UUID, list[QuestionnaireAssignment]] = {}
             for assignment in profile_assignments:
-                if assignment.status in {AssignmentStatus.scored, AssignmentStatus.validated}:
+                if assignment.status in {
+                    AssignmentStatus.submitted,
+                    AssignmentStatus.scored,
+                    AssignmentStatus.validated,
+                }:
                     continue
                 active_by_project.setdefault(assignment.project_id, []).append(assignment)
 
@@ -886,7 +1072,7 @@ async def _seed_invites_and_delivery(
                     f"{PREVIEW_SOURCE}:assignment:{assignment.id}".encode()
                 ).hexdigest()
                 email_send = EmailSend(
-                    id=uuid.uuid4(),
+                    id=_preview_uuid("assignment-email-send", assignment.id),
                     owner_id=trainer.id,
                     assignment_id=assignment.id,
                     recipient_email=profile.email,
@@ -909,7 +1095,7 @@ async def _seed_invites_and_delivery(
                 if status == EmailSendStatus.delivered:
                     session.add(
                         EmailEvent(
-                            id=uuid.uuid4(),
+                            id=_preview_uuid("assignment-email-event", email_send.id, "delivered"),
                             email_send_id=email_send.id,
                             event_type=EmailEventType.delivered,
                             provider_event_id=f"preview-delivered-{email_send.id}",
@@ -922,7 +1108,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
     for template in PREVIEW_EMAIL_TEMPLATES.values():
         session.add(
             EmailTemplate(
-                id=uuid.uuid4(),
+                id=_preview_uuid("email-template", trainer.id, template.key, template.version),
                 key=template.key,
                 version=template.version,
                 subject=template.subject,
@@ -948,7 +1134,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
     recipients: list[CampaignRecipient] = []
     for name, email, organization, segment, status in contact_specs:
         recipient = CampaignRecipient(
-            id=uuid.uuid4(),
+            id=_preview_uuid("campaign-recipient", trainer.id, email or name),
             owner_id=trainer.id,
             email=email,
             contact_name=name,
@@ -970,7 +1156,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
     promo_report = PREVIEW_EMAIL_TEMPLATES["preview_campaign_report"]
     campaigns = [
         Campaign(
-            id=uuid.uuid4(),
+            id=_preview_uuid("campaign", trainer.id, PREVIEW_CAMPAIGN_NAMES[0]),
             owner_id=trainer.id,
             name=PREVIEW_CAMPAIGN_NAMES[0],
             segment=CampaignRecipientSegment.past_customer,
@@ -984,7 +1170,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
             updated_at=now - timedelta(hours=6),
         ),
         Campaign(
-            id=uuid.uuid4(),
+            id=_preview_uuid("campaign", trainer.id, PREVIEW_CAMPAIGN_NAMES[1]),
             owner_id=trainer.id,
             name=PREVIEW_CAMPAIGN_NAMES[1],
             segment=CampaignRecipientSegment.potential_customer,
@@ -999,7 +1185,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
             updated_at=now - timedelta(hours=2),
         ),
         Campaign(
-            id=uuid.uuid4(),
+            id=_preview_uuid("campaign", trainer.id, PREVIEW_CAMPAIGN_NAMES[2]),
             owner_id=trainer.id,
             name=PREVIEW_CAMPAIGN_NAMES[2],
             segment=CampaignRecipientSegment.past_customer,
@@ -1028,7 +1214,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
         for recipient in matching_recipients:
             session.add(
                 CampaignRecipientMembership(
-                    id=uuid.uuid4(),
+                    id=_preview_uuid("campaign-membership", campaign.id, recipient.id),
                     campaign_id=campaign.id,
                     recipient_id=recipient.id,
                     source=PREVIEW_SOURCE,
@@ -1050,7 +1236,7 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
             f"{PREVIEW_SOURCE}:campaign:{completed_campaign.id}:{recipient.id}".encode()
         ).hexdigest()
         send = EmailSend(
-            id=uuid.uuid4(),
+            id=_preview_uuid("campaign-email-send", completed_campaign.id, recipient.id),
             owner_id=trainer.id,
             campaign_id=completed_campaign.id,
             campaign_recipient_id=recipient.id,
@@ -1097,7 +1283,13 @@ async def _seed_communications(session: AsyncSession, trainer: User) -> tuple[in
         for event_index, event_type in enumerate(preview_events.get(recipient.email, ())):
             session.add(
                 CampaignRecipientEvent(
-                    id=uuid.uuid4(),
+                    id=_preview_uuid(
+                        "campaign-recipient-event",
+                        completed_campaign.id,
+                        recipient.id,
+                        event_index,
+                        event_type,
+                    ),
                     owner_id=trainer.id,
                     campaign_id=completed_campaign.id,
                     recipient_id=recipient.id,

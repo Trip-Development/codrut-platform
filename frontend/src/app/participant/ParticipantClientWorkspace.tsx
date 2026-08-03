@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRightIcon, ClipboardCheckIcon, MessageSquareTextIcon } from "lucide-react";
+import { ArrowRightIcon } from "lucide-react";
 
 import type { SessionState } from "@/api/auth";
 import type { InviteTask } from "@/api/invites";
@@ -13,6 +13,11 @@ import type {
   ParticipantWorkspaceResult,
 } from "@/api/participants";
 import { EmptyState } from "@/components/presentation/empty-state";
+import { CycleComparisonBars, type CycleComparisonRow } from "@/components/reports/CycleComparisonBars";
+import { cycleAccent } from "@/components/reports/cycle-accents";
+import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
+import { InterpretationDisclosure } from "@/components/reports/InterpretationDisclosure";
+import { ResultSignalBadge } from "@/components/reports/ResultSignalBadge";
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
@@ -375,24 +380,350 @@ export function ParticipantResultsPanel({
   );
 }
 
+export type ParticipantCycleResultSummary = {
+  cycle: ParticipantWorkspaceCycle;
+  results: ParticipantWorkspaceResult[];
+  receivedFeedback?: ParticipantReceivedFeedbackSummary | null;
+  receivedFeedbackGroups?: ParticipantReceivedFeedbackSummary[];
+  pcmBase?: string | null;
+  pcmPhase?: string | null;
+};
+
+export function ParticipantResultsHistory({
+  cycles,
+}: {
+  cycles: ParticipantCycleResultSummary[];
+}) {
+  const lencioniRows = participantResultComparisonRows(cycles, "lencioni");
+  const driverRows = participantResultComparisonRows(cycles, "drivers");
+  const selfIcareRows = participantResultComparisonRows(cycles, "icare");
+  const directTeamRows = participantFeedbackComparisonRows(cycles, "direct_team");
+  const leadershipPeerRows = participantFeedbackComparisonRows(cycles, "leadership_peers");
+  const pcmAvailable = cycles.some(({ pcmBase, pcmPhase }) => pcmBase || pcmPhase);
+  const lencioniScale = participantComparisonScale(cycles, "lencioni", 3, 9);
+  const driverScale = participantComparisonScale(cycles, "drivers", 0, 100);
+  const selfIcareScale = participantComparisonScale(cycles, "icare", 0, 100);
+  const directScale = participantFeedbackComparisonScale(cycles, "direct_team");
+  const peerScale = participantFeedbackComparisonScale(cycles, "leadership_peers");
+
+  return (
+    <section className="flex flex-col gap-10" aria-label="Comparația rezultatelor">
+      {pcmAvailable ? (
+        <PcmEvolution cycles={cycles} />
+      ) : null}
+
+      <ParticipantResultSection
+        id="history-lencioni"
+        title="Lencioni"
+        empty="Rezultatul Lencioni apare aici după finalizarea unei evaluări."
+        hasContent={lencioniRows.length > 0}
+        contained={false}
+      >
+        <CycleComparisonBars
+          title="Evoluția dimensiunilor"
+          rows={lencioniRows}
+          min={lencioniScale.min}
+          max={lencioniScale.max}
+          deltaUnit="points"
+          higherIsBetter
+          empty="Nu există încă rezultate Lencioni comparabile."
+        />
+      </ParticipantResultSection>
+
+      <ParticipantResultSection
+        id="history-icare"
+        title="iCARE"
+        empty="Rezultatele iCARE apar aici când perspectivele sunt disponibile."
+        hasContent={cycles.some((cycle) => (
+          cycle.results.some((result) => resultKind(result.questionnaireKey) === "icare")
+          || mergeParticipantFeedbackGroups(cycle.receivedFeedbackGroups ?? [], cycle.receivedFeedback).length > 0
+        ))}
+        contained={false}
+      >
+        <IcarePerspectiveGrid
+          perspectives={[
+            {
+              id: "direct-team",
+              label: "Cum te vede echipa ta",
+              responseCount: participantFeedbackResponseCount(cycles, "direct_team"),
+              content: (
+                <CycleComparisonBars
+                  title="Cum te vede echipa ta"
+                  rows={directTeamRows}
+                  min={directScale.min}
+                  max={directScale.max}
+                  deltaUnit={directScale.suffix === "%" ? "pp" : "points"}
+                  higherIsBetter
+                  empty={participantFeedbackEmptyCopy(cycles, "direct_team")}
+                />
+              ),
+            },
+            {
+              id: "leadership-peers",
+              label: "Cum te văd colegii din leadership",
+              responseCount: participantFeedbackResponseCount(cycles, "leadership_peers"),
+              content: (
+                <CycleComparisonBars
+                  title="Cum te văd colegii din leadership"
+                  rows={leadershipPeerRows}
+                  min={peerScale.min}
+                  max={peerScale.max}
+                  deltaUnit={peerScale.suffix === "%" ? "pp" : "points"}
+                  higherIsBetter
+                  empty={participantFeedbackEmptyCopy(cycles, "leadership_peers")}
+                />
+              ),
+            },
+            {
+              id: "self",
+              label: "Cum te evaluezi",
+              responseCount: cycles.filter((cycle) => cycle.results.some((result) => resultKind(result.questionnaireKey) === "icare")).length,
+              content: (
+                <CycleComparisonBars
+                  title="Cum te evaluezi"
+                  rows={selfIcareRows}
+                  min={selfIcareScale.min}
+                  max={selfIcareScale.max}
+                  deltaUnit={selfIcareScale.suffix === "%" ? "pp" : "points"}
+                  higherIsBetter
+                  empty="Autoevaluarea nu este încă disponibilă."
+                />
+              ),
+            },
+          ]}
+        />
+      </ParticipantResultSection>
+
+      <ParticipantResultSection
+        id="history-ta-drivers"
+        title="TA Drivers"
+        empty="Rezultatul TA Drivers apare aici după finalizare."
+        hasContent={driverRows.length > 0}
+        contained={false}
+      >
+        <CycleComparisonBars
+          title="Evoluția driverilor de stres"
+          rows={driverRows}
+          min={driverScale.min}
+          max={driverScale.max}
+          deltaUnit="pp"
+          higherIsBetter={false}
+          empty="Nu există încă rezultate TA comparabile."
+        />
+      </ParticipantResultSection>
+    </section>
+  );
+}
+
+function participantResultComparisonRows(
+  cycles: ParticipantCycleResultSummary[],
+  kind: ResultKind,
+): CycleComparisonRow[] {
+  const dimensions = new Map<string, string>();
+  cycles.forEach(({ results }) => results
+    .filter((result) => resultKind(result.questionnaireKey) === kind)
+    .forEach((result) => scoreItemsForResult(result)
+      .forEach((item) => dimensions.set(item.id, item.label))));
+
+  return [...dimensions].map(([id, label]) => {
+    let guidance: string | null = null;
+    const values = cycles.flatMap(({ cycle, results }, index) => {
+      const result = results.find((candidate) => resultKind(candidate.questionnaireKey) === kind);
+      const item = result ? scoreItemsForResult(result).find((candidate) => candidate.id === id) : null;
+      if (!result || !item) return [];
+      const scale = resultScoreScale(result, kind);
+      if (kind === "drivers" && item.score > 50 && item.explanation) guidance = item.explanation;
+      return [{
+        cycleId: cycle.id,
+        cycleLabel: cycle.name,
+        color: cycleAccent(index).color,
+        value: item.score,
+        valueLabel: `${formatScore(item.score)}${scale.suffix}`,
+        status: kind === "drivers" ? (item.score > 50 ? "watch" as const : "ok" as const) : undefined,
+      }];
+    });
+    return { id: `${kind}-${id}`, label, values, note: guidance };
+  });
+}
+
+function participantFeedbackComparisonRows(
+  cycles: ParticipantCycleResultSummary[],
+  cohort: ParticipantReceivedFeedbackSummary["cohort"],
+): CycleComparisonRow[] {
+  const dimensions = new Map<string, string>();
+  cycles.forEach((cycle) => participantFeedbackForCycle(cycle, cohort)?.dimensions
+    .forEach((dimension) => dimensions.set(dimension.id, dimension.label)));
+
+  return [...dimensions].map(([id, label]) => ({
+    id: `${cohort}-${id}`,
+    label,
+    values: cycles.flatMap((cycle, index) => {
+      const feedback = participantFeedbackForCycle(cycle, cohort);
+      const dimension = feedback?.visible
+        ? feedback.dimensions.find((candidate) => candidate.id === id)
+        : null;
+      if (!dimension || !feedback) return [];
+      const max = receivedFeedbackScaleMax(feedback);
+      return [{
+        cycleId: cycle.cycle.id,
+        cycleLabel: cycle.cycle.name,
+        color: cycleAccent(index).color,
+        value: dimension.averageScore,
+        valueLabel: `${formatScore(dimension.averageScore)}${receivedFeedbackScoreSuffix(feedback, max)}`,
+      }];
+    }),
+  }));
+}
+
+function participantFeedbackForCycle(
+  cycle: ParticipantCycleResultSummary,
+  cohort: ParticipantReceivedFeedbackSummary["cohort"],
+): ParticipantReceivedFeedbackSummary | null {
+  return mergeParticipantFeedbackGroups(cycle.receivedFeedbackGroups ?? [], cycle.receivedFeedback)
+    .find((feedback) => feedback.cohort === cohort) ?? null;
+}
+
+function participantComparisonScale(
+  cycles: ParticipantCycleResultSummary[],
+  kind: ResultKind,
+  fallbackMin: number,
+  fallbackMax: number,
+) {
+  const scales = cycles.flatMap(({ results }) => results
+    .filter((result) => resultKind(result.questionnaireKey) === kind)
+    .map((result) => resultScoreScale(result, kind)));
+  return {
+    min: scales.length > 0 ? Math.min(...scales.map((scale) => scale.min)) : fallbackMin,
+    max: scales.length > 0 ? Math.max(...scales.map((scale) => scale.max)) : fallbackMax,
+    suffix: scales.length > 0 && scales.every((scale) => scale.suffix === scales[0].suffix)
+      ? scales[0].suffix
+      : "",
+  };
+}
+
+function PcmEvolution({ cycles }: { cycles: ParticipantCycleResultSummary[] }) {
+  return (
+    <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
+      <section aria-labelledby="participant-history-pcm">
+        <h2 id="participant-history-pcm" className="text-xl font-semibold tracking-tight text-foreground">PCM</h2>
+        <div className="mt-5 grid gap-7">
+          <PcmEvolutionLane label="Bază" cycles={cycles} select={(cycle) => cycle.pcmBase} />
+          <PcmEvolutionLane label="Fază" cycles={cycles} select={(cycle) => cycle.pcmPhase} />
+        </div>
+      </section>
+    </Card>
+  );
+}
+
+function PcmEvolutionLane({
+  label,
+  cycles,
+  select,
+}: {
+  label: string;
+  cycles: ParticipantCycleResultSummary[];
+  select: (cycle: ParticipantCycleResultSummary) => string | null | undefined;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground">{label}</h3>
+      <ol className="mt-3 grid auto-cols-[minmax(9.5rem,1fr)] grid-flow-col overflow-x-auto pb-2">
+        {cycles.map((cycle, index) => {
+          const value = select(cycle);
+          const previousValue = index > 0 ? select(cycles[index - 1]) : null;
+          const changed = index > 0 && Boolean(value && previousValue && value !== previousValue);
+          const profile = getPcmProfile(value);
+          return (
+            <li key={cycle.cycle.id} className="relative min-w-0 pr-8 last:pr-0">
+              {index > 0 ? (
+                <ArrowRightIcon
+                  aria-hidden="true"
+                  className="absolute -left-6 top-9 size-4 text-muted-foreground"
+                  strokeWidth={1.8}
+                />
+              ) : null}
+              <p className="truncate text-[0.68rem] font-semibold text-muted-foreground">{cycle.cycle.name}</p>
+              <p className="mt-2 flex items-center gap-2 text-base font-semibold text-foreground">
+                <span className="size-2.5 shrink-0" style={{ backgroundColor: profile?.color ?? "var(--border)" }} aria-hidden="true" />
+                <span className="truncate">{value ? formatPcmLabel(value) : "În așteptare"}</span>
+              </p>
+              {index > 0 ? (
+                <p className={cn("mt-1 text-[0.68rem] font-semibold", changed ? "text-burgundy" : "text-muted-foreground")}>
+                  {changed ? "Profil schimbat" : "Fără schimbare"}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function participantFeedbackComparisonScale(
+  cycles: ParticipantCycleResultSummary[],
+  cohort: ParticipantReceivedFeedbackSummary["cohort"],
+) {
+  const feedback = cycles
+    .map((cycle) => participantFeedbackForCycle(cycle, cohort))
+    .filter((item): item is ParticipantReceivedFeedbackSummary => Boolean(item));
+  const suffixes = feedback.map((item) => receivedFeedbackScoreSuffix(item, receivedFeedbackScaleMax(item)));
+  return {
+    min: feedback.length > 0 ? Math.min(...feedback.map((item) => item.scaleMin ?? 0)) : 0,
+    max: feedback.length > 0 ? Math.max(...feedback.map(receivedFeedbackScaleMax)) : 100,
+    suffix: suffixes.length > 0 && suffixes.every((suffix) => suffix === suffixes[0])
+      ? suffixes[0]
+      : "",
+  };
+}
+
+function participantFeedbackResponseCount(
+  cycles: ParticipantCycleResultSummary[],
+  cohort: ParticipantReceivedFeedbackSummary["cohort"],
+): number {
+  return cycles.reduce(
+    (sum, cycle) => sum + (participantFeedbackForCycle(cycle, cohort)?.completedCount ?? 0),
+    0,
+  );
+}
+
+function participantFeedbackEmptyCopy(
+  cycles: ParticipantCycleResultSummary[],
+  cohort: ParticipantReceivedFeedbackSummary["cohort"],
+): string {
+  const feedback = [...cycles]
+    .reverse()
+    .map((cycle) => participantFeedbackForCycle(cycle, cohort))
+    .find((item): item is ParticipantReceivedFeedbackSummary => Boolean(item));
+  return feedback
+    ? receivedFeedbackUnavailableCopy(feedback)
+    : "Această perspectivă nu este încă disponibilă.";
+}
+
 function ParticipantResultSection({
   id,
   title,
   empty,
   hasContent,
   children,
+  contained = true,
 }: {
   id: string;
   title: string;
   empty: string;
   hasContent: boolean;
   children: React.ReactNode;
+  contained?: boolean;
 }) {
   return (
     <section aria-labelledby={`participant-result-${id}`}>
       <h2 id={`participant-result-${id}`} className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
       {hasContent ? (
-        <Card className="mt-4 gap-0 divide-y divide-border py-0">{children}</Card>
+        contained ? (
+          <Card className="mt-4 gap-0 divide-y divide-border py-0">{children}</Card>
+        ) : (
+          <div className="mt-4">{children}</div>
+        )
       ) : (
         <EmptyState className="mt-4" title={`Niciun rezultat ${title} disponibil`} description={empty} />
       )}
@@ -519,6 +850,7 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
               max={scaleMax}
               suffix={scoreSuffix}
               showSignal={false}
+              showStatus={false}
             />
           ))}
         </div>
@@ -582,7 +914,6 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
   const items = scoreItemsForResult(result);
   const scale = resultScoreScale(result, kind);
   const average = averageScore(items);
-  const highlightedItems = items.filter((item) => kind === "drivers" && item.score > 50 && item.explanation);
   const scaleUnavailable = result.scoreScaleCompatible === false
     || result.unavailableReason === "incompatible_score_scales";
 
@@ -623,20 +954,6 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
         </p>
       ) : null}
 
-      {!scaleUnavailable && highlightedItems.length > 0 ? (
-        <section className="mt-7 border-l-2 border-destructive pl-5" aria-labelledby={`guidance-${result.assignmentId}`}>
-          <div className="flex items-center gap-2 text-destructive">
-            <MessageSquareTextIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
-            <h4 id={`guidance-${result.assignmentId}`} className="text-sm font-semibold">Ce merită atenție</h4>
-          </div>
-          <div className="mt-4 grid gap-5">
-            {highlightedItems.map((item) => (
-              <GuidanceBlock key={item.id} item={item} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       {!scaleUnavailable ? (
         <div className="mt-7 divide-y divide-border border-t border-border" aria-label="Scoruri detaliate">
           {items.map((item) => (
@@ -647,6 +964,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
               max={scale.max}
               suffix={scale.suffix}
               showSignal={kind === "drivers" && item.score > 50}
+              showStatus={kind === "drivers"}
             />
           ))}
         </div>
@@ -664,32 +982,20 @@ function ResultStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GuidanceBlock({ item }: { item: ScoreItem }) {
-  if (!item.explanation) return null;
-
-  return (
-    <article>
-      <div className="flex items-center gap-2 text-destructive">
-        <ClipboardCheckIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
-        <h5 className="text-sm font-semibold">Punct de lucru pentru {item.label}</h5>
-      </div>
-      <p className="mt-2 max-w-4xl text-base leading-7 text-foreground">{item.explanation}</p>
-    </article>
-  );
-}
-
 function ScoreRow({
   item,
   min = 0,
   max,
   suffix = "",
   showSignal,
+  showStatus,
 }: {
   item: ScoreItem;
   min?: number;
   max: number;
   suffix?: string;
   showSignal: boolean;
+  showStatus: boolean;
 }) {
   const range = Math.max(max - min, Number.EPSILON);
   const width = Math.max(0, Math.min(100, ((item.score - min) / range) * 100));
@@ -700,10 +1006,8 @@ function ScoreRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-base font-semibold leading-6 text-foreground">{item.label}</h4>
-          {showSignal ? (
-            <span className="rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive">
-              De urmărit
-            </span>
+          {showStatus ? (
+            <ResultSignalBadge status={showSignal ? "watch" : "ok"} />
           ) : null}
         </div>
         <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_9rem] lg:items-center">
@@ -725,6 +1029,9 @@ function ScoreRow({
             />
           </div>
         </div>
+        {showSignal && item.explanation ? (
+          <InterpretationDisclosure>{item.explanation}</InterpretationDisclosure>
+        ) : null}
       </div>
       <div className="md:text-right">
         <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">{formatScore(item.score)}{suffix}</p>
@@ -762,8 +1069,8 @@ function resultScoreScale(
   result: ParticipantWorkspaceResult,
   kind: ResultKind,
 ): { min: number; max: number; suffix: string } {
-  const fallbackMax = kind === "lencioni" ? 10 : 100;
-  const min = result.scaleMin ?? 0;
+  const fallbackMax = kind === "lencioni" ? 9 : 100;
+  const min = result.scaleMin ?? (kind === "lencioni" ? 3 : 0);
   const max = result.scaleMax ?? fallbackMax;
   if (result.scoreUnit === "percent") return { min, max, suffix: "%" };
   if (result.scoreUnit === "grade_1_to_5") return { min, max, suffix: ` din ${max}` };

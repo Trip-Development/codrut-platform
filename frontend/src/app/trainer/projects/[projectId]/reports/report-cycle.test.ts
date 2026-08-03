@@ -7,6 +7,10 @@ describe("report cycle helpers", () => {
     expect(buildProjectReportQuery({
       cycle: "cycle current",
     })).toBe("?cycle=cycle+current");
+    expect(buildProjectReportQuery({
+      baseline: "cycle one",
+      compare: "cycle latest",
+    })).toBe("?baseline=cycle+one&compare=cycle+latest");
     expect(buildProjectReportQuery({})).toBe("");
   });
 });

@@ -9,13 +9,15 @@ import { AppShell } from "@/components/shell/app-shell";
 import { cycleAccent } from "@/components/reports/cycle-accents";
 import { cn } from "@/utils/cn";
 import { redirect } from "next/navigation";
-import { ParticipantResultsPanel } from "../ParticipantClientWorkspace";
-import { ParticipantContextSelector } from "../ParticipantContextSelector";
+import { ParticipantResultsHistory, ParticipantResultsPanel } from "../ParticipantClientWorkspace";
+import { ParticipantContextSelector, ParticipantResultCycleControls } from "../ParticipantContextSelector";
 import {
   participantActiveHref,
+  participantDefaultContext,
   participantScopeParams,
   participantScopedNavItems,
   participantWorkspaceRequestOptions,
+  firstValue,
   type ParticipantRouteSearchParams,
 } from "../participant-context";
 
@@ -35,6 +37,16 @@ export default async function ParticipantResultsPage({
       }),
     ),
   ]);
+  if (!participantWorkspaceRequestOptions(undefined, routeParams).projectId) {
+    const preferred = participantDefaultContext(selectedSummary.contexts);
+    if (preferred) {
+      const params = new URLSearchParams({
+        profile: preferred.participantProfileId,
+        project: preferred.projectId,
+      });
+      redirect(`/participant/results?${params.toString()}`);
+    }
+  }
   const onboarding = await getParticipantOnboardingState(
     selectedSummary.participantProfileId,
   );
@@ -43,12 +55,23 @@ export default async function ParticipantResultsPage({
   const orderedCycles = [...selectedSummary.cycles].sort(
     (left, right) => left.sequence - right.sequence,
   );
-  const cycleSummaries = orderedCycles.length > 0
-    ? await Promise.all(
-        orderedCycles.map((cycle) =>
-          loadCycleSummary(selectedSummary, requestOptions.headers, cycle.id),
-        ),
-      )
+  const requestedCycleId = firstValue(routeParams.cycle);
+  const selectedCycle = orderedCycles.find((cycle) => cycle.id === requestedCycleId) ?? null;
+  const defaultBaseline = orderedCycles[0];
+  const defaultComparison = orderedCycles.at(-1) ?? defaultBaseline;
+  const requestedBaseline = orderedCycles.find((cycle) => cycle.id === firstValue(routeParams.baseline));
+  const requestedComparison = orderedCycles.find((cycle) => cycle.id === firstValue(routeParams.compare));
+  const baselineCycle = requestedBaseline ?? defaultBaseline;
+  const comparisonCycle = requestedComparison && requestedComparison.id !== baselineCycle?.id
+    ? requestedComparison
+    : [...orderedCycles].reverse().find((cycle) => cycle.id !== baselineCycle?.id) ?? defaultComparison;
+  const displayedCycles = selectedCycle
+    ? [selectedCycle]
+    : [baselineCycle, comparisonCycle].filter(
+        (cycle, index, cycles): cycle is NonNullable<typeof cycle> => Boolean(cycle) && cycles.findIndex((candidate) => candidate?.id === cycle.id) === index,
+      );
+  const cycleSummaries = displayedCycles.length > 0
+    ? await Promise.all(displayedCycles.map((cycle) => loadCycleSummary(selectedSummary, requestOptions.headers, cycle.id)))
     : [selectedSummary];
   const scopeParams = participantScopeParams(selectedSummary);
 
@@ -68,16 +91,28 @@ export default async function ParticipantResultsPage({
         selectedProfileId={selectedSummary.participantProfileId}
         selectedProjectId={selectedSummary.projectId}
       />
+      {baselineCycle && comparisonCycle ? (
+        <ParticipantResultCycleControls
+          cycles={orderedCycles}
+          cycleId={selectedCycle?.id}
+          baselineId={baselineCycle.id}
+          compareId={comparisonCycle.id}
+        />
+      ) : null}
 
       <header className="mb-10 border-b border-border pb-6">
         <p className="text-sm font-semibold text-burgundy">{selectedSummary.projectName}</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">Istoricul rezultatelor</h1>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+          {selectedCycle ? selectedCycle.name : "Evoluția rezultatelor"}
+        </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Fiecare evaluare rămâne vizibilă. Culorile marchează ciclurile, iar denumirea este afișată lângă fiecare rezultat.
+          {selectedCycle
+            ? "Scorurile și interpretările disponibile pentru evaluarea selectată."
+            : "Compară prima evaluare cu cea mai recentă pe aceleași dimensiuni."}
         </p>
         {orderedCycles.length > 0 ? (
           <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-3" aria-label="Legendă cicluri de evaluare">
-            {orderedCycles.map((cycle, index) => (
+            {displayedCycles.map((cycle, index) => (
               <li key={cycle.id} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                 <span aria-hidden="true" className={cn("size-2.5 rounded-full", cycleAccent(index).dot)} />
                 Ciclul {cycle.sequence}: {cycle.name}
@@ -87,45 +122,31 @@ export default async function ParticipantResultsPage({
         ) : null}
       </header>
 
-      <div className="grid gap-14">
-        {cycleSummaries.map((summary, index) => {
-          const cycle = orderedCycles[index];
-          const accent = cycleAccent(index);
-          return (
-            <article
-              key={cycle?.id ?? "current"}
-              className={cn("border-l-2 pl-5 sm:pl-7", accent.rail)}
-              aria-labelledby={`cycle-results-${cycle?.id ?? "current"}`}
-            >
-              <header className="mb-8 flex flex-col gap-2 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    {cycle ? `Ciclul ${cycle.sequence}` : "Evaluarea curentă"}
-                  </p>
-                  <h2 id={`cycle-results-${cycle?.id ?? "current"}`} className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-                    {cycle?.name ?? summary.projectName}
-                  </h2>
-                </div>
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {cycle?.status === "active" ? "În desfășurare" : cycle?.status === "closed" ? "Finalizat" : "În pregătire"}
-                </p>
-              </header>
-              <ParticipantResultsPanel
-                results={summary.results}
-                receivedFeedback={summary.receivedFeedback}
-                receivedFeedbackGroups={summary.receivedFeedbackGroups}
-                pcmBase={summary.pcmBase}
-                pcmPhase={summary.pcmPhase}
-                hasTasks={summary.tasks.length > 0}
-                allTasksComplete={
-                  summary.tasks.length > 0
-                  && summary.tasks.every((task) => task.status === "completed")
-                }
-              />
-            </article>
-          );
-        })}
-      </div>
+      {!selectedCycle && displayedCycles.length > 1 ? (
+        <ParticipantResultsHistory
+          cycles={cycleSummaries.map((summary, index) => ({
+            cycle: displayedCycles[index],
+            results: summary.results,
+            receivedFeedback: summary.receivedFeedback,
+            receivedFeedbackGroups: summary.receivedFeedbackGroups,
+            pcmBase: summary.pcmBase,
+            pcmPhase: summary.pcmPhase,
+          }))}
+        />
+      ) : (
+        <ParticipantResultsPanel
+          results={cycleSummaries[0].results}
+          receivedFeedback={cycleSummaries[0].receivedFeedback}
+          receivedFeedbackGroups={cycleSummaries[0].receivedFeedbackGroups}
+          pcmBase={cycleSummaries[0].pcmBase}
+          pcmPhase={cycleSummaries[0].pcmPhase}
+          hasTasks={cycleSummaries[0].tasks.length > 0}
+          allTasksComplete={
+            cycleSummaries[0].tasks.length > 0
+            && cycleSummaries[0].tasks.every((task) => task.status === "completed")
+          }
+        />
+      )}
     </AppShell>
   );
 }

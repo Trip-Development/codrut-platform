@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeftIcon, LogInIcon } from "lucide-react";
+import { HomeIcon, LogInIcon } from "lucide-react";
 
 import { BrandMark } from "@/components/brand/brand-mark";
+import { SmartBackButton } from "@/components/navigation/SmartBackButton";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
 
 export default function NotFound() {
@@ -28,12 +29,10 @@ export default function NotFound() {
               Linkul poate fi vechi sau ai ajuns într-un spațiu care nu mai este public.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/" className={serverLinkButtonClassName({ size: "lg" })}>
-                <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
-                Înapoi acasă
-              </Link>
-              <Link href="/trainer/login" className={serverLinkButtonClassName({ variant: "outline", size: "lg" })}>
-                Autentificare trainer
+              <SmartBackButton />
+              <Link href="/" className={serverLinkButtonClassName({ variant: "outline", size: "lg" })}>
+                <HomeIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+                Pagina principală
               </Link>
             </div>
           </div>

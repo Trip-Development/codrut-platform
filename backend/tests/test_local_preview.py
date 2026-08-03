@@ -14,7 +14,7 @@ from codrut.tools.local_preview import (
     build_preview_questionnaire_definitions,
     build_sample_answers,
 )
-from codrut.tools.seed_local_preview import _replace_preview_definitions
+from codrut.tools.seed_local_preview import _preview_uuid, _replace_preview_definitions
 
 
 def test_preview_participant_domain_satisfies_api_email_validation() -> None:
@@ -33,6 +33,21 @@ def test_local_preview_is_allowed_in_test() -> None:
     assert_local_preview_allowed(Settings(env="test"))
 
 
+def test_preview_record_ids_are_stable_and_semantically_distinct() -> None:
+    project_id = _preview_uuid("project", "Atelier Meridian", "Leadership operațional Q3")
+
+    assert project_id == _preview_uuid(
+        "project",
+        "Atelier Meridian",
+        "Leadership operațional Q3",
+    )
+    assert project_id != _preview_uuid(
+        "project",
+        "Atelier Meridian",
+        "Coaching managerial aplicat",
+    )
+
+
 def test_local_preview_is_blocked_outside_development_and_test() -> None:
     with pytest.raises(RuntimeError, match="only be seeded in development or test"):
         assert_local_preview_allowed(Settings(env="staging"))
@@ -46,20 +61,25 @@ def test_preview_definitions_use_short_synthetic_samples() -> None:
     assert PREVIEW_DEFINITION_VERSION > 1
     assert set(definitions) == {"pcm_base", "lencioni", "distress_drivers", "boss_360"}
     assert len(definitions["pcm_base"].schema["sections"][0]["questions"]) == 2
-    assert len(definitions["lencioni"].schema["sections"][0]["questions"]) == 5
+    assert len(definitions["lencioni"].schema["sections"][0]["questions"]) == 15
     work_style_questions = definitions["distress_drivers"].schema["sections"][0]["questions"]
     assert len(work_style_questions) == 1
-    assert len(work_style_questions[0]["statements"]) == 5
+    assert len(work_style_questions[0]["statements"]) == 10
     assert definitions["distress_drivers"].schema["scoring"]["normalize_to"] == 100
+    assert all(
+        driver["feedback_above_50"]
+        for driver in definitions["distress_drivers"].schema["scoring"]["drivers"]
+    )
+    assert definitions["boss_360"].schema["scoring"]["score_min"] == 0
     assert definitions["distress_drivers"].feedback_policy["participant_results"] == {
         "publication": "scores",
         "target_types": ["self"],
         "dimension_ids": [
-            "work_signal_a",
-            "work_signal_b",
-            "work_signal_c",
-            "work_signal_d",
-            "work_signal_e",
+            "autonomie",
+            "rigoare",
+            "efort",
+            "ritm",
+            "cooperare",
         ],
         "include_primary_result": True,
     }

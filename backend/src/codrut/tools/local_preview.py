@@ -182,23 +182,29 @@ def _pcm_preview() -> PreviewQuestionnaireDefinition:
 
 def _team_preview() -> PreviewQuestionnaireDefinition:
     groups = [
-        ("team_signal_a", "Claritate"),
-        ("team_signal_b", "Dialog"),
-        ("team_signal_c", "Decizii"),
-        ("team_signal_d", "Responsabilitate"),
-        ("team_signal_e", "Rezultate"),
+        ("claritate", "Claritate"),
+        ("dialog", "Dialog"),
+        ("decizii", "Decizii"),
+        ("responsabilitate", "Responsabilitate"),
+        ("rezultate", "Rezultate"),
     ]
-    questions = [
-        {
-            "id": f"team_sample_{index}",
-            "code": f"T{index}",
-            "type": "likert",
-            "label": f"Afirmație sintetică pentru {label.lower()}",
-            "required": True,
-            "scale": _scale(3),
-        }
-        for index, (_group, label) in enumerate(groups, start=1)
-    ]
+    questions = []
+    group_question_ids: dict[str, list[str]] = {}
+    for group_index, (group, label) in enumerate(groups, start=1):
+        group_question_ids[group] = []
+        for item_index in range(1, 4):
+            question_id = f"team_sample_{group_index}_{item_index}"
+            group_question_ids[group].append(question_id)
+            questions.append(
+                {
+                    "id": question_id,
+                    "code": f"T{group_index}.{item_index}",
+                    "type": "likert",
+                    "label": f"Afirmația {item_index} despre {label.lower()}",
+                    "required": True,
+                    "scale": _scale(3),
+                }
+            )
     return PreviewQuestionnaireDefinition(
         key="lencioni",
         title="Evaluarea echipei, mostră",
@@ -210,10 +216,10 @@ def _team_preview() -> PreviewQuestionnaireDefinition:
             "scoring": {
                 "method": "sum_by_group",
                 "groups": [
-                    {"id": group, "label": label, "question_ids": [f"team_sample_{index}"]}
-                    for index, (group, label) in enumerate(groups, start=1)
+                    {"id": group, "label": label, "question_ids": group_question_ids[group]}
+                    for group, label in groups
                 ],
-                "interpretation": [{"min": 1, "max": 3, "label": "Rezultat demonstrativ."}],
+                "interpretation": [{"min": 3, "max": 9, "label": "Rezultat demonstrativ."}],
             },
         },
         feedback_policy={
@@ -229,21 +235,68 @@ def _team_preview() -> PreviewQuestionnaireDefinition:
 
 def _work_style_preview() -> PreviewQuestionnaireDefinition:
     drivers = [
-        ("work_signal_a", "Autonomie"),
-        ("work_signal_b", "Rigoare"),
-        ("work_signal_c", "Efort"),
-        ("work_signal_d", "Ritm"),
-        ("work_signal_e", "Cooperare"),
+        ("autonomie", "Autonomie"),
+        ("rigoare", "Rigoare"),
+        ("efort", "Efort"),
+        ("ritm", "Ritm"),
+        ("cooperare", "Cooperare"),
     ]
     statements = [
         {
-            "id": f"style_{index}",
-            "code": f"S{index}",
-            "label": f"Afirmație sintetică despre {label.lower()}",
+            "id": f"style_{driver_index}_{item_index}",
+            "code": f"S{driver_index}.{item_index}",
+            "label": f"Afirmația {item_index} despre {label.lower()}",
             "scoring": {"driver": driver},
         }
-        for index, (driver, label) in enumerate(drivers, start=1)
+        for driver_index, (driver, label) in enumerate(drivers, start=1)
+        for item_index in range(1, 3)
     ]
+    guidance = {
+        "autonomie": (
+            "Pe scurt\nPreferi să păstrezi controlul și să rezolvi singur situațiile dificile.\n\n"
+            "Factori de presiune\nCereri neclare, dependența de alții și "
+            "expunerea vulnerabilității.\n\n"
+            "Comportament sub stres\nTe poți retrage, poți comunica mai puțin "
+            "și poți evita să ceri ajutor.\n\n"
+            "Permisiuni utile\nEste în regulă să exprimi ce simți, să ceri ajutor "
+            "și să nu ai toate răspunsurile."
+        ),
+        "rigoare": (
+            "Pe scurt\nPui preț pe standarde clare, precizie și rezultate corecte din prima.\n\n"
+            "Factori de presiune\nPierderea controlului, standardele scăzute "
+            "și riscul de a greși.\n\n"
+            "Comportament sub stres\nPoți deveni rigid, critic și concentrat doar "
+            "pe propria soluție.\n\n"
+            "Permisiuni utile\nEste în regulă ca rezultatul să fie suficient de bun "
+            "și ca greșelile să facă parte din proces."
+        ),
+        "efort": (
+            "Pe scurt\nArăți implicarea prin energie, efort vizibil și disponibilitatea "
+            "de a prelua mult.\n\n"
+            "Factori de presiune\nCritica lipsei de implicare, rutina și impresia "
+            "că ceilalți nu încearcă.\n\n"
+            "Comportament sub stres\nPoți munci și mai mult fără să închizi "
+            "lucrurile importante.\n\n"
+            "Permisiuni utile\nTe poți relaxa, poți lăsa lucrurile să evolueze "
+            "și poți avea încredere că reușești."
+        ),
+        "ritm": (
+            "Pe scurt\nPreferi ritmul alert, deciziile rapide și trecerea imediată "
+            "la următorul lucru.\n\n"
+            "Factori de presiune\nAșteptarea, tăcerea, timpul neocupat și procesele lente.\n\n"
+            "Comportament sub stres\nPoți grăbi conversațiile, poți sări între "
+            "activități și poți face greșeli din grabă.\n\n"
+            "Permisiuni utile\nEste în regulă să încetinești și să îți iei timp pentru a gândi."
+        ),
+        "cooperare": (
+            "Pe scurt\nObservi nevoile celorlalți și cauți să păstrezi relațiile armonioase.\n\n"
+            "Factori de presiune\nCritica, ignorarea, conflictul și teama "
+            "de a-i dezamăgi pe ceilalți.\n\n"
+            "Comportament sub stres\nPoți accepta prea multe, poți evita limitele "
+            "și poți încerca să salvezi pe toată lumea.\n\n"
+            "Permisiuni utile\nEste în regulă să spui nu și să spui clar de ce ai nevoie."
+        ),
+    }
     return PreviewQuestionnaireDefinition(
         key="distress_drivers",
         title="Preferințe de lucru, mostră",
@@ -270,7 +323,14 @@ def _work_style_preview() -> PreviewQuestionnaireDefinition:
             ],
             "scoring": {
                 "method": "sum_statement_scores_by_driver",
-                "drivers": [{"id": driver, "label": label} for driver, label in drivers],
+                "drivers": [
+                    {
+                        "id": driver,
+                        "label": label,
+                        "feedback_above_50": guidance[driver],
+                    }
+                    for driver, label in drivers
+                ],
                 "normalize_to": 100,
             },
         },
@@ -297,16 +357,16 @@ def _participant_feedback_scale(behavior: str) -> list[dict[str, Any]]:
 
 def _feedback_preview() -> PreviewQuestionnaireDefinition:
     dimensions = [
-        ("feedback_signal_a", "Dezvoltare"),
-        ("feedback_signal_b", "Colaborare"),
-        ("feedback_signal_c", "Claritate"),
-        ("feedback_signal_d", "Adaptare"),
+        ("dezvoltare", "Dezvoltare"),
+        ("colaborare", "Colaborare"),
+        ("claritate", "Claritate"),
+        ("adaptare", "Adaptare"),
     ]
     sections = []
     for index, (dimension, label) in enumerate(dimensions, start=1):
         sections.append(
             {
-                "id": f"feedback_section_{index}",
+                "id": dimension,
                 "title": label,
                 "questions": [
                     {
@@ -351,7 +411,7 @@ def _feedback_preview() -> PreviewQuestionnaireDefinition:
                 "scale_min": 1,
                 "scale_max": 4,
                 "score_unit": "percent",
-                "score_min": 1,
+                "score_min": 0,
             },
         },
         feedback_policy={
