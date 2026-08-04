@@ -178,7 +178,7 @@ export function AccountSettingsPanel({
               <ul className="mt-3 flex flex-col gap-2 text-sm leading-6 text-muted-foreground">
                 {(notes ?? []).map((note) => (
                   <li key={note} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-burgundy/70" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
                     <span>{note}</span>
                   </li>
                 ))}
@@ -196,9 +196,7 @@ function PasswordReauthPrompt({ message, reauthHref }: { message: string; reauth
     <div className="mt-5 flex flex-col gap-4" role="status" aria-live="polite">
       <div className="rounded-lg border border-primary/18 bg-primary/6 p-4">
         <div className="flex items-start gap-3">
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
-            <CheckCircle2Icon aria-hidden="true" strokeWidth={1.8} />
-          </span>
+          <CheckCircle2Icon aria-hidden="true" className="size-5 shrink-0 text-success-ink" strokeWidth={1.8} />
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">Parola a fost actualizată</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{message}</p>
@@ -223,7 +221,7 @@ function SettingsList({ title, rows }: { title: string; rows: AccountSettingsDet
             <dd
               className={cn(
                 "flex min-w-0 items-center gap-2 break-words text-sm font-semibold",
-                row.tone === "accent" ? "text-burgundy" : "text-foreground",
+                row.tone === "accent" ? "text-brand-text" : "text-foreground",
               )}
             >
               {row.color ? (

@@ -65,7 +65,7 @@ export function ProjectTabs({
               className={[
                 "inline-flex h-11 shrink-0 items-center justify-center border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4",
                 isActive
-                  ? "border-burgundy text-burgundy"
+                  ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >

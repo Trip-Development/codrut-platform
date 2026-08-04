@@ -208,7 +208,7 @@ export function CompanyProjectsPanel({
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="rounded-lg border bg-surface p-3 text-foreground shadow-sm">
+      <div className="rounded-lg border bg-surface p-3 text-foreground">
         <div className="flex flex-wrap items-center justify-between gap-3 px-1">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Proiecte</h2>
@@ -240,7 +240,7 @@ export function CompanyProjectsPanel({
             label="Caută proiect"
             value={query}
             onValueChange={updateQuery}
-            placeholder="Caută proiect după nume, tip sau status"
+            placeholder="Caută proiecte"
           />
 
           <SearchableProjectFilter
@@ -395,7 +395,7 @@ export function CompanyProjectsPanel({
       ) : null}
 
       {visibleProjects.length === 0 ? (
-        <Empty className="min-h-[18rem] border bg-surface shadow-sm">
+        <Empty className="min-h-[18rem] border bg-surface">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <FolderPlusIcon aria-hidden="true" strokeWidth={1.8} />
@@ -417,10 +417,19 @@ export function CompanyProjectsPanel({
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-surface shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[64rem] text-left text-sm">
-              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+        <div className="overflow-hidden rounded-lg border bg-surface">
+          <div className="md:overflow-x-auto">
+            <table className="block w-full text-left text-sm md:table md:min-w-[64rem] xl:min-w-0 xl:table-fixed">
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[11%]" />
+                <col className="w-[14%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[10%]" />
+                <col className="w-[13%]" />
+              </colgroup>
+              <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
                 <tr>
                   <th scope="col" className="px-4 py-3">Proiect</th>
                   <th scope="col" className="min-w-28 px-4 py-3">Status</th>
@@ -431,10 +440,10 @@ export function CompanyProjectsPanel({
                   <th scope="col" className="min-w-44 px-4 py-3">Următorul pas</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="block divide-y divide-border md:table-row-group">
                 {visibleProjects.map((project) => (
-                  <tr key={project.id} className="transition-colors hover:bg-muted/45">
-                    <td className="max-w-[22rem] px-4 py-4">
+                  <tr key={project.id} className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/45 md:table-row md:px-0 md:py-0">
+                    <td className="col-span-2 row-start-1 min-w-0 md:max-w-[22rem] md:px-4 md:py-4">
                       <Link href={`/trainer/projects/${project.id}`} className="group inline-flex max-w-full flex-col gap-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45">
                         <span className="truncate text-base font-semibold text-foreground group-hover:text-primary">{project.name}</span>
                         {project.description ? (
@@ -442,21 +451,29 @@ export function CompanyProjectsPanel({
                         ) : null}
                       </Link>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="col-start-2 row-start-2 justify-self-end md:justify-self-auto md:px-4 md:py-4">
                       <ProjectStatusBadge status={project.status} />
                     </td>
-                    <td className="px-4 py-4 font-medium text-foreground">{projectTypeLabel(project.project_type)}</td>
-                    <td className="min-w-40 px-4 py-4">
+                    <td className="col-start-1 row-start-2 font-medium text-foreground md:px-4 md:py-4">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Tip</span>
+                      {projectTypeLabel(project.project_type)}
+                    </td>
+                    <td className="col-span-2 row-start-3 md:min-w-40 md:px-4 md:py-4">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Calendar</span>
                       <span className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground">
                         <CalendarDaysIcon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
                         <span>{formatProjectDateRange(project.starts_at, project.due_at)}</span>
                       </span>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="col-span-2 row-start-4 md:px-4 md:py-4">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Completare</span>
                       <ProjectCompletion progress={assignmentProgressByProject.get(project.id)} />
                     </td>
-                    <td className="px-4 py-4 text-muted-foreground">{formatProjectDate(project.updated_at)}</td>
-                    <td className="px-4 py-4">
+                    <td className="col-span-2 row-start-5 text-muted-foreground md:px-4 md:py-4">
+                      <span className="mr-2 text-xs font-medium md:hidden">Actualizat</span>
+                      {formatProjectDate(project.updated_at)}
+                    </td>
+                    <td className="col-span-2 row-start-6 border-t pt-3 md:border-0 md:px-4 md:py-4">
                       <Link
                         href={`/trainer/projects/${project.id}`}
                         className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"

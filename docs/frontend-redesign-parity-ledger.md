@@ -67,10 +67,10 @@ proof of data, security, delivery, persistence, or calculation parity.
 |---|---|---|---|---|---|
 | `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | preserved |
 | `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | preserved |
-| `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, compact inline context | company panels/tabs tests; seeded navigation | unmigrated |
-| `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | unmigrated |
-| `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | unmigrated |
-| `/trainer/companies/[companyId]/teams` | Company team workspace | Current team data, mutations, permissions and recovery | List/detail presentation and states | `TeamsWorkspace.test.tsx`; seeded team journey | unmigrated |
+| `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, compact inline context | company panels/tabs tests; seeded navigation | preserved |
+| `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | preserved |
+| `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | preserved |
+| `/trainer/companies/[companyId]/teams` | Company team workspace | Current team data, mutations, permissions and recovery | List/detail presentation and states | `TeamsWorkspace.test.tsx`; seeded team journey | preserved |
 | `/trainer/companies/[companyId]/invitations` | Company invitation compatibility/delivery access | Delivery state, resend/recovery, secure links, idempotency | Invitation status/action presentation | `InvitationsWorkspace.test.tsx`; invite contracts; seeded delivery journey | unmigrated |
 
 ## Trainer projects, questionnaires, and settings
@@ -78,18 +78,18 @@ proof of data, security, delivery, persistence, or calculation parity.
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
 | `/trainer/projects` | Searchable/filterable project list | Project lifecycle, direct navigation, URL state, permissions | List archetype, toolbar, responsive data view | `ProjectsWorkspace.test.tsx`; project controls; seeded list | preserved |
-| `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/compact inline context | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | unmigrated |
-| `/trainer/projects/[projectId]/participants` | Roster import, participant and account access | Import validation/persistence, roster operations, access recovery | Data view, importer composition, responsive controls | participant workspace, roster importer/format tests; seeded import | unmigrated |
-| `/trainer/projects/[projectId]/participants/[participantId]` | Participant and assignment/account-link detail | Correct identity, assignments, account-link repair authorization and recovery | Detail hierarchy and state presentation | profile-data and account-link repair tests; seeded detail | unmigrated |
+| `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/compact inline context | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | preserved |
+| `/trainer/projects/[projectId]/participants` | Roster import, participant and account access | Import validation/persistence, roster operations, access recovery | Data view, importer composition, responsive controls | participant workspace, roster importer/format tests; seeded import | preserved |
+| `/trainer/projects/[projectId]/participants/[participantId]` | Participant and assignment/account-link detail | Correct identity, assignments, account-link repair authorization and recovery | Detail hierarchy and state presentation | profile-data and account-link repair tests; seeded detail | preserved |
 | `/trainer/projects/[projectId]/assignments` | Assignment planning and creation | Generation/regeneration/manual assignment/save, idempotency, permissions and errors | Editor/workspace composition, control language, states | assignment/API contract tests discovered during packet; seeded create/retry | unmigrated |
 | `/trainer/projects/[projectId]/invitations` | Invitation preparation, dispatch and delivery | Recipients/tasks, send/resend, secure links, delivery state, recovery and idempotency | Delivery workspace hierarchy, statuses, actions | invite/API contracts and outbox evidence; seeded prepare/send/retry | unmigrated |
-| `/trainer/projects/[projectId]/org-chart` | Organization chart view/edit | Existing graph data, edits, permissions and persistence | Editor composition, controls, responsive/local scroll | `org-chart.test.tsx`; seeded edit/reload | unmigrated |
+| `/trainer/projects/[projectId]/org-chart` | Organization chart view/edit | Existing graph data, edits, permissions and persistence | Editor composition, controls, responsive/local scroll | `org-chart.test.tsx`; seeded edit/reload | preserved |
 | `/trainer/projects/[projectId]/reports` | Project report overview | Aggregation, privacy thresholds, comparisons, drill-down, export/print | Protected report exceptions only | report overview/detail/cycle/print tests; seeded expected values | unmigrated |
 | `/trainer/projects/[projectId]/reports/lencioni` | Lencioni report detail | Raw 3-9 scale meaning, comparison direction, privacy, Back/export/print | Protected report shell/tokens/accessibility only | report detail/score/cycle tests; seeded values | unmigrated |
 | `/trainer/projects/[projectId]/reports/leadership/[participantId]` | Individual leadership report | Correct participant, iCARE perspectives, privacy, comparison and navigation | Protected report shell/tokens/accessibility only | leadership page, iCARE, report detail tests; seeded values | unmigrated |
-| `/trainer/projects/[projectId]/settings` | Project settings | Existing mutations, validation, permissions and recovery | Settings/form archetype | `ProjectSettingsForm.test.tsx`; project-data contracts | unmigrated |
+| `/trainer/projects/[projectId]/settings` | Project settings | Existing mutations, validation, permissions and recovery | Settings/form archetype | `ProjectSettingsForm.test.tsx`; project-data contracts | preserved |
 | `/trainer/questionnaires` | Questionnaire catalog/editor | Versioning, protected definitions, explicit saves, preview boundary and errors | Editor archetype, structure/inspector, save context | `QuestionnairesWorkspace.test.tsx`; questionnaire contracts; seeded edit/reload | unmigrated |
-| `/trainer/settings` | Trainer account settings | Account/security mutations, validation, session and recovery | Settings/form archetype | account-settings/auth/password tests; seeded mutation | unmigrated |
+| `/trainer/settings` | Trainer account settings | Account/security mutations, validation, session and recovery | Settings/form archetype | account-settings/auth/password tests; seeded mutation | preserved |
 
 ## Trainer communication
 
@@ -279,3 +279,27 @@ risk. Do not rerun broad checks merely to fill a gate document.
   11/11; targeted ESLint passed. Seeded `/trainer/projects` and `/trainer` at
   390x844 had `scrollWidth === innerWidth === 390`, retained all actions and
   accessible row content, and showed no standalone context rail.
+
+### Sequence 02 packet 2 — detail and organization
+
+- Company and project detail routes now share one matte identity/header and
+  underline-navigation language. The former full burgundy company billboard
+  and segmented shadow tab treatment were removed; `#890505` remains the exact
+  brand/action accent. Conventional back/settings actions are borderless icon
+  controls with accessible names and titles.
+- Company projects, company participants, project rosters, and participant
+  project history retain one semantic table DOM and use prioritized mobile rows
+  below `768px`; desktop keeps deliberate widths and bounded local scrolling.
+  Search, URL state, import/add/edit, account-link repair, settings mutations,
+  team membership, org-chart expansion, and participant privacy copy are
+  unchanged. The existing company Teams surface is reachable again through the
+  canonical company section navigation; no duplicate project Teams route was
+  reintroduced.
+- Project workflow warnings now use warning semantics instead of burgundy;
+  scored counts use information color; completion/success remains green.
+  Decorative status icon containers and ordinary surface shadows were removed.
+- Proof: the seven directly affected detail/roster/organization suites passed
+  34/34; the six protected team/settings/profile/account-link/data suites passed
+  25/25; targeted ESLint passed. Seeded company detail and project roster at
+  390x844 retained named navigation/actions and measured
+  `scrollWidth === innerWidth === 390`.
