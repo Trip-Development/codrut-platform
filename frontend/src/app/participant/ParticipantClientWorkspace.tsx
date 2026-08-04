@@ -13,6 +13,7 @@ import type {
   ParticipantWorkspaceResult,
 } from "@/api/participants";
 import { EmptyState } from "@/components/presentation/empty-state";
+import { CoachingContextRail } from "@/components/presentation/coaching-context-rail";
 import { CycleComparisonBars, type CycleComparisonRow } from "@/components/reports/CycleComparisonBars";
 import { cycleAccent } from "@/components/reports/cycle-accents";
 import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
@@ -129,7 +130,24 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
         selectedProfileId={summaryData.participantProfileId}
         selectedProjectId={summaryData.projectId}
       />
-      <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_17rem] xl:gap-12">
+      <CoachingContextRail
+        eyebrow="Orientarea ta"
+        title={
+          pendingTaskGroups.length > 0
+            ? `${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`
+            : "Toate sarcinile active sunt finalizate"
+        }
+        detail={`${tasksProgressPct}% progres · ${hasMultipleProjects ? projectCountCopy : summaryData.projectName} · datele rămân în spațiul tău de lucru`}
+        nextAction={
+          pendingTaskGroups.length > 0
+            ? "Completează următorul chestionar"
+            : resultCount > 0
+              ? "Vezi rezultatele disponibile"
+              : "Așteaptă activarea următoarei sarcini"
+        }
+        tone={isComplete ? "success" : "info"}
+      />
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_16rem] xl:gap-10">
         <section
           className="min-w-0"
           aria-labelledby={isComplete ? "participant-completion-title" : "participant-tasks-title"}
@@ -151,7 +169,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
             <>
               <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
                 <div>
-                  <h2 id="participant-tasks-title" className="text-2xl font-semibold tracking-tight text-foreground">
+                  <h2 id="participant-tasks-title" className="text-xl font-semibold tracking-tight text-foreground">
                     {pendingTaskGroups.length > 0 ? "De completat" : "Chestionare"}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -160,7 +178,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                 </div>
                 {pendingTaskGroups.length > 0 ? (
                   <div
-                    className="flex items-baseline gap-2 text-burgundy"
+                    className="flex items-baseline gap-2 text-brand-text"
                     role="status"
                     aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
                   >
@@ -187,7 +205,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
               <p className="text-sm text-muted-foreground">
                 Ai {resultCount} {resultCount === 1 ? "rezultat disponibil" : "rezultate disponibile"}.
               </p>
-              <Link href={resultsHref} className={serverLinkButtonClassName({ variant: "ghost", className: "w-fit text-burgundy" })}>
+              <Link href={resultsHref} className={serverLinkButtonClassName({ variant: "ghost", className: "w-fit text-brand-text" })}>
                 Vezi rezultatele
                 <ArrowRightIcon data-icon="inline-end" aria-hidden="true" strokeWidth={2.2} />
               </Link>
@@ -197,7 +215,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
 
         <aside className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0" aria-label="Stadiul proiectului">
           <p className="text-sm font-semibold text-foreground">Progres</p>
-          <p className="mt-3 font-mono text-5xl font-semibold tracking-tight text-burgundy tabular-nums">{tasksProgressPct}%</p>
+          <p className="mt-3 font-mono text-5xl font-semibold tracking-tight text-brand-text tabular-nums">{tasksProgressPct}%</p>
           <div
             className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"
             role="progressbar"
@@ -294,7 +312,7 @@ export function ParticipantResultsPanel({
       {availableResultCount > 0 ? (
         <header className="flex flex-col gap-3 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold text-burgundy">Disponibile acum</p>
+            <p className="text-xs font-semibold text-brand-text">Disponibile acum</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
               {availableResultCount} {availableResultCount === 1 ? "rezultat" : "rezultate"}
             </h2>
@@ -316,7 +334,7 @@ export function ParticipantResultsPanel({
         <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
           <section className="grid gap-7 md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] md:items-center" aria-labelledby="participant-pcm-title">
             <div>
-              <p className="text-sm font-semibold text-burgundy">Profil personal</p>
+              <p className="text-sm font-semibold text-brand-text">Profil personal</p>
               <h2 id="participant-pcm-title" className="mt-1 text-2xl font-semibold tracking-tight text-foreground">PCM</h2>
             </div>
             <div className="flex flex-wrap gap-x-12 gap-y-5">
@@ -648,7 +666,7 @@ function PcmEvolutionLane({
                 <span className="truncate">{value ? formatPcmLabel(value) : "În așteptare"}</span>
               </p>
               {index > 0 ? (
-                <p className={cn("mt-1 text-[0.68rem] font-semibold", changed ? "text-burgundy" : "text-muted-foreground")}>
+                <p className={cn("mt-1 text-[0.68rem] font-semibold", changed ? "text-brand-text" : "text-muted-foreground")}>
                   {changed ? "Profil schimbat" : "Fără schimbare"}
                 </p>
               ) : null}
@@ -782,7 +800,7 @@ function PcmCycleValues({
 }) {
   return (
     <div className={cn("border-l-2 pl-4", tone === "current" ? "border-burgundy" : "border-zinc-400")}>
-      <p className={cn("text-xs font-semibold", tone === "current" ? "text-burgundy" : "text-muted-foreground")}>{label}</p>
+      <p className={cn("text-xs font-semibold", tone === "current" ? "text-brand-text" : "text-muted-foreground")}>{label}</p>
       {base || phase ? (
         <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
           <PcmInlineValue label="Bază" value={base} />
@@ -823,7 +841,7 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
         <div>
           <h3 className="text-xl font-semibold tracking-tight text-foreground">{cohortTitle}</h3>
           {feedback.projectName ? (
-            <p className="mt-1 text-sm font-semibold text-burgundy">{feedback.projectName}</p>
+            <p className="mt-1 text-sm font-semibold text-brand-text">{feedback.projectName}</p>
           ) : null}
           {feedback.questionnaireTitle ? (
             <p className="mt-1 text-sm text-muted-foreground">{feedback.questionnaireTitle}</p>
@@ -921,7 +939,7 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
     <article className="px-5 py-6">
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-burgundy">{resultKindLabel(kind)}</p>
+          <p className="text-xs font-semibold text-brand-text">{resultKindLabel(kind)}</p>
           <h3 className="mt-2 text-2xl font-semibold leading-8 tracking-tight text-foreground" title={result.title}>{result.title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {[result.projectName, result.targetLabel].filter(Boolean).join(" · ")}

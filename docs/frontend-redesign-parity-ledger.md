@@ -1,0 +1,175 @@
+# CF0002 Current-Dev Parity Ledger
+
+Baseline: product `origin/dev` at `ee63802` on 2026-08-04. The route inventory
+contains 44 `page.tsx` entries. This ledger is derived from the current route
+tree, current tests, and current product documentation. It does not reuse an
+older `origin/prod` comparison as fresh redesign authorization.
+
+During Sequence 01, copy this ledger to
+`docs/frontend-redesign-parity-ledger.md` on the feature branch. Update the
+product copy with evidence and dispositions as work proceeds. Retain
+`docs/product-overhaul-route-matrix.md` as historical controlled-pilot/release
+evidence; do not overwrite it.
+
+Disposition keys:
+
+- `unmigrated`: current `dev` behavior is the baseline; no CF0002 change proved.
+- `preserved`: migrated presentation with the same capability and outcomes.
+- `replaced-approved`: owner approved a different interaction serving the same
+  goal after parity proof.
+- `blocked`: evidence is missing or a proposed change crosses the contract.
+
+Every entry starts `unmigrated`. A route becomes `preserved` only after its
+named behavior proof and relevant live check pass. Visual review alone is not
+proof of data, security, delivery, persistence, or calculation parity.
+
+## Public, legal, and identity
+
+| Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
+|---|---|---|---|---|---|
+| `/` | Public product page and role entry | Trainer and participant access paths remain reachable | Composition, copy, tokens, local photography, responsive hierarchy | `app/page.test.tsx`; live links/themes/viewports | unmigrated |
+| `/login` | Participant authentication | Session restoration, errors, return path, and role boundary | Shared auth shell, copy, fields, states | `app/login/page.test.tsx`; auth contracts; live failure/success | unmigrated |
+| `/trainer/login` | Trainer authentication | Trainer entry and session/role isolation | Shared auth shell, copy, fields, states | `app/trainer/login/page.test.tsx`; auth contracts; live failure/success | unmigrated |
+| `/register` | Invite-aware registration | Invite context, password policy, field recovery, account outcome | Auth shell, hierarchy, feedback | `app/register/page.test.tsx`; password/auth contracts; invite journey | unmigrated |
+| `/reset-password` | Password reset request | Request semantics and explicit pending/failure/success recovery | Auth shell, copy, form states | `app/reset-password/page.test.tsx`; password contracts | unmigrated |
+| `/update-password` | Token-based password update | Token validation, password policy, error and success recovery | Auth shell, copy, form states | `app/update-password/page.test.tsx`; password contracts | unmigrated |
+| `/onboarding` | Authentication-aware compatibility/redirect entry | Existing redirect destination and old-link behavior | Loading/redirect presentation only | route inspection and authenticated/anonymous smoke | unmigrated |
+| `/confidentialitate` | Romanian privacy policy | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | `app/confidentialitate/page.test.tsx`; content diff; live read | unmigrated |
+| `/termeni` | Romanian terms | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | content diff and route smoke | unmigrated |
+| `/cookies` | Necessary-cookie disclosure | Current disclosure and access remain; no invented consent behavior | Reading layout, typography, responsive spacing | content diff and runtime cookie assumption check | unmigrated |
+
+## Anonymous invitations
+
+| Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
+|---|---|---|---|---|---|
+| `/invite/[token]` | Invitation lookup and registration or secure-link entry | Valid, invalid, expired, consent, exchange-failure, permanent-account, and secure-link paths | Hierarchy, copy, state presentation, accessible controls | `app/invite/[token]/page.test.tsx`; auth contracts; seeded invite journey | unmigrated |
+| `/invite/[token]/tasks/[taskId]` | Secure invitation-task compatibility entry | Token/task resolution, stale-link recovery, and safe destination | Shell and state presentation | dedicated page test; questionnaire runner tests; seeded secure task | unmigrated |
+
+## Participant
+
+| Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
+|---|---|---|---|---|---|
+| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, coaching-context rail | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | unmigrated |
+| `/participant/dashboard` | Participant dashboard compatibility entry | Existing destination and Back/refresh behavior | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
+| `/participant/questionnaires` | Assigned questionnaire list | Persisted assignments, targets, drafts, completion/result states | List archetype, state presentation, copy | participant context and questionnaire contract tests; seeded list | unmigrated |
+| `/participant/questionnaires/[key]` | Questionnaire completion | Pinned definition, answers, autosave/draft, Back recovery, validation, submission | Runner composition, progress/save context, controls, states | page, return-href, runner, and questionnaire contract tests; live draft/submit | unmigrated |
+| `/participant/tasks/[taskId]` | Task compatibility entry | Existing task resolution and old links | Compatibility/loading presentation only | task-display and route/API contract checks | unmigrated |
+| `/participant/results` | Policy-controlled participant results | Calculations, publication/privacy threshold, no raw answers/formula, comparison and recovery | Protected report shell/tokens/accessibility only | participant results test; report/score tests; seeded expected values | unmigrated |
+| `/participant/account` | Account and program settings | Account mutations, password validation, program data, error recovery | Settings archetype, form hierarchy and feedback | account page/workspace and account-settings tests | unmigrated |
+| `/participant/consent` | Persisted legal consent | Required version, acceptance persistence, protected-route gating | Guided layout, copy, states | `ConsentForm.test.tsx`; auth contract; seeded consent journey | unmigrated |
+| `/participant/onboarding` | Participant onboarding compatibility entry | Existing destination and session boundary | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
+| `/participant/final-evaluation` | Final evaluation workflow | Existing evaluation assignment, answers, submit and recovery | Guided flow presentation only | route/API inspection; questionnaire runner/contracts; seeded journey | unmigrated |
+| `/participant/chat` | Existing placeholder/bounded surface | Do not imply or add AI coaching/roleplay capability | Harmonize shell and honest empty/placeholder state only | route inspection; navigation and copy review | unmigrated |
+
+## Trainer core and companies
+
+| Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
+|---|---|---|---|---|---|
+| `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | unmigrated |
+| `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | unmigrated |
+| `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, context rail | company panels/tabs tests; seeded navigation | unmigrated |
+| `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | unmigrated |
+| `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | unmigrated |
+| `/trainer/companies/[companyId]/teams` | Company team workspace | Current team data, mutations, permissions and recovery | List/detail presentation and states | `TeamsWorkspace.test.tsx`; seeded team journey | unmigrated |
+| `/trainer/companies/[companyId]/invitations` | Company invitation compatibility/delivery access | Delivery state, resend/recovery, secure links, idempotency | Invitation status/action presentation | `InvitationsWorkspace.test.tsx`; invite contracts; seeded delivery journey | unmigrated |
+
+## Trainer projects, questionnaires, and settings
+
+| Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
+|---|---|---|---|---|---|
+| `/trainer/projects` | Searchable/filterable project list | Project lifecycle, direct navigation, URL state, permissions | List archetype, toolbar, responsive data view | `ProjectsWorkspace.test.tsx`; project controls; seeded list | unmigrated |
+| `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/context rail | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | unmigrated |
+| `/trainer/projects/[projectId]/participants` | Roster import, participant and account access | Import validation/persistence, roster operations, access recovery | Data view, importer composition, responsive controls | participant workspace, roster importer/format tests; seeded import | unmigrated |
+| `/trainer/projects/[projectId]/participants/[participantId]` | Participant and assignment/account-link detail | Correct identity, assignments, account-link repair authorization and recovery | Detail hierarchy and state presentation | profile-data and account-link repair tests; seeded detail | unmigrated |
+| `/trainer/projects/[projectId]/assignments` | Assignment planning and creation | Generation/regeneration/manual assignment/save, idempotency, permissions and errors | Editor/workspace composition, control language, states | assignment/API contract tests discovered during packet; seeded create/retry | unmigrated |
+| `/trainer/projects/[projectId]/invitations` | Invitation preparation, dispatch and delivery | Recipients/tasks, send/resend, secure links, delivery state, recovery and idempotency | Delivery workspace hierarchy, statuses, actions | invite/API contracts and outbox evidence; seeded prepare/send/retry | unmigrated |
+| `/trainer/projects/[projectId]/org-chart` | Organization chart view/edit | Existing graph data, edits, permissions and persistence | Editor composition, controls, responsive/local scroll | `org-chart.test.tsx`; seeded edit/reload | unmigrated |
+| `/trainer/projects/[projectId]/reports` | Project report overview | Aggregation, privacy thresholds, comparisons, drill-down, export/print | Protected report exceptions only | report overview/detail/cycle/print tests; seeded expected values | unmigrated |
+| `/trainer/projects/[projectId]/reports/lencioni` | Lencioni report detail | Raw 3-9 scale meaning, comparison direction, privacy, Back/export/print | Protected report shell/tokens/accessibility only | report detail/score/cycle tests; seeded values | unmigrated |
+| `/trainer/projects/[projectId]/reports/leadership/[participantId]` | Individual leadership report | Correct participant, iCARE perspectives, privacy, comparison and navigation | Protected report shell/tokens/accessibility only | leadership page, iCARE, report detail tests; seeded values | unmigrated |
+| `/trainer/projects/[projectId]/settings` | Project settings | Existing mutations, validation, permissions and recovery | Settings/form archetype | `ProjectSettingsForm.test.tsx`; project-data contracts | unmigrated |
+| `/trainer/questionnaires` | Questionnaire catalog/editor | Versioning, protected definitions, explicit saves, preview boundary and errors | Editor archetype, structure/inspector, save context | `QuestionnairesWorkspace.test.tsx`; questionnaire contracts; seeded edit/reload | unmigrated |
+| `/trainer/settings` | Trainer account settings | Account/security mutations, validation, session and recovery | Settings/form archetype | account-settings/auth/password tests; seeded mutation | unmigrated |
+
+## Trainer communication
+
+`/trainer/email` owns three URL-addressed views. Treat each as a separate
+capability even though there is one route file.
+
+| Route state | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
+|---|---|---|---|---|---|
+| `/trainer/email?view=campaigns` | Campaign list/editor, recipient selection, test/send readiness and durable state | Content, eligibility, validation, send/test-send, delivery status, errors and retry | Communication archetype, progressive detail, status/action hierarchy | email workspace/validation and communication contract tests; authorized seeded rehearsal | unmigrated |
+| `/trainer/email?view=contacts` | Searchable contacts, segment filtering and import | Import validation, recipient eligibility, inactive/invalid state, URL state and persistence | Table/toolbar, borderless conventional edit actions, import states | archived contacts, roster/import and communication tests; seeded import | unmigrated |
+| `/trainer/email?tab=templates` | Template catalog/editor | Protected/system ownership, trainer templates, saves and source boundary | Editor composition, save state and controls | communication contracts and affected editor tests discovered in packet; seeded edit/reload | unmigrated |
+
+## Cross-route invariants
+
+These are checked for every changed route where relevant:
+
+- authorization and role isolation;
+- accurate document title, landmark, heading order, skip link, accessible names,
+  keyboard operation, focus preservation/restoration, and 200% zoom;
+- loading, sparse/dense, empty, error, permission-denied, disabled, stale,
+  success, retry, and unsaved-change recovery;
+- responsive behavior at 390x844, 768x1024, 1440x900, and 1728x1117 with no
+  document-level overflow;
+- both themes, correct semantic status, no reliance on color alone, no console
+  error, and no hydration loss of input value or focus;
+- preserved URL state and Back/Forward behavior;
+- no unexplained shared or touched-route bundle increase above 10%.
+
+## Exact cleanup candidates
+
+This is a candidate ledger, not a deletion instruction. Confirm consumers and
+coverage in the named migration slice.
+
+| Candidate | Current evidence | Planned disposition | Required proof |
+|---|---|---|---|
+| `.interface-design/system.md` | Tracked, report-only system | Replace in Sequence 01 with CF0002 `system.md`; protected report rules are already incorporated | Diff confirms all useful report rules remain |
+| `frontend/test-results/.last-run.json` | Tracked generated last-run state | Remove in Sequence 01 only if no script or CI consumer exists; ignore future generated residue if appropriate | `rg` consumer search; targeted/full test commands still work |
+| `docs/product-overhaul-checklist.md` | Tracked prior visual approval artifact | Archive in Sequence 01 to `docs/archive/product-overhaul-2026-07/` without rewriting history | Links/consumers updated; Git move visible |
+| `docs/product-overhaul-review-packet.md` | Tracked prior visual approval artifact | Archive in Sequence 01 beside the checklist | Links/consumers updated; Git move visible |
+| `docs/product-overhaul-route-matrix.md` | Historical `origin/prod` vs controlled-pilot matrix | Retain as historical evidence; do not use as CF0002 current baseline | New ledger exists and is referenced by guidance |
+| Fraunces import in `frontend/src/components/auth/auth-shell.tsx` | Current remaining split typography consumer; test mock exists in `frontend/src/test/setup.ts` | Remove font import and its test mock after auth shell migrates to Geist | Auth-shell tests and build pass; no Fraunces consumer remains |
+| `frontend/public/landing/codrut-team-session.png` | Tracked local photography | Retain and prefer for public/auth use | Image dimensions, loading, alt, and responsive proof |
+| `frontend/public/landing/codrut-workshop-table.png` | Tracked local photography | Retain and prefer for public/auth use | Image dimensions, loading, alt, and responsive proof |
+
+Do not run a repository-wide deletion sweep. Add candidates only when a current
+consumer is identified. Delete a test only when its behavior is intentionally
+gone with approval or equivalent named surviving coverage passes.
+
+## Packet evidence record
+
+After each task packet, append a concise record to the product copy of this
+ledger: routes touched, disposition changes, protected tests run, live journeys
+checked, removals and consumer proof, authored product additions/deletions,
+tests/docs generated separately, bundle movement if measured, and unresolved
+risk. Do not rerun broad checks merely to fill a gate document.
+
+### Sequence 01 foundation packet — 2026-08-04
+
+- Routes touched: shared tokens/shell and prototype hooks only; `/trainer/companies`
+  and `/participant` remain `unmigrated` until route-level parity proof passes.
+- Protected baseline: `just frontend-test` completed with 83 files, 620 passed,
+  62 failed, and 24 failed files before CF0002 edits; the existing
+  `ParticipantClientWorkspace.test.tsx` passed all 27 tests, while
+  `CompaniesWorkspace.test.tsx` reported 4 failures.
+- Baseline checks: `just frontend-lint` passed; `just frontend-typecheck`
+  passed; `just frontend-build` passed. Baseline shared First Load JS was
+  103 kB, `/trainer/companies` was 167 kB, and `/participant` was 174 kB.
+- Seeded live baseline: `just dev` and `just seed-local-preview` succeeded with
+  3 companies, 6 projects, 10 participants, 32 assignments, 3 campaigns, and
+  8 contacts. Both routes were inspected at 1440x900 and 390x844 in light
+  theme; each showed one existing console error and no disposition is marked
+  preserved from visual evidence alone. Baseline screenshots are retained
+  locally under `output/playwright/` and are not product code.
+- Foundation changes: authoritative `.interface-design/system.md`, nested
+  `frontend/AGENTS.md`, semantic token layer, 248px shell, mobile header action,
+  and shared coaching-context rail.
+- Cleanup evidence: `.last-run.json` has no repository consumers and was
+  removed as generated residue; the old checklist and review packet moved
+  unchanged to `docs/archive/product-overhaul-2026-07/`; the historical route
+  matrix remains retained. Fraunces remains because auth-shell is still its
+  live consumer.
+- Remaining risk: route-level state, keyboard/focus, dark-theme, responsive,
+  console, and bundle proof is still open at the prototype gate.

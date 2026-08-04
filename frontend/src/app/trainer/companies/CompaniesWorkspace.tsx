@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { type CompanyListItem } from "@/api/companies";
+import { CoachingContextRail } from "@/components/presentation/coaching-context-rail";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -198,8 +199,33 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
+      <CoachingContextRail
+        eyebrow="Operare trainer"
+        title={`${filteredCompanies.length} ${filteredCompanies.length === 1 ? "companie" : "companii"} în listă`}
+        detail={`${activeCompanies} active · ${companiesNeedingAttention} necesită acțiune · ${pendingAssignments} completări de urmărit`}
+        nextAction={
+          selectedCount > 0
+            ? "Exportă selecția"
+            : filteredCompanies.length > 0
+              ? "Deschide următoarea companie de urmărit"
+              : "Adaugă prima companie"
+        }
+        action={
+          <Button
+            type="button"
+            size="sm"
+            className="md:hidden"
+            onClick={() => {
+              setCreateOpen(true);
+              setParam("modal", "create-company");
+            }}
+          >
+            Companie nouă
+          </Button>
+        }
+      />
       <section
-        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
+        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
         aria-label="Filtre companii"
       >
         <WorkspaceSearchInput
@@ -333,7 +359,11 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             </div>
           </div>
 
-          <div className="w-full max-w-full overflow-x-auto [scrollbar-width:thin]">
+          <div
+            className="w-full max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
+            tabIndex={0}
+            aria-label="Tabelul companiilor; derulează lateral pentru coloanele suplimentare"
+          >
             <table className="w-full min-w-[74rem] border-collapse text-left text-sm">
               <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
                 <tr>
