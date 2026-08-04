@@ -304,24 +304,15 @@ export function AppShell({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               collapsed ? "mx-auto size-8 justify-center rounded-md" : "h-10 gap-3 rounded-md px-2.5",
               active
-                ? "bg-primary/8 text-brand-text ring-1 ring-primary/10"
+                ? "bg-sidebar-accent text-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
             )}
           >
-            {active ? (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "absolute top-1/2 w-1 -translate-y-1/2 rounded-r-full bg-primary shadow-sm",
-                  collapsed ? "-left-2 h-5" : "-left-3 h-6",
-                )}
-              />
-            ) : null}
             <Icon
               aria-hidden="true"
               className={cn(
                 "size-4 shrink-0 transition-colors",
-                active ? "text-current" : "text-foreground/45 group-hover:text-foreground/72",
+                active ? "text-brand-text" : "text-foreground/45 group-hover:text-foreground/72",
               )}
               strokeWidth={1.8}
             />
@@ -531,7 +522,7 @@ export function AppShell({
               <BrandMark size="sm" subtitle="" />
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Închide meniul"

@@ -501,3 +501,34 @@ risk. Do not rerun broad checks merely to fill a gate document.
   add no churn and the ledger records each packet separately. Campaign-state
   validation reports one valid active Festival. The branch is ready for the
   requested combined owner review, but remains unpushed and has no PR.
+
+### Owner correction packet — inky surfaces and unified results
+
+- Both themes now use neutral, inky gray canvas, surface, muted, raised, text,
+  border, and control tokens. The canonical `#890505` burgundy remains the
+  primary accent; the correction removes the cool blue-green cast without
+  introducing another accent family.
+- Shared controls now use a restrained 10-18 px radius scale, flat ordinary
+  surfaces, and borderless icon actions where the action is conventional.
+  Disclosure chevrons are borderless at rest and retain keyboard focus rings.
+- Single-cycle and comparison PCM reuse one compact profile summary. Comparison
+  adds explicit unchanged, changed, newly available, and waiting states without
+  changing profile calculation or result data.
+- Single-cycle desktop iCARE now uses the same responsive perspective grid as
+  comparison: two perspectives use two columns and three perspectives use three
+  columns at wide desktop widths, while both stack safely on smaller screens.
+  Scoring, aggregation, confidentiality thresholds, labels, and APIs are
+  unchanged.
+- Representative browser proof covered participant results in light and dark at
+  1440x900 and 390x844, plus the trainer company list, create-company dialog,
+  questionnaire catalog, and questionnaire editor. No inspected route produced
+  horizontal document overflow; the inky surface hierarchy, rounded shared
+  controls, neutral active navigation, and borderless icon/disclosure actions
+  remained consistent.
+- Final correction proof: `just frontend-lint`, `just frontend-typecheck`, and
+  `just frontend-build` passed. `just frontend-test` completed 684/685; its sole
+  failure is the unchanged pre-existing
+  `runtime-pcm-contracts.test.ts` fallback-disablement assertion, while all 82
+  other files and all correction-scoped tests passed. Shared First Load JS
+  remains 103 kB, `/participant` remains 174 kB, and
+  `/trainer/companies` remains 167 kB.

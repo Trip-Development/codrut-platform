@@ -260,7 +260,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                     <FieldError id="campaign-body-error">{campaignFieldErrors.body}</FieldError>
                   </Field>
                   <details className="group mt-3">
-                    <summary className="flex cursor-pointer list-none items-center justify-between rounded-md border border-[var(--border)] bg-surface-muted px-4 py-2 text-xs font-bold text-foreground/65 transition hover:border-burgundy/30 hover:text-burgundy">
+                    <summary className="flex cursor-pointer list-none items-center justify-between rounded-sm px-2 py-2 text-xs font-semibold text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45">
                       <span>Editor HTML avansat</span>
                       <ChevronDownIcon aria-hidden="true" className="size-3.5 text-foreground/40 transition group-open:rotate-180" strokeWidth={1.8} />
                     </summary>

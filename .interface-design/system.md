@@ -31,7 +31,8 @@ permissions, route access, product outcomes, or domain behavior.
 ## Design direction
 
 - Character: calm, evidence-led, professional coaching software.
-- Material: matte layered surfaces with quiet borders and background shifts.
+- Material: inky neutral, matte layered surfaces with quiet borders and clear
+  background shifts. Neutral foundations do not lean blue, green, or purple.
 - Brand anchor: the existing canonical burgundy `#890505`.
 - Typography: Geist Sans everywhere, including public and authentication.
 - Density: one regular spacing language; no separate compact mode.
@@ -71,16 +72,16 @@ roles, never route-local palette values.
 
 | Role | Light | Dark | Use |
 |---|---|---|---|
-| canvas | `#F7F8F8` | `#101214` | App background |
-| surface | `#FFFFFF` | `#171A1D` | Primary work surface |
-| surface-muted | `#EEF1F2` | `#202429` | Secondary grouping |
-| surface-raised | `#FFFFFF` | `#24292E` | Menus and floating layers |
-| sidebar | `#F7F8F8` | `#101214` | Shell navigation; separate with border |
-| foreground | `#1D2126` | `#ECEFF1` | Primary text |
-| muted-foreground | `#66707A` | `#AAB2B9` | Supporting text |
-| border | `rgba(29,33,38,.12)` | `rgba(236,239,241,.12)` | Ordinary separation |
-| control | `#F1F3F4` | `#121518` | Inset controls |
-| control-border | `rgba(29,33,38,.18)` | `rgba(236,239,241,.18)` | Control edges |
+| canvas | `#F5F5F4` | `#0D0D0E` | App background |
+| surface | `#FFFFFF` | `#171718` | Primary work surface |
+| surface-muted | `#ECECEB` | `#202022` | Secondary grouping |
+| surface-raised | `#FFFFFF` | `#272729` | Menus and floating layers |
+| sidebar | `#F5F5F4` | `#0D0D0E` | Shell navigation; separate with border |
+| foreground | `#1D1D1F` | `#F1F1F2` | Primary text |
+| muted-foreground | `#68686D` | `#A6A6AA` | Supporting text |
+| border | `rgba(29,29,31,.11)` | `rgba(241,241,242,.10)` | Ordinary separation |
+| control | `#EFEFED` | `#111112` | Inset controls |
+| control-border | `rgba(29,29,31,.16)` | `rgba(241,241,242,.16)` | Control edges |
 | brand-core | `#890505` | `#890505` | Identity and primary fill |
 | brand-text | `#890505` | `#C56A7D` | Inline brand accent |
 | focus-ring | `rgba(137,5,5,.45)` | `rgba(197,106,125,.55)` | Focus indication |
@@ -124,9 +125,10 @@ resilient to short, average, and very long user-generated content.
 - Controls: 36 px on desktop; 44 px on mobile. Mobile text inputs use at least
   16 px text. Borderless icon controls use a 32 px desktop and 44 px mobile hit
   area with a 16-18 px glyph.
-- Radius: 6 px controls, 8 px surfaces, 10 px overlays. Child radii remain
-  concentric and no larger than parent radii. Pills are reserved for genuine
-  compact status or segmented selection.
+- Radius: 10 px buttons and inset controls, 12 px search/select and active
+  navigation surfaces, 14 px cards and popovers, and 18 px dialogs. Child
+  radii remain concentric and no larger than parent radii. Pills are reserved
+  for genuine compact status, toggles, progress, or segmented selection.
 - Motion: 120-180 ms for feedback. Transition named `opacity` and `transform`
   properties only by default; never `transition: all`. Respect reduced motion.
   Avoid animation when immediate state change communicates better.
@@ -160,6 +162,8 @@ resilient to short, average, and very long user-generated content.
 - Do not put icons in decorative circles or bordered containers. A plus icon is
   a plain glyph inside the button hit area, not a plus-in-a-circle illustration.
 - Do not use icon-only controls merely to save space when recognition is weak.
+- Disclosure chevrons are borderless glyphs inside a quiet text or row trigger;
+  do not present an ordinary reveal action as a bordered capsule.
 
 ### Forms and mutations
 

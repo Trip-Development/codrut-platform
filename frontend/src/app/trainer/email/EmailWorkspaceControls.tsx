@@ -11,54 +11,30 @@ export function IconButton({
   label,
   children,
   tone = "neutral",
-  appearance = "boxed",
   disabled,
   onClick,
 }: {
   label: string;
   children: React.ReactNode;
   tone?: "neutral" | "danger" | "success";
-  appearance?: "boxed" | "plain";
   disabled?: boolean;
   onClick: () => void;
 }) {
-  if (appearance === "plain") {
-    const plainToneClass = tone === "danger"
-      ? "text-foreground/45 hover:bg-destructive/8 hover:text-destructive"
-      : tone === "success"
-        ? "text-success-ink hover:bg-success/10 hover:text-success-ink"
-        : "text-foreground/45 hover:bg-surface-muted hover:text-burgundy";
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={label}
-        title={label}
-        disabled={disabled}
-        onClick={onClick}
-        className={cn("rounded-md border-0 shadow-none disabled:opacity-45", plainToneClass)}
-      >
-        {children}
-      </Button>
-    );
-  }
-
   const toneClass = tone === "danger"
-    ? "border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/50 hover:bg-destructive/15"
+    ? "text-foreground/45 hover:bg-destructive/8 hover:text-destructive"
     : tone === "success"
-      ? "status-success hover:bg-success/20"
-      : "border-[var(--border)] bg-surface text-foreground/62 hover:border-burgundy/40 hover:text-burgundy";
+      ? "text-success-ink hover:bg-success/10 hover:text-success-ink"
+      : "text-foreground/45 hover:bg-surface-muted hover:text-burgundy";
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="icon-sm"
       aria-label={label}
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={cn("rounded-md shadow-sm disabled:opacity-55", toneClass)}
+      className={cn("rounded-md border-0 shadow-none disabled:opacity-45", toneClass)}
     >
       {children}
     </Button>

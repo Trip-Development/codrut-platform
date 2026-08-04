@@ -96,21 +96,21 @@
 
 :root {
   color-scheme: light;
-  --background: #F7F8F8;
-  --foreground: #1D2126;
+  --background: #F5F5F4;
+  --foreground: #1D1D1F;
   --surface: #FFFFFF;
-  --surface-muted: #EEF1F2;
+  --surface-muted: #ECECEB;
   --surface-raised: #FFFFFF;
   --surface-elevated: var(--surface-raised);
-  --shell-sidebar: #F7F8F8;
-  --border: rgba(29, 33, 38, 0.12);
-  --control: #F1F3F4;
-  --control-border: rgba(29, 33, 38, 0.18);
+  --shell-sidebar: #F5F5F4;
+  --border: rgba(29, 29, 31, 0.11);
+  --control: #EFEFED;
+  --control-border: rgba(29, 29, 31, 0.16);
   --burgundy: #890505;
   --burgundy-dark: #650303;
   --brand-text: #890505;
   --ochre: #8A5714;
-  --brand-gray: #66707A;
+  --brand-gray: #68686D;
   --success: #237A4B;
   --success-ink: #237A4B;
   --warning: #8A5714;
@@ -128,7 +128,7 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-muted);
-  --muted-foreground: #66707A;
+  --muted-foreground: #68686D;
   --accent: color-mix(in srgb, var(--burgundy) 10%, var(--surface-muted));
   --accent-foreground: var(--brand-text);
   --destructive: var(--danger);
@@ -136,7 +136,7 @@
   --input: var(--control-border);
   --ring: rgba(137, 5, 5, 0.45);
   --focus-ring: rgba(137, 5, 5, 0.45);
-  --radius: 0.5rem;
+  --radius: 0.875rem;
   --chart-1: var(--burgundy);
   --chart-2: var(--ochre);
   --chart-3: var(--success);
@@ -157,21 +157,21 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #101214;
-  --foreground: #ECEFF1;
-  --surface: #171A1D;
-  --surface-muted: #202429;
-  --surface-raised: #24292E;
+  --background: #0D0D0E;
+  --foreground: #F1F1F2;
+  --surface: #171718;
+  --surface-muted: #202022;
+  --surface-raised: #272729;
   --surface-elevated: var(--surface-raised);
-  --shell-sidebar: #101214;
-  --border: rgba(236, 239, 241, 0.12);
-  --control: #121518;
-  --control-border: rgba(236, 239, 241, 0.18);
+  --shell-sidebar: #0D0D0E;
+  --border: rgba(241, 241, 242, 0.10);
+  --control: #111112;
+  --control-border: rgba(241, 241, 242, 0.16);
   --burgundy: #890505;
   --burgundy-dark: #C56A7D;
   --brand-text: #C56A7D;
   --ochre: #E2A54E;
-  --brand-gray: #AAB2B9;
+  --brand-gray: #A6A6AA;
   --success: #58C98A;
   --success-ink: #58C98A;
   --warning: #E2A54E;
@@ -189,11 +189,11 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-muted);
-  --muted-foreground: #AAB2B9;
+  --muted-foreground: #A6A6AA;
   --accent: color-mix(in srgb, var(--brand-text) 18%, var(--surface-muted));
   --accent-foreground: var(--brand-text);
   --destructive: var(--danger);
-  --destructive-foreground: #101214;
+  --destructive-foreground: #0D0D0E;
   --input: var(--control-border);
   --ring: rgba(197, 106, 125, 0.55);
   --focus-ring: rgba(197, 106, 125, 0.55);
@@ -563,14 +563,14 @@ html {
   }
 
   .modal-panel {
-    @apply w-full max-w-xl rounded-lg border bg-surface p-6 text-foreground shadow-xl;
+    @apply w-full max-w-xl rounded-xl border bg-surface p-6 text-foreground shadow-xl;
     max-height: calc(100dvh - 3rem);
     overflow-y: auto;
     box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.35);
   }
 
   .page-toolbar {
-    @apply flex flex-col gap-4 rounded-lg border bg-surface p-5 text-foreground shadow-sm md:flex-row md:items-center md:justify-between md:p-6;
+    @apply flex flex-col gap-4 rounded-lg border bg-surface p-5 text-foreground shadow-none md:flex-row md:items-center md:justify-between md:p-6;
   }
 
   .band-mark {

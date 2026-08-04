@@ -281,7 +281,7 @@ export function CompanyProjectsPanel({
               type="button"
               onClick={closeCreateModal}
               disabled={isCreating}
-              variant="outline"
+              variant="ghost"
               size="icon-sm"
               aria-label="Închide"
             >

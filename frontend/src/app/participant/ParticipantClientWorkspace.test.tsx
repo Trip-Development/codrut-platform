@@ -508,6 +508,7 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.queryByText(/Reviewer One/i)).toBeNull();
     expect(screen.queryByText(/reviewer-one@example\.com/i)).toBeNull();
     expect(screen.queryByText("Nu există scoruri calculate încă")).toBeNull();
+    expect(screen.getByRole("region", { name: "Perspective iCARE" })).toBeDefined();
   });
 
   it("hides received iCARE averages below the privacy threshold", () => {
@@ -811,6 +812,8 @@ describe("ParticipantResultsHistory", () => {
     expect(screen.getByRole("region", { name: "Comparația rezultatelor" })).toBeTruthy();
     expect(screen.getAllByText("Evaluare inițială").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Reevaluare").length).toBeGreaterThan(0);
+    expect(screen.getByText("Profil schimbat")).toBeDefined();
+    expect(screen.getByText("Fără schimbare")).toBeDefined();
     expect(screen.getByRole("group", { name: /Cum te vede echipa ta/ })).toBeTruthy();
     expect(screen.getByRole("group", { name: /Cum te văd colegii din leadership/ })).toBeTruthy();
     expect(screen.getByRole("group", { name: /Cum te evaluezi/ })).toBeTruthy();

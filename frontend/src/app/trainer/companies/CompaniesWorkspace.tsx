@@ -441,7 +441,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             <div className="flex items-center gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 aria-label="Pagina anterioară"
                 disabled={safePageIndex === 0}
@@ -474,7 +474,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
               )}
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 aria-label="Pagina următoare"
                 disabled={safePageIndex >= pageCount - 1}

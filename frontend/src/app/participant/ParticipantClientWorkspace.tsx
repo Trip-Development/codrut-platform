@@ -294,6 +294,28 @@ export function ParticipantResultsPanel({
   const icareResults = results.filter((result) => resultKind(result.questionnaireKey) === "icare");
   const driverResults = results.filter((result) => resultKind(result.questionnaireKey) === "drivers");
   const otherResults = results.filter((result) => resultKind(result.questionnaireKey) === "other");
+  const icarePerspectives = [
+    ...feedbackGroups.map((feedback, index) => ({
+      id: `${feedback.assignmentRoundId ?? "round"}-${feedback.cohort}-${index}`,
+      label: receivedFeedbackCohortTitle(feedback.cohort),
+      responseCount: feedback.completedCount,
+      content: (
+        <Card className="h-full gap-0 py-0">
+          <ReceivedFeedbackPanel feedback={feedback} />
+        </Card>
+      ),
+    })),
+    ...icareResults.map((result) => ({
+      id: `self-${result.assignmentId}`,
+      label: result.targetLabel || "Cum te evaluezi",
+      responseCount: 1,
+      content: (
+        <Card className="h-full gap-0 py-0">
+          <ResultCard result={result} compact />
+        </Card>
+      ),
+    })),
+  ];
   return (
     <section className="flex flex-col gap-10">
       {availableResultCount > 0 ? (
@@ -309,27 +331,26 @@ export function ParticipantResultsPanel({
       ) : null}
 
       {comparison && (pcmBase || pcmPhase || comparison.baselinePcmBase || comparison.baselinePcmPhase) ? (
-        <PcmComparison
-          baselineLabel={comparison.baselineLabel}
-          currentLabel={comparison.currentLabel}
-          baselineBase={comparison.baselinePcmBase}
-          baselinePhase={comparison.baselinePcmPhase}
-          currentBase={pcmBase}
-          currentPhase={pcmPhase}
+        <PcmProfileSummary
+          snapshots={[
+            {
+              id: "baseline",
+              label: comparison.baselineLabel,
+              base: comparison.baselinePcmBase,
+              phase: comparison.baselinePcmPhase,
+            },
+            {
+              id: "current",
+              label: comparison.currentLabel,
+              base: pcmBase,
+              phase: pcmPhase,
+            },
+          ]}
         />
       ) : pcmBase || pcmPhase ? (
-        <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
-          <section className="grid gap-7 md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.3fr)] md:items-center" aria-labelledby="participant-pcm-title">
-            <div>
-              <p className="text-sm font-semibold text-brand-text">Profil personal</p>
-              <h2 id="participant-pcm-title" className="mt-1 text-2xl font-semibold tracking-tight text-foreground">PCM</h2>
-            </div>
-            <div className="flex flex-wrap gap-x-12 gap-y-5">
-              {pcmBase ? <PcmResultChip label="Bază PCM" value={pcmBase} /> : null}
-              {pcmPhase ? <PcmResultChip label="Fază PCM" value={pcmPhase} /> : null}
-            </div>
-          </section>
-        </Card>
+        <PcmProfileSummary
+          snapshots={[{ id: "current", label: "Rezultat curent", base: pcmBase, phase: pcmPhase }]}
+        />
       ) : null}
 
       <ParticipantResultSection
@@ -345,15 +366,10 @@ export function ParticipantResultsPanel({
         id="icare"
         title="iCARE"
         empty="Rezultatele iCARE apar aici când perspectivele sunt disponibile."
-        hasContent={feedbackGroups.length > 0 || icareResults.length > 0}
+        hasContent={icarePerspectives.length > 0}
+        contained={false}
       >
-        {feedbackGroups.map((feedback, index) => (
-          <ReceivedFeedbackPanel
-            key={`${feedback.assignmentRoundId ?? "round"}-${feedback.cohort}-${index}`}
-            feedback={feedback}
-          />
-        ))}
-        {icareResults.map((result) => <ResultCard key={result.assignmentId} result={result} />)}
+        <IcarePerspectiveGrid perspectives={icarePerspectives} />
       </ParticipantResultSection>
 
       <ParticipantResultSection
@@ -607,61 +623,120 @@ function participantComparisonScale(
 }
 
 function PcmEvolution({ cycles }: { cycles: ParticipantCycleResultSummary[] }) {
+  return <PcmProfileSummary snapshots={cycles.map((cycle) => ({
+    id: cycle.cycle.id,
+    label: cycle.cycle.name,
+    base: cycle.pcmBase,
+    phase: cycle.pcmPhase,
+  }))} />;
+}
+
+type PcmProfileSnapshot = {
+  id: string;
+  label: string;
+  base?: string | null;
+  phase?: string | null;
+};
+
+function PcmProfileSummary({ snapshots }: { snapshots: PcmProfileSnapshot[] }) {
+  const first = snapshots[0];
+  const current = snapshots.at(-1);
+  if (!first || !current) return null;
+  const comparing = first.id !== current.id;
+
   return (
     <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
-      <section aria-labelledby="participant-history-pcm">
-        <h2 id="participant-history-pcm" className="text-xl font-semibold tracking-tight text-foreground">PCM</h2>
-        <div className="mt-5 grid gap-7">
-          <PcmEvolutionLane label="Bază" cycles={cycles} select={(cycle) => cycle.pcmBase} />
-          <PcmEvolutionLane label="Fază" cycles={cycles} select={(cycle) => cycle.pcmPhase} />
+      <section aria-labelledby="participant-pcm-title">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold text-brand-text">Profil personal</p>
+            <h2 id="participant-pcm-title" className="mt-1 text-xl font-semibold tracking-tight text-foreground">PCM</h2>
+          </div>
+          {comparing ? (
+            <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <span>{first.label}</span>
+              <ArrowRightIcon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+              <span className="text-foreground">{current.label}</span>
+            </p>
+          ) : null}
+        </header>
+        <div className="mt-4 divide-y divide-border">
+          <PcmProfileRow
+            label="Bază"
+            previousValue={comparing ? first.base : undefined}
+            currentValue={current.base}
+            comparing={comparing}
+          />
+          <PcmProfileRow
+            label="Fază"
+            previousValue={comparing ? first.phase : undefined}
+            currentValue={current.phase}
+            comparing={comparing}
+          />
         </div>
       </section>
     </Card>
   );
 }
 
-function PcmEvolutionLane({
+function PcmProfileRow({
   label,
-  cycles,
-  select,
+  previousValue,
+  currentValue,
+  comparing,
 }: {
   label: string;
-  cycles: ParticipantCycleResultSummary[];
-  select: (cycle: ParticipantCycleResultSummary) => string | null | undefined;
+  previousValue?: string | null;
+  currentValue?: string | null;
+  comparing: boolean;
 }) {
+  const changed = comparing && Boolean(previousValue && currentValue && previousValue !== currentValue);
+  const becameAvailable = comparing && !previousValue && Boolean(currentValue);
+  const becameUnavailable = comparing && Boolean(previousValue) && !currentValue;
+  const status = changed
+    ? "Profil schimbat"
+    : becameAvailable
+      ? "Disponibil acum"
+      : becameUnavailable
+        ? "În așteptare"
+        : comparing
+          ? "Fără schimbare"
+          : null;
+
   return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground">{label}</h3>
-      <ol className="mt-3 grid auto-cols-[minmax(9.5rem,1fr)] grid-flow-col overflow-x-auto pb-2">
-        {cycles.map((cycle, index) => {
-          const value = select(cycle);
-          const previousValue = index > 0 ? select(cycles[index - 1]) : null;
-          const changed = index > 0 && Boolean(value && previousValue && value !== previousValue);
-          const profile = getPcmProfile(value);
-          return (
-            <li key={cycle.cycle.id} className="relative min-w-0 pr-8 last:pr-0">
-              {index > 0 ? (
-                <ArrowRightIcon
-                  aria-hidden="true"
-                  className="absolute -left-6 top-9 size-4 text-muted-foreground"
-                  strokeWidth={1.8}
-                />
-              ) : null}
-              <p className="truncate text-[0.68rem] font-semibold text-muted-foreground">{cycle.cycle.name}</p>
-              <p className="mt-2 flex items-center gap-2 text-base font-semibold text-foreground">
-                <span className="size-2.5 shrink-0" style={{ backgroundColor: profile?.color ?? "var(--border)" }} aria-hidden="true" />
-                <span className="truncate">{value ? formatPcmLabel(value) : "În așteptare"}</span>
-              </p>
-              {index > 0 ? (
-                <p className={cn("mt-1 text-[0.68rem] font-semibold", changed ? "text-brand-text" : "text-muted-foreground")}>
-                  {changed ? "Profil schimbat" : "Fără schimbare"}
-                </p>
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
+    <div className="grid gap-2 py-4 first:pt-0 last:pb-0 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center md:gap-4">
+      <h3 className="text-sm font-semibold text-muted-foreground">{label}</h3>
+      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+        {changed ? (
+          <>
+            <PcmProfileValue value={previousValue} muted />
+            <ArrowRightIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+          </>
+        ) : null}
+        <PcmProfileValue value={currentValue} />
+      </div>
+      {status ? (
+        <p className={cn("text-xs font-semibold", changed || becameAvailable ? "text-brand-text" : "text-muted-foreground")}>
+          {status}
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function PcmProfileValue({ value, muted = false }: { value?: string | null; muted?: boolean }) {
+  const profile = getPcmProfile(value);
+  return (
+    <span className={cn("flex min-w-0 items-center gap-2 text-base font-semibold", muted ? "text-muted-foreground" : "text-foreground")}>
+      {value ? (
+        <span
+          aria-hidden="true"
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: profile?.color ?? "var(--border)" }}
+        />
+      ) : null}
+      <span className="truncate">{value ? formatPcmLabel(value) : "În așteptare"}</span>
+    </span>
   );
 }
 
@@ -746,71 +821,12 @@ export type ParticipantResultsComparison = {
   baselinePcmPhase?: string | null;
 };
 
-function PcmComparison({
-  baselineLabel,
-  currentLabel,
-  baselineBase,
-  baselinePhase,
-  currentBase,
-  currentPhase,
-}: {
-  baselineLabel: string;
-  currentLabel: string;
-  baselineBase?: string | null;
-  baselinePhase?: string | null;
-  currentBase?: string | null;
-  currentPhase?: string | null;
-}) {
-  return (
-    <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
-      <section aria-labelledby="pcm-comparison-title">
-        <h2 id="pcm-comparison-title" className="text-xl font-semibold tracking-tight text-foreground">Profil PCM</h2>
-        <div className="mt-5 grid gap-5 md:grid-cols-2">
-          <PcmCycleValues label={baselineLabel} base={baselineBase} phase={baselinePhase} tone="baseline" />
-          <PcmCycleValues label={currentLabel} base={currentBase} phase={currentPhase} tone="current" />
-        </div>
-      </section>
-    </Card>
-  );
-}
-
-function PcmCycleValues({
-  label,
-  base,
-  phase,
-  tone,
-}: {
-  label: string;
-  base?: string | null;
-  phase?: string | null;
-  tone: "baseline" | "current";
-}) {
-  return (
-    <div className={cn("border-l-2 pl-4", tone === "current" ? "border-burgundy" : "border-zinc-400")}>
-      <p className={cn("text-xs font-semibold", tone === "current" ? "text-brand-text" : "text-muted-foreground")}>{label}</p>
-      {base || phase ? (
-        <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
-          <PcmInlineValue label="Bază" value={base} />
-          <PcmInlineValue label="Fază" value={phase} />
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-muted-foreground">În așteptare</p>
-      )}
-    </div>
-  );
-}
-
-function PcmInlineValue({ label, value }: { label: string; value?: string | null }) {
-  const profile = getPcmProfile(value);
-  return (
-    <div>
-      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1 flex items-center gap-2 text-base font-semibold text-foreground">
-        {value ? <span className="size-2.5 rounded-full" style={{ backgroundColor: profile?.color ?? "var(--border)" }} /> : null}
-        {value ? formatPcmLabel(value) : "În așteptare"}
-      </p>
-    </div>
-  );
+function receivedFeedbackCohortTitle(
+  cohort: ParticipantReceivedFeedbackSummary["cohort"],
+): string {
+  return cohort === "direct_team"
+    ? "Cum te vede echipa ta"
+    : "Cum te văd colegii din leadership";
 }
 
 function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
@@ -818,13 +834,11 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
   const scaleMin = feedback.scaleMin ?? 0;
   const scaleMax = receivedFeedbackScaleMax(feedback);
   const scoreSuffix = receivedFeedbackScoreSuffix(feedback, scaleMax);
-  const cohortTitle = feedback.cohort === "direct_team"
-    ? "Cum te vede echipa ta"
-    : "Cum te văd colegii din leadership";
+  const cohortTitle = receivedFeedbackCohortTitle(feedback.cohort);
 
   return (
     <article className="px-5 py-6">
-      <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-5">
         <div>
           <h3 className="text-xl font-semibold tracking-tight text-foreground">{cohortTitle}</h3>
           {feedback.projectName ? (
@@ -835,7 +849,7 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
           ) : null}
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Vezi doar media grupului, niciodată răspunsurile unei persoane.</p>
         </div>
-        <div className="flex gap-10">
+        <div className="grid grid-cols-2 gap-6">
           <FeedbackMetric label="Feedbackuri" value={String(feedback.completedCount)} />
           <FeedbackMetric label="Medie" value={visible ? `${formatScore(feedback.overallAverage ?? 0)}${scoreSuffix}` : "N/A"} />
         </div>
@@ -900,21 +914,7 @@ function receivedFeedbackScoreSuffix(feedback: ParticipantReceivedFeedbackSummar
     : ` din ${scaleMax}`;
 }
 
-function PcmResultChip({ label, value }: { label: string; value?: string | null }) {
-  const profile = getPcmProfile(value);
-  const color = profile?.color ?? "var(--border)";
-  return (
-    <div>
-      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1.5 flex items-center gap-2.5 text-xl font-semibold text-foreground">
-        <span className="size-3 rounded-full ring-2 ring-border" style={{ backgroundColor: color }} />
-        {formatPcmLabel(value)}
-      </p>
-    </div>
-  );
-}
-
-function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
+function ResultCard({ result, compact = false }: { result: ParticipantWorkspaceResult; compact?: boolean }) {
   const kind = resultKind(result.questionnaireKey);
   const items = scoreItemsForResult(result);
   const scale = resultScoreScale(result, kind);
@@ -924,16 +924,21 @@ function ResultCard({ result }: { result: ParticipantWorkspaceResult }) {
 
   return (
     <article className="px-5 py-6">
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <div className={cn("grid gap-5", !compact && "md:grid-cols-[minmax(0,1fr)_auto] md:items-end")}>
         <div className="min-w-0">
           <p className="text-xs font-semibold text-brand-text">{resultKindLabel(kind)}</p>
-          <h3 className="mt-2 text-2xl font-semibold leading-8 tracking-tight text-foreground" title={result.title}>{result.title}</h3>
+          <h3
+            className={cn("mt-2 font-semibold tracking-tight text-foreground", compact ? "text-xl leading-7" : "text-2xl leading-8")}
+            title={result.title}
+          >
+            {result.title}
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {[result.projectName, result.targetLabel].filter(Boolean).join(" · ")}
           </p>
         </div>
         {!scaleUnavailable ? (
-          <dl className="flex flex-wrap gap-x-8 gap-y-3">
+          <dl className={cn("flex flex-wrap gap-x-8 gap-y-3", compact && "grid grid-cols-3 gap-4")}>
             <ResultStat label="Dimensiuni" value={String(items.length)} />
             <ResultStat
               label="Scor mediu"

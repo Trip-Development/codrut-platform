@@ -181,7 +181,7 @@ function RouteErrorContent({
 
 function ErrorContextCard() {
   return (
-    <aside className="rounded-lg border bg-surface p-5 shadow-sm">
+    <aside className="rounded-lg border bg-surface p-5 shadow-none">
       <div className="rounded-lg bg-primary p-4 text-primary-foreground">
         <p className="text-sm font-semibold">Cody</p>
         <p className="mt-3 text-3xl font-semibold leading-tight">Recuperare curată.</p>
