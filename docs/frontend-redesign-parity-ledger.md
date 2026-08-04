@@ -98,9 +98,9 @@ capability even though there is one route file.
 
 | Route state | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/trainer/email?view=campaigns` | Campaign list/editor, recipient selection, test/send readiness and durable state | Content, eligibility, validation, send/test-send, delivery status, errors and retry | Communication archetype, progressive detail, status/action hierarchy | email workspace/validation and communication contract tests; authorized seeded rehearsal | unmigrated |
-| `/trainer/email?view=contacts` | Searchable contacts, segment filtering and import | Import validation, recipient eligibility, inactive/invalid state, URL state and persistence | Table/toolbar, borderless conventional edit actions, import states | archived contacts, roster/import and communication tests; seeded import | unmigrated |
-| `/trainer/email?tab=templates` | Template catalog/editor | Protected/system ownership, trainer templates, saves and source boundary | Editor composition, save state and controls | communication contracts and affected editor tests discovered in packet; seeded edit/reload | unmigrated |
+| `/trainer/email?view=campaigns` | Campaign list/editor, recipient selection, test/send readiness and durable state | Content, eligibility, validation, send/test-send, delivery status, errors and retry | Communication archetype, progressive detail, status/action hierarchy | email workspace/validation and communication contract tests; authorized seeded rehearsal | preserved |
+| `/trainer/email?view=contacts` | Searchable contacts, segment filtering and import | Import validation, recipient eligibility, inactive/invalid state, URL state and persistence | Table/toolbar, borderless conventional edit actions, import states | archived contacts, roster/import and communication tests; seeded import | preserved |
+| `/trainer/email?tab=templates` | Template catalog/editor | Protected/system ownership, trainer templates, saves and source boundary | Editor composition, save state and controls | communication contracts and affected editor tests discovered in packet; seeded edit/reload | preserved |
 
 ## Cross-route invariants
 
@@ -340,3 +340,25 @@ risk. Do not rerun broad checks merely to fill a gate document.
   passed. The seeded catalog/editor was checked at 390x844 and 1440x900;
   document width matched viewport width at both sizes, mobile structure height
   remained bounded, and the three-column desktop editor remained intact.
+
+### Sequence 02 packet 5 — communication workspace
+
+- Campaigns, contacts, archive, and templates now share one locally scrollable
+  underline navigation instead of a floating segmented block. The workspace
+  title and all four destinations fit the mobile document without widening it;
+  the campaign editor, recipient selection, send readiness, imports, and URL
+  state are unchanged.
+- Contacts retain one semantic table DOM. Below `768px`, identity and the
+  existing borderless edit/archive actions lead each row, with segment, status,
+  and interaction totals grouped below. The three contact-type buttons collapse
+  to one labeled native control on mobile; desktop retains the quick switcher.
+- Template catalog/editor shadows and decorative preview containers were
+  reduced, catalog density now matches the questionnaire catalog, and the
+  catalog return action is a borderless accessible icon. Template ownership,
+  versioning, validation, placeholders, explicit saves, and preview content are
+  unchanged.
+- Proof: the communication workspace, validation, and archive suites passed
+  83/83; targeted ESLint passed. Seeded campaigns, contacts, and templates were
+  checked at 390x844 with `scrollWidth === innerWidth`; recipient actions,
+  contact filtering, and all navigation destinations remained named and
+  reachable.

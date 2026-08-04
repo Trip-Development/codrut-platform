@@ -64,7 +64,17 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
             <SearchIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.8} />
             <Input value={props.search} onChange={(event) => props.setSearch(event.target.value)} placeholder="Caută nume, email sau companie" className="h-11 min-w-0 rounded-md bg-background pl-9 text-sm" aria-label="Caută contacte campanie" />
           </label>
-          <div className="inline-flex w-fit rounded-md bg-surface-muted p-1">
+          <SelectControl
+            label="Tip contact"
+            wrapperClassName="w-full lg:hidden"
+            value={props.typeFilter}
+            onChange={(event) => props.setTypeFilter(event.target.value as CampaignContactTypeFilter)}
+          >
+            <option value="all">Toate</option>
+            <option value="past_customer">Clienți existenți</option>
+            <option value="potential_customer">Prospecte</option>
+          </SelectControl>
+          <div className="hidden w-fit rounded-md bg-surface-muted p-1 lg:inline-flex">
             {[["all", "Toate"], ["past_customer", "Clienți existenți"], ["potential_customer", "Prospecte"]].map(([value, label]) => (
               <SegmentedButton key={value} onClick={() => props.setTypeFilter(value as CampaignContactTypeFilter)} active={props.typeFilter === value} className="h-7 px-3 text-[10px] uppercase tracking-wider">{label}</SegmentedButton>
             ))}
@@ -86,12 +96,12 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-surface">
-        <table className="min-w-[66rem] text-left text-xs">
-          <thead className="border-b border-[var(--border)] bg-surface-muted text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/50">
+      <div className="rounded-lg border border-[var(--border)] bg-surface md:overflow-x-auto">
+        <table className="block w-full text-left text-xs md:table md:min-w-[66rem]">
+          <thead className="hidden border-b border-[var(--border)] bg-surface-muted text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/50 md:table-header-group">
             <tr><th className="w-12 px-4 py-3">Select</th><th className="min-w-[22rem] px-4 py-3">Contact</th><th className="px-4 py-3">Segment</th><th className="px-4 py-3">Activ</th><th className="px-4 py-3">Interacțiuni</th><th className="px-4 py-3 text-right">Acțiuni</th></tr>
           </thead>
-          <tbody className="divide-y divide-[var(--border)]">
+          <tbody className="block divide-y divide-[var(--border)] md:table-row-group">
             {props.contacts.length > 0 ? props.contacts.map((recipient) => {
               const isEditing = props.editingContactId === recipient.id;
               const draft = props.drafts[recipient.id] ?? campaignRecipientDraft(recipient);
@@ -102,9 +112,9 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
               const isPastCustomer = recipient.clientType === "tip_1";
               const SegmentIcon = isPastCustomer ? Building2Icon : CircleDashedIcon;
               return (
-                <tr key={recipient.id} className={cn("group/contact transition-colors hover:bg-surface-muted/70", !isActive ? "bg-surface-muted/35 text-foreground/55" : null)}>
-                  <td className={cn("px-4 py-2.5 align-middle", isEditing && "align-top")}><Checkbox checked={props.selectableIds.has(recipient.id) && props.selectedIds.includes(recipient.id)} disabled={!props.selectableIds.has(recipient.id)} onCheckedChange={() => props.toggleSelected(recipient.id)} aria-label={`Selectează ${recipient.email}`} /></td>
-                  <td className={cn("min-w-[17rem] px-4 py-2.5 align-middle", isEditing && "align-top")}>
+                <tr key={recipient.id} className={cn("group/contact grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-4 px-4 py-4 transition-colors hover:bg-surface-muted/70 md:table-row md:px-0 md:py-0", !isActive ? "bg-surface-muted/35 text-foreground/55" : null)}>
+                  <td className={cn("col-start-1 row-start-1 pt-1 md:table-cell md:px-4 md:py-2.5 md:align-middle", isEditing && "md:align-top")}><Checkbox checked={props.selectableIds.has(recipient.id) && props.selectedIds.includes(recipient.id)} disabled={!props.selectableIds.has(recipient.id)} onCheckedChange={() => props.toggleSelected(recipient.id)} aria-label={`Selectează ${recipient.email}`} /></td>
+                  <td className={cn("col-start-2 row-start-1 min-w-0 md:table-cell md:min-w-[17rem] md:px-4 md:py-2.5 md:align-middle", isEditing && "md:align-top")}>
                     {isEditing ? (
                       <div className="flex flex-col gap-2"><Input value={draft.organization_name} onChange={(event) => props.updateDraft(recipient.id, "organization_name", event.target.value)} className="h-9 px-3 py-2 text-xs" placeholder="Companie" /><Input value={draft.contact_name} onChange={(event) => props.updateDraft(recipient.id, "contact_name", event.target.value)} className="h-9 px-3 py-2 text-xs" placeholder="Nume contact" /><Input type="email" value={draft.email} onChange={(event) => props.updateDraft(recipient.id, "email", event.target.value)} className="h-9 px-3 py-2 font-mono text-xs" placeholder="email@companie.ro" /></div>
                     ) : (
@@ -114,11 +124,11 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                       </div>
                     )}
                   </td>
-                  <td className={cn("min-w-[11rem] px-4 py-2.5 align-middle", isEditing && "align-top")}>
+                  <td className={cn("col-start-2 row-start-2 min-w-0 md:table-cell md:min-w-[11rem] md:px-4 md:py-2.5 md:align-middle", isEditing && "md:align-top")}>
                     {isEditing ? (
                       <div className="flex flex-col gap-2"><SelectControl label={`Segment pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.segment} onChange={(event) => props.updateDraft(recipient.id, "segment", event.target.value as CampaignContactDraft["segment"])} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="potential_customer">Prospect</option><option value="past_customer">Client existent</option></SelectControl><SelectControl label={`Status campanie pentru ${campaignRecipientName(recipient) || recipient.email}`} value={draft.status} onChange={(event) => props.updateDraft(recipient.id, "status", event.target.value as CampaignContactDraft["status"])} disabled={isUnsubscribed} className="h-9 bg-surface-elevated px-3 py-2 text-xs"><option value="active" disabled={!canActivate}>Activ</option><option value="suppressed">Adresă respinsă</option>{isUnsubscribed ? <option value="unsubscribed">Dezabonat</option> : null}</SelectControl>{recipient.status === "suppressed" && !canActivate ? <p className="text-[11px] leading-4 text-muted-foreground">Corectează și salvează mai întâi adresa de email. Apoi poți activa explicit contactul.</p> : null}</div>
                     ) : (
-                      <div className="flex min-w-[9rem] items-start gap-2.5">
+                      <div className="flex min-w-0 items-start gap-2.5 md:min-w-[9rem]">
                         <SegmentIcon aria-hidden="true" className={cn("mt-0.5 size-4 shrink-0", isPastCustomer ? "text-zinc-600" : "text-burgundy")} strokeWidth={1.8} />
                         <div>
                           <p className="text-xs font-semibold text-foreground">{isPastCustomer ? "Client existent" : "Prospect"}</p>
@@ -127,17 +137,17 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                       </div>
                     )}
                   </td>
-                  <td className={cn("px-4 py-2.5 align-middle", isEditing && "align-top")}>
+                  <td className={cn("col-start-3 row-start-2 text-right md:table-cell md:px-4 md:py-2.5 md:text-left md:align-middle", isEditing && "md:align-top")}>
                     {isEditing ? <span className="text-xs font-medium text-muted-foreground">În editare</span> : <ContactStatus status={recipient.status} />}
                   </td>
-                  <td className={cn("px-4 py-2.5 align-middle", isEditing && "align-top")}><div className="flex min-w-[17rem] flex-wrap gap-x-4 gap-y-1.5"><ContactMetric label="Desch." value={recipient.openCount} /><ContactMetric label="Click" value={recipient.clickCount} /><ContactMetric label="Video" value={recipient.viewCount} /><ContactMetric label="Răsp." value={recipient.replyCount} /><ContactMetric label="Cal." value={recipient.calendlyClickCount} /></div></td>
-                  <td className={cn("px-4 py-2.5 align-middle", isEditing && "align-top")}><div className="flex justify-end gap-2 opacity-80 transition group-hover/contact:opacity-100 group-focus-within/contact:opacity-100">
+                  <td className={cn("col-span-2 col-start-2 row-start-3 md:table-cell md:px-4 md:py-2.5 md:align-middle", isEditing && "md:align-top")}><div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1.5 md:min-w-[17rem]"><ContactMetric label="Desch." value={recipient.openCount} /><ContactMetric label="Click" value={recipient.clickCount} /><ContactMetric label="Video" value={recipient.viewCount} /><ContactMetric label="Răsp." value={recipient.replyCount} /><ContactMetric label="Cal." value={recipient.calendlyClickCount} /></div></td>
+                  <td className={cn("col-start-3 row-start-1 md:table-cell md:px-4 md:py-2.5 md:align-middle", isEditing && "md:align-top")}><div className="flex justify-end gap-1 opacity-80 transition group-hover/contact:opacity-100 group-focus-within/contact:opacity-100 md:gap-2">
                     {isEditing ? <><IconButton appearance="plain" label={props.savingContactId === recipient.id ? "Salvăm contactul" : `Salvează ${recipient.email}`} tone="success" disabled={props.savingContactId === recipient.id} onClick={() => props.saveContact(recipient)}><CheckIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton><IconButton appearance="plain" label={`Anulează editarea pentru ${recipient.email}`} disabled={props.savingContactId === recipient.id} onClick={() => props.cancelEditing(recipient.id)}><XIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton></> : <><IconButton appearance="plain" label={`Editează ${recipient.email}`} onClick={() => props.startEditing(recipient)}><PencilIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton><IconButton appearance="plain" label={props.deletingContactId === recipient.id ? "Arhivăm contactul" : `Arhivează ${recipient.email}`} tone="danger" disabled={props.deletingContactId === recipient.id} onClick={() => props.deleteContact(recipient)}><ArchiveIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></IconButton></>}
                   </div></td>
                 </tr>
               );
             }) : (
-              <tr><td colSpan={6} className="px-6 py-12 text-center text-sm font-medium text-foreground/50"><p>Niciun contact înregistrat încă.</p><div className="mt-4 flex items-center justify-center gap-3"><span className="text-foreground/40">Importă un fișier CSV sau</span><Button type="button" variant="outline" size="xs" onClick={props.openManualContact} className="text-burgundy hover:border-burgundy/45 hover:text-burgundy-700">adaugă manual</Button></div></td></tr>
+              <tr className="block md:table-row"><td colSpan={6} className="block px-6 py-12 text-center text-sm font-medium text-foreground/50 md:table-cell"><p>Niciun contact înregistrat încă.</p><div className="mt-4 flex flex-wrap items-center justify-center gap-3"><span className="text-foreground/40">Importă un fișier CSV sau</span><Button type="button" variant="outline" size="xs" onClick={props.openManualContact} className="text-primary hover:border-primary/45 hover:text-primary">adaugă manual</Button></div></td></tr>
             )}
           </tbody>
         </table>

@@ -26,8 +26,8 @@ export function EmailWorkspaceNavigation({
   onViewChange: (view: EmailWorkspaceView) => void;
 }) {
   return (
-    <div className="flex justify-end">
-      <nav aria-label="Navigare Comunicare" className="flex w-fit items-center gap-1 rounded-md bg-muted p-1">
+    <div className="min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav aria-label="Navigare Comunicare" className="flex w-max min-w-full items-center border-b border-border sm:min-w-0">
         {views.map(({ key, label, icon: Icon }) => {
           const isActive = activeView === key;
           return (
@@ -39,10 +39,10 @@ export function EmailWorkspaceNavigation({
               aria-current={isActive ? "page" : undefined}
               onClick={() => onViewChange(key)}
               className={cn(
-                "h-9 rounded-[6px] px-3 font-medium shadow-none",
+                "h-10 shrink-0 rounded-none border-x-0 border-b-2 border-t-0 px-3 font-medium shadow-none",
                 isActive
-                  ? "bg-background text-foreground shadow-sm hover:bg-background"
-                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                  ? "border-primary bg-transparent text-primary hover:bg-transparent"
+                  : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
               <Icon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
