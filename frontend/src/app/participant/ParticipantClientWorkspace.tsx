@@ -157,11 +157,6 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   <p className="mt-1 text-sm text-muted-foreground">
                     {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
                   </p>
-                  {pendingTaskGroups.length > 0 ? (
-                    <p className="mt-2 text-xs font-medium text-muted-foreground">
-                      Recomandare: continuă cu primul chestionar disponibil.
-                    </p>
-                  ) : null}
                 </div>
                 {pendingTaskGroups.length > 0 ? (
                   <div
@@ -230,11 +225,6 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
               })}
             </div>
           ) : null}
-          <dl className={cn("divide-y divide-border border-y border-border", hasMultipleProjects ? "mt-5" : "mt-7")}>
-            <ContextRow label="Companie" value={summaryData.companyName || "Neasociată"} />
-            {!hasMultipleProjects ? <ContextRow label="Termen" value={summaryData.deadlineLabel || "Fără termen"} /> : null}
-            <ContextRow label="Profil" value={participantIdentity} />
-          </dl>
         </aside>
       </div>
     </AppShell>
@@ -256,15 +246,6 @@ function participantProjectCountCopy(
     return `${currentCount} ${currentCount === 1 ? "proiect în desfășurare" : "proiecte în desfășurare"}`;
   }
   return `${historyCount} ${historyCount === 1 ? "proiect în istoric" : "proiecte în istoric"}`;
-}
-
-function ContextRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="py-3">
-      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-semibold text-foreground">{value}</dd>
-    </div>
-  );
 }
 
 export function ParticipantResultsPanel({
@@ -319,14 +300,11 @@ export function ParticipantResultsPanel({
   return (
     <section className="flex flex-col gap-10">
       {availableResultCount > 0 ? (
-        <header className="flex flex-col gap-3 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold text-brand-text">Disponibile acum</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-              {availableResultCount} {availableResultCount === 1 ? "rezultat" : "rezultate"}
-            </h2>
-          </div>
-          <p className="text-sm font-semibold text-muted-foreground">Lencioni · iCARE · TA Drivers</p>
+        <header className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-2">
+          <h2 className="text-sm font-semibold text-foreground">
+            {availableResultCount} {availableResultCount === 1 ? "rezultat disponibil" : "rezultate disponibile"}
+          </h2>
+          <p className="text-xs font-medium text-muted-foreground">PCM · Lencioni · iCARE · TA Drivers</p>
         </header>
       ) : null}
 

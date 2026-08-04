@@ -674,7 +674,7 @@ html {
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   html[data-sidebar-collapsed="true"] [data-codrut-sidebar] {
     width: 3.5rem;
   }

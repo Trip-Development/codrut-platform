@@ -89,16 +89,13 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
   }
 
   return (
-    <div className="p-5">
-      <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-surface">
+    <div className="p-2 sm:p-3">
+      <div className="overflow-hidden rounded-md">
         {props.campaigns.map((campaign) => {
           const memberIds = props.memberships[campaign.id] ?? [];
           const activeMemberIds = props.getActiveMemberIds(campaign);
           const sendableMemberIds = props.getSendableMemberIds(campaign);
           const sentMemberCount = activeMemberIds.filter((recipientId) => props.getRecipientDelivery(campaign, recipientId) === "sent").length;
-          const unsentLabel = sendableMemberIds.length === 1
-            ? "1 netrimis"
-            : `${sendableMemberIds.length} netrimiși`;
           const eligibleRecipients = props.getEligibleRecipients();
           const visibleEligibleRecipients = props.getVisibleEligibleRecipients(campaign);
           const membershipSearch = props.membershipSearches[campaign.id] ?? "";
@@ -151,13 +148,13 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                   <span className="mt-2 block truncate text-sm font-semibold text-foreground">{campaign.name}</span>
                   <span className="mt-1 block truncate text-xs font-medium text-muted-foreground">{campaign.subject}</span>
                 </span>
-                  <span className="grid min-w-0 gap-3 text-xs sm:grid-cols-4">
-                  <span className="min-w-0"><span className="block font-medium text-muted-foreground">Listă</span><span className="mt-1 block truncate font-semibold text-foreground">Destinatari ({activeMemberIds.length}/{eligibleRecipients.length}, {unsentLabel})</span></span>
+                  <span className="grid min-w-0 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <span className="min-w-0"><span className="block font-medium text-muted-foreground">Listă</span><span className="mt-1 block font-semibold tabular-nums text-foreground">{activeMemberIds.length}/{eligibleRecipients.length} destinatari</span></span>
                   <span><span className="block font-medium text-muted-foreground">Trimiși</span><span className="mt-1 block font-semibold tabular-nums text-foreground">{sentMemberCount}</span></span>
                   <span><span className="block font-medium text-muted-foreground">Conținut</span><span className="mt-1 block font-semibold text-foreground">{campaign.video_url ? "Video" : campaign.thumbnail_url ? "Imagine" : campaign.landing_page_url ? "Link" : "Doar email"}</span></span>
                   <span><span className="block font-medium text-muted-foreground">Livrare</span><span className="mt-1 block font-semibold text-foreground">{deliverySummary}</span></span>
                 </span>
-                <span className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-2 text-xs font-semibold text-foreground/62">{isOpen ? "Închide" : "Deschide"}<ChevronDownIcon aria-hidden="true" className={cn("size-4 transition-transform", isOpen && "rotate-180")} strokeWidth={1.8} /></span>
+                <span className="inline-flex h-9 items-center justify-center justify-self-end gap-2 rounded-md px-2 text-xs font-semibold text-foreground/62">{isOpen ? "Închide" : "Deschide"}<ChevronDownIcon aria-hidden="true" className={cn("size-4 transition-transform", isOpen && "rotate-180")} strokeWidth={1.8} /></span>
               </button>
 
               {isOpen ? (

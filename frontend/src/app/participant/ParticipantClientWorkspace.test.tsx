@@ -87,7 +87,7 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.getByRole("status", { name: "3 sarcini active" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Bună, Mihai" })).toBeDefined();
     expect(screen.queryByText("Bună, SignalHarbor5271")).toBeNull();
-    expect(screen.getByText("Recomandare: continuă cu primul chestionar disponibil.")).toBeDefined();
+    expect(screen.queryByText("Recomandare: continuă cu primul chestionar disponibil.")).toBeNull();
     expect(screen.queryByRole("complementary", { name: "Contextul fluxului" })).toBeNull();
   });
 
@@ -697,7 +697,7 @@ describe("ParticipantResultsPanel", () => {
     );
 
     expect(screen.getAllByText("Cum te văd colegii din leadership")).toHaveLength(2);
-    expect(screen.getByRole("heading", { name: "2 rezultate" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "2 rezultate disponibile" })).toBeDefined();
   });
 
   it("shows a clear waiting state when all tasks are complete but no result is publishable", () => {
@@ -724,7 +724,7 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "1 rezultat" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "1 rezultat disponibil" })).toBeDefined();
     expect(screen.getByText("Profil personal")).toBeDefined();
     expect(screen.getByRole("heading", { name: "PCM" }).closest("[data-slot='card']")).toBeTruthy();
     expect(screen.queryByText("Nu există rezultate disponibile încă")).toBeNull();

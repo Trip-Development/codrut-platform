@@ -324,12 +324,12 @@ export function AppShell({
   );
 
   return (
-    <div className="app-min-height flex flex-col bg-background text-foreground md:flex-row">
+    <div className="app-min-height flex flex-col bg-background text-foreground lg:flex-row">
       <aside
         aria-label="Navigare principală"
         data-codrut-sidebar
         className={cn(
-          "hidden h-[100dvh] shrink-0 border-r bg-sidebar text-sidebar-foreground md:sticky md:top-0 md:z-30 md:flex md:flex-col",
+          "hidden h-[100dvh] shrink-0 border-r bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:z-30 lg:flex lg:flex-col",
           isSidebarWidthTransitioning ? "transition-[width] duration-200 ease-out" : "transition-none",
           isSidebarCollapsed ? "w-14" : "w-[248px]",
         )}
@@ -486,7 +486,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b bg-surface/95 px-4 py-3 md:hidden">
+      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b bg-surface/95 px-4 py-3 lg:hidden">
         <Link
           href="/"
           className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
@@ -510,7 +510,7 @@ export function AppShell({
 
       {mobileMenuOpen ? (
         <div
-          className="fixed inset-0 z-50 bg-foreground/35 md:hidden"
+          className="fixed inset-0 z-50 bg-foreground/35 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
           <nav

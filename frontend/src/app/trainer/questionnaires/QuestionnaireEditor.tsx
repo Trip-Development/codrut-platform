@@ -248,14 +248,14 @@ export function QuestionnaireEditor({
   };
 
   return (
-    <section data-testid="questionnaire-editor-workspace" className="min-w-0 bg-background">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-sm lg:px-4">
+    <section data-testid="questionnaire-editor-workspace" className="min-w-0 overflow-hidden rounded-lg border bg-surface">
+      <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-3 py-2.5 backdrop-blur-sm lg:px-4">
         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-2 sm:flex sm:items-center">
           <Button type="button" variant="ghost" size="icon-sm" onClick={onBack} aria-label="Înapoi la catalog" title="Înapoi la catalog">
             <ArrowLeftIcon aria-hidden="true" />
           </Button>
           <div className="min-w-0 flex-1 border-l border-border pl-3">
-            <h1 className="truncate text-sm font-semibold text-foreground">{definition.title}</h1>
+            <h2 className="truncate text-sm font-semibold text-foreground">{definition.title}</h2>
             <div className="mt-0.5 flex min-w-0 items-center gap-2">
               <span className="text-[11px] text-muted-foreground">v{selectedVersion}</span>
               <SaveStatus state={saveState} label={saveStateLabel} error={saveError} />

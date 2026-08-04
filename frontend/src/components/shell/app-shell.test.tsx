@@ -116,7 +116,7 @@ describe("AppShell", () => {
     const sidebar = document.querySelector("[data-codrut-sidebar]");
     expect(accountMenu).not.toBeNull();
     expect(accountMenu?.className).toContain("w-64");
-    expect(sidebar?.className).toContain("md:z-30");
+    expect(sidebar?.className).toContain("lg:z-30");
     expect(screen.getAllByRole("combobox", { name: "Temă" })[0]?.className).toContain("w-full");
   });
 

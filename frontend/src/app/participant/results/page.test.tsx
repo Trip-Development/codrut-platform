@@ -33,8 +33,7 @@ vi.mock("../ParticipantClientWorkspace", () => ({
     <div>{results.map((result) => <p key={result.title}>{result.title}</p>)}</div>
   ),
   ParticipantResultsHistory: ({ cycles }: { cycles: Array<{ cycle: { name: string }; results: Array<{ title: string }> }> }) => (
-    <section>
-      <h2>Evoluția rezultatelor</h2>
+    <section aria-label="Evoluția rezultatelor">
       {cycles.map(({ cycle, results }) => (
         <div key={cycle.name}>
           <span>{cycle.name}</span>
@@ -89,7 +88,7 @@ describe("participant result history", () => {
     });
     render(ui);
 
-    expect(screen.getByRole("heading", { name: "Evoluția rezultatelor", level: 1 })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Evoluția rezultatelor", level: 2 })).toBeTruthy();
     expect(screen.getAllByText(/Ciclul 1/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Ciclul 2/).length).toBeGreaterThan(0);
     expect(screen.getByText("Lencioni inițial")).toBeTruthy();
