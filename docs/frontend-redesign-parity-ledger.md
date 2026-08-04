@@ -71,7 +71,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 | `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | preserved |
 | `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | preserved |
 | `/trainer/companies/[companyId]/teams` | Company team workspace | Current team data, mutations, permissions and recovery | List/detail presentation and states | `TeamsWorkspace.test.tsx`; seeded team journey | preserved |
-| `/trainer/companies/[companyId]/invitations` | Company invitation compatibility/delivery access | Delivery state, resend/recovery, secure links, idempotency | Invitation status/action presentation | `InvitationsWorkspace.test.tsx`; invite contracts; seeded delivery journey | unmigrated |
+| `/trainer/companies/[companyId]/invitations` | Company invitation compatibility/delivery access | Delivery state, resend/recovery, secure links, idempotency | Invitation status/action presentation | `InvitationsWorkspace.test.tsx`; invite contracts; seeded delivery journey | preserved |
 
 ## Trainer projects, questionnaires, and settings
 
@@ -81,8 +81,8 @@ proof of data, security, delivery, persistence, or calculation parity.
 | `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/compact inline context | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | preserved |
 | `/trainer/projects/[projectId]/participants` | Roster import, participant and account access | Import validation/persistence, roster operations, access recovery | Data view, importer composition, responsive controls | participant workspace, roster importer/format tests; seeded import | preserved |
 | `/trainer/projects/[projectId]/participants/[participantId]` | Participant and assignment/account-link detail | Correct identity, assignments, account-link repair authorization and recovery | Detail hierarchy and state presentation | profile-data and account-link repair tests; seeded detail | preserved |
-| `/trainer/projects/[projectId]/assignments` | Assignment planning and creation | Generation/regeneration/manual assignment/save, idempotency, permissions and errors | Editor/workspace composition, control language, states | assignment/API contract tests discovered during packet; seeded create/retry | unmigrated |
-| `/trainer/projects/[projectId]/invitations` | Invitation preparation, dispatch and delivery | Recipients/tasks, send/resend, secure links, delivery state, recovery and idempotency | Delivery workspace hierarchy, statuses, actions | invite/API contracts and outbox evidence; seeded prepare/send/retry | unmigrated |
+| `/trainer/projects/[projectId]/assignments` | Assignment planning and creation | Generation/regeneration/manual assignment/save, idempotency, permissions and errors | Editor/workspace composition, control language, states | assignment/API contract tests discovered during packet; seeded create/retry | preserved |
+| `/trainer/projects/[projectId]/invitations` | Invitation preparation, dispatch and delivery | Recipients/tasks, send/resend, secure links, delivery state, recovery and idempotency | Delivery workspace hierarchy, statuses, actions | invite/API contracts and outbox evidence; seeded prepare/send/retry | preserved |
 | `/trainer/projects/[projectId]/org-chart` | Organization chart view/edit | Existing graph data, edits, permissions and persistence | Editor composition, controls, responsive/local scroll | `org-chart.test.tsx`; seeded edit/reload | preserved |
 | `/trainer/projects/[projectId]/reports` | Project report overview | Aggregation, privacy thresholds, comparisons, drill-down, export/print | Protected report exceptions only | report overview/detail/cycle/print tests; seeded expected values | unmigrated |
 | `/trainer/projects/[projectId]/reports/lencioni` | Lencioni report detail | Raw 3-9 scale meaning, comparison direction, privacy, Back/export/print | Protected report shell/tokens/accessibility only | report detail/score/cycle tests; seeded values | unmigrated |
@@ -303,3 +303,23 @@ risk. Do not rerun broad checks merely to fill a gate document.
   25/25; targeted ESLint passed. Seeded company detail and project roster at
   390x844 retained named navigation/actions and measured
   `scrollWidth === innerWidth === 390`.
+
+### Sequence 02 packet 3 — assignments and invitations
+
+- Company Invitations is now reachable through the canonical company section
+  navigation. Project assignment and invitation routes keep the same cycle,
+  generation, save, recipient-selection, send/resend, secure-link, delivery,
+  and URL-filter behavior.
+- Saved assignments and invitation recipients retain one semantic table DOM.
+  Below `768px`, identity and primary action lead each row while questionnaire,
+  target, delivery, account, task, and next-step context remain visible without
+  document-level horizontal scrolling. Desktop retains the full columns and
+  bounded table scrolling.
+- The five invitation filters collapse to one labeled native control on mobile;
+  desktop retains the existing quick filter buttons. Delivery failures now use
+  the destructive semantic role rather than the brand burgundy.
+- Proof: `InvitationsWorkspace.test.tsx` and `CompanySectionTabs.test.tsx`
+  passed 35/35; targeted ESLint passed. Seeded project assignments and
+  invitations were checked at 390x844 and 1440x900; both measured
+  `scrollWidth === innerWidth`, retained named assignment/invitation controls,
+  and exposed the compact invitation filter on mobile.

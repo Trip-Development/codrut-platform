@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderIcon, NetworkIcon, UsersIcon } from "lucide-react";
+import { FolderIcon, MailIcon, NetworkIcon, UsersIcon } from "lucide-react";
 
 import { cn } from "@/utils/cn";
 
@@ -10,6 +10,7 @@ const companySections = [
   { key: "projects", label: "Proiecte", suffix: "", icon: FolderIcon },
   { key: "participants", label: "Participanți", suffix: "/participants", icon: UsersIcon },
   { key: "teams", label: "Echipe", suffix: "/teams", icon: NetworkIcon },
+  { key: "invitations", label: "Invitații", suffix: "/invitations", icon: MailIcon },
 ] as const;
 
 export function CompanySectionTabs({ basePath }: { basePath: string }) {

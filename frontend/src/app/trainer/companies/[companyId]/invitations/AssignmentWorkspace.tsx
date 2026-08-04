@@ -1264,9 +1264,9 @@ function AssignmentTable({
   const hasRows = assignments.length > 0;
 
   return (
-    <div className="min-w-0 max-w-full overflow-x-auto">
-      <table className="min-w-[760px] w-full text-left text-sm">
-        <thead className="bg-muted text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="min-w-0 max-w-full md:overflow-x-auto">
+      <table className="block w-full text-left text-sm md:table md:min-w-[760px] xl:min-w-0 xl:table-fixed">
+        <thead className="hidden bg-muted text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:table-header-group">
           <tr>
             <th className="w-12 px-4 py-3" />
             <th className="px-4 py-3">Respondent</th>
@@ -1276,22 +1276,26 @@ function AssignmentTable({
             <th className="px-4 py-3">Stare</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody className="block divide-y divide-border md:table-row-group">
           {!hasRows ? (
-            <tr>
-              <td colSpan={6} className="px-4 py-10 text-center">
+            <tr className="block md:table-row">
+              <td colSpan={6} className="block px-4 py-10 text-center md:table-cell">
                 <p className="font-semibold text-foreground">Nicio asignare</p>
               </td>
             </tr>
           ) : (
             assignments.map((assignment) => (
-              <tr key={assignment.id} className="hover:bg-muted/60">
-                <td className="px-4 py-3" />
-                <td className="px-4 py-3 font-semibold text-foreground">
+              <tr key={assignment.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 px-4 py-4 hover:bg-muted/60 md:table-row md:px-0 md:py-0">
+                <td className="hidden md:table-cell md:px-4 md:py-3" />
+                <td className="col-start-1 row-start-1 min-w-0 font-semibold text-foreground md:table-cell md:px-4 md:py-3">
                   {participantsById.get(assignment.respondent_profile_id)?.full_name ?? "Participant"}
                 </td>
-                <td className="px-4 py-3">{formatQuestionnaireLabel(assignment.questionnaire_key)}</td>
-                <td className="px-4 py-3">
+                <td className="col-start-1 row-start-2 md:table-cell md:px-4 md:py-3">
+                  <span className="mr-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Chestionar</span>
+                  {formatQuestionnaireLabel(assignment.questionnaire_key)}
+                </td>
+                <td className="col-start-1 row-start-3 min-w-0 md:table-cell md:px-4 md:py-3">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Țintă</p>
                   <p className="font-medium text-foreground">
                     {formatSavedTarget(assignment, participantsById, teamsById)}
                   </p>
@@ -1299,8 +1303,8 @@ function AssignmentTable({
                     {formatTargetType(assignment.target_type)}
                   </p>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">Proiect</td>
-                <td className="px-4 py-3">
+                <td className="hidden text-muted-foreground md:table-cell md:px-4 md:py-3">Proiect</td>
+                <td className="col-start-2 row-start-1 md:table-cell md:px-4 md:py-3">
                   <AssignmentState saved selected={false} />
                 </td>
               </tr>
