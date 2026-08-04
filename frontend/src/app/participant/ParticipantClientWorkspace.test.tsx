@@ -87,6 +87,9 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.getByRole("status", { name: "3 sarcini active" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Bună, Mihai" })).toBeDefined();
     expect(screen.queryByText("Bună, SignalHarbor5271")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "Contextul fluxului" }).textContent).toContain(
+      "Completează următorul chestionar",
+    );
   });
 
   it("makes ready results the primary action after every questionnaire is complete", () => {

@@ -54,7 +54,7 @@ export function CoachingContextRail({
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
-            <ArrowRightIcon className="size-4 shrink-0 text-primary" aria-hidden="true" strokeWidth={1.8} />
+            <ArrowRightIcon className="size-4 shrink-0 text-brand-text" aria-hidden="true" strokeWidth={1.8} />
             <span className="truncate">{nextAction}</span>
           </p>
           {action}

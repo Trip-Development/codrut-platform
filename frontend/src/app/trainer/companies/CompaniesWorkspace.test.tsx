@@ -46,6 +46,10 @@ describe("CompaniesWorkspace", () => {
     expect(screen.getAllByText("Michelin").length).toBeGreaterThan(0);
     expect(screen.queryByText("Local-only client")).toBeNull();
     expect(getCompanyList).not.toHaveBeenCalled();
+    expect(screen.getByRole("complementary", { name: "Contextul fluxului" }).textContent).toContain(
+      "1 companie în listă",
+    );
+    expect(screen.getByRole("button", { name: "Companie nouă" })).toBeTruthy();
   });
 
   it("keeps destructive company actions out of the company grid", async () => {
@@ -170,7 +174,7 @@ describe("CompaniesWorkspace", () => {
 
     render(<CompaniesWorkspace initialCompanies={[]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Companie nouă" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Companie nouă" })[0]);
     const companyNameInput = await screen.findByLabelText("Nume companie");
     fireEvent.change(companyNameInput, {
       target: { value: "Compania nouă" },

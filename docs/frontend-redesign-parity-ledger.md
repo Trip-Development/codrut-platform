@@ -49,7 +49,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, coaching-context rail | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | unmigrated |
+| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, coaching-context rail | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | owner-gate |
 | `/participant/dashboard` | Participant dashboard compatibility entry | Existing destination and Back/refresh behavior | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
 | `/participant/questionnaires` | Assigned questionnaire list | Persisted assignments, targets, drafts, completion/result states | List archetype, state presentation, copy | participant context and questionnaire contract tests; seeded list | unmigrated |
 | `/participant/questionnaires/[key]` | Questionnaire completion | Pinned definition, answers, autosave/draft, Back recovery, validation, submission | Runner composition, progress/save context, controls, states | page, return-href, runner, and questionnaire contract tests; live draft/submit | unmigrated |
@@ -66,7 +66,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
 | `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | unmigrated |
-| `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | unmigrated |
+| `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | owner-gate |
 | `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, context rail | company panels/tabs tests; seeded navigation | unmigrated |
 | `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | unmigrated |
 | `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | unmigrated |
@@ -173,3 +173,57 @@ risk. Do not rerun broad checks merely to fill a gate document.
   live consumer.
 - Remaining risk: route-level state, keyboard/focus, dark-theme, responsive,
   console, and bundle proof is still open at the prototype gate.
+
+### Sequence 01 two-prototype packet — 2026-08-04
+
+- Routes: `/trainer/companies` and `/participant`. Both dispositions are now
+  `owner-gate`; no shared-pattern propagation or Sequence 02 work started.
+- Trainer prototype: preserved backend-provided company rows, URL-backed search
+  and filters, selection/export, creation modal entry, pagination, direct links,
+  status/stage semantics, and discoverable local table scrolling. Added a shared
+  operational context rail and a mobile create action without changing APIs or
+  persistence behavior.
+- Participant prototype: preserved project context selection, questionnaire
+  links, task expansion/local persistence, completion/result visibility, privacy
+  copy, and progress calculations. Added one orientation rail, a quieter
+  participant hierarchy, semantic dark-mode inline accents, and retained the
+  protected result presentation path.
+- Focused proof: `CompaniesWorkspace.test.tsx` and
+  `ParticipantClientWorkspace.test.tsx` passed, 34/34 tests.
+- Required Compose proof: `just frontend-lint` passed; `just frontend-typecheck`
+  passed; `just frontend-build` passed; `just frontend-test` completed with 83
+  files, 681 passed, 1 failed, 682 total. The sole failure is the existing
+  `src/api/runtime-pcm-contracts.test.ts` fallback-disablement assertion; it
+  failed before CF0002 changes and is outside these routes.
+- Seeded live proof: `just seed-local-preview` data was inspected on both routes
+  at 1440x900 and 390x844, in light and dark themes. Accessible snapshots retain
+  one `h1`, named landmarks, task/company actions, table headers, progressbar,
+  and keyboard-addressable controls. Both mobile documents measured
+  `scrollWidth === clientWidth === 375` (390px viewport with scrollbar).
+- Browser console: each route retains the existing local auth-bypass
+  `GET /api/auth/csrf` 401 console error; no new route or hydration error was
+  observed. This remains an explicit owner-gate risk, not a claim of clean
+  console proof.
+- Screenshots: `output/playwright/cf0002-trainer-companies-1440-light.png`,
+  `cf0002-trainer-companies-1440-dark.png`,
+  `cf0002-trainer-companies-390-light.png`,
+  `cf0002-trainer-companies-390-dark.png`,
+  `cf0002-participant-1440-light.png`,
+  `cf0002-participant-1440-dark.png`,
+  `cf0002-participant-390-light.png`, and
+  `cf0002-participant-390-dark.png` are local owner-review evidence and are
+  intentionally not product code.
+- Bundle proof: shared First Load JS remains 103 kB; `/trainer/companies`
+  remains 167 kB; `/participant` remains 174 kB. No new production dependency,
+  backend/API/schema change, protected workflow deletion, or generated contract
+  change was made.
+- Cleanup and scope: the generated last-run file remains removed with no
+  consumer; prior checklist/review packet remain unchanged in the dated archive;
+  the historical route matrix remains retained; Fraunces remains because the
+  auth shell still consumes it. Authored product files are 228 additions and
+  86 deletions from `origin/dev`; focused test changes are 8 additions and 1
+  deletion. Both remain well below the task's ~1,000-line pause threshold;
+  docs/evidence are reported separately.
+- Stop condition: wait for owner approval of both real-data prototypes in both
+  themes and representative mobile/desktop states before propagating the rail,
+  tokens, or shell pattern to any additional route.

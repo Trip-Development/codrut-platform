@@ -317,7 +317,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
           aria-label="Lista companiilor"
           aria-busy={isFilterPending}
           className={cn(
-            "min-w-0 overflow-hidden rounded-lg border bg-surface shadow-sm transition-opacity",
+            "min-w-0 overflow-hidden rounded-lg border bg-surface transition-opacity",
             isFilterPending && "opacity-70",
           )}
         >
@@ -476,7 +476,7 @@ function CompaniesEmptyState({
   onAction: () => void;
 }) {
   return (
-    <Empty className="min-h-[22rem] border bg-surface shadow-sm">
+    <Empty className="min-h-[22rem] border bg-surface">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Building2Icon aria-hidden="true" strokeWidth={1.8} />
@@ -521,7 +521,7 @@ function CompanyTableRow({
         >
           <EntityMark name={company.name} />
           <span className="min-w-0">
-            <span className="block truncate font-semibold text-foreground group-hover:text-primary">{company.name}</span>
+            <span className="block truncate font-semibold text-foreground group-hover:text-brand-text">{company.name}</span>
             <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{formatCompanyCode(company)}</span>
           </span>
         </Link>
@@ -549,21 +549,21 @@ function CompanyTableRow({
           <span className="text-xs font-medium text-muted-foreground">Nicio asignare</span>
         )}
       </td>
-      <td className={cn("px-4 py-3 text-right align-middle font-semibold tabular-nums", pending > 0 ? "text-primary" : "text-muted-foreground")}>
+      <td className={cn("px-4 py-3 text-right align-middle font-semibold tabular-nums", pending > 0 ? "text-brand-text" : "text-muted-foreground")}>
         {pending}
       </td>
       <td className="px-4 py-3 align-middle">
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             href={`/trainer/companies/${company.id}`}
-            className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+            className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
           >
             {companyNextAction(company)}
             <ArrowRightIcon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
           </Link>
           <Link
             href={`/trainer/companies/${company.id}/settings`}
-            className="font-semibold text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+            className="font-semibold text-muted-foreground hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
           >
             Setări
           </Link>
@@ -643,7 +643,7 @@ function EntityMark({ name }: { name: string }) {
   return (
     <span
       className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white",
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold",
         entityMarkClass(name),
       )}
       aria-hidden="true"
@@ -741,7 +741,13 @@ function companyInitials(name: string): string {
 }
 
 function entityMarkClass(seed: string): string {
-  const classes = ["bg-primary", "bg-foreground", "bg-muted-foreground", "bg-success-ink", "bg-burgundy-800"];
+  const classes = [
+    "bg-primary text-primary-foreground",
+    "bg-foreground text-background",
+    "bg-muted-foreground text-background",
+    "bg-success text-background",
+    "bg-burgundy-800 text-white",
+  ];
   return classes[Math.abs(hashString(seed)) % classes.length];
 }
 
