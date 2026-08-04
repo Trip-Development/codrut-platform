@@ -19,7 +19,7 @@ export function LencioniTeamBreakdown({
     <section id="lencioni-pe-echipe" className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-burgundy">Lencioni</p>
+          <p className="text-sm font-semibold text-primary">Lencioni</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Rezultate pe echipe</h2>
         </div>
         <Link

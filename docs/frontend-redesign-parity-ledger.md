@@ -84,9 +84,9 @@ proof of data, security, delivery, persistence, or calculation parity.
 | `/trainer/projects/[projectId]/assignments` | Assignment planning and creation | Generation/regeneration/manual assignment/save, idempotency, permissions and errors | Editor/workspace composition, control language, states | assignment/API contract tests discovered during packet; seeded create/retry | preserved |
 | `/trainer/projects/[projectId]/invitations` | Invitation preparation, dispatch and delivery | Recipients/tasks, send/resend, secure links, delivery state, recovery and idempotency | Delivery workspace hierarchy, statuses, actions | invite/API contracts and outbox evidence; seeded prepare/send/retry | preserved |
 | `/trainer/projects/[projectId]/org-chart` | Organization chart view/edit | Existing graph data, edits, permissions and persistence | Editor composition, controls, responsive/local scroll | `org-chart.test.tsx`; seeded edit/reload | preserved |
-| `/trainer/projects/[projectId]/reports` | Project report overview | Aggregation, privacy thresholds, comparisons, drill-down, export/print | Protected report exceptions only | report overview/detail/cycle/print tests; seeded expected values | unmigrated |
-| `/trainer/projects/[projectId]/reports/lencioni` | Lencioni report detail | Raw 3-9 scale meaning, comparison direction, privacy, Back/export/print | Protected report shell/tokens/accessibility only | report detail/score/cycle tests; seeded values | unmigrated |
-| `/trainer/projects/[projectId]/reports/leadership/[participantId]` | Individual leadership report | Correct participant, iCARE perspectives, privacy, comparison and navigation | Protected report shell/tokens/accessibility only | leadership page, iCARE, report detail tests; seeded values | unmigrated |
+| `/trainer/projects/[projectId]/reports` | Project report overview | Aggregation, privacy thresholds, comparisons, drill-down, export/print | Protected report exceptions only | report overview/detail/cycle/print tests; seeded expected values | preserved |
+| `/trainer/projects/[projectId]/reports/lencioni` | Lencioni report detail | Raw 3-9 scale meaning, comparison direction, privacy, Back/export/print | Protected report shell/tokens/accessibility only | report detail/score/cycle tests; seeded values | preserved |
+| `/trainer/projects/[projectId]/reports/leadership/[participantId]` | Individual leadership report | Correct participant, iCARE perspectives, privacy, comparison and navigation | Protected report shell/tokens/accessibility only | leadership page, iCARE, report detail tests; seeded values | preserved |
 | `/trainer/projects/[projectId]/settings` | Project settings | Existing mutations, validation, permissions and recovery | Settings/form archetype | `ProjectSettingsForm.test.tsx`; project-data contracts | preserved |
 | `/trainer/questionnaires` | Questionnaire catalog/editor | Versioning, protected definitions, explicit saves, preview boundary and errors | Editor archetype, structure/inspector, save context | `QuestionnairesWorkspace.test.tsx`; questionnaire contracts; seeded edit/reload | preserved |
 | `/trainer/settings` | Trainer account settings | Account/security mutations, validation, session and recovery | Settings/form archetype | account-settings/auth/password tests; seeded mutation | preserved |
@@ -362,3 +362,16 @@ risk. Do not rerun broad checks merely to fill a gate document.
   checked at 390x844 with `scrollWidth === innerWidth`; recipient actions,
   contact filtering, and all navigation destinations remained named and
   reachable.
+
+### Sequence 02 packet 6 — protected reports
+
+- Report composition, aggregation order, score scales, privacy thresholds,
+  cycle comparison, drill-down, printing, and all chart data remain unchanged.
+  This packet only aligned report links/eyebrows with the semantic primary
+  token, removed the ordinary disclosure shadow, and neutralized a decorative
+  information icon; the canonical burgundy remains available to intentional
+  chart encodings.
+- Proof: overview, detail route, Lencioni section, leadership, comparison-bar,
+  and iCARE perspective suites passed 25/25; targeted ESLint passed. The seeded
+  report overview at 390x844 retained project/cycle context, print action,
+  comparison controls, and `scrollWidth === innerWidth`.

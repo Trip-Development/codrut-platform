@@ -11,7 +11,7 @@ export function InterpretationDisclosure({
 }) {
   return (
     <details className={cn("group mt-4 text-sm text-muted-foreground", className)}>
-      <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground shadow-sm outline-none transition-[background-color,border-color,color,box-shadow,transform] hover:border-foreground/20 hover:bg-muted focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground outline-none transition-[background-color,border-color,color,box-shadow,transform] hover:border-foreground/20 hover:bg-muted focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px [&::-webkit-details-marker]:hidden">
         <MessageSquareTextIcon className="size-3.5 text-primary" aria-hidden="true" />
         <span className="group-open:hidden">Vezi interpretarea completă</span>
         <span className="hidden group-open:inline">Ascunde interpretarea</span>
