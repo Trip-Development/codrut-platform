@@ -88,7 +88,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 | `/trainer/projects/[projectId]/reports/lencioni` | Lencioni report detail | Raw 3-9 scale meaning, comparison direction, privacy, Back/export/print | Protected report shell/tokens/accessibility only | report detail/score/cycle tests; seeded values | unmigrated |
 | `/trainer/projects/[projectId]/reports/leadership/[participantId]` | Individual leadership report | Correct participant, iCARE perspectives, privacy, comparison and navigation | Protected report shell/tokens/accessibility only | leadership page, iCARE, report detail tests; seeded values | unmigrated |
 | `/trainer/projects/[projectId]/settings` | Project settings | Existing mutations, validation, permissions and recovery | Settings/form archetype | `ProjectSettingsForm.test.tsx`; project-data contracts | preserved |
-| `/trainer/questionnaires` | Questionnaire catalog/editor | Versioning, protected definitions, explicit saves, preview boundary and errors | Editor archetype, structure/inspector, save context | `QuestionnairesWorkspace.test.tsx`; questionnaire contracts; seeded edit/reload | unmigrated |
+| `/trainer/questionnaires` | Questionnaire catalog/editor | Versioning, protected definitions, explicit saves, preview boundary and errors | Editor archetype, structure/inspector, save context | `QuestionnairesWorkspace.test.tsx`; questionnaire contracts; seeded edit/reload | preserved |
 | `/trainer/settings` | Trainer account settings | Account/security mutations, validation, session and recovery | Settings/form archetype | account-settings/auth/password tests; seeded mutation | preserved |
 
 ## Trainer communication
@@ -323,3 +323,20 @@ risk. Do not rerun broad checks merely to fill a gate document.
   invitations were checked at 390x844 and 1440x900; both measured
   `scrollWidth === innerWidth`, retained named assignment/invitation controls,
   and exposed the compact invitation filter on mobile.
+
+### Sequence 02 packet 4 — questionnaire editor
+
+- The catalog and editor retain definition loading, search, creation,
+  versioning, dirty-state protection, explicit save/discard, retirement,
+  structure editing, scales, and inspector behavior. Ordinary catalog shadows
+  were removed and mobile catalog cards use denser vertical rhythm.
+- The editor action header now forms two deliberate mobile rows: identity and
+  save state remain readable, while version selection and the borderless
+  discard/version/retire controls share a compact action row. The primary save
+  action becomes an accessible icon control below `640px`. The mobile structure
+  navigator is locally scrollable so the active editor remains reachable
+  without traversing the complete questionnaire tree.
+- Proof: `QuestionnairesWorkspace.test.tsx` passed 19/19 and targeted ESLint
+  passed. The seeded catalog/editor was checked at 390x844 and 1440x900;
+  document width matched viewport width at both sizes, mobile structure height
+  remained bounded, and the three-column desktop editor remained intact.

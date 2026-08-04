@@ -993,7 +993,7 @@ export function QuestionnairesWorkspace() {
       {!selectedKey ? (
         // GALLERY MODE
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-sm md:flex-row md:items-center">
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 md:flex-row md:items-center">
             <div className="relative w-full md:flex-1">
               <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-11 items-center justify-center text-muted-foreground">
                 <SearchIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
@@ -1048,7 +1048,7 @@ export function QuestionnairesWorkspace() {
                   variant="outline"
                   onClick={() => handleSelectDefinition(stub.id, stub.version ?? 1)}
                   aria-label={`Editează ${stub.name}`}
-                  className="group h-auto min-h-[12rem] items-stretch justify-start whitespace-normal border-border bg-surface p-4 text-left shadow-sm hover:border-primary/35"
+                  className="group h-auto min-h-[10rem] items-stretch justify-start whitespace-normal border-border bg-surface p-4 text-left hover:border-primary/35 hover:bg-muted/25 md:min-h-[12rem]"
                 >
                   <div className="flex h-full flex-col">
                     <div className="mb-3 flex items-start justify-between gap-3">

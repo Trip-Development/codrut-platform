@@ -250,7 +250,7 @@ export function QuestionnaireEditor({
   return (
     <section data-testid="questionnaire-editor-workspace" className="min-w-0 bg-background">
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-sm lg:px-4">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-2 sm:flex sm:items-center">
           <Button type="button" variant="ghost" size="icon-sm" onClick={onBack} aria-label="Înapoi la catalog" title="Înapoi la catalog">
             <ArrowLeftIcon aria-hidden="true" />
           </Button>
@@ -262,62 +262,72 @@ export function QuestionnaireEditor({
             </div>
           </div>
 
-          <SelectControl
-            label="Versiune"
-            wrapperClassName="w-28 shrink-0"
-            value={selectedVersion}
-            onChange={(event) => onSelectVersion(Number(event.target.value))}
-            disabled={isBusy}
-          >
-            {availableVersions.map((version) => (
-              <option key={version} value={version}>
-                v{version} {version === latestSelectedVersion ? "(Activă)" : "(Veche)"}
-              </option>
-            ))}
-          </SelectControl>
+          <div className="col-span-2 flex min-w-0 items-end gap-1 border-t border-border pt-2 sm:col-span-1 sm:ml-auto sm:border-0 sm:pt-0">
+            <SelectControl
+              label="Versiune"
+              wrapperClassName="mr-auto min-w-0 flex-1 sm:w-28 sm:flex-none"
+              value={selectedVersion}
+              onChange={(event) => onSelectVersion(Number(event.target.value))}
+              disabled={isBusy}
+            >
+              {availableVersions.map((version) => (
+                <option key={version} value={version}>
+                  v{version} {version === latestSelectedVersion ? "(Activă)" : "(Veche)"}
+                </option>
+              ))}
+            </SelectControl>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onDiscard}
-            disabled={!isDirty || isBusy}
-            aria-label="Revino la ultima versiune salvată"
-            title="Revino la ultima versiune salvată"
-          >
-            <RotateCcwIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onCreateVersion}
-            disabled={isBusy}
-            aria-label="Versiune nouă (clonează)"
-            title="Versiune nouă (clonează)"
-          >
-            <CopyPlusIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onDeleteQuestionnaire}
-            disabled={!canDelete || isBusy}
-            aria-label="Pensionează chestionarul"
-            title="Pensionează chestionarul"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2Icon aria-hidden="true" />
-          </Button>
-          <Button type="button" size="sm" onClick={onSave} disabled={!isDirty || isBusy} aria-label="Salvează modificările">
-            {saveState === "saving" ? (
-              <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-            ) : (
-              <SaveIcon data-icon="inline-start" aria-hidden="true" />
-            )}
-            {saveState === "saving" ? "Salvăm" : "Salvează"}
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onDiscard}
+              disabled={!isDirty || isBusy}
+              aria-label="Revino la ultima versiune salvată"
+              title="Revino la ultima versiune salvată"
+            >
+              <RotateCcwIcon aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onCreateVersion}
+              disabled={isBusy}
+              aria-label="Versiune nouă (clonează)"
+              title="Versiune nouă (clonează)"
+            >
+              <CopyPlusIcon aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onDeleteQuestionnaire}
+              disabled={!canDelete || isBusy}
+              aria-label="Pensionează chestionarul"
+              title="Pensionează chestionarul"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2Icon aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onSave}
+              disabled={!isDirty || isBusy}
+              aria-label="Salvează modificările"
+              title="Salvează modificările"
+              className="shrink-0 px-2.5 sm:px-3"
+            >
+              {saveState === "saving" ? (
+                <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+              ) : (
+                <SaveIcon data-icon="inline-start" aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">{saveState === "saving" ? "Salvăm" : "Salvează"}</span>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -330,7 +340,7 @@ export function QuestionnaireEditor({
       <div className="grid min-h-[calc(100vh-10rem)] min-w-0 lg:grid-cols-[13.5rem_minmax(25rem,1fr)_19rem]">
         <nav
           aria-label="Structura chestionarului"
-          className="min-w-0 border-r border-border bg-muted/35 p-2.5 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto"
+          className="max-h-64 min-w-0 overflow-y-auto border-r border-border bg-muted/35 p-2.5 lg:max-h-[calc(100vh-10rem)]"
         >
           <div className="mb-2 flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
