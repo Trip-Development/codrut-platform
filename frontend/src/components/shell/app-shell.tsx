@@ -506,10 +506,11 @@ export function AppShell({
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="icon-sm"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Deschide meniul de navigare"
+            className="border-0 shadow-none"
           >
             <MenuIcon aria-hidden="true" strokeWidth={1.8} />
           </Button>

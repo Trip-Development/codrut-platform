@@ -46,10 +46,10 @@ describe("CompaniesWorkspace", () => {
     expect(screen.getAllByText("Michelin").length).toBeGreaterThan(0);
     expect(screen.queryByText("Local-only client")).toBeNull();
     expect(getCompanyList).not.toHaveBeenCalled();
-    expect(screen.getByRole("complementary", { name: "Contextul fluxului" }).textContent).toContain(
-      "1 companie în listă",
+    expect(screen.getByRole("region", { name: "Lista companiilor" }).textContent).toContain(
+      "1 companie",
     );
-    expect(screen.getByRole("button", { name: "Companie nouă" })).toBeTruthy();
+    expect(screen.queryByRole("complementary", { name: "Contextul fluxului" })).toBeNull();
   });
 
   it("keeps destructive company actions out of the company grid", async () => {
@@ -162,6 +162,31 @@ describe("CompaniesWorkspace", () => {
     fireEvent.click(screen.getByLabelText("Selectează Atlas Mobility"));
     expect(screen.getByRole("button", { name: "Exportă selecția" })).toBeTruthy();
     expect(screen.getByText("1 selectată")).toBeTruthy();
+  });
+
+  it("collapses mobile filters behind one accessible sheet trigger", async () => {
+    render(
+      <CompaniesWorkspace
+        initialCompanies={[
+          {
+            id: "backend-company",
+            name: "Michelin",
+            participantCount: 0,
+            projectCount: 0,
+            assignmentCount: 0,
+            completedCount: 0,
+            stage: "setup",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Filtre" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Filtre" }));
+    expect(screen.getByRole("dialog", { name: "Filtre" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Închide filtrele" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Gata" }));
+    expect(screen.queryByRole("dialog", { name: "Filtre" })).toBeNull();
   });
 
   it("shows a full pending surface while creating the first company", async () => {

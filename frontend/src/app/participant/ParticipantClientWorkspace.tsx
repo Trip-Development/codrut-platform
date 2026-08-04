@@ -13,7 +13,6 @@ import type {
   ParticipantWorkspaceResult,
 } from "@/api/participants";
 import { EmptyState } from "@/components/presentation/empty-state";
-import { CoachingContextRail } from "@/components/presentation/coaching-context-rail";
 import { CycleComparisonBars, type CycleComparisonRow } from "@/components/reports/CycleComparisonBars";
 import { cycleAccent } from "@/components/reports/cycle-accents";
 import { IcarePerspectiveGrid } from "@/components/reports/IcarePerspectiveGrid";
@@ -130,23 +129,6 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
         selectedProfileId={summaryData.participantProfileId}
         selectedProjectId={summaryData.projectId}
       />
-      <CoachingContextRail
-        eyebrow="Orientarea ta"
-        title={
-          pendingTaskGroups.length > 0
-            ? `${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`
-            : "Toate sarcinile active sunt finalizate"
-        }
-        detail={`${tasksProgressPct}% progres · ${hasMultipleProjects ? projectCountCopy : summaryData.projectName} · datele rămân în spațiul tău de lucru`}
-        nextAction={
-          pendingTaskGroups.length > 0
-            ? "Completează următorul chestionar"
-            : resultCount > 0
-              ? "Vezi rezultatele disponibile"
-              : "Așteaptă activarea următoarei sarcini"
-        }
-        tone={isComplete ? "success" : "info"}
-      />
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_16rem] xl:gap-10">
         <section
           className="min-w-0"
@@ -175,6 +157,11 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                   <p className="mt-1 text-sm text-muted-foreground">
                     {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
                   </p>
+                  {pendingTaskGroups.length > 0 ? (
+                    <p className="mt-2 text-xs font-semibold text-brand-text">
+                      Următorul pas: Completează următorul chestionar
+                    </p>
+                  ) : null}
                 </div>
                 {pendingTaskGroups.length > 0 ? (
                   <div

@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import { type CompanyListItem } from "@/api/companies";
-import { CoachingContextRail } from "@/components/presentation/coaching-context-rail";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,6 +27,7 @@ import {
 } from "@/components/ui/empty";
 import { SelectControl } from "@/components/ui/select-control";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { useUrlState } from "@/hooks/use-url-state";
 import { cn } from "@/utils/cn";
 import {
@@ -58,6 +58,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   const [statusFilter, setStatusFilter] = useState(get("status") ?? "");
   const [stageFilter, setStageFilter] = useState(get("stage") ?? "");
   const [extraFilter, setExtraFilter] = useState(get("filter") ?? "");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
@@ -197,49 +198,9 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
     exportCompanies(selectedCompanies, "companii-selectate-codrut.csv");
   }
 
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <CoachingContextRail
-        eyebrow="Operare trainer"
-        title={`${filteredCompanies.length} ${filteredCompanies.length === 1 ? "companie" : "companii"} în listă`}
-        detail={`${activeCompanies} active · ${companiesNeedingAttention} necesită acțiune · ${pendingAssignments} completări de urmărit`}
-        nextAction={
-          selectedCount > 0
-            ? "Exportă selecția"
-            : filteredCompanies.length > 0
-              ? "Deschide următoarea companie de urmărit"
-              : "Adaugă prima companie"
-        }
-        action={
-          <Button
-            type="button"
-            size="sm"
-            className="md:hidden"
-            onClick={() => {
-              setCreateOpen(true);
-              setParam("modal", "create-company");
-            }}
-          >
-            Companie nouă
-          </Button>
-        }
-      />
-      <section
-        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
-        aria-label="Filtre companii"
-      >
-        <WorkspaceSearchInput
-          id="companies-search"
-          label="Caută companie"
-          value={searchQuery}
-          onValueChange={(value) => {
-            setSearchQuery(value);
-            setParam("q", value || null, "replace");
-          }}
-          placeholder="Caută după denumire, cod, status sau etapă"
-          className="lg:col-span-2 xl:col-span-1"
-        />
-
+  function renderFilterControls() {
+    return (
+      <>
         <FilterSelect
           icon={FilterIcon}
           label="Status"
@@ -277,7 +238,71 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             ["reporting", "Pregătite de raportare"],
           ]}
         />
+      </>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <section
+        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
+        aria-label="Filtre companii"
+      >
+        <div className="flex min-w-0 items-center gap-2 lg:contents">
+          <WorkspaceSearchInput
+            id="companies-search"
+            label="Caută companie"
+            value={searchQuery}
+            onValueChange={(value) => {
+              setSearchQuery(value);
+              setParam("q", value || null, "replace");
+            }}
+            placeholder="Caută după denumire, cod, status sau etapă"
+            className="min-w-0 flex-1 lg:col-span-2 xl:col-span-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="lg:hidden"
+            aria-haspopup="dialog"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <FilterIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Filtre
+          </Button>
+        </div>
+        <div className="hidden lg:contents">{renderFilterControls()}</div>
       </section>
+
+      <Sheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        labelledBy="company-filters-title"
+        describedBy="company-filters-description"
+      >
+        <SheetHeader className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="company-filters-title" className="text-lg font-semibold text-foreground">Filtre</h2>
+            <p id="company-filters-description" className="mt-1 text-sm text-muted-foreground">
+              Restrânge lista fără să pierzi căutarea curentă.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Închide filtrele"
+            onClick={() => setFiltersOpen(false)}
+          >
+            <XIcon aria-hidden="true" strokeWidth={1.8} />
+          </Button>
+        </SheetHeader>
+        <SheetBody className="flex flex-col gap-4">{filtersOpen ? renderFilterControls() : null}</SheetBody>
+        <SheetFooter className="flex items-center justify-between gap-3">
+          <Button type="button" variant="ghost" onClick={resetFilters}>Resetează</Button>
+          <Button type="button" onClick={() => setFiltersOpen(false)}>Gata</Button>
+        </SheetFooter>
+      </Sheet>
 
       <div className="min-h-5 px-1 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
         {isFilterPending ? "Se actualizează lista" : null}
@@ -364,7 +389,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             tabIndex={0}
             aria-label="Tabelul companiilor; derulează lateral pentru coloanele suplimentare"
           >
-            <table className="w-full min-w-[74rem] border-collapse text-left text-sm">
+            <table className="w-full min-w-[74rem] border-collapse text-left text-sm xl:min-w-0 xl:table-fixed">
               <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
                 <tr>
                   <th className="w-12 px-4 py-3">
@@ -374,14 +399,14 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
                       onCheckedChange={togglePageSelection}
                     />
                   </th>
-                  <th scope="col" className="min-w-56 px-4 py-3">Companie</th>
+                  <th scope="col" className="min-w-56 px-4 py-3 xl:min-w-0">Companie</th>
                   <th scope="col" className="px-4 py-3">Status</th>
                   <th scope="col" className="px-4 py-3">Etapă</th>
                   <th scope="col" className="px-4 py-3 text-right">Proiecte</th>
                   <th scope="col" className="px-4 py-3 text-right">Participanți</th>
-                  <th scope="col" className="min-w-36 px-4 py-3">Completare</th>
+                  <th scope="col" className="min-w-36 px-4 py-3 xl:min-w-0">Completare</th>
                   <th scope="col" className="px-4 py-3 text-right">De urmărit</th>
-                  <th scope="col" className="min-w-52 px-4 py-3">Următorul pas</th>
+                  <th scope="col" className="min-w-52 px-4 py-3 xl:min-w-0">Următorul pas</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">

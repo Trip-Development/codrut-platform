@@ -49,7 +49,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, coaching-context rail | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | owner-gate |
+| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, compact inline contextual cue | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | owner-gate |
 | `/participant/dashboard` | Participant dashboard compatibility entry | Existing destination and Back/refresh behavior | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
 | `/participant/questionnaires` | Assigned questionnaire list | Persisted assignments, targets, drafts, completion/result states | List archetype, state presentation, copy | participant context and questionnaire contract tests; seeded list | unmigrated |
 | `/participant/questionnaires/[key]` | Questionnaire completion | Pinned definition, answers, autosave/draft, Back recovery, validation, submission | Runner composition, progress/save context, controls, states | page, return-href, runner, and questionnaire contract tests; live draft/submit | unmigrated |
@@ -67,7 +67,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 |---|---|---|---|---|---|
 | `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | unmigrated |
 | `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | owner-gate |
-| `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, context rail | company panels/tabs tests; seeded navigation | unmigrated |
+| `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, compact inline context | company panels/tabs tests; seeded navigation | unmigrated |
 | `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | unmigrated |
 | `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | unmigrated |
 | `/trainer/companies/[companyId]/teams` | Company team workspace | Current team data, mutations, permissions and recovery | List/detail presentation and states | `TeamsWorkspace.test.tsx`; seeded team journey | unmigrated |
@@ -78,7 +78,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
 | `/trainer/projects` | Searchable/filterable project list | Project lifecycle, direct navigation, URL state, permissions | List archetype, toolbar, responsive data view | `ProjectsWorkspace.test.tsx`; project controls; seeded list | unmigrated |
-| `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/context rail | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | unmigrated |
+| `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/compact inline context | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | unmigrated |
 | `/trainer/projects/[projectId]/participants` | Roster import, participant and account access | Import validation/persistence, roster operations, access recovery | Data view, importer composition, responsive controls | participant workspace, roster importer/format tests; seeded import | unmigrated |
 | `/trainer/projects/[projectId]/participants/[participantId]` | Participant and assignment/account-link detail | Correct identity, assignments, account-link repair authorization and recovery | Detail hierarchy and state presentation | profile-data and account-link repair tests; seeded detail | unmigrated |
 | `/trainer/projects/[projectId]/assignments` | Assignment planning and creation | Generation/regeneration/manual assignment/save, idempotency, permissions and errors | Editor/workspace composition, control language, states | assignment/API contract tests discovered during packet; seeded create/retry | unmigrated |
@@ -164,8 +164,8 @@ risk. Do not rerun broad checks merely to fill a gate document.
   preserved from visual evidence alone. Baseline screenshots are retained
   locally under `output/playwright/` and are not product code.
 - Foundation changes: authoritative `.interface-design/system.md`, nested
-  `frontend/AGENTS.md`, semantic token layer, 248px shell, mobile header action,
-  and shared coaching-context rail.
+  `frontend/AGENTS.md`, semantic token layer, 248px shell, and mobile header
+  action; no shared coaching-context rail remains.
 - Cleanup evidence: `.last-run.json` has no repository consumers and was
   removed as generated residue; the old checklist and review packet moved
   unchanged to `docs/archive/product-overhaul-2026-07/`; the historical route
@@ -180,12 +180,12 @@ risk. Do not rerun broad checks merely to fill a gate document.
   `owner-gate`; no shared-pattern propagation or Sequence 02 work started.
 - Trainer prototype: preserved backend-provided company rows, URL-backed search
   and filters, selection/export, creation modal entry, pagination, direct links,
-  status/stage semantics, and discoverable local table scrolling. Added a shared
-  operational context rail and a mobile create action without changing APIs or
-  persistence behavior.
+  status/stage semantics, and discoverable local table scrolling. Kept operational
+  context in the existing list summary/table actions and retained one mobile
+  header create action without changing APIs or persistence behavior.
 - Participant prototype: preserved project context selection, questionnaire
   links, task expansion/local persistence, completion/result visibility, privacy
-  copy, and progress calculations. Added one orientation rail, a quieter
+  copy, and progress calculations. Added one compact task-header cue, a quieter
   participant hierarchy, semantic dark-mode inline accents, and retained the
   protected result presentation path.
 - Focused proof: `CompaniesWorkspace.test.tsx` and
@@ -225,5 +225,32 @@ risk. Do not rerun broad checks merely to fill a gate document.
   deletion. Both remain well below the task's ~1,000-line pause threshold;
   docs/evidence are reported separately.
 - Stop condition: wait for owner approval of both real-data prototypes in both
-  themes and representative mobile/desktop states before propagating the rail,
-  tokens, or shell pattern to any additional route.
+  themes and representative mobile/desktop states before propagating these
+  patterns to any additional route.
+
+### Sequence 01 correction packet — 2026-08-04
+
+- Owner feedback applied: removed the standalone “Orientarea ta / Operare
+  trainer” panels and deleted the shared rail component. `.interface-design/system.md`
+  now explicitly withdraws this pattern and permits only a compact cue inside
+  an existing header or actionable section.
+- Trainer correction: kept a single header-level `Companie nouă` action on
+  mobile; replaced stacked mobile filters with search plus one `Filtre` Sheet
+  trigger; made the mobile hamburger borderless; disabled the Next.js
+  development badge that was covering the lower-left mobile content; and made
+  the 1440px table fit without horizontal overflow while retaining local
+  mobile table scrolling.
+- Participant correction: integrated only `Următorul pas: Completează următorul
+  chestionar` into the existing task header; no standalone orientation panel
+  remains.
+- Correction proof: focused trainer/participant tests passed 35/35; affected
+  frontend lint passed; Compose typecheck passed; Compose production build
+  passed with shared First Load JS 103 kB, `/trainer/companies` 167 kB, and
+  `/participant` 174 kB. The full suite was not rerun for this correction.
+- Visual evidence: updated light/dark desktop/mobile screenshots are retained
+  under `output/playwright/cf0002-correction-*`; trainer mobile scrolled-data
+  captures show the horizontally scrolled table view, `tableScrollLeft=828`,
+  and no document overflow. At 1440px the trainer table wrapper measured
+  `scrollWidth=clientWidth=1142` in both themes.
+- Owner gate remains active. No additional route propagation, Festival task
+  completion, PR creation, push, or merge was performed.

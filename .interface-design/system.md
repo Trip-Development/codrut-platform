@@ -41,19 +41,17 @@ permissions, route access, product outcomes, or domain behavior.
   containers, glass work surfaces, gradient-led styling, oversized headings,
   excessive pills, and motion used as decoration.
 
-### Locked visual signature: coaching-context rail
+### Withdrawn pattern: standalone coaching-context rails
 
-Use one restrained coaching-context rail when it materially connects the
-current stage or status, privacy/delivery context, and next meaningful action.
-It is a functional orientation device, not decoration.
-
-Approved placements are participant project progress, trainer company/project
-context, invitations and delivery state, questionnaire save/progress context,
-and communication readiness. Use it at most once per view. On wide screens it
-may be a quiet secondary rail; on narrow screens it becomes an inline band near
-the relevant workflow. Do not turn it into a generic stepper or a stack of
-cards. Do not insert it into report visualizations: reports retain their
-protected compact evidence-row signature defined below.
+Do not introduce or propagate a standalone “coaching-context rail”, orientation
+panel, or full-width context band. In the two-prototype owner review these
+panels duplicated nearby state and actions, consumed too much narrow-screen
+space, and produced abrupt cropping. When orientation is genuinely useful,
+integrate one compact contextual cue into the existing page header or
+actionable section. Keep the cue subordinate to the workflow and do not create
+a second action surface. Do not insert contextual cues into report
+visualizations: reports retain their protected compact evidence-row signature
+defined below.
 
 ## Protected behavior
 
@@ -209,7 +207,7 @@ resilient to short, average, and very long user-generated content.
 2. **List/index:** header, optional actionable summary, unified toolbar, data
    view, pagination, and designed sparse/dense/loading/empty/error states.
 3. **Detail/workspace:** identity header, stable section navigation, primary
-   work area, and the coaching-context rail only when it advances the task.
+   work area, and compact inline context only when it advances the task.
 4. **Editor:** stable structure navigation, focused canvas, contextual inspector,
    explicit save state, keyboard-safe overlays, and no nested card maze.
 5. **Guided participant flow:** privacy/progress context, one clear next action,
@@ -278,7 +276,7 @@ The pre-CF0002 report work is intentionally retained as a specialized consumer
 of this app-wide system:
 
 - Report signature: compact first-to-latest evidence rows that keep values,
-  change, and interpretation together. Do not apply the coaching-context rail
+  change, and interpretation together. Do not apply standalone context panels
   inside report visualizations.
 - Keep comparison controls in one quiet bordered toolbar. Reuse
   `CycleComparisonToolbar`, `CycleComparisonBars`, `ResultSignalBadge`,
