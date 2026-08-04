@@ -50,16 +50,16 @@ proof of data, security, delivery, persistence, or calculation parity.
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
 | `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, compact inline contextual cue | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | preserved |
-| `/participant/dashboard` | Participant dashboard compatibility entry | Existing destination and Back/refresh behavior | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
+| `/participant/dashboard` | Participant dashboard compatibility entry | Existing destination and Back/refresh behavior | Compatibility/loading presentation only | route inspection plus authenticated smoke | preserved |
 | `/participant/questionnaires` | Assigned questionnaire list | Persisted assignments, targets, drafts, completion/result states | List archetype, state presentation, copy | participant context and questionnaire contract tests; seeded list | unmigrated |
 | `/participant/questionnaires/[key]` | Questionnaire completion | Pinned definition, answers, autosave/draft, Back recovery, validation, submission | Runner composition, progress/save context, controls, states | page, return-href, runner, and questionnaire contract tests; live draft/submit | unmigrated |
-| `/participant/tasks/[taskId]` | Task compatibility entry | Existing task resolution and old links | Compatibility/loading presentation only | task-display and route/API contract checks | unmigrated |
+| `/participant/tasks/[taskId]` | Task compatibility entry | Existing task resolution and old links | Compatibility/loading presentation only | task-display and route/API contract checks | preserved |
 | `/participant/results` | Policy-controlled participant results | Calculations, publication/privacy threshold, no raw answers/formula, comparison and recovery | Protected report shell/tokens/accessibility only | participant results test; report/score tests; seeded expected values | unmigrated |
-| `/participant/account` | Account and program settings | Account mutations, password validation, program data, error recovery | Settings archetype, form hierarchy and feedback | account page/workspace and account-settings tests | unmigrated |
+| `/participant/account` | Account and program settings | Account mutations, password validation, program data, error recovery | Settings archetype, form hierarchy and feedback | account page/workspace and account-settings tests | preserved |
 | `/participant/consent` | Persisted legal consent | Required version, acceptance persistence, protected-route gating | Guided layout, copy, states | `ConsentForm.test.tsx`; auth contract; seeded consent journey | unmigrated |
 | `/participant/onboarding` | Participant onboarding compatibility entry | Existing destination and session boundary | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
-| `/participant/final-evaluation` | Final evaluation workflow | Existing evaluation assignment, answers, submit and recovery | Guided flow presentation only | route/API inspection; questionnaire runner/contracts; seeded journey | unmigrated |
-| `/participant/chat` | Existing placeholder/bounded surface | Do not imply or add AI coaching/roleplay capability | Harmonize shell and honest empty/placeholder state only | route inspection; navigation and copy review | unmigrated |
+| `/participant/final-evaluation` | Final evaluation workflow | Existing evaluation assignment, answers, submit and recovery | Guided flow presentation only | route/API inspection; questionnaire runner/contracts; seeded journey | preserved |
+| `/participant/chat` | Existing placeholder/bounded surface | Do not imply or add AI coaching/roleplay capability | Harmonize shell and honest empty/placeholder state only | route inspection; navigation and copy review | preserved |
 
 ## Trainer core and companies
 
@@ -401,3 +401,15 @@ risk. Do not rerun broad checks merely to fill a gate document.
   applicable bundle baseline. Remaining `unmigrated` rows are exclusively the
   participant, identity, public, legal, and compatibility surfaces assigned to
   Sequence 03.
+
+### Sequence 03 packet 1 — participant shell and everyday work
+
+- The approved participant prototype remains unchanged. Dashboard and task
+  compatibility entries keep their existing resolution, while account, final
+  evaluation, and the honest bounded Support surface consume the shared shell,
+  settings, navigation, and semantic primary token. No AI coaching or roleplay
+  capability, promise, or duplicate rail was introduced.
+- Proof: participant prototype, account page/workspace, context, and task-display
+  suites passed 44/44. Seeded participant home, account, support, and final
+  evaluation were checked at 390x844; all retained their primary heading and
+  matched document width to viewport width.

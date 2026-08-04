@@ -67,7 +67,7 @@ export default async function ParticipantFinalEvaluationPage({
                       <p className="text-base font-semibold text-foreground">{task.title}</p>
                       <p className="mt-1 text-sm text-muted-foreground">{task.targetLabel}</p>
                     </div>
-                    <span className="text-sm font-semibold text-burgundy">{task.estimatedMinutes} min</span>
+                    <span className="text-sm font-semibold text-primary">{task.estimatedMinutes} min</span>
                   </div>
                 ))}
               </div>
@@ -83,7 +83,7 @@ export default async function ParticipantFinalEvaluationPage({
 
         <aside className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <p className="text-sm font-semibold text-foreground">Progres</p>
-          <p className="mt-3 font-mono text-5xl font-semibold tabular-nums text-burgundy">{completed}/{total}</p>
+          <p className="mt-3 font-mono text-5xl font-semibold tabular-nums text-primary">{completed}/{total}</p>
           <p className="mt-2 text-sm text-muted-foreground">{hasOpenTasks ? `${openTasks.length} rămase` : "Complet"}</p>
           <p className="mt-7 border-t border-border pt-5 text-sm leading-6 text-muted-foreground">Răspunsurile individuale nu sunt afișate participanților.</p>
         </aside>
