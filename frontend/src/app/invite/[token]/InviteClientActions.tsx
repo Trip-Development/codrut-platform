@@ -386,7 +386,7 @@ function InviteFrame({
 
 function InvitePanel({ children }: { children: ReactNode }) {
   return (
-    <section className="rounded-lg border bg-surface p-6 shadow-sm md:p-8">
+    <section className="rounded-lg border bg-surface p-6 md:p-8">
       {children}
     </section>
   );

@@ -42,8 +42,8 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/invite/[token]` | Invitation lookup and registration or secure-link entry | Valid, invalid, expired, consent, exchange-failure, permanent-account, and secure-link paths | Hierarchy, copy, state presentation, accessible controls | `app/invite/[token]/page.test.tsx`; auth contracts; seeded invite journey | unmigrated |
-| `/invite/[token]/tasks/[taskId]` | Secure invitation-task compatibility entry | Token/task resolution, stale-link recovery, and safe destination | Shell and state presentation | dedicated page test; questionnaire runner tests; seeded secure task | unmigrated |
+| `/invite/[token]` | Invitation lookup and registration or secure-link entry | Valid, invalid, expired, consent, exchange-failure, permanent-account, and secure-link paths | Hierarchy, copy, state presentation, accessible controls | `app/invite/[token]/page.test.tsx`; auth contracts; seeded invite journey | preserved |
+| `/invite/[token]/tasks/[taskId]` | Secure invitation-task compatibility entry | Token/task resolution, stale-link recovery, and safe destination | Shell and state presentation | dedicated page test; questionnaire runner tests; seeded secure task | preserved |
 
 ## Participant
 
@@ -56,8 +56,8 @@ proof of data, security, delivery, persistence, or calculation parity.
 | `/participant/tasks/[taskId]` | Task compatibility entry | Existing task resolution and old links | Compatibility/loading presentation only | task-display and route/API contract checks | preserved |
 | `/participant/results` | Policy-controlled participant results | Calculations, publication/privacy threshold, no raw answers/formula, comparison and recovery | Protected report shell/tokens/accessibility only | participant results test; report/score tests; seeded expected values | preserved |
 | `/participant/account` | Account and program settings | Account mutations, password validation, program data, error recovery | Settings archetype, form hierarchy and feedback | account page/workspace and account-settings tests | preserved |
-| `/participant/consent` | Persisted legal consent | Required version, acceptance persistence, protected-route gating | Guided layout, copy, states | `ConsentForm.test.tsx`; auth contract; seeded consent journey | unmigrated |
-| `/participant/onboarding` | Participant onboarding compatibility entry | Existing destination and session boundary | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
+| `/participant/consent` | Persisted legal consent | Required version, acceptance persistence, protected-route gating | Guided layout, copy, states | `ConsentForm.test.tsx`; auth contract; seeded consent journey | preserved |
+| `/participant/onboarding` | Participant onboarding compatibility entry | Existing destination and session boundary | Compatibility/loading presentation only | route inspection plus authenticated smoke | preserved |
 | `/participant/final-evaluation` | Final evaluation workflow | Existing evaluation assignment, answers, submit and recovery | Guided flow presentation only | route/API inspection; questionnaire runner/contracts; seeded journey | preserved |
 | `/participant/chat` | Existing placeholder/bounded surface | Do not imply or add AI coaching/roleplay capability | Harmonize shell and honest empty/placeholder state only | route inspection; navigation and copy review | preserved |
 
@@ -426,3 +426,14 @@ risk. Do not rerun broad checks merely to fill a gate document.
   passed 34/34. Seeded list, a real assigned distress-driver runner, and results
   were checked at 390x844; all matched document width to viewport width and
   retained their task/result headings.
+
+### Sequence 03 packet 3 — invitation, consent, and session entry
+
+- Anonymous invite, secure task compatibility, consent, and participant
+  onboarding keep their existing token resolution, invalid/expired recovery,
+  secure-link/permanent-account boundary, required legal version, persistence,
+  and session redirect behavior. Presentation changes are limited to flat
+  bordered surfaces and semantic primary aliases.
+- Proof: invite state matrix, secure-task compatibility, and consent suites
+  passed 20/20. No invite exchange, auth/session, persistence, or protected
+  redirect handler changed; onboarding remains the same compatibility route.
