@@ -465,3 +465,39 @@ risk. Do not rerun broad checks merely to fill a gate document.
 - Proof: landing and privacy suites passed 2/2; terms/cookies and the shared
   legal component have no product-content diff in this packet. Both retained
   image assets remain tracked and referenced by the landing route.
+
+### Sequence 03 packet 6 — completion and final proof
+
+- Static route audit found all 44 `page.tsx` routes and no remaining
+  `unmigrated` ledger disposition. Repository scope review found no backend,
+  API/schema, migration, package, lockfile, generated contract, scoring, or
+  privacy implementation change in CF0002.
+- Targeted Sequence 03 suites passed 128/128. Final configured checks:
+  `just frontend-lint` passed, `just frontend-typecheck` passed,
+  `just frontend-build` passed, and `just frontend-test` completed 684/685.
+  The sole failure remains the pre-existing
+  `runtime-pcm-contracts.test.ts` explicit fallback-disablement assertion first
+  recorded before CF0002; all other 82 files and 684 tests passed.
+- Production build shared First Load JS remains 103 kB;
+  `/trainer/companies` remains 167 kB and `/participant` remains 174 kB, exactly
+  matching the Sequence 01 baseline. Landing is 115 kB, auth routes 133-138 kB,
+  invitations 117-140 kB, trainer communication/questionnaires 167 kB, and
+  reports 146-151 kB. No changed route exceeded the 10% unexplained threshold.
+- Final real-browser matrix covered public, legal, password recovery, invalid
+  invitation recovery, participant home, a real assigned questionnaire runner,
+  participant results, trainer projects, trainer questionnaire editor, and
+  trainer reports in light/dark at 390x844, 768x1024, 1440x900, and 1728x1117.
+  All 80 combinations matched document width to viewport width, applied the
+  requested theme, retained an accessible heading, and recorded no console
+  error. The single participant-results heading sampled before load at ultrawide
+  dark passed its one correction-scoped 1000ms recheck.
+- Exact cleanup: removed the final Fraunces runtime consumer and mock after all
+  28 auth tests passed and the production build proved the replacement. The
+  inspected ignored `frontend/.next-build` cache (440 MB) was removed after
+  bundle evidence was captured; it was generated and is reproducible, not
+  source. Archived prior overhaul evidence and the historical route matrix
+  remain present. No protected test or runtime route was deleted.
+- Sequence 03 authored product diff before this final evidence is +43/-54; tests
+  add no churn and the ledger records each packet separately. Campaign-state
+  validation reports one valid active Festival. The branch is ready for the
+  requested combined owner review, but remains unpushed and has no PR.
