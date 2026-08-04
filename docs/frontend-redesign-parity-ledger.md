@@ -28,11 +28,11 @@ proof of data, security, delivery, persistence, or calculation parity.
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
 | `/` | Public product page and role entry | Trainer and participant access paths remain reachable | Composition, copy, tokens, local photography, responsive hierarchy | `app/page.test.tsx`; live links/themes/viewports | unmigrated |
-| `/login` | Participant authentication | Session restoration, errors, return path, and role boundary | Shared auth shell, copy, fields, states | `app/login/page.test.tsx`; auth contracts; live failure/success | unmigrated |
-| `/trainer/login` | Trainer authentication | Trainer entry and session/role isolation | Shared auth shell, copy, fields, states | `app/trainer/login/page.test.tsx`; auth contracts; live failure/success | unmigrated |
-| `/register` | Invite-aware registration | Invite context, password policy, field recovery, account outcome | Auth shell, hierarchy, feedback | `app/register/page.test.tsx`; password/auth contracts; invite journey | unmigrated |
-| `/reset-password` | Password reset request | Request semantics and explicit pending/failure/success recovery | Auth shell, copy, form states | `app/reset-password/page.test.tsx`; password contracts | unmigrated |
-| `/update-password` | Token-based password update | Token validation, password policy, error and success recovery | Auth shell, copy, form states | `app/update-password/page.test.tsx`; password contracts | unmigrated |
+| `/login` | Participant authentication | Session restoration, errors, return path, and role boundary | Shared auth shell, copy, fields, states | `app/login/page.test.tsx`; auth contracts; live failure/success | preserved |
+| `/trainer/login` | Trainer authentication | Trainer entry and session/role isolation | Shared auth shell, copy, fields, states | `app/trainer/login/page.test.tsx`; auth contracts; live failure/success | preserved |
+| `/register` | Invite-aware registration | Invite context, password policy, field recovery, account outcome | Auth shell, hierarchy, feedback | `app/register/page.test.tsx`; password/auth contracts; invite journey | preserved |
+| `/reset-password` | Password reset request | Request semantics and explicit pending/failure/success recovery | Auth shell, copy, form states | `app/reset-password/page.test.tsx`; password contracts | preserved |
+| `/update-password` | Token-based password update | Token validation, password policy, error and success recovery | Auth shell, copy, form states | `app/update-password/page.test.tsx`; password contracts | preserved |
 | `/onboarding` | Authentication-aware compatibility/redirect entry | Existing redirect destination and old-link behavior | Loading/redirect presentation only | route inspection and authenticated/anonymous smoke | unmigrated |
 | `/confidentialitate` | Romanian privacy policy | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | `app/confidentialitate/page.test.tsx`; content diff; live read | unmigrated |
 | `/termeni` | Romanian terms | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | content diff and route smoke | unmigrated |
@@ -130,7 +130,7 @@ coverage in the named migration slice.
 | `docs/product-overhaul-checklist.md` | Tracked prior visual approval artifact | Archive in Sequence 01 to `docs/archive/product-overhaul-2026-07/` without rewriting history | Links/consumers updated; Git move visible |
 | `docs/product-overhaul-review-packet.md` | Tracked prior visual approval artifact | Archive in Sequence 01 beside the checklist | Links/consumers updated; Git move visible |
 | `docs/product-overhaul-route-matrix.md` | Historical `origin/prod` vs controlled-pilot matrix | Retain as historical evidence; do not use as CF0002 current baseline | New ledger exists and is referenced by guidance |
-| Fraunces import in `frontend/src/components/auth/auth-shell.tsx` | Current remaining split typography consumer; test mock exists in `frontend/src/test/setup.ts` | Remove font import and its test mock after auth shell migrates to Geist | Auth-shell tests and build pass; no Fraunces consumer remains |
+| Fraunces import in `frontend/src/components/auth/auth-shell.tsx` | Former split typography consumer and test mock | Removed in Sequence 03; auth quote panels now inherit the canonical Geist family | Auth-shell/auth route tests pass; `rg` confirms no Fraunces consumer remains; final build pending |
 | `frontend/public/landing/codrut-team-session.png` | Tracked local photography | Retain and prefer for public/auth use | Image dimensions, loading, alt, and responsive proof |
 | `frontend/public/landing/codrut-workshop-table.png` | Tracked local photography | Retain and prefer for public/auth use | Image dimensions, loading, alt, and responsive proof |
 
@@ -437,3 +437,17 @@ risk. Do not rerun broad checks merely to fill a gate document.
 - Proof: invite state matrix, secure-task compatibility, and consent suites
   passed 20/20. No invite exchange, auth/session, persistence, or protected
   redirect handler changed; onboarding remains the same compatibility route.
+
+### Sequence 03 packet 4 — authentication
+
+- Participant/trainer login, invite-aware registration, reset request, password
+  update, remembered-session, autofill/password-manager attributes, role
+  isolation, and pending/failure/success branches retain their existing logic.
+  Auth surfaces now use the single Geist family and flatter recovery/session
+  surfaces while preserving the deep burgundy quote panel and exact primary
+  brand color.
+- Cleanup: the final Fraunces import, CSS variable consumer, and test mock were
+  removed together. Repository search confirms no remaining Fraunces consumer;
+  final production build is the remaining cleanup proof.
+- Proof: participant/trainer login, registration, reset/update password,
+  account-access link, and auth-shell suites passed 28/28.

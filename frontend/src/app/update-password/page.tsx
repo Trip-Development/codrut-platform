@@ -83,7 +83,7 @@ function UpdatePasswordForm() {
   return (
     <PasswordFrame>
       {success ? (
-        <section className="rounded-lg border bg-surface p-6 shadow-sm">
+        <section className="rounded-lg border bg-surface p-6">
           <CheckCircle2Icon className="size-9 text-primary" aria-hidden="true" />
           <h1 className="mt-6 text-3xl font-semibold leading-tight tracking-normal">
             Parola a fost actualizată.

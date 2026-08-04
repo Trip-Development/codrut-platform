@@ -162,7 +162,7 @@ export default function RegisterPage() {
   if (loading) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10 text-foreground">
-        <section className="w-full max-w-md rounded-lg border bg-surface p-8 shadow-sm">
+        <section className="w-full max-w-md rounded-lg border bg-surface p-8">
           <BrandMark size="lg" showText={false} className="mx-auto" />
           <OperationFeedback
             className="mt-8"
