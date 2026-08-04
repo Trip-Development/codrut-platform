@@ -258,7 +258,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
               setSearchQuery(value);
               setParam("q", value || null, "replace");
             }}
-            placeholder="Caută după denumire, cod, status sau etapă"
+            placeholder="Caută companii"
             className="min-w-0 flex-1 lg:col-span-2 xl:col-span-1"
           />
           <Button

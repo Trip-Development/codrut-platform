@@ -61,7 +61,7 @@ function OperationsOverview({ companies }: { companies: TrainerCompanyRow[] }) {
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <section className="overflow-hidden rounded-lg border bg-surface shadow-sm" aria-labelledby="trainer-queue-title">
+      <section className="overflow-hidden rounded-lg border bg-surface" aria-labelledby="trainer-queue-title">
         <div className="flex min-h-14 items-center justify-between gap-4 border-b px-5 py-3">
           <h2 id="trainer-queue-title" className="text-lg font-semibold text-foreground">De rezolvat</h2>
           <span className="text-sm font-semibold tabular-nums text-muted-foreground">{queue.length}</span>
@@ -90,7 +90,7 @@ function OperationsOverview({ companies }: { companies: TrainerCompanyRow[] }) {
         )}
       </section>
 
-      <aside className="overflow-hidden rounded-lg border bg-surface shadow-sm" aria-labelledby="coverage-title">
+      <aside className="overflow-hidden rounded-lg border bg-surface" aria-labelledby="coverage-title">
         <div className="px-5 py-5">
           <h2 id="coverage-title" className="text-lg font-semibold text-foreground">Acoperire</h2>
           <div className="mt-5 flex items-end justify-between gap-4">
@@ -124,9 +124,7 @@ function QueueRow({ company }: { company: TrainerCompanyRow }) {
   return (
     <article className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)_auto] md:items-center">
       <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-warning/15 text-warning-ink">
-          <AlertTriangleIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
-        </span>
+        <AlertTriangleIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-ink" strokeWidth={1.8} />
         <div className="min-w-0">
           <h3 className="truncate font-semibold text-foreground">{company.company}</h3>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{blockers}</p>
@@ -163,7 +161,7 @@ function CoverageRow({
 
 function CompanyOperationsTable({ companies }: { companies: TrainerCompanyRow[] }) {
   return (
-    <section className="overflow-hidden rounded-lg border bg-surface shadow-sm" aria-labelledby="company-operations-title">
+    <section className="overflow-hidden rounded-lg border bg-surface" aria-labelledby="company-operations-title">
       <div className="flex min-h-14 items-center justify-between gap-4 border-b px-5 py-3">
         <h2 id="company-operations-title" className="text-lg font-semibold text-foreground">Companii în lucru</h2>
         <Link href="/trainer/companies" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
@@ -175,9 +173,16 @@ function CompanyOperationsTable({ companies }: { companies: TrainerCompanyRow[] 
       {companies.length === 0 ? (
         <p className="px-5 py-8 text-sm font-semibold text-muted-foreground">Nicio companie activă</p>
       ) : (
-        <div className="overflow-x-auto [scrollbar-width:thin]">
-          <table className="w-full min-w-[68rem] text-left text-sm">
-            <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+        <div className="md:overflow-x-auto md:[scrollbar-width:thin]">
+          <table className="block w-full text-left text-sm md:table md:min-w-[68rem] xl:min-w-0 xl:table-fixed">
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[12%]" />
+              <col className="w-[18%]" />
+              <col className="w-[24%]" />
+              <col className="w-[26%]" />
+            </colgroup>
+            <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
               <tr>
                 <th scope="col" className="px-4 py-3">Companie</th>
                 <th scope="col" className="px-4 py-3">Etapă</th>
@@ -186,7 +191,7 @@ function CompanyOperationsTable({ companies }: { companies: TrainerCompanyRow[] 
                 <th scope="col" className="min-w-64 px-4 py-3">Următorul pas</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="block divide-y divide-border md:table-row-group">
               {companies.map((company) => <CompanyRow key={company.id} company={company} />)}
             </tbody>
           </table>
@@ -200,20 +205,21 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
   const completion = company.total > 0 ? Math.round((company.completed / company.total) * 100) : 0;
 
   return (
-    <tr className="transition-colors hover:bg-muted/35">
-      <td className="px-4 py-4">
+    <tr className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
+      <td className="col-span-2 row-start-1 min-w-0 md:px-4 md:py-4">
         <Link href={company.href} className="font-semibold text-foreground hover:text-primary">{company.company}</Link>
         <span className="mt-1 block text-xs font-medium text-muted-foreground">
           {company.invited} {company.invited === 1 ? "invitație" : "invitații"}
         </span>
       </td>
-      <td className="px-4 py-4">
+      <td className="col-start-1 row-start-2 md:px-4 md:py-4">
         <span className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground">
           <span className={cn("size-1.5 rounded-full", stageDotClass(company.stage))} aria-hidden="true" />
           {companyStageLabel(company.stage)}
         </span>
       </td>
-      <td className="px-4 py-4">
+      <td className="col-span-2 row-start-3 md:px-4 md:py-4">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Completare</span>
         <div className="flex items-center justify-between gap-3 text-xs">
           <span className="font-semibold tabular-nums text-foreground">{company.completed}/{company.total}</span>
           <span className="tabular-nums text-muted-foreground">{completion}%</span>
@@ -222,7 +228,8 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
           <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
         </div>
       </td>
-      <td className="px-4 py-4">
+      <td className="col-span-2 row-start-4 md:px-4 md:py-4">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Blocaje</span>
         {company.blockers.length > 0 ? (
           <div className="flex items-start gap-2 text-sm text-foreground">
             <CircleDashedIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-ink" strokeWidth={1.8} />
@@ -235,7 +242,7 @@ function CompanyRow({ company }: { company: TrainerCompanyRow }) {
           </span>
         )}
       </td>
-      <td className="px-4 py-4">
+      <td className="col-span-2 row-start-5 border-t pt-3 md:border-0 md:px-4 md:py-4">
         <Link href={company.href} className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary">
           {company.nextAction}
           <ArrowRightIcon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />

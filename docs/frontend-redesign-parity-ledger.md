@@ -65,7 +65,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | unmigrated |
+| `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | preserved |
 | `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | preserved |
 | `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, compact inline context | company panels/tabs tests; seeded navigation | unmigrated |
 | `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | unmigrated |
@@ -77,7 +77,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/trainer/projects` | Searchable/filterable project list | Project lifecycle, direct navigation, URL state, permissions | List archetype, toolbar, responsive data view | `ProjectsWorkspace.test.tsx`; project controls; seeded list | unmigrated |
+| `/trainer/projects` | Searchable/filterable project list | Project lifecycle, direct navigation, URL state, permissions | List archetype, toolbar, responsive data view | `ProjectsWorkspace.test.tsx`; project controls; seeded list | preserved |
 | `/trainer/projects/[projectId]` | Project summary and active section navigation | Correct project, permissions, section URLs and data | Detail archetype, tabs/compact inline context | `ProjectTabs.test.tsx`; project-data tests; seeded navigation | unmigrated |
 | `/trainer/projects/[projectId]/participants` | Roster import, participant and account access | Import validation/persistence, roster operations, access recovery | Data view, importer composition, responsive controls | participant workspace, roster importer/format tests; seeded import | unmigrated |
 | `/trainer/projects/[projectId]/participants/[participantId]` | Participant and assignment/account-link detail | Correct identity, assignments, account-link repair authorization and recovery | Detail hierarchy and state presentation | profile-data and account-link repair tests; seeded detail | unmigrated |
@@ -261,3 +261,21 @@ risk. Do not rerun broad checks merely to fill a gate document.
   in their place. `/trainer/companies` and `/participant` are now `preserved`.
   Sequence 01 may advance. Push and PR creation remain explicitly deferred to
   the final combined owner review gate.
+
+### Sequence 02 packet 1 — shell, overview, and lists
+
+- `/trainer` and `/trainer/projects` now consume the approved flat surface,
+  status, filter, and responsive data-row language; `/trainer/companies`
+  remains the approved prototype consumer.
+- Project URL-state, searchable filters, archive/restore behavior, direct links,
+  project status/type/date meaning, and error recovery are unchanged. Mobile
+  filters use one Sheet trigger with active-state count; project and trainer
+  operational tables preserve one semantic DOM while presenting prioritized
+  rows below `768px`.
+- Project status color now uses semantic roles: active information, draft
+  warning, completed success, archived muted. Burgundy is no longer a generic
+  project-status color.
+- Proof: `ProjectsWorkspace.test.tsx` and `trainer/layout.test.tsx` passed
+  11/11; targeted ESLint passed. Seeded `/trainer/projects` and `/trainer` at
+  390x844 had `scrollWidth === innerWidth === 390`, retained all actions and
+  accessible row content, and showed no standalone context rail.

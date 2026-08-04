@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { restoreCompanyProject, type CompanyProject } from "@/api/companies";
@@ -93,6 +93,26 @@ describe("ProjectsWorkspace", () => {
     expect(screen.queryByText("Cohortă retail arhivată")).toBeNull();
   });
 
+  it("collapses mobile filters behind one trigger and reports active state", () => {
+    render(
+      <ProjectsWorkspace
+        projects={projects}
+        initialFilters={{}}
+        companies={[["company-1", "Atlas Mobility"]]}
+        projectTypes={["leadership"]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Filtre" }));
+    const dialog = screen.getByRole("dialog", { name: "Filtre" });
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Status" }));
+    fireEvent.click(screen.getByRole("option", { name: "Active" }));
+    fireEvent.click(screen.getByRole("button", { name: "Gata" }));
+
+    expect(screen.getByRole("button", { name: "Filtre, 1 active" })).toBeTruthy();
+    expect(screen.getByText("Leadership operațional Q3")).toBeTruthy();
+  });
+
   it("keeps the operational next step in the project table and searches without diacritics", () => {
     render(
       <ProjectsWorkspace
@@ -109,7 +129,7 @@ describe("ProjectsWorkspace", () => {
     expect(screen.getByRole("columnheader", { name: "Următorul pas" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Urmărește progresul/i })).toBeTruthy();
 
-    fireEvent.change(screen.getByPlaceholderText("Caută proiect sau companie"), {
+    fireEvent.change(screen.getByPlaceholderText("Caută proiecte"), {
       target: { value: "operational" },
     });
 

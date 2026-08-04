@@ -96,7 +96,7 @@ describe("CompaniesWorkspace", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Caută după denumire, cod, status sau etapă"), {
+    fireEvent.change(screen.getByPlaceholderText("Caută companii"), {
       target: { value: "Radacini" },
     });
 
@@ -120,7 +120,7 @@ describe("CompaniesWorkspace", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Caută după denumire, cod, status sau etapă"), {
+    fireEvent.change(screen.getByPlaceholderText("Caută companii"), {
       target: { value: "ID ATLASMO" },
     });
 

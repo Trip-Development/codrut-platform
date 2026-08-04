@@ -18,10 +18,10 @@ export function ProjectStatusBadge({
   className?: string;
 }) {
   const statusClassName = {
-    active: "text-primary",
+    active: "text-info-ink",
     archived: "text-muted-foreground",
-    completed: "text-foreground",
-    draft: "text-foreground/70",
+    completed: "text-success-ink",
+    draft: "text-warning-ink",
   }[status];
 
   return (
