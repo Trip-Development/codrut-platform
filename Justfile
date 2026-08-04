@@ -40,29 +40,29 @@ backend-lint-host:
   cd backend && uv run ruff check src tests migrations
 
 frontend-test:
-  {{compose}} run --rm --user node --workdir {{frontend_workdir}} frontend pnpm test
+  {{compose}} run --rm --no-deps --user node --workdir {{frontend_workdir}} frontend pnpm test
 
 frontend-coverage:
-  {{compose}} run --rm --user node --workdir {{frontend_workdir}} frontend pnpm test:coverage
+  {{compose}} run --rm --no-deps --user node --workdir {{frontend_workdir}} frontend pnpm test:coverage
 
 frontend-test-host:
   cd frontend && pnpm test
 
 frontend-lint:
-  {{compose}} run --rm --user node --workdir {{frontend_workdir}} frontend pnpm lint
+  {{compose}} run --rm --no-deps --user node --workdir {{frontend_workdir}} frontend pnpm lint
 
 frontend-lint-host:
   cd frontend && pnpm lint
 
 frontend-typecheck:
-  {{compose}} run --rm --user node --workdir {{frontend_workdir}} frontend pnpm typecheck
+  {{compose}} run --rm --no-deps --user node --workdir {{frontend_workdir}} frontend pnpm typecheck
 
 frontend-typecheck-host:
   cd frontend && pnpm typecheck
 
 frontend-build:
   mkdir -p frontend/.next-build
-  {{compose}} run --rm --user node --volume ./frontend/.next-build:{{frontend_workdir}}/.next --workdir {{frontend_workdir}} frontend pnpm build
+  {{compose}} run --rm --no-deps --user node --volume ./frontend/.next-build:{{frontend_workdir}}/.next --workdir {{frontend_workdir}} frontend pnpm build
 
 frontend-build-host:
   cd frontend && pnpm build
