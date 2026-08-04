@@ -1173,7 +1173,7 @@ export function AssessmentCycleToolbar({
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <Select value={selectedCycleId ?? undefined} onValueChange={onSelect} disabled={loading}>
-          <SelectTrigger className="h-9 w-full max-w-72 bg-surface" aria-label="Evaluare">
+          <SelectTrigger className="h-9 w-full max-w-72 bg-control" aria-label="Evaluare">
             <SelectValue placeholder={loading ? "Încărcăm evaluările" : "Alege evaluarea"} />
           </SelectTrigger>
           <SelectContent>

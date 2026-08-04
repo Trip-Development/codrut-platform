@@ -6,7 +6,6 @@ import {
   ChevronDownIcon,
   Loader2Icon,
   PencilIcon,
-  SearchIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react";
@@ -23,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { SelectControl } from "@/components/ui/select-control";
 import { cn } from "@/utils/cn";
@@ -166,8 +165,14 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                   <div className="min-w-0 p-4">
                     <FieldGroup className="grid gap-2 rounded-md bg-surface-muted p-2 lg:grid-cols-[minmax(0,1fr)_11rem_minmax(13rem,0.8fr)]">
                       <Field>
-                        <FieldLabel className="sr-only" htmlFor={`campaign-${campaign.id}-recipient-search`}>Caută destinatari pentru {campaign.name}</FieldLabel>
-                        <div className="relative"><SearchIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.8} /><Input id={`campaign-${campaign.id}-recipient-search`} value={membershipSearch} onChange={(event) => props.setMembershipSearch(campaign.id, event.target.value)} className="h-9 rounded-md bg-background pl-9 pr-3 text-xs" placeholder="Caută în toate contactele" /></div>
+                        <SearchField
+                          id={`campaign-${campaign.id}-recipient-search`}
+                          label={`Caută destinatari pentru ${campaign.name}`}
+                          value={membershipSearch}
+                          onValueChange={(value) => props.setMembershipSearch(campaign.id, value)}
+                          placeholder="Caută în toate contactele"
+                          inputClassName="text-xs"
+                        />
                       </Field>
                       <SearchableCombobox
                         icon={UsersIcon}

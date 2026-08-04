@@ -1,13 +1,14 @@
 "use client";
 
 import type React from "react";
-import { ArrowLeftIcon, EyeIcon, InfoIcon, Loader2Icon, MailIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, EyeIcon, InfoIcon, Loader2Icon, MailIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import type { EmailTemplate } from "@/api/email";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/utils/cn";
@@ -53,10 +54,14 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
     return (
       <div className="flex flex-col gap-6">
         <div className="filter-toolbar">
-          <div className="relative w-full md:flex-1">
-            <SearchIcon aria-hidden="true" className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-foreground/40" strokeWidth={1.8} />
-            <Input type="text" value={props.searchQuery} onChange={(event) => props.onSearchChange(event.target.value)} placeholder="Caută șabloane" className="h-12 pl-12 pr-4" />
-          </div>
+          <SearchField
+            id="email-template-search"
+            label="Caută șabloane"
+            value={props.searchQuery}
+            onValueChange={props.onSearchChange}
+            placeholder="Caută șabloane"
+            className="w-full md:flex-1"
+          />
           <Button type="button" onClick={props.onCreate} disabled={props.isLoading} className="shrink-0">
             {props.operation === "create" ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
             {props.operation === "create" ? "Creăm șablonul" : "Creează șablon"}

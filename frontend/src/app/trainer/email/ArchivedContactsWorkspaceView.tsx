@@ -4,14 +4,13 @@ import {
   ArchiveIcon,
   Loader2Icon,
   RotateCcwIcon,
-  SearchIcon,
   Trash2Icon,
 } from "lucide-react";
 
 import type { CampaignRecipientRow } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { campaignRecipientName, campaignRecipientStatusLabel } from "./campaign-domain";
 
 type ArchiveAction = {
@@ -45,20 +44,13 @@ export function ArchivedContactsWorkspaceView({
       ) : null}
 
       <div className="mb-4 grid gap-3 border-b border-[var(--border)] pb-4 md:grid-cols-[minmax(18rem,32rem)_1fr] md:items-center">
-        <label className="relative">
-          <SearchIcon
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            strokeWidth={1.8}
-          />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Caută în arhivă"
-            className="h-11 rounded-md bg-background pl-9 text-sm"
-            aria-label="Caută contacte arhivate"
-          />
-        </label>
+        <SearchField
+          id="archived-contacts-search"
+          label="Caută contacte arhivate"
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Caută în arhivă"
+        />
         <p className="text-xs leading-5 text-muted-foreground md:text-right">
           Contactele arhivate nu mai pot fi folosite în campanii. Le poți restaura înainte
           de curățarea automată sau le poți șterge definitiv acum. Păstrăm doar protecția

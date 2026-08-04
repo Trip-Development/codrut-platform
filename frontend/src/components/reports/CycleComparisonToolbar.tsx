@@ -121,7 +121,7 @@ function CycleSelect({
     <label className="grid w-full min-w-0 gap-1.5 text-[0.6875rem] font-semibold text-muted-foreground">
       {label}
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className="h-10 w-full bg-surface shadow-none" aria-label={label}>
+        <SelectTrigger className="h-10 w-full bg-control shadow-none" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

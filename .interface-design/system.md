@@ -72,16 +72,16 @@ roles, never route-local palette values.
 
 | Role | Light | Dark | Use |
 |---|---|---|---|
-| canvas | `#F5F5F4` | `#0D0D0E` | App background |
-| surface | `#FFFFFF` | `#171718` | Primary work surface |
-| surface-muted | `#ECECEB` | `#202022` | Secondary grouping |
-| surface-raised | `#FFFFFF` | `#272729` | Menus and floating layers |
-| sidebar | `#F5F5F4` | `#0D0D0E` | Shell navigation; separate with border |
-| foreground | `#1D1D1F` | `#F1F1F2` | Primary text |
-| muted-foreground | `#68686D` | `#A6A6AA` | Supporting text |
-| border | `rgba(29,29,31,.11)` | `rgba(241,241,242,.10)` | Ordinary separation |
-| control | `#EFEFED` | `#111112` | Inset controls |
-| control-border | `rgba(29,29,31,.16)` | `rgba(241,241,242,.16)` | Control edges |
+| canvas | `#F7F7F6` | `#060606` | App background; always the deepest layer |
+| surface | `#FFFFFF` | `#0F0F0E` | Primary work surface |
+| surface-muted | `#EEEEEC` | `#1B1B1A` | Secondary grouping and quiet hover |
+| surface-raised | `#FFFFFF` | `#151414` | Menus and floating layers |
+| sidebar | `#F2F2F0` | `#0F0F0E` | Shell navigation; separate with border |
+| foreground | `#1C1C1B` | `#F1F0EC` | Primary text |
+| muted-foreground | `#6C6C69` | `#A8A6A1` | Supporting text |
+| border | `rgba(28,28,27,.10)` | `rgba(255,255,255,.08)` | Ordinary separation |
+| control | `#F1F1EF` | `#141413` | Inset controls |
+| control-border | `rgba(28,28,27,.14)` | `rgba(255,255,255,.09)` | Control edges |
 | brand-core | `#890505` | `#890505` | Identity and primary fill |
 | brand-text | `#890505` | `#C56A7D` | Inline brand accent |
 | focus-ring | `rgba(137,5,5,.45)` | `rgba(197,106,125,.55)` | Focus indication |
@@ -125,8 +125,8 @@ resilient to short, average, and very long user-generated content.
 - Controls: 36 px on desktop; 44 px on mobile. Mobile text inputs use at least
   16 px text. Borderless icon controls use a 32 px desktop and 44 px mobile hit
   area with a 16-18 px glyph.
-- Radius: 10 px buttons and inset controls, 12 px search/select and active
-  navigation surfaces, 14 px cards and popovers, and 18 px dialogs. Child
+- Radius: 12 px buttons, inset controls, and search; 14 px selects and active
+  navigation surfaces; 16 px cards and popovers; and 20 px dialogs. Child
   radii remain concentric and no larger than parent radii. Pills are reserved
   for genuine compact status, toggles, progress, or segmented selection.
 - Motion: 120-180 ms for feedback. Transition named `opacity` and `transform`
@@ -186,6 +186,11 @@ resilient to short, average, and very long user-generated content.
 - Use one search pattern with a clear label, optional clear icon, predictable
   keyboard behavior, and URL-persisted value where the current route supports
   shareable filtering.
+- The shared search field is 36 px on desktop and 44 px on mobile, with a
+  16 px borderless search glyph, inset control fill, quiet control border, and
+  a borderless clear action only while non-empty. Escape clears a populated
+  standalone field before it affects an enclosing overlay. Combobox search
+  shares the same materials but retains its distinct listbox behavior.
 - Mobile filters open in a labeled sheet and summarize active filters at the
   trigger. Do not scatter route-local filter buttons around the header.
 - Tables remain semantic tables when comparison across columns matters. Below

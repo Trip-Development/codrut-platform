@@ -48,9 +48,27 @@ describe("project workspace controls", () => {
     );
 
     const input = screen.getByLabelText("Caută proiect");
-    expect(input.className).toContain("pl-10");
-    expect(input.parentElement?.querySelector("svg")?.getAttribute("class")).toContain("left-3.5");
+    expect(input.getAttribute("type")).toBe("search");
+    expect(input.className).toContain("pl-9");
+    expect(input.parentElement?.querySelector("svg")?.getAttribute("class")).toContain("left-3");
     fireEvent.click(screen.getByRole("button", { name: "Șterge căutarea" }));
+    expect(onValueChange).toHaveBeenCalledWith("");
+  });
+
+  it("clears a populated standalone search with Escape", () => {
+    const onValueChange = vi.fn();
+    render(
+      <WorkspaceSearchInput
+        id="project-search"
+        label="Caută proiect"
+        placeholder="Caută proiect"
+        value="Atlas"
+        onValueChange={onValueChange}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole("searchbox", { name: "Caută proiect" }), { key: "Escape" });
+
     expect(onValueChange).toHaveBeenCalledWith("");
   });
 });

@@ -404,7 +404,7 @@ export function AppShell({
 
                 <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3 px-3 py-2">
                   <span className="text-xs font-medium text-muted-foreground">Temă</span>
-                  <ThemeSelector className="h-9 w-full min-w-0 bg-background px-3 font-medium" />
+                  <ThemeSelector className="h-9 w-full min-w-0 bg-control px-3 font-medium" />
                 </div>
 
                 <Separator />
@@ -553,7 +553,7 @@ export function AppShell({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-muted-foreground">Temă</span>
-                <ThemeSelector className="h-10 min-w-36 bg-background px-3 font-medium" />
+                <ThemeSelector className="h-10 min-w-36 bg-control px-3 font-medium" />
               </div>
               {alternateWorkspaceHref ? (
                 <Button asChild variant="outline" className="w-full justify-start">

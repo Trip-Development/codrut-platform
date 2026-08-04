@@ -96,21 +96,21 @@
 
 :root {
   color-scheme: light;
-  --background: #F5F5F4;
-  --foreground: #1D1D1F;
+  --background: #F7F7F6;
+  --foreground: #1C1C1B;
   --surface: #FFFFFF;
-  --surface-muted: #ECECEB;
+  --surface-muted: #EEEEEC;
   --surface-raised: #FFFFFF;
   --surface-elevated: var(--surface-raised);
-  --shell-sidebar: #F5F5F4;
-  --border: rgba(29, 29, 31, 0.11);
-  --control: #EFEFED;
-  --control-border: rgba(29, 29, 31, 0.16);
+  --shell-sidebar: #F2F2F0;
+  --border: rgba(28, 28, 27, 0.10);
+  --control: #F1F1EF;
+  --control-border: rgba(28, 28, 27, 0.14);
   --burgundy: #890505;
   --burgundy-dark: #650303;
   --brand-text: #890505;
   --ochre: #8A5714;
-  --brand-gray: #68686D;
+  --brand-gray: #6C6C69;
   --success: #237A4B;
   --success-ink: #237A4B;
   --warning: #8A5714;
@@ -128,7 +128,7 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-muted);
-  --muted-foreground: #68686D;
+  --muted-foreground: #6C6C69;
   --accent: color-mix(in srgb, var(--burgundy) 10%, var(--surface-muted));
   --accent-foreground: var(--brand-text);
   --destructive: var(--danger);
@@ -136,7 +136,7 @@
   --input: var(--control-border);
   --ring: rgba(137, 5, 5, 0.45);
   --focus-ring: rgba(137, 5, 5, 0.45);
-  --radius: 0.875rem;
+  --radius: 1rem;
   --chart-1: var(--burgundy);
   --chart-2: var(--ochre);
   --chart-3: var(--success);
@@ -157,21 +157,21 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #0D0D0E;
-  --foreground: #F1F1F2;
-  --surface: #171718;
-  --surface-muted: #202022;
-  --surface-raised: #272729;
+  --background: #060606;
+  --foreground: #F1F0EC;
+  --surface: #0F0F0E;
+  --surface-muted: #1B1B1A;
+  --surface-raised: #151414;
   --surface-elevated: var(--surface-raised);
-  --shell-sidebar: #0D0D0E;
-  --border: rgba(241, 241, 242, 0.10);
-  --control: #111112;
-  --control-border: rgba(241, 241, 242, 0.16);
+  --shell-sidebar: #0F0F0E;
+  --border: rgba(255, 255, 255, 0.08);
+  --control: #141413;
+  --control-border: rgba(255, 255, 255, 0.09);
   --burgundy: #890505;
   --burgundy-dark: #C56A7D;
   --brand-text: #C56A7D;
   --ochre: #E2A54E;
-  --brand-gray: #A6A6AA;
+  --brand-gray: #A8A6A1;
   --success: #58C98A;
   --success-ink: #58C98A;
   --warning: #E2A54E;
@@ -189,11 +189,11 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-muted);
-  --muted-foreground: #A6A6AA;
+  --muted-foreground: #A8A6A1;
   --accent: color-mix(in srgb, var(--brand-text) 18%, var(--surface-muted));
   --accent-foreground: var(--brand-text);
   --destructive: var(--danger);
-  --destructive-foreground: #0D0D0E;
+  --destructive-foreground: #060606;
   --input: var(--control-border);
   --ring: rgba(197, 106, 125, 0.55);
   --focus-ring: rgba(197, 106, 125, 0.55);
@@ -563,7 +563,7 @@ html {
   }
 
   .modal-panel {
-    @apply w-full max-w-xl rounded-xl border bg-surface p-6 text-foreground shadow-xl;
+    @apply w-full max-w-xl rounded-xl border bg-surface-raised p-6 text-foreground shadow-xl;
     max-height: calc(100dvh - 3rem);
     overflow-y: auto;
     box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.35);
@@ -624,7 +624,7 @@ html {
     border-collapse: separate;
     border-spacing: 0;
     overflow: hidden;
-    border-radius: 0.75rem;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border);
     background: var(--surface);
     text-align: left;

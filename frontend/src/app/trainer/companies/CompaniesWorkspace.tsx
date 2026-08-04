@@ -487,7 +487,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
                 value={pageSize}
                 onChange={(event) => setPageSize(Number(event.target.value))}
                 wrapperClassName="w-auto"
-                className="h-9 bg-background py-1.5 text-sm"
+                className="h-9 bg-control py-1.5 text-sm"
               >
                 <option value={10}>10 / pagină</option>
                 <option value={25}>25 / pagină</option>

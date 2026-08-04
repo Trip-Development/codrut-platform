@@ -1,12 +1,13 @@
 "use client";
 
-import { ArchiveIcon, Building2Icon, CheckIcon, CircleDashedIcon, Loader2Icon, PencilIcon, SearchIcon, XIcon } from "lucide-react";
+import { ArchiveIcon, Building2Icon, CheckIcon, CircleDashedIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
 
 import type { CampaignRecipientRow } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { SelectControl } from "@/components/ui/select-control";
 import { cn } from "@/utils/cn";
 import {
@@ -60,10 +61,14 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
       {props.message ? <InlineFeedback className="mb-4" descriptionClassName="text-xs leading-5">{props.message}</InlineFeedback> : null}
       <div className="mb-4 grid gap-3 border-b border-[var(--border)] pb-4 xl:grid-cols-[minmax(24rem,1fr)_auto] xl:items-center">
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center">
-          <label className="relative min-w-0 flex-1">
-            <SearchIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.8} />
-            <Input value={props.search} onChange={(event) => props.setSearch(event.target.value)} placeholder="Caută nume, email sau companie" className="h-11 min-w-0 rounded-md bg-background pl-9 text-sm" aria-label="Caută contacte campanie" />
-          </label>
+          <SearchField
+            id="campaign-contacts-search"
+            label="Caută contacte campanie"
+            value={props.search}
+            onValueChange={props.setSearch}
+            placeholder="Caută nume, email sau companie"
+            className="min-w-0 flex-1"
+          />
           <SelectControl
             label="Tip contact"
             wrapperClassName="w-full lg:hidden"

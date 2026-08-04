@@ -1222,7 +1222,7 @@ function InvitationCycleToolbar({
     <section className="flex items-center gap-3 border-b border-border pb-4" aria-label="Evaluare selectată">
       <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <Select value={selectedCycleId ?? undefined} onValueChange={onSelect} disabled={loading}>
-        <SelectTrigger className="h-9 w-full max-w-72 bg-surface" aria-label="Evaluare">
+        <SelectTrigger className="h-9 w-full max-w-72 bg-control" aria-label="Evaluare">
           <SelectValue placeholder={loading ? "Încărcăm evaluările" : "Alege evaluarea"} />
         </SelectTrigger>
         <SelectContent>

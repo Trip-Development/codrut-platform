@@ -33,7 +33,7 @@ describe("ArchivedContactsWorkspaceView", () => {
     );
 
     expect(screen.getByText("Arhiva este goală.")).toBeTruthy();
-    fireEvent.change(screen.getByRole("textbox", { name: "Caută contacte arhivate" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Caută contacte arhivate" }), {
       target: { value: "Ioana" },
     });
     expect(setSearch).toHaveBeenCalledWith("Ioana");

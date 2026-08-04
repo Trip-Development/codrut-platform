@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2Icon, PlusIcon, SearchIcon } from "lucide-react";
+import { Loader2Icon, PlusIcon } from "lucide-react";
 import {
   listQuestionnaireDefinitionStubs,
   latestDefinitionStubs,
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ModalLayer } from "@/components/ui/modal-layer";
+import { SearchField } from "@/components/ui/search-field";
 import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
 import { useUrlState } from "@/hooks/use-url-state";
@@ -994,21 +995,17 @@ export function QuestionnairesWorkspace() {
         // GALLERY MODE
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 md:flex-row md:items-center">
-            <div className="relative w-full md:flex-1">
-              <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-11 items-center justify-center text-muted-foreground">
-                <SearchIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
-              </span>
-              <Input
-                type="text"
-                placeholder="Caută chestionar"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setParam("q", e.target.value, "replace");
-                }}
-                className="!pl-11"
-              />
-            </div>
+            <SearchField
+              id="questionnaire-search"
+              label="Caută chestionar"
+              placeholder="Caută chestionar"
+              value={searchQuery}
+              onValueChange={(value) => {
+                setSearchQuery(value);
+                setParam("q", value, "replace");
+              }}
+              className="w-full md:flex-1"
+            />
             <Button
               type="button"
               onClick={() => {
