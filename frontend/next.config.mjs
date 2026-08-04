@@ -2,7 +2,6 @@
 const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  devIndicators: false,
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },

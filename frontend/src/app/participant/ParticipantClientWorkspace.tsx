@@ -158,8 +158,8 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
                     {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
                   </p>
                   {pendingTaskGroups.length > 0 ? (
-                    <p className="mt-2 text-xs font-semibold text-brand-text">
-                      Următorul pas: Completează următorul chestionar
+                    <p className="mt-2 text-xs font-medium text-muted-foreground">
+                      Recomandare: continuă cu primul chestionar disponibil.
                     </p>
                   ) : null}
                 </div>

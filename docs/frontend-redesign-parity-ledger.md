@@ -49,7 +49,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, compact inline contextual cue | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | owner-gate |
+| `/participant` | Participant project/task home | Assignment visibility, progress, navigation, permissions, and recovery | Sequence 01 prototype; shell, hierarchy, compact inline contextual cue | `ParticipantClientWorkspace.test.tsx`; context/task tests; seeded live prototype | preserved |
 | `/participant/dashboard` | Participant dashboard compatibility entry | Existing destination and Back/refresh behavior | Compatibility/loading presentation only | route inspection plus authenticated smoke | unmigrated |
 | `/participant/questionnaires` | Assigned questionnaire list | Persisted assignments, targets, drafts, completion/result states | List archetype, state presentation, copy | participant context and questionnaire contract tests; seeded list | unmigrated |
 | `/participant/questionnaires/[key]` | Questionnaire completion | Pinned definition, answers, autosave/draft, Back recovery, validation, submission | Runner composition, progress/save context, controls, states | page, return-href, runner, and questionnaire contract tests; live draft/submit | unmigrated |
@@ -66,7 +66,7 @@ proof of data, security, delivery, persistence, or calculation parity.
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
 | `/trainer` | Trainer overview and work entry | Access to current trainer work and permissions | Overview archetype, operational hierarchy, states | trainer layout test; authenticated seeded smoke | unmigrated |
-| `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | owner-gate |
+| `/trainer/companies` | Company list, search/filter, creation and direct actions | Persisted mutations, URL/filter state, permissions and errors | Sequence 01 prototype; list archetype and controls | `CompaniesWorkspace.test.tsx`; trainer-company contracts; seeded mutations | preserved |
 | `/trainer/companies/[companyId]` | Company workspace and project/participant access | Correct company identity, navigation, data and permissions | Detail archetype, section navigation, compact inline context | company panels/tabs tests; seeded navigation | unmigrated |
 | `/trainer/companies/[companyId]/participants` | Company-wide participant roster | Roster data, search, project relation, access and errors | Data view and responsive substitution | participant table/contracts; seeded roster comparison | unmigrated |
 | `/trainer/companies/[companyId]/settings` | Company settings | Existing backend mutation, validation, permissions and recovery | Settings/form archetype | `CompanySettingsWorkspace.test.tsx`; trainer-company contracts | unmigrated |
@@ -236,21 +236,28 @@ risk. Do not rerun broad checks merely to fill a gate document.
   an existing header or actionable section.
 - Trainer correction: kept a single header-level `Companie nouă` action on
   mobile; replaced stacked mobile filters with search plus one `Filtre` Sheet
-  trigger; made the mobile hamburger borderless; disabled the Next.js
-  development badge that was covering the lower-left mobile content; and made
-  the 1440px table fit without horizontal overflow while retaining local
-  mobile table scrolling.
-- Participant correction: integrated only `Următorul pas: Completează următorul
-  chestionar` into the existing task header; no standalone orientation panel
-  remains.
+  trigger that exposes active-filter count; made the mobile hamburger
+  borderless; replaced horizontal mobile table hunting with prioritized,
+  identity-first rows using the same semantic table DOM; and assigned deliberate
+  desktop column widths so company names and statuses remain readable.
+- The temporary `devIndicators: false` workaround was removed from Next config.
+  Framework developer chrome is not treated as product UI and production-like
+  captures remain the appropriate clean evidence surface.
+- Participant correction: replaced the action-like burgundy cue with neutral
+  supporting guidance inside the existing task header. No standalone
+  orientation panel or duplicate action surface remains.
 - Correction proof: focused trainer/participant tests passed 35/35; affected
-  frontend lint passed; Compose typecheck passed; Compose production build
-  passed with shared First Load JS 103 kB, `/trainer/companies` 167 kB, and
-  `/participant` 174 kB. The full suite was not rerun for this correction.
-- Visual evidence: updated light/dark desktop/mobile screenshots are retained
-  under `output/playwright/cf0002-correction-*`; trainer mobile scrolled-data
-  captures show the horizontally scrolled table view, `tableScrollLeft=828`,
-  and no document overflow. At 1440px the trainer table wrapper measured
-  `scrollWidth=clientWidth=1142` in both themes.
-- Owner gate remains active. No additional route propagation, Festival task
-  completion, PR creation, push, or merge was performed.
+  frontend lint passed; Compose typecheck passed; and an isolated Compose
+  production build passed with shared First Load JS 103 kB,
+  `/trainer/companies` 167 kB, and `/participant` 174 kB. The full suite was not
+  rerun because the shared-foundation gate already ran it and recorded its one
+  unchanged baseline failure.
+- Visual proof: both prototypes were rechecked with seeded data at 390x844 and
+  1440x900 in light and dark themes. Both widths measured document
+  `scrollWidth === innerWidth`; mobile company identity, state, progress, and
+  next action remain together; desktop company links have no internal overflow;
+  and status badges render at one line/24px height.
+- Proxy owner decision: approved on the owner's explicit instruction to proceed
+  in their place. `/trainer/companies` and `/participant` are now `preserved`.
+  Sequence 01 may advance. Push and PR creation remain explicitly deferred to
+  the final combined owner review gate.

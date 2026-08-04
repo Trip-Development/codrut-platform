@@ -101,6 +101,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
     (total, company) => total + Math.max(0, company.assignmentCount - company.completedCount),
     0,
   );
+  const activeFilterCount = [statusFilter, stageFilter, extraFilter].filter(Boolean).length;
   const pageCount = Math.max(1, Math.ceil(filteredCompanies.length / pageSize));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const pageStart = safePageIndex * pageSize;
@@ -265,10 +266,11 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             variant="outline"
             className="lg:hidden"
             aria-haspopup="dialog"
+            aria-label={activeFilterCount > 0 ? `Filtre, ${activeFilterCount} active` : "Filtre"}
             onClick={() => setFiltersOpen(true)}
           >
             <FilterIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
-            Filtre
+            Filtre{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
           </Button>
         </div>
         <div className="hidden lg:contents">{renderFilterControls()}</div>
@@ -385,12 +387,22 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
           </div>
 
           <div
-            className="w-full max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
-            tabIndex={0}
-            aria-label="Tabelul companiilor; derulează lateral pentru coloanele suplimentare"
+            className="w-full max-w-full md:overflow-x-auto md:overscroll-x-contain md:[scrollbar-width:thin]"
+            aria-label="Tabelul companiilor"
           >
-            <table className="w-full min-w-[74rem] border-collapse text-left text-sm xl:min-w-0 xl:table-fixed">
-              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+            <table className="block w-full border-collapse text-left text-sm md:table md:min-w-[74rem] xl:min-w-0 xl:table-fixed">
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[18%]" />
+                <col className="w-[14%]" />
+                <col className="w-[8%]" />
+                <col className="w-[7%]" />
+                <col className="w-[9%]" />
+                <col className="w-[14%]" />
+                <col className="w-[7%]" />
+                <col className="w-[19%]" />
+              </colgroup>
+              <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
                 <tr>
                   <th className="w-12 px-4 py-3">
                     <Checkbox
@@ -409,7 +421,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
                   <th scope="col" className="min-w-52 px-4 py-3 xl:min-w-0">Următorul pas</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="block divide-y divide-border md:table-row-group">
                 {pagedCompanies.map((company) => (
                   <CompanyTableRow
                     key={company.id}
@@ -531,35 +543,48 @@ function CompanyTableRow({
     : 0;
 
   return (
-    <tr className={cn("transition-colors hover:bg-muted/35", selected && "bg-primary/5")} aria-selected={selected}>
-      <td className="px-4 py-3 align-middle">
+    <tr
+      className={cn(
+        "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0",
+        selected && "bg-primary/5",
+      )}
+      aria-selected={selected}
+    >
+      <td className="col-start-1 row-start-1 py-1 align-middle md:px-4 md:py-3">
         <Checkbox
           aria-label={`Selectează ${company.name}`}
           checked={selected}
           onCheckedChange={onToggleSelected}
         />
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-1 min-w-0 align-middle md:px-4 md:py-3">
         <Link
           href={`/trainer/companies/${company.id}`}
           className="group inline-flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
         >
           <EntityMark name={company.name} />
           <span className="min-w-0">
-            <span className="block truncate font-semibold text-foreground group-hover:text-brand-text">{company.name}</span>
+            <span className="block break-words font-semibold text-foreground group-hover:text-brand-text md:truncate">{company.name}</span>
             <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{formatCompanyCode(company)}</span>
           </span>
         </Link>
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-2 align-middle md:px-4 md:py-3">
         <CompanyStatusBadge company={company} />
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-3 align-middle md:px-4 md:py-3">
         <CompanyStageInline stage={company.stage} unavailable={company.dataUnavailable} />
       </td>
-      <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-foreground">{company.projectCount}</td>
-      <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-foreground">{company.participantCount}</td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 row-start-4 flex items-baseline gap-2 align-middle font-semibold tabular-nums text-foreground md:table-cell md:px-4 md:py-3 md:text-right">
+        <span className="text-xs font-medium text-muted-foreground md:hidden">Proiecte</span>
+        {company.projectCount}
+      </td>
+      <td className="col-start-3 row-start-4 flex items-baseline justify-self-end gap-2 align-middle font-semibold tabular-nums text-foreground md:table-cell md:px-4 md:py-3 md:text-right">
+        <span className="text-xs font-medium text-muted-foreground md:hidden">Participanți</span>
+        {company.participantCount}
+      </td>
+      <td className="col-start-2 col-end-4 row-start-5 align-middle md:px-4 md:py-3">
+        <span className="mb-2 block text-xs font-medium text-muted-foreground md:hidden">Completare</span>
         {company.assignmentCount > 0 ? (
           <div className="min-w-28">
             <div className="flex items-center justify-between gap-3 text-xs">
@@ -574,10 +599,11 @@ function CompanyTableRow({
           <span className="text-xs font-medium text-muted-foreground">Nicio asignare</span>
         )}
       </td>
-      <td className={cn("px-4 py-3 text-right align-middle font-semibold tabular-nums", pending > 0 ? "text-brand-text" : "text-muted-foreground")}>
-        {pending}
+      <td className={cn("col-start-2 col-end-4 row-start-6 flex items-baseline justify-between gap-3 align-middle font-semibold tabular-nums md:table-cell md:px-4 md:py-3 md:text-right", pending > 0 ? "text-brand-text" : "text-muted-foreground")}>
+        <span className="text-xs font-medium text-muted-foreground md:hidden">De urmărit</span>
+        <span>{pending}</span>
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-7 border-t border-border pt-3 align-middle md:border-0 md:px-4 md:py-3">
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             href={`/trainer/companies/${company.id}`}
@@ -635,7 +661,7 @@ function CompanyStatusBadge({ company }: { company: CompanyListItem }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold",
         status === "inactive" && "bg-muted text-muted-foreground",
         status === "attention" && "status-warning-soft",
         status === "active" && "status-success-soft",

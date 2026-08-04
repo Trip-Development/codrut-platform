@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -183,10 +183,14 @@ describe("CompaniesWorkspace", () => {
 
     expect(screen.getByRole("button", { name: "Filtre" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Filtre" }));
-    expect(screen.getByRole("dialog", { name: "Filtre" })).toBeTruthy();
+    const filterDialog = screen.getByRole("dialog", { name: "Filtre" });
+    expect(filterDialog).toBeTruthy();
     expect(screen.getByRole("button", { name: "Închide filtrele" })).toBeTruthy();
+    fireEvent.click(within(filterDialog).getByRole("combobox", { name: "Status" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Necesită acțiune" }));
     fireEvent.click(screen.getByRole("button", { name: "Gata" }));
     expect(screen.queryByRole("dialog", { name: "Filtre" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Filtre, 1 active" })).toBeTruthy();
   });
 
   it("shows a full pending surface while creating the first company", async () => {
