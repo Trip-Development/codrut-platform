@@ -101,7 +101,7 @@ export default async function ParticipantResultsPage({
       ) : null}
 
       <header className="mb-10 border-b border-border pb-6">
-        <p className="text-sm font-semibold text-burgundy">{selectedSummary.projectName}</p>
+        <p className="text-sm font-semibold text-primary">{selectedSummary.projectName}</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
           {selectedCycle ? selectedCycle.name : "Evoluția rezultatelor"}
         </h1>

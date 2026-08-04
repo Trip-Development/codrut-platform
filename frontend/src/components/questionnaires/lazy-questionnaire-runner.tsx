@@ -25,7 +25,7 @@ function QuestionnaireRunnerSkeleton() {
       aria-label="Pregătim chestionarul"
       className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start"
     >
-      <div className="overflow-hidden rounded-lg bg-surface shadow-sm ring-1 ring-border">
+      <div className="overflow-hidden rounded-lg bg-surface ring-1 ring-border">
         <div className="px-5 py-5 md:px-6">
           <div className="flex items-center justify-between gap-4">
             <Skeleton className="h-9 w-24" />
@@ -57,7 +57,7 @@ function QuestionnaireRunnerSkeleton() {
           ))}
         </div>
       </div>
-      <aside className="rounded-lg bg-surface p-4 shadow-sm ring-1 ring-border">
+      <aside className="rounded-lg bg-surface p-4 ring-1 ring-border">
         <div className="flex items-center justify-between gap-3">
           <Skeleton className="h-5 w-20" />
           <Skeleton className="h-5 w-12" />
