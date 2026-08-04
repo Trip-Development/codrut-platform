@@ -27,16 +27,16 @@ proof of data, security, delivery, persistence, or calculation parity.
 
 | Route | Current `dev` capability | Protected outcome and recovery | Allowed CF0002 change | Required proof | Disposition |
 |---|---|---|---|---|---|
-| `/` | Public product page and role entry | Trainer and participant access paths remain reachable | Composition, copy, tokens, local photography, responsive hierarchy | `app/page.test.tsx`; live links/themes/viewports | unmigrated |
+| `/` | Public product page and role entry | Trainer and participant access paths remain reachable | Composition, copy, tokens, local photography, responsive hierarchy | `app/page.test.tsx`; live links/themes/viewports | preserved |
 | `/login` | Participant authentication | Session restoration, errors, return path, and role boundary | Shared auth shell, copy, fields, states | `app/login/page.test.tsx`; auth contracts; live failure/success | preserved |
 | `/trainer/login` | Trainer authentication | Trainer entry and session/role isolation | Shared auth shell, copy, fields, states | `app/trainer/login/page.test.tsx`; auth contracts; live failure/success | preserved |
 | `/register` | Invite-aware registration | Invite context, password policy, field recovery, account outcome | Auth shell, hierarchy, feedback | `app/register/page.test.tsx`; password/auth contracts; invite journey | preserved |
 | `/reset-password` | Password reset request | Request semantics and explicit pending/failure/success recovery | Auth shell, copy, form states | `app/reset-password/page.test.tsx`; password contracts | preserved |
 | `/update-password` | Token-based password update | Token validation, password policy, error and success recovery | Auth shell, copy, form states | `app/update-password/page.test.tsx`; password contracts | preserved |
-| `/onboarding` | Authentication-aware compatibility/redirect entry | Existing redirect destination and old-link behavior | Loading/redirect presentation only | route inspection and authenticated/anonymous smoke | unmigrated |
-| `/confidentialitate` | Romanian privacy policy | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | `app/confidentialitate/page.test.tsx`; content diff; live read | unmigrated |
-| `/termeni` | Romanian terms | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | content diff and route smoke | unmigrated |
-| `/cookies` | Necessary-cookie disclosure | Current disclosure and access remain; no invented consent behavior | Reading layout, typography, responsive spacing | content diff and runtime cookie assumption check | unmigrated |
+| `/onboarding` | Authentication-aware compatibility/redirect entry | Existing redirect destination and old-link behavior | Loading/redirect presentation only | route inspection and authenticated/anonymous smoke | preserved |
+| `/confidentialitate` | Romanian privacy policy | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | `app/confidentialitate/page.test.tsx`; content diff; live read | preserved |
+| `/termeni` | Romanian terms | Legal content, navigation, and readable access remain | Reading layout, typography, responsive spacing | content diff and route smoke | preserved |
+| `/cookies` | Necessary-cookie disclosure | Current disclosure and access remain; no invented consent behavior | Reading layout, typography, responsive spacing | content diff and runtime cookie assumption check | preserved |
 
 ## Anonymous invitations
 
@@ -451,3 +451,17 @@ risk. Do not rerun broad checks merely to fill a gate document.
   final production build is the remaining cleanup proof.
 - Proof: participant/trainer login, registration, reset/update password,
   account-access link, and auth-shell suites passed 28/28.
+
+### Sequence 03 packet 5 — public and legal
+
+- The existing public composition already used both approved local photographs,
+  the canonical responsive hierarchy, clear trainer/participant access paths,
+  and flat semantic sections. This packet removed the remaining ordinary card
+  shadows and decorative privacy icon container; no new or generated media was
+  introduced.
+- Privacy, terms, and cookie documents retain their exact content, dates,
+  contact/access paths, and necessary-cookie-only disclosure. The root onboarding
+  route remains the same authentication-aware compatibility entry.
+- Proof: landing and privacy suites passed 2/2; terms/cookies and the shared
+  legal component have no product-content diff in this packet. Both retained
+  image assets remain tracked and referenced by the landing route.

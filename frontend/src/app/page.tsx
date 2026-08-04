@@ -99,7 +99,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-surface p-3 shadow-sm">
+        <div className="rounded-lg border bg-surface p-3">
           <Image
             src="/landing/codrut-workshop-table.png"
             alt="Masă de workshop cu materiale de leadership și instrumente de lucru"
@@ -143,8 +143,8 @@ export default function HomePage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {processRows.map((row, index) => (
-                <article key={row.title} className="flex min-h-38 flex-col justify-between rounded-lg border bg-surface p-5 shadow-sm">
-                  <span className="font-mono text-sm font-semibold tabular-nums text-burgundy">{String(index + 1).padStart(2, "0")}</span>
+                <article key={row.title} className="flex min-h-38 flex-col justify-between rounded-lg border bg-surface p-5">
+                  <span className="font-mono text-sm font-semibold tabular-nums text-primary">{String(index + 1).padStart(2, "0")}</span>
                   <div className="mt-8">
                     <h3 className="text-lg font-semibold text-foreground">{row.title}</h3>
                     <p className="mt-3 text-sm leading-6 text-muted-foreground">{row.body}</p>
@@ -211,12 +211,10 @@ export default function HomePage() {
       </section>
 
       <section className="px-4 pb-20 md:px-6">
-        <div className="mx-auto max-w-7xl rounded-lg border bg-surface p-6 shadow-sm md:p-8">
+        <div className="mx-auto max-w-7xl rounded-lg border bg-surface p-6 md:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex max-w-xl gap-4">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-burgundy text-white">
-                <LockKeyholeIcon className="size-5" aria-hidden="true" />
-              </span>
+              <LockKeyholeIcon className="size-6 shrink-0 text-primary" aria-hidden="true" />
               <div>
                 <h2 className="text-2xl font-semibold leading-tight tracking-normal text-foreground">
                   Confidențialitate și acces controlat.
