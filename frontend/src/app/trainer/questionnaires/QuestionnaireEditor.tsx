@@ -318,7 +318,7 @@ export function QuestionnaireEditor({
               disabled={!isDirty || isBusy}
               aria-label="Salvează modificările"
               title="Salvează modificările"
-              className="shrink-0 px-2.5 sm:px-3"
+              className="min-w-10 shrink-0 px-2.5 sm:px-3"
             >
               {saveState === "saving" ? (
                 <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
@@ -376,12 +376,12 @@ export function QuestionnaireEditor({
                     onClick={() => selectSection(section.id)}
                     aria-current={sectionSelected ? "true" : undefined}
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45",
-                      sectionSelected ? "bg-foreground text-background" : "text-foreground hover:bg-muted",
+                      "flex min-h-10 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45 lg:min-h-0",
+                      sectionSelected ? "bg-muted text-foreground" : "text-foreground hover:bg-muted/65",
                     )}
                   >
                     <span className="truncate">{section.title || `Secțiunea ${sectionIndex + 1}`}</span>
-                    <span className={cn("text-[10px]", sectionSelected ? "text-background/70" : "text-muted-foreground")}>
+                    <span className="text-[10px] text-muted-foreground">
                       {section.questions.length}
                     </span>
                   </button>
@@ -399,8 +399,8 @@ export function QuestionnaireEditor({
                             aria-current={questionSelected ? "true" : undefined}
                             aria-label={`Editează ${question.code || `întrebarea ${questionIndex + 1}`} ${question.label}`}
                             className={cn(
-                              "grid w-full grid-cols-[2.25rem_minmax(0,1fr)] gap-1.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45",
-                              questionSelected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                              "grid min-h-10 w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-1.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45 lg:min-h-0",
+                              questionSelected ? "bg-muted text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                             )}
                           >
                             <span className="truncate text-[10px] font-bold uppercase">{question.code || questionIndex + 1}</span>
@@ -412,7 +412,7 @@ export function QuestionnaireEditor({
                         type="button"
                         variant="ghost"
                         size="xs"
-                        className="mt-1 w-full justify-start text-muted-foreground"
+                        className="mt-1 min-h-10 w-full justify-start text-muted-foreground lg:min-h-7"
                         onClick={() => {
                           const questionId = onAddQuestion(sectionIndex);
                           if (questionId) selectQuestion(section.id, questionId);
@@ -627,7 +627,7 @@ export function QuestionnaireEditor({
 
         <aside aria-label="Inspector" className="min-w-0 border-l border-border bg-surface">
           <div className="sticky top-[3.75rem]">
-            <div className="grid grid-cols-3 border-b border-border px-2 pt-2">
+            <div className="grid grid-cols-3 gap-1 border-b border-border p-2">
               <InspectorTab
                 active={inspectorView === "question"}
                 disabled={!selectedQuestion}
@@ -698,8 +698,8 @@ function InspectorTab({
       disabled={disabled}
       aria-pressed={active}
       className={cn(
-        "flex min-w-0 flex-col items-center gap-1 border-b-2 px-1 py-2 text-[10px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45 disabled:opacity-40",
-        active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+        "flex min-w-0 flex-col items-center gap-1 rounded-sm px-1 py-2 text-[10px] font-semibold outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/45 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 motion-reduce:active:transform-none",
+        active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/65 hover:text-foreground",
       )}
     >
       <Icon aria-hidden="true" className="size-3.5" />

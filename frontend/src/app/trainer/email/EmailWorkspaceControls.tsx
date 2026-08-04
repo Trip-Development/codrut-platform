@@ -34,7 +34,7 @@ export function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={cn("rounded-md border-0 shadow-none disabled:opacity-45", toneClass)}
+      className={cn("rounded-sm border-0 shadow-none disabled:opacity-45", toneClass)}
     >
       {children}
     </Button>
@@ -54,7 +54,7 @@ export function SegmentedButton({
       size="sm"
       aria-pressed={active}
       className={cn(
-        "rounded-md border-transparent font-bold shadow-none",
+        "rounded-sm border-transparent font-bold shadow-none",
         active ? "bg-burgundy text-white hover:bg-burgundy hover:text-white" : "text-foreground/62 hover:bg-surface-muted hover:text-burgundy",
         className,
       )}

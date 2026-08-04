@@ -127,7 +127,7 @@ export function SearchableCombobox({
               }
             }}
             className={cn(
-              "flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-control px-3.5 text-sm font-semibold text-foreground outline-none transition-colors hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
+              "flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-control-border bg-control px-3.5 text-sm font-semibold text-foreground outline-none transition-[background-color,border-color,box-shadow] duration-150 hover:bg-muted hover:border-foreground/15 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
               size === "sm" ? "h-9" : "h-11",
             )}
           >

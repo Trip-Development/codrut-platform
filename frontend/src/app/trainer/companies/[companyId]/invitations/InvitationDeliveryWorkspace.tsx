@@ -1079,7 +1079,7 @@ export function InvitationDeliveryWorkspace({
                         aria-controls={`invitation-tasks-${selectedCycleId ?? "legacy"}-${row.participant.id}`}
                         onClick={() => toggleTaskDetails(row.participant.id)}
                         disabled={row.totalTasks === 0}
-                        className="inline-flex items-center gap-2 whitespace-nowrap font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/45 disabled:cursor-default disabled:text-muted-foreground"
+                        className="-mx-2 inline-flex min-h-9 items-center gap-2 whitespace-nowrap rounded-sm px-2 font-semibold text-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-brand-text focus-visible:ring-2 focus-visible:ring-ring/45 active:scale-[0.98] disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-transparent motion-reduce:active:transform-none"
                       >
                         {row.totalTasks > 0 ? `${row.completionLabel} finalizate` : "0 sarcini"}
                         {row.totalTasks > 0 ? (

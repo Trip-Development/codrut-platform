@@ -18,7 +18,7 @@ import {
 } from "@/api/questionnaires";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { ModalCloseButton, ModalLayer } from "@/components/ui/modal-layer";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/utils/cn";
 
@@ -503,15 +503,10 @@ export function QuestionnaireRunner({
                   Detalii chestionar
                 </h3>
               </div>
-              <Button
-                type="button"
+              <ModalCloseButton
                 onClick={() => setDetailsOpen(false)}
-                aria-label="Închide detaliile"
-                variant="outline"
-                size="sm"
-              >
-                Închide
-              </Button>
+                label="Închide detaliile"
+              />
             </div>
             {definition.description ? (
               <p className="mt-4 text-sm leading-6 text-muted-foreground">{definition.description}</p>

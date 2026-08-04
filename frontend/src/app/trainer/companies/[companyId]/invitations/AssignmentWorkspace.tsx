@@ -43,7 +43,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { ModalCloseButton, ModalLayer } from "@/components/ui/modal-layer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SelectControl } from "@/components/ui/select-control";
 import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
@@ -866,15 +866,10 @@ export function AssignmentWorkspace({
             <h2 id="advanced-assignment-title" className="text-xl font-semibold text-foreground">
               Asignare individuală
             </h2>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
+            <ModalCloseButton
               onClick={() => setAdvancedAssignmentModalOpen(false)}
               disabled={urlStatePending}
-            >
-              Închide
-            </Button>
+            />
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">

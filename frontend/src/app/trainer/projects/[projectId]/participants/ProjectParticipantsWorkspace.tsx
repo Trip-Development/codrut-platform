@@ -31,7 +31,7 @@ import { RosterImporter } from "@/components/roster-importer";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { ModalCloseButton, ModalLayer } from "@/components/ui/modal-layer";
 import { SelectControl } from "@/components/ui/select-control";
 import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
@@ -624,15 +624,9 @@ export function ProjectParticipantsWorkspace({
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">{companyName}</p>
               </div>
-              <Button
-                type="button"
+              <ModalCloseButton
                 onClick={() => setImportModalOpen(false)}
-                variant="outline"
-                size="sm"
-                className={secondaryButtonClass}
-              >
-                Închide
-              </Button>
+              />
             </div>
             <div className="mt-5 max-h-[80vh] overflow-y-auto pr-1">
               <RosterImporter

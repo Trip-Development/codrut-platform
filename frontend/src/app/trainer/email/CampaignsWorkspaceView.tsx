@@ -145,7 +145,7 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
 
           return (
             <article key={campaign.id} className={cn("overflow-hidden border-b border-[var(--border)] bg-surface transition-colors last:border-b-0", isOpen && "bg-background")}>
-              <button type="button" aria-expanded={isOpen} onClick={() => props.setOpenCampaignId(isOpen ? null : campaign.id)} className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-surface-muted xl:grid-cols-[minmax(18rem,1.1fr)_minmax(27rem,1.5fr)_auto] xl:items-center">
+              <button type="button" aria-expanded={isOpen} onClick={() => props.setOpenCampaignId(isOpen ? null : campaign.id)} className="grid w-full gap-3 px-4 py-3 text-left outline-none transition-[background-color,transform] duration-150 hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45 active:scale-[0.995] motion-reduce:active:transform-none xl:grid-cols-[minmax(18rem,1.1fr)_minmax(27rem,1.5fr)_auto] xl:items-center">
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2"><CampaignStatusBadge status={campaign.status} /><Badge variant="outline" className="rounded-md text-[10px] uppercase tracking-[0.12em]">{campaignSegmentLabel(campaign.segment)}</Badge></span>
                   <span className="mt-2 block truncate text-sm font-semibold text-foreground">{campaign.name}</span>
