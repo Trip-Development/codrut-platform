@@ -375,3 +375,29 @@ risk. Do not rerun broad checks merely to fill a gate document.
   and iCARE perspective suites passed 25/25; targeted ESLint passed. The seeded
   report overview at 390x844 retained project/cycle context, print action,
   comparison controls, and `scrollWidth === innerWidth`.
+
+### Sequence 02 combined trainer proof
+
+- Combined Compose lint and typecheck passed after all six packets. The shared
+  foundation did not change after Sequence 01, so the full suite and production
+  build were not repeated; Packet 1-6 targeted suites cover 232 passing tests
+  in aggregate, with protected settings/team/detail coverage recorded in the
+  packet notes above.
+- Real seeded browser matrix: list, company detail, questionnaire editor,
+  invitation delivery, communication contacts, and report overview were checked
+  in light and dark themes at 390x844, 1440x900, and 1728x1117. All 36 route,
+  width, and theme combinations matched document width to viewport width and
+  retained their primary heading. Communication views were rechecked with their
+  full data-loading interval at all six width/theme combinations. No browser
+  console error was recorded during the matrix; keyboard movement retained a
+  visible focus ring on the shared shell control.
+- Sequence 02 authored diff from the approved prototype gate: 500 additions and
+  361 deletions in product code, 59 additions and 7 deletions in tests, and 162
+  additions and 22 deletions in the parity ledger. No dependency, API, backend,
+  schema, migration, new workflow, test harness, or protected test deletion was
+  introduced. No cleanup candidate became safe to delete in this sequence.
+- Bundle sizes were not remeasured because the already-built shared foundation
+  and dependency graph did not change; the Sequence 01 build remains the
+  applicable bundle baseline. Remaining `unmigrated` rows are exclusively the
+  participant, identity, public, legal, and compatibility surfaces assigned to
+  Sequence 03.
