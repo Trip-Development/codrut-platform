@@ -1,3 +1,6 @@
+import base64
+import json
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -40,6 +43,26 @@ def test_cors_origins_accept_comma_separated_env_format() -> None:
     settings = Settings(cors_origins="https://codrut.andreivacaru.ro,https://codrut.ro")
 
     assert settings.cors_origins == ["https://codrut.andreivacaru.ro", "https://codrut.ro"]
+
+
+def test_protected_result_guidance_decodes_without_exposing_content_in_source() -> None:
+    payload = {
+        "distress_drivers": {
+            "be_strong": "Pe scurt\nText participant.\n\nPermisiuni utile\nPoți cere ajutor."
+        }
+    }
+    encoded = base64.b64encode(
+        json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
+
+    settings = Settings(_env_file=None, protected_result_guidance_b64=encoded)
+
+    assert settings.protected_result_guidance == payload
+
+
+def test_protected_result_guidance_rejects_invalid_payloads() -> None:
+    with pytest.raises(ValidationError, match="valid base64 JSON"):
+        Settings(_env_file=None, protected_result_guidance_b64="not-base64")
 
 
 def test_rate_limit_trusted_proxies_accept_json_ip_and_cidr_env_list(

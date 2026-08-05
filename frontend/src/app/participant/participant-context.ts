@@ -39,15 +39,27 @@ export function participantScopedHref(pathname: string, params: URLSearchParams)
   return query ? `${pathname}?${query}` : pathname;
 }
 
+export function participantResultsHref(params: URLSearchParams): string {
+  const comparisonParams = new URLSearchParams(params);
+  comparisonParams.delete("cycle");
+  comparisonParams.delete("baseline");
+  comparisonParams.delete("compare");
+  return participantScopedHref("/participant/results", comparisonParams);
+}
+
 export function participantScopedNavItems(params: URLSearchParams): ShellNavItem[] {
   return participantNavItems.map((item) => ({
     ...item,
-    href: participantScopedHref(item.href, params),
+    href: item.href === "/participant/results"
+      ? participantResultsHref(params)
+      : participantScopedHref(item.href, params),
   }));
 }
 
 export function participantActiveHref(pathname: string, params: URLSearchParams): string {
-  return participantScopedHref(pathname, params);
+  return pathname === "/participant/results"
+    ? participantResultsHref(params)
+    : participantScopedHref(pathname, params);
 }
 
 export function firstValue(value: string | string[] | undefined): string | undefined {

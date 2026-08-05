@@ -419,6 +419,42 @@ describe("ParticipantResultsPanel", () => {
     expect(lencioniHeading.parentElement?.querySelector("[data-slot='card']")).toBeTruthy();
   });
 
+  it("keeps iCARE dimensions in the same canonical order across perspectives", () => {
+    render(
+      <ParticipantResultsPanel
+        results={[{
+          assignmentId: "icare-self",
+          questionnaireKey: "boss_360",
+          title: "Autoevaluare iCARE",
+          targetLabel: "Cum te evaluezi",
+          scores: {
+            icare_02_claritate: { score: 92, label: "Claritate" },
+            icare_01_dezvoltare: { score: 54, label: "Dezvoltare" },
+          },
+        }]}
+        receivedFeedbackGroups={[{
+          cohort: "direct_team",
+          completedCount: 2,
+          minimumCompleted: 2,
+          visible: true,
+          dimensions: [
+            { id: "icare_02_claritate", label: "Claritate", averageScore: 70, completedCount: 2 },
+            { id: "icare_01_dezvoltare", label: "Dezvoltare", averageScore: 88, completedCount: 2 },
+          ],
+        }]}
+      />,
+    );
+
+    const teamPerspective = screen.getByRole("group", { name: /Cum te vede echipa ta/ });
+    const selfPerspective = screen.getByRole("group", { name: /Cum te evaluezi/ });
+    const visibleDimensionLabels = (container: HTMLElement) => (
+      [...container.querySelectorAll("h4")].map((heading) => heading.textContent)
+    );
+
+    expect(visibleDimensionLabels(teamPerspective)).toEqual(["Dezvoltare", "Claritate"]);
+    expect(visibleDimensionLabels(selfPerspective)).toEqual(["Dezvoltare", "Claritate"]);
+  });
+
   it("uses the pinned Lencioni sum range for labels and bars", () => {
     render(
       <ParticipantResultsPanel
