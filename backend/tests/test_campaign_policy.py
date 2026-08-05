@@ -25,7 +25,7 @@ def make_recipient(
 def test_campaign_send_policy_allows_active_recipient_with_https_unsubscribe() -> None:
     require_campaign_send_allowed(
         make_recipient(),
-        unsubscribe_url="https://codrut.andreivacaru.ro/unsubscribe/token",
+        unsubscribe_url="https://cody.andreivacaru.ro/unsubscribe/token",
     )
 
 
@@ -33,7 +33,7 @@ def test_campaign_send_policy_rejects_suppressed_recipient() -> None:
     with pytest.raises(DomainError, match="suppressed or unsubscribed"):
         require_campaign_send_allowed(
             make_recipient(CampaignRecipientStatus.suppressed),
-            unsubscribe_url="https://codrut.andreivacaru.ro/unsubscribe/token",
+            unsubscribe_url="https://cody.andreivacaru.ro/unsubscribe/token",
         )
 
 

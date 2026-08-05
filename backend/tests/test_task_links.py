@@ -67,8 +67,8 @@ def test_task_token_requires_assignment_scope() -> None:
 
 
 def test_build_task_url_points_to_participant_bundle() -> None:
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
 
     url = build_task_url("token.value", settings)
 
-    assert url == "https://codrut.andreivacaru.ro/invite/token.value"
+    assert url == "https://cody.andreivacaru.ro/invite/token.value"

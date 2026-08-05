@@ -941,7 +941,7 @@ async def test_send_campaign_sends_active_members_across_segments_with_unsubscri
     service = make_service(repository)
 
     settings = Settings(
-        public_app_url="https://codrut.andreivacaru.ro",
+        public_app_url="https://cody.andreivacaru.ro",
         email_legal_address="Cody legal footer",
     )
     response = await service.send_campaign(
@@ -960,16 +960,16 @@ async def test_send_campaign_sends_active_members_across_segments_with_unsubscri
     assert message.to.value == active.email
     assert message.subject == "Salut Ana"
     assert (
-        "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/"
+        "https://cody.andreivacaru.ro/api/communications/campaigns/unsubscribe/"
         in message.html_body
     )
     assert (
-        "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
+        "https://cody.andreivacaru.ro/api/communications/campaigns/track/calendly/"
         in message.html_body
     )
     assert "Alege un slot" in message.html_body
     assert (
-        "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
+        "https://cody.andreivacaru.ro/api/communications/campaigns/track/calendly/"
         in message.text_body
     )
     assert "Ai primit acest email deoarece" in message.html_body
@@ -1005,7 +1005,7 @@ async def test_send_campaign_does_not_append_duplicate_calendly_cta() -> None:
         campaign.id,
         CampaignSendRequest(recipient_ids=[active.id]),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     assert response.queued == 1
@@ -1013,7 +1013,7 @@ async def test_send_campaign_does_not_append_duplicate_calendly_cta() -> None:
     assert message.html_body.count("Alege un slot") == 1
     assert message.text_body.count("Alege un slot") == 1
     assert (
-        "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/"
+        "https://cody.andreivacaru.ro/api/communications/campaigns/track/calendly/"
         in message.html_body
     )
 
@@ -1023,8 +1023,8 @@ async def test_send_campaign_adds_open_click_and_video_tracking() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     campaign.video_url = "https://vimeo.com/123456789"
-    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
-    campaign.landing_page_url = "https://codrut.andreivacaru.ro/campanii/demo"
+    campaign.thumbnail_url = "https://cody.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = "https://cody.andreivacaru.ro/campanii/demo"
     campaign.html_body = (
         '<p><a href="${landing_page_url}"><img src="${thumbnail_url}" alt="Video" /></a></p>'
         '<p><a href="https://example.com/articol">Citește articolul</a></p>'
@@ -1035,7 +1035,7 @@ async def test_send_campaign_adds_open_click_and_video_tracking() -> None:
     repository.campaign_recipients.append(active)
     provider = FakeEmailProvider()
     service = make_service(repository)
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
 
     response = await service.send_campaign(
         campaign.id,
@@ -1068,8 +1068,8 @@ async def test_send_campaign_repairs_plain_video_and_calendly_content() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     campaign.video_url = "https://vimeo.com/123456789"
-    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
-    campaign.landing_page_url = "https://codrut.andreivacaru.ro/campanii/demo"
+    campaign.thumbnail_url = "https://cody.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = "https://cody.andreivacaru.ro/campanii/demo"
     campaign.html_body = (
         "<p>Material video: ${landing_page_url}</p>"
         "<p>Alege un slot: ${calendly_url}</p>"
@@ -1088,7 +1088,7 @@ async def test_send_campaign_repairs_plain_video_and_calendly_content() -> None:
         campaign.id,
         CampaignSendRequest(recipient_ids=[active.id]),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     message = queued_messages(repository)[0]
@@ -1108,8 +1108,8 @@ async def test_send_campaign_removes_styled_fallback_links_from_html() -> None:
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     campaign.video_url = "https://vimeo.com/123456789"
-    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
-    campaign.landing_page_url = "https://codrut.andreivacaru.ro/campanii/demo"
+    campaign.thumbnail_url = "https://cody.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.landing_page_url = "https://cody.andreivacaru.ro/campanii/demo"
     campaign.html_body = (
         '<p><a href="${landing_page_url}">'
         '<img src="${thumbnail_url}" alt="Video" />'
@@ -1133,7 +1133,7 @@ async def test_send_campaign_removes_styled_fallback_links_from_html() -> None:
         campaign.id,
         CampaignSendRequest(recipient_ids=[active.id]),
         provider=FakeEmailProvider(),
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     message = queued_messages(repository)[0]
@@ -1160,7 +1160,7 @@ async def test_send_campaign_rejects_calendly_substring_as_existing_text_link() 
         campaign.id,
         CampaignSendRequest(recipient_ids=[active.id]),
         provider=FakeEmailProvider(),
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     message = queued_messages(repository)[0]
@@ -1188,7 +1188,7 @@ async def test_send_campaign_without_video_removes_empty_video_blocks() -> None:
         campaign.id,
         CampaignSendRequest(recipient_ids=[active.id]),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     message = queued_messages(repository)[0]
@@ -1236,7 +1236,7 @@ async def test_send_campaign_uses_video_url_when_landing_page_is_missing() -> No
     repository = FakeCommunicationsRepository()
     campaign = persisted_campaign()
     campaign.video_url = "https://vimeo.com/123456789"
-    campaign.thumbnail_url = "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg"
+    campaign.thumbnail_url = "https://cody.andreivacaru.ro/api/campaign-assets/demo.jpg"
     campaign.landing_page_url = None
     campaign.html_body = '<a href="${landing_page_url}">Vezi video</a>'
     campaign.text_body = "Vezi video: ${landing_page_url}"
@@ -1250,7 +1250,7 @@ async def test_send_campaign_uses_video_url_when_landing_page_is_missing() -> No
         campaign.id,
         CampaignSendRequest(recipient_ids=[recipient.id]),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     assert response.queued == 1
@@ -1302,7 +1302,7 @@ async def test_send_campaign_default_mode_skips_already_accepted_recipients() ->
         campaign.id,
         CampaignSendRequest(),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     assert second_response.queued == 1
@@ -1327,7 +1327,7 @@ async def test_send_campaign_reuses_result_for_same_idempotency_key() -> None:
     )
     provider = FakeEmailProvider()
     service = make_service(repository)
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
 
     first = await service.send_campaign(
         campaign.id,
@@ -1590,7 +1590,7 @@ async def test_send_campaign_uses_persisted_membership_not_all_segment_contacts(
         campaign.id,
         CampaignSendRequest(),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     assert response.queued == 1
@@ -1626,13 +1626,13 @@ async def test_send_campaign_all_resends_only_campaign_members() -> None:
         campaign.id,
         CampaignSendRequest(),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
     response = await service.send_campaign(
         campaign.id,
         CampaignSendRequest(mode="all"),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     assert response.queued == 1
@@ -1660,7 +1660,7 @@ async def test_send_campaign_only_uses_contacts_owned_by_campaign_owner() -> Non
         campaign.id,
         CampaignSendRequest(mode="all"),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
         owner_id=owner_id,
     )
 
@@ -1708,7 +1708,7 @@ async def test_send_campaign_respects_daily_email_cap() -> None:
         CampaignSendRequest(mode="all"),
         provider=provider,
         settings=Settings(
-            public_app_url="https://codrut.andreivacaru.ro",
+            public_app_url="https://cody.andreivacaru.ro",
             email_daily_send_cap=1,
         ),
     )
@@ -1734,7 +1734,7 @@ async def test_send_campaign_dry_run_does_not_send_or_log() -> None:
         campaign.id,
         CampaignSendRequest(dry_run=True),
         provider=provider,
-        settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+        settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
     )
 
     assert response.dry_run is True
@@ -2083,7 +2083,7 @@ async def test_send_campaign_rejects_campaigns_that_are_not_ready() -> None:
             campaign.id,
             CampaignSendRequest(),
             provider=FakeEmailProvider(),
-            settings=Settings(public_app_url="https://codrut.andreivacaru.ro"),
+            settings=Settings(public_app_url="https://cody.andreivacaru.ro"),
         )
 
     assert exc_info.value.code == "campaign_not_ready"
@@ -2094,7 +2094,7 @@ async def test_unsubscribe_campaign_recipient_marks_recipient_unsubscribed() -> 
     repository = FakeCommunicationsRepository()
     recipient = persisted_campaign_recipient()
     repository.campaign_recipients.append(recipient)
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
     token = create_campaign_recipient_action_token(
         CampaignRecipientActionClaims(
             recipient_id=recipient.id,
@@ -2116,7 +2116,7 @@ async def test_unsubscribe_campaign_recipient_rejects_other_owner_token() -> Non
     repository = FakeCommunicationsRepository()
     recipient = persisted_campaign_recipient()
     repository.campaign_recipients.append(recipient)
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
     token = create_campaign_recipient_action_token(
         CampaignRecipientActionClaims(
             recipient_id=recipient.id,

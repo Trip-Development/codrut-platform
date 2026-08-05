@@ -87,13 +87,13 @@ def test_campaign_tracking_token_rejects_non_calendly_target() -> None:
 
 
 def test_build_campaign_tracking_url_points_to_public_calendly_redirect() -> None:
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
 
     url = build_campaign_tracking_url("token.value", settings)
 
     assert (
         url
-        == "https://codrut.andreivacaru.ro/api/communications/campaigns/track/calendly/token.value"
+        == "https://cody.andreivacaru.ro/api/communications/campaigns/track/calendly/token.value"
     )
 
 
@@ -118,10 +118,10 @@ def test_campaign_recipient_action_token_round_trips_unsubscribe_claims() -> Non
 
 
 def test_build_campaign_unsubscribe_url_points_to_public_endpoint() -> None:
-    settings = Settings(public_app_url="https://codrut.andreivacaru.ro")
+    settings = Settings(public_app_url="https://cody.andreivacaru.ro")
 
     url = build_campaign_unsubscribe_url("token.value", settings)
 
     assert (
-        url == "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/token.value"
+        url == "https://cody.andreivacaru.ro/api/communications/campaigns/unsubscribe/token.value"
     )

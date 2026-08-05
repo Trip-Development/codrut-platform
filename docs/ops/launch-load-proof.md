@@ -149,7 +149,7 @@ docker compose "${COMPOSE_ARGS[@]}" run -T --rm \
   --manifest "$MANIFEST" \
   --report "$REPORT" \
   --runtime-evidence "$RUNTIME_EVIDENCE" \
-  --base-url https://codrut.andreivacaru.ro \
+  --base-url https://cody.andreivacaru.ro \
   --ramp-seconds 60 \
   --read-interval-seconds 5 \
   --ack "$ACK" </dev/null

@@ -9,17 +9,17 @@ export const MOCK_REPLACEMENTS: Record<string, string> = {
   "{organization_name}": "Compania Pilot",
   "{contact_name}": "Ioana Popescu",
   "{email}": "ioana.popescu@example.com",
-  "{action_url}": "https://codrut.andreivacaru.ro/invite/demo-token",
+  "{action_url}": "https://cody.andreivacaru.ro/invite/demo-token",
   "{project}": "Intake Iunie",
-  "{link_securizat}": "https://codrut.andreivacaru.ro/auth/seclink-8f2a175",
+  "{link_securizat}": "https://cody.andreivacaru.ro/auth/seclink-8f2a175",
   "{estimare_timp}": "15",
   "{sarcini_ramase}": "2 chestionare rămase (Lencioni, Distress)",
   "{link_video}": "https://watch.codrut.ro/v/performanta-echipe-2026",
   "{video_url}": "https://vimeo.com/123456789",
-  "{thumbnail_url}": "https://codrut.andreivacaru.ro/api/campaign-assets/demo.jpg",
+  "{thumbnail_url}": "https://cody.andreivacaru.ro/api/campaign-assets/demo.jpg",
   "{landing_page_url}": "https://vimeo.com/123456789",
   "{calendly_url}": "https://calendly.com/andreivacaru/intalnire-de-apropiere",
-  "{unsubscribe_url}": "https://codrut.andreivacaru.ro/api/communications/campaigns/unsubscribe/demo-token",
+  "{unsubscribe_url}": "https://cody.andreivacaru.ro/api/communications/campaigns/unsubscribe/demo-token",
   "{legal_address}": "București, România",
 };
 
@@ -172,7 +172,7 @@ function sanitizePreviewHref(value: string): string {
     return trimmed;
   }
   try {
-    const parsed = new URL(trimmed, "https://codrut.andreivacaru.ro");
+    const parsed = new URL(trimmed, "https://cody.andreivacaru.ro");
     if (["http:", "https:", "mailto:"].includes(parsed.protocol)) {
       return trimmed;
     }

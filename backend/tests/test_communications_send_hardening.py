@@ -37,7 +37,7 @@ from codrut.modules.communications.service import (
 )
 
 OWNER_ID = uuid.UUID("00000000-0000-0000-0000-000000000111")
-SETTINGS = Settings(public_app_url="https://codrut.andreivacaru.ro")
+SETTINGS = Settings(public_app_url="https://cody.andreivacaru.ro")
 
 
 class MemoryCommunicationsRepository:
