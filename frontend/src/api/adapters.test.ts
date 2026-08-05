@@ -998,7 +998,7 @@ describe("frontend API adapter stubs", () => {
       subject: "O idee pentru {first_name}",
       videoUrl: "https://video.codrut.ro/watch/intro",
       thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=\"hero\"",
-      landingUrl: "https://codrut.andreivacaru.ro/watch/intro?source=email&name=\"hero\"",
+      landingUrl: "https://cody.andreivacaru.ro/watch/intro?source=email&name=\"hero\"",
     });
 
     expect(payload).toMatchObject({
@@ -1007,7 +1007,7 @@ describe("frontend API adapter stubs", () => {
       subject: "O idee pentru ${first_name}",
       video_url: "https://video.codrut.ro/watch/intro",
       thumbnail_url: "https://cdn.codrut.ro/thumb.jpg?size=large&variant=%22hero%22",
-      landing_page_url: "https://codrut.andreivacaru.ro/watch/intro?source=email&name=%22hero%22",
+      landing_page_url: "https://cody.andreivacaru.ro/watch/intro?source=email&name=%22hero%22",
     });
     expect(payload?.html_body).toContain('href="${landing_page_url}"');
     expect(payload?.html_body).toContain('<img src="${thumbnail_url}"');
@@ -1102,7 +1102,7 @@ describe("frontend API adapter stubs", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        url: "https://codrut.andreivacaru.ro/api/campaign-assets/mini.png",
+        url: "https://cody.andreivacaru.ro/api/campaign-assets/mini.png",
         file_name: "mini.png",
         content_type: "image/png",
         size_bytes: 4,
@@ -1111,7 +1111,7 @@ describe("frontend API adapter stubs", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(uploadCampaignAssetOnServer(file)).resolves.toMatchObject({
-      url: "https://codrut.andreivacaru.ro/api/campaign-assets/mini.png",
+      url: "https://cody.andreivacaru.ro/api/campaign-assets/mini.png",
       content_type: "image/png",
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1153,7 +1153,7 @@ describe("frontend API adapter stubs", () => {
       subject: "Salut",
       videoUrl: "ftp://video.codrut.ro/watch/intro",
       thumbnailUrl: "https://cdn.codrut.ro/thumb.jpg",
-      landingUrl: "https://codrut.andreivacaru.ro/watch/intro",
+      landingUrl: "https://cody.andreivacaru.ro/watch/intro",
     })).toBeNull();
     expect(buildVideoCampaignCreatePayload({
       name: "Campanie video",

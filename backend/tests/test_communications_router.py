@@ -414,7 +414,7 @@ def test_campaign_asset_upload_requires_trainer_role() -> None:
 
 def test_trainer_can_upload_campaign_asset(tmp_path, monkeypatch) -> None:
     settings = Settings(
-        public_app_url="https://codrut.andreivacaru.ro",
+        public_app_url="https://cody.andreivacaru.ro",
         campaign_asset_dir=str(tmp_path),
         campaign_asset_public_path="/api/campaign-assets",
     )
@@ -430,7 +430,7 @@ def test_trainer_can_upload_campaign_asset(tmp_path, monkeypatch) -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["url"].startswith("https://codrut.andreivacaru.ro/api/campaign-assets/")
+    assert body["url"].startswith("https://cody.andreivacaru.ro/api/campaign-assets/")
     assert body["content_type"] == "image/png"
     assert body["size_bytes"] > 0
     assert body["file_name"].endswith(".png")
@@ -674,7 +674,7 @@ def test_campaign_calendly_tracking_redirect_is_public_and_records_event() -> No
         status=CampaignRecipientStatus.active,
     )
     settings = Settings(
-        public_app_url="https://codrut.andreivacaru.ro",
+        public_app_url="https://cody.andreivacaru.ro",
         email_from_name="Cody Test",
     )
     session = MagicMock()
@@ -732,7 +732,7 @@ def test_campaign_unsubscribe_get_is_public_confirmation_without_mutation() -> N
         status=CampaignRecipientStatus.active,
     )
     settings = Settings(
-        public_app_url="https://codrut.andreivacaru.ro",
+        public_app_url="https://cody.andreivacaru.ro",
         email_from_name="Cody Test",
     )
     session = MagicMock()
@@ -785,7 +785,7 @@ def test_campaign_unsubscribe_post_updates_recipient() -> None:
         status=CampaignRecipientStatus.active,
     )
     settings = Settings(
-        public_app_url="https://codrut.andreivacaru.ro",
+        public_app_url="https://cody.andreivacaru.ro",
         email_from_name="Cody Test",
     )
     session = MagicMock()

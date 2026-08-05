@@ -120,7 +120,7 @@ async def test_assignment_invitation_enqueues_immutable_account_setup_message(
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://codrut.andreivacaru.ro/invite/token",
+            action_url="https://cody.andreivacaru.ro/invite/token",
             task_count=2,
         ),
         assignment_ids=[assignment.id, related_assignment.id],
@@ -152,7 +152,7 @@ async def test_assignment_invitation_enqueues_bundle_without_provider_call(
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://codrut.andreivacaru.ro/tasks/token",
+            action_url="https://cody.andreivacaru.ro/tasks/token",
             task_count=3,
         ),
     )
@@ -171,7 +171,7 @@ async def test_assignment_invitation_duplicate_enqueue_returns_same_queued_deliv
     context = AssignmentInvitationContext(
         company_name="Demo",
         trainer_name="Andrei",
-        action_url="https://codrut.andreivacaru.ro/tasks/token",
+        action_url="https://cody.andreivacaru.ro/tasks/token",
     )
 
     first = await service.send_assignment_invitation(
@@ -204,7 +204,7 @@ async def test_assignment_reminder_uses_reminder_template_and_tracks_assignment_
         AssignmentInvitationContext(
             company_name="Demo",
             trainer_name="Andrei",
-            action_url="https://codrut.andreivacaru.ro/tasks/token",
+            action_url="https://cody.andreivacaru.ro/tasks/token",
         ),
         assignment_ids=[assignment.id],
         reminder_assignment_ids=[assignment.id],
