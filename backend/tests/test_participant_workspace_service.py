@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -29,6 +30,7 @@ from codrut.modules.forms.models import (
     QuestionnaireResponseStatus,
 )
 from codrut.modules.identity.models import User, UserRole
+from codrut.modules.participants import service as participant_service_module
 from codrut.modules.participants.service import (
     ParticipantWorkspaceService,
     _definition_scale_max,
@@ -299,6 +301,108 @@ def test_driver_feedback_is_read_from_the_pinned_questionnaire_definition() -> N
     assert _definition_score_feedback(definition) == {
         "be_perfect": "Verifică standardele imposibile."
     }
+
+
+def test_protected_guidance_overrides_copy_without_changing_the_driver_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    definition_id = uuid.uuid4()
+    assignment_id = uuid.uuid4()
+    assignment_round_id = uuid.uuid4()
+    profile_id = uuid.uuid4()
+    company_id = uuid.uuid4()
+    definition = QuestionnaireDefinition(
+        id=definition_id,
+        key="distress_drivers",
+        version=1,
+        title="TA",
+        schema={"schema_version": "questionnaire.v1"},
+        private_config={
+            "schema": {
+                "scoring": {
+                    "method": "sum_statement_scores_by_driver",
+                    "normalize_to": 100,
+                    "drivers": [
+                        {
+                            "id": "be_perfect",
+                            "label": "Fii perfect",
+                            "feedback_above_50": "Text vechi.",
+                        },
+                        {
+                            "id": "be_strong",
+                            "label": "Fii puternic",
+                            "feedback_above_50": "Text vechi.",
+                        },
+                    ],
+                }
+            }
+        },
+        content_checksum="a" * 64,
+        active=True,
+    )
+    assignment = QuestionnaireAssignment(
+        id=assignment_id,
+        company_id=company_id,
+        assignment_round_id=assignment_round_id,
+        respondent_profile_id=profile_id,
+        questionnaire_key="distress_drivers",
+        questionnaire_definition_id=definition_id,
+        target_type=AssignmentTargetType.self_assessment,
+        status=AssignmentStatus.scored,
+    )
+    result = ScoringResult(
+        assignment_id=assignment_id,
+        scores={
+            "be_perfect": {"score": 65},
+            "be_strong": {"score": 50},
+        },
+        primary_result="be_perfect",
+    )
+    publication = ResultPublication(
+        publication_key=f"individual:{assignment_id}",
+        participant_profile_id=profile_id,
+        company_id=company_id,
+        assignment_round_id=assignment_round_id,
+        questionnaire_definition_id=definition_id,
+        questionnaire_key="distress_drivers",
+        source_assignment_id=assignment_id,
+        kind=ResultPublicationKind.individual,
+        source_count=1,
+        definition_checksum=definition.content_checksum,
+        policy_snapshot={
+            "publication": "scores",
+            "dimension_ids": ["be_perfect", "be_strong"],
+            "target_types": ["self"],
+            "include_primary_result": True,
+        },
+        published_at=datetime.now(UTC),
+    )
+    monkeypatch.setattr(
+        participant_service_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            protected_result_guidance={
+                "distress_drivers": {
+                    "be_perfect": "Pe scurt\nText complet.",
+                    "be_strong": "Pe scurt\nText care rămâne ascuns la prag.",
+                }
+            }
+        ),
+    )
+
+    workspace_result = ParticipantWorkspaceService(None)._assignment_to_result(  # type: ignore[arg-type]
+        assignment=assignment,
+        result=result,
+        definition=definition,
+        publication=publication,
+        teams={},
+        people={},
+        projects={},
+    )
+
+    assert workspace_result is not None
+    assert workspace_result.scores["be_perfect"]["feedback"] == "Pe scurt\nText complet."
+    assert "feedback" not in workspace_result.scores["be_strong"]
 
 
 def test_result_labels_prefer_participant_schema_copy() -> None:

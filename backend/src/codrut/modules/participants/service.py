@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codrut.core.config import get_settings
 from codrut.core.errors import DomainError
 from codrut.modules.assignments.models import (
     AssessmentCycle,
@@ -1445,6 +1446,12 @@ class ParticipantWorkspaceService:
         }
         labels = _definition_score_labels(definition)
         feedback_by_dimension = _definition_score_feedback(definition)
+        feedback_by_dimension.update(
+            get_settings().protected_result_guidance.get(
+                assignment.questionnaire_key,
+                {},
+            )
+        )
         public_scores: dict[str, dict[str, float | str]] = {}
         for dimension_id in visible_dimension_ids:
             value = result.scores.get(dimension_id)

@@ -85,18 +85,18 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
                 variant="outline"
                 onClick={() => { props.onSelectTemplate(template.id); props.setIsEditing(false); }}
                 aria-label={`Deschide șablon ${template.name}`}
-                className="group relative h-full min-h-[10rem] items-stretch justify-start overflow-hidden whitespace-normal border-[var(--border)] bg-surface p-5 text-left shadow-none hover:border-primary/25 hover:bg-muted/25 md:min-h-[13rem]"
+                className="group relative h-full min-h-[10rem] min-w-0 items-stretch justify-start overflow-hidden whitespace-normal border-[var(--border)] bg-surface p-5 text-left shadow-none hover:border-primary/25 hover:bg-muted/25 md:min-h-[13rem]"
               >
-                <div className="flex h-full w-full flex-col">
-                  <div className="mb-4 flex items-start justify-between">
+                <div className="flex h-full min-w-0 w-full flex-col">
+                  <div className="mb-4 flex items-start justify-between gap-3">
                     <span className={cn("rounded-md border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]", template.lane === "transactional" ? "status-success" : "status-info-soft border border-border")}>{template.lane === "transactional" ? "Sistem" : "Campanie"}</span>
                     <span className="rounded-lg border border-[var(--border)] bg-surface-muted px-3 py-1 text-[10px] font-bold text-foreground/60">v{template.version ?? 1}</span>
                   </div>
-                  <h4 className="mb-2 line-clamp-1 text-xl font-bold text-foreground transition-colors group-hover:text-primary">{template.name}</h4>
-                  <p className="mb-4 min-h-[2.5rem] line-clamp-2 text-sm font-medium leading-relaxed text-foreground/60">{template.subject || "Fără subiect"}</p>
+                  <h4 className="mb-2 break-words text-pretty text-lg font-semibold leading-6 text-foreground transition-colors group-hover:text-primary">{template.name}</h4>
+                  <p className="mb-5 break-words text-pretty text-sm font-medium leading-6 text-foreground/60">{template.subject || "Fără subiect"}</p>
                   <div className="mt-auto flex items-center justify-between border-t border-[var(--border)] pt-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {template.placeholders.slice(0, 3).map((placeholder) => <div key={placeholder} className="inline-block rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 font-mono text-[10px] font-bold text-foreground/60">{placeholder.replace("{", "").replace("}", "")}</div>)}
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      {template.placeholders.slice(0, 3).map((placeholder) => <div key={placeholder} className="inline-block max-w-full break-all rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 font-mono text-[10px] font-bold text-foreground/60">{placeholder.replace("{", "").replace("}", "")}</div>)}
                       {template.placeholders.length > 3 ? <div className="inline-flex items-center justify-center rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 text-[10px] font-bold text-foreground/60">+{template.placeholders.length - 3}</div> : null}
                     </div>
                   </div>

@@ -31,6 +31,7 @@ jobs:
       CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET: ${{ secrets.CODRUT_EMAIL_SUPPRESSION_FINGERPRINT_SECRET }}
       CODRUT_CORS_ORIGINS: ${{ secrets.CODRUT_CORS_ORIGINS }}
       CODRUT_PUBLIC_APP_URL: ${{ secrets.CODRUT_PUBLIC_APP_URL }}
+      CODRUT_PROTECTED_RESULT_GUIDANCE_B64: ${{ secrets.CODRUT_PROTECTED_RESULT_GUIDANCE_B64 }}
       CODRUT_EMAIL_PROVIDER: ${{ secrets.CODRUT_EMAIL_PROVIDER }}
       CODRUT_EMAIL_FROM_ADDRESS: ${{ secrets.CODRUT_EMAIL_FROM_ADDRESS }}
       CODRUT_EMAIL_FROM_NAME: ${{ secrets.CODRUT_EMAIL_FROM_NAME }}
@@ -70,6 +71,10 @@ jobs:
             TRAEFIK_ACME_EMAIL
             CODRUT_DB_VOLUME_PATH
           )
+
+          if [[ "${DEPLOY_ENVIRONMENT}" == "prod" ]]; then
+            required_vars+=(CODRUT_PROTECTED_RESULT_GUIDANCE_B64)
+          fi
 
           missing=()
           for var_name in "${required_vars[@]}"; do
