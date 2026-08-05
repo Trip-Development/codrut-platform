@@ -106,6 +106,7 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
           const isOpen = props.openCampaignId === campaign.id;
           const isSending = props.sendingCampaignId === campaign.id;
           const sendMode = sendModes[campaign.id] ?? "selected";
+          const recipientSummary = `Destinatari (${activeMemberIds.length}/${eligibleRecipients.length}, ${sendableMemberIds.length} ${sendableMemberIds.length === 1 ? "netrimis" : "netrimiși"})`;
           const readinessError = campaignSendReadinessError(campaign);
           const plannedSendCount = sendMode === "all"
             ? activeMemberIds.length
@@ -148,7 +149,7 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                   <span className="mt-2 block truncate text-sm font-semibold text-foreground">{campaign.name}</span>
                   <span className="mt-1 block truncate text-xs font-medium text-muted-foreground">{campaign.subject}</span>
                 </span>
-                  <span className="grid min-w-0 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                <span aria-label={recipientSummary} className="grid min-w-0 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                   <span className="min-w-0"><span className="block font-medium text-muted-foreground">Listă</span><span className="mt-1 block font-semibold tabular-nums text-foreground">{activeMemberIds.length}/{eligibleRecipients.length} destinatari</span></span>
                   <span><span className="block font-medium text-muted-foreground">Trimiși</span><span className="mt-1 block font-semibold tabular-nums text-foreground">{sentMemberCount}</span></span>
                   <span><span className="block font-medium text-muted-foreground">Conținut</span><span className="mt-1 block font-semibold text-foreground">{campaign.video_url ? "Video" : campaign.thumbnail_url ? "Imagine" : campaign.landing_page_url ? "Link" : "Doar email"}</span></span>
