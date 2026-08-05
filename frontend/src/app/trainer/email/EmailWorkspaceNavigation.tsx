@@ -3,6 +3,7 @@
 import { ArchiveIcon, FileTextIcon, MailIcon, UsersIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SectionNavigationList, sectionNavigationItemVariants } from "@/components/ui/section-navigation";
 import { cn } from "@/utils/cn";
 
 export type EmailWorkspaceView = "campaigns" | "contacts" | "archive" | "templates";
@@ -26,8 +27,8 @@ export function EmailWorkspaceNavigation({
   onViewChange: (view: EmailWorkspaceView) => void;
 }) {
   return (
-    <div className="flex justify-end">
-      <nav aria-label="Navigare Comunicare" className="flex w-fit items-center gap-1 rounded-md bg-muted p-1">
+    <nav aria-label="Navigare Comunicare" className="min-w-0">
+      <SectionNavigationList>
         {views.map(({ key, label, icon: Icon }) => {
           const isActive = activeView === key;
           return (
@@ -39,10 +40,8 @@ export function EmailWorkspaceNavigation({
               aria-current={isActive ? "page" : undefined}
               onClick={() => onViewChange(key)}
               className={cn(
-                "h-9 rounded-[6px] px-3 font-medium shadow-none",
-                isActive
-                  ? "bg-background text-foreground shadow-sm hover:bg-background"
-                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                sectionNavigationItemVariants({ active: isActive }),
+                "h-10 border-0 px-3 font-medium shadow-none sm:px-3",
               )}
             >
               <Icon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
@@ -50,7 +49,7 @@ export function EmailWorkspaceNavigation({
             </Button>
           );
         })}
-      </nav>
-    </div>
+      </SectionNavigationList>
+    </nav>
   );
 }

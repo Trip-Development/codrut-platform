@@ -20,7 +20,7 @@ export function OperationFeedback({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-surface px-4 py-3 text-sm shadow-sm",
+        "rounded-lg border bg-surface px-4 py-3 text-sm shadow-none",
         isDanger
           ? "border-destructive/25 text-destructive"
           : "border-primary/15 text-foreground",

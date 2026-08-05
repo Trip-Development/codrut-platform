@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2Icon, ShieldAlertIcon } from "lucide-react";
+import { ChevronDownIcon, Loader2Icon, ShieldAlertIcon } from "lucide-react";
 
 import {
   repairParticipantAccountLink,
@@ -10,6 +10,7 @@ import {
 } from "@/api/companies";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { disclosureTriggerClassName } from "@/components/ui/disclosure";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -82,9 +83,10 @@ export function AccountLinkRepairPanel({
 
   return (
     <section className="border-y border-border">
-      <details>
-        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-foreground">
-          Administrare legătură cont
+      <details className="group">
+        <summary className={`${disclosureTriggerClassName} flex w-full items-center justify-between px-5 py-4 text-sm font-semibold text-foreground`}>
+          <span>Administrare legătură cont</span>
+          <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground transition-transform duration-150 group-open:rotate-180" strokeWidth={1.8} />
         </summary>
         <div className="border-t border-border px-5 py-5">
           <div className="grid gap-4 md:grid-cols-2">

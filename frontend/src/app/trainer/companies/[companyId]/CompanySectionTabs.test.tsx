@@ -19,5 +19,11 @@ describe("CompanySectionTabs", () => {
 
     expect(screen.getByRole("link", { name: "Participanți" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Proiecte" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Echipe" }).getAttribute("href")).toBe(
+      "/trainer/companies/company-1/teams",
+    );
+    expect(screen.getByRole("link", { name: "Invitații" }).getAttribute("href")).toBe(
+      "/trainer/companies/company-1/invitations",
+    );
   });
 });

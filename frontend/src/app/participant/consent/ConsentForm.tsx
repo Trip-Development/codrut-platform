@@ -51,11 +51,11 @@ export function ConsentForm() {
           </FieldLabel>
           <FieldDescription>
             Citește{" "}
-            <Link href="/confidentialitate" className="font-semibold text-burgundy hover:underline">
+            <Link href="/confidentialitate" className="font-semibold text-primary hover:underline">
               politica de confidențialitate
             </Link>{" "}
             și{" "}
-            <Link href="/termeni" className="font-semibold text-burgundy hover:underline">
+            <Link href="/termeni" className="font-semibold text-primary hover:underline">
               termenii
             </Link>
             .

@@ -87,6 +87,8 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.getByRole("status", { name: "3 sarcini active" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Bună, Mihai" })).toBeDefined();
     expect(screen.queryByText("Bună, SignalHarbor5271")).toBeNull();
+    expect(screen.queryByText("Recomandare: continuă cu primul chestionar disponibil.")).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Contextul fluxului" })).toBeNull();
   });
 
   it("makes ready results the primary action after every questionnaire is complete", () => {
@@ -506,6 +508,7 @@ describe("ParticipantResultsPanel", () => {
     expect(screen.queryByText(/Reviewer One/i)).toBeNull();
     expect(screen.queryByText(/reviewer-one@example\.com/i)).toBeNull();
     expect(screen.queryByText("Nu există scoruri calculate încă")).toBeNull();
+    expect(screen.getByRole("region", { name: "Perspective iCARE" })).toBeDefined();
   });
 
   it("hides received iCARE averages below the privacy threshold", () => {
@@ -694,7 +697,7 @@ describe("ParticipantResultsPanel", () => {
     );
 
     expect(screen.getAllByText("Cum te văd colegii din leadership")).toHaveLength(2);
-    expect(screen.getByRole("heading", { name: "2 rezultate" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "2 rezultate disponibile" })).toBeDefined();
   });
 
   it("shows a clear waiting state when all tasks are complete but no result is publishable", () => {
@@ -721,7 +724,7 @@ describe("ParticipantResultsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "1 rezultat" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "1 rezultat disponibil" })).toBeDefined();
     expect(screen.getByText("Profil personal")).toBeDefined();
     expect(screen.getByRole("heading", { name: "PCM" }).closest("[data-slot='card']")).toBeTruthy();
     expect(screen.queryByText("Nu există rezultate disponibile încă")).toBeNull();
@@ -809,6 +812,8 @@ describe("ParticipantResultsHistory", () => {
     expect(screen.getByRole("region", { name: "Comparația rezultatelor" })).toBeTruthy();
     expect(screen.getAllByText("Evaluare inițială").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Reevaluare").length).toBeGreaterThan(0);
+    expect(screen.getByText("Profil schimbat")).toBeDefined();
+    expect(screen.getByText("Fără schimbare")).toBeDefined();
     expect(screen.getByRole("group", { name: /Cum te vede echipa ta/ })).toBeTruthy();
     expect(screen.getByRole("group", { name: /Cum te văd colegii din leadership/ })).toBeTruthy();
     expect(screen.getByRole("group", { name: /Cum te evaluezi/ })).toBeTruthy();

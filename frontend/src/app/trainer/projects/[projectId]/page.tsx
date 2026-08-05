@@ -15,11 +15,10 @@ import {
   getCompanyInvitationStatuses,
   getCompanyProjectById,
   getProjectParticipants,
-  type CompanyProject,
 } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
-import { projectTypeLabel } from "@/components/projects/project-display";
+import { ProjectStatusBadge, projectTypeLabel } from "@/components/projects/project-display";
 import { cn } from "@/utils/cn";
 import { formatRomanianDate } from "@/utils/date-format";
 
@@ -117,11 +116,11 @@ export default async function ProjectOverviewPage({
         <InlineFeedback key={error} tone="danger">{error}</InlineFeedback>
       ))}
 
-      <section className="overflow-hidden rounded-lg border bg-surface shadow-sm" aria-labelledby="project-overview-title">
+      <section className="overflow-hidden rounded-lg border bg-surface" aria-labelledby="project-overview-title">
         <div className="border-b px-5 py-5">
           <h2 id="project-overview-title" className="sr-only">Sumar proiect</h2>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <ProjectStatus project={project} />
+            <ProjectStatusBadge status={project.status} />
             <span className="font-medium text-foreground">{projectTypeLabel(project.project_type)}</span>
             <span className="text-muted-foreground">{formatDateRange(project.starts_at, project.due_at)}</span>
           </div>
@@ -172,8 +171,8 @@ function WorkflowRow({ step }: { step: WorkflowStep }) {
       <span
         aria-hidden="true"
         className={cn(
-          "inline-flex size-9 shrink-0 items-center justify-center rounded-md",
-          step.locked ? "bg-muted text-muted-foreground" : "bg-primary/8 text-primary",
+          "inline-flex size-5 shrink-0 items-center justify-center",
+          step.locked ? "text-muted-foreground" : step.attention ? "text-warning-ink" : "text-info-ink",
         )}
       >
         {step.locked ? <LockIcon className="size-4" strokeWidth={1.8} /> : <Icon className="size-4" strokeWidth={1.8} />}
@@ -183,14 +182,14 @@ function WorkflowRow({ step }: { step: WorkflowStep }) {
       <span
         className={cn(
           "min-w-32 text-right text-sm font-semibold",
-          step.locked ? "text-muted-foreground" : step.attention ? "text-primary" : "text-success-ink",
+          step.locked ? "text-muted-foreground" : step.attention ? "text-warning-ink" : "text-success-ink",
         )}
       >
         {step.locked ? "Blocat" : step.state}
       </span>
       <ArrowRightIcon
         aria-hidden="true"
-        className={cn("size-4 shrink-0", step.locked ? "text-muted-foreground/40" : "text-primary")}
+        className={cn("size-4 shrink-0", step.locked ? "text-muted-foreground/40" : "text-muted-foreground")}
         strokeWidth={1.8}
       />
     </>
@@ -214,37 +213,9 @@ function ProjectCount({ label, value, attention = false }: { label: string; valu
   return (
     <div>
       <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
-      <dd className={cn("mt-1 text-xl font-semibold tabular-nums", attention && value > 0 ? "text-primary" : "text-foreground")}>{value}</dd>
+      <dd className={cn("mt-1 text-xl font-semibold tabular-nums", attention && value > 0 ? "text-warning-ink" : "text-foreground")}>{value}</dd>
     </div>
   );
-}
-
-function ProjectStatus({ project }: { project: CompanyProject }) {
-  return (
-    <span className={cn(
-      "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
-      project.status === "active" && "status-success-soft",
-      project.status === "draft" && "bg-muted text-muted-foreground",
-      project.status === "completed" && "bg-primary/8 text-primary",
-      project.status === "archived" && "bg-muted text-muted-foreground",
-    )}>
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
-      {projectStatusLabel(project.status)}
-    </span>
-  );
-}
-
-function projectStatusLabel(status: CompanyProject["status"]): string {
-  switch (status) {
-    case "active":
-      return "Activ";
-    case "completed":
-      return "Finalizat";
-    case "archived":
-      return "Arhivat";
-    case "draft":
-      return "În pregătire";
-  }
 }
 
 function formatDateRange(start: string | null, end: string | null): string {

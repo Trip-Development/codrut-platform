@@ -18,7 +18,7 @@ import {
 } from "@/api/questionnaires";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { ModalCloseButton, ModalLayer } from "@/components/ui/modal-layer";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/utils/cn";
 
@@ -132,7 +132,7 @@ function DiscreteScaleSlider({
     <div
       data-testid="question-response-group"
       data-selected={hasSelectedOption || undefined}
-      className="mt-4 rounded-lg border border-border bg-surface px-4 py-4 shadow-[0_1px_0_rgba(24,24,27,0.04)] data-[selected=true]:border-burgundy/35"
+      className="mt-4 rounded-lg border border-border bg-surface px-4 py-4 data-[selected=true]:border-primary/35"
     >
       <Slider
         min={layout.sliderMin}
@@ -430,7 +430,7 @@ export function QuestionnaireRunner({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
-      <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-[0_1px_0_rgba(24,24,27,0.04)]">
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         <section className="border-b border-border px-5 py-5 md:px-6">
           <div className="flex items-center gap-4">
             <Button
@@ -440,7 +440,7 @@ export function QuestionnaireRunner({
               onClick={() => void saveDraftAndExit()}
               aria-label={returnLabel}
               disabled={isExiting || activeOperation === "submit"}
-              className="-ml-2 text-muted-foreground hover:text-burgundy"
+              className="-ml-2 text-muted-foreground hover:text-primary"
             >
               {isExiting ? (
                 <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
@@ -452,7 +452,7 @@ export function QuestionnaireRunner({
           </div>
 
           <div className="mt-5 max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-burgundy">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
               {targetCopy.eyebrow}
             </p>
             <h2 className="mt-2 text-3xl font-semibold leading-tight tracking-tight text-foreground md:text-4xl">
@@ -460,7 +460,7 @@ export function QuestionnaireRunner({
               {targetCopy.targetName ? (
                 <>
                   {" "}
-                  <span className="font-medium italic text-burgundy">{targetCopy.targetName}</span>
+                  <span className="font-medium italic text-primary">{targetCopy.targetName}</span>
                 </>
               ) : null}
             </h2>
@@ -482,7 +482,7 @@ export function QuestionnaireRunner({
                 aria-expanded={detailsOpen}
                 aria-controls={questionnaireDetailsId}
                 onClick={() => setDetailsOpen(true)}
-                className="border-burgundy/30 text-burgundy hover:border-burgundy/60 hover:bg-burgundy/5 hover:text-burgundy"
+                className="border-primary/30 text-primary hover:border-primary/60 hover:bg-primary/5 hover:text-primary"
               >
                 Detalii chestionar
               </Button>
@@ -498,26 +498,21 @@ export function QuestionnaireRunner({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-burgundy">Chestionar</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Chestionar</p>
                 <h3 id={`${questionnaireDetailsId}-title`} className="mt-1 text-xl font-semibold text-foreground">
                   Detalii chestionar
                 </h3>
               </div>
-              <Button
-                type="button"
+              <ModalCloseButton
                 onClick={() => setDetailsOpen(false)}
-                aria-label="Închide detaliile"
-                variant="outline"
-                size="sm"
-              >
-                Închide
-              </Button>
+                label="Închide detaliile"
+              />
             </div>
             {definition.description ? (
               <p className="mt-4 text-sm leading-6 text-muted-foreground">{definition.description}</p>
             ) : null}
             {definition.schema.instructions ? (
-              <p className="mt-4 rounded-lg border border-burgundy/18 bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
+              <p className="mt-4 rounded-lg border border-border bg-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
                 {definition.schema.instructions}
               </p>
             ) : null}
@@ -545,7 +540,7 @@ export function QuestionnaireRunner({
                 {section.questions.map((question) => (
                   <article key={question.id} className="px-5 py-5 md:px-6">
                     <div className="grid gap-3 md:grid-cols-[1.5rem_1fr]">
-                      <span className="pt-0.5 text-sm font-bold tabular-nums text-burgundy/72">
+                      <span className="pt-0.5 text-sm font-bold tabular-nums text-primary/72">
                         {questionNumbers.get(question.id)}
                       </span>
                       <div className="min-w-0">
@@ -586,7 +581,7 @@ export function QuestionnaireRunner({
         )}
       </div>
 
-      <aside className="rounded-lg border border-border bg-surface p-4 shadow-[0_1px_0_rgba(24,24,27,0.04)] lg:sticky lg:top-8">
+      <aside className="rounded-lg border border-border bg-surface p-4 lg:sticky lg:top-8">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-foreground">Progres</p>
           <p className="text-sm font-semibold tabular-nums text-muted-foreground">
@@ -594,7 +589,7 @@ export function QuestionnaireRunner({
           </p>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-burgundy transition-[width] duration-200" style={{ width: `${progress}%` }} />
+          <div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${progress}%` }} />
         </div>
         <p className="mt-3 text-xs font-semibold text-muted-foreground">{progress}% completat</p>
 
@@ -877,8 +872,8 @@ function choiceButtonClass(selected: boolean): string {
   return cn(
     "h-auto whitespace-normal disabled:opacity-55",
     selected
-      ? "border-burgundy bg-burgundy text-white shadow-sm hover:bg-burgundy-700"
-      : "border-border bg-surface text-muted-foreground hover:border-burgundy/45 hover:bg-muted/70 hover:text-burgundy",
+      ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+      : "border-border bg-surface text-muted-foreground hover:border-primary/45 hover:bg-muted/70 hover:text-primary",
   );
 }
 
@@ -1026,7 +1021,7 @@ function HorizontalScaleChoices({
               key={String(option.value)}
               className={cn(
                 "flex w-24 cursor-pointer flex-col items-center gap-2 rounded-lg px-2 py-2 text-center text-xs font-medium text-muted-foreground transition-colors",
-                selected && "bg-burgundy/8 text-burgundy",
+                selected && "bg-primary/8 text-primary",
                 disabled && "cursor-not-allowed opacity-55",
               )}
             >

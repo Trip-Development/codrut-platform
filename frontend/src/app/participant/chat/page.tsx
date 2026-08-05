@@ -86,10 +86,10 @@ function SupportLink({
   return (
     <Link href={href} className="group flex items-center justify-between gap-4 py-5">
       <span>
-        <span className="block text-base font-semibold text-foreground group-hover:text-burgundy">{label}</span>
+        <span className="block text-base font-semibold text-foreground group-hover:text-primary">{label}</span>
         <span className="mt-1 block text-sm text-muted-foreground">{detail}</span>
       </span>
-      <ArrowRightIcon aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-burgundy" />
+      <ArrowRightIcon aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
     </Link>
   );
 }

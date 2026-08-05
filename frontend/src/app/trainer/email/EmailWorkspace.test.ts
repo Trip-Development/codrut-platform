@@ -1565,7 +1565,7 @@ describe("EmailWorkspace campaign contacts", () => {
 
     const campaignCard = (await screen.findByText("Campanie cu marker")).closest("article");
     expect(campaignCard).not.toBeNull();
-    expect(within(campaignCard as HTMLElement).getByText("Destinatari (2/2, 1 netrimis)")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).getByLabelText("Destinatari (2/2, 1 netrimis)")).toBeTruthy();
     openCampaignControls(campaignCard as HTMLElement);
     expect(within(campaignCard as HTMLElement).getByText("În lista de trimitere")).toBeTruthy();
     expect(within(campaignCard as HTMLElement).getByText("Pregătiți de trimis")).toBeTruthy();
@@ -1696,7 +1696,7 @@ describe("EmailWorkspace campaign contacts", () => {
 
     const campaignCard = (await screen.findByText("Campanie clienți existenți")).closest("article");
     expect(campaignCard).not.toBeNull();
-    expect(within(campaignCard as HTMLElement).getByText("Destinatari (1/2, 1 netrimis)")).toBeTruthy();
+    expect(within(campaignCard as HTMLElement).getByLabelText("Destinatari (1/2, 1 netrimis)")).toBeTruthy();
     openCampaignControls(campaignCard as HTMLElement);
 
     const existingCheckbox = within(campaignCard as HTMLElement).getByLabelText(

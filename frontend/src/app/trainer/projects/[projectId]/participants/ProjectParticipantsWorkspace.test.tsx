@@ -169,7 +169,7 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(screen.getByText("Link activ")).toBeTruthy();
   });
 
-  it("uses a bounded roster surface with a stable-width table and horizontal scroller", () => {
+  it("uses one semantic roster with responsive rows and bounded desktop scrolling", () => {
     renderWorkspace();
 
     const rosterSurface = screen.getByRole("region", { name: "Registru participanți" });
@@ -178,8 +178,9 @@ describe("ProjectParticipantsWorkspace", () => {
     expect(rosterSurface.className).toContain("overflow-hidden");
     expect(rosterSurface.contains(roster)).toBe(true);
     expect(roster.tagName).toBe("TABLE");
-    expect(roster.className).toContain("min-w-[960px]");
-    expect(roster.parentElement?.className).toContain("overflow-x-auto");
+    expect(roster.className).toContain("block");
+    expect(roster.className).toContain("md:min-w-[960px]");
+    expect(roster.parentElement?.className).toContain("md:overflow-x-auto");
     expect(screen.getByLabelText("Caută participant").parentElement?.className).toContain(
       "basis-auto",
     );

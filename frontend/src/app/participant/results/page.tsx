@@ -100,18 +100,18 @@ export default async function ParticipantResultsPage({
         />
       ) : null}
 
-      <header className="mb-10 border-b border-border pb-6">
-        <p className="text-sm font-semibold text-burgundy">{selectedSummary.projectName}</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+      <header className="mb-9 max-w-3xl">
+        <p className="text-xs font-semibold text-brand-text">{selectedSummary.projectName}</p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
           {selectedCycle ? selectedCycle.name : "Evoluția rezultatelor"}
-        </h1>
+        </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
           {selectedCycle
             ? "Scorurile și interpretările disponibile pentru evaluarea selectată."
             : "Compară prima evaluare cu cea mai recentă pe aceleași dimensiuni."}
         </p>
         {orderedCycles.length > 0 ? (
-          <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-3" aria-label="Legendă cicluri de evaluare">
+          <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2" aria-label="Legendă cicluri de evaluare">
             {displayedCycles.map((cycle, index) => (
               <li key={cycle.id} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                 <span aria-hidden="true" className={cn("size-2.5 rounded-full", cycleAccent(index).dot)} />

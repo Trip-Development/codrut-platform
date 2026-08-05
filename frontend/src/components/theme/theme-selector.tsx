@@ -76,7 +76,7 @@ export function ThemeSelector({ className }: { className?: string }) {
 
   return (
     <Select value={themeMode} onValueChange={(value) => applyTheme(value as ThemeMode)}>
-      <SelectTrigger aria-label="Temă" className={className ?? "h-9 min-w-32 bg-background px-3 font-medium"}>
+      <SelectTrigger aria-label="Temă" className={className ?? "h-9 min-w-32 bg-control px-3 font-medium"}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent align="end">

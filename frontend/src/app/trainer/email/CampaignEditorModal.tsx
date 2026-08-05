@@ -8,11 +8,13 @@ import type { EmailCampaign, EmailTemplate } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
+import { disclosureTriggerClassName } from "@/components/ui/disclosure";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { ModalCloseButton, ModalLayer } from "@/components/ui/modal-layer";
 import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/utils/cn";
 import type { CampaignSegmentKey, CampaignTargetSegment } from "./campaign-domain";
 import type { CampaignFieldErrors, CampaignFieldName, CampaignSaveFailure } from "./campaign-validation";
 import {
@@ -116,16 +118,10 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
           <h2 id="campaign-modal-title" className="text-xl font-semibold text-foreground">
             {editingCampaign ? campaignName || "Editează campania" : "Campanie nouă"}
           </h2>
-          <Button
-            type="button"
+          <ModalCloseButton
             onClick={props.onClose}
             disabled={isSaving}
-            variant="outline"
-            size="sm"
-            className="text-foreground/62 hover:border-burgundy/30 hover:text-burgundy"
-          >
-            Închide
-          </Button>
+          />
         </div>
       </div>
 
@@ -260,9 +256,9 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                     <FieldError id="campaign-body-error">{campaignFieldErrors.body}</FieldError>
                   </Field>
                   <details className="group mt-3">
-                    <summary className="flex cursor-pointer list-none items-center justify-between rounded-md border border-[var(--border)] bg-surface-muted px-4 py-2 text-xs font-bold text-foreground/65 transition hover:border-burgundy/30 hover:text-burgundy">
+                    <summary className={cn(disclosureTriggerClassName, "flex items-center justify-between px-2 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground")}>
                       <span>Editor HTML avansat</span>
-                      <ChevronDownIcon aria-hidden="true" className="size-3.5 text-foreground/40 transition group-open:rotate-180" strokeWidth={1.8} />
+                      <ChevronDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground transition-transform duration-150 group-open:rotate-180" strokeWidth={1.8} />
                     </summary>
                     <Field className="mt-3" data-disabled={isSaving || undefined}>
                       <FieldLabel htmlFor="campaign-html-body">Corp email</FieldLabel>

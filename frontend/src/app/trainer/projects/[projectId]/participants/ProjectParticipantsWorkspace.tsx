@@ -31,7 +31,7 @@ import { RosterImporter } from "@/components/roster-importer";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ModalLayer } from "@/components/ui/modal-layer";
+import { ModalCloseButton, ModalLayer } from "@/components/ui/modal-layer";
 import { SelectControl } from "@/components/ui/select-control";
 import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
@@ -394,7 +394,7 @@ export function ProjectParticipantsWorkspace({
               label="Caută participant"
               value={query}
               onValueChange={updateQuery}
-              placeholder="Caută după nume, email, rol sau manager"
+              placeholder="Caută participanți"
               className="min-w-[min(100%,16rem)] flex-1 basis-auto sm:basis-64"
             />
             <SelectControl
@@ -624,15 +624,9 @@ export function ProjectParticipantsWorkspace({
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">{companyName}</p>
               </div>
-              <Button
-                type="button"
+              <ModalCloseButton
                 onClick={() => setImportModalOpen(false)}
-                variant="outline"
-                size="sm"
-                className={secondaryButtonClass}
-              >
-                Închide
-              </Button>
+              />
             </div>
             <div className="mt-5 max-h-[80vh] overflow-y-auto pr-1">
               <RosterImporter
@@ -668,11 +662,11 @@ function RosterTable({
   return (
     <div
       data-slot="participants-table-scroll"
-      className="min-w-0 max-w-full overflow-x-auto"
+      className="min-w-0 max-w-full md:overflow-x-auto"
     >
       <table
         aria-label="Roster participanți"
-        className="w-full min-w-[960px] table-fixed border-collapse text-left text-sm"
+        className="block w-full border-collapse text-left text-sm md:table md:min-w-[960px] md:table-fixed xl:min-w-0"
       >
         <colgroup>
           <col className="w-[17%]" />
@@ -683,7 +677,7 @@ function RosterTable({
           <col className="w-[12%]" />
           <col className="w-[6%]" />
         </colgroup>
-        <thead className="bg-muted/70 text-xs font-semibold text-muted-foreground">
+        <thead className="hidden bg-muted/70 text-xs font-semibold text-muted-foreground md:table-header-group">
           <tr>
             <th scope="col" className="px-4 py-2.5">Participant</th>
             <th scope="col" className="px-4 py-2.5">Email</th>
@@ -696,10 +690,10 @@ function RosterTable({
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody className="block divide-y divide-border md:table-row-group">
           {rows.length === 0 ? (
-            <tr>
-              <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+            <tr className="block md:table-row">
+              <td colSpan={7} className="block px-4 py-10 text-center text-muted-foreground md:table-cell">
                 {emptyMessage}
               </td>
             </tr>
@@ -733,8 +727,8 @@ function ParticipantRow({
 }) {
   const participant = row.participant;
   return (
-    <tr data-participant-row={participant.id} className="transition-colors hover:bg-muted/35">
-      <th scope="row" className="px-4 py-3 text-left align-middle font-semibold text-foreground">
+    <tr data-participant-row={participant.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
+      <th scope="row" className="col-start-1 row-start-1 min-w-0 text-left align-middle font-semibold text-foreground md:px-4 md:py-3">
         <Link
           href={`/trainer/projects/${projectId}/participants/${participant.id}`}
           className="whitespace-normal break-words underline-offset-4 hover:text-burgundy hover:underline"
@@ -742,22 +736,27 @@ function ParticipantRow({
           {participant.full_name}
         </Link>
       </th>
-      <td className="break-all px-4 py-3 align-middle text-foreground/65">
+      <td className="col-span-2 row-start-2 break-all align-middle text-foreground/65 md:px-4 md:py-3">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Email</span>
         {participant.email ?? "email lipsă"}
       </td>
-      <td className="whitespace-normal break-words px-4 py-3 align-middle text-foreground/65">
+      <td className="col-start-1 row-start-3 whitespace-normal break-words align-middle text-foreground/65 md:px-4 md:py-3">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Manager</span>
         {formatManagerName(participant.reports_to_name)}
       </td>
-      <td className="whitespace-normal break-words px-4 py-3 align-middle text-foreground/65">
+      <td className="col-start-2 row-start-3 max-w-36 whitespace-normal break-words text-right align-middle text-foreground/65 md:max-w-none md:px-4 md:py-3 md:text-left">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Poziție</span>
         {participant.position ?? "-"}
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-1 row-start-4 align-middle md:px-4 md:py-3">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Acces</span>
         <DotStatus {...accessTypeStatus(row)} />
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 row-start-4 justify-self-end text-right align-middle md:justify-self-auto md:px-4 md:py-3 md:text-left">
+        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Stare</span>
         <DotStatus {...participantStateStatus(row)} />
       </td>
-      <td className="px-3 py-3 text-right align-middle">
+      <td className="col-start-2 row-start-1 text-right align-middle md:px-3 md:py-3">
         <Button
           type="button"
           onClick={onEdit}

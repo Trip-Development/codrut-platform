@@ -74,7 +74,7 @@ export function CreateCompanyModal({ onClose, onCreated, onMessage }: CreateComp
           type="button"
           onClick={closeIfIdle}
           disabled={isSubmitting}
-          variant="outline"
+          variant="ghost"
           size="icon-sm"
           aria-label="Închide"
         >

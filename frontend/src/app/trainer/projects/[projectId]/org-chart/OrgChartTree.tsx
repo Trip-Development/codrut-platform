@@ -59,9 +59,7 @@ function OrgChartWarningPanel({ warnings }: { warnings: OrgChartWarning[] }) {
       aria-labelledby="org-chart-warnings-title"
     >
       <div className="flex items-start gap-3">
-        <span className="status-warning-soft inline-flex size-8 shrink-0 items-center justify-center rounded-full">
-          <AlertTriangleIcon aria-hidden="true" className="size-4.5" strokeWidth={1.8} />
-        </span>
+        <AlertTriangleIcon aria-hidden="true" className="size-4.5 shrink-0 text-warning-ink" strokeWidth={1.8} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h3 id="org-chart-warnings-title" className="text-sm font-semibold">
@@ -105,7 +103,7 @@ function OrgChartNodeItem({
         className={cn(
           "rounded-lg border bg-muted/20 px-3 py-3 transition-colors sm:px-4",
           hasChildren && "bg-surface",
-          depth === 0 && "border-primary/30 shadow-sm",
+          depth === 0 && "border-primary/30",
         )}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">

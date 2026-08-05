@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/utils/cn";
+
 export type IcarePerspective = {
   id: string;
   label: string;
@@ -19,7 +21,11 @@ export function IcarePerspectiveGrid({
   return (
     <section
       aria-label={ariaLabel}
-      className="grid items-stretch gap-4 lg:grid-cols-3"
+      className={cn(
+        "grid items-stretch gap-4",
+        perspectives.length === 2 && "md:grid-cols-2",
+        perspectives.length >= 3 && "md:grid-cols-2 xl:grid-cols-3",
+      )}
     >
       {perspectives.map((perspective) => {
         const responseCopy = `${perspective.responseCount} ${perspective.responseCount === 1 ? "răspuns" : "răspunsuri"}`;

@@ -116,7 +116,7 @@ function InviteTasksView({
 
         <div className="mt-10 grid gap-7 border-b border-border pb-7 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div className="max-w-2xl">
-            <p className="text-sm font-semibold text-burgundy">{data.projectName}</p>
+            <p className="text-sm font-semibold text-primary">{data.projectName}</p>
             <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight text-foreground md:text-5xl">
               Chestionarele tale
             </h1>
@@ -137,7 +137,7 @@ function InviteTasksView({
               aria-valuemax={100}
               aria-valuenow={progress.percent}
             >
-              <div className="h-full rounded-full bg-burgundy" style={{ width: `${progress.percent}%` }} />
+              <div className="h-full rounded-full bg-primary" style={{ width: `${progress.percent}%` }} />
             </div>
           </div>
         </div>
@@ -236,7 +236,7 @@ function InviteFrame({
 
 function InvitePanel({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border bg-surface p-6 shadow-sm md:p-8">
+    <section className="rounded-lg border bg-surface p-6 md:p-8">
       {children}
     </section>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Fraunces } from "next/font/google";
 import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -11,12 +10,6 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { cn } from "@/utils/cn";
 
 export const REMEMBERED_SESSION_DELAY_MS = 900;
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-  weight: ["500", "700"],
-});
 
 type AuthQuoteVariant = "participant" | "trainer" | "activation" | "recovery" | "security";
 
@@ -73,7 +66,6 @@ export function AuthQuotePanel({ variant, className }: AuthQuotePanelProps) {
     <section
       className={cn(
         "hidden overflow-hidden border-r border-burgundy-700 bg-burgundy-900 p-10 text-white lg:flex lg:flex-col lg:justify-between",
-        fraunces.variable,
         className,
       )}
     >
@@ -84,7 +76,7 @@ export function AuthQuotePanel({ variant, className }: AuthQuotePanelProps) {
       <div className="max-w-xl">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">{copy.kicker}</p>
         <blockquote className="mt-8">
-          <p className="text-5xl font-medium leading-tight tracking-normal [font-family:var(--font-fraunces)]">{copy.quote}</p>
+          <p className="text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">{copy.quote}</p>
           <footer className="mt-6 text-sm font-semibold text-white/68">{copy.caption}</footer>
         </blockquote>
       </div>
@@ -104,7 +96,7 @@ export function AuthTextLink({ href, children, className }: AuthTextLinkProps) {
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy underline-offset-4 transition-colors hover:text-burgundy-700 hover:underline",
+        "inline-flex items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline",
         className,
       )}
     >
@@ -135,10 +127,10 @@ export function RememberedSessionSplash({ user }: RememberedSessionSplashProps) 
 
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10 text-foreground">
-      <section className="w-full max-w-md rounded-lg border bg-surface p-8 shadow-sm" role="status" aria-live="polite">
+      <section className="w-full max-w-md rounded-lg border bg-surface p-8" role="status" aria-live="polite">
         <BrandMark subtitle="Sesiune salvată" />
         <div className="mt-12">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-burgundy">Bine ai revenit</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Bine ai revenit</p>
           <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-normal text-foreground">
             {display.title}
           </h1>
@@ -150,7 +142,7 @@ export function RememberedSessionSplash({ user }: RememberedSessionSplashProps) 
         <div className="mt-10 h-2 overflow-hidden rounded-full bg-muted" aria-label="Încărcăm sesiunea salvată">
           <div
             className={cn(
-              "h-full w-full origin-left scale-x-0 rounded-full bg-burgundy transition-transform ease-out motion-reduce:scale-x-100 motion-reduce:transition-none",
+              "h-full w-full origin-left scale-x-0 rounded-full bg-primary transition-transform ease-out motion-reduce:scale-x-100 motion-reduce:transition-none",
               progressStarted && "scale-x-100",
             )}
             style={{ transitionDuration: `${REMEMBERED_SESSION_DELAY_MS}ms` }}

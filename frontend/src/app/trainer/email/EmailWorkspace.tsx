@@ -2177,7 +2177,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between gap-6 px-1 py-1">
+      <header className="grid min-w-0 gap-3 px-1 py-1 md:grid-cols-[auto_minmax(0,1fr)] md:items-end md:gap-6">
         <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground md:text-[2rem]">
           Comunicare
         </h1>
@@ -2187,7 +2187,7 @@ export function EmailWorkspace({ initialSummary }: EmailWorkspaceProps) {
       {activeTab === "campaigns" && (
         <div className="flex flex-col gap-5">
           <section
-            className="overflow-hidden rounded-lg border border-[var(--border)] bg-surface text-foreground shadow-sm"
+            className="overflow-hidden rounded-lg border border-[var(--border)] bg-surface text-foreground"
             aria-label={
               campaignView === "campaigns"
                 ? "Campanii"

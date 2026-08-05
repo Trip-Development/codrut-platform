@@ -36,6 +36,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { useUrlState } from "@/hooks/use-url-state";
 import { cn } from "@/utils/cn";
 import {
@@ -76,6 +77,7 @@ export function ProjectsWorkspace({
   });
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const deferredQuery = useDeferredValue(values.q);
   const isFilterPending = isUrlPending || values.q !== deferredQuery;
 
@@ -117,6 +119,7 @@ export function ProjectsWorkspace({
   const draftCount = filteredProjects.filter((project) => project.status === "draft").length;
   const completedCount = filteredProjects.filter((project) => project.status === "completed").length;
   const hasActiveFilters = Boolean(values.q || values.company || values.status || values.type);
+  const activeFilterCount = [values.company, values.status, values.type].filter(Boolean).length;
 
   function updateValue(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -152,42 +155,9 @@ export function ProjectsWorkspace({
     }
   }
 
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <nav className="flex flex-wrap items-center gap-2" aria-label="Vizualizare proiecte">
-        <Button asChild variant={archivedMode ? "ghost" : "secondary"} size="sm">
-          <Link href="/trainer/projects">
-            <FolderOpenIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
-            Proiecte curente
-          </Link>
-        </Button>
-        <Button asChild variant={archivedMode ? "secondary" : "ghost"} size="sm">
-          <Link href="/trainer/projects?view=archived">
-            <FolderArchiveIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
-            Arhivă
-          </Link>
-        </Button>
-      </nav>
-
-      {restoreError ? <InlineFeedback tone="danger">{restoreError}</InlineFeedback> : null}
-
-      <section
-        className={cn(
-          "grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2",
-          archivedMode
-            ? "xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)]"
-            : "xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]",
-        )}
-        aria-label="Filtre proiecte"
-      >
-        <WorkspaceSearchInput
-          id="projects-search"
-          label="Caută proiect sau companie"
-          value={values.q}
-          onValueChange={(value) => updateValue("q", value)}
-          placeholder="Caută proiect sau companie"
-          className="lg:col-span-2 xl:col-span-1"
-        />
+  function renderFilterControls() {
+    return (
+      <>
         <SearchableProjectFilter
           icon={Building2Icon}
           label="Companie"
@@ -218,14 +188,92 @@ export function ProjectsWorkspace({
           options={projectTypes.map((type) => ({ value: type, label: projectTypeLabel(type) }))}
           onValueChange={(value) => updateValue("type", value)}
         />
+      </>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <nav className="flex flex-wrap items-center gap-2" aria-label="Vizualizare proiecte">
+        <Button asChild variant={archivedMode ? "ghost" : "secondary"} size="sm">
+          <Link href="/trainer/projects">
+            <FolderOpenIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Proiecte curente
+          </Link>
+        </Button>
+        <Button asChild variant={archivedMode ? "secondary" : "ghost"} size="sm">
+          <Link href="/trainer/projects?view=archived">
+            <FolderArchiveIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Arhivă
+          </Link>
+        </Button>
+      </nav>
+
+      {restoreError ? <InlineFeedback tone="danger">{restoreError}</InlineFeedback> : null}
+
+      <section
+        className={cn(
+          "grid min-w-0 gap-3 rounded-lg border bg-surface p-3 lg:grid-cols-2",
+          archivedMode
+            ? "xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)]"
+            : "xl:grid-cols-[minmax(24rem,1fr)_minmax(12rem,14rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]",
+        )}
+        aria-label="Filtre proiecte"
+      >
+        <div className="flex min-w-0 items-center gap-2 lg:contents">
+          <WorkspaceSearchInput
+            id="projects-search"
+            label="Caută proiect sau companie"
+            value={values.q}
+            onValueChange={(value) => updateValue("q", value)}
+            placeholder="Caută proiecte"
+            className="min-w-0 flex-1 lg:col-span-2 xl:col-span-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="lg:hidden"
+            aria-haspopup="dialog"
+            aria-label={activeFilterCount > 0 ? `Filtre, ${activeFilterCount} active` : "Filtre"}
+            onClick={() => setFiltersOpen(true)}
+          >
+            <FilterIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Filtre{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </Button>
+        </div>
+        <div className="hidden lg:contents">{renderFilterControls()}</div>
       </section>
+
+      <Sheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        labelledBy="project-filters-title"
+        describedBy="project-filters-description"
+      >
+        <SheetHeader className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="project-filters-title" className="text-lg font-semibold text-foreground">Filtre</h2>
+            <p id="project-filters-description" className="mt-1 text-sm text-muted-foreground">
+              Restrânge lista fără să pierzi căutarea curentă.
+            </p>
+          </div>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Închide filtrele" onClick={() => setFiltersOpen(false)}>
+            <XIcon aria-hidden="true" strokeWidth={1.8} />
+          </Button>
+        </SheetHeader>
+        <SheetBody className="flex flex-col gap-4">{filtersOpen ? renderFilterControls() : null}</SheetBody>
+        <SheetFooter className="flex items-center justify-between gap-3">
+          <Button type="button" variant="ghost" onClick={resetFilters}>Resetează</Button>
+          <Button type="button" onClick={() => setFiltersOpen(false)}>Gata</Button>
+        </SheetFooter>
+      </Sheet>
 
       <span className="sr-only" role="status" aria-live="polite">
         {isFilterPending ? "Se actualizează lista" : ""}
       </span>
 
       {projects.length === 0 ? (
-        <Empty className="min-h-[40vh] border bg-surface p-12 shadow-sm">
+        <Empty className="min-h-[40vh] border bg-surface p-12">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <FolderPlusIcon aria-hidden="true" strokeWidth={1.8} />
@@ -250,7 +298,7 @@ export function ProjectsWorkspace({
           </EmptyContent>
         </Empty>
       ) : filteredProjects.length === 0 ? (
-        <Empty className="min-h-[18rem] border bg-surface p-10 shadow-sm">
+        <Empty className="min-h-[18rem] border bg-surface p-10">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <SearchIcon aria-hidden="true" strokeWidth={1.8} />
@@ -270,7 +318,7 @@ export function ProjectsWorkspace({
           aria-label="Lista proiectelor"
           aria-busy={isFilterPending}
           className={cn(
-            "min-w-0 overflow-hidden rounded-lg border bg-surface shadow-sm transition-opacity",
+            "min-w-0 overflow-hidden rounded-lg border bg-surface transition-opacity",
             isFilterPending && "opacity-70",
           )}
         >
@@ -295,9 +343,18 @@ export function ProjectsWorkspace({
             ) : null}
           </div>
 
-          <div className="w-full max-w-full overflow-x-auto [scrollbar-width:thin]">
-            <table className="w-full min-w-[64rem] text-left text-sm">
-              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+          <div className="w-full max-w-full md:overflow-x-auto md:[scrollbar-width:thin]">
+            <table className="block w-full text-left text-sm md:table md:min-w-[64rem] xl:min-w-0 xl:table-fixed">
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[15%]" />
+                <col className="w-[11%]" />
+                <col className="w-[13%]" />
+                <col className="w-[15%]" />
+                <col className="w-[10%]" />
+                <col className="w-[14%]" />
+              </colgroup>
+              <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
                 <tr>
                   <th scope="col" className="min-w-64 px-4 py-3">Proiect</th>
                   <th scope="col" className="min-w-44 px-4 py-3">Companie</th>
@@ -308,10 +365,10 @@ export function ProjectsWorkspace({
                   <th scope="col" className="min-w-40 px-4 py-3">Următorul pas</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="block divide-y divide-border md:table-row-group">
                 {filteredProjects.map((project) => (
-                  <tr key={project.id} className="transition-colors hover:bg-muted/35">
-                    <td className="max-w-[24rem] px-4 py-4">
+                  <tr key={project.id} className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
+                    <td className="col-span-2 row-start-1 min-w-0 md:max-w-[24rem] md:px-4 md:py-4">
                       <Link
                         href={`/trainer/projects/${project.id}`}
                         className="group inline-flex max-w-full flex-col gap-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
@@ -322,19 +379,27 @@ export function ProjectsWorkspace({
                         ) : null}
                       </Link>
                     </td>
-                    <td className="max-w-[14rem] px-4 py-4">
+                    <td className="col-start-1 row-start-2 min-w-0 md:max-w-[14rem] md:px-4 md:py-4">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Companie</span>
                       <span className="block truncate font-medium text-foreground">{project.company_name ?? "Companie"}</span>
                     </td>
-                    <td className="min-w-28 px-4 py-4"><ProjectStatusBadge status={project.status} /></td>
-                    <td className="px-4 py-4 font-medium text-foreground">{projectTypeLabel(project.project_type)}</td>
-                    <td className="min-w-40 px-4 py-4">
+                    <td className="col-start-2 row-start-2 justify-self-end md:min-w-28 md:justify-self-auto md:px-4 md:py-4"><ProjectStatusBadge status={project.status} /></td>
+                    <td className="col-start-1 row-start-3 font-medium text-foreground md:px-4 md:py-4">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Tip</span>
+                      {projectTypeLabel(project.project_type)}
+                    </td>
+                    <td className="col-span-2 row-start-4 md:min-w-40 md:px-4 md:py-4">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Calendar</span>
                       <span className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground">
                         <CalendarDaysIcon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
                         {formatProjectDateRange(project.starts_at, project.due_at)}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-muted-foreground">{formatProjectDate(project.updated_at)}</td>
-                    <td className="px-4 py-4">
+                    <td className="col-start-2 row-start-3 justify-self-end text-right text-muted-foreground md:justify-self-auto md:px-4 md:py-4 md:text-left">
+                      <span className="mb-1 block text-xs font-medium md:hidden">Actualizat</span>
+                      {formatProjectDate(project.updated_at)}
+                    </td>
+                    <td className="col-span-2 row-start-5 border-t pt-3 md:border-0 md:px-4 md:py-4">
                       {archivedMode ? (
                         <div className="flex items-center gap-2">
                           <Button

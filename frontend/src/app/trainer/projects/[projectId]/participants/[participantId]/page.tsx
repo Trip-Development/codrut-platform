@@ -32,7 +32,6 @@ type TrainerParticipantReportPageProps = {
 };
 
 const tableHeaderClass = "px-4 py-3 text-left text-xs font-semibold text-muted-foreground";
-const tableCellClass = "px-4 py-3 align-middle text-sm";
 
 export default async function TrainerParticipantReportPage({ params }: TrainerParticipantReportPageProps) {
   const [{ projectId, participantId }, requestOptions] = await Promise.all([
@@ -106,9 +105,7 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
 
         <aside className="border-l border-border pl-5">
           <div className="flex items-start gap-3">
-            <span className="status-success-soft inline-flex size-9 shrink-0 items-center justify-center rounded-full">
-              <ShieldCheckIcon aria-hidden="true" className="size-5" strokeWidth={1.8} />
-            </span>
+            <ShieldCheckIcon aria-hidden="true" className="size-5 shrink-0 text-success-ink" strokeWidth={1.8} />
             <div>
               <h3 className="text-sm font-semibold text-foreground">Vizibilitate protejată</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -138,9 +135,17 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
         </PanelHeader>
         <Separator />
         <PanelContent className="px-0">
-          <div className="overflow-x-auto">
-            <table className="min-w-[62rem] w-full border-collapse text-left text-sm">
-              <thead className="bg-muted/45">
+          <div className="md:overflow-x-auto">
+            <table className="block w-full border-collapse text-left text-sm md:table md:min-w-[62rem] xl:min-w-0 xl:table-fixed">
+              <colgroup>
+                <col className="w-[28%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+              </colgroup>
+              <thead className="hidden bg-muted/45 md:table-header-group">
                 <tr className="border-b">
                   <th className={tableHeaderClass}>Proiect</th>
                   <th className={tableHeaderClass}>Asignări</th>
@@ -150,29 +155,36 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
                   <th className={tableHeaderClass}>Ultima activitate</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="block divide-y divide-border md:table-row-group md:divide-y-0">
                 {historyRows.length > 0 ? (
                   historyRows.map((row) => (
-                    <tr key={row.projectId} className="border-b last:border-b-0 hover:bg-muted/35">
-                      <td className={cn(tableCellClass, "font-semibold text-foreground")}>{row.projectName}</td>
-                      <td className={tableCellClass}>
+                    <tr key={row.projectId} className="grid grid-cols-3 gap-x-3 gap-y-3 px-4 py-4 hover:bg-muted/35 md:table-row md:px-0 md:py-0">
+                      <td className="col-span-3 row-start-1 font-semibold text-foreground md:px-4 md:py-3">{row.projectName}</td>
+                      <td className="col-start-1 row-start-2 md:px-4 md:py-3">
+                        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Asignări</span>
                         <CountPill value={row.assignedCount} />
                       </td>
-                      <td className={tableCellClass}>
+                      <td className="col-start-2 row-start-2 md:px-4 md:py-3">
+                        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Completate</span>
                         <CountPill value={row.completedCount} tone="success" />
                       </td>
-                      <td className={tableCellClass}>
+                      <td className="col-start-3 row-start-2 md:px-4 md:py-3">
+                        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Scorate</span>
                         <CountPill value={row.scoredCount} tone="primary" />
                       </td>
-                      <td className={tableCellClass}>
+                      <td className="col-span-2 row-start-3 md:px-4 md:py-3">
+                        <span className="mr-2 text-xs font-medium text-muted-foreground md:hidden">360 oferit/primit</span>
                         <span className="font-semibold text-foreground">{row.feedbackGivenCount}/{row.feedbackReceivedCount}</span>
                       </td>
-                      <td className={cn(tableCellClass, "text-muted-foreground")}>{formatDate(row.lastActivityAt)}</td>
+                      <td className="col-start-3 row-start-3 text-right text-muted-foreground md:px-4 md:py-3 md:text-left">
+                        <span className="mb-1 block text-xs font-medium md:hidden">Activitate</span>
+                        {formatDate(row.lastActivityAt)}
+                      </td>
                     </tr>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-sm font-medium text-muted-foreground">
+                  <tr className="block md:table-row">
+                    <td colSpan={6} className="block px-5 py-8 text-center text-sm font-medium text-muted-foreground md:table-cell">
                       Nu există încă istoric de proiect pentru acest participant.
                     </td>
                   </tr>
@@ -358,7 +370,7 @@ function ParticipantMark({ name }: { name: string }) {
 function countToneClass(tone: "default" | "primary" | "success"): string {
   switch (tone) {
     case "primary":
-      return "bg-primary/10 text-primary";
+      return "bg-info-ink/10 text-info-ink";
     case "success":
       return "status-success-soft";
     default:

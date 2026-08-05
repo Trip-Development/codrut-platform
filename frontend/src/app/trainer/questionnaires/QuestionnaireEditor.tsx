@@ -248,76 +248,86 @@ export function QuestionnaireEditor({
   };
 
   return (
-    <section data-testid="questionnaire-editor-workspace" className="min-w-0 bg-background">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-sm lg:px-4">
-        <div className="flex min-w-0 items-center gap-2">
+    <section data-testid="questionnaire-editor-workspace" className="min-w-0 overflow-hidden rounded-lg border bg-surface">
+      <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-3 py-2.5 backdrop-blur-sm lg:px-4">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-2 sm:flex sm:items-center">
           <Button type="button" variant="ghost" size="icon-sm" onClick={onBack} aria-label="Înapoi la catalog" title="Înapoi la catalog">
             <ArrowLeftIcon aria-hidden="true" />
           </Button>
           <div className="min-w-0 flex-1 border-l border-border pl-3">
-            <h1 className="truncate text-sm font-semibold text-foreground">{definition.title}</h1>
+            <h2 className="truncate text-sm font-semibold text-foreground">{definition.title}</h2>
             <div className="mt-0.5 flex min-w-0 items-center gap-2">
               <span className="text-[11px] text-muted-foreground">v{selectedVersion}</span>
               <SaveStatus state={saveState} label={saveStateLabel} error={saveError} />
             </div>
           </div>
 
-          <SelectControl
-            label="Versiune"
-            wrapperClassName="w-28 shrink-0"
-            value={selectedVersion}
-            onChange={(event) => onSelectVersion(Number(event.target.value))}
-            disabled={isBusy}
-          >
-            {availableVersions.map((version) => (
-              <option key={version} value={version}>
-                v{version} {version === latestSelectedVersion ? "(Activă)" : "(Veche)"}
-              </option>
-            ))}
-          </SelectControl>
+          <div className="col-span-2 flex min-w-0 items-end gap-1 border-t border-border pt-2 sm:col-span-1 sm:ml-auto sm:border-0 sm:pt-0">
+            <SelectControl
+              label="Versiune"
+              wrapperClassName="mr-auto min-w-0 flex-1 sm:w-28 sm:flex-none"
+              value={selectedVersion}
+              onChange={(event) => onSelectVersion(Number(event.target.value))}
+              disabled={isBusy}
+            >
+              {availableVersions.map((version) => (
+                <option key={version} value={version}>
+                  v{version} {version === latestSelectedVersion ? "(Activă)" : "(Veche)"}
+                </option>
+              ))}
+            </SelectControl>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onDiscard}
-            disabled={!isDirty || isBusy}
-            aria-label="Revino la ultima versiune salvată"
-            title="Revino la ultima versiune salvată"
-          >
-            <RotateCcwIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onCreateVersion}
-            disabled={isBusy}
-            aria-label="Versiune nouă (clonează)"
-            title="Versiune nouă (clonează)"
-          >
-            <CopyPlusIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onDeleteQuestionnaire}
-            disabled={!canDelete || isBusy}
-            aria-label="Pensionează chestionarul"
-            title="Pensionează chestionarul"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2Icon aria-hidden="true" />
-          </Button>
-          <Button type="button" size="sm" onClick={onSave} disabled={!isDirty || isBusy} aria-label="Salvează modificările">
-            {saveState === "saving" ? (
-              <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-            ) : (
-              <SaveIcon data-icon="inline-start" aria-hidden="true" />
-            )}
-            {saveState === "saving" ? "Salvăm" : "Salvează"}
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onDiscard}
+              disabled={!isDirty || isBusy}
+              aria-label="Revino la ultima versiune salvată"
+              title="Revino la ultima versiune salvată"
+            >
+              <RotateCcwIcon aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onCreateVersion}
+              disabled={isBusy}
+              aria-label="Versiune nouă (clonează)"
+              title="Versiune nouă (clonează)"
+            >
+              <CopyPlusIcon aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onDeleteQuestionnaire}
+              disabled={!canDelete || isBusy}
+              aria-label="Pensionează chestionarul"
+              title="Pensionează chestionarul"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2Icon aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onSave}
+              disabled={!isDirty || isBusy}
+              aria-label="Salvează modificările"
+              title="Salvează modificările"
+              className="min-w-10 shrink-0 px-2.5 sm:px-3"
+            >
+              {saveState === "saving" ? (
+                <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+              ) : (
+                <SaveIcon data-icon="inline-start" aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">{saveState === "saving" ? "Salvăm" : "Salvează"}</span>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -330,7 +340,7 @@ export function QuestionnaireEditor({
       <div className="grid min-h-[calc(100vh-10rem)] min-w-0 lg:grid-cols-[13.5rem_minmax(25rem,1fr)_19rem]">
         <nav
           aria-label="Structura chestionarului"
-          className="min-w-0 border-r border-border bg-muted/35 p-2.5 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto"
+          className="max-h-64 min-w-0 overflow-y-auto border-r border-border bg-muted/35 p-2.5 lg:max-h-[calc(100vh-10rem)]"
         >
           <div className="mb-2 flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
@@ -366,12 +376,12 @@ export function QuestionnaireEditor({
                     onClick={() => selectSection(section.id)}
                     aria-current={sectionSelected ? "true" : undefined}
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45",
-                      sectionSelected ? "bg-foreground text-background" : "text-foreground hover:bg-muted",
+                      "flex min-h-10 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45 lg:min-h-0",
+                      sectionSelected ? "bg-muted text-foreground" : "text-foreground hover:bg-muted/65",
                     )}
                   >
                     <span className="truncate">{section.title || `Secțiunea ${sectionIndex + 1}`}</span>
-                    <span className={cn("text-[10px]", sectionSelected ? "text-background/70" : "text-muted-foreground")}>
+                    <span className="text-[10px] text-muted-foreground">
                       {section.questions.length}
                     </span>
                   </button>
@@ -389,8 +399,8 @@ export function QuestionnaireEditor({
                             aria-current={questionSelected ? "true" : undefined}
                             aria-label={`Editează ${question.code || `întrebarea ${questionIndex + 1}`} ${question.label}`}
                             className={cn(
-                              "grid w-full grid-cols-[2.25rem_minmax(0,1fr)] gap-1.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45",
-                              questionSelected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                              "grid min-h-10 w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-1.5 rounded-md px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/45 lg:min-h-0",
+                              questionSelected ? "bg-muted text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                             )}
                           >
                             <span className="truncate text-[10px] font-bold uppercase">{question.code || questionIndex + 1}</span>
@@ -402,7 +412,7 @@ export function QuestionnaireEditor({
                         type="button"
                         variant="ghost"
                         size="xs"
-                        className="mt-1 w-full justify-start text-muted-foreground"
+                        className="mt-1 min-h-10 w-full justify-start text-muted-foreground lg:min-h-7"
                         onClick={() => {
                           const questionId = onAddQuestion(sectionIndex);
                           if (questionId) selectQuestion(section.id, questionId);
@@ -617,7 +627,7 @@ export function QuestionnaireEditor({
 
         <aside aria-label="Inspector" className="min-w-0 border-l border-border bg-surface">
           <div className="sticky top-[3.75rem]">
-            <div className="grid grid-cols-3 border-b border-border px-2 pt-2">
+            <div className="grid grid-cols-3 gap-1 border-b border-border p-2">
               <InspectorTab
                 active={inspectorView === "question"}
                 disabled={!selectedQuestion}
@@ -688,8 +698,8 @@ function InspectorTab({
       disabled={disabled}
       aria-pressed={active}
       className={cn(
-        "flex min-w-0 flex-col items-center gap-1 border-b-2 px-1 py-2 text-[10px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45 disabled:opacity-40",
-        active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+        "flex min-w-0 flex-col items-center gap-1 rounded-sm px-1 py-2 text-[10px] font-semibold outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/45 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 motion-reduce:active:transform-none",
+        active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/65 hover:text-foreground",
       )}
     >
       <Icon aria-hidden="true" className="size-3.5" />

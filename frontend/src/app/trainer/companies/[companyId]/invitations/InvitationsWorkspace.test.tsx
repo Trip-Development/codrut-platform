@@ -382,6 +382,31 @@ describe("buildInvitationRows", () => {
     expect(taskCounts[0].getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("offers the invitation filters through the compact mobile control", () => {
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={projects}
+        selectedProjectId="project-1"
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
+        teams={teams}
+      />,
+    );
+
+    const filter = screen.getByRole("combobox", { name: "Filtru invitații" });
+    expect((filter as HTMLSelectElement).value).toBe("all");
+
+    fireEvent.change(filter, { target: { value: "errors" } });
+
+    expect((filter as HTMLSelectElement).value).toBe("errors");
+    expect(screen.getByText("Niciun rezultat pentru filtrul ales.")).toBeTruthy();
+  });
+
   it("keeps failed persisted deliveries in the error state without provider detail", () => {
     const rows = buildInvitationRows(
       participants,

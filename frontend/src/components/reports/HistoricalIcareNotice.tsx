@@ -21,7 +21,7 @@ export function HistoricalIcareNotice({ count, reason }: HistoricalIcareNoticePr
       aria-label="Despre răspunsurile iCARE mai vechi"
       className="flex gap-3 rounded-lg border border-border bg-muted/45 px-4 py-3"
     >
-      <InfoIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-burgundy" strokeWidth={1.8} />
+      <InfoIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
       <div>
         <p className="text-sm font-semibold text-foreground">Răspunsuri iCARE mai vechi</p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">

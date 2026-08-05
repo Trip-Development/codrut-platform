@@ -127,7 +127,7 @@ export function SearchableCombobox({
               }
             }}
             className={cn(
-              "flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-background px-3.5 text-sm font-semibold text-foreground outline-none transition-colors hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
+              "flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-control-border bg-control px-3.5 text-sm font-semibold text-foreground outline-none transition-[background-color,border-color,box-shadow] duration-150 hover:bg-muted hover:border-foreground/15 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
               size === "sm" ? "h-9" : "h-11",
             )}
           >
@@ -172,7 +172,7 @@ export function SearchableCombobox({
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Caută opțiuni"
-              className="h-9 rounded-sm bg-background pl-9 pr-3 text-sm"
+              className="h-9 rounded-sm bg-control pl-9 pr-3 text-sm"
             />
           </div>
           <div id={listboxId} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto py-0.5">
