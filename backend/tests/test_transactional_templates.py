@@ -17,7 +17,7 @@ def test_account_setup_template_renders_email_message() -> None:
             "participant_name": "Ana",
             "trainer_name": "Andrei",
             "company_name": "Demo",
-            "action_url": "https://codrut.andreivacaru.ro/invite/token",
+            "action_url": "https://cody.andreivacaru.ro/invite/token",
         },
     )
 
@@ -26,7 +26,7 @@ def test_account_setup_template_renders_email_message() -> None:
     assert "Demo" in message.subject
     assert "Ana" in message.html_body
     assert "Cody" in message.html_body
-    assert "https://codrut.andreivacaru.ro/invite/token" in message.text_body
+    assert "https://cody.andreivacaru.ro/invite/token" in message.text_body
 
 
 def test_assignment_bundle_template_renders_task_count() -> None:
@@ -38,7 +38,7 @@ def test_assignment_bundle_template_renders_task_count() -> None:
             "participant_name": "Ana",
             "company_name": "Demo",
             "task_count": "3",
-            "action_url": "https://codrut.andreivacaru.ro/tasks/token",
+            "action_url": "https://cody.andreivacaru.ro/tasks/token",
         },
     )
 

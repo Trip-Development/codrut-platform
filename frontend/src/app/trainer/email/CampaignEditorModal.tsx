@@ -350,7 +350,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                       disabled={isSaving}
                       aria-invalid={Boolean(campaignFieldErrors.thumbnailUrl)}
                       aria-describedby={campaignFieldErrors.thumbnailUrl ? "campaign-thumbnail-url-error" : undefined}
-                      placeholder="https://codrut.andreivacaru.ro/api/campaign-assets/thumbnail.jpg"
+                      placeholder="https://cody.andreivacaru.ro/api/campaign-assets/thumbnail.jpg"
                       className="py-3"
                     />
                     <FieldError id="campaign-thumbnail-url-error">{campaignFieldErrors.thumbnailUrl}</FieldError>
