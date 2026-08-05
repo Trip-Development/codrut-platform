@@ -7,7 +7,7 @@ import { ParticipantResultCycleControls } from "./ParticipantContextSelector";
 import {
   participantScopeParams,
   participantDefaultContext,
-  participantScopedHref,
+  participantResultsHref,
   participantWorkspaceRequestOptions,
 } from "./participant-context";
 
@@ -93,8 +93,8 @@ describe("participant workspace context", () => {
       projectId: "project-1",
       assessmentCycleId: "cycle-1",
     });
-    expect(participantScopedHref("/participant/results", params)).toBe(
-      "/participant/results?profile=profile-1&project=project-1&cycle=cycle-1",
+    expect(participantResultsHref(params)).toBe(
+      "/participant/results?profile=profile-1&project=project-1",
     );
     expect(participantWorkspaceRequestOptions(undefined, {
       profile: ["profile-1", "ignored"],

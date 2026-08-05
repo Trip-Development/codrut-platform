@@ -27,6 +27,7 @@ import { ParticipantContextSelector } from "./ParticipantContextSelector";
 import { ParticipantTaskList } from "./ParticipantTaskList";
 import {
   participantActiveHref,
+  participantResultsHref,
   participantScopeParams,
   participantScopedHref,
   participantScopedNavItems,
@@ -110,7 +111,7 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
   const contexts = summaryData.contexts ?? [];
   const scopeParams = participantScopeParams(summaryData);
   const questionnairesHref = participantScopedHref("/participant/questionnaires", scopeParams);
-  const resultsHref = participantScopedHref("/participant/results", scopeParams);
+  const resultsHref = participantResultsHref(scopeParams);
   const navItems = participantScopedNavItems(scopeParams);
 
   return (
@@ -275,6 +276,10 @@ export function ParticipantResultsPanel({
   const icareResults = results.filter((result) => resultKind(result.questionnaireKey) === "icare");
   const driverResults = results.filter((result) => resultKind(result.questionnaireKey) === "drivers");
   const otherResults = results.filter((result) => resultKind(result.questionnaireKey) === "other");
+  const icareDimensionOrder = buildDimensionOrder([
+    ...feedbackGroups.flatMap((feedback) => feedback.dimensions),
+    ...icareResults.flatMap((result) => scoreItemsForResult(result)),
+  ]);
   const icarePerspectives = [
     ...feedbackGroups.map((feedback, index) => ({
       id: `${feedback.assignmentRoundId ?? "round"}-${feedback.cohort}-${index}`,
@@ -282,7 +287,7 @@ export function ParticipantResultsPanel({
       responseCount: feedback.completedCount,
       content: (
         <Card className="h-full gap-0 py-0">
-          <ReceivedFeedbackPanel feedback={feedback} />
+          <ReceivedFeedbackPanel feedback={feedback} dimensionOrder={icareDimensionOrder} />
         </Card>
       ),
     })),
@@ -292,7 +297,7 @@ export function ParticipantResultsPanel({
       responseCount: 1,
       content: (
         <Card className="h-full gap-0 py-0">
-          <ResultCard result={result} compact />
+          <ResultCard result={result} compact dimensionOrder={icareDimensionOrder} />
         </Card>
       ),
     })),
@@ -524,7 +529,11 @@ function participantResultComparisonRows(
     .forEach((result) => scoreItemsForResult(result)
       .forEach((item) => dimensions.set(item.id, item.label))));
 
-  return [...dimensions].map(([id, label]) => {
+  const orderedDimensions = kind === "icare"
+    ? [...dimensions].sort(compareDimensionEntries)
+    : [...dimensions];
+
+  return orderedDimensions.map(([id, label]) => {
     let guidance: string | null = null;
     const values = cycles.flatMap(({ cycle, results }, index) => {
       const result = results.find((candidate) => resultKind(candidate.questionnaireKey) === kind);
@@ -553,7 +562,7 @@ function participantFeedbackComparisonRows(
   cycles.forEach((cycle) => participantFeedbackForCycle(cycle, cohort)?.dimensions
     .forEach((dimension) => dimensions.set(dimension.id, dimension.label)));
 
-  return [...dimensions].map(([id, label]) => ({
+  return [...dimensions].sort(compareDimensionEntries).map(([id, label]) => ({
     id: `${cohort}-${id}`,
     label,
     values: cycles.flatMap((cycle, index) => {
@@ -807,7 +816,13 @@ function receivedFeedbackCohortTitle(
     : "Cum te văd colegii din leadership";
 }
 
-function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeedbackSummary }) {
+function ReceivedFeedbackPanel({
+  feedback,
+  dimensionOrder,
+}: {
+  feedback: ParticipantReceivedFeedbackSummary;
+  dimensionOrder?: ReadonlyMap<string, number>;
+}) {
   const visible = feedback.visible;
   const scaleMin = feedback.scaleMin ?? 0;
   const scaleMax = receivedFeedbackScaleMax(feedback);
@@ -835,7 +850,7 @@ function ReceivedFeedbackPanel({ feedback }: { feedback: ParticipantReceivedFeed
 
       {visible && feedback.dimensions.length > 0 ? (
         <div className="mt-6 divide-y divide-border border-t border-border">
-          {feedback.dimensions.map((dimension) => (
+          {sortByDimensionOrder(feedback.dimensions, dimensionOrder).map((dimension) => (
             <ScoreRow
               key={dimension.id}
               item={{
@@ -892,9 +907,17 @@ function receivedFeedbackScoreSuffix(feedback: ParticipantReceivedFeedbackSummar
     : ` din ${scaleMax}`;
 }
 
-function ResultCard({ result, compact = false }: { result: ParticipantWorkspaceResult; compact?: boolean }) {
+function ResultCard({
+  result,
+  compact = false,
+  dimensionOrder,
+}: {
+  result: ParticipantWorkspaceResult;
+  compact?: boolean;
+  dimensionOrder?: ReadonlyMap<string, number>;
+}) {
   const kind = resultKind(result.questionnaireKey);
-  const items = scoreItemsForResult(result);
+  const items = scoreItemsForResult(result, dimensionOrder);
   const scale = resultScoreScale(result, kind);
   const average = averageScore(items);
   const scaleUnavailable = result.scoreScaleCompatible === false
@@ -1066,7 +1089,10 @@ function resultScoreScale(
   return { min, max, suffix: "" };
 }
 
-function scoreItemsForResult(result: ParticipantWorkspaceResult): ScoreItem[] {
+function scoreItemsForResult(
+  result: ParticipantWorkspaceResult,
+  dimensionOrder?: ReadonlyMap<string, number>,
+): ScoreItem[] {
   const items: ScoreItem[] = [];
   for (const [id, value] of Object.entries(result.scores)) {
     const score = extractScore(value);
@@ -1079,7 +1105,48 @@ function scoreItemsForResult(result: ParticipantWorkspaceResult): ScoreItem[] {
       explanation: extractFeedback(value),
     });
   }
-  return items.sort((first, second) => second.score - first.score);
+  return dimensionOrder
+    ? sortByDimensionOrder(items, dimensionOrder)
+    : items.sort((first, second) => second.score - first.score);
+}
+
+function buildDimensionOrder(
+  dimensions: Array<{ id: string; label: string }>,
+): ReadonlyMap<string, number> {
+  const unique = new Map<string, string>();
+  dimensions.forEach((dimension) => unique.set(dimension.id, dimension.label));
+  return new Map([...unique].sort(compareDimensionEntries).map(([id], index) => [id, index]));
+}
+
+function compareDimensionEntries(
+  [firstId, firstLabel]: [string, string],
+  [secondId, secondLabel]: [string, string],
+): number {
+  const firstPosition = icareDimensionPosition(firstId);
+  const secondPosition = icareDimensionPosition(secondId);
+  if (firstPosition !== null || secondPosition !== null) {
+    if (firstPosition === null) return 1;
+    if (secondPosition === null) return -1;
+    if (firstPosition !== secondPosition) return firstPosition - secondPosition;
+  }
+  return firstLabel.localeCompare(secondLabel, "ro", { numeric: true, sensitivity: "base" })
+    || firstId.localeCompare(secondId, "ro", { numeric: true, sensitivity: "base" });
+}
+
+function icareDimensionPosition(id: string): number | null {
+  const match = id.match(/^icare_(\d+)(?:_|$)/);
+  return match ? Number(match[1]) : null;
+}
+
+function sortByDimensionOrder<T extends { id: string }>(
+  dimensions: T[],
+  order?: ReadonlyMap<string, number>,
+): T[] {
+  if (!order) return dimensions;
+  return [...dimensions].sort((first, second) => (
+    (order.get(first.id) ?? Number.MAX_SAFE_INTEGER)
+    - (order.get(second.id) ?? Number.MAX_SAFE_INTEGER)
+  ));
 }
 
 function averageScore(items: ScoreItem[]): number | null {

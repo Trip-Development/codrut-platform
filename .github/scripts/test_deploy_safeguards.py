@@ -112,6 +112,29 @@ class DeploySafeguardTests(unittest.TestCase):
         self.assertIn("environment: prod", capacity_job)
         self.assertNotIn("environment: production", capacity_job)
 
+    def test_production_deploy_requires_and_injects_protected_result_guidance(self) -> None:
+        preflight = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-preflight.yml"
+        ).read_text(encoding="utf-8")
+        deploy = (
+            REPOSITORY_ROOT / ".github/workflows/_deploy-vps.yml"
+        ).read_text(encoding="utf-8")
+
+        for workflow in (preflight, deploy):
+            self.assertIn(
+                "CODRUT_PROTECTED_RESULT_GUIDANCE_B64: "
+                "${{ secrets.CODRUT_PROTECTED_RESULT_GUIDANCE_B64 }}",
+                workflow,
+            )
+            self.assertGreaterEqual(
+                workflow.count("CODRUT_PROTECTED_RESULT_GUIDANCE_B64"),
+                2,
+            )
+        self.assertIn(
+            "CODRUT_PROTECTED_RESULT_GUIDANCE_B64=$CODRUT_PROTECTED_RESULT_GUIDANCE_B64",
+            deploy,
+        )
+
     def test_retention_removes_only_obsolete_codrut_tags(self) -> None:
         current_backend = (
             "ghcr.io/trip-development/codrut-platform-backend:sha-current"

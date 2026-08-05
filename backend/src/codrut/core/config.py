@@ -1,5 +1,7 @@
+import base64
+import binascii
 import json
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from ipaddress import ip_network
 from typing import Literal
 from urllib.parse import urlsplit
@@ -89,6 +91,7 @@ class Settings(BaseSettings):
     local_auth_bypass: bool = False
     local_auth_trainer_email: str = "trainer@example.com"
     local_auth_participant_email: str = "participant@example.com"
+    protected_result_guidance_b64: SecretStr | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -133,6 +136,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_safety(self) -> "Settings":
+        if self.protected_result_guidance_b64 is not None:
+            _ = self.protected_result_guidance
         peak_worker_connections = (
             self.email_outbox_concurrency + self.worker_max_jobs - 1
         )
@@ -237,6 +242,42 @@ class Settings(BaseSettings):
         if self.email_suppression_fingerprint_secret is not None:
             return self.email_suppression_fingerprint_secret.get_secret_value().strip()
         return self.effective_task_link_secret.strip()
+
+    @cached_property
+    def protected_result_guidance(self) -> dict[str, dict[str, str]]:
+        if self.protected_result_guidance_b64 is None:
+            return {}
+        encoded = self.protected_result_guidance_b64.get_secret_value().strip()
+        if not encoded:
+            return {}
+        if len(encoded) > 200_000:
+            raise ValueError("Protected result guidance is too large.")
+        try:
+            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+            payload = json.loads(decoded)
+        except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Protected result guidance must be valid base64 JSON.") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("Protected result guidance must be a questionnaire map.")
+
+        guidance: dict[str, dict[str, str]] = {}
+        for questionnaire_key, dimensions in payload.items():
+            if not isinstance(questionnaire_key, str) or not questionnaire_key.strip():
+                raise ValueError("Protected result guidance questionnaire keys must be strings.")
+            if not isinstance(dimensions, dict):
+                raise ValueError("Protected result guidance dimensions must be a map.")
+            normalized_dimensions: dict[str, str] = {}
+            for dimension_id, content in dimensions.items():
+                if (
+                    not isinstance(dimension_id, str)
+                    or not dimension_id.strip()
+                    or not isinstance(content, str)
+                    or not content.strip()
+                ):
+                    raise ValueError("Protected result guidance entries must be non-empty strings.")
+                normalized_dimensions[dimension_id.strip()] = content.strip()
+            guidance[questionnaire_key.strip()] = normalized_dimensions
+        return guidance
 
 
 @lru_cache
