@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/empty";
 import { SelectControl } from "@/components/ui/select-control";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { useUrlState } from "@/hooks/use-url-state";
 import { cn } from "@/utils/cn";
 import {
@@ -57,6 +58,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
   const [statusFilter, setStatusFilter] = useState(get("status") ?? "");
   const [stageFilter, setStageFilter] = useState(get("stage") ?? "");
   const [extraFilter, setExtraFilter] = useState(get("filter") ?? "");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
@@ -99,6 +101,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
     (total, company) => total + Math.max(0, company.assignmentCount - company.completedCount),
     0,
   );
+  const activeFilterCount = [statusFilter, stageFilter, extraFilter].filter(Boolean).length;
   const pageCount = Math.max(1, Math.ceil(filteredCompanies.length / pageSize));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const pageStart = safePageIndex * pageSize;
@@ -196,24 +199,9 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
     exportCompanies(selectedCompanies, "companii-selectate-codrut.csv");
   }
 
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <section
-        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 shadow-sm lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
-        aria-label="Filtre companii"
-      >
-        <WorkspaceSearchInput
-          id="companies-search"
-          label="Caută companie"
-          value={searchQuery}
-          onValueChange={(value) => {
-            setSearchQuery(value);
-            setParam("q", value || null, "replace");
-          }}
-          placeholder="Caută după denumire, cod, status sau etapă"
-          className="lg:col-span-2 xl:col-span-1"
-        />
-
+  function renderFilterControls() {
+    return (
+      <>
         <FilterSelect
           icon={FilterIcon}
           label="Status"
@@ -251,7 +239,72 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             ["reporting", "Pregătite de raportare"],
           ]}
         />
+      </>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <section
+        className="grid min-w-0 gap-3 rounded-lg border bg-surface p-3 lg:grid-cols-2 xl:grid-cols-[minmax(24rem,1fr)_minmax(11rem,13rem)_minmax(11rem,13rem)_minmax(11rem,13rem)]"
+        aria-label="Filtre companii"
+      >
+        <div className="flex min-w-0 items-center gap-2 lg:contents">
+          <WorkspaceSearchInput
+            id="companies-search"
+            label="Caută companie"
+            value={searchQuery}
+            onValueChange={(value) => {
+              setSearchQuery(value);
+              setParam("q", value || null, "replace");
+            }}
+            placeholder="Caută companii"
+            className="min-w-0 flex-1 lg:col-span-2 xl:col-span-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="lg:hidden"
+            aria-haspopup="dialog"
+            aria-label={activeFilterCount > 0 ? `Filtre, ${activeFilterCount} active` : "Filtre"}
+            onClick={() => setFiltersOpen(true)}
+          >
+            <FilterIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
+            Filtre{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </Button>
+        </div>
+        <div className="hidden lg:contents">{renderFilterControls()}</div>
       </section>
+
+      <Sheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        labelledBy="company-filters-title"
+        describedBy="company-filters-description"
+      >
+        <SheetHeader className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="company-filters-title" className="text-lg font-semibold text-foreground">Filtre</h2>
+            <p id="company-filters-description" className="mt-1 text-sm text-muted-foreground">
+              Restrânge lista fără să pierzi căutarea curentă.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Închide filtrele"
+            onClick={() => setFiltersOpen(false)}
+          >
+            <XIcon aria-hidden="true" strokeWidth={1.8} />
+          </Button>
+        </SheetHeader>
+        <SheetBody className="flex flex-col gap-4">{filtersOpen ? renderFilterControls() : null}</SheetBody>
+        <SheetFooter className="flex items-center justify-between gap-3">
+          <Button type="button" variant="ghost" onClick={resetFilters}>Resetează</Button>
+          <Button type="button" onClick={() => setFiltersOpen(false)}>Gata</Button>
+        </SheetFooter>
+      </Sheet>
 
       <div className="min-h-5 px-1 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
         {isFilterPending ? "Se actualizează lista" : null}
@@ -291,7 +344,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
           aria-label="Lista companiilor"
           aria-busy={isFilterPending}
           className={cn(
-            "min-w-0 overflow-hidden rounded-lg border bg-surface shadow-sm transition-opacity",
+            "min-w-0 overflow-hidden rounded-lg border bg-surface transition-opacity",
             isFilterPending && "opacity-70",
           )}
         >
@@ -333,9 +386,23 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             </div>
           </div>
 
-          <div className="w-full max-w-full overflow-x-auto [scrollbar-width:thin]">
-            <table className="w-full min-w-[74rem] border-collapse text-left text-sm">
-              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+          <div
+            className="w-full max-w-full md:overflow-x-auto md:overscroll-x-contain md:[scrollbar-width:thin]"
+            aria-label="Tabelul companiilor"
+          >
+            <table className="block w-full border-collapse text-left text-sm md:table md:min-w-[74rem] xl:min-w-0 xl:table-fixed">
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[18%]" />
+                <col className="w-[14%]" />
+                <col className="w-[8%]" />
+                <col className="w-[7%]" />
+                <col className="w-[9%]" />
+                <col className="w-[14%]" />
+                <col className="w-[7%]" />
+                <col className="w-[19%]" />
+              </colgroup>
+              <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
                 <tr>
                   <th className="w-12 px-4 py-3">
                     <Checkbox
@@ -344,17 +411,17 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
                       onCheckedChange={togglePageSelection}
                     />
                   </th>
-                  <th scope="col" className="min-w-56 px-4 py-3">Companie</th>
+                  <th scope="col" className="min-w-56 px-4 py-3 xl:min-w-0">Companie</th>
                   <th scope="col" className="px-4 py-3">Status</th>
                   <th scope="col" className="px-4 py-3">Etapă</th>
                   <th scope="col" className="px-4 py-3 text-right">Proiecte</th>
                   <th scope="col" className="px-4 py-3 text-right">Participanți</th>
-                  <th scope="col" className="min-w-36 px-4 py-3">Completare</th>
+                  <th scope="col" className="min-w-36 px-4 py-3 xl:min-w-0">Completare</th>
                   <th scope="col" className="px-4 py-3 text-right">De urmărit</th>
-                  <th scope="col" className="min-w-52 px-4 py-3">Următorul pas</th>
+                  <th scope="col" className="min-w-52 px-4 py-3 xl:min-w-0">Următorul pas</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="block divide-y divide-border md:table-row-group">
                 {pagedCompanies.map((company) => (
                   <CompanyTableRow
                     key={company.id}
@@ -374,7 +441,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
             <div className="flex items-center gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 aria-label="Pagina anterioară"
                 disabled={safePageIndex === 0}
@@ -407,7 +474,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
               )}
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 aria-label="Pagina următoare"
                 disabled={safePageIndex >= pageCount - 1}
@@ -420,7 +487,7 @@ export function CompaniesWorkspace({ initialCompanies }: CompaniesWorkspaceProps
                 value={pageSize}
                 onChange={(event) => setPageSize(Number(event.target.value))}
                 wrapperClassName="w-auto"
-                className="h-9 bg-background py-1.5 text-sm"
+                className="h-9 bg-control py-1.5 text-sm"
               >
                 <option value={10}>10 / pagină</option>
                 <option value={25}>25 / pagină</option>
@@ -446,7 +513,7 @@ function CompaniesEmptyState({
   onAction: () => void;
 }) {
   return (
-    <Empty className="min-h-[22rem] border bg-surface shadow-sm">
+    <Empty className="min-h-[22rem] border bg-surface">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Building2Icon aria-hidden="true" strokeWidth={1.8} />
@@ -476,35 +543,48 @@ function CompanyTableRow({
     : 0;
 
   return (
-    <tr className={cn("transition-colors hover:bg-muted/35", selected && "bg-primary/5")} aria-selected={selected}>
-      <td className="px-4 py-3 align-middle">
+    <tr
+      className={cn(
+        "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0",
+        selected && "bg-primary/5",
+      )}
+      aria-selected={selected}
+    >
+      <td className="col-start-1 row-start-1 py-1 align-middle md:px-4 md:py-3">
         <Checkbox
           aria-label={`Selectează ${company.name}`}
           checked={selected}
           onCheckedChange={onToggleSelected}
         />
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-1 min-w-0 align-middle md:px-4 md:py-3">
         <Link
           href={`/trainer/companies/${company.id}`}
           className="group inline-flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
         >
           <EntityMark name={company.name} />
           <span className="min-w-0">
-            <span className="block truncate font-semibold text-foreground group-hover:text-primary">{company.name}</span>
+            <span className="block break-words font-semibold text-foreground group-hover:text-brand-text md:truncate">{company.name}</span>
             <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{formatCompanyCode(company)}</span>
           </span>
         </Link>
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-2 align-middle md:px-4 md:py-3">
         <CompanyStatusBadge company={company} />
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-3 align-middle md:px-4 md:py-3">
         <CompanyStageInline stage={company.stage} unavailable={company.dataUnavailable} />
       </td>
-      <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-foreground">{company.projectCount}</td>
-      <td className="px-4 py-3 text-right align-middle font-semibold tabular-nums text-foreground">{company.participantCount}</td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 row-start-4 flex items-baseline gap-2 align-middle font-semibold tabular-nums text-foreground md:table-cell md:px-4 md:py-3 md:text-right">
+        <span className="text-xs font-medium text-muted-foreground md:hidden">Proiecte</span>
+        {company.projectCount}
+      </td>
+      <td className="col-start-3 row-start-4 flex items-baseline justify-self-end gap-2 align-middle font-semibold tabular-nums text-foreground md:table-cell md:px-4 md:py-3 md:text-right">
+        <span className="text-xs font-medium text-muted-foreground md:hidden">Participanți</span>
+        {company.participantCount}
+      </td>
+      <td className="col-start-2 col-end-4 row-start-5 align-middle md:px-4 md:py-3">
+        <span className="mb-2 block text-xs font-medium text-muted-foreground md:hidden">Completare</span>
         {company.assignmentCount > 0 ? (
           <div className="min-w-28">
             <div className="flex items-center justify-between gap-3 text-xs">
@@ -519,21 +599,22 @@ function CompanyTableRow({
           <span className="text-xs font-medium text-muted-foreground">Nicio asignare</span>
         )}
       </td>
-      <td className={cn("px-4 py-3 text-right align-middle font-semibold tabular-nums", pending > 0 ? "text-primary" : "text-muted-foreground")}>
-        {pending}
+      <td className={cn("col-start-2 col-end-4 row-start-6 flex items-baseline justify-between gap-3 align-middle font-semibold tabular-nums md:table-cell md:px-4 md:py-3 md:text-right", pending > 0 ? "text-brand-text" : "text-muted-foreground")}>
+        <span className="text-xs font-medium text-muted-foreground md:hidden">De urmărit</span>
+        <span>{pending}</span>
       </td>
-      <td className="px-4 py-3 align-middle">
+      <td className="col-start-2 col-end-4 row-start-7 border-t border-border pt-3 align-middle md:border-0 md:px-4 md:py-3">
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             href={`/trainer/companies/${company.id}`}
-            className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+            className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
           >
             {companyNextAction(company)}
             <ArrowRightIcon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
           </Link>
           <Link
             href={`/trainer/companies/${company.id}/settings`}
-            className="font-semibold text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+            className="font-semibold text-muted-foreground hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
           >
             Setări
           </Link>
@@ -580,7 +661,7 @@ function CompanyStatusBadge({ company }: { company: CompanyListItem }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold",
         status === "inactive" && "bg-muted text-muted-foreground",
         status === "attention" && "status-warning-soft",
         status === "active" && "status-success-soft",
@@ -613,7 +694,7 @@ function EntityMark({ name }: { name: string }) {
   return (
     <span
       className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white",
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold",
         entityMarkClass(name),
       )}
       aria-hidden="true"
@@ -711,7 +792,13 @@ function companyInitials(name: string): string {
 }
 
 function entityMarkClass(seed: string): string {
-  const classes = ["bg-primary", "bg-foreground", "bg-muted-foreground", "bg-success-ink", "bg-burgundy-800"];
+  const classes = [
+    "bg-primary text-primary-foreground",
+    "bg-foreground text-background",
+    "bg-muted-foreground text-background",
+    "bg-success text-background",
+    "bg-burgundy-800 text-white",
+  ];
   return classes[Math.abs(hashString(seed)) % classes.length];
 }
 

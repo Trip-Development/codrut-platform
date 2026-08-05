@@ -20,7 +20,7 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, description, icon, action, className = "" }: EmptyStateProps) {
   return (
-    <Empty className={cn("rounded-lg border border-border bg-surface px-5 py-6 shadow-sm", className)}>
+    <Empty className={cn("rounded-lg border border-border bg-surface px-5 py-6 shadow-none", className)}>
       {icon ? (
         <EmptyMedia variant="icon" className="size-12 text-muted-foreground [&_svg:not([class*='size-'])]:size-5">
           {icon}

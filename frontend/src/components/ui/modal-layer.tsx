@@ -1,7 +1,10 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { XIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 type ModalLayerProps = {
   children: ReactNode;
@@ -127,5 +130,25 @@ export function ModalLayer({
       </section>
     </div>,
     document.body,
+  );
+}
+
+export function ModalCloseButton({
+  label = "Închide",
+  ...props
+}: Omit<ComponentProps<typeof Button>, "children" | "size" | "variant"> & {
+  label?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      title={label}
+      {...props}
+    >
+      <XIcon aria-hidden="true" strokeWidth={1.8} />
+    </Button>
   );
 }

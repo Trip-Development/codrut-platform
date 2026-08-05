@@ -92,7 +92,7 @@ export default async function LeadershipMemberReportPage({
         <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
         Înapoi la rezultatele proiectului
       </a>
-      <p className="text-sm font-semibold text-burgundy">Raport individual</p>
+      <p className="text-sm font-semibold text-primary">Raport individual</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{report.member.full_name}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         {report.member.position || "Membru leadership"} · {project.name}
@@ -127,7 +127,7 @@ export default async function LeadershipMemberReportPage({
       <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
         <section aria-labelledby="pcm-profile-title" className="grid gap-5 md:grid-cols-[minmax(12rem,0.7fr)_minmax(0,1.3fr)] md:items-center">
           <div>
-            <p className="text-sm font-semibold text-burgundy">Profil personal</p>
+            <p className="text-sm font-semibold text-primary">Profil personal</p>
             <h2 id="pcm-profile-title" className="mt-1 text-2xl font-semibold tracking-tight text-foreground">PCM</h2>
           </div>
           <div className="flex flex-wrap gap-x-12 gap-y-5">
@@ -239,7 +239,7 @@ function LeadershipMemberComparison({
     <>
       <Card asChild className="px-5 [--card-spacing:--spacing(5)] md:px-6">
         <section aria-labelledby="pcm-evolution-title">
-          <p className="text-sm font-semibold text-burgundy">Profil personal</p>
+          <p className="text-sm font-semibold text-primary">Profil personal</p>
           <h2 id="pcm-evolution-title" className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Evoluție PCM</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <PcmTransition label="Bază" cycles={cycles} reports={reports} value={(report) => report.pcm_base} />

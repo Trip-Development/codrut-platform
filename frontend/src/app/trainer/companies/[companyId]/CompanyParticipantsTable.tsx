@@ -67,16 +67,23 @@ export function CompanyParticipantsTable({
               label="Caută participant"
               value={query}
               onValueChange={updateQuery}
-              placeholder="Caută după nume, email, rol sau manager"
+              placeholder="Caută participanți"
               className="max-w-2xl"
             />
           </div>
           <span className="sr-only" role="status" aria-live="polite">
             {query !== deferredQuery ? "Se actualizează lista" : ""}
           </span>
-          <div className="overflow-x-auto [scrollbar-width:thin]">
-            <table className="w-full min-w-[52rem] text-left text-sm">
-              <thead className="bg-muted/60 text-xs font-semibold text-muted-foreground">
+          <div className="md:overflow-x-auto md:[scrollbar-width:thin]">
+            <table className="block w-full text-left text-sm md:table md:min-w-[52rem] xl:min-w-0 xl:table-fixed">
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[28%]" />
+                <col className="w-[18%]" />
+                <col className="w-[20%]" />
+                <col className="w-[12%]" />
+              </colgroup>
+              <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
                 <tr>
                   <th scope="col" className="min-w-52 px-5 py-3">Participant</th>
                   <th scope="col" className="min-w-56 px-4 py-3">Email</th>
@@ -85,22 +92,30 @@ export function CompanyParticipantsTable({
                   <th scope="col" className="min-w-32 px-4 py-3">Cont</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="block divide-y divide-border md:table-row-group">
                 {visibleParticipants.length > 0 ? visibleParticipants.map((participant) => {
                   const hasPermanentAccount = hasPermanentParticipantAccount(participant);
                   return (
-                    <tr key={participant.id} className="transition-colors hover:bg-muted/35">
-                      <td className="px-5 py-4 font-semibold text-foreground">{participant.full_name}</td>
-                      <td className="px-4 py-4 text-muted-foreground">{participant.email ?? "Email lipsă"}</td>
-                      <td className="px-4 py-4 text-foreground">
+                    <tr key={participant.id} className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
+                      <td className="col-span-2 row-start-1 font-semibold text-foreground md:px-5 md:py-4">{participant.full_name}</td>
+                      <td className="col-span-2 row-start-2 break-all text-muted-foreground md:px-4 md:py-4">
+                        <span className="mb-1 block text-xs font-medium md:hidden">Email</span>
+                        {participant.email ?? "Email lipsă"}
+                      </td>
+                      <td className="col-start-1 row-start-3 text-foreground md:px-4 md:py-4">
+                        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Rol</span>
                         {participant.position ?? (participant.role_group === "leadership" ? "Leadership" : "Membru")}
                       </td>
-                      <td className="px-4 py-4 text-muted-foreground">{participant.reports_to_name ?? "Fără manager"}</td>
-                      <td className="px-4 py-4">
+                      <td className="col-start-2 row-start-3 text-right text-muted-foreground md:px-4 md:py-4 md:text-left">
+                        <span className="mb-1 block text-xs font-medium md:hidden">Manager</span>
+                        {participant.reports_to_name ?? "Fără manager"}
+                      </td>
+                      <td className="col-span-2 row-start-4 border-t pt-3 md:border-0 md:px-4 md:py-4">
+                        <span className="mb-1 block text-xs font-medium text-muted-foreground md:hidden">Cont</span>
                         <span className="inline-flex items-center gap-2 whitespace-nowrap font-medium text-foreground">
                           <span
                             aria-hidden="true"
-                            className={hasPermanentAccount ? "size-2 rounded-full bg-emerald-500" : "size-2 rounded-full bg-zinc-400"}
+                            className={hasPermanentAccount ? "size-2 rounded-full bg-success-ink" : "size-2 rounded-full bg-muted-foreground"}
                           />
                           {hasPermanentAccount ? "Activ" : "Necreat"}
                         </span>
@@ -108,8 +123,8 @@ export function CompanyParticipantsTable({
                     </tr>
                   );
                 }) : (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  <tr className="block md:table-row">
+                    <td colSpan={5} className="block px-5 py-10 text-center text-sm text-muted-foreground md:table-cell">
                       Niciun participant pentru căutarea curentă.
                     </td>
                   </tr>

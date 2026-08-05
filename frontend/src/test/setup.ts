@@ -63,5 +63,4 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("next/font/google", () => ({
   Geist: () => ({ className: "__geist", variable: "__geist-variable" }),
-  Fraunces: () => ({ className: "__fraunces", variable: "__fraunces-variable" }),
 }));

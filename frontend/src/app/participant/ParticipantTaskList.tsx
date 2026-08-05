@@ -216,7 +216,7 @@ export function ParticipantTaskList({
                       ? "text-success-ink"
                       : readOnly
                         ? "text-muted-foreground"
-                        : "text-burgundy",
+                        : "text-brand-text",
                   )}
                 >
                   {readOnly
@@ -296,7 +296,7 @@ function ParticipantTaskRow({
                 ? "text-success-ink"
                 : readOnly
                   ? "text-muted-foreground"
-                  : "text-burgundy",
+                  : "text-brand-text",
             )}
           >
             {readOnly && !isComplete ? "Închis" : copy.label}

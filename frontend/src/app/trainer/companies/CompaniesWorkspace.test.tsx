@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -46,6 +46,10 @@ describe("CompaniesWorkspace", () => {
     expect(screen.getAllByText("Michelin").length).toBeGreaterThan(0);
     expect(screen.queryByText("Local-only client")).toBeNull();
     expect(getCompanyList).not.toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Lista companiilor" }).textContent).toContain(
+      "1 companie",
+    );
+    expect(screen.queryByRole("complementary", { name: "Contextul fluxului" })).toBeNull();
   });
 
   it("keeps destructive company actions out of the company grid", async () => {
@@ -92,7 +96,7 @@ describe("CompaniesWorkspace", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Caută după denumire, cod, status sau etapă"), {
+    fireEvent.change(screen.getByPlaceholderText("Caută companii"), {
       target: { value: "Radacini" },
     });
 
@@ -116,7 +120,7 @@ describe("CompaniesWorkspace", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Caută după denumire, cod, status sau etapă"), {
+    fireEvent.change(screen.getByPlaceholderText("Caută companii"), {
       target: { value: "ID ATLASMO" },
     });
 
@@ -160,6 +164,35 @@ describe("CompaniesWorkspace", () => {
     expect(screen.getByText("1 selectată")).toBeTruthy();
   });
 
+  it("collapses mobile filters behind one accessible sheet trigger", async () => {
+    render(
+      <CompaniesWorkspace
+        initialCompanies={[
+          {
+            id: "backend-company",
+            name: "Michelin",
+            participantCount: 0,
+            projectCount: 0,
+            assignmentCount: 0,
+            completedCount: 0,
+            stage: "setup",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Filtre" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Filtre" }));
+    const filterDialog = screen.getByRole("dialog", { name: "Filtre" });
+    expect(filterDialog).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Închide filtrele" })).toBeTruthy();
+    fireEvent.click(within(filterDialog).getByRole("combobox", { name: "Status" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Necesită acțiune" }));
+    fireEvent.click(screen.getByRole("button", { name: "Gata" }));
+    expect(screen.queryByRole("dialog", { name: "Filtre" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Filtre, 1 active" })).toBeTruthy();
+  });
+
   it("shows a full pending surface while creating the first company", async () => {
     let resolveCreate!: (value: Awaited<ReturnType<typeof createCompany>>) => void;
     vi.mocked(createCompany).mockImplementation(
@@ -170,7 +203,7 @@ describe("CompaniesWorkspace", () => {
 
     render(<CompaniesWorkspace initialCompanies={[]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Companie nouă" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Companie nouă" })[0]);
     const companyNameInput = await screen.findByLabelText("Nume companie");
     fireEvent.change(companyNameInput, {
       target: { value: "Compania nouă" },

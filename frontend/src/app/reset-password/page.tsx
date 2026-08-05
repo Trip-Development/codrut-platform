@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
           </Link>
 
           {success ? (
-            <div className="rounded-lg border bg-surface p-6 shadow-sm">
+            <div className="rounded-lg border bg-surface p-6">
               <CheckCircle2Icon className="size-9 text-primary" aria-hidden="true" />
               <h1 className="mt-6 text-3xl font-semibold leading-tight tracking-normal">
                 Solicitarea a fost primită.

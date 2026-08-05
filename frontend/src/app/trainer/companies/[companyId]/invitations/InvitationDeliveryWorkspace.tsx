@@ -900,7 +900,7 @@ export function InvitationDeliveryWorkspace({
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-end gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -911,27 +911,43 @@ export function InvitationDeliveryWorkspace({
               <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
               Actualizează livrarea
             </Button>
-            <FilterButton active={invitationFilter === "all"} onClick={() => setInvitationFilter("all")}>
-              Toți {rows.length}
-            </FilterButton>
-            <FilterButton active={invitationFilter === "ready"} onClick={() => setInvitationFilter("ready")}>
-              Netrimiși {readyCount}
-            </FilterButton>
-            <FilterButton active={invitationFilter === "errors"} onClick={() => setInvitationFilter("errors")}>
-              Erori {errorCount}
-            </FilterButton>
-            <FilterButton
-              active={invitationFilter === "no_assignments"}
-              onClick={() => setInvitationFilter("no_assignments")}
+            <SelectControl
+              label="Filtru invitații"
+              wrapperClassName="order-first w-full md:hidden"
+              value={invitationFilter}
+              onChange={(event) => setInvitationFilter(event.target.value as InvitationFilter)}
             >
-              Fără asignări {noAssignmentCount}
-            </FilterButton>
-            <FilterButton
-              active={invitationFilter === "not_signed_up"}
-              onClick={() => setInvitationFilter("not_signed_up")}
-            >
-              Fără cont {rows.filter((row) => !row.signedUp).length}
-            </FilterButton>
+              <option value="all">Toți ({rows.length})</option>
+              <option value="ready">Netrimiși ({readyCount})</option>
+              <option value="errors">Erori ({errorCount})</option>
+              <option value="no_assignments">Fără asignări ({noAssignmentCount})</option>
+              <option value="not_signed_up">
+                Fără cont ({rows.filter((row) => !row.signedUp).length})
+              </option>
+            </SelectControl>
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
+              <FilterButton active={invitationFilter === "all"} onClick={() => setInvitationFilter("all")}>
+                Toți {rows.length}
+              </FilterButton>
+              <FilterButton active={invitationFilter === "ready"} onClick={() => setInvitationFilter("ready")}>
+                Netrimiși {readyCount}
+              </FilterButton>
+              <FilterButton active={invitationFilter === "errors"} onClick={() => setInvitationFilter("errors")}>
+                Erori {errorCount}
+              </FilterButton>
+              <FilterButton
+                active={invitationFilter === "no_assignments"}
+                onClick={() => setInvitationFilter("no_assignments")}
+              >
+                Fără asignări {noAssignmentCount}
+              </FilterButton>
+              <FilterButton
+                active={invitationFilter === "not_signed_up"}
+                onClick={() => setInvitationFilter("not_signed_up")}
+              >
+                Fără cont {rows.filter((row) => !row.signedUp).length}
+              </FilterButton>
+            </div>
             <Button
               type="button"
               variant="ghost"
@@ -991,9 +1007,9 @@ export function InvitationDeliveryWorkspace({
           ) : null}
         </header>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-[920px] w-full text-left text-sm">
-            <thead className="bg-muted text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        <div className="md:overflow-x-auto">
+          <table className="block w-full text-left text-sm md:table md:min-w-[920px] xl:min-w-0 xl:table-fixed">
+            <thead className="hidden bg-muted text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:table-header-group">
               <tr>
                 <th className="w-12 px-4 py-3">
                   <Checkbox
@@ -1011,7 +1027,7 @@ export function InvitationDeliveryWorkspace({
                 <th className="px-4 py-3 text-right">Acțiune</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="block divide-y divide-border md:table-row-group">
               {rows.length === 0 ? (
                 <EmptyTableRow colSpan={7}>Nu există participanți.</EmptyTableRow>
               ) : filteredRows.length === 0 ? (
@@ -1021,11 +1037,11 @@ export function InvitationDeliveryWorkspace({
                   <tr
                     key={invitationIdentity(selectedCycleId, row.participant.id)}
                     className={cn(
-                      "align-top transition-colors hover:bg-muted/60",
-                      row.deliveryTone === "danger" && "bg-burgundy/5",
+                      "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-4 px-4 py-4 align-top transition-colors hover:bg-muted/60 md:table-row md:px-0 md:py-0",
+                      row.deliveryTone === "danger" && "bg-destructive/5",
                     )}
                   >
-                    <td className="px-4 py-3">
+                    <td className="col-start-1 row-start-1 pt-0.5 md:table-cell md:px-4 md:py-3">
                       <Checkbox
                         aria-label={`Selectează ${row.participant.full_name}`}
                         checked={selectedParticipantIds.has(row.participant.id)}
@@ -1033,14 +1049,15 @@ export function InvitationDeliveryWorkspace({
                         onCheckedChange={() => toggleParticipantSelection(row.participant.id)}
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="col-start-2 row-start-1 min-w-0 md:table-cell md:px-4 md:py-3">
                       <p className="font-semibold text-foreground">{row.participant.full_name}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{row.participant.email ?? "Email lipsă"}</p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="col-span-2 col-start-2 row-start-2 min-w-0 md:table-cell md:px-4 md:py-3">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Livrare</p>
                       <StatusMarker tone={row.deliveryTone}>{row.deliveryLabel}</StatusMarker>
                       {row.deliveryError ? (
-                        <p className="mt-2 max-w-56 text-xs font-medium text-burgundy">{row.deliveryError}</p>
+                        <p className="mt-2 max-w-56 text-xs font-medium text-destructive">{row.deliveryError}</p>
                       ) : null}
                       {row.secureLinkExpiresAt ? (
                         <p className="mt-2 text-xs text-muted-foreground">
@@ -1048,19 +1065,21 @@ export function InvitationDeliveryWorkspace({
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="col-start-2 row-start-3 md:table-cell md:px-4 md:py-3">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Cont</p>
                       <StatusMarker tone={row.signedUp ? "success" : "warning"}>
                         {row.signedUp ? "Activ" : "Neînregistrat"}
                       </StatusMarker>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="col-start-3 row-start-3 text-right md:table-cell md:px-4 md:py-3 md:text-left">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Sarcini</p>
                       <button
                         type="button"
                         aria-expanded={expandedTaskParticipantIds.has(row.participant.id)}
                         aria-controls={`invitation-tasks-${selectedCycleId ?? "legacy"}-${row.participant.id}`}
                         onClick={() => toggleTaskDetails(row.participant.id)}
                         disabled={row.totalTasks === 0}
-                        className="inline-flex items-center gap-2 whitespace-nowrap font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/45 disabled:cursor-default disabled:text-muted-foreground"
+                        className="-mx-2 inline-flex min-h-9 items-center gap-2 whitespace-nowrap rounded-sm px-2 font-semibold text-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-brand-text focus-visible:ring-2 focus-visible:ring-ring/45 active:scale-[0.98] disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-transparent motion-reduce:active:transform-none"
                       >
                         {row.totalTasks > 0 ? `${row.completionLabel} finalizate` : "0 sarcini"}
                         {row.totalTasks > 0 ? (
@@ -1079,8 +1098,11 @@ export function InvitationDeliveryWorkspace({
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.nextAction}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="col-span-2 col-start-2 row-start-4 text-muted-foreground md:table-cell md:px-4 md:py-3">
+                      <span className="mr-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Următorul pas</span>
+                      {row.nextAction}
+                    </td>
+                    <td className="col-start-3 row-start-1 text-right md:table-cell md:px-4 md:py-3">
                       {row.secureLinkUrl ? (
                         <Button
                           type="button"
@@ -1200,7 +1222,7 @@ function InvitationCycleToolbar({
     <section className="flex items-center gap-3 border-b border-border pb-4" aria-label="Evaluare selectată">
       <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <Select value={selectedCycleId ?? undefined} onValueChange={onSelect} disabled={loading}>
-        <SelectTrigger className="h-9 w-full max-w-72 bg-surface" aria-label="Evaluare">
+        <SelectTrigger className="h-9 w-full max-w-72 bg-control" aria-label="Evaluare">
           <SelectValue placeholder={loading ? "Încărcăm evaluările" : "Alege evaluarea"} />
         </SelectTrigger>
         <SelectContent>
@@ -1238,8 +1260,8 @@ function FilterButton({
 
 function EmptyTableRow({ colSpan, children }: { colSpan: number; children: React.ReactNode }) {
   return (
-    <tr>
-      <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-muted-foreground">
+    <tr className="block md:table-row">
+      <td colSpan={colSpan} className="block px-4 py-10 text-center text-sm text-muted-foreground md:table-cell">
         {children}
       </td>
     </tr>
@@ -1259,7 +1281,7 @@ function StatusMarker({
       : tone === "warning"
         ? "border-ochre/20 bg-ochre-100 text-ochre-700"
         : tone === "danger"
-          ? "border-burgundy/20 bg-burgundy/10 text-burgundy"
+          ? "border-destructive/20 bg-destructive/10 text-destructive"
           : "border-border bg-muted text-muted-foreground";
   const dotClass =
     tone === "success"
@@ -1267,7 +1289,7 @@ function StatusMarker({
       : tone === "warning"
         ? "bg-ochre"
         : tone === "danger"
-          ? "bg-burgundy"
+          ? "bg-destructive"
           : "bg-muted-foreground";
 
   return (

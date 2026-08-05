@@ -1,13 +1,14 @@
 "use client";
 
 import type React from "react";
-import { ArrowLeftIcon, EyeIcon, InfoIcon, Loader2Icon, MailIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, EyeIcon, InfoIcon, Loader2Icon, MailIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import type { EmailTemplate } from "@/api/email";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/utils/cn";
@@ -53,10 +54,14 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
     return (
       <div className="flex flex-col gap-6">
         <div className="filter-toolbar">
-          <div className="relative w-full md:flex-1">
-            <SearchIcon aria-hidden="true" className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-foreground/40" strokeWidth={1.8} />
-            <Input type="text" value={props.searchQuery} onChange={(event) => props.onSearchChange(event.target.value)} placeholder="Caută șabloane" className="h-12 pl-12 pr-4" />
-          </div>
+          <SearchField
+            id="email-template-search"
+            label="Caută șabloane"
+            value={props.searchQuery}
+            onValueChange={props.onSearchChange}
+            placeholder="Caută șabloane"
+            className="w-full md:flex-1"
+          />
           <Button type="button" onClick={props.onCreate} disabled={props.isLoading} className="shrink-0">
             {props.operation === "create" ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : <PlusIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />}
             {props.operation === "create" ? "Creăm șablonul" : "Creează șablon"}
@@ -64,7 +69,7 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
         </div>
 
         {props.isLoading && props.templateCount === 0 ? (
-          <div className="flex min-h-64 items-center justify-center rounded-lg border border-[var(--border)] bg-surface p-6 text-foreground shadow-sm">
+          <div className="flex min-h-64 items-center justify-center rounded-lg border border-[var(--border)] bg-surface p-6 text-foreground">
             <OperationFeedback
               className="w-full max-w-md"
               title={props.operation === "create" ? "Creăm șablonul" : "Încărcăm șabloanele"}
@@ -72,7 +77,7 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
             />
           </div>
         ) : props.filteredTemplates.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {props.filteredTemplates.map((template) => (
               <Button
                 key={template.id}
@@ -80,19 +85,19 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
                 variant="outline"
                 onClick={() => { props.onSelectTemplate(template.id); props.setIsEditing(false); }}
                 aria-label={`Deschide șablon ${template.name}`}
-                className="group relative h-full min-h-[220px] items-stretch justify-start overflow-hidden whitespace-normal border-[var(--border)] bg-surface p-6 text-left shadow-sm hover:border-burgundy/25"
+                className="group relative h-full min-h-[10rem] items-stretch justify-start overflow-hidden whitespace-normal border-[var(--border)] bg-surface p-5 text-left shadow-none hover:border-primary/25 hover:bg-muted/25 md:min-h-[13rem]"
               >
                 <div className="flex h-full w-full flex-col">
                   <div className="mb-4 flex items-start justify-between">
                     <span className={cn("rounded-md border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]", template.lane === "transactional" ? "status-success" : "status-info-soft border border-border")}>{template.lane === "transactional" ? "Sistem" : "Campanie"}</span>
                     <span className="rounded-lg border border-[var(--border)] bg-surface-muted px-3 py-1 text-[10px] font-bold text-foreground/60">v{template.version ?? 1}</span>
                   </div>
-                  <h4 className="mb-2 line-clamp-1 text-xl font-bold text-foreground transition-colors group-hover:text-burgundy">{template.name}</h4>
+                  <h4 className="mb-2 line-clamp-1 text-xl font-bold text-foreground transition-colors group-hover:text-primary">{template.name}</h4>
                   <p className="mb-4 min-h-[2.5rem] line-clamp-2 text-sm font-medium leading-relaxed text-foreground/60">{template.subject || "Fără subiect"}</p>
                   <div className="mt-auto flex items-center justify-between border-t border-[var(--border)] pt-4">
                     <div className="flex flex-wrap gap-1.5">
-                      {template.placeholders.slice(0, 3).map((placeholder) => <div key={placeholder} className="inline-block rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 font-mono text-[10px] font-bold text-foreground/60 shadow-sm">{placeholder.replace("{", "").replace("}", "")}</div>)}
-                      {template.placeholders.length > 3 ? <div className="inline-flex items-center justify-center rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 text-[10px] font-bold text-foreground/60 shadow-sm">+{template.placeholders.length - 3}</div> : null}
+                      {template.placeholders.slice(0, 3).map((placeholder) => <div key={placeholder} className="inline-block rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 font-mono text-[10px] font-bold text-foreground/60">{placeholder.replace("{", "").replace("}", "")}</div>)}
+                      {template.placeholders.length > 3 ? <div className="inline-flex items-center justify-center rounded-md border border-[var(--border)] bg-surface-muted px-2 py-1 text-[10px] font-bold text-foreground/60">+{template.placeholders.length - 3}</div> : null}
                     </div>
                   </div>
                 </div>
@@ -101,7 +106,7 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
           </div>
         ) : (
           <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-[var(--border)] bg-surface-muted p-6 text-center">
-            <div className="mb-4 flex size-16 items-center justify-center rounded-lg bg-surface text-foreground/30 shadow-sm"><MailIcon aria-hidden="true" className="size-8" strokeWidth={1.8} /></div>
+            <MailIcon aria-hidden="true" className="mb-4 size-9 text-muted-foreground" strokeWidth={1.8} />
             <p className="mb-1 text-lg font-bold text-foreground">Niciun șablon găsit</p>
             <p className="text-sm font-medium text-foreground/50">Modifică termenii de căutare sau creează un șablon nou.</p>
           </div>
@@ -113,13 +118,13 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Button type="button" variant="outline" size="sm" onClick={() => props.onSelectTemplate("")} disabled={props.isLoading} className="text-foreground/62 hover:text-foreground">
-          <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />Înapoi la catalog
+        <Button type="button" variant="ghost" size="icon-sm" onClick={() => props.onSelectTemplate("")} disabled={props.isLoading} aria-label="Înapoi la catalog" title="Înapoi la catalog" className="text-foreground/62 hover:text-foreground">
+          <ArrowLeftIcon aria-hidden="true" strokeWidth={1.8} />
         </Button>
       </div>
       {selectedTemplate ? (
         <main className="grid gap-6 xl:grid-cols-2">
-          <section className="flex flex-col rounded-lg border border-[var(--border)] bg-surface p-6 text-foreground shadow-sm">
+          <section className="flex flex-col rounded-lg border border-[var(--border)] bg-surface p-5 text-foreground md:p-6">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div><h3 className="text-xl font-bold text-foreground">{props.isEditing ? "Modificare șablon" : "Detalii șablon"}</h3><p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/50">Versiunea {selectedTemplate.version ?? 1}</p></div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -193,9 +198,9 @@ export function TemplatesWorkspaceView(props: TemplatesWorkspaceViewProps) {
             </FieldGroup>
           </section>
 
-          <section className="flex flex-col rounded-lg border border-[var(--border)] bg-surface p-6 text-foreground shadow-sm">
-            <div className="mb-5 flex items-center gap-3 border-b border-[var(--border)] pb-4"><div className="flex size-8 items-center justify-center rounded-md bg-burgundy/10 text-burgundy"><EyeIcon aria-hidden="true" className="size-4" strokeWidth={1.8} /></div><h3 className="text-sm font-bold uppercase tracking-wider text-foreground/80">Previzualizare Live</h3></div>
-            <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-surface shadow-sm">
+          <section className="flex flex-col rounded-lg border border-[var(--border)] bg-surface p-5 text-foreground md:p-6">
+            <div className="mb-5 flex items-center gap-3 border-b border-[var(--border)] pb-4"><EyeIcon aria-hidden="true" className="size-4 text-muted-foreground" strokeWidth={1.8} /><h3 className="text-sm font-bold uppercase tracking-wider text-foreground/80">Previzualizare Live</h3></div>
+            <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-surface">
               <div className="flex flex-col gap-2 border-b border-[var(--border)] bg-surface-muted p-5 text-xs text-foreground/60">
                 <div className="flex items-center justify-between"><p><strong className="text-foreground/80">De la:</strong> Andrei Văcaru</p><span className="font-mono text-[10px] opacity-50">10:42 AM</span></div>
                 <p><strong className="text-foreground/80">Către:</strong> {MOCK_REPLACEMENTS["{first_name}"]}</p><p className="pt-1 text-sm font-bold text-foreground">{props.preview.subject}</p>

@@ -103,7 +103,7 @@ export default async function ProjectReportsPage({
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-burgundy">{project.name}</p>
+          <p className="text-sm font-semibold text-primary">{project.name}</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
             {selectedCycle ? selectedCycle.name : "Evoluția proiectului"}
           </h1>
@@ -261,7 +261,7 @@ function ProjectCyclesComparison({
         {!hierarchyAmbiguous ? (
           <Link
             href={`${reportsPath}/lencioni`}
-            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-burgundy hover:underline"
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary hover:underline"
           >
             Vezi rezultatele pe echipe
             <ArrowRightIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
@@ -585,7 +585,7 @@ function ProjectCycleResults({
         ) : (
           <Link
             href={`${reportsPath}/lencioni${reportQuery}`}
-            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-burgundy hover:underline"
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary hover:underline"
           >
             Vezi rezultatele pe echipe
             <ArrowRightIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
@@ -827,10 +827,10 @@ function LeadershipMembers({
           className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45"
         >
           <span>
-            <span className="block font-semibold text-foreground group-hover:text-burgundy">{member.full_name}</span>
+            <span className="block font-semibold text-foreground group-hover:text-primary">{member.full_name}</span>
             <span className="mt-1 block text-sm text-muted-foreground">{member.position || "Membru leadership"}</span>
           </span>
-          <ArrowRightIcon aria-hidden="true" className="size-4 text-muted-foreground group-hover:text-burgundy" strokeWidth={1.8} />
+          <ArrowRightIcon aria-hidden="true" className="size-4 text-muted-foreground group-hover:text-primary" strokeWidth={1.8} />
         </Link>
       ))}
     </Card>

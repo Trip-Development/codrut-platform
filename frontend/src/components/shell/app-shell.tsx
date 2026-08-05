@@ -304,24 +304,15 @@ export function AppShell({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               collapsed ? "mx-auto size-8 justify-center rounded-md" : "h-10 gap-3 rounded-md px-2.5",
               active
-                ? "bg-primary/8 text-primary ring-1 ring-primary/10"
+                ? "bg-sidebar-accent text-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
             )}
           >
-            {active ? (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "absolute top-1/2 w-1 -translate-y-1/2 rounded-r-full bg-primary shadow-sm",
-                  collapsed ? "-left-2 h-5" : "-left-3 h-6",
-                )}
-              />
-            ) : null}
             <Icon
               aria-hidden="true"
               className={cn(
                 "size-4 shrink-0 transition-colors",
-                active ? "text-current" : "text-foreground/45 group-hover:text-foreground/72",
+                active ? "text-brand-text" : "text-foreground/45 group-hover:text-foreground/72",
               )}
               strokeWidth={1.8}
             />
@@ -333,14 +324,14 @@ export function AppShell({
   );
 
   return (
-    <div className="app-min-height flex flex-col bg-background text-foreground md:flex-row">
+    <div className="app-min-height flex flex-col bg-background text-foreground lg:flex-row">
       <aside
         aria-label="Navigare principală"
         data-codrut-sidebar
         className={cn(
-          "hidden h-[100dvh] shrink-0 border-r bg-sidebar text-sidebar-foreground md:sticky md:top-0 md:z-30 md:flex md:flex-col",
+          "hidden h-[100dvh] shrink-0 border-r bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:z-30 lg:flex lg:flex-col",
           isSidebarWidthTransitioning ? "transition-[width] duration-200 ease-out" : "transition-none",
-          isSidebarCollapsed ? "w-14" : "w-48",
+          isSidebarCollapsed ? "w-14" : "w-[248px]",
         )}
       >
         <div className={cn("flex items-center gap-2 px-3 py-4", isSidebarCollapsed && "justify-center px-2")}>
@@ -413,7 +404,7 @@ export function AppShell({
 
                 <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3 px-3 py-2">
                   <span className="text-xs font-medium text-muted-foreground">Temă</span>
-                  <ThemeSelector className="h-9 w-full min-w-0 bg-background px-3 font-medium" />
+                  <ThemeSelector className="h-9 w-full min-w-0 bg-control px-3 font-medium" />
                 </div>
 
                 <Separator />
@@ -495,7 +486,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b bg-surface/95 px-4 py-3 shadow-sm md:hidden">
+      <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b bg-surface/95 px-4 py-3 lg:hidden">
         <Link
           href="/"
           className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
@@ -506,10 +497,11 @@ export function AppShell({
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="icon-sm"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Deschide meniul de navigare"
+            className="border-0 shadow-none"
           >
             <MenuIcon aria-hidden="true" strokeWidth={1.8} />
           </Button>
@@ -518,7 +510,7 @@ export function AppShell({
 
       {mobileMenuOpen ? (
         <div
-          className="fixed inset-0 z-50 bg-foreground/35 md:hidden"
+          className="fixed inset-0 z-50 bg-foreground/35 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
           <nav
@@ -530,7 +522,7 @@ export function AppShell({
               <BrandMark size="sm" subtitle="" />
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Închide meniul"
@@ -561,7 +553,7 @@ export function AppShell({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-muted-foreground">Temă</span>
-                <ThemeSelector className="h-10 min-w-36 bg-background px-3 font-medium" />
+                <ThemeSelector className="h-10 min-w-36 bg-control px-3 font-medium" />
               </div>
               {alternateWorkspaceHref ? (
                 <Button asChild variant="outline" className="w-full justify-start">
@@ -592,14 +584,14 @@ export function AppShell({
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="mx-auto w-full max-w-[1420px] flex-1 px-4 py-5 md:px-6 lg:px-8 lg:py-7">
+        <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 md:px-6 lg:px-6 lg:py-6">
           {showHeader ? (
-            <section className="mb-7 flex items-start justify-between gap-6 px-1 py-2">
+            <section className="mb-7 flex flex-col items-start justify-between gap-4 px-1 py-2 md:flex-row md:gap-6">
               <div className="min-w-0">
                 {eyebrow ? (
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-primary">{eyebrow}</p>
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-brand-text">{eyebrow}</p>
                 ) : null}
-                <h1 className="text-3xl font-semibold leading-tight tracking-normal text-foreground md:text-[2rem]">
+                <h1 className="text-[28px] font-semibold leading-[34px] tracking-[-0.02em] text-foreground">
                   {title}
                 </h1>
                 {description ? (
@@ -608,6 +600,9 @@ export function AppShell({
               </div>
               {headerActions ? (
                 <div className="hidden shrink-0 items-center gap-2 md:flex">{headerActions}</div>
+              ) : null}
+              {headerActions ? (
+                <div className="flex w-full items-center gap-2 md:hidden">{headerActions}</div>
               ) : null}
             </section>
           ) : null}

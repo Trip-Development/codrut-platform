@@ -6,7 +6,6 @@ import {
   ChevronDownIcon,
   Loader2Icon,
   PencilIcon,
-  SearchIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react";
@@ -23,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { SelectControl } from "@/components/ui/select-control";
 import { cn } from "@/utils/cn";
@@ -90,16 +89,13 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
   }
 
   return (
-    <div className="p-5">
-      <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-surface">
+    <div className="p-2 sm:p-3">
+      <div className="overflow-hidden rounded-md">
         {props.campaigns.map((campaign) => {
           const memberIds = props.memberships[campaign.id] ?? [];
           const activeMemberIds = props.getActiveMemberIds(campaign);
           const sendableMemberIds = props.getSendableMemberIds(campaign);
           const sentMemberCount = activeMemberIds.filter((recipientId) => props.getRecipientDelivery(campaign, recipientId) === "sent").length;
-          const unsentLabel = sendableMemberIds.length === 1
-            ? "1 netrimis"
-            : `${sendableMemberIds.length} netrimiși`;
           const eligibleRecipients = props.getEligibleRecipients();
           const visibleEligibleRecipients = props.getVisibleEligibleRecipients(campaign);
           const membershipSearch = props.membershipSearches[campaign.id] ?? "";
@@ -110,6 +106,7 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
           const isOpen = props.openCampaignId === campaign.id;
           const isSending = props.sendingCampaignId === campaign.id;
           const sendMode = sendModes[campaign.id] ?? "selected";
+          const recipientSummary = `Destinatari (${activeMemberIds.length}/${eligibleRecipients.length}, ${sendableMemberIds.length} ${sendableMemberIds.length === 1 ? "netrimis" : "netrimiși"})`;
           const readinessError = campaignSendReadinessError(campaign);
           const plannedSendCount = sendMode === "all"
             ? activeMemberIds.length
@@ -146,19 +143,19 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
 
           return (
             <article key={campaign.id} className={cn("overflow-hidden border-b border-[var(--border)] bg-surface transition-colors last:border-b-0", isOpen && "bg-background")}>
-              <button type="button" aria-expanded={isOpen} onClick={() => props.setOpenCampaignId(isOpen ? null : campaign.id)} className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-surface-muted xl:grid-cols-[minmax(18rem,1.1fr)_minmax(27rem,1.5fr)_auto] xl:items-center">
+              <button type="button" aria-expanded={isOpen} onClick={() => props.setOpenCampaignId(isOpen ? null : campaign.id)} className="grid w-full gap-3 px-4 py-3 text-left outline-none transition-[background-color,transform] duration-150 hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/45 active:scale-[0.995] motion-reduce:active:transform-none xl:grid-cols-[minmax(18rem,1.1fr)_minmax(27rem,1.5fr)_auto] xl:items-center">
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2"><CampaignStatusBadge status={campaign.status} /><Badge variant="outline" className="rounded-md text-[10px] uppercase tracking-[0.12em]">{campaignSegmentLabel(campaign.segment)}</Badge></span>
                   <span className="mt-2 block truncate text-sm font-semibold text-foreground">{campaign.name}</span>
                   <span className="mt-1 block truncate text-xs font-medium text-muted-foreground">{campaign.subject}</span>
                 </span>
-                  <span className="grid min-w-0 gap-3 text-xs sm:grid-cols-4">
-                  <span className="min-w-0"><span className="block font-medium text-muted-foreground">Listă</span><span className="mt-1 block truncate font-semibold text-foreground">Destinatari ({activeMemberIds.length}/{eligibleRecipients.length}, {unsentLabel})</span></span>
+                <span aria-label={recipientSummary} className="grid min-w-0 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <span className="min-w-0"><span className="block font-medium text-muted-foreground">Listă</span><span className="mt-1 block font-semibold tabular-nums text-foreground">{activeMemberIds.length}/{eligibleRecipients.length} destinatari</span></span>
                   <span><span className="block font-medium text-muted-foreground">Trimiși</span><span className="mt-1 block font-semibold tabular-nums text-foreground">{sentMemberCount}</span></span>
                   <span><span className="block font-medium text-muted-foreground">Conținut</span><span className="mt-1 block font-semibold text-foreground">{campaign.video_url ? "Video" : campaign.thumbnail_url ? "Imagine" : campaign.landing_page_url ? "Link" : "Doar email"}</span></span>
                   <span><span className="block font-medium text-muted-foreground">Livrare</span><span className="mt-1 block font-semibold text-foreground">{deliverySummary}</span></span>
                 </span>
-                <span className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-2 text-xs font-semibold text-foreground/62">{isOpen ? "Închide" : "Deschide"}<ChevronDownIcon aria-hidden="true" className={cn("size-4 transition-transform", isOpen && "rotate-180")} strokeWidth={1.8} /></span>
+                <span className="inline-flex h-9 items-center justify-center justify-self-end gap-2 rounded-md px-2 text-xs font-semibold text-foreground/62">{isOpen ? "Închide" : "Deschide"}<ChevronDownIcon aria-hidden="true" className={cn("size-4 transition-transform", isOpen && "rotate-180")} strokeWidth={1.8} /></span>
               </button>
 
               {isOpen ? (
@@ -166,8 +163,14 @@ export function CampaignsWorkspaceView(props: CampaignsWorkspaceViewProps) {
                   <div className="min-w-0 p-4">
                     <FieldGroup className="grid gap-2 rounded-md bg-surface-muted p-2 lg:grid-cols-[minmax(0,1fr)_11rem_minmax(13rem,0.8fr)]">
                       <Field>
-                        <FieldLabel className="sr-only" htmlFor={`campaign-${campaign.id}-recipient-search`}>Caută destinatari pentru {campaign.name}</FieldLabel>
-                        <div className="relative"><SearchIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.8} /><Input id={`campaign-${campaign.id}-recipient-search`} value={membershipSearch} onChange={(event) => props.setMembershipSearch(campaign.id, event.target.value)} className="h-9 rounded-md bg-background pl-9 pr-3 text-xs" placeholder="Caută în toate contactele" /></div>
+                        <SearchField
+                          id={`campaign-${campaign.id}-recipient-search`}
+                          label={`Caută destinatari pentru ${campaign.name}`}
+                          value={membershipSearch}
+                          onValueChange={(value) => props.setMembershipSearch(campaign.id, value)}
+                          placeholder="Caută în toate contactele"
+                          inputClassName="text-xs"
+                        />
                       </Field>
                       <SearchableCombobox
                         icon={UsersIcon}

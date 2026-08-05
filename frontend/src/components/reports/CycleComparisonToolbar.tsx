@@ -50,7 +50,10 @@ export function CycleComparisonToolbar({
   return (
     <div
       className={cn(
-        "grid gap-3 rounded-lg border border-border/80 bg-muted/20 p-3 shadow-none md:grid-cols-[minmax(10rem,0.72fr)_minmax(0,1fr)] md:items-end",
+        "grid gap-3 rounded-lg border border-border/80 bg-muted/20 p-3 shadow-none",
+        cycleId
+          ? "w-full max-w-sm"
+          : "md:grid-cols-[minmax(10rem,0.72fr)_minmax(0,1fr)] md:items-end",
         className,
       )}
       aria-label="Alege evaluarea"
@@ -121,7 +124,7 @@ function CycleSelect({
     <label className="grid w-full min-w-0 gap-1.5 text-[0.6875rem] font-semibold text-muted-foreground">
       {label}
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className="h-10 w-full bg-surface shadow-none" aria-label={label}>
+        <SelectTrigger className="h-10 w-full bg-control shadow-none" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

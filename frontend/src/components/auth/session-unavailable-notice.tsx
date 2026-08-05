@@ -10,9 +10,9 @@ export function SessionUnavailableNotice({ audience }: SessionUnavailableNoticeP
   return (
     <main className="min-h-[100dvh] bg-background px-6 py-10 text-foreground">
       <section className="mx-auto flex min-h-[60vh] max-w-2xl flex-col justify-center">
-        <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface p-6">
           <div className="grid gap-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-burgundy/75">
+            <p className="text-xs font-bold uppercase tracking-wider text-primary/75">
               Verificare sesiune
             </p>
             <h1 className="font-heading text-2xl font-medium tracking-tight text-foreground">

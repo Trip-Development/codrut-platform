@@ -48,10 +48,11 @@ export default async function ProjectLayout({
       headerActions={
         <Link
           href={`/trainer/companies/${project.company_id}`}
-          className={serverLinkButtonClassName({ variant: "outline" })}
+          aria-label="Înapoi la companie"
+          title="Înapoi la companie"
+          className={serverLinkButtonClassName({ variant: "ghost", size: "icon-sm" })}
         >
-          <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" strokeWidth={1.8} />
-          Înapoi la companie
+          <ArrowLeftIcon aria-hidden="true" strokeWidth={1.8} />
         </Link>
       }
     >

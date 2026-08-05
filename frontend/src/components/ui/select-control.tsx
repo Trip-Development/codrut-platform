@@ -30,7 +30,7 @@ function SelectControl({
       <select
         data-slot="select"
         className={cn(
-          "h-11 w-full min-w-0 cursor-pointer appearance-none rounded-lg border border-border bg-surface-elevated px-3.5 py-2 pr-9 text-sm font-semibold text-foreground shadow-none outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60",
+          "h-11 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-control-border bg-control px-3 py-2 pr-9 text-sm font-medium text-foreground shadow-none outline-none transition-[background-color,border-color,box-shadow,color] duration-150 hover:border-foreground/15 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 md:h-9",
           Icon && "pl-10",
           className,
         )}
