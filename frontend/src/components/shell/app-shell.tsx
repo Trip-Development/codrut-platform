@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BarChart3Icon,
   Building2Icon,
@@ -33,6 +33,7 @@ import { Separator } from "@/components/ui/separator";
 import { ThemeSelector } from "@/components/theme/theme-selector";
 import { cn } from "@/utils/cn";
 import type { ShellNavItem } from "./nav";
+import { ProfileAvatar } from "./profile-avatar";
 import { SessionBanner } from "./session-banner";
 
 type AppShellProps = {
@@ -179,6 +180,7 @@ export function AppShell({
   const displayedLabel = displayedIdentity?.label ?? label;
   const displayedAvatarSeed = displayedIdentity?.avatarSeed ?? avatarSeed;
   const displayedAvatarPaletteKey = displayedIdentity?.avatarPaletteKey ?? avatarPaletteKey;
+  const displayedAvatarIdentitySeed = `${audience}:${displayedAvatarSeed}`;
   const identityIsPending = accountIdentityPending && displayedIdentity === null;
   const accountHref = isTrainer ? "/trainer/settings" : "/participant/account";
   const availableWorkspaces = session?.user.availableWorkspaces ?? [session?.user.role ?? audience];
@@ -386,10 +388,10 @@ export function AppShell({
                 className="absolute bottom-[4.75rem] left-3 z-50 flex w-64 flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
               >
                 <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
-                  <ProfileMark
+                  <ProfileAvatar
                     className="size-10"
-                    audience={audience}
-                    seed={displayedAvatarSeed}
+                    label={displayedLabel}
+                    seed={displayedAvatarIdentitySeed}
                     paletteKey={displayedAvatarPaletteKey}
                     pending={identityIsPending}
                   />
@@ -456,10 +458,10 @@ export function AppShell({
               isSidebarCollapsed ? "mx-auto size-10 justify-center" : "w-full gap-3 p-1.5 pr-2",
             )}
           >
-            <ProfileMark
+            <ProfileAvatar
               className="size-8"
-              audience={audience}
-              seed={displayedAvatarSeed}
+              label={displayedLabel}
+              seed={displayedAvatarIdentitySeed}
               paletteKey={displayedAvatarPaletteKey}
               pending={identityIsPending}
             />
@@ -536,10 +538,10 @@ export function AppShell({
             <div className="mt-auto flex flex-col gap-3 pt-5">
               <Separator />
               <div className="flex items-center gap-3 rounded-lg border bg-muted p-2">
-                <ProfileMark
+                <ProfileAvatar
                   className="size-9"
-                  audience={audience}
-                  seed={displayedAvatarSeed}
+                  label={displayedLabel}
+                  seed={displayedAvatarIdentitySeed}
                   paletteKey={displayedAvatarPaletteKey}
                   pending={identityIsPending}
                 />
@@ -612,118 +614,4 @@ export function AppShell({
       </div>
     </div>
   );
-}
-
-function ProfileMark({
-  audience,
-  seed,
-  paletteKey,
-  className,
-  pending = false,
-}: {
-  audience: AppShellProps["audience"];
-  seed: string;
-  paletteKey?: number | null;
-  className?: string;
-  pending?: boolean;
-}) {
-  if (pending) {
-    return (
-      <span
-        aria-hidden="true"
-        className={cn("inline-flex shrink-0 animate-pulse rounded-full bg-foreground/10", className)}
-      />
-    );
-  }
-  const palette = profilePalette(`${audience}:${seed}`, paletteKey);
-
-  return (
-    <span
-      aria-hidden="true"
-      data-profile-avatar
-      data-avatar-palette-key={paletteKey ?? undefined}
-      style={palette.base}
-      className={cn(
-        "relative inline-flex shrink-0 overflow-hidden rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.56),0_10px_24px_-16px_rgba(0,0,0,0.55)]",
-        className,
-      )}
-    >
-      <span
-        className="absolute -left-[18%] top-[8%] size-[66%] rounded-full blur-[1.5px]"
-        style={palette.first}
-      />
-      <span
-        className="absolute bottom-[-18%] right-[-12%] size-[72%] rounded-full blur-[2px]"
-        style={palette.second}
-      />
-      <span className="absolute inset-[18%] rounded-full bg-white/18 blur-[3px]" />
-    </span>
-  );
-}
-
-const AVATAR_PALETTE_SPACE = 55_520_640;
-
-export function profilePalette(seed: string, paletteKey?: number | null): {
-  base: CSSProperties;
-  first: CSSProperties;
-  second: CSSProperties;
-} {
-  const persistedPalette = decodeAvatarPaletteKey(paletteKey);
-  const primaryHash = unsignedHash(seed);
-  const secondaryHash = unsignedHash(`${seed}:secondary`);
-  const primaryHue = persistedPalette?.primaryHue ?? (primaryHash % 360);
-  const highlightOffset = persistedPalette?.highlightOffset ?? (secondaryHash % 68);
-  const depthOffset = persistedPalette?.depthOffset ?? (primaryHash % 54);
-  const angleOffset = persistedPalette?.angleOffset ?? (secondaryHash % 42);
-  const highlightHue = (primaryHue + 24 + highlightOffset) % 360;
-  const depthHue = (primaryHue + 154 + depthOffset) % 360;
-  const angle = 22 + angleOffset;
-  const base = `hsl(${primaryHue} 52% 31%)`;
-  const first = `hsl(${highlightHue} 76% 68%)`;
-  const second = `hsl(${depthHue} 48% 22%)`;
-
-  return {
-    base: {
-      backgroundColor: base,
-      backgroundImage: `linear-gradient(${angle}deg, transparent 12%, hsl(${highlightHue} 78% 72% / 0.18) 48%, transparent 72%), radial-gradient(circle at 32% 22%, ${first} 0, transparent 38%), radial-gradient(circle at 74% 80%, ${second} 0, transparent 48%)`,
-    },
-    first: { backgroundColor: first },
-    second: { backgroundColor: second },
-  };
-}
-
-function decodeAvatarPaletteKey(paletteKey?: number | null): {
-  primaryHue: number;
-  highlightOffset: number;
-  depthOffset: number;
-  angleOffset: number;
-} | null {
-  if (
-    paletteKey === null
-    || paletteKey === undefined
-    || !Number.isSafeInteger(paletteKey)
-    || paletteKey < 0
-    || paletteKey >= AVATAR_PALETTE_SPACE
-  ) {
-    return null;
-  }
-
-  let remaining = paletteKey;
-  const primaryHue = remaining % 360;
-  remaining = Math.floor(remaining / 360);
-  const highlightOffset = remaining % 68;
-  remaining = Math.floor(remaining / 68);
-  const depthOffset = remaining % 54;
-  remaining = Math.floor(remaining / 54);
-  const angleOffset = remaining % 42;
-  return { primaryHue, highlightOffset, depthOffset, angleOffset };
-}
-
-function unsignedHash(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
 }
