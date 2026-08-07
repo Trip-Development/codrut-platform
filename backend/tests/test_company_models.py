@@ -77,6 +77,7 @@ def test_participant_response_distinguishes_shadow_and_permanent_accounts() -> N
         email="permanent@example.com",
         password_hash=hash_password("permanent-password-123"),
         role=UserRole.participant,
+        avatar_palette_key=12_345,
     )
     permanent_profile = ParticipantProfile(
         id=uuid.uuid4(),
@@ -89,6 +90,7 @@ def test_participant_response_distinguishes_shadow_and_permanent_accounts() -> N
 
     assert ParticipantResponse.model_validate(shadow_profile).is_shadow_account is True
     assert ParticipantResponse.model_validate(permanent_profile).is_shadow_account is False
+    assert ParticipantResponse.model_validate(permanent_profile).avatar_palette_key == 12_345
 
 
 def test_participant_profile_is_company_scoped() -> None:

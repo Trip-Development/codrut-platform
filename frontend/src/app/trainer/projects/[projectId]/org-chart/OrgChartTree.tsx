@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { AlertTriangleIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/utils/cn";
@@ -108,7 +109,13 @@ function OrgChartNodeItem({
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <NodeMark name={node.fullName} depth={depth} />
+            <IdentityMark
+              kind="person"
+              label={node.fullName}
+              seed={`participant:${node.id}`}
+              paletteKey={node.avatarPaletteKey}
+              size="md"
+            />
             <div className="min-w-0">
               <p className="break-words font-semibold text-foreground">{node.fullName}</p>
               <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">
@@ -173,40 +180,12 @@ function collectDefaultExpandedIds(roots: OrgChartNode[]): Set<string> {
   return expandedIds;
 }
 
-function NodeMark({ name, depth }: { name: string; depth: number }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold ring-1 ring-inset",
-        depth === 0
-          ? "bg-primary text-primary-foreground ring-primary/20"
-          : depth === 1
-            ? "bg-foreground text-background ring-foreground/15"
-            : "bg-muted text-foreground ring-border",
-      )}
-    >
-      {nodeInitials(name)}
-    </span>
-  );
-}
-
 function NodeChip({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-md bg-surface px-2 py-1 text-[0.7rem] font-semibold text-muted-foreground ring-1 ring-border">
       {children}
     </span>
   );
-}
-
-function nodeInitials(name: string): string {
-  const words = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (words.length === 0) return "OR";
-  if (words.length === 1) return words[0].slice(0, 2).toLocaleUpperCase("ro");
-  return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toLocaleUpperCase("ro");
 }
 
 function warningReasonLabel(reason: OrgChartWarning["reason"]): string {

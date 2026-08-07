@@ -110,6 +110,7 @@ export type CompanyParticipant = {
   pcm_phase?: string | null;
   anonymous_name?: string | null;
   user_id: string | null;
+  avatar_palette_key?: number | null;
   account_type?: "guest" | "registered" | null;
   is_shadow_account?: boolean;
 };

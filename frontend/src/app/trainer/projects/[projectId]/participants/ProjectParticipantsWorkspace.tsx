@@ -26,6 +26,7 @@ import {
   normalizeReportsToName,
 } from "@/api/roster-format";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { RosterImporter } from "@/components/roster-importer";
 import { Button } from "@/components/ui/button";
@@ -731,9 +732,16 @@ function ParticipantRow({
       <th scope="row" className="col-start-1 row-start-1 min-w-0 text-left align-middle font-semibold text-foreground md:px-4 md:py-3">
         <Link
           href={`/trainer/projects/${projectId}/participants/${participant.id}`}
-          className="whitespace-normal break-words underline-offset-4 hover:text-burgundy hover:underline"
+          className="inline-flex min-w-0 items-center gap-3 whitespace-normal break-words underline-offset-4 hover:text-burgundy hover:underline"
         >
-          {participant.full_name}
+          <IdentityMark
+            kind="person"
+            label={participant.full_name}
+            seed={`participant:${participant.id}`}
+            paletteKey={participant.avatar_palette_key}
+            size="sm"
+          />
+          <span className="min-w-0">{participant.full_name}</span>
         </Link>
       </th>
       <td className="col-span-2 row-start-2 break-all align-middle text-foreground/65 md:px-4 md:py-3">

@@ -98,7 +98,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Acasă" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("keeps the account menu wide enough for the theme selector when the sidebar is expanded", () => {
+  it("keeps the account theme control compact when the sidebar is expanded", () => {
     render(
       <AppShell
         audience="participant"
@@ -118,7 +118,7 @@ describe("AppShell", () => {
     expect(accountMenu).not.toBeNull();
     expect(accountMenu?.className).toContain("w-64");
     expect(sidebar?.className).toContain("lg:z-30");
-    expect(screen.getAllByRole("combobox", { name: "Temă" })[0]?.className).toContain("w-full");
+    expect(screen.getAllByRole("combobox", { name: "Temă" })[0]?.className).toContain("w-auto");
   });
 
   it("keeps the generated avatar stable when page copy changes and varies it by account id", () => {

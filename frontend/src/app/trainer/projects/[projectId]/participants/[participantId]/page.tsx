@@ -16,6 +16,7 @@ import {
 } from "@/api/companies";
 import { formatPcmLabel, getPcmProfile } from "@/api/pcm";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/utils/cn";
 import { formatRomanianDate } from "@/utils/date-format";
@@ -88,7 +89,13 @@ export default async function TrainerParticipantReportPage({ params }: TrainerPa
       <section className="grid gap-6 border-b border-border pb-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div>
           <div className="flex min-w-0 items-start gap-5">
-            <ParticipantMark name={participant.full_name} />
+            <IdentityMark
+              kind="person"
+              label={participant.full_name}
+              seed={`participant:${participant.id}`}
+              paletteKey={participant.avatar_palette_key}
+              size="lg"
+            />
             <div className="min-w-0">
               <h2 className="text-3xl font-semibold leading-tight text-foreground">{participant.full_name}</h2>
               <p className="mt-2 break-words text-sm text-muted-foreground">{participant.email ?? "Email lipsă"}</p>
@@ -353,20 +360,6 @@ function ProfilePill({ children, className }: { children: ReactNode; className?:
   );
 }
 
-function ParticipantMark({ name }: { name: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-flex size-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white",
-        participantMarkClass(name),
-      )}
-    >
-      {participantInitials(name)}
-    </span>
-  );
-}
-
 function countToneClass(tone: "default" | "primary" | "success"): string {
   switch (tone) {
     case "primary":
@@ -376,35 +369,6 @@ function countToneClass(tone: "default" | "primary" | "success"): string {
     default:
       return "bg-muted text-foreground";
   }
-}
-
-function participantMarkClass(seed: string): string {
-  const classes = [
-    "bg-primary",
-    "bg-foreground",
-    "bg-muted-foreground",
-    "bg-success-ink",
-    "bg-burgundy-800",
-  ];
-  return classes[Math.abs(hashString(seed)) % classes.length];
-}
-
-function participantInitials(name: string): string {
-  const words = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (words.length === 0) return "PR";
-  if (words.length === 1) return words[0].slice(0, 2).toLocaleUpperCase("ro");
-  return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toLocaleUpperCase("ro");
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-  return hash;
 }
 
 function formatDate(value: string | null | undefined): string {
