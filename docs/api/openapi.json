@@ -5967,6 +5967,17 @@
             ],
             "title": "Anonymous Name"
           },
+          "avatar_palette_key": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Palette Key"
+          },
           "company_id": {
             "format": "uuid",
             "title": "Company Id",
@@ -6943,6 +6954,17 @@
               }
             ],
             "title": "Anonymous Name"
+          },
+          "avatar_palette_key": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Palette Key"
           },
           "company_id": {
             "format": "uuid",

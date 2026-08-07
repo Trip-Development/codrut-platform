@@ -31,6 +31,7 @@ const participants: CompanyParticipant[] = [
     role_group: "leadership",
     pcm_profile: null,
     user_id: "user-2",
+    avatar_palette_key: 12_345,
   },
   {
     id: "participant-3",
@@ -80,5 +81,8 @@ describe("CompanyParticipantsTable", () => {
     expect(shadowRow).toBeTruthy();
     expect(within(permanentRow as HTMLElement).getByText("Activ")).toBeTruthy();
     expect(within(shadowRow as HTMLElement).getByText("Necreat")).toBeTruthy();
+    expect(
+      permanentRow?.querySelector("[data-avatar-palette-key='12345']"),
+    ).toBeTruthy();
   });
 });

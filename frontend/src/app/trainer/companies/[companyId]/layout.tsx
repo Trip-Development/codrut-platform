@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2Icon, SettingsIcon } from "lucide-react";
+import { SettingsIcon } from "lucide-react";
 
 import { getTrainerSession } from "@/api/auth-server";
 import { getCompanyDetail } from "@/api/companies";
 import { getServerApiRequestOptions } from "@/api/server-request";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { AppShell } from "@/components/shell/app-shell";
 import { trainerNavItems } from "@/components/shell/nav";
 import { serverLinkButtonClassName } from "@/components/ui/server-link-button";
@@ -44,7 +45,12 @@ export default async function CompanyDetailLayout({
       <section className="mb-5 rounded-lg border bg-surface px-5 py-5 md:px-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
-            <Building2Icon aria-hidden="true" className="mt-1 hidden size-5 shrink-0 text-primary sm:block" strokeWidth={1.8} />
+            <IdentityMark
+              kind="company"
+              label={company.name}
+              seed={`company:${company.id}`}
+              size="xl"
+            />
             <div className="min-w-0">
               <p className="text-xs font-semibold text-muted-foreground">Companie</p>
               <h1 className="mt-1 break-words text-2xl font-semibold leading-tight text-foreground md:text-3xl">

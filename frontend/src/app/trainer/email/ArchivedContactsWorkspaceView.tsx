@@ -8,10 +8,15 @@ import {
 } from "lucide-react";
 
 import type { CampaignRecipientRow } from "@/api/email";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
-import { campaignRecipientName, campaignRecipientStatusLabel } from "./campaign-domain";
+import {
+  campaignRecipientIdentityLabel,
+  campaignRecipientName,
+  campaignRecipientStatusLabel,
+} from "./campaign-domain";
 
 type ArchiveAction = {
   recipientId: string;
@@ -77,9 +82,12 @@ export function ArchivedContactsWorkspaceView({
                 <tr key={recipient.id} className="transition-colors hover:bg-surface-muted/70">
                   <td className="px-4 py-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-400 text-xs font-semibold uppercase text-white">
-                        {(name || recipient.company || recipient.email).slice(0, 2)}
-                      </span>
+                      <IdentityMark
+                        kind="contact"
+                        label={campaignRecipientIdentityLabel(recipient)}
+                        seed={`contact:${recipient.id}`}
+                        size="sm"
+                      />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-foreground">{recipient.company}</p>
                         <p className="mt-1 truncate text-xs font-medium text-foreground/60">{name || "Contact fără nume"}</p>

@@ -34,6 +34,7 @@ import {
   type EmailSendCapacity,
 } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1050,8 +1051,19 @@ export function InvitationDeliveryWorkspace({
                       />
                     </td>
                     <td className="col-start-2 row-start-1 min-w-0 md:table-cell md:px-4 md:py-3">
-                      <p className="font-semibold text-foreground">{row.participant.full_name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{row.participant.email ?? "Email lipsă"}</p>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <IdentityMark
+                          kind="person"
+                          label={row.participant.full_name}
+                          seed={`participant:${row.participant.id}`}
+                          paletteKey={row.participant.avatar_palette_key}
+                          size="xs"
+                        />
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold text-foreground">{row.participant.full_name}</p>
+                          <p className="mt-1 break-words text-xs text-muted-foreground">{row.participant.email ?? "Email lipsă"}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="col-span-2 col-start-2 row-start-2 min-w-0 md:table-cell md:px-4 md:py-3">
                       <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Livrare</p>

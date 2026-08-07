@@ -202,6 +202,7 @@ class ParticipantResponse(BaseModel):
     id: UUID
     company_id: UUID
     user_id: UUID | None
+    avatar_palette_key: int | None = None
     account_type: Literal["guest", "registered"] | None = None
     is_shadow_account: bool = False
     full_name: str

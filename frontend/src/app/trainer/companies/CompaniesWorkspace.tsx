@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { type CompanyListItem } from "@/api/companies";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -562,7 +563,12 @@ function CompanyTableRow({
           href={`/trainer/companies/${company.id}`}
           className="group inline-flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
         >
-          <EntityMark name={company.name} />
+          <IdentityMark
+            kind="company"
+            label={company.name}
+            seed={`company:${company.id}`}
+            size="md"
+          />
           <span className="min-w-0">
             <span className="block break-words font-semibold text-foreground group-hover:text-brand-text md:truncate">{company.name}</span>
             <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{formatCompanyCode(company)}</span>
@@ -690,20 +696,6 @@ function CompanyStageInline({
   );
 }
 
-function EntityMark({ name }: { name: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold",
-        entityMarkClass(name),
-      )}
-      aria-hidden="true"
-    >
-      {companyInitials(name)}
-    </span>
-  );
-}
-
 function companyStatusKey(company: CompanyListItem): "active" | "attention" | "inactive" {
   if (company.dataUnavailable) return "inactive";
   if (company.projectCount === 0 && company.participantCount === 0) return "inactive";
@@ -782,32 +774,6 @@ function stageLabel(stage: CompanyListItem["stage"]): string {
 function formatCompanyCode(company: CompanyListItem): string {
   const compact = company.id.replace(/[^a-z0-9]/gi, "").toLocaleUpperCase("ro");
   return compact ? `ID ${compact.slice(0, 8)}` : "ID local";
-}
-
-function companyInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "CO";
-  if (words.length === 1) return words[0].slice(0, 2).toLocaleUpperCase("ro");
-  return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toLocaleUpperCase("ro");
-}
-
-function entityMarkClass(seed: string): string {
-  const classes = [
-    "bg-primary text-primary-foreground",
-    "bg-foreground text-background",
-    "bg-muted-foreground text-background",
-    "bg-success text-background",
-    "bg-burgundy-800 text-white",
-  ];
-  return classes[Math.abs(hashString(seed)) % classes.length];
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-  return hash;
 }
 
 function paginationWindow(pageCount: number, currentIndex: number): Array<number | "ellipsis"> {

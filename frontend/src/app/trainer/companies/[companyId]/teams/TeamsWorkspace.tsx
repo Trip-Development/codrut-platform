@@ -12,6 +12,7 @@ import {
   type CompanyTeamMembership,
 } from "@/api/companies";
 import { managerReferenceKey, normalizeReportsToName } from "@/api/roster-format";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
 import { Badge } from "@/components/ui/badge";
@@ -406,9 +407,18 @@ function DerivedTeamCard({ team }: { team: DerivedTeam }) {
       <ol className="mt-4 flex max-h-64 flex-col divide-y divide-border overflow-y-auto">
         {team.members.map(({ membership, participant }) => (
           <li key={membership.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 py-2.5 hover:bg-muted/50">
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
-              <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
+            <span className="flex min-w-0 items-center gap-2.5">
+              <IdentityMark
+                kind="person"
+                label={participant.full_name}
+                seed={`participant:${participant.id}`}
+                paletteKey={participant.avatar_palette_key}
+                size="xs"
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
+                <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
+              </span>
             </span>
             <RoleBadge role={membership.role} />
           </li>
@@ -506,9 +516,18 @@ function TeamCard({
           <ol className="flex max-h-56 flex-col divide-y divide-border overflow-y-auto">
             {members.map(({ membership, participant }) => (
               <li key={membership.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 py-2.5">
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <IdentityMark
+                    kind="person"
+                    label={participant.full_name}
+                    seed={`participant:${participant.id}`}
+                    paletteKey={participant.avatar_palette_key}
+                    size="xs"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-foreground">{participant.full_name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{participant.position ?? "Membru"}</span>
+                  </span>
                 </span>
                 {confirmingMembershipId === membership.id ? (
                   <span className="flex items-center gap-1">

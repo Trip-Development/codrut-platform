@@ -3,6 +3,7 @@
 import { ArchiveIcon, Building2Icon, CheckIcon, CircleDashedIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
 
 import type { CampaignRecipientRow } from "@/api/email";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +13,7 @@ import { SelectControl } from "@/components/ui/select-control";
 import { cn } from "@/utils/cn";
 import {
   campaignRecipientDraft,
+  campaignRecipientIdentityLabel,
   campaignRecipientName,
   campaignRecipientSourceLabel,
   campaignRecipientStatusLabel,
@@ -124,7 +126,12 @@ export function ContactsWorkspaceView(props: ContactsWorkspaceViewProps) {
                       <div className="flex flex-col gap-2"><Input value={draft.organization_name} onChange={(event) => props.updateDraft(recipient.id, "organization_name", event.target.value)} className="h-9 px-3 py-2 text-xs" placeholder="Companie" /><Input value={draft.contact_name} onChange={(event) => props.updateDraft(recipient.id, "contact_name", event.target.value)} className="h-9 px-3 py-2 text-xs" placeholder="Nume contact" /><Input type="email" value={draft.email} onChange={(event) => props.updateDraft(recipient.id, "email", event.target.value)} className="h-9 px-3 py-2 font-mono text-xs" placeholder="email@companie.ro" /></div>
                     ) : (
                       <div className="flex min-w-0 items-start gap-3">
-                        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase text-white", isPastCustomer ? "bg-zinc-800" : "bg-burgundy", !isActive && "bg-zinc-400")}>{(campaignRecipientName(recipient) || recipient.company || recipient.email).slice(0, 2)}</span>
+                        <IdentityMark
+                          kind="contact"
+                          label={campaignRecipientIdentityLabel(recipient)}
+                          seed={`contact:${recipient.id}`}
+                          size="sm"
+                        />
                         <div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{recipient.company}</p><p className="mt-1 truncate text-xs font-medium text-foreground/60">{campaignRecipientName(recipient) || "Contact lipsă"}</p><p className="mt-1 truncate font-mono text-[11px] text-foreground/40">{recipient.email}</p></div>
                       </div>
                     )}

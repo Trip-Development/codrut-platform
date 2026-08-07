@@ -34,6 +34,11 @@ export function campaignRecipientName(recipient: CampaignRecipientRow): string {
   return [recipient.firstName, recipient.lastName].filter(Boolean).join(" ");
 }
 
+export function campaignRecipientIdentityLabel(recipient: CampaignRecipientRow): string {
+  const emailLocalPart = recipient.email.split("@", 1)[0];
+  return campaignRecipientName(recipient) || recipient.company.trim() || emailLocalPart || recipient.email;
+}
+
 export function campaignRecipientSegment(recipient: CampaignRecipientRow): CampaignSegmentKey {
   return recipient.clientType === "tip_1" ? "past_customer" : "potential_customer";
 }
