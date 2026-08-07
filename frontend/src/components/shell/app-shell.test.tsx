@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { apiFetch as apiFetchType } from "@/api/http";
 import { apiFetch, ensureCsrfToken } from "@/api/http";
-import { AppShell, clearAppShellIdentityCache, profilePalette } from "./app-shell";
+import { AppShell, clearAppShellIdentityCache } from "./app-shell";
+import { profileAvatarVisual } from "./profile-avatar";
 
 const navigationState = vi.hoisted(() => ({ pathname: "/trainer" }));
 
@@ -176,9 +177,9 @@ describe("AppShell", () => {
   });
 
   it("uses the persisted palette across account contexts and keeps assigned palettes distinct", () => {
-    const trainerPalette = profilePalette("trainer:user-1", 12_345);
-    const invitePalette = profilePalette("participant:different-seed", 12_345);
-    const differentUserPalette = profilePalette("trainer:user-2", 12_346);
+    const trainerPalette = profileAvatarVisual("trainer:user-1", 12_345);
+    const invitePalette = profileAvatarVisual("participant:different-seed", 12_345);
+    const differentUserPalette = profileAvatarVisual("trainer:user-2", 12_346);
 
     expect(invitePalette).toEqual(trainerPalette);
     expect(differentUserPalette).not.toEqual(trainerPalette);
@@ -211,8 +212,8 @@ describe("AppShell", () => {
   it.each([null, -1, 1.5, 55_520_640])(
     "falls back to the stable account seed for an invalid palette key (%s)",
     (paletteKey) => {
-      expect(profilePalette("trainer:user-1", paletteKey)).toEqual(
-        profilePalette("trainer:user-1"),
+      expect(profileAvatarVisual("trainer:user-1", paletteKey)).toEqual(
+        profileAvatarVisual("trainer:user-1"),
       );
     },
   );

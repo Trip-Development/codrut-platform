@@ -99,6 +99,18 @@ backgrounds from these ink families and the current surface.
 Set the correct browser `color-scheme` and theme color. Verify controls and
 scrollbars in both themes, including native selects on Windows-like rendering.
 
+### Account avatar identity palette
+
+Generated account avatars are the one approved exception to the semantic-color
+rule. They use a centralized set of muted rosewood, terracotta, sage, teal,
+denim, iris, berry, and walnut anchors so accounts remain friendly and visually
+distinct without turning status or brand colors into identity labels. Keep hue,
+saturation, and lightness drift tightly bounded around those anchors, vary the
+gradient geometry deterministically from the persisted avatar palette key, and
+render the account initials above the gradient. The same key must produce the
+same avatar in every workspace; do not use random values at render time or infer
+permissions, role, state, or meaning from an avatar color.
+
 ## Typography and numbers
 
 Use Geist Sans through `next/font`; remove Fraunces only after its last consumer
