@@ -501,7 +501,7 @@ describe("EmailWorkspace campaign contacts", () => {
     expect(await screen.findByText("Șabloanele nu au putut fi citite.")).toBeTruthy();
   });
 
-  it("uses the shared button primitive for template catalog cards", async () => {
+  it("uses the shared catalog primitive for template cards", async () => {
     const template = makeTemplate();
     navigationMocks.searchParams = new URLSearchParams("tab=templates");
     emailApiMocks.listEmailTemplatesOnServer.mockResolvedValueOnce([template]);
@@ -509,8 +509,7 @@ describe("EmailWorkspace campaign contacts", () => {
     render(React.createElement(EmailWorkspace, { initialSummary: makeEmailSummary() }));
 
     const catalogCard = await screen.findByRole("button", { name: "Deschide șablon Invitație inițială" });
-    expect(catalogCard.getAttribute("data-slot")).toBe("button");
-    expect(catalogCard.getAttribute("data-variant")).toBe("outline");
+    expect(catalogCard.getAttribute("data-slot")).toBe("catalog-card");
   });
 
   it("locks template creation and prevents duplicate create requests", async () => {

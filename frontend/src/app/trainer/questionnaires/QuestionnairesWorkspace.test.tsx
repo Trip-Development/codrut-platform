@@ -132,8 +132,7 @@ describe("QuestionnairesWorkspace", () => {
     expect(listQuestionnaireDefinitionStubs).toHaveBeenCalledTimes(1);
     expect(screen.getByPlaceholderText("Caută chestionar").getAttribute("data-slot")).toBe("input");
     const catalogCard = await screen.findByRole("button", { name: "Editează Chestionar de evaluare a echipei" });
-    expect(catalogCard.getAttribute("data-slot")).toBe("button");
-    expect(catalogCard.getAttribute("data-variant")).toBe("outline");
+    expect(catalogCard.getAttribute("data-slot")).toBe("catalog-card");
   });
 
   it("shows catalog load failures instead of leaving the editor empty", async () => {

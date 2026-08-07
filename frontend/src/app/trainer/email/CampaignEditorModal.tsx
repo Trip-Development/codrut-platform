@@ -113,7 +113,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
       closeOnBackdrop={!isSaving}
       panelClassName="flex h-[88vh] max-w-6xl flex-col overflow-hidden p-0"
     >
-      <div className="border-b border-[var(--border)] bg-surface-muted px-6 py-4">
+      <div className="border-b border-border bg-surface-raised px-4 py-4 sm:px-6">
         <div className="flex items-start justify-between gap-4">
           <h2 id="campaign-modal-title" className="text-xl font-semibold text-foreground">
             {editingCampaign ? campaignName || "Editează campania" : "Campanie nouă"}
@@ -126,7 +126,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
       </div>
 
       <form onSubmit={props.onSubmit} noValidate className="flex min-h-0 flex-1 flex-col" aria-busy={isSaving}>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 sm:px-6">
           {invalidFields.length > 1 ? (
             <InlineFeedback tone="danger" className="mb-4 px-3 py-2" descriptionClassName="text-xs leading-5" id="campaign-error-summary">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -145,8 +145,8 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
             </InlineFeedback>
           ) : null}
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)]">
-            <div className="flex flex-col gap-4">
-              <div className="rounded-lg border border-[var(--border)] bg-surface-muted p-4">
+            <div className="overflow-hidden rounded-lg border border-border bg-surface">
+              <section className="p-4 sm:p-5" aria-label="Configurare campanie">
                 <FieldGroup className="grid gap-4 md:grid-cols-2">
                   <Field data-disabled={isSaving || undefined} data-invalid={campaignFieldErrors.name ? true : undefined}>
                     <FieldLabel htmlFor="campaign-name">Nume campanie</FieldLabel>
@@ -208,9 +208,9 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                     {campaignTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
                   </SelectControl>
                 </Field>
-              </div>
+              </section>
 
-              <div className="rounded-lg border border-[var(--border)] bg-surface-muted p-4">
+              <section className="border-t border-border p-4 sm:p-5" aria-label="Conținut email">
                 <Field data-disabled={isSaving || undefined} data-invalid={campaignFieldErrors.subject ? true : undefined}>
                   <FieldLabel htmlFor="campaign-subject">Subiect</FieldLabel>
                   <Input
@@ -228,10 +228,9 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                   <FieldError id="campaign-subject-error">{campaignFieldErrors.subject}</FieldError>
                 </Field>
 
-                <div className="mt-4 rounded-lg border border-[var(--border)] bg-surface px-4 py-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-foreground/60">Conținut email</p>
-                  <Field className="mt-3 rounded-lg border border-[var(--border)] bg-surface-muted p-3" data-disabled={isSaving || undefined} data-invalid={campaignFieldErrors.body ? true : undefined}>
-                    <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-burgundy/75">Andrei Văcaru</span>
+                <div className="mt-4 border-t border-border pt-4">
+                  <Field data-disabled={isSaving || undefined} data-invalid={campaignFieldErrors.body ? true : undefined}>
+                    <span className="block text-xs font-medium text-brand-text">Andrei Văcaru</span>
                     <FieldLabel htmlFor="campaign-plain-body">Mesaj email</FieldLabel>
                     <Textarea
                       id="campaign-plain-body"
@@ -251,7 +250,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                       aria-describedby={campaignFieldErrors.body ? "campaign-body-error" : undefined}
                       rows={8}
                       placeholder="Scrie mesajul emailului aici. Folosește rânduri libere pentru paragrafe."
-                      className="mt-2 min-h-[13rem] resize-y bg-surface py-3 font-medium"
+                      className="mt-2 min-h-[13rem] resize-y py-3 font-medium"
                     />
                     <FieldError id="campaign-body-error">{campaignFieldErrors.body}</FieldError>
                   </Field>
@@ -280,9 +279,9 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                     </Field>
                   </details>
                 </div>
-              </div>
+              </section>
 
-              <div className="rounded-lg border border-[var(--border)] bg-surface-muted p-4">
+              <section className="border-t border-border p-4 sm:p-5" aria-label="Media campanie">
                 <FieldGroup className="grid gap-4 md:grid-cols-2">
                   <Field data-disabled={isSaving || undefined} data-invalid={campaignFieldErrors.videoUrl ? true : undefined}>
                     <FieldLabel htmlFor="campaign-video-url">Link video (opțional)</FieldLabel>
@@ -379,12 +378,12 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                     </InlineFeedback>
                   ) : null}
                 </div>
-              </div>
+              </section>
             </div>
 
             <aside className="flex flex-col gap-4 lg:sticky lg:top-0 lg:self-start">
-              <div className="rounded-lg border border-[var(--border)] bg-surface-muted p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/60">Media</p>
+              <section className="rounded-lg border border-border bg-surface p-4">
+                <h3 className="text-sm font-semibold text-foreground">Media</h3>
                 {campaignAssetPreviewUrl || campaignThumbnailUrl ? (
                   <div className="relative mt-3 overflow-hidden rounded-lg border border-[var(--border)] bg-surface">
                     <Image
@@ -396,9 +395,9 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                       className="h-36 w-full object-cover"
                     />
                     {campaignVideoUrl.trim() ? (
-                      <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-black/10">
-                        <span className="flex size-14 items-center justify-center rounded-md border border-white/65 bg-white/86 shadow-xl backdrop-blur-sm">
-                          <span className="ml-1 block h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-burgundy" />
+                      <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-black/15">
+                        <span className="flex size-11 items-center justify-center rounded-md bg-black/65 text-white shadow-sm">
+                          <span className="ml-0.5 block h-0 w-0 border-y-[7px] border-l-[11px] border-y-transparent border-l-white" />
                         </span>
                       </div>
                     ) : null}
@@ -407,10 +406,10 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                   <div className="mt-3 flex h-36 items-center justify-center rounded-lg border border-[var(--border)] bg-surface text-xs font-semibold text-foreground/45">Fără media</div>
                 )}
                 {campaignMediaHasChanges ? <InlineFeedback className="mt-3 px-3 py-2" descriptionClassName="text-xs leading-5">Modificări nesalvate</InlineFeedback> : null}
-              </div>
+              </section>
 
-              <div className="rounded-lg border border-[var(--border)] bg-surface-muted p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-foreground/60">Preview email campanie</p>
+              <section className="rounded-lg border border-border bg-surface p-4">
+                <h3 className="text-sm font-semibold text-foreground">Previzualizare email</h3>
                 <div className="mt-3 overflow-hidden rounded-lg border border-[var(--border)] bg-surface shadow-sm">
                   <div className="border-b border-[var(--border)] bg-surface-muted px-4 py-3">
                     <p className="text-[11px] font-semibold text-foreground/50">Către: {MOCK_REPLACEMENTS["{first_name}"]}</p>
@@ -418,7 +417,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
                   </div>
                   <div className="max-h-[20rem] overflow-y-auto p-4 text-sm leading-relaxed text-foreground" dangerouslySetInnerHTML={{ __html: campaignPreview.bodyHtml }} />
                 </div>
-              </div>
+              </section>
             </aside>
           </div>
         </div>
@@ -443,7 +442,7 @@ export function CampaignEditorModal(props: CampaignEditorModalProps) {
             className="mx-6 mb-3"
           />
         ) : null}
-        <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] bg-surface-muted px-6 py-4">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-surface-raised px-4 py-4 sm:px-6">
           <Button type="button" onClick={props.onClose} variant="ghost" disabled={isSaving}>Anulează</Button>
           <Button type="submit" disabled={isSaving}>
             {isSaving ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}

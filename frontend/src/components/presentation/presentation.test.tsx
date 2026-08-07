@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { EmptyState } from "./empty-state";
 import { InlineFeedback } from "./inline-feedback";
+import { CatalogCard, CatalogToolbar } from "./catalog-card";
 
 describe("presentation components", () => {
   it("renders empty state content", () => {
@@ -26,5 +27,26 @@ describe("presentation components", () => {
     render(<InlineFeedback descriptionClassName="text-xs">Filtering.</InlineFeedback>);
 
     expect(screen.getByText("Filtering.").className).toContain("text-xs");
+  });
+
+  it("renders catalog navigation with shared semantics and status", () => {
+    render(
+      <CatalogToolbar>
+        <CatalogCard
+          eyebrow="Echipă"
+          version="v3"
+          title="Evaluarea echipei"
+          description="Descriere scurtă"
+          metadata="15 întrebări"
+          status={{ label: "Activ", tone: "success" }}
+          aria-label="Deschide evaluarea"
+        />
+      </CatalogToolbar>,
+    );
+
+    expect(screen.getByRole("button", { name: "Deschide evaluarea" }).getAttribute("data-slot")).toBe("catalog-card");
+    expect(screen.getByText("Activ")).toBeTruthy();
+    expect(screen.getByText("15 întrebări")).toBeTruthy();
+    expect(screen.getByText("Evaluarea echipei")).toBeTruthy();
   });
 });
