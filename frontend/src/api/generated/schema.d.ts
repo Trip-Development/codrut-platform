@@ -3494,6 +3494,8 @@ export interface components {
             account_type?: ("guest" | "registered") | null;
             /** Anonymous Name */
             anonymous_name?: string | null;
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
             /**
              * Company Id
              * Format: uuid
@@ -3794,6 +3796,8 @@ export interface components {
             account_type?: ("guest" | "registered") | null;
             /** Anonymous Name */
             anonymous_name?: string | null;
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
             /**
              * Company Id
              * Format: uuid

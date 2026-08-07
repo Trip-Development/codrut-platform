@@ -240,6 +240,12 @@ class ParticipantProfile(TimestampMixin, Base):
             return None
         return "registered" if self.user.is_registered else "guest"
 
+    @property
+    def avatar_palette_key(self) -> int | None:
+        if self.user is None:
+            return None
+        return self.user.avatar_palette_key
+
 
 class ParticipantAccountLinkAudit(Base):
     __tablename__ = "participant_account_link_audits"

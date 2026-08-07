@@ -404,9 +404,9 @@ export function AppShell({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3 px-3 py-2">
-                  <span className="text-xs font-medium text-muted-foreground">Temă</span>
-                  <ThemeSelector className="h-9 w-full min-w-0 bg-control px-3 font-medium" />
+                <div className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="text-sm font-medium text-muted-foreground">Temă</span>
+                  <ThemeSelector className="h-9 w-auto min-w-0 gap-1.5 border-0 bg-transparent px-1.5 font-medium shadow-none hover:bg-muted/60 focus-visible:border-transparent" />
                 </div>
 
                 <Separator />
@@ -555,7 +555,7 @@ export function AppShell({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-muted-foreground">Temă</span>
-                <ThemeSelector className="h-10 min-w-36 bg-control px-3 font-medium" />
+                <ThemeSelector className="h-10 w-auto min-w-0 gap-1.5 border-0 bg-transparent px-1.5 font-medium shadow-none hover:bg-muted/60 focus-visible:border-transparent" />
               </div>
               {alternateWorkspaceHref ? (
                 <Button asChild variant="outline" className="w-full justify-start">

@@ -1857,6 +1857,7 @@ def _project_participant_response(
         id=participant.id,
         company_id=participant.company_id,
         user_id=participant.user_id,
+        avatar_palette_key=participant.avatar_palette_key,
         account_type=participant.account_type,
         is_shadow_account=participant.is_shadow_account,
         full_name=participant.full_name,

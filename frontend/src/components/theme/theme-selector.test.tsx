@@ -39,6 +39,32 @@ describe("ThemeSelector", () => {
       expect(document.documentElement.dataset.theme).toBe("light");
     });
   });
+
+  it("tracks system theme changes while system mode is active", async () => {
+    let prefersDark = false;
+    let handleChange: (() => void) | undefined;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        get matches() {
+          return prefersDark && query.includes("dark");
+        },
+        media: query,
+        addEventListener: vi.fn((_event: string, listener: () => void) => {
+          handleChange = listener;
+        }),
+        removeEventListener: vi.fn(),
+      })),
+    });
+
+    render(<ThemeSelector />);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+
+    prefersDark = true;
+    handleChange?.();
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+  });
 });
 
 describe("theme preference helpers", () => {

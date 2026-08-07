@@ -59,6 +59,8 @@ describe("ArchivedContactsWorkspaceView", () => {
 
     expect(screen.getByText("Restaurarea este în curs.")).toBeTruthy();
     expect(screen.getByText("Contact fără nume")).toBeTruthy();
+    expect(screen.getByText("I")).toBeTruthy();
+    expect(document.querySelector("[data-identity-kind='contact']")).toBeTruthy();
     expect(screen.getByText("Înainte: Adresă respinsă")).toBeTruthy();
     expect(screen.getByText("Curățare automată: 29 august 2026")).toBeTruthy();
     expect(

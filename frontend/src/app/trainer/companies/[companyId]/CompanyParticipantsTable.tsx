@@ -6,6 +6,7 @@ import {
   hasPermanentParticipantAccount,
   type CompanyParticipant,
 } from "@/api/companies";
+import { IdentityMark } from "@/components/presentation/identity-mark";
 import { useUrlState } from "@/hooks/use-url-state";
 import {
   normalizeWorkspaceSearch,
@@ -97,7 +98,18 @@ export function CompanyParticipantsTable({
                   const hasPermanentAccount = hasPermanentParticipantAccount(participant);
                   return (
                     <tr key={participant.id} className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
-                      <td className="col-span-2 row-start-1 font-semibold text-foreground md:px-5 md:py-4">{participant.full_name}</td>
+                      <td className="col-span-2 row-start-1 font-semibold text-foreground md:px-5 md:py-4">
+                        <span className="flex min-w-0 items-center gap-3">
+                          <IdentityMark
+                            kind="person"
+                            label={participant.full_name}
+                            seed={`participant:${participant.id}`}
+                            paletteKey={participant.avatar_palette_key}
+                            size="sm"
+                          />
+                          <span className="min-w-0 break-words">{participant.full_name}</span>
+                        </span>
+                      </td>
                       <td className="col-span-2 row-start-2 break-all text-muted-foreground md:px-4 md:py-4">
                         <span className="mb-1 block text-xs font-medium md:hidden">Email</span>
                         {participant.email ?? "Email lipsă"}

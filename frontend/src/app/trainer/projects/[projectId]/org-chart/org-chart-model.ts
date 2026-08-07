@@ -4,6 +4,7 @@ import { managerReferenceKey, normalizeReportsToName } from "@/api/roster-format
 export type OrgChartNode = {
   id: string;
   fullName: string;
+  avatarPaletteKey: number | null;
   reportsToName: string;
   position: string | null;
   location: string | null;
@@ -100,6 +101,7 @@ function toMutableNode(participant: CompanyParticipant, originalIndex: number): 
   return {
     id: participant.id,
     fullName: participant.full_name,
+    avatarPaletteKey: participant.avatar_palette_key ?? null,
     reportsToName: normalizeReportsToName(participant.reports_to_name),
     position: participant.position,
     location: participant.location,
@@ -119,6 +121,7 @@ function finalizeNode(node: MutableOrgChartNode): OrgChartNode {
   return {
     id: node.id,
     fullName: node.fullName,
+    avatarPaletteKey: node.avatarPaletteKey,
     reportsToName: node.reportsToName,
     position: node.position,
     location: node.location,
