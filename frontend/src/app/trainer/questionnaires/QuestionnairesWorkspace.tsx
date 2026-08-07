@@ -19,6 +19,11 @@ import {
 } from "@/api/questionnaires";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import {
+  CatalogCard,
+  CatalogToolbar,
+  type CatalogStatusTone,
+} from "@/components/presentation/catalog-card";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -27,7 +32,6 @@ import { SearchField } from "@/components/ui/search-field";
 import { SelectControl } from "@/components/ui/select-control";
 import { Textarea } from "@/components/ui/textarea";
 import { useUrlState } from "@/hooks/use-url-state";
-import { cn } from "@/utils/cn";
 import {
   QuestionnaireEditor,
   type QuestionnaireScaleGroup,
@@ -47,6 +51,12 @@ const QUESTIONNAIRE_STATUS_LABELS: Record<string, string> = {
   inactive: "Inactiv",
   retired: "Pensionat",
 };
+
+function questionnaireStatusTone(status: string): CatalogStatusTone {
+  if (status === "active") return "success";
+  if (status === "draft") return "warning";
+  return "neutral";
+}
 
 type ConfirmDialogState = {
   title: string;
@@ -994,7 +1004,7 @@ export function QuestionnairesWorkspace() {
       {!selectedKey ? (
         // GALLERY MODE
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 md:flex-row md:items-center">
+          <CatalogToolbar>
             <SearchField
               id="questionnaire-search"
               label="Caută chestionar"
@@ -1027,7 +1037,7 @@ export function QuestionnairesWorkspace() {
               )}
               {isCatalogLoading ? "Încărcăm catalogul" : "Creează chestionar"}
             </Button>
-          </div>
+          </CatalogToolbar>
 
           {isCatalogLoading ? (
             <div className="flex min-h-64 items-center justify-center rounded-lg border border-border bg-surface p-6">
@@ -1039,44 +1049,20 @@ export function QuestionnairesWorkspace() {
           ) : filteredStubs.length > 0 ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredStubs.map((stub) => (
-                <Button
+                <CatalogCard
                   key={`${stub.id}-${stub.version ?? "fără-versiune"}`}
-                  type="button"
-                  variant="outline"
                   onClick={() => handleSelectDefinition(stub.id, stub.version ?? 1)}
                   aria-label={`Editează ${stub.name}`}
-                  className="group h-auto min-h-[10rem] items-stretch justify-start whitespace-normal border-border bg-surface p-4 text-left hover:border-primary/35 hover:bg-muted/25 md:min-h-[12rem]"
-                >
-                  <div className="flex h-full flex-col">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <span
-                        className={cn(
-                          "rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]",
-                          stub.audience === "team"
-                            ? "border-border bg-muted text-muted-foreground"
-                            : stub.audience === "leadership"
-                              ? "border-primary/35 bg-primary/10 text-primary"
-                              : "border-border bg-surface text-muted-foreground",
-                        )}
-                      >
-                        {AUDIENCE_LABELS[stub.audience] ?? stub.audience}
-                      </span>
-                      <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-                        v{stub.version ?? 1}
-                      </span>
-                    </div>
-                    <h4 className="mb-2 line-clamp-1 text-base font-bold text-foreground transition-colors group-hover:text-primary">
-                      {stub.name}
-                    </h4>
-                    <p className="mb-5 line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">
-                      {stub.description || "Fără descriere"}
-                    </p>
-                    <div className="mt-auto flex items-center justify-between border-t border-border pt-3 text-xs font-semibold text-muted-foreground">
-                      <span>{stub.estimatedItems ?? "TBD"} întrebări</span>
-                      <span>{QUESTIONNAIRE_STATUS_LABELS[stub.status] ?? stub.status}</span>
-                    </div>
-                  </div>
-                </Button>
+                  eyebrow={AUDIENCE_LABELS[stub.audience] ?? stub.audience}
+                  version={`v${stub.version ?? 1}`}
+                  title={stub.name}
+                  description={stub.description || "Fără descriere"}
+                  metadata={<span className="font-medium tabular-nums">{stub.estimatedItems ?? "TBD"} întrebări</span>}
+                  status={{
+                    label: QUESTIONNAIRE_STATUS_LABELS[stub.status] ?? stub.status,
+                    tone: questionnaireStatusTone(stub.status),
+                  }}
+                />
               ))}
             </div>
           ) : (

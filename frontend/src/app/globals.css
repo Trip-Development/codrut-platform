@@ -549,10 +549,6 @@ html {
     color: var(--burgundy-dark);
   }
 
-  .filter-toolbar {
-    @apply flex flex-col gap-4 rounded-lg border bg-surface p-5 text-foreground md:flex-row md:items-center md:p-6;
-  }
-
   .modal-backdrop {
     @apply fixed inset-0 z-[80] flex justify-center overflow-y-auto bg-black/45 px-4 py-6 backdrop-blur-sm sm:py-8;
     align-items: flex-start;
