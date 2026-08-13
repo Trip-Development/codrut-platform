@@ -3916,6 +3916,8 @@ export interface components {
             /** Questionnaire Version */
             questionnaire_version: number;
             status: components["schemas"]["QuestionnaireResponseStatus"];
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** QuestionnaireResponseSaveRequest */
         QuestionnaireResponseSaveRequest: {
@@ -3923,6 +3925,8 @@ export interface components {
             answers?: {
                 [key: string]: unknown;
             };
+            /** Expected Updated At */
+            expected_updated_at?: string | null;
         };
         /**
          * QuestionnaireResponseStatus

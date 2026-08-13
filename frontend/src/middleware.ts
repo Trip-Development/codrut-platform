@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { trainerLoginHref } from "@/lib/auth-return";
+import { participantLoginHref, trainerLoginHref } from "@/lib/auth-return";
 import { THEME_PREPAINT_CSP_HASH } from "@/lib/theme-prepaint";
 
 const protectedPrefixes = ["/participant", "/trainer"];
@@ -113,8 +113,10 @@ export function middleware(request: NextRequest) {
       loginUrl.pathname = loginPathname;
       loginUrl.search = loginSearch ? `?${loginSearch}` : "";
     } else {
-      loginUrl.pathname = "/login";
-      loginUrl.search = "";
+      const loginHref = participantLoginHref(`${pathname}${request.nextUrl.search}`);
+      const [loginPathname, loginSearch = ""] = loginHref.split("?");
+      loginUrl.pathname = loginPathname;
+      loginUrl.search = loginSearch ? `?${loginSearch}` : "";
     }
     return applyPageSecurityHeaders(
       NextResponse.redirect(loginUrl),

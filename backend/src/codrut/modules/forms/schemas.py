@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -45,6 +46,7 @@ class QuestionnaireDefinitionUpdateRequest(StrictRequestModel):
 
 class QuestionnaireResponseSaveRequest(StrictRequestModel):
     answers: dict[str, Any] = Field(default_factory=dict)
+    expected_updated_at: datetime | None = None
 
 
 class QuestionnaireResponseResponse(BaseModel):
@@ -56,6 +58,7 @@ class QuestionnaireResponseResponse(BaseModel):
     questionnaire_version: int
     status: QuestionnaireResponseStatus
     answers: dict[str, Any]
+    updated_at: datetime | None = None
 
 
 class ParticipantOnboardingResponse(BaseModel):

@@ -1422,6 +1422,33 @@ describe("frontend API adapter stubs", () => {
 
   });
 
+  it("passes keepalive through for exit-safe questionnaire saves", async () => {
+    process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "draft", answers: { q1: 1 } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await saveQuestionnaireResponse(
+      "assignment-1",
+      { q1: 1 },
+      { keepalive: true, expectedUpdatedAt: "2026-08-13T09:00:00Z" },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/forms/assignments/assignment-1/response"),
+      expect.objectContaining({
+        keepalive: true,
+        body: JSON.stringify({
+          answers: { q1: 1 },
+          expected_updated_at: "2026-08-13T09:00:00Z",
+        }),
+      }),
+    );
+  });
+
   it("passes server-provided auth headers when loading an assignment draft", async () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";

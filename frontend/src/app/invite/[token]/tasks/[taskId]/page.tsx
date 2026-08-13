@@ -61,6 +61,7 @@ export default async function SecureTaskRunnerPage({
             assignmentId={taskId}
             initialAnswers={responseRecord?.answers}
             initialStatus={responseRecord?.status}
+            initialResponseUpdatedAt={responseRecord?.updated_at}
             returnHref={safeReturnTo}
             returnLabel="Înapoi la invitație"
             targetLabel={target}

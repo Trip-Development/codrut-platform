@@ -285,6 +285,7 @@ class FormsService:
                 questionnaire_version=definition.version,
                 status=QuestionnaireResponseStatus.draft,
                 answers={},
+                updated_at=None,
             )
         return _response_to_schema(response)
 
@@ -350,9 +351,24 @@ class FormsService:
                 "Submitted responses are locked. Ask the trainer to reopen this assignment.",
                 code="response_locked",
             )
+        expected_revision_supplied = "expected_updated_at" in payload.model_fields_set
+        expected_revision_matches = (
+            response is None and payload.expected_updated_at is None
+        ) or (
+            response is not None
+            and payload.expected_updated_at is not None
+            and response.updated_at == payload.expected_updated_at
+        )
+        if expected_revision_supplied and not expected_revision_matches:
+            raise DomainError(
+                "Draftul a fost modificat într-o altă filă sau pe alt dispozitiv. "
+                "Reîncarcă pagina înainte să continui.",
+                code="response_conflict",
+            )
         definition = await _resolve_definition(repository, assignment)
         if submit:
             _validate_submit_answers(definition.schema, payload.answers)
+        updated_at = datetime.now(UTC)
         if response is None:
             response = await repository.add_response(
                 QuestionnaireResponse(
@@ -361,10 +377,12 @@ class FormsService:
                     questionnaire_version=definition.version,
                     status=QuestionnaireResponseStatus.draft,
                     answers=payload.answers,
+                    updated_at=updated_at,
                 )
             )
         else:
             response.answers = payload.answers
+            response.updated_at = updated_at
         if submit:
             response.status = QuestionnaireResponseStatus.submitted
             response.submitted_at = response.submitted_at or datetime.now(UTC)
