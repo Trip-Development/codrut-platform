@@ -362,6 +362,46 @@ describe("QuestionnaireRunner", () => {
     expect((screen.getByRole("button", { name: "Trimite răspunsurile" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("reveals missing required answers and focuses the first unanswered question", () => {
+    const twoQuestionDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          ...mockDefinition.schema.sections[0],
+          questions: [
+            mockDefinition.schema.sections[0].questions[0],
+            {
+              id: "q2",
+              code: "Q2",
+              type: "likert",
+              label: "Question Two Label",
+              required: true,
+              scale: [{ value: 1, label: "Da" }],
+            },
+          ],
+        }],
+      },
+    };
+    render(
+      <QuestionnaireRunner
+        definition={twoQuestionDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+      />,
+    );
+
+    const submitButton = screen.getByRole("button", { name: "Trimite răspunsurile" });
+    expect((submitButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(submitButton);
+
+    expect(screen.queryByRole("dialog", { name: "Trimiți răspunsurile finale?" })).toBeNull();
+    expect(screen.getByText("Mai ai o întrebare fără răspuns.")).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("radiogroup", { name: "Question Two Label" }),
+    );
+  });
+
   it("communicates autosave through the submit control without locking answers", async () => {
     vi.useFakeTimers();
     let resolveSave!: () => void;
@@ -481,6 +521,39 @@ describe("QuestionnaireRunner", () => {
     expect(slider.getAttribute("aria-valuemin")).toBe("1");
     expect(slider.getAttribute("aria-valuemax")).toBe("10");
     expect(screen.queryByRole("radiogroup", { name: "Lucrez sub presiunea timpului" })).toBeNull();
+  });
+
+  it("wraps short statement scales into a mobile grid without hidden horizontal choices", () => {
+    const compactDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "distress_drivers",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          id: "drivers",
+          title: "Driveri",
+          questions: [{
+            id: "driver_set",
+            code: "D",
+            type: "statement_score_set",
+            label: "Driveri",
+            required: true,
+            scale: [
+              { value: 1, label: "Niciodată" },
+              { value: 2, label: "Uneori" },
+              { value: 3, label: "Des" },
+              { value: 4, label: "Mereu" },
+            ],
+            statements: [{ id: "s1", code: "S1", label: "Afirmație" }],
+          }],
+        }],
+      },
+    };
+    render(<QuestionnaireRunner definition={compactDefinition} assignmentId="drivers-assignment" />);
+
+    const group = screen.getByRole("radiogroup", { name: "Afirmație" });
+    expect(group.className).not.toContain("overflow-x-auto");
+    expect(group.firstElementChild?.className).toContain("grid-cols-2");
   });
 
   it("renders the original 0-10 TA scale as a centered snapping slider", async () => {
