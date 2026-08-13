@@ -75,6 +75,17 @@ describe("ParticipantClientWorkspace", () => {
               estimatedMinutes: 10,
               questionnaireKey: "boss_360",
             },
+            {
+              id: "boss-360-second",
+              title: "Feedback confidențial",
+              status: "not_started",
+              detail: "Feedback de completat.",
+              href: "/participant/questionnaires/boss_360?assignmentId=boss-360-second",
+              assignmentId: "boss-360-second",
+              targetLabel: "Darius Neagu",
+              estimatedMinutes: 10,
+              questionnaireKey: "boss_360",
+            },
           ],
         }}
       />,
@@ -84,7 +95,7 @@ describe("ParticipantClientWorkspace", () => {
     expect(screen.getByRole("heading", { name: "De completat" })).toBeDefined();
     expect(screen.queryByText(/baza de date/i)).toBeNull();
     expect(screen.queryByText(/Fiecare sarcină vine din invitațiile pregătite de trainer/i)).toBeNull();
-    expect(screen.getByRole("status", { name: "3 sarcini active" })).toBeDefined();
+    expect(screen.getByRole("status", { name: "4 sarcini active" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Bună, Mihai" })).toBeDefined();
     expect(screen.queryByText("Bună, SignalHarbor5271")).toBeNull();
     expect(screen.queryByText("Recomandare: continuă cu primul chestionar disponibil.")).toBeNull();
