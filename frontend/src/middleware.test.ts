@@ -43,6 +43,17 @@ describe("middleware", () => {
     );
   });
 
+  it("preserves a protected participant destination across authentication", () => {
+    const response = middleware(
+      requestFor("/participant/questionnaires/distress_drivers?assignmentId=assignment-1"),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/login?returnTo=%2Fparticipant%2Fquestionnaires%2Fdistress_drivers%3FassignmentId%3Dassignment-1",
+    );
+  });
+
   it("redirects protected trainer routes without a session when demo fallback is explicitly disabled", () => {
     process.env.CODRUT_FRONTEND_DEMO_FALLBACK = "false";
     process.env.NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK = "false";

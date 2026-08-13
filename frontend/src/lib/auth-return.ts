@@ -2,6 +2,7 @@ const TRAINER_HOME = "/trainer";
 const TRAINER_LOGIN = "/trainer/login";
 const INTERNAL_ORIGIN = "https://codrut.invalid";
 const PARTICIPANT_HOME = "/participant";
+const PARTICIPANT_LOGIN = "/login";
 
 export function safeTrainerReturnTo(value: string | null | undefined): string {
   if (!value) return TRAINER_HOME;
@@ -47,4 +48,11 @@ export function safeParticipantReturnTo(value: string | null | undefined): strin
   } catch {
     return PARTICIPANT_HOME;
   }
+}
+
+export function participantLoginHref(returnTo: string | null | undefined): string {
+  const safeReturnTo = safeParticipantReturnTo(returnTo);
+  if (safeReturnTo === PARTICIPANT_HOME) return PARTICIPANT_LOGIN;
+
+  return `${PARTICIPANT_LOGIN}?returnTo=${encodeURIComponent(safeReturnTo)}`;
 }
