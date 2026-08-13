@@ -91,12 +91,6 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
   const pendingActiveTasks = activeTasks.filter(
     (task) => task.status !== "completed",
   );
-  const activeTaskGroups = activeTaskProjects.flatMap(
-    (project) => project.groups,
-  );
-  const pendingTaskGroups = activeTaskGroups.filter(
-    (group) => group.status !== "completed",
-  );
   const completedTasksCount = activeTasks.length - pendingActiveTasks.length;
   const tasksProgressPct =
     activeTasks.length > 0
@@ -153,19 +147,19 @@ export function ParticipantClientWorkspace({ session, summaryData }: Participant
               <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
                 <div>
                   <h2 id="participant-tasks-title" className="text-xl font-semibold tracking-tight text-foreground">
-                    {pendingTaskGroups.length > 0 ? "De completat" : "Chestionare"}
+                    {pendingActiveTasks.length > 0 ? "De completat" : "Chestionare"}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {hasMultipleProjects ? projectCountCopy : summaryData.projectName}
                   </p>
                 </div>
-                {pendingTaskGroups.length > 0 ? (
+                {pendingActiveTasks.length > 0 ? (
                   <div
                     className="flex items-baseline gap-2 text-brand-text"
                     role="status"
-                    aria-label={`${pendingTaskGroups.length} ${pendingTaskGroups.length === 1 ? "sarcină activă" : "sarcini active"}`}
+                    aria-label={`${pendingActiveTasks.length} ${pendingActiveTasks.length === 1 ? "sarcină activă" : "sarcini active"}`}
                   >
-                    <span className="font-mono text-2xl font-semibold tabular-nums">{pendingTaskGroups.length}</span>
+                    <span className="font-mono text-2xl font-semibold tabular-nums">{pendingActiveTasks.length}</span>
                     <span className="text-sm font-semibold">active</span>
                   </div>
                 ) : null}

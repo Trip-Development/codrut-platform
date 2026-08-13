@@ -7292,6 +7292,18 @@
           },
           "status": {
             "$ref": "#/components/schemas/QuestionnaireResponseStatus"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           }
         },
         "required": [
@@ -7312,6 +7324,18 @@
             "additionalProperties": true,
             "title": "Answers",
             "type": "object"
+          },
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Updated At"
           }
         },
         "title": "QuestionnaireResponseSaveRequest",

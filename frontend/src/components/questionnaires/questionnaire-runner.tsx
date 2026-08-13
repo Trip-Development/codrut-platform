@@ -7,6 +7,7 @@ import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from "lucide-re
 
 import {
   isQuestionnaireSessionError,
+  QuestionnaireRequestError,
   saveQuestionnaireResponse,
   saveSecureQuestionnaireResponse,
   submitQuestionnaireResponse,
@@ -33,6 +34,7 @@ export type QuestionnaireRunnerProps = {
   assignmentId?: string;
   initialAnswers?: AnswerState;
   initialStatus?: "draft" | "submitted";
+  initialResponseUpdatedAt?: string | null;
   returnHref?: string;
   returnLabel?: string;
   targetLabel?: string;
@@ -43,6 +45,10 @@ export type QuestionnaireRunnerProps = {
 
 function answerKey(question: QuestionnaireQuestion, statementId?: string): string {
   return statementId ? `${question.id}:${statementId}` : question.id;
+}
+
+function answerTargetId(key: string): string {
+  return `questionnaire-answer-${encodeURIComponent(key)}`;
 }
 
 function numericScaleOptionValue(option: QuestionnaireScaleOption): number | null {
@@ -89,21 +95,25 @@ function discreteScaleLayout(scale: QuestionnaireScaleOption[]): DiscreteScaleLa
 }
 
 type DiscreteScaleSliderProps = {
+  answerKey: string;
   label: string;
   scale: QuestionnaireScaleOption[];
   selectedValue: QuestionnaireAnswerValue | undefined;
   onChange: (value: QuestionnaireAnswerValue) => void;
   disabled?: boolean;
   showTaAnchors?: boolean;
+  invalid?: boolean;
 };
 
 function DiscreteScaleSlider({
+  answerKey: key,
   label,
   scale,
   selectedValue,
   onChange,
   disabled,
   showTaAnchors = false,
+  invalid = false,
 }: DiscreteScaleSliderProps) {
   const selectedDescriptionId = useId();
   const layout = discreteScaleLayout(scale);
@@ -135,6 +145,8 @@ function DiscreteScaleSlider({
       className="mt-4 rounded-lg border border-border bg-surface px-4 py-4 data-[selected=true]:border-primary/35"
     >
       <Slider
+        id={answerTargetId(key)}
+        aria-invalid={invalid || undefined}
         min={layout.sliderMin}
         max={layout.sliderMax}
         step={1}
@@ -186,6 +198,7 @@ export function QuestionnaireRunner({
   assignmentId,
   initialAnswers,
   initialStatus = "draft",
+  initialResponseUpdatedAt = null,
   returnHref = "/participant/questionnaires",
   returnLabel = "Înapoi la chestionare",
   targetLabel,
@@ -203,6 +216,7 @@ export function QuestionnaireRunner({
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [missingAnswersRevealed, setMissingAnswersRevealed] = useState(false);
   const questionnaireDetailsId = useId();
   const latestAnswersRef = useRef<AnswerState>(initialAnswers ?? {});
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,12 +225,20 @@ export function QuestionnaireRunner({
   const autosaveInFlightPromiseRef = useRef<Promise<void> | null>(null);
   const queuedAutosaveRef = useRef<{ assignmentId: string; sequence: number } | null>(null);
   const terminalOperationRef = useRef<"exit" | "submit" | null>(null);
+  const draftDirtyRef = useRef(false);
+  const submittedRef = useRef(initialStatus === "submitted");
+  const exitSaveStartedRef = useRef(false);
+  const responseRevisionRef = useRef<string | null>(initialResponseUpdatedAt);
 
   useEffect(() => {
     const nextAnswers = initialAnswers ?? {};
     saveSequenceRef.current += 1;
     queuedAutosaveRef.current = null;
     terminalOperationRef.current = null;
+    draftDirtyRef.current = false;
+    submittedRef.current = initialStatus === "submitted";
+    exitSaveStartedRef.current = false;
+    responseRevisionRef.current = initialResponseUpdatedAt;
     latestAnswersRef.current = nextAnswers;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -228,13 +250,63 @@ export function QuestionnaireRunner({
     setAnswers(nextAnswers);
     setIsExiting(false);
     setSubmitConfirmOpen(false);
-  }, [initialAnswers, initialStatus, assignmentId]);
+    setMissingAnswersRevealed(false);
+  }, [initialAnswers, initialStatus, initialResponseUpdatedAt, assignmentId]);
 
-  useEffect(() => () => {
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
+  useEffect(() => {
+    function persistDirtyDraftOnExit() {
+      if (
+        !assignmentId
+        || !draftDirtyRef.current
+        || submittedRef.current
+        || terminalOperationRef.current
+        || exitSaveStartedRef.current
+      ) {
+        return;
+      }
+
+      exitSaveStartedRef.current = true;
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      const options = {
+        expectedUpdatedAt: responseRevisionRef.current,
+        keepalive: true,
+      };
+      const request = secureInviteToken
+        ? saveSecureQuestionnaireResponse(
+            secureInviteToken,
+            assignmentId,
+            latestAnswersRef.current,
+            options,
+          )
+        : saveQuestionnaireResponse(assignmentId, latestAnswersRef.current, options);
+      void request
+        .then((savedResponse) => {
+          responseRevisionRef.current = savedResponse.updated_at ?? null;
+          draftDirtyRef.current = false;
+        })
+        .catch(() => undefined);
     }
-  }, []);
+
+    function warnBeforeUnsavedExit(event: BeforeUnloadEvent) {
+      if (!draftDirtyRef.current || submittedRef.current || terminalOperationRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", warnBeforeUnsavedExit);
+    window.addEventListener("pagehide", persistDirtyDraftOnExit);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnsavedExit);
+      window.removeEventListener("pagehide", persistDirtyDraftOnExit);
+      persistDirtyDraftOnExit();
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [assignmentId, secureInviteToken]);
   const questions = useMemo(
     () => definition.schema.sections.flatMap((section) => section.questions),
     [definition.schema.sections],
@@ -259,6 +331,14 @@ export function QuestionnaireRunner({
     () => requiredAnswerKeys.filter((key) => answers[key] !== undefined).length,
     [answers, requiredAnswerKeys],
   );
+  const unansweredAnswerKeys = useMemo(
+    () => requiredAnswerKeys.filter((key) => answers[key] === undefined),
+    [answers, requiredAnswerKeys],
+  );
+  const invalidAnswerKeys = useMemo(
+    () => new Set(missingAnswersRevealed ? unansweredAnswerKeys : []),
+    [missingAnswersRevealed, unansweredAnswerKeys],
+  );
   const progress = requiredAnswerKeys.length > 0
     ? Math.round((answeredCount / requiredAnswerKeys.length) * 100)
     : 0;
@@ -279,6 +359,8 @@ export function QuestionnaireRunner({
     if (responsesLocked) return;
     const newAnswers = { ...latestAnswersRef.current, [key]: value };
     latestAnswersRef.current = newAnswers;
+    draftDirtyRef.current = true;
+    exitSaveStartedRef.current = false;
     setAnswers(newAnswers);
 
     if (assignmentId) {
@@ -310,15 +392,23 @@ export function QuestionnaireRunner({
     autosaveInFlightRef.current = true;
     const request = (async () => {
       if (secureInviteToken) {
-        await saveSecureQuestionnaireResponse(
+        const savedResponse = await saveSecureQuestionnaireResponse(
           secureInviteToken,
           currentAssignmentId,
           latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
         );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       } else {
-        await saveQuestionnaireResponse(currentAssignmentId, latestAnswersRef.current);
+        const savedResponse = await saveQuestionnaireResponse(
+          currentAssignmentId,
+          latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
+        );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       }
       if (saveSequenceRef.current === sequence) {
+        draftDirtyRef.current = false;
         setSaveState("saved");
         setActiveOperation(null);
         setSaveError(null);
@@ -366,15 +456,23 @@ export function QuestionnaireRunner({
     try {
       await autosaveInFlightPromiseRef.current?.catch(() => undefined);
       if (secureInviteToken) {
-        await saveSecureQuestionnaireResponse(
+        const savedResponse = await saveSecureQuestionnaireResponse(
           secureInviteToken,
           assignmentId,
           latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
         );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       } else {
-        await saveQuestionnaireResponse(assignmentId, latestAnswersRef.current);
+        const savedResponse = await saveQuestionnaireResponse(
+          assignmentId,
+          latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
+        );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       }
       setSaveState("saved");
+      draftDirtyRef.current = false;
       setActiveOperation(null);
       setSaveError(null);
       router.push(returnHref);
@@ -388,7 +486,12 @@ export function QuestionnaireRunner({
   }
 
   function submit() {
-    if (!canSubmit || !assignmentId) return;
+    if (!assignmentId) return;
+    if (!canSubmit) {
+      setMissingAnswersRevealed(true);
+      focusFirstUnansweredAnswer(unansweredAnswerKeys);
+      return;
+    }
     setSubmitConfirmOpen(true);
   }
 
@@ -408,15 +511,24 @@ export function QuestionnaireRunner({
     try {
       await autosaveInFlightPromiseRef.current?.catch(() => undefined);
       if (secureInviteToken) {
-        await submitSecureQuestionnaireResponse(
+        const submittedResponse = await submitSecureQuestionnaireResponse(
           secureInviteToken,
           assignmentId,
           latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
         );
+        responseRevisionRef.current = submittedResponse.updated_at ?? null;
       } else {
-        await submitQuestionnaireResponse(assignmentId, latestAnswersRef.current);
+        const submittedResponse = await submitQuestionnaireResponse(
+          assignmentId,
+          latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
+        );
+        responseRevisionRef.current = submittedResponse.updated_at ?? null;
       }
       setSaveState("submitted");
+      draftDirtyRef.current = false;
+      submittedRef.current = true;
       setActiveOperation(null);
       setSaveError(null);
       router.refresh();
@@ -554,6 +666,7 @@ export function QuestionnaireRunner({
                             answers={answers}
                             disabled={responsesLocked}
                             onAnswerChange={handleAnswerChange}
+                            invalidAnswerKeys={invalidAnswerKeys}
                           />
                         ) : question.type === "single_choice" ? (
                           <SingleChoiceQuestion
@@ -561,6 +674,7 @@ export function QuestionnaireRunner({
                             answers={answers}
                             disabled={responsesLocked}
                             onAnswerChange={handleAnswerChange}
+                            invalidAnswerKeys={invalidAnswerKeys}
                           />
                         ) : (
                           <StatementSetQuestion
@@ -569,6 +683,7 @@ export function QuestionnaireRunner({
                             disabled={responsesLocked}
                             onAnswerChange={handleAnswerChange}
                             compactScale={isDistressQuestionnaire(definition.key)}
+                            invalidAnswerKeys={invalidAnswerKeys}
                           />
                         )}
                       </div>
@@ -597,12 +712,30 @@ export function QuestionnaireRunner({
           <Button
             type="button"
             size="lg"
-            disabled={!canSubmit || saveState === "saving" || isComplete || isExiting}
+            disabled={!assignmentId || saveState === "saving" || isComplete || isExiting}
             onClick={submit}
           >
             {saveState === "saving" ? <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : null}
             {saveState === "saving" ? (activeOperation === "submit" ? "Trimitem" : "Se salvează") : "Trimite răspunsurile"}
           </Button>
+          {missingAnswersRevealed && unansweredAnswerKeys.length > 0 ? (
+            <div className="rounded-lg border border-warning-ink/30 bg-warning-ink/8 px-3 py-3" role="status">
+              <p className="text-sm font-semibold text-foreground">
+                {unansweredAnswerKeys.length === 1
+                  ? "Mai ai o întrebare fără răspuns."
+                  : `Mai ai ${unansweredAnswerKeys.length} întrebări fără răspuns.`}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-1 h-10 px-0 text-warning-ink hover:bg-transparent hover:text-warning-ink"
+                onClick={() => focusFirstUnansweredAnswer(unansweredAnswerKeys)}
+              >
+                Mergi la prima întrebare
+              </Button>
+            </div>
+          ) : null}
         </div>
         <AutosaveStatus
           assignmentId={assignmentId}
@@ -758,6 +891,9 @@ function AutosaveStatus({
 }
 
 function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof QuestionnaireRequestError && error.code === "response_conflict") {
+    return "Draftul a fost modificat într-o altă filă sau pe alt dispozitiv. Reîncarcă pagina pentru a păstra versiunea cea mai nouă.";
+  }
   if (isQuestionnaireSessionError(error)) {
     return "Sesiunea activă s-a schimbat în altă filă. Reîncarcă pagina sau intră din nou în contul de participant înainte să trimiți chestionarul.";
   }
@@ -818,19 +954,29 @@ type QuestionInputProps = {
   answers: AnswerState;
   disabled?: boolean;
   compactScale?: boolean;
+  invalidAnswerKeys?: Set<string>;
   onAnswerChange: (key: string, value: QuestionnaireAnswerValue) => void;
 };
 
-function LikertQuestion({ question, answers, disabled, onAnswerChange }: QuestionInputProps) {
+function LikertQuestion({
+  question,
+  answers,
+  disabled,
+  invalidAnswerKeys,
+  onAnswerChange,
+}: QuestionInputProps) {
   const key = answerKey(question);
+  const invalid = invalidAnswerKeys?.has(key) ?? false;
 
   if (discreteScaleLayout(question.scale)) {
     return (
       <DiscreteScaleSlider
+        answerKey={key}
         label={question.label}
         scale={question.scale}
         selectedValue={answers[key]}
         disabled={disabled}
+        invalid={invalid}
         onChange={(value) => onAnswerChange(key, value)}
       />
     );
@@ -838,10 +984,16 @@ function LikertQuestion({ question, answers, disabled, onAnswerChange }: Questio
 
   return (
     <div
+      id={answerTargetId(key)}
       data-testid="question-response-group"
       role="radiogroup"
       aria-label={question.label}
-      className="mt-4 grid gap-2 sm:grid-cols-3"
+      aria-invalid={invalid || undefined}
+      tabIndex={-1}
+      className={cn(
+        "mt-4 grid gap-2 rounded-lg outline-none sm:grid-cols-3",
+        invalid && "ring-2 ring-warning-ink/45 ring-offset-2 ring-offset-background",
+      )}
     >
       {question.scale.map((option) => {
         const selected = answers[key] === option.value;
@@ -877,15 +1029,28 @@ function choiceButtonClass(selected: boolean): string {
   );
 }
 
-function SingleChoiceQuestion({ question, answers, disabled, onAnswerChange }: QuestionInputProps) {
+function SingleChoiceQuestion({
+  question,
+  answers,
+  disabled,
+  invalidAnswerKeys,
+  onAnswerChange,
+}: QuestionInputProps) {
   const key = answerKey(question);
+  const invalid = invalidAnswerKeys?.has(key) ?? false;
 
   return (
     <div
+      id={answerTargetId(key)}
       data-testid="question-response-group"
       role="radiogroup"
       aria-label={question.label}
-      className="mt-4 grid gap-2 sm:grid-cols-2"
+      aria-invalid={invalid || undefined}
+      tabIndex={-1}
+      className={cn(
+        "mt-4 grid gap-2 rounded-lg outline-none sm:grid-cols-2",
+        invalid && "ring-2 ring-warning-ink/45 ring-offset-2 ring-offset-background",
+      )}
     >
       {question.scale.map((option) => {
         const selected = answers[key] === option.value;
@@ -919,6 +1084,7 @@ function StatementSetQuestion({
   answers,
   disabled,
   compactScale = false,
+  invalidAnswerKeys,
   onAnswerChange,
 }: QuestionInputProps) {
   return (
@@ -935,11 +1101,13 @@ function StatementSetQuestion({
             <p className="text-sm font-medium leading-6 text-foreground/72">{statement.label}</p>
             {discreteScaleLayout(scale) ? (
               <DiscreteScaleSlider
+                answerKey={key}
                 label={statement.label}
                 scale={scale}
                 selectedValue={selectedValue}
                 disabled={disabled}
                 showTaAnchors={compactScale}
+                invalid={invalidAnswerKeys?.has(key)}
                 onChange={(value) => onAnswerChange(key, value)}
               />
             ) : compactScale ? (
@@ -949,14 +1117,22 @@ function StatementSetQuestion({
                 scale={scale}
                 selectedValue={selectedValue}
                 disabled={disabled}
+                invalid={invalidAnswerKeys?.has(key)}
                 onChange={(value) => onAnswerChange(key, value)}
               />
             ) : (
               <div
+                id={answerTargetId(key)}
                 data-testid="question-response-group"
                 role="radiogroup"
                 aria-label={statement.label}
-                className="mt-3 grid gap-2"
+                aria-invalid={invalidAnswerKeys?.has(key) || undefined}
+                tabIndex={-1}
+                className={cn(
+                  "mt-3 grid gap-2 rounded-lg outline-none",
+                  invalidAnswerKeys?.has(key)
+                    && "ring-2 ring-warning-ink/45 ring-offset-2 ring-offset-background",
+                )}
               >
                 {scale.map((option) => {
                   const selected = selectedValue === option.value;
@@ -996,6 +1172,7 @@ function HorizontalScaleChoices({
   scale,
   selectedValue,
   disabled,
+  invalid = false,
   onChange,
 }: {
   answerKey: string;
@@ -1003,16 +1180,23 @@ function HorizontalScaleChoices({
   scale: QuestionnaireScaleOption[];
   selectedValue: QuestionnaireAnswerValue | undefined;
   disabled?: boolean;
+  invalid?: boolean;
   onChange: (value: QuestionnaireAnswerValue) => void;
 }) {
   return (
     <div
+      id={answerTargetId(key)}
       data-testid="question-response-group"
       role="radiogroup"
       aria-label={label}
-      className="mt-3 overflow-x-auto pb-1"
+      aria-invalid={invalid || undefined}
+      tabIndex={-1}
+      className={cn(
+        "mt-3 rounded-lg outline-none",
+        invalid && "ring-2 ring-warning-ink/45 ring-offset-2 ring-offset-background",
+      )}
     >
-      <div className="flex min-w-max items-start gap-3">
+      <div className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4">
         {scale.map((option, index) => {
           const selected = selectedValue === option.value;
           const valueLabel = numericScaleOptionValue(option) ?? index + 1;
@@ -1020,7 +1204,7 @@ function HorizontalScaleChoices({
             <label
               key={String(option.value)}
               className={cn(
-                "flex w-24 cursor-pointer flex-col items-center gap-2 rounded-lg px-2 py-2 text-center text-xs font-medium text-muted-foreground transition-colors",
+                "flex min-h-11 w-full cursor-pointer flex-col items-center gap-2 rounded-lg px-2 py-2 text-center text-xs font-medium text-muted-foreground transition-colors",
                 selected && "bg-primary/8 text-primary",
                 disabled && "cursor-not-allowed opacity-55",
               )}
@@ -1044,4 +1228,12 @@ function HorizontalScaleChoices({
       </div>
     </div>
   );
+}
+
+function focusFirstUnansweredAnswer(unansweredAnswerKeys: string[]) {
+  const firstKey = unansweredAnswerKeys[0];
+  if (!firstKey) return;
+  const target = document.getElementById(answerTargetId(firstKey));
+  target?.scrollIntoView?.({ block: "center" });
+  target?.focus();
 }

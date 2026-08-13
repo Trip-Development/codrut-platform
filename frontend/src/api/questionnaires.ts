@@ -92,7 +92,25 @@ export type QuestionnaireResponseRecord = {
   questionnaire_version: number;
   status: "draft" | "submitted";
   answers: Record<string, QuestionnaireAnswerValue>;
+  updated_at?: string | null;
 };
+
+type QuestionnaireSaveOptions = {
+  keepalive?: boolean;
+  expectedUpdatedAt?: string | null;
+};
+
+function questionnaireSavePayload(
+  answers: Record<string, QuestionnaireAnswerValue>,
+  options: QuestionnaireSaveOptions,
+) {
+  return {
+    answers,
+    ...(Object.hasOwn(options, "expectedUpdatedAt")
+      ? { expected_updated_at: options.expectedUpdatedAt }
+      : {}),
+  };
+}
 
 export class QuestionnaireRequestError extends Error {
   status: number;
@@ -599,6 +617,7 @@ export async function getSecureQuestionnaireResponse(
 export async function saveQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, QuestionnaireAnswerValue>,
+  options: QuestionnaireSaveOptions = {},
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "draft");
@@ -609,7 +628,8 @@ export async function saveQuestionnaireResponse(
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify(questionnaireSavePayload(answers, options)),
+      ...(options.keepalive ? { keepalive: true } : {}),
     });
 
     if (!response.ok) {
@@ -626,6 +646,7 @@ export async function saveSecureQuestionnaireResponse(
   token: string,
   assignmentId: string,
   answers: Record<string, QuestionnaireAnswerValue>,
+  options: QuestionnaireSaveOptions = {},
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "draft");
@@ -637,7 +658,8 @@ export async function saveSecureQuestionnaireResponse(
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify(questionnaireSavePayload(answers, options)),
+        ...(options.keepalive ? { keepalive: true } : {}),
       },
     );
 
@@ -654,6 +676,7 @@ export async function saveSecureQuestionnaireResponse(
 export async function submitQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, QuestionnaireAnswerValue>,
+  options: QuestionnaireSaveOptions = {},
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "submitted");
@@ -664,7 +687,7 @@ export async function submitQuestionnaireResponse(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify(questionnaireSavePayload(answers, options)),
     });
 
     if (!response.ok) {
@@ -681,6 +704,7 @@ export async function submitSecureQuestionnaireResponse(
   token: string,
   assignmentId: string,
   answers: Record<string, QuestionnaireAnswerValue>,
+  options: QuestionnaireSaveOptions = {},
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "submitted");
@@ -692,7 +716,7 @@ export async function submitSecureQuestionnaireResponse(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify(questionnaireSavePayload(answers, options)),
       },
     );
 

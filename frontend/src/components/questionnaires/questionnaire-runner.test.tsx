@@ -296,7 +296,36 @@ describe("QuestionnaireRunner", () => {
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
-    });
+    }, { expectedUpdatedAt: null });
+  });
+
+  it("flushes a pending draft with keepalive when the questionnaire unmounts", async () => {
+    vi.useFakeTimers();
+    const { unmount } = render(
+      <QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "De obicei" }));
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith(
+      "test-assignment",
+      { q1: 2 },
+      { expectedUpdatedAt: null, keepalive: true },
+    );
+  });
+
+  it("warns before leaving only while a changed answer is unsaved", () => {
+    render(<QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />);
+
+    const cleanExit = new Event("beforeunload", { cancelable: true });
+    expect(window.dispatchEvent(cleanExit)).toBe(true);
+
+    fireEvent.click(screen.getByRole("radio", { name: "De obicei" }));
+    const dirtyExit = new Event("beforeunload", { cancelable: true });
+    expect(window.dispatchEvent(dirtyExit)).toBe(false);
   });
 
   it("allows submission when only optional questions are unanswered", () => {
@@ -331,6 +360,46 @@ describe("QuestionnaireRunner", () => {
 
     expect(screen.getByText("100% completat")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Trimite răspunsurile" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("reveals missing required answers and focuses the first unanswered question", () => {
+    const twoQuestionDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          ...mockDefinition.schema.sections[0],
+          questions: [
+            mockDefinition.schema.sections[0].questions[0],
+            {
+              id: "q2",
+              code: "Q2",
+              type: "likert",
+              label: "Question Two Label",
+              required: true,
+              scale: [{ value: 1, label: "Da" }],
+            },
+          ],
+        }],
+      },
+    };
+    render(
+      <QuestionnaireRunner
+        definition={twoQuestionDefinition}
+        assignmentId="test-assignment"
+        initialAnswers={{ q1: 1 }}
+      />,
+    );
+
+    const submitButton = screen.getByRole("button", { name: "Trimite răspunsurile" });
+    expect((submitButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(submitButton);
+
+    expect(screen.queryByRole("dialog", { name: "Trimiți răspunsurile finale?" })).toBeNull();
+    expect(screen.getByText("Mai ai o întrebare fără răspuns.")).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("radiogroup", { name: "Question Two Label" }),
+    );
   });
 
   it("communicates autosave through the submit control without locking answers", async () => {
@@ -412,7 +481,7 @@ describe("QuestionnaireRunner", () => {
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("ten-point-assignment", {
       q1: 7,
-    });
+    }, { expectedUpdatedAt: null });
   });
 
   it("renders 1-10 distress statement scales without a horizontally scrolling choice row", () => {
@@ -452,6 +521,39 @@ describe("QuestionnaireRunner", () => {
     expect(slider.getAttribute("aria-valuemin")).toBe("1");
     expect(slider.getAttribute("aria-valuemax")).toBe("10");
     expect(screen.queryByRole("radiogroup", { name: "Lucrez sub presiunea timpului" })).toBeNull();
+  });
+
+  it("wraps short statement scales into a mobile grid without hidden horizontal choices", () => {
+    const compactDefinition: QuestionnaireDefinition = {
+      ...mockDefinition,
+      key: "distress_drivers",
+      schema: {
+        ...mockDefinition.schema,
+        sections: [{
+          id: "drivers",
+          title: "Driveri",
+          questions: [{
+            id: "driver_set",
+            code: "D",
+            type: "statement_score_set",
+            label: "Driveri",
+            required: true,
+            scale: [
+              { value: 1, label: "Niciodată" },
+              { value: 2, label: "Uneori" },
+              { value: 3, label: "Des" },
+              { value: 4, label: "Mereu" },
+            ],
+            statements: [{ id: "s1", code: "S1", label: "Afirmație" }],
+          }],
+        }],
+      },
+    };
+    render(<QuestionnaireRunner definition={compactDefinition} assignmentId="drivers-assignment" />);
+
+    const group = screen.getByRole("radiogroup", { name: "Afirmație" });
+    expect(group.className).not.toContain("overflow-x-auto");
+    expect(group.firstElementChild?.className).toContain("grid-cols-2");
   });
 
   it("renders the original 0-10 TA scale as a centered snapping slider", async () => {
@@ -505,7 +607,7 @@ describe("QuestionnaireRunner", () => {
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("drivers-assignment", {
       "driver_set:driver_a": 6,
-    });
+    }, { expectedUpdatedAt: null });
   });
 
   it("shows 1-10 slider ticks while preserving a stored 0-9 distress scale", async () => {
@@ -547,7 +649,7 @@ describe("QuestionnaireRunner", () => {
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("drivers-assignment", {
       "driver_set:driver_a": 5,
-    });
+    }, { expectedUpdatedAt: null });
   });
 
   it("debounces auto-save and only sends the latest changed answer", async () => {
@@ -564,7 +666,7 @@ describe("QuestionnaireRunner", () => {
     expect(saveQuestionnaireResponse).toHaveBeenCalledTimes(1);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
-    });
+    }, { expectedUpdatedAt: null });
   });
 
   it("shows the concrete save error when auto-save fails", async () => {
@@ -580,6 +682,69 @@ describe("QuestionnaireRunner", () => {
     expect(
       screen.getByText(/Nu s-a salvat\. Poți reîncerca\. Serverul nu a putut salva draftul\./),
     ).toBeTruthy();
+  });
+
+  it("uses the latest server revision for each subsequent autosave", async () => {
+    vi.useFakeTimers();
+    vi.mocked(saveQuestionnaireResponse)
+      .mockResolvedValueOnce({
+        status: "draft",
+        updated_at: "2026-08-13T09:00:01Z",
+      } as Awaited<ReturnType<typeof saveQuestionnaireResponse>>)
+      .mockResolvedValueOnce({
+        status: "draft",
+        updated_at: "2026-08-13T09:00:02Z",
+      } as Awaited<ReturnType<typeof saveQuestionnaireResponse>>);
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialResponseUpdatedAt="2026-08-13T09:00:00Z"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Rar"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    fireEvent.click(screen.getByText("De obicei"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    expect(saveQuestionnaireResponse).toHaveBeenNthCalledWith(
+      1,
+      "test-assignment",
+      { q1: 1 },
+      { expectedUpdatedAt: "2026-08-13T09:00:00Z" },
+    );
+    expect(saveQuestionnaireResponse).toHaveBeenNthCalledWith(
+      2,
+      "test-assignment",
+      { q1: 2 },
+      { expectedUpdatedAt: "2026-08-13T09:00:01Z" },
+    );
+  });
+
+  it("keeps the newer server draft when another tab wins the save race", async () => {
+    vi.useFakeTimers();
+    vi.mocked(saveQuestionnaireResponse).mockRejectedValueOnce(
+      new QuestionnaireRequestError("Conflict", 400, "response_conflict"),
+    );
+    render(
+      <QuestionnaireRunner
+        definition={mockDefinition}
+        assignmentId="test-assignment"
+        initialResponseUpdatedAt="2026-08-13T09:00:00Z"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Rar"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    expect(screen.getByText(/Draftul a fost modificat într-o altă filă/)).toBeTruthy();
   });
 
   it("merges rapid answers from different questions before the debounced save", async () => {
@@ -621,7 +786,7 @@ describe("QuestionnaireRunner", () => {
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", {
       q1: 2,
       q2: 2,
-    });
+    }, { expectedUpdatedAt: null });
   });
 
   it("saves through the back action and exits to the questionnaire list", async () => {
@@ -640,7 +805,11 @@ describe("QuestionnaireRunner", () => {
       expect(routerPush).toHaveBeenCalledWith("/participant/questionnaires");
     });
     expect(screen.getByRole("button", { name: "Trimite răspunsurile" })).toBeTruthy();
-    expect(saveQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 1 });
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith(
+      "test-assignment",
+      { q1: 1 },
+      { expectedUpdatedAt: null },
+    );
   });
 
   it("shows save-before-exit feedback while the back action is pending", async () => {
@@ -694,7 +863,11 @@ describe("QuestionnaireRunner", () => {
     fireEvent.click(screen.getByRole("button", { name: "Trimite" }));
 
     await waitFor(() => {
-      expect(submitQuestionnaireResponse).toHaveBeenCalledWith("test-assignment", { q1: 2 });
+      expect(submitQuestionnaireResponse).toHaveBeenCalledWith(
+        "test-assignment",
+        { q1: 2 },
+        { expectedUpdatedAt: null },
+      );
       expect(routerRefresh).toHaveBeenCalled();
       expect(screen.getByText("Răspunsurile au fost trimise")).toBeTruthy();
     });
@@ -880,6 +1053,6 @@ describe("QuestionnaireRunner", () => {
     await vi.advanceTimersByTimeAsync(450);
     expect(saveQuestionnaireResponse).toHaveBeenCalledWith("pcm-assignment", {
       pcm_base: "thinker",
-    });
+    }, { expectedUpdatedAt: null });
   });
 });
