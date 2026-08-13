@@ -599,6 +599,7 @@ export async function getSecureQuestionnaireResponse(
 export async function saveQuestionnaireResponse(
   assignmentId: string,
   answers: Record<string, QuestionnaireAnswerValue>,
+  options: { keepalive?: boolean } = {},
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "draft");
@@ -610,6 +611,7 @@ export async function saveQuestionnaireResponse(
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ answers }),
+      ...(options.keepalive ? { keepalive: true } : {}),
     });
 
     if (!response.ok) {
@@ -626,6 +628,7 @@ export async function saveSecureQuestionnaireResponse(
   token: string,
   assignmentId: string,
   answers: Record<string, QuestionnaireAnswerValue>,
+  options: { keepalive?: boolean } = {},
 ): Promise<QuestionnaireResponseRecord> {
   if (canUseSeededAssignmentFallback(assignmentId)) {
     return seededQuestionnaireResponse(assignmentId, answers, "draft");
@@ -638,6 +641,7 @@ export async function saveSecureQuestionnaireResponse(
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers }),
+        ...(options.keepalive ? { keepalive: true } : {}),
       },
     );
 

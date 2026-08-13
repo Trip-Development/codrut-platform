@@ -211,12 +211,18 @@ export function QuestionnaireRunner({
   const autosaveInFlightPromiseRef = useRef<Promise<void> | null>(null);
   const queuedAutosaveRef = useRef<{ assignmentId: string; sequence: number } | null>(null);
   const terminalOperationRef = useRef<"exit" | "submit" | null>(null);
+  const draftDirtyRef = useRef(false);
+  const submittedRef = useRef(initialStatus === "submitted");
+  const exitSaveStartedRef = useRef(false);
 
   useEffect(() => {
     const nextAnswers = initialAnswers ?? {};
     saveSequenceRef.current += 1;
     queuedAutosaveRef.current = null;
     terminalOperationRef.current = null;
+    draftDirtyRef.current = false;
+    submittedRef.current = initialStatus === "submitted";
+    exitSaveStartedRef.current = false;
     latestAnswersRef.current = nextAnswers;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -230,11 +236,51 @@ export function QuestionnaireRunner({
     setSubmitConfirmOpen(false);
   }, [initialAnswers, initialStatus, assignmentId]);
 
-  useEffect(() => () => {
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
+  useEffect(() => {
+    function persistDirtyDraftOnExit() {
+      if (
+        !assignmentId
+        || !draftDirtyRef.current
+        || submittedRef.current
+        || terminalOperationRef.current
+        || exitSaveStartedRef.current
+      ) {
+        return;
+      }
+
+      exitSaveStartedRef.current = true;
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      const request = secureInviteToken
+        ? saveSecureQuestionnaireResponse(
+            secureInviteToken,
+            assignmentId,
+            latestAnswersRef.current,
+            { keepalive: true },
+          )
+        : saveQuestionnaireResponse(assignmentId, latestAnswersRef.current, { keepalive: true });
+      void request.catch(() => undefined);
     }
-  }, []);
+
+    function warnBeforeUnsavedExit(event: BeforeUnloadEvent) {
+      if (!draftDirtyRef.current || submittedRef.current || terminalOperationRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", warnBeforeUnsavedExit);
+    window.addEventListener("pagehide", persistDirtyDraftOnExit);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnsavedExit);
+      window.removeEventListener("pagehide", persistDirtyDraftOnExit);
+      persistDirtyDraftOnExit();
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [assignmentId, secureInviteToken]);
   const questions = useMemo(
     () => definition.schema.sections.flatMap((section) => section.questions),
     [definition.schema.sections],
@@ -279,6 +325,8 @@ export function QuestionnaireRunner({
     if (responsesLocked) return;
     const newAnswers = { ...latestAnswersRef.current, [key]: value };
     latestAnswersRef.current = newAnswers;
+    draftDirtyRef.current = true;
+    exitSaveStartedRef.current = false;
     setAnswers(newAnswers);
 
     if (assignmentId) {
@@ -319,6 +367,7 @@ export function QuestionnaireRunner({
         await saveQuestionnaireResponse(currentAssignmentId, latestAnswersRef.current);
       }
       if (saveSequenceRef.current === sequence) {
+        draftDirtyRef.current = false;
         setSaveState("saved");
         setActiveOperation(null);
         setSaveError(null);
@@ -375,6 +424,7 @@ export function QuestionnaireRunner({
         await saveQuestionnaireResponse(assignmentId, latestAnswersRef.current);
       }
       setSaveState("saved");
+      draftDirtyRef.current = false;
       setActiveOperation(null);
       setSaveError(null);
       router.push(returnHref);
@@ -417,6 +467,8 @@ export function QuestionnaireRunner({
         await submitQuestionnaireResponse(assignmentId, latestAnswersRef.current);
       }
       setSaveState("submitted");
+      draftDirtyRef.current = false;
+      submittedRef.current = true;
       setActiveOperation(null);
       setSaveError(null);
       router.refresh();

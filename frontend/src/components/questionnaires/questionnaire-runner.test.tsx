@@ -299,6 +299,35 @@ describe("QuestionnaireRunner", () => {
     });
   });
 
+  it("flushes a pending draft with keepalive when the questionnaire unmounts", async () => {
+    vi.useFakeTimers();
+    const { unmount } = render(
+      <QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "De obicei" }));
+    expect(saveQuestionnaireResponse).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(saveQuestionnaireResponse).toHaveBeenCalledWith(
+      "test-assignment",
+      { q1: 2 },
+      { keepalive: true },
+    );
+  });
+
+  it("warns before leaving only while a changed answer is unsaved", () => {
+    render(<QuestionnaireRunner definition={mockDefinition} assignmentId="test-assignment" />);
+
+    const cleanExit = new Event("beforeunload", { cancelable: true });
+    expect(window.dispatchEvent(cleanExit)).toBe(true);
+
+    fireEvent.click(screen.getByRole("radio", { name: "De obicei" }));
+    const dirtyExit = new Event("beforeunload", { cancelable: true });
+    expect(window.dispatchEvent(dirtyExit)).toBe(false);
+  });
+
   it("allows submission when only optional questions are unanswered", () => {
     const definition: QuestionnaireDefinition = {
       ...mockDefinition,
