@@ -1431,11 +1431,21 @@ describe("frontend API adapter stubs", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await saveQuestionnaireResponse("assignment-1", { q1: 1 }, { keepalive: true });
+    await saveQuestionnaireResponse(
+      "assignment-1",
+      { q1: 1 },
+      { keepalive: true, expectedUpdatedAt: "2026-08-13T09:00:00Z" },
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/forms/assignments/assignment-1/response"),
-      expect.objectContaining({ keepalive: true }),
+      expect.objectContaining({
+        keepalive: true,
+        body: JSON.stringify({
+          answers: { q1: 1 },
+          expected_updated_at: "2026-08-13T09:00:00Z",
+        }),
+      }),
     );
   });
 

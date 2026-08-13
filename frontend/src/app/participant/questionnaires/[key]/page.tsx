@@ -86,6 +86,7 @@ export default async function ParticipantQuestionnaireRunPage({
               assignmentId={assignmentId}
               initialAnswers={responseRecord?.answers}
               initialStatus={responseRecord?.status}
+              initialResponseUpdatedAt={responseRecord?.updated_at}
               returnHref={safeReturnTo}
               returnLabel="Înapoi la invitație"
               targetLabel={target}
@@ -114,6 +115,7 @@ export default async function ParticipantQuestionnaireRunPage({
           assignmentId={assignmentId}
           initialAnswers={responseRecord?.answers}
           initialStatus={responseRecord?.status}
+          initialResponseUpdatedAt={responseRecord?.updated_at}
           returnHref={safeReturnTo}
           returnLabel="Înapoi la chestionare"
           targetLabel={target}

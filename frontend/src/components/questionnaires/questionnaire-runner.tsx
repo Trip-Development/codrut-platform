@@ -7,6 +7,7 @@ import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from "lucide-re
 
 import {
   isQuestionnaireSessionError,
+  QuestionnaireRequestError,
   saveQuestionnaireResponse,
   saveSecureQuestionnaireResponse,
   submitQuestionnaireResponse,
@@ -33,6 +34,7 @@ export type QuestionnaireRunnerProps = {
   assignmentId?: string;
   initialAnswers?: AnswerState;
   initialStatus?: "draft" | "submitted";
+  initialResponseUpdatedAt?: string | null;
   returnHref?: string;
   returnLabel?: string;
   targetLabel?: string;
@@ -196,6 +198,7 @@ export function QuestionnaireRunner({
   assignmentId,
   initialAnswers,
   initialStatus = "draft",
+  initialResponseUpdatedAt = null,
   returnHref = "/participant/questionnaires",
   returnLabel = "Înapoi la chestionare",
   targetLabel,
@@ -225,6 +228,7 @@ export function QuestionnaireRunner({
   const draftDirtyRef = useRef(false);
   const submittedRef = useRef(initialStatus === "submitted");
   const exitSaveStartedRef = useRef(false);
+  const responseRevisionRef = useRef<string | null>(initialResponseUpdatedAt);
 
   useEffect(() => {
     const nextAnswers = initialAnswers ?? {};
@@ -234,6 +238,7 @@ export function QuestionnaireRunner({
     draftDirtyRef.current = false;
     submittedRef.current = initialStatus === "submitted";
     exitSaveStartedRef.current = false;
+    responseRevisionRef.current = initialResponseUpdatedAt;
     latestAnswersRef.current = nextAnswers;
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -246,7 +251,7 @@ export function QuestionnaireRunner({
     setIsExiting(false);
     setSubmitConfirmOpen(false);
     setMissingAnswersRevealed(false);
-  }, [initialAnswers, initialStatus, assignmentId]);
+  }, [initialAnswers, initialStatus, initialResponseUpdatedAt, assignmentId]);
 
   useEffect(() => {
     function persistDirtyDraftOnExit() {
@@ -265,15 +270,24 @@ export function QuestionnaireRunner({
         clearTimeout(autosaveTimerRef.current);
         autosaveTimerRef.current = null;
       }
+      const options = {
+        expectedUpdatedAt: responseRevisionRef.current,
+        keepalive: true,
+      };
       const request = secureInviteToken
         ? saveSecureQuestionnaireResponse(
             secureInviteToken,
             assignmentId,
             latestAnswersRef.current,
-            { keepalive: true },
+            options,
           )
-        : saveQuestionnaireResponse(assignmentId, latestAnswersRef.current, { keepalive: true });
-      void request.catch(() => undefined);
+        : saveQuestionnaireResponse(assignmentId, latestAnswersRef.current, options);
+      void request
+        .then((savedResponse) => {
+          responseRevisionRef.current = savedResponse.updated_at ?? null;
+          draftDirtyRef.current = false;
+        })
+        .catch(() => undefined);
     }
 
     function warnBeforeUnsavedExit(event: BeforeUnloadEvent) {
@@ -378,13 +392,20 @@ export function QuestionnaireRunner({
     autosaveInFlightRef.current = true;
     const request = (async () => {
       if (secureInviteToken) {
-        await saveSecureQuestionnaireResponse(
+        const savedResponse = await saveSecureQuestionnaireResponse(
           secureInviteToken,
           currentAssignmentId,
           latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
         );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       } else {
-        await saveQuestionnaireResponse(currentAssignmentId, latestAnswersRef.current);
+        const savedResponse = await saveQuestionnaireResponse(
+          currentAssignmentId,
+          latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
+        );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       }
       if (saveSequenceRef.current === sequence) {
         draftDirtyRef.current = false;
@@ -435,13 +456,20 @@ export function QuestionnaireRunner({
     try {
       await autosaveInFlightPromiseRef.current?.catch(() => undefined);
       if (secureInviteToken) {
-        await saveSecureQuestionnaireResponse(
+        const savedResponse = await saveSecureQuestionnaireResponse(
           secureInviteToken,
           assignmentId,
           latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
         );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       } else {
-        await saveQuestionnaireResponse(assignmentId, latestAnswersRef.current);
+        const savedResponse = await saveQuestionnaireResponse(
+          assignmentId,
+          latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
+        );
+        responseRevisionRef.current = savedResponse.updated_at ?? null;
       }
       setSaveState("saved");
       draftDirtyRef.current = false;
@@ -483,13 +511,20 @@ export function QuestionnaireRunner({
     try {
       await autosaveInFlightPromiseRef.current?.catch(() => undefined);
       if (secureInviteToken) {
-        await submitSecureQuestionnaireResponse(
+        const submittedResponse = await submitSecureQuestionnaireResponse(
           secureInviteToken,
           assignmentId,
           latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
         );
+        responseRevisionRef.current = submittedResponse.updated_at ?? null;
       } else {
-        await submitQuestionnaireResponse(assignmentId, latestAnswersRef.current);
+        const submittedResponse = await submitQuestionnaireResponse(
+          assignmentId,
+          latestAnswersRef.current,
+          { expectedUpdatedAt: responseRevisionRef.current },
+        );
+        responseRevisionRef.current = submittedResponse.updated_at ?? null;
       }
       setSaveState("submitted");
       draftDirtyRef.current = false;
@@ -856,6 +891,9 @@ function AutosaveStatus({
 }
 
 function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof QuestionnaireRequestError && error.code === "response_conflict") {
+    return "Draftul a fost modificat într-o altă filă sau pe alt dispozitiv. Reîncarcă pagina pentru a păstra versiunea cea mai nouă.";
+  }
   if (isQuestionnaireSessionError(error)) {
     return "Sesiunea activă s-a schimbat în altă filă. Reîncarcă pagina sau intră din nou în contul de participant înainte să trimiți chestionarul.";
   }

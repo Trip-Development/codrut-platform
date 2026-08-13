@@ -233,8 +233,51 @@ async def test_save_assignment_response_creates_draft_and_starts_assignment() ->
     assert response.questionnaire_key == "lencioni"
     assert response.questionnaire_version == PREVIEW_DEFINITION_VERSION
     assert response.answers == {"team_sample_1": 3}
+    assert response.updated_at is not None
     assert assignment.status == AssignmentStatus.started
     assert assignment.started_at is not None
+
+
+async def test_save_assignment_response_rejects_a_stale_draft_revision() -> None:
+    assignment = make_assignment()
+    repository = FakeFormsRepository(assignment)
+    service = make_service(repository)
+    user_id = uuid.uuid4()
+
+    first = await service.save_assignment_response(
+        user_id,
+        assignment.id,
+        QuestionnaireResponseSaveRequest(
+            answers={"team_sample_1": 1},
+            expected_updated_at=None,
+        ),
+    )
+    assert first.updated_at is not None
+
+    second = await service.save_assignment_response(
+        user_id,
+        assignment.id,
+        QuestionnaireResponseSaveRequest(
+            answers={"team_sample_1": 2},
+            expected_updated_at=first.updated_at,
+        ),
+    )
+    assert second.updated_at is not None
+    assert second.updated_at > first.updated_at
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.save_assignment_response(
+            user_id,
+            assignment.id,
+            QuestionnaireResponseSaveRequest(
+                answers={"team_sample_1": 3},
+                expected_updated_at=first.updated_at,
+            ),
+        )
+
+    assert exc_info.value.code == "response_conflict"
+    assert repository.response is not None
+    assert repository.response.answers == {"team_sample_1": 2}
 
 
 async def test_submit_assignment_response_marks_response_and_assignment_submitted() -> None:
