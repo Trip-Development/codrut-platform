@@ -61,6 +61,19 @@ export function buildManagerReferenceKeySet(values: Iterable<string | null | und
   return keys;
 }
 
+export function directReportsForParticipant<
+  T extends { id: string; full_name: string; reports_to_name?: string | null },
+>(participants: T[], manager: T): T[] {
+  const managerKey = managerReferenceKey(manager.full_name);
+  return participants
+    .filter(
+      (participant) =>
+        participant.id !== manager.id
+        && managerReferenceKey(normalizeReportsToName(participant.reports_to_name)) === managerKey,
+    )
+    .sort((first, second) => first.full_name.localeCompare(second.full_name, "ro"));
+}
+
 function normalizeManagerToken(value: string): string {
   return value
     .normalize("NFD")

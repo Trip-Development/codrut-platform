@@ -2217,6 +2217,45 @@ export async function updateCompanyParticipant(
   return (await response.json()) as CompanyParticipant;
 }
 
+export async function removeProjectParticipant(
+  companyId: string,
+  projectId: string,
+  participantId: string,
+  expectedDirectReportIds: string[],
+): Promise<void> {
+  await removeParticipant(
+    `${getApiBaseUrl()}/companies/${companyId}/projects/${projectId}/participants/${participantId}`,
+    expectedDirectReportIds,
+  );
+}
+
+export async function deleteCompanyParticipant(
+  companyId: string,
+  participantId: string,
+  expectedDirectReportIds: string[],
+): Promise<void> {
+  await removeParticipant(
+    `${getApiBaseUrl()}/companies/${companyId}/participants/${participantId}`,
+    expectedDirectReportIds,
+  );
+}
+
+async function removeParticipant(
+  url: string,
+  expectedDirectReportIds: string[],
+): Promise<void> {
+  const response = await apiFetch(url, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ expected_direct_report_ids: expectedDirectReportIds }),
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(formatApiError(data, `Backend refuzat (${response.status})`));
+  }
+}
+
 export async function sendParticipantInvitations(
   companyId: string,
   payload: {

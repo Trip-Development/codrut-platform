@@ -1,12 +1,23 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2Icon, PencilIcon, XIcon } from "lucide-react";
 
 import {
+  deleteCompanyParticipant,
   hasPermanentParticipantAccount,
+  updateCompanyParticipant,
   type CompanyParticipant,
 } from "@/api/companies";
+import { directReportsForParticipant } from "@/api/roster-format";
 import { IdentityMark } from "@/components/presentation/identity-mark";
+import { InlineFeedback } from "@/components/presentation/inline-feedback";
+import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { ParticipantManagerSelect } from "@/components/participants/participant-manager-select";
+import { ParticipantRemovalSheetContent } from "@/components/participants/participant-removal-sheet-content";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from "@/components/ui/sheet";
 import { useUrlState } from "@/hooks/use-url-state";
 import {
   normalizeWorkspaceSearch,
@@ -14,13 +25,23 @@ import {
 } from "../../projects/project-workspace-controls";
 
 export function CompanyParticipantsTable({
-  participants,
+  companyId,
+  participants: initialParticipants,
 }: {
+  companyId: string;
   participants: CompanyParticipant[];
 }) {
+  const router = useRouter();
   const { get, searchKey, setParam } = useUrlState();
+  const [participants, setParticipants] = useState(initialParticipants);
   const [query, setQuery] = useState(() => get("q") ?? "");
   const deferredQuery = useDeferredValue(query);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [reportsToName, setReportsToName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const visibleParticipants = useMemo(() => {
     const normalizedQuery = normalizeWorkspaceSearch(deferredQuery);
     if (!normalizedQuery) return participants;
@@ -36,6 +57,15 @@ export function CompanyParticipantsTable({
       ].filter(Boolean).join(" ")).includes(normalizedQuery),
     );
   }, [deferredQuery, participants]);
+  const editingParticipant = participants.find((participant) => participant.id === editingId) ?? null;
+  const editingDirectReports = editingParticipant
+    ? directReportsForParticipant(participants, editingParticipant)
+    : [];
+  const mutationLocked = saving || removing;
+
+  useEffect(() => {
+    setParticipants(initialParticipants);
+  }, [initialParticipants]);
 
   useEffect(() => {
     setQuery(get("q") ?? "");
@@ -44,6 +74,66 @@ export function CompanyParticipantsTable({
   function updateQuery(nextQuery: string) {
     setQuery(nextQuery);
     setParam("q", nextQuery || null, "replace");
+  }
+
+  function startEdit(participant: CompanyParticipant) {
+    if (mutationLocked) return;
+    setEditingId(participant.id);
+    setReportsToName(participant.reports_to_name ?? "");
+    setConfirmingRemoval(false);
+    setError(null);
+  }
+
+  function closeEditor() {
+    setEditingId(null);
+    setReportsToName("");
+    setConfirmingRemoval(false);
+    setError(null);
+  }
+
+  async function saveManager() {
+    if (!editingParticipant || mutationLocked) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateCompanyParticipant(companyId, editingParticipant.id, {
+        reportsToName: reportsToName.trim() || null,
+      });
+      setParticipants((current) => current.map((participant) =>
+        participant.id === editingParticipant.id ? { ...participant, ...updated } : participant));
+      closeEditor();
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Managerul nu a putut fi salvat.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeParticipant() {
+    if (!editingParticipant || mutationLocked) return;
+    setRemoving(true);
+    setError(null);
+    try {
+      await deleteCompanyParticipant(
+        companyId,
+        editingParticipant.id,
+        editingDirectReports.map((participant) => participant.id),
+      );
+      const directReportIds = new Set(editingDirectReports.map((participant) => participant.id));
+      setParticipants((current) => current
+        .filter((participant) => participant.id !== editingParticipant.id)
+        .map((participant) => directReportIds.has(participant.id)
+          ? { ...participant, reports_to_name: null }
+          : participant));
+      closeEditor();
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Participantul nu a putut fi șters.");
+      router.refresh();
+    } finally {
+      setRemoving(false);
+    }
   }
 
   return (
@@ -82,7 +172,8 @@ export function CompanyParticipantsTable({
                 <col className="w-[28%]" />
                 <col className="w-[18%]" />
                 <col className="w-[20%]" />
-                <col className="w-[12%]" />
+                <col className="w-[8%]" />
+                <col className="w-[4%]" />
               </colgroup>
               <thead className="hidden bg-muted/60 text-xs font-semibold text-muted-foreground md:table-header-group">
                 <tr>
@@ -91,14 +182,17 @@ export function CompanyParticipantsTable({
                   <th scope="col" className="min-w-40 px-4 py-3">Rol</th>
                   <th scope="col" className="min-w-40 px-4 py-3">Manager</th>
                   <th scope="col" className="min-w-32 px-4 py-3">Cont</th>
+                  <th scope="col" className="relative px-3 py-3 text-right">
+                    <span className="sr-only">Acțiuni</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="block divide-y divide-border md:table-row-group">
                 {visibleParticipants.length > 0 ? visibleParticipants.map((participant) => {
                   const hasPermanentAccount = hasPermanentParticipantAccount(participant);
                   return (
-                    <tr key={participant.id} className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
-                      <td className="col-span-2 row-start-1 font-semibold text-foreground md:px-5 md:py-4">
+                    <tr key={participant.id} className="relative grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 transition-colors hover:bg-muted/35 md:table-row md:px-0 md:py-0">
+                      <td className="col-span-2 row-start-1 pr-12 font-semibold text-foreground md:px-5 md:py-4">
                         <span className="flex min-w-0 items-center gap-3">
                           <IdentityMark
                             kind="person"
@@ -132,11 +226,25 @@ export function CompanyParticipantsTable({
                           {hasPermanentAccount ? "Activ" : "Necreat"}
                         </span>
                       </td>
+                      <td className="absolute right-3 top-3 text-right md:static md:px-3 md:py-4">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={mutationLocked}
+                          aria-label={`Editează ${participant.full_name}`}
+                          title={`Editează ${participant.full_name}`}
+                          onClick={() => startEdit(participant)}
+                          className="rounded-md text-muted-foreground shadow-none hover:text-burgundy"
+                        >
+                          <PencilIcon aria-hidden="true" strokeWidth={1.8} />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 }) : (
                   <tr className="block md:table-row">
-                    <td colSpan={5} className="block px-5 py-10 text-center text-sm text-muted-foreground md:table-cell">
+                    <td colSpan={6} className="block px-5 py-10 text-center text-sm text-muted-foreground md:table-cell">
                       Niciun participant pentru căutarea curentă.
                     </td>
                   </tr>
@@ -148,6 +256,103 @@ export function CompanyParticipantsTable({
       ) : (
         <p className="px-5 py-10 text-center text-sm text-muted-foreground">Niciun participant adăugat.</p>
       )}
+
+      <Sheet
+        open={Boolean(editingParticipant)}
+        onOpenChange={(open) => {
+          if (!open && !mutationLocked) closeEditor();
+        }}
+        labelledBy={confirmingRemoval ? "participant-removal-title" : "company-participant-edit-title"}
+        describedBy={confirmingRemoval ? "participant-removal-description" : "company-participant-edit-description"}
+        closeOnBackdrop={!mutationLocked}
+      >
+        {editingParticipant ? (
+          confirmingRemoval ? (
+            <ParticipantRemovalSheetContent
+              participant={editingParticipant}
+              directReports={editingDirectReports}
+              scope="company"
+              removing={removing}
+              error={error}
+              onCancel={() => {
+                setConfirmingRemoval(false);
+                setError(null);
+              }}
+              onConfirm={() => void removeParticipant()}
+            />
+          ) : (
+            <div className="flex h-full min-w-0 flex-col">
+              <SheetHeader className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h2 id="company-participant-edit-title" className="text-lg font-semibold text-foreground">
+                    Editează managerul
+                  </h2>
+                  <p id="company-participant-edit-description" className="mt-1 break-words text-sm text-muted-foreground">
+                    {editingParticipant.full_name}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Închide editarea"
+                  title="Închide"
+                  disabled={mutationLocked}
+                  onClick={closeEditor}
+                  className="-mr-2 shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <XIcon aria-hidden="true" strokeWidth={1.8} />
+                </Button>
+              </SheetHeader>
+              <SheetBody aria-busy={saving}>
+                {error ? (
+                  <InlineFeedback tone="danger" className="mb-5 px-4 py-3">
+                    {error}
+                  </InlineFeedback>
+                ) : null}
+                <ParticipantManagerSelect
+                  participantId={editingParticipant.id}
+                  participants={participants}
+                  value={reportsToName}
+                  disabled={saving}
+                  onChange={setReportsToName}
+                />
+                <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                  Modificarea actualizează relația curentă din companie. Sarcinile și rezultatele deja create nu se schimbă.
+                </p>
+                {saving ? (
+                  <OperationFeedback
+                    title="Salvăm managerul"
+                    detail="Actualizăm profilul participantului."
+                    className="mt-5"
+                  />
+                ) : null}
+              </SheetBody>
+              <SheetFooter className="flex items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => setConfirmingRemoval(true)}
+                  className="text-destructive hover:bg-destructive/8 hover:text-destructive"
+                >
+                  Șterge din companie
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={saving} onClick={closeEditor}>
+                    Anulează
+                  </Button>
+                  <Button type="button" size="sm" disabled={saving} onClick={() => void saveManager()}>
+                    {saving ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
+                    {saving ? "Salvăm managerul" : "Salvează managerul"}
+                  </Button>
+                </div>
+              </SheetFooter>
+            </div>
+          )
+        ) : null}
+      </Sheet>
     </section>
   );
 }

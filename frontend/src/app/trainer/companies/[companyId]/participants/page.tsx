@@ -27,7 +27,7 @@ export default async function CompanyParticipantsPage({
       {company.dataErrors?.map((error) => (
         <InlineFeedback key={error} tone="danger">{error}</InlineFeedback>
       ))}
-      <CompanyParticipantsTable participants={participants} />
+      <CompanyParticipantsTable companyId={companyId} participants={participants} />
     </div>
   );
 }
