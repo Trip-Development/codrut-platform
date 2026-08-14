@@ -1,13 +1,27 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CompanyParticipant } from "@/api/companies";
+import {
+  deleteCompanyParticipant,
+  updateCompanyParticipant,
+  type CompanyParticipant,
+} from "@/api/companies";
 import { CompanyParticipantsTable } from "./CompanyParticipantsTable";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/trainer/companies/company-1/participants",
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
+
+vi.mock("@/api/companies", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/companies")>();
+  return {
+    ...original,
+    deleteCompanyParticipant: vi.fn(),
+    updateCompanyParticipant: vi.fn(),
+  };
+});
 
 const participants: CompanyParticipant[] = [
   {
@@ -58,7 +72,7 @@ describe("CompanyParticipantsTable", () => {
   });
 
   it("filters company participants without diacritics and persists the query in the URL", () => {
-    render(<CompanyParticipantsTable participants={participants} />);
+    render(<CompanyParticipantsTable companyId="company-1" participants={participants} />);
 
     fireEvent.change(screen.getByLabelText("Caută participant"), {
       target: { value: "stefan" },
@@ -72,7 +86,7 @@ describe("CompanyParticipantsTable", () => {
   });
 
   it("shows only real linked accounts as active", () => {
-    render(<CompanyParticipantsTable participants={participants} />);
+    render(<CompanyParticipantsTable companyId="company-1" participants={participants} />);
 
     const permanentRow = screen.getByText("ana@example.test").closest("tr");
     const shadowRow = screen.getByText("Mihai Temporar").closest("tr");
@@ -84,5 +98,44 @@ describe("CompanyParticipantsTable", () => {
     expect(
       permanentRow?.querySelector("[data-avatar-palette-key='12345']"),
     ).toBeTruthy();
+  });
+
+  it("edits the company-level manager from the participant sheet", async () => {
+    vi.mocked(updateCompanyParticipant).mockResolvedValue({
+      ...participants[0],
+      reports_to_name: null,
+    });
+    render(<CompanyParticipantsTable companyId="company-1" participants={participants} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Editează Ștefan Ionescu" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "Manager" }), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvează managerul" }));
+
+    await waitFor(() => expect(updateCompanyParticipant).toHaveBeenCalledWith(
+      "company-1",
+      "participant-1",
+      { reportsToName: null },
+    ));
+  });
+
+  it("warns with named direct reports before company deletion", async () => {
+    vi.mocked(deleteCompanyParticipant).mockResolvedValue();
+    render(<CompanyParticipantsTable companyId="company-1" participants={participants} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Editează Ana Manager" }));
+    fireEvent.click(screen.getByRole("button", { name: "Șterge din companie" }));
+
+    const removalDialog = await screen.findByRole("dialog", { name: "Șterge din companie" });
+    expect(within(removalDialog).getByText(/Ștefan Ionescu/)).toBeTruthy();
+    expect(within(removalDialog).getByText(/Mihai Temporar/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Șterge din companie" }));
+
+    await waitFor(() => expect(deleteCompanyParticipant).toHaveBeenCalledWith(
+      "company-1",
+      "participant-2",
+      ["participant-3", "participant-1"],
+    ));
   });
 });

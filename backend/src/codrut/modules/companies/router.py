@@ -23,6 +23,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
+    ParticipantRemovalRequest,
     ParticipantResponse,
     ParticipantUpdateRequest,
     ProjectLifecycleEventResponse,
@@ -333,6 +334,52 @@ async def update_company_participant(
     )
     await session.commit()
     return participant
+
+
+@router.delete(
+    "/{company_id}/projects/{project_id}/participants/{participant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_project_participant(
+    company_id: UUID,
+    project_id: UUID,
+    participant_id: UUID,
+    payload: ParticipantRemovalRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await CompanyService(session).remove_project_participant(
+        principal.user_id,
+        company_id,
+        project_id,
+        participant_id,
+        payload,
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{company_id}/participants/{participant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_company_participant(
+    company_id: UUID,
+    participant_id: UUID,
+    payload: ParticipantRemovalRequest,
+    principal: Annotated[SessionPrincipal, Depends(current_principal)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> Response:
+    require_trainer_principal(principal)
+    await CompanyService(session).delete_company_participant(
+        principal.user_id,
+        company_id,
+        participant_id,
+        payload,
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

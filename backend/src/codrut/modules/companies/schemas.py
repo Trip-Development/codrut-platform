@@ -150,6 +150,10 @@ class ParticipantUpdateRequest(StrictRequestModel):
     role_group: str | None = Field(default=None, max_length=255)
 
 
+class ParticipantRemovalRequest(StrictRequestModel):
+    expected_direct_report_ids: list[UUID] = Field(default_factory=list, max_length=500)
+
+
 class RosterImportRow(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

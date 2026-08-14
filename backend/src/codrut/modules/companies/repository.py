@@ -360,6 +360,21 @@ class CompanyRepository:
         )
         return list(result.scalars().all())
 
+    async def list_all_project_memberships(
+        self,
+        company_id: UUID,
+    ) -> list[tuple[ProjectMembership, ParticipantProfile]]:
+        result = await self.session.execute(
+            select(ProjectMembership, ParticipantProfile)
+            .join(
+                ParticipantProfile,
+                ParticipantProfile.id == ProjectMembership.participant_profile_id,
+            )
+            .where(ProjectMembership.company_id == company_id)
+            .order_by(ParticipantProfile.full_name)
+        )
+        return [(membership, participant) for membership, participant in result.all()]
+
     async def add_project_membership(
         self,
         membership: ProjectMembership,
@@ -367,6 +382,52 @@ class CompanyRepository:
         self.session.add(membership)
         await self.session.flush()
         return membership
+
+    async def delete_project_membership(self, membership: ProjectMembership) -> None:
+        await self.session.delete(membership)
+        await self.session.flush()
+
+    async def participant_deletion_blockers(self, participant_id: UUID) -> list[str]:
+        from codrut.modules.assignments.models import (
+            AssessmentCycleTeamMembership,
+            QuestionnaireAssignment,
+        )
+        from codrut.modules.identity.models import AssignmentInvite, ConsentAcceptance
+        from codrut.modules.scoring.models import ResultPublication
+
+        result = await self.session.execute(
+            select(
+                exists()
+                .where(
+                    or_(
+                        QuestionnaireAssignment.respondent_profile_id == participant_id,
+                        QuestionnaireAssignment.target_person_id == participant_id,
+                    )
+                )
+                .label("assignments"),
+                exists()
+                .where(AssessmentCycleTeamMembership.participant_profile_id == participant_id)
+                .label("assessment_cycles"),
+                exists()
+                .where(AssignmentInvite.respondent_profile_id == participant_id)
+                .label("invitations"),
+                exists()
+                .where(ParticipantAccountLinkAudit.participant_profile_id == participant_id)
+                .label("account_link_audits"),
+                exists()
+                .where(ResultPublication.participant_profile_id == participant_id)
+                .label("published_results"),
+                exists()
+                .where(ConsentAcceptance.respondent_profile_id == participant_id)
+                .label("consent_history"),
+            )
+        )
+        row = result.one()._mapping
+        return [name for name, present in row.items() if present]
+
+    async def delete_participant(self, participant: ParticipantProfile) -> None:
+        await self.session.delete(participant)
+        await self.session.flush()
 
     async def replace_reporting_relationships(
         self,

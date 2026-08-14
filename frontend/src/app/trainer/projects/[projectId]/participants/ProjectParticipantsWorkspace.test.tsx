@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   importCompanyRoster,
+  removeProjectParticipant,
   updateCompanyParticipant,
   type CompanyParticipant,
   type CompanyProject,
@@ -18,6 +19,7 @@ vi.mock("@/api/companies", async (importOriginal) => {
   return {
     ...original,
     importCompanyRoster: vi.fn(),
+    removeProjectParticipant: vi.fn(),
     updateCompanyParticipant: vi.fn(),
   };
 });
@@ -314,6 +316,28 @@ describe("ProjectParticipantsWorkspace", () => {
         roleGroup: "leadership",
       })),
     );
+  });
+
+  it("warns about direct reports and removes only the project membership", async () => {
+    vi.mocked(removeProjectParticipant).mockResolvedValue();
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Editează Ana Manager" }));
+    fireEvent.click(screen.getByRole("button", { name: "Elimină din proiect" }));
+
+    const removalDialog = await screen.findByRole("dialog", { name: "Elimină din proiect" });
+    expect(within(removalDialog).getByText(/Dan Membru/)).toBeTruthy();
+    expect(within(removalDialog).getByText(/sarcinile deja generate rămân neschimbate/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Elimină din proiect" }));
+
+    await waitFor(() => expect(removeProjectParticipant).toHaveBeenCalledWith(
+      "company-1",
+      "project-1",
+      "manager-1",
+      ["member-1"],
+    ));
+    expect(screen.queryByRole("link", { name: "Ana Manager" })).toBeNull();
+    expect(screen.getByText("Fără manager")).toBeTruthy();
   });
 
   it("shows operation feedback while a participant edit is saving", async () => {

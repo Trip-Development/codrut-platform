@@ -56,6 +56,7 @@ from codrut.modules.companies.schemas import (
     ParticipantAccountLinkRepairRequest,
     ParticipantCreateRequest,
     ParticipantInviteBatchRequest,
+    ParticipantRemovalRequest,
     ParticipantUpdateRequest,
     ProjectPermanentDeleteRequest,
     RosterImportRequest,
@@ -393,6 +394,18 @@ class FakeCompanyRepository:
             and membership.active
         ]
 
+    async def list_all_project_memberships(
+        self,
+        company_id: uuid.UUID,
+    ) -> list[tuple[ProjectMembership, ParticipantProfile]]:
+        participants_by_id = {participant.id: participant for participant in self.participants}
+        return [
+            (membership, participants_by_id[membership.participant_profile_id])
+            for membership in self.project_memberships
+            if membership.company_id == company_id
+            and membership.participant_profile_id in participants_by_id
+        ]
+
     async def add_project_membership(
         self,
         membership: ProjectMembership,
@@ -400,6 +413,46 @@ class FakeCompanyRepository:
         membership.id = uuid.uuid4()
         self.project_memberships.append(membership)
         return membership
+
+    async def delete_project_membership(self, membership: ProjectMembership) -> None:
+        self.project_memberships = [
+            existing for existing in self.project_memberships if existing.id != membership.id
+        ]
+
+    async def participant_deletion_blockers(self, participant_id: uuid.UUID) -> list[str]:
+        blockers: list[str] = []
+        if any(
+            assignment.respondent_profile_id == participant_id
+            or assignment.target_person_id == participant_id
+            for assignment in self.assignments
+        ):
+            blockers.append("assignments")
+        if any(
+            audit.participant_profile_id == participant_id for audit in self.account_link_audits
+        ):
+            blockers.append("account_link_audits")
+        return blockers
+
+    async def delete_participant(self, participant: ParticipantProfile) -> None:
+        self.participants = [
+            existing for existing in self.participants if existing.id != participant.id
+        ]
+        self.reporting_relationships = [
+            relationship
+            for relationship in self.reporting_relationships
+            if relationship.participant_profile_id != participant.id
+            and relationship.manager_profile_id != participant.id
+        ]
+
+    async def list_reporting_relationships(
+        self,
+        company_id: uuid.UUID,
+    ) -> list[ParticipantReportingRelationship]:
+        return [
+            relationship
+            for relationship in self.reporting_relationships
+            if relationship.company_id == company_id
+        ]
 
     async def replace_reporting_relationships(
         self,
@@ -1316,6 +1369,184 @@ async def test_update_participant_rejects_blank_name_after_trim() -> None:
 
     assert exc_info.value.code == "participant_name_required"
     assert participant.full_name == "Ana"
+
+
+async def test_remove_project_participant_clears_confirmed_direct_reports_only_in_project() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Pilot"),
+    )
+    manager = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Maria Manager", email="maria@example.com"),
+    )
+    direct_reports = [
+        await service.create_participant(
+            owner_id,
+            company.id,
+            ParticipantCreateRequest(
+                full_name=name,
+                email=email,
+                reports_to_name="MariaManager",
+            ),
+        )
+        for name, email in (
+            ("Ana", "ana@example.com"),
+            ("Bogdan", "bogdan@example.com"),
+        )
+    ]
+    for participant in [manager, *direct_reports]:
+        await repository.add_project_membership(
+            ProjectMembership(
+                company_id=company.id,
+                project_id=project.id,
+                participant_profile_id=participant.id,
+                reports_to_name=None if participant is manager else "MariaManager",
+                active=True,
+            )
+        )
+
+    await service.remove_project_participant(
+        owner_id,
+        company.id,
+        project.id,
+        manager.id,
+        ParticipantRemovalRequest(
+            expected_direct_report_ids=[participant.id for participant in direct_reports]
+        ),
+    )
+
+    assert manager in repository.participants
+    assert await repository.get_project_membership(project.id, manager.id) is None
+    assert all(
+        membership.reports_to_name is None
+        for membership in repository.project_memberships
+        if membership.participant_profile_id in {participant.id for participant in direct_reports}
+    )
+    assert all(participant.reports_to_name == "MariaManager" for participant in direct_reports)
+
+
+async def test_remove_project_participant_rejects_stale_direct_report_confirmation() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Pilot"),
+    )
+    manager = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Maria Manager", email="maria@example.com"),
+    )
+    direct_report = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
+    for participant, reports_to_name in (
+        (manager, None),
+        (direct_report, "Maria Manager"),
+    ):
+        await repository.add_project_membership(
+            ProjectMembership(
+                company_id=company.id,
+                project_id=project.id,
+                participant_profile_id=participant.id,
+                reports_to_name=reports_to_name,
+                active=True,
+            )
+        )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.remove_project_participant(
+            owner_id,
+            company.id,
+            project.id,
+            manager.id,
+            ParticipantRemovalRequest(expected_direct_report_ids=[]),
+        )
+
+    assert exc_info.value.code == "participant_direct_reports_changed"
+    assert await repository.get_project_membership(project.id, manager.id) is not None
+    direct_membership = await repository.get_project_membership(project.id, direct_report.id)
+    assert direct_membership is not None
+    assert direct_membership.reports_to_name == "Maria Manager"
+
+
+async def test_delete_company_participant_clears_confirmed_stale_references() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    manager = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Maria Manager", email="maria@example.com"),
+    )
+    direct_report = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(
+            full_name="Ana",
+            email="ana@example.com",
+            reports_to_name="MariaManager",
+        ),
+    )
+
+    await service.delete_company_participant(
+        owner_id,
+        company.id,
+        manager.id,
+        ParticipantRemovalRequest(expected_direct_report_ids=[direct_report.id]),
+    )
+
+    assert manager not in repository.participants
+    assert direct_report.reports_to_name is None
+
+
+async def test_delete_company_participant_requires_project_removal_first() -> None:
+    repository = FakeCompanyRepository()
+    service = make_service(repository)
+    owner_id = uuid.uuid4()
+    company = await service.create_company(owner_id, CompanyCreateRequest(name="Client"))
+    project = await service.create_project(
+        owner_id,
+        company.id,
+        CompanyProjectCreateRequest(name="Pilot"),
+    )
+    participant = await service.create_participant(
+        owner_id,
+        company.id,
+        ParticipantCreateRequest(full_name="Ana", email="ana@example.com"),
+    )
+    await repository.add_project_membership(
+        ProjectMembership(
+            company_id=company.id,
+            project_id=project.id,
+            participant_profile_id=participant.id,
+            active=True,
+        )
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        await service.delete_company_participant(
+            owner_id,
+            company.id,
+            participant.id,
+            ParticipantRemovalRequest(expected_direct_report_ids=[]),
+        )
+
+    assert exc_info.value.code == "participant_has_project_memberships"
+    assert participant in repository.participants
 
 
 def test_require_trainer_principal_allows_trainer() -> None:
