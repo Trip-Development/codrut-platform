@@ -50,6 +50,7 @@ from codrut.modules.companies.schemas import (
     ParticipantInvitationStatusResponse,
     ParticipantInviteBatchRequest,
     ParticipantInviteBatchResponse,
+    ParticipantRemovalRequest,
     ParticipantUpdateRequest,
     ProjectLifecycleEventResponse,
     ProjectParticipantResponse,
@@ -693,6 +694,145 @@ class CompanyService:
             await self._sync_leadership_team_membership(company_id, participant)
 
         return participant
+
+    async def remove_project_participant(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        project_id: UUID,
+        participant_id: UUID,
+        payload: ParticipantRemovalRequest,
+    ) -> None:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        await self._require_company_project(company_id, project_id, allow_archived=False)
+
+        participant = await self.repository.get_participant_for_update(
+            company_id,
+            participant_id,
+        )
+        if participant is None:
+            raise DomainError("Participant not found.", code="participant_not_found")
+
+        membership = await self.repository.get_project_membership(project_id, participant_id)
+        if membership is None or membership.company_id != company_id or not membership.active:
+            raise DomainError(
+                "Participant is not a member of this project.",
+                code="project_membership_not_found",
+            )
+
+        project_memberships = await self.repository.list_project_memberships(
+            company_id,
+            project_id,
+        )
+        direct_reports = [
+            (direct_membership, direct_participant)
+            for direct_membership, direct_participant in project_memberships
+            if direct_participant.id != participant.id
+            and manager_reference_key(direct_membership.reports_to_name)
+            == manager_reference_key(participant.full_name)
+        ]
+        _require_expected_direct_reports(
+            payload,
+            [direct_participant for _membership, direct_participant in direct_reports],
+        )
+
+        for direct_membership, _direct_participant in direct_reports:
+            direct_membership.reports_to_name = None
+        await self.repository.delete_project_membership(membership)
+
+    async def delete_company_participant(
+        self,
+        user_id: UUID,
+        company_id: UUID,
+        participant_id: UUID,
+        payload: ParticipantRemovalRequest,
+    ) -> None:
+        await self._require_company(company_id)
+        await self._require_company_manager(user_id, company_id)
+        participant = await self.repository.get_participant_for_update(
+            company_id,
+            participant_id,
+        )
+        if participant is None:
+            raise DomainError("Participant not found.", code="participant_not_found")
+        if participant.user_id is not None:
+            raise DomainError(
+                "Participantul are un cont asociat și nu poate fi șters din companie.",
+                code="participant_has_account",
+            )
+
+        project_memberships = await self.repository.list_all_project_memberships(company_id)
+        participant_memberships = [
+            membership
+            for membership, member in project_memberships
+            if member.id == participant.id
+        ]
+        if participant_memberships:
+            raise DomainError(
+                "Elimină participantul din proiectele companiei înainte de ștergere.",
+                code="participant_has_project_memberships",
+                details={
+                    "project_ids": sorted(
+                        {str(membership.project_id) for membership in participant_memberships}
+                    )
+                },
+            )
+
+        blockers = await self.repository.participant_deletion_blockers(participant.id)
+        if blockers:
+            raise DomainError(
+                "Participantul are istoric protejat și nu poate fi șters din companie.",
+                code="participant_has_protected_history",
+                details={"blockers": blockers},
+            )
+
+        participants = await self.repository.list_participants(company_id)
+        direct_reports_by_id = {
+            direct_participant.id: direct_participant
+            for direct_participant in participants
+            if direct_participant.id != participant.id
+            and manager_reference_key(direct_participant.reports_to_name)
+            == manager_reference_key(participant.full_name)
+        }
+        for direct_membership, direct_participant in project_memberships:
+            if (
+                direct_participant.id != participant.id
+                and manager_reference_key(direct_membership.reports_to_name)
+                == manager_reference_key(participant.full_name)
+            ):
+                direct_reports_by_id[direct_participant.id] = direct_participant
+        for relationship in await self.repository.list_reporting_relationships(company_id):
+            if relationship.manager_profile_id == participant.id:
+                direct_report = next(
+                    (
+                        candidate
+                        for candidate in participants
+                        if candidate.id == relationship.participant_profile_id
+                    ),
+                    None,
+                )
+                if direct_report is not None:
+                    direct_reports_by_id[direct_report.id] = direct_report
+
+        direct_reports = list(direct_reports_by_id.values())
+        _require_expected_direct_reports(payload, direct_reports)
+
+        for direct_report in direct_reports:
+            if (
+                manager_reference_key(direct_report.reports_to_name)
+                == manager_reference_key(participant.full_name)
+            ):
+                direct_report.reports_to_name = None
+        for direct_membership, direct_participant in project_memberships:
+            if (
+                direct_participant.id in direct_reports_by_id
+                and manager_reference_key(direct_membership.reports_to_name)
+                == manager_reference_key(participant.full_name)
+            ):
+                direct_membership.reports_to_name = None
+
+        await self.repository.delete_participant(participant)
 
     async def import_roster(
         self,
@@ -1945,6 +2085,27 @@ def _normalize_roster_row(row: RosterImportRow) -> RosterImportRow:
         pcm_profile=_clean_optional(row.pcm_profile),
         pcm_base=_clean_optional(row.pcm_base),
         pcm_phase=_clean_optional(row.pcm_phase),
+    )
+
+
+def _require_expected_direct_reports(
+    payload: ParticipantRemovalRequest,
+    direct_reports: list[ParticipantProfile],
+) -> None:
+    expected_ids = set(payload.expected_direct_report_ids)
+    actual_ids = {participant.id for participant in direct_reports}
+    if expected_ids == actual_ids:
+        return
+    raise DomainError(
+        "Lista persoanelor care raportează acestui participant s-a modificat. "
+        "Reîncarcă și verifică din nou.",
+        code="participant_direct_reports_changed",
+        details={
+            "direct_reports": [
+                {"id": str(participant.id), "full_name": participant.full_name}
+                for participant in sorted(direct_reports, key=lambda item: item.full_name)
+            ]
+        },
     )
 
 

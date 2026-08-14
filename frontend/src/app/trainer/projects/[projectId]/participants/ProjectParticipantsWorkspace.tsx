@@ -15,12 +15,14 @@ import {
 import {
   hasPermanentParticipantAccount,
   importCompanyRoster,
+  removeProjectParticipant,
   updateCompanyParticipant,
   type CompanyParticipant,
   type CompanyProject,
   type ParticipantInvitationStatus,
 } from "@/api/companies";
 import {
+  directReportsForParticipant,
   isExternalMatrixManagerLabel,
   managerReferenceKey,
   normalizeReportsToName,
@@ -28,6 +30,8 @@ import {
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { IdentityMark } from "@/components/presentation/identity-mark";
 import { OperationFeedback } from "@/components/presentation/operation-feedback";
+import { ParticipantManagerSelect } from "@/components/participants/participant-manager-select";
+import { ParticipantRemovalSheetContent } from "@/components/participants/participant-removal-sheet-content";
 import { RosterImporter } from "@/components/roster-importer";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -176,6 +180,8 @@ export function ProjectParticipantsWorkspace({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ParticipantEditForm | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const addingRef = useRef(false);
   const savingParticipantRef = useRef<string | null>(null);
@@ -210,7 +216,10 @@ export function ProjectParticipantsWorkspace({
   const activeSecureLinkCount = accessRows.filter((row) => row.hasSecureLink).length;
   const editingParticipant = participants.find((participant) => participant.id === editingId) ?? null;
   const editingAccessRow = accessRows.find((row) => row.participant.id === editingId) ?? null;
-  const mutationLocked = adding || Boolean(savingId);
+  const editingDirectReports = editingParticipant
+    ? directReportsForParticipant(participants, editingParticipant)
+    : [];
+  const mutationLocked = adding || Boolean(savingId) || Boolean(removingId);
 
   useEffect(() => {
     setParticipants(initialParticipants);
@@ -249,6 +258,7 @@ export function ProjectParticipantsWorkspace({
     const storedRole = participant.role_group?.trim().toLowerCase();
     setError(null);
     setEditingId(participant.id);
+    setConfirmingRemoval(false);
     setForm({
       fullName: participant.full_name,
       email: participant.email ?? "",
@@ -268,6 +278,7 @@ export function ProjectParticipantsWorkspace({
   const cancelEdit = () => {
     setEditingId(null);
     setForm(null);
+    setConfirmingRemoval(false);
     setError(null);
   };
 
@@ -315,6 +326,34 @@ export function ProjectParticipantsWorkspace({
     } finally {
       savingParticipantRef.current = null;
       setSavingId(null);
+    }
+  };
+
+  const removeEditingParticipant = async () => {
+    if (!editingParticipant || savingParticipantRef.current || removingId) return;
+
+    setRemovingId(editingParticipant.id);
+    setError(null);
+    try {
+      await removeProjectParticipant(
+        companyId,
+        projectId,
+        editingParticipant.id,
+        editingDirectReports.map((participant) => participant.id),
+      );
+      const directReportIds = new Set(editingDirectReports.map((participant) => participant.id));
+      setParticipants((current) => current
+        .filter((participant) => participant.id !== editingParticipant.id)
+        .map((participant) => directReportIds.has(participant.id)
+          ? { ...participant, reports_to_name: null }
+          : participant));
+      cancelEdit();
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Participantul nu a putut fi eliminat.");
+      router.refresh();
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -474,13 +513,27 @@ export function ProjectParticipantsWorkspace({
       <Sheet
         open={Boolean(editingParticipant && editingAccessRow && form)}
         onOpenChange={(open) => {
-          if (!open && !savingId) cancelEdit();
+          if (!open && !savingId && !removingId) cancelEdit();
         }}
-        labelledBy="participant-edit-title"
-        describedBy="participant-edit-description"
-        closeOnBackdrop={!savingId}
+        labelledBy={confirmingRemoval ? "participant-removal-title" : "participant-edit-title"}
+        describedBy={confirmingRemoval ? "participant-removal-description" : "participant-edit-description"}
+        closeOnBackdrop={!savingId && !removingId}
       >
         {editingParticipant && editingAccessRow && form ? (
+          confirmingRemoval ? (
+            <ParticipantRemovalSheetContent
+              participant={editingParticipant}
+              directReports={editingDirectReports}
+              scope="project"
+              removing={removingId === editingParticipant.id}
+              error={error}
+              onCancel={() => {
+                setConfirmingRemoval(false);
+                setError(null);
+              }}
+              onConfirm={() => void removeEditingParticipant()}
+            />
+          ) : (
           <div className="flex h-full min-w-0 flex-col">
             <SheetHeader className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -526,8 +579,9 @@ export function ProjectParticipantsWorkspace({
                   disabled={Boolean(savingId)}
                   onChange={(value) => updateField("email", value)}
                 />
-                <EditField
-                  label="Manager"
+                <ParticipantManagerSelect
+                  participantId={editingParticipant.id}
+                  participants={participants}
                   value={form.reportsToName}
                   disabled={Boolean(savingId)}
                   onChange={(value) => updateField("reportsToName", value)}
@@ -587,28 +641,41 @@ export function ProjectParticipantsWorkspace({
                 />
               ) : null}
             </SheetBody>
-            <SheetFooter className="flex items-center justify-end gap-2">
+            <SheetFooter className="flex items-center justify-between gap-3">
               <Button
                 type="button"
-                onClick={cancelEdit}
+                onClick={() => setConfirmingRemoval(true)}
                 disabled={Boolean(savingId)}
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className={secondaryButtonClass}
+                className="text-destructive hover:bg-destructive/8 hover:text-destructive"
               >
-                Anulează
+                Elimină din proiect
               </Button>
-              <Button
-                type="button"
-                onClick={() => void saveEdit(editingParticipant)}
-                disabled={Boolean(savingId) || !form.fullName.trim() || !form.email.trim()}
-                size="sm"
-              >
-                {savingId ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
-                {savingId ? "Salvăm participantul" : "Salvează"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={cancelEdit}
+                  disabled={Boolean(savingId)}
+                  variant="outline"
+                  size="sm"
+                  className={secondaryButtonClass}
+                >
+                  Anulează
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void saveEdit(editingParticipant)}
+                  disabled={Boolean(savingId) || !form.fullName.trim() || !form.email.trim()}
+                  size="sm"
+                >
+                  {savingId ? <Loader2Icon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
+                  {savingId ? "Salvăm participantul" : "Salvează"}
+                </Button>
+              </div>
             </SheetFooter>
           </div>
+          )
         ) : null}
       </Sheet>
 
