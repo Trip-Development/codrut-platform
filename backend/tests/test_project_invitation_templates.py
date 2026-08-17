@@ -524,3 +524,128 @@ async def test_update_project_template_validations():
                 ),
             )
         assert exc_info.value.code in ("template_inactive", "template_not_found")
+
+
+def test_invite_batch_error_messages_human_friendly():
+    from codrut.modules.companies.service import _invite_batch_error_message
+
+    # Inactive template messages by role
+    msg_lead_inactive = _invite_batch_error_message("template_inactive", role_group="leadership")
+    assert msg_lead_inactive == (
+        "Șablonul ales pentru echipa de direcție este dezactivat. "
+        "Activează-l din secțiunea Șabloane, apoi reia trimiterea."
+    )
+
+    msg_mem_inactive = _invite_batch_error_message("template_inactive", role_group="member")
+    assert msg_mem_inactive == (
+        "Șablonul ales pentru membrii echipei este dezactivat. "
+        "Activează-l din secțiunea Șabloane, apoi reia trimiterea."
+    )
+
+    msg_gen_inactive = _invite_batch_error_message("template_inactive", role_group=None)
+    assert msg_gen_inactive == (
+        "Șablonul ales este dezactivat. "
+        "Activează-l din secțiunea Șabloane, apoi reia trimiterea."
+    )
+
+    # Missing template
+    msg_not_found = _invite_batch_error_message("template_not_found")
+    assert msg_not_found == "Șablonul ales nu mai există. Alege altul din lista de la Șabloane."
+
+    # Missing action url
+    msg_no_link = _invite_batch_error_message("action_url_missing")
+    assert msg_no_link == (
+        "Șablonul ales nu conține butonul de acces. Fără el, destinatarii nu ar avea unde intra. "
+        "Adaugă butonul și reia."
+    )
+
+    # Campaign template not allowed
+    msg_campaign = _invite_batch_error_message("campaign_template_not_allowed")
+    assert msg_campaign == (
+        "Ai ales un șablon de campanie. "
+        "Pentru invitații e nevoie de un șablon de sistem."
+    )
+
+    # Unsupported variables
+    msg_unsupported = _invite_batch_error_message("unsupported_placeholders")
+    assert msg_unsupported == (
+        "Șablonul ales conține variabile nepermise. "
+        "Verifică textul din secțiunea Șabloane și reia."
+    )
+
+    # Unknown / unexpected code fallback (informative, without misleading retry advice)
+    msg_unknown = _invite_batch_error_message("some_unexpected_code")
+    assert "Încearcă din nou" not in msg_unknown
+    assert "Șabloane" in msg_unknown
+
+
+@pytest.mark.asyncio
+async def test_send_participant_invites_returns_human_friendly_error_message_on_inactive_template():
+    from codrut.modules.companies.models import ProjectMembership
+    from codrut.modules.companies.schemas import ParticipantInviteBatchRequest
+
+    async with SessionLocal() as db_session:
+        user, company, participant, assignment = await create_test_context(
+            db_session,
+            role_group="leadership",
+        )
+        comm_repo = CommunicationsRepository(db_session)
+        inactive_key = f"inactive_{uuid4().hex[:8]}"
+
+        await comm_repo.add_template(
+            EmailTemplate(
+                key=inactive_key,
+                owner_id=user.id,
+                version=1,
+                subject="Invitație ${participant_name}",
+                html_body="<a href=\"${action_url}\">Link</a>",
+                text_body="Link: ${action_url}",
+                variables=["participant_name", "action_url"],
+                audience="transactional",
+                active=False,
+            )
+        )
+        project = CompanyProject(
+            company_id=company.id,
+            name="Test Project Error Msg",
+            leadership_invitation_template_key=inactive_key,
+        )
+        db_session.add(project)
+        await db_session.flush()
+
+        assignment.project_id = project.id
+        db_session.add(
+            ProjectMembership(
+                company_id=company.id,
+                project_id=project.id,
+                participant_profile_id=participant.id,
+                role_group=participant.role_group,
+                active=True,
+            )
+        )
+        await db_session.flush()
+
+        company_service = CompanyService(db_session)
+        response = await company_service.send_participant_invites(
+            user_id=user.id,
+            company_id=company.id,
+            payload=ParticipantInviteBatchRequest(
+                participant_ids=[participant.id],
+                mode="email",
+                project_id=project.id,
+                target_mode="selected",
+            ),
+        )
+
+        assert response.emails_failed == 1
+        assert response.emails_queued == 0
+        assert len(response.results) == 1
+        res = response.results[0]
+        assert res.email_sent is False
+        assert res.email_queued is False
+        # Human friendly error message received
+        assert res.error in (
+            "Șablonul ales pentru echipa de direcție este dezactivat. "
+            "Activează-l din secțiunea Șabloane, apoi reia trimiterea.",
+            "Șablonul ales nu mai există. Alege altul din lista de la Șabloane.",
+        )

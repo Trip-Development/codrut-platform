@@ -1538,7 +1538,10 @@ class CompanyService:
             except DomainError as exc:
                 invite_url = None
                 send_error_code = exc.code
-                send_error = _invite_batch_error_message(exc.code)
+                send_error = _invite_batch_error_message(
+                    exc.code,
+                    role_group=participant.role_group,
+                )
             except SQLAlchemyError as exc:
                 invite_url = None
                 send_error_code = "invitation_persistence_error"
@@ -2296,7 +2299,43 @@ def _participant_invite_idempotency_key(
     return hashlib.sha256(f"{request_key}:{scope}".encode()).hexdigest()
 
 
-def _invite_batch_error_message(code: str) -> str:
+def _invite_batch_error_message(code: str, role_group: str | None = None) -> str:
+    if code == "template_inactive":
+        if role_group == "leadership":
+            return (
+                "Șablonul ales pentru echipa de direcție este dezactivat. "
+                "Activează-l din secțiunea Șabloane, apoi reia trimiterea."
+            )
+        if role_group == "member":
+            return (
+                "Șablonul ales pentru membrii echipei este dezactivat. "
+                "Activează-l din secțiunea Șabloane, apoi reia trimiterea."
+            )
+        return (
+            "Șablonul ales este dezactivat. "
+            "Activează-l din secțiunea Șabloane, apoi reia trimiterea."
+        )
+    if code == "template_not_found":
+        return "Șablonul ales nu mai există. Alege altul din lista de la Șabloane."
+    if code in ("action_url_missing", "email_template_missing_action_url"):
+        return (
+            "Șablonul ales nu conține butonul de acces. "
+            "Fără el, destinatarii nu ar avea unde intra. "
+            "Adaugă butonul și reia."
+        )
+    if code == "campaign_template_not_allowed":
+        return (
+            "Ai ales un șablon de campanie. "
+            "Pentru invitații e nevoie de un șablon de sistem."
+        )
+    if code in ("unsupported_placeholders", "email_template_unsupported_variables"):
+        return (
+            "Șablonul ales conține variabile nepermise. "
+            "Verifică textul din secțiunea Șabloane și reia."
+        )
+    if code == "template_owner_mismatch":
+        return "Șablonul ales aparține altui cont. Alege un șablon propriu din secțiunea Șabloane."
+
     messages = {
         "reminder_not_due": (
             "Reminderul nu este încă disponibil sau cele două runde au fost trimise."
@@ -2306,7 +2345,11 @@ def _invite_batch_error_message(code: str) -> str:
         "project_closed": "Perioada de completare a proiectului s-a încheiat.",
         "profile_not_found": "Participantul nu mai este disponibil în acest proiect.",
     }
-    return messages.get(code, "Invitația nu a putut fi pregătită. Încearcă din nou.")
+    return messages.get(
+        code,
+        "Invitația nu a putut fi pregătită din cauza configurării șablonului. "
+        "Verifică secțiunea Șabloane.",
+    )
 
 
 def _log_invitation_batch_failure(
