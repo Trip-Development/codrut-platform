@@ -4,49 +4,49 @@
  */
 
 export interface paths {
-    "/api/auth/change-password": {
+    "/api/health/live": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Live */
+        get: operations["live_api_health_live_get"];
         put?: never;
-        /** Change Password */
-        post: operations["change_password_api_auth_change_password_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/auth/consent": {
+    "/api/health/ready": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Ready */
+        get: operations["ready_api_health_ready_get"];
         put?: never;
-        /** Consent */
-        post: operations["consent_api_auth_consent_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/auth/csrf": {
+    "/api/auth/invite/verify": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Csrf Token */
-        get: operations["csrf_token_api_auth_csrf_get"];
+        /** Verify Invite */
+        get: operations["verify_invite_api_auth_invite_verify_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -72,17 +72,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/invite/verify": {
+    "/api/auth/register": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Verify Invite */
-        get: operations["verify_invite_api_auth_invite_verify_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** Register */
+        post: operations["register_api_auth_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -100,57 +100,6 @@ export interface paths {
         put?: never;
         /** Login */
         post: operations["login_api_auth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Logout */
-        post: operations["logout_api_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Me */
-        get: operations["me_api_auth_me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register */
-        post: operations["register_api_auth_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -191,6 +140,538 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_api_auth_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Consent */
+        post: operations["consent_api_auth_consent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Csrf Token */
+        get: operations["csrf_token_api_auth_csrf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_api_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/participants/me/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Workspace */
+        get: operations["get_my_workspace_api_participants_me_workspace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Companies */
+        get: operations["list_companies_api_companies_get"];
+        put?: never;
+        /** Create Company */
+        post: operations["create_company_api_companies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Company Summaries */
+        get: operations["list_company_summaries_api_companies_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List All Company Projects */
+        get: operations["list_all_company_projects_api_companies_projects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company Project By Id */
+        get: operations["get_company_project_by_id_api_companies_projects__project_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Company */
+        delete: operations["delete_company_api_companies__company_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Company Projects */
+        get: operations["list_company_projects_api_companies__company_id__projects_get"];
+        put?: never;
+        /** Create Company Project */
+        post: operations["create_company_project_api_companies__company_id__projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Company Project */
+        delete: operations["delete_company_project_api_companies__company_id__projects__project_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Company Project */
+        patch: operations["update_company_project_api_companies__company_id__projects__project_id__patch"];
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Company Project */
+        post: operations["restore_company_project_api_companies__company_id__projects__project_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/permanent-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Permanently Delete Company Project */
+        post: operations["permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/lifecycle-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Company Project Lifecycle Events */
+        get: operations["list_company_project_lifecycle_events_api_companies__company_id__projects__project_id__lifecycle_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Company Participants */
+        get: operations["list_company_participants_api_companies__company_id__participants_get"];
+        put?: never;
+        /** Create Company Participant */
+        post: operations["create_company_participant_api_companies__company_id__participants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/{participant_id}/account-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Participant Account Link Status */
+        get: operations["get_participant_account_link_status_api_companies__company_id__participants__participant_id__account_link_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/{participant_id}/account-link/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Repair Participant Account Link */
+        post: operations["repair_participant_account_link_api_companies__company_id__participants__participant_id__account_link_repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Project Participants */
+        get: operations["list_project_participants_api_companies__company_id__projects__project_id__participants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/{participant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Company Participant */
+        delete: operations["delete_company_participant_api_companies__company_id__participants__participant_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Company Participant */
+        patch: operations["update_company_participant_api_companies__company_id__participants__participant_id__patch"];
+        trace?: never;
+    };
+    "/api/companies/{company_id}/projects/{project_id}/participants/{participant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Project Participant */
+        delete: operations["remove_project_participant_api_companies__company_id__projects__project_id__participants__participant_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Company Roster */
+        post: operations["import_company_roster_api_companies__company_id__participants_roster_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Participant Invitations */
+        post: operations["send_participant_invitations_api_companies__company_id__participants_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/invitations/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Participant Invitation Statuses */
+        get: operations["list_participant_invitation_statuses_api_companies__company_id__participants_invitations_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/{participant_id}/resend-invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend Participant Invite */
+        post: operations["resend_participant_invite_api_companies__company_id__participants__participant_id__resend_invite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/access-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Company Access Code */
+        post: operations["create_company_access_code_api_companies__company_id__access_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/access-code-registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register With Company Access Code */
+        post: operations["register_with_company_access_code_api_companies_access_code_registration_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/participants/reporting-relationships/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Company Reporting Relationships */
+        post: operations["import_company_reporting_relationships_api_companies__company_id__participants_reporting_relationships_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/webhooks/brevo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Brevo Webhook */
+        post: operations["receive_brevo_webhook_api_communications_webhooks_brevo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/test-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Test Email */
+        post: operations["send_test_email_api_communications_test_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/communications/campaign-assets": {
         parameters: {
             query?: never;
@@ -225,18 +706,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/communications/campaigns": {
+    "/api/communications/templates": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Campaigns */
-        get: operations["list_campaigns_api_communications_campaigns_get"];
+        /** List Email Templates */
+        get: operations["list_email_templates_api_communications_templates_get"];
         put?: never;
-        /** Create Campaign */
-        post: operations["create_campaign_api_communications_campaigns_post"];
+        /** Create Email Template */
+        post: operations["create_email_template_api_communications_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/templates/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Email Template */
+        get: operations["get_email_template_api_communications_templates__key__get"];
+        put?: never;
+        post?: never;
+        /** Retire Email Template */
+        delete: operations["retire_email_template_api_communications_templates__key__delete"];
+        options?: never;
+        head?: never;
+        /** Update Email Template */
+        patch: operations["update_email_template_api_communications_templates__key__patch"];
+        trace?: never;
+    };
+    "/api/communications/templates/{key}/versions/{version}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Email Template */
+        post: operations["activate_email_template_api_communications_templates__key__versions__version__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/ops-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Email Ops Summary */
+        get: operations["get_email_ops_summary_api_communications_ops_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/communications/send-capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Email Send Capacity */
+        get: operations["get_email_send_capacity_api_communications_send_capacity_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -295,7 +846,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/communications/campaigns/recipients/{recipient_id}/events": {
+    "/api/communications/campaigns/recipients/{recipient_id}/restore": {
         parameters: {
             query?: never;
             header?: never;
@@ -304,8 +855,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record Campaign Recipient Event */
-        post: operations["record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post"];
+        /** Restore Campaign Recipient */
+        post: operations["restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -329,7 +880,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/communications/campaigns/recipients/{recipient_id}/restore": {
+    "/api/communications/campaigns/recipients/{recipient_id}/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -338,8 +889,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Restore Campaign Recipient */
-        post: operations["restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post"];
+        /** Record Campaign Recipient Event */
+        post: operations["record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -415,35 +966,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/communications/campaigns/{campaign_id}": {
+    "/api/communications/campaigns": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Campaigns */
+        get: operations["list_campaigns_api_communications_campaigns_get"];
         put?: never;
-        post?: never;
-        /** Delete Campaign */
-        delete: operations["delete_campaign_api_communications_campaigns__campaign_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Campaign */
-        patch: operations["update_campaign_api_communications_campaigns__campaign_id__patch"];
-        trace?: never;
-    };
-    "/api/communications/campaigns/{campaign_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Campaign Delivery */
-        post: operations["cancel_campaign_delivery_api_communications_campaigns__campaign_id__cancel_post"];
+        /** Create Campaign */
+        post: operations["create_campaign_api_communications_campaigns_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -485,78 +1019,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/communications/ops-summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Email Ops Summary */
-        get: operations["get_email_ops_summary_api_communications_ops_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/communications/send-capacity": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Email Send Capacity */
-        get: operations["get_email_send_capacity_api_communications_send_capacity_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/communications/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Email Templates */
-        get: operations["list_email_templates_api_communications_templates_get"];
-        put?: never;
-        /** Create Email Template */
-        post: operations["create_email_template_api_communications_templates_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/communications/templates/{key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Email Template */
-        get: operations["get_email_template_api_communications_templates__key__get"];
-        put?: never;
-        post?: never;
-        /** Retire Email Template */
-        delete: operations["retire_email_template_api_communications_templates__key__delete"];
-        options?: never;
-        head?: never;
-        /** Update Email Template */
-        patch: operations["update_email_template_api_communications_templates__key__patch"];
-        trace?: never;
-    };
-    "/api/communications/templates/{key}/versions/{version}/activate": {
+    "/api/communications/campaigns/{campaign_id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -565,135 +1028,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Activate Email Template */
-        post: operations["activate_email_template_api_communications_templates__key__versions__version__activate_post"];
+        /** Cancel Campaign Delivery */
+        post: operations["cancel_campaign_delivery_api_communications_campaigns__campaign_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/communications/test-email": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Test Email */
-        post: operations["send_test_email_api_communications_test_email_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/communications/webhooks/brevo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Receive Brevo Webhook */
-        post: operations["receive_brevo_webhook_api_communications_webhooks_brevo_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Companies */
-        get: operations["list_companies_api_companies_get"];
-        put?: never;
-        /** Create Company */
-        post: operations["create_company_api_companies_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/access-code-registration": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register With Company Access Code */
-        post: operations["register_with_company_access_code_api_companies_access_code_registration_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List All Company Projects */
-        get: operations["list_all_company_projects_api_companies_projects_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/projects/{project_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Company Project By Id */
-        get: operations["get_company_project_by_id_api_companies_projects__project_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Company Summaries */
-        get: operations["list_company_summaries_api_companies_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}": {
+    "/api/communications/campaigns/{campaign_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -703,306 +1046,12 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Company */
-        delete: operations["delete_company_api_companies__company_id__delete"];
+        /** Delete Campaign */
+        delete: operations["delete_campaign_api_communications_campaigns__campaign_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/access-codes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Company Access Code */
-        post: operations["create_company_access_code_api_companies__company_id__access_codes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/assignments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Company Assignments */
-        get: operations["list_company_assignments_api_companies__company_id__assignments_get"];
-        put?: never;
-        /** Create Company Assignment */
-        post: operations["create_company_assignment_api_companies__company_id__assignments_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/assignments/default-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Company Default Assignment Plan */
-        get: operations["get_company_default_assignment_plan_api_companies__company_id__assignments_default_plan_get"];
-        put?: never;
-        /** Save Company Assignment Plan */
-        post: operations["save_company_assignment_plan_api_companies__company_id__assignments_default_plan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/assignments/{assignment_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Company Assignment Status */
-        patch: operations["update_company_assignment_status_api_companies__company_id__assignments__assignment_id__status_patch"];
-        trace?: never;
-    };
-    "/api/companies/{company_id}/invitations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Company Invitation */
-        post: operations["create_company_invitation_api_companies__company_id__invitations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/invitations/{respondent_profile_id}/invalidate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Invalidate Company Invitation */
-        post: operations["invalidate_company_invitation_api_companies__company_id__invitations__respondent_profile_id__invalidate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Company Participants */
-        get: operations["list_company_participants_api_companies__company_id__participants_get"];
-        put?: never;
-        /** Create Company Participant */
-        post: operations["create_company_participant_api_companies__company_id__participants_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/invitations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Participant Invitations */
-        post: operations["send_participant_invitations_api_companies__company_id__participants_invitations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/invitations/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Participant Invitation Statuses */
-        get: operations["list_participant_invitation_statuses_api_companies__company_id__participants_invitations_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/reporting-relationships/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Import Company Reporting Relationships */
-        post: operations["import_company_reporting_relationships_api_companies__company_id__participants_reporting_relationships_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/roster": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Import Company Roster */
-        post: operations["import_company_roster_api_companies__company_id__participants_roster_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/{participant_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Company Participant */
-        delete: operations["delete_company_participant_api_companies__company_id__participants__participant_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Company Participant */
-        patch: operations["update_company_participant_api_companies__company_id__participants__participant_id__patch"];
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/{participant_id}/account-link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Participant Account Link Status */
-        get: operations["get_participant_account_link_status_api_companies__company_id__participants__participant_id__account_link_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/{participant_id}/account-link/repair": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Repair Participant Account Link */
-        post: operations["repair_participant_account_link_api_companies__company_id__participants__participant_id__account_link_repair_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/participants/{participant_id}/resend-invite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resend Participant Invite */
-        post: operations["resend_participant_invite_api_companies__company_id__participants__participant_id__resend_invite_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Company Projects */
-        get: operations["list_company_projects_api_companies__company_id__projects_get"];
-        put?: never;
-        /** Create Company Project */
-        post: operations["create_company_project_api_companies__company_id__projects_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Company Project */
-        delete: operations["delete_company_project_api_companies__company_id__projects__project_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Company Project */
-        patch: operations["update_company_project_api_companies__company_id__projects__project_id__patch"];
+        /** Update Campaign */
+        patch: operations["update_campaign_api_communications_campaigns__campaign_id__patch"];
         trace?: never;
     };
     "/api/companies/{company_id}/projects/{project_id}/assessment-cycles": {
@@ -1052,159 +1101,6 @@ export interface paths {
         put?: never;
         /** Close Project Assessment Cycle */
         post: operations["close_project_assessment_cycle_api_companies__company_id__projects__project_id__assessment_cycles__assessment_cycle_id__close_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}/lifecycle-events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Company Project Lifecycle Events */
-        get: operations["list_company_project_lifecycle_events_api_companies__company_id__projects__project_id__lifecycle_events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}/participants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Project Participants */
-        get: operations["list_project_participants_api_companies__company_id__projects__project_id__participants_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}/participants/{participant_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Project Participant */
-        delete: operations["remove_project_participant_api_companies__company_id__projects__project_id__participants__participant_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}/permanent-delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Permanently Delete Company Project */
-        post: operations["permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}/reports/leadership/{participant_profile_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Leadership Member Report */
-        get: operations["get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/projects/{project_id}/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore Company Project */
-        post: operations["restore_company_project_api_companies__company_id__projects__project_id__restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/reports/aggregate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Company Report Aggregate */
-        get: operations["get_company_report_aggregate_api_companies__company_id__reports_aggregate_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/reports/comparison": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Company Report Comparison */
-        get: operations["get_company_report_comparison_api_companies__company_id__reports_comparison_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/companies/{company_id}/reports/icare-answers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Company Icare Answer Review */
-        get: operations["get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1264,15 +1160,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/forms/assignments/{assignment_id}/definition": {
+    "/api/companies/{company_id}/assignments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Assignment Definition */
-        get: operations["get_assignment_definition_api_forms_assignments__assignment_id__definition_get"];
+        /** List Company Assignments */
+        get: operations["list_company_assignments_api_companies__company_id__assignments_get"];
+        put?: never;
+        /** Create Company Assignment */
+        post: operations["create_company_assignment_api_companies__company_id__assignments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/assignments/default-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company Default Assignment Plan */
+        get: operations["get_company_default_assignment_plan_api_companies__company_id__assignments_default_plan_get"];
+        put?: never;
+        /** Save Company Assignment Plan */
+        post: operations["save_company_assignment_plan_api_companies__company_id__assignments_default_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/reports/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company Report Aggregate */
+        get: operations["get_company_report_aggregate_api_companies__company_id__reports_aggregate_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1281,17 +1213,16 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/forms/assignments/{assignment_id}/response": {
+    "/api/companies/{company_id}/projects/{project_id}/reports/leadership/{participant_profile_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Assignment Response */
-        get: operations["get_assignment_response_api_forms_assignments__assignment_id__response_get"];
-        /** Save Assignment Response */
-        put: operations["save_assignment_response_api_forms_assignments__assignment_id__response_put"];
+        /** Get Leadership Member Report */
+        get: operations["get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1299,7 +1230,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/forms/assignments/{assignment_id}/response/submit": {
+    "/api/companies/{company_id}/reports/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company Report Comparison */
+        get: operations["get_company_report_comparison_api_companies__company_id__reports_comparison_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/reports/icare-answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company Icare Answer Review */
+        get: operations["get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/assignments/{assignment_id}/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -1308,8 +1273,59 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Submit Assignment Response */
-        post: operations["submit_assignment_response_api_forms_assignments__assignment_id__response_submit_post"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Company Assignment Status */
+        patch: operations["update_company_assignment_status_api_companies__company_id__assignments__assignment_id__status_patch"];
+        trace?: never;
+    };
+    "/api/companies/{company_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Company Invitation */
+        post: operations["create_company_invitation_api_companies__company_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}/invitations/{respondent_profile_id}/invalidate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invalidate Company Invitation */
+        post: operations["invalidate_company_invitation_api_companies__company_id__invitations__respondent_profile_id__invalidate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/forms/participant/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Participant Onboarding */
+        get: operations["get_participant_onboarding_api_forms_participant_onboarding_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1353,6 +1369,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forms/assignments/{assignment_id}/definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Assignment Definition */
+        get: operations["get_assignment_definition_api_forms_assignments__assignment_id__definition_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/forms/definitions/{key}/versions/{version}/activate": {
         parameters: {
             query?: never;
@@ -1370,33 +1403,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/forms/participant/onboarding": {
+    "/api/forms/assignments/{assignment_id}/response": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Participant Onboarding */
-        get: operations["get_participant_onboarding_api_forms_participant_onboarding_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/forms/secure-links/{token}/assignments/{assignment_id}/definition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Secure Assignment Definition */
-        get: operations["get_secure_assignment_definition_api_forms_secure_links__token__assignments__assignment_id__definition_get"];
-        put?: never;
+        /** Get Assignment Response */
+        get: operations["get_assignment_response_api_forms_assignments__assignment_id__response_get"];
+        /** Save Assignment Response */
+        put: operations["save_assignment_response_api_forms_assignments__assignment_id__response_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1422,6 +1439,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forms/secure-links/{token}/assignments/{assignment_id}/definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Secure Assignment Definition */
+        get: operations["get_secure_assignment_definition_api_forms_secure_links__token__assignments__assignment_id__definition_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/forms/assignments/{assignment_id}/response/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Assignment Response */
+        post: operations["submit_assignment_response_api_forms_assignments__assignment_id__response_submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/forms/secure-links/{token}/assignments/{assignment_id}/response/submit": {
         parameters: {
             query?: never;
@@ -1433,57 +1484,6 @@ export interface paths {
         put?: never;
         /** Submit Secure Assignment Response */
         post: operations["submit_secure_assignment_response_api_forms_secure_links__token__assignments__assignment_id__response_submit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/health/live": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Live */
-        get: operations["live_api_health_live_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/health/ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ready */
-        get: operations["ready_api_health_ready_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/participants/me/workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get My Workspace */
-        get: operations["get_my_workspace_api_participants_me_workspace_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1521,21 +1521,19 @@ export interface components {
         };
         /** AssessmentCycleCreateRequest */
         AssessmentCycleCreateRequest: {
-            /** Due At */
-            due_at?: string | null;
             /** Name */
             name?: string | null;
-            /** Questionnaire Keys */
-            questionnaire_keys?: string[] | null;
             /** Source Cycle Id */
             source_cycle_id?: string | null;
+            /** Questionnaire Keys */
+            questionnaire_keys?: string[] | null;
             /** Starts At */
             starts_at?: string | null;
+            /** Due At */
+            due_at?: string | null;
         };
         /** AssessmentCycleQuestionnaireResponse */
         AssessmentCycleQuestionnaireResponse: {
-            /** Display Order */
-            display_order: number;
             /**
              * Id
              * Format: uuid
@@ -1548,51 +1546,53 @@ export interface components {
             questionnaire_definition_id: string;
             /** Questionnaire Key */
             questionnaire_key: string;
+            /** Display Order */
+            display_order: number;
         };
         /** AssessmentCycleResponse */
         AssessmentCycleResponse: {
-            /** Closed At */
-            closed_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /**
              * Company Id
              * Format: uuid
              */
             company_id: string;
             /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Created By User Id */
-            created_by_user_id: string | null;
-            /** Due At */
-            due_at: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /**
              * Project Id
              * Format: uuid
              */
             project_id: string;
-            /** Questionnaires */
-            questionnaires?: components["schemas"]["AssessmentCycleQuestionnaireResponse"][];
             /** Sequence */
             sequence: number;
+            /** Name */
+            name: string;
+            status: components["schemas"]["AssessmentCycleStatus"];
             /** Source Cycle Id */
             source_cycle_id: string | null;
             /** Starts At */
             starts_at: string | null;
-            status: components["schemas"]["AssessmentCycleStatus"];
+            /** Due At */
+            due_at: string | null;
+            /** Closed At */
+            closed_at: string | null;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
+            /** Questionnaires */
+            questionnaires?: components["schemas"]["AssessmentCycleQuestionnaireResponse"][];
         };
         /**
          * AssessmentCycleStatus
@@ -1601,37 +1601,37 @@ export interface components {
         AssessmentCycleStatus: "draft" | "active" | "closed";
         /** AssessmentCycleUpdateRequest */
         AssessmentCycleUpdateRequest: {
-            /** Due At */
-            due_at?: string | null;
             /** Name */
             name?: string | null;
             /** Starts At */
             starts_at?: string | null;
+            /** Due At */
+            due_at?: string | null;
         };
         /** AssessmentDeliveryRowResponse */
         AssessmentDeliveryRowResponse: {
-            /** Audience */
-            audience: string;
-            /** Company Id */
-            company_id: string;
-            /** Completion */
-            completion: string;
-            /** Delivery */
-            delivery: string;
-            /** Email */
-            email: string;
             /** Id */
             id: string;
-            /** Nextaction */
-            nextAction: string;
+            /** Company Id */
+            company_id: string;
             /** Participant */
             participant: string;
+            /** Email */
+            email: string;
+            /** Audience */
+            audience: string;
             /** Project */
             project: string;
-            /** Reminder */
-            reminder: string;
             /** Tasks */
             tasks: string;
+            /** Delivery */
+            delivery: string;
+            /** Reminder */
+            reminder: string;
+            /** Completion */
+            completion: string;
+            /** Nextaction */
+            nextAction: string;
         };
         /**
          * AssignmentAccessMode
@@ -1640,40 +1640,29 @@ export interface components {
         AssignmentAccessMode: "account_link";
         /** AssignmentCreateRequest */
         AssignmentCreateRequest: {
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
             /** Project Id */
             project_id?: string | null;
-            /** Questionnaire Key */
-            questionnaire_key: string;
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /**
              * Respondent Profile Id
              * Format: uuid
              */
             respondent_profile_id: string;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+            target_type: components["schemas"]["AssignmentTargetType"];
             /** Target Person Id */
             target_person_id?: string | null;
             /** Target Team Id */
             target_team_id?: string | null;
-            target_type: components["schemas"]["AssignmentTargetType"];
             /** @default trainer_raw_review */
             visibility_policy: components["schemas"]["ResponseVisibilityPolicy"];
         };
         /** AssignmentPlanItemResponse */
         AssignmentPlanItemResponse: {
-            /** Existing Assignment Id */
-            existing_assignment_id?: string | null;
             /** Key */
             key: string;
-            /** Questionnaire Key */
-            questionnaire_key: string;
-            /** Respondent Name */
-            respondent_name: string;
-            /**
-             * Respondent Profile Id
-             * Format: uuid
-             */
-            respondent_profile_id: string;
             /** Scope Id */
             scope_id: string;
             /** Scope Name */
@@ -1681,76 +1670,87 @@ export interface components {
             /** Scope Type */
             scope_type: string;
             /**
-             * Selected
-             * @default true
+             * Respondent Profile Id
+             * Format: uuid
              */
-            selected: boolean;
+            respondent_profile_id: string;
+            /** Respondent Name */
+            respondent_name: string;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+            target_type: components["schemas"]["AssignmentTargetType"];
             /** Target Person Id */
             target_person_id?: string | null;
             /** Target Person Name */
             target_person_name?: string | null;
             /** Target Team Id */
             target_team_id?: string | null;
-            /** Target Team Leader Id */
-            target_team_leader_id?: string | null;
-            /** Target Team Member Ids */
-            target_team_member_ids?: string[];
             /** Target Team Name */
             target_team_name?: string | null;
             target_team_type?: components["schemas"]["TeamType"] | null;
-            target_type: components["schemas"]["AssignmentTargetType"];
+            /** Target Team Member Ids */
+            target_team_member_ids?: string[];
+            /** Target Team Leader Id */
+            target_team_leader_id?: string | null;
             /** @default trainer_raw_review */
             visibility_policy: components["schemas"]["ResponseVisibilityPolicy"];
+            /**
+             * Selected
+             * @default true
+             */
+            selected: boolean;
+            /** Existing Assignment Id */
+            existing_assignment_id?: string | null;
         };
         /** AssignmentPlanResponse */
         AssignmentPlanResponse: {
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
-            /** Assignments */
-            assignments: components["schemas"]["AssignmentPlanItemResponse"][];
-            /** Existing Count */
-            existing_count: number;
             /** Project Id */
             project_id?: string | null;
-            /** Scopes */
-            scopes: components["schemas"]["AssignmentPlanScopeResponse"][];
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Source Cycle Id */
             source_cycle_id?: string | null;
+            /** Scopes */
+            scopes: components["schemas"]["AssignmentPlanScopeResponse"][];
+            /** Assignments */
+            assignments: components["schemas"]["AssignmentPlanItemResponse"][];
             /** Suggested Count */
             suggested_count: number;
+            /** Existing Count */
+            existing_count: number;
         };
         /** AssignmentPlanSaveItem */
         AssignmentPlanSaveItem: {
-            /** Questionnaire Key */
-            questionnaire_key: string;
             /**
              * Respondent Profile Id
              * Format: uuid
              */
             respondent_profile_id: string;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+            target_type: components["schemas"]["AssignmentTargetType"];
             /** Target Person Id */
             target_person_id?: string | null;
             /** Target Team Id */
             target_team_id?: string | null;
-            /** Target Team Leader Id */
-            target_team_leader_id?: string | null;
-            /** Target Team Member Ids */
-            target_team_member_ids?: string[];
             /** Target Team Name */
             target_team_name?: string | null;
             target_team_type?: components["schemas"]["TeamType"] | null;
-            target_type: components["schemas"]["AssignmentTargetType"];
+            /** Target Team Member Ids */
+            target_team_member_ids?: string[];
+            /** Target Team Leader Id */
+            target_team_leader_id?: string | null;
             /** @default trainer_raw_review */
             visibility_policy: components["schemas"]["ResponseVisibilityPolicy"];
         };
         /** AssignmentPlanSaveRequest */
         AssignmentPlanSaveRequest: {
+            /** Project Id */
+            project_id?: string | null;
             /** Assessment Cycle Id */
             assessment_cycle_id?: string | null;
             /** Assignments */
             assignments?: components["schemas"]["AssignmentPlanSaveItem"][];
-            /** Project Id */
-            project_id?: string | null;
         };
         /** AssignmentPlanSaveResponse */
         AssignmentPlanSaveResponse: {
@@ -1767,14 +1767,25 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Participant Ids */
-            participant_ids: string[];
             /** Type */
             type: string;
+            /** Participant Ids */
+            participant_ids: string[];
         };
         /** AssignmentResponse */
         AssignmentResponse: {
-            access_mode: components["schemas"]["AssignmentAccessMode"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Project Id */
+            project_id: string | null;
             /** Assessment Cycle Id */
             assessment_cycle_id: string | null;
             /**
@@ -1783,49 +1794,38 @@ export interface components {
              */
             assignment_round_id: string;
             /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Due At */
-            due_at: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Invited At */
-            invited_at: string | null;
-            /** Last Reminder Sent At */
-            last_reminder_sent_at: string | null;
-            /** Project Id */
-            project_id: string | null;
-            /** Questionnaire Key */
-            questionnaire_key: string;
-            /** Reminder Count */
-            reminder_count: number;
-            /** Reminder Due At */
-            reminder_due_at: string | null;
-            /**
              * Respondent Profile Id
              * Format: uuid
              */
             respondent_profile_id: string;
-            /** Scored At */
-            scored_at: string | null;
-            /** Started At */
-            started_at: string | null;
-            status: components["schemas"]["AssignmentStatus"];
-            /** Submitted At */
-            submitted_at: string | null;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+            target_type: components["schemas"]["AssignmentTargetType"];
             /** Target Person Id */
             target_person_id: string | null;
             /** Target Team Id */
             target_team_id: string | null;
-            target_type: components["schemas"]["AssignmentTargetType"];
+            access_mode: components["schemas"]["AssignmentAccessMode"];
+            status: components["schemas"]["AssignmentStatus"];
+            visibility_policy: components["schemas"]["ResponseVisibilityPolicy"];
+            /** Due At */
+            due_at: string | null;
+            /** Invited At */
+            invited_at: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Submitted At */
+            submitted_at: string | null;
             /** Validated At */
             validated_at: string | null;
-            visibility_policy: components["schemas"]["ResponseVisibilityPolicy"];
+            /** Scored At */
+            scored_at: string | null;
+            /** Reminder Due At */
+            reminder_due_at: string | null;
+            /** Last Reminder Sent At */
+            last_reminder_sent_at: string | null;
+            /** Reminder Count */
+            reminder_count: number;
         };
         /**
          * AssignmentStatus
@@ -1844,11 +1844,16 @@ export interface components {
         /** AuthResponse */
         AuthResponse: {
             /**
-             * Access Mode
-             * @default account
-             * @enum {string}
+             * User Id
+             * Format: uuid
              */
-            access_mode: "account" | "secure_link";
+            user_id: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            role: components["schemas"]["UserRole"];
             /** @default registered */
             account_type: components["schemas"]["UserAccountType"];
             /**
@@ -1856,47 +1861,42 @@ export interface components {
              * @default []
              */
             available_workspaces: components["schemas"]["UserRole"][];
+            default_workspace?: components["schemas"]["UserRole"] | null;
             /** Avatar Palette Key */
             avatar_palette_key?: number | null;
-            /**
-             * Consent Current
-             * @default false
-             */
-            consent_current: boolean;
-            default_workspace?: components["schemas"]["UserRole"] | null;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            role: components["schemas"]["UserRole"];
             /** Terms Accepted At */
             terms_accepted_at?: string | null;
             /** Terms Version */
             terms_version?: string | null;
             /**
-             * User Id
-             * Format: uuid
+             * Consent Current
+             * @default false
              */
-            user_id: string;
+            consent_current: boolean;
+            /**
+             * Access Mode
+             * @default account
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
         };
         /** BrevoWebhookEvent */
         BrevoWebhookEvent: {
+            /** Event */
+            event: string;
             /**
              * Email
              * Format: email
              */
             email: string;
-            /** Event */
-            event: string;
             /** Message-Id */
             "message-id": string;
-            /** Reason */
-            reason?: string | null;
-            /** Ts */
-            ts?: number | null;
             /** Ts Event */
             ts_event?: number | null;
+            /** Ts */
+            ts?: number | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** BrevoWebhookResponse */
         BrevoWebhookResponse: {
@@ -1908,14 +1908,14 @@ export interface components {
         };
         /** CampaignAssetUploadResponse */
         CampaignAssetUploadResponse: {
-            /** Content Type */
-            content_type: string;
-            /** File Name */
-            file_name: string;
-            /** Size Bytes */
-            size_bytes: number;
             /** Url */
             url: string;
+            /** File Name */
+            file_name: string;
+            /** Content Type */
+            content_type: string;
+            /** Size Bytes */
+            size_bytes: number;
         };
         /** CampaignCancelResponse */
         CampaignCancelResponse: {
@@ -1931,77 +1931,77 @@ export interface components {
         CampaignContactAggregateResponse: {
             /** Campaignid */
             campaignId?: string | null;
-            /** Count */
-            count: number;
             /** Metric */
             metric: string;
+            /** Count */
+            count: number;
         };
         /** CampaignCreateRequest */
         CampaignCreateRequest: {
-            /** Html Body */
-            html_body: string;
-            /** Landing Page Url */
-            landing_page_url?: string | null;
             /** Name */
             name: string;
             /** Segment */
             segment?: ("past_customer" | "potential_customer") | null;
             /** Subject */
             subject: string;
+            /** Html Body */
+            html_body: string;
             /** Text Body */
             text_body: string;
-            /** Thumbnail Url */
-            thumbnail_url?: string | null;
             /** Video Url */
             video_url?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Landing Page Url */
+            landing_page_url?: string | null;
         };
         /** CampaignOpsSummaryResponse */
         CampaignOpsSummaryResponse: {
-            /** Recipients */
-            recipients: components["schemas"]["CampaignRecipientRowResponse"][];
-            /** Retainedaggregates */
-            retainedAggregates?: components["schemas"]["CampaignContactAggregateResponse"][];
-            /** Template */
-            template: {
-                [key: string]: unknown;
-            };
             /** Videohost */
             videoHost: {
                 [key: string]: unknown;
             };
+            /** Template */
+            template: {
+                [key: string]: unknown;
+            };
+            /** Recipients */
+            recipients: components["schemas"]["CampaignRecipientRowResponse"][];
             /** Weeklyreport */
             weeklyReport: {
                 [key: string]: unknown;
             };
+            /** Retainedaggregates */
+            retainedAggregates?: components["schemas"]["CampaignContactAggregateResponse"][];
         };
         /** CampaignRecipientArchiveResponse */
         CampaignRecipientArchiveResponse: {
-            /**
-             * Archived At
-             * Format: date-time
-             */
-            archived_at: string;
-            /** Cancelled */
-            cancelled: number;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** In Flight */
-            in_flight: number;
-            /** Memberships Removed */
-            memberships_removed: number;
-            /**
-             * Purge After
-             * Format: date-time
-             */
-            purge_after: string;
             /**
              * Status
              * @constant
              */
             status: "archived";
+            /**
+             * Archived At
+             * Format: date-time
+             */
+            archived_at: string;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /** Memberships Removed */
+            memberships_removed: number;
+            /** Cancelled */
+            cancelled: number;
+            /** In Flight */
+            in_flight: number;
         };
         /** CampaignRecipientBulkCreateRequest */
         CampaignRecipientBulkCreateRequest: {
@@ -2010,10 +2010,10 @@ export interface components {
         };
         /** CampaignRecipientCreateRequest */
         CampaignRecipientCreateRequest: {
-            /** Contact Name */
-            contact_name?: string | null;
             /** Email */
             email?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
             /** Organization Name */
             organization_name?: string | null;
             /**
@@ -2021,10 +2021,10 @@ export interface components {
              * @enum {string}
              */
             segment: "past_customer" | "potential_customer";
-            /** Source */
-            source?: string | null;
             /** Status */
             status?: string | null;
+            /** Source */
+            source?: string | null;
         };
         /** CampaignRecipientEventCreateRequest */
         CampaignRecipientEventCreateRequest: {
@@ -2033,108 +2033,108 @@ export interface components {
              * @enum {string}
              */
             event_type: "opened" | "clicked" | "video_viewed" | "calendly_clicked" | "replied";
-            /** Occurred At */
-            occurred_at?: string | null;
             /** Variant Key */
             variant_key?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
         };
         /** CampaignRecipientEventResponse */
         CampaignRecipientEventResponse: {
-            /**
-             * Event Type
-             * @enum {string}
-             */
-            event_type: "opened" | "clicked" | "video_viewed" | "calendly_clicked" | "replied";
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /**
-             * Occurred At
-             * Format: date-time
-             */
-            occurred_at: string;
-            /**
              * Recipient Id
              * Format: uuid
              */
             recipient_id: string;
+            /**
+             * Event Type
+             * @enum {string}
+             */
+            event_type: "opened" | "clicked" | "video_viewed" | "calendly_clicked" | "replied";
             /** Variant Key */
             variant_key?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
         };
         /** CampaignRecipientMembershipRowResponse */
         CampaignRecipientMembershipRowResponse: {
+            /** Id */
+            id: string;
+            /** Company */
+            company: string;
+            /** Firstname */
+            firstName?: string | null;
+            /** Lastname */
+            lastName?: string | null;
+            /** Email */
+            email: string;
+            /** Clienttype */
+            clientType: string;
+            /** Status */
+            status: string;
+            /** Openrate */
+            openRate?: string | null;
+            /** Clickrate */
+            clickRate?: string | null;
+            /** Viewrate */
+            viewRate?: string | null;
             /**
-             * Activationallowed
-             * @default false
+             * Opencount
+             * @default 0
              */
-            activationAllowed: boolean;
-            /** Archivedat */
-            archivedAt?: string | null;
+            openCount: number;
+            /**
+             * Clickcount
+             * @default 0
+             */
+            clickCount: number;
+            /**
+             * Viewcount
+             * @default 0
+             */
+            viewCount: number;
+            /**
+             * Replycount
+             * @default 0
+             */
+            replyCount: number;
             /**
              * Calendlyclickcount
              * @default 0
              */
             calendlyClickCount: number;
+            /** Source */
+            source?: string | null;
+            /** Emailvariant */
+            emailVariant?: string | null;
+            /** Outcome */
+            outcome?: string | null;
+            /** Archivedat */
+            archivedAt?: string | null;
+            /** Purgeafter */
+            purgeAfter?: string | null;
+            /** Statusbeforearchive */
+            statusBeforeArchive?: string | null;
+            /**
+             * Activationallowed
+             * @default false
+             */
+            activationAllowed: boolean;
+            /** Membershipsource */
+            membershipSource?: string | null;
             /**
              * Campaigndelivery
              * @default not_sent
              * @enum {string}
              */
             campaignDelivery: "not_sent" | "queued" | "sent" | "failed";
-            /**
-             * Clickcount
-             * @default 0
-             */
-            clickCount: number;
-            /** Clickrate */
-            clickRate?: string | null;
-            /** Clienttype */
-            clientType: string;
-            /** Company */
-            company: string;
-            /** Email */
-            email: string;
-            /** Emailvariant */
-            emailVariant?: string | null;
-            /** Firstname */
-            firstName?: string | null;
-            /** Id */
-            id: string;
-            /** Lastname */
-            lastName?: string | null;
-            /** Membershipsource */
-            membershipSource?: string | null;
-            /**
-             * Opencount
-             * @default 0
-             */
-            openCount: number;
-            /** Openrate */
-            openRate?: string | null;
-            /** Outcome */
-            outcome?: string | null;
-            /** Purgeafter */
-            purgeAfter?: string | null;
-            /**
-             * Replycount
-             * @default 0
-             */
-            replyCount: number;
-            /** Source */
-            source?: string | null;
-            /** Status */
-            status: string;
-            /** Statusbeforearchive */
-            statusBeforeArchive?: string | null;
-            /**
-             * Viewcount
-             * @default 0
-             */
-            viewCount: number;
-            /** Viewrate */
-            viewRate?: string | null;
         };
         /** CampaignRecipientMembershipUpdateRequest */
         CampaignRecipientMembershipUpdateRequest: {
@@ -2143,10 +2143,6 @@ export interface components {
         };
         /** CampaignRecipientPermanentDeleteResponse */
         CampaignRecipientPermanentDeleteResponse: {
-            /** Anonymized Sends */
-            anonymized_sends: number;
-            /** Cancelled */
-            cancelled: number;
             /**
              * Id
              * Format: uuid
@@ -2157,135 +2153,139 @@ export interface components {
              * @constant
              */
             status: "deleted";
+            /** Cancelled */
+            cancelled: number;
+            /** Anonymized Sends */
+            anonymized_sends: number;
         };
         /** CampaignRecipientRestoreResponse */
         CampaignRecipientRestoreResponse: {
-            /** Archived At */
-            archived_at?: null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Purge After */
-            purge_after?: null;
             /**
              * Status
              * @enum {string}
              */
             status: "active" | "suppressed" | "unsubscribed";
+            /** Archived At */
+            archived_at?: null;
+            /** Purge After */
+            purge_after?: null;
         };
         /** CampaignRecipientRowResponse */
         CampaignRecipientRowResponse: {
-            /**
-             * Activationallowed
-             * @default false
-             */
-            activationAllowed: boolean;
-            /** Archivedat */
-            archivedAt?: string | null;
-            /**
-             * Calendlyclickcount
-             * @default 0
-             */
-            calendlyClickCount: number;
-            /**
-             * Clickcount
-             * @default 0
-             */
-            clickCount: number;
-            /** Clickrate */
-            clickRate?: string | null;
-            /** Clienttype */
-            clientType: string;
-            /** Company */
-            company: string;
-            /** Email */
-            email: string;
-            /** Emailvariant */
-            emailVariant?: string | null;
-            /** Firstname */
-            firstName?: string | null;
             /** Id */
             id: string;
+            /** Company */
+            company: string;
+            /** Firstname */
+            firstName?: string | null;
             /** Lastname */
             lastName?: string | null;
+            /** Email */
+            email: string;
+            /** Clienttype */
+            clientType: string;
+            /** Status */
+            status: string;
+            /** Openrate */
+            openRate?: string | null;
+            /** Clickrate */
+            clickRate?: string | null;
+            /** Viewrate */
+            viewRate?: string | null;
             /**
              * Opencount
              * @default 0
              */
             openCount: number;
-            /** Openrate */
-            openRate?: string | null;
-            /** Outcome */
-            outcome?: string | null;
-            /** Purgeafter */
-            purgeAfter?: string | null;
             /**
-             * Replycount
+             * Clickcount
              * @default 0
              */
-            replyCount: number;
-            /** Source */
-            source?: string | null;
-            /** Status */
-            status: string;
-            /** Statusbeforearchive */
-            statusBeforeArchive?: string | null;
+            clickCount: number;
             /**
              * Viewcount
              * @default 0
              */
             viewCount: number;
-            /** Viewrate */
-            viewRate?: string | null;
+            /**
+             * Replycount
+             * @default 0
+             */
+            replyCount: number;
+            /**
+             * Calendlyclickcount
+             * @default 0
+             */
+            calendlyClickCount: number;
+            /** Source */
+            source?: string | null;
+            /** Emailvariant */
+            emailVariant?: string | null;
+            /** Outcome */
+            outcome?: string | null;
+            /** Archivedat */
+            archivedAt?: string | null;
+            /** Purgeafter */
+            purgeAfter?: string | null;
+            /** Statusbeforearchive */
+            statusBeforeArchive?: string | null;
+            /**
+             * Activationallowed
+             * @default false
+             */
+            activationAllowed: boolean;
         };
         /** CampaignRecipientUpdateRequest */
         CampaignRecipientUpdateRequest: {
-            /** Contact Name */
-            contact_name?: string | null;
             /** Email */
             email?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
             /** Organization Name */
             organization_name?: string | null;
             /** Segment */
             segment?: string | null;
-            /** Source */
-            source?: string | null;
             /** Status */
             status?: string | null;
+            /** Source */
+            source?: string | null;
         };
         /** CampaignSendRecipientResult */
         CampaignSendRecipientResult: {
-            /** Email */
-            email: string;
-            /** Error */
-            error?: string | null;
-            /** Message Id */
-            message_id?: string | null;
             /**
              * Recipient Id
              * Format: uuid
              */
             recipient_id: string;
+            /** Email */
+            email: string;
             /** Status */
             status: string;
+            /** Message Id */
+            message_id?: string | null;
+            /** Error */
+            error?: string | null;
         };
         /** CampaignSendRequest */
         CampaignSendRequest: {
-            /**
-             * Dry Run
-             * @default false
-             */
-            dry_run: boolean;
+            /** Recipient Ids */
+            recipient_ids?: string[] | null;
             /**
              * Mode
              * @default new
              * @enum {string}
              */
             mode: "new" | "selected" | "all";
-            /** Recipient Ids */
-            recipient_ids?: string[] | null;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
         };
         /** CampaignSendResponse */
         CampaignSendResponse: {
@@ -2294,30 +2294,26 @@ export interface components {
              * Format: uuid
              */
             campaign_id: string;
-            /** Dry Run */
-            dry_run: boolean;
-            /** Failed */
-            failed: number;
+            /** Total */
+            total: number;
             /**
              * Queued
              * @default 0
              */
             queued: number;
-            /** Results */
-            results: components["schemas"]["CampaignSendRecipientResult"][];
             /** Sent */
             sent: number;
+            /** Failed */
+            failed: number;
             /** Skipped */
             skipped: number;
-            /** Total */
-            total: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Results */
+            results: components["schemas"]["CampaignSendRecipientResult"][];
         };
         /** CampaignUpdateRequest */
         CampaignUpdateRequest: {
-            /** Html Body */
-            html_body?: string | null;
-            /** Landing Page Url */
-            landing_page_url?: string | null;
             /** Name */
             name?: string | null;
             /** Segment */
@@ -2326,12 +2322,16 @@ export interface components {
             status?: string | null;
             /** Subject */
             subject?: string | null;
+            /** Html Body */
+            html_body?: string | null;
             /** Text Body */
             text_body?: string | null;
-            /** Thumbnail Url */
-            thumbnail_url?: string | null;
             /** Video Url */
             video_url?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Landing Page Url */
+            landing_page_url?: string | null;
         };
         /** CompanyAccessCodeCreateRequest */
         CompanyAccessCodeCreateRequest: {
@@ -2340,8 +2340,6 @@ export interface components {
         };
         /** CompanyAccessCodeRegistrationRequest */
         CompanyAccessCodeRegistrationRequest: {
-            /** Access Code */
-            access_code: string;
             /**
              * Email
              * Format: email
@@ -2349,23 +2347,25 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Access Code */
+            access_code: string;
         };
         /** CompanyAccessCodeResponse */
         CompanyAccessCodeResponse: {
-            /** Code */
-            code: string;
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
             /** Label */
             label: string | null;
+            /** Code */
+            code: string;
         };
         /** CompanyCreateRequest */
         CompanyCreateRequest: {
@@ -2374,105 +2374,129 @@ export interface components {
         };
         /** CompanyProjectCreateRequest */
         CompanyProjectCreateRequest: {
-            /** Description */
-            description?: string | null;
-            /** Due At */
-            due_at?: string | null;
-            /** Form Closes At */
-            form_closes_at?: string | null;
-            /** Form Opens At */
-            form_opens_at?: string | null;
             /** Name */
             name: string;
+            /** Description */
+            description?: string | null;
             /** Project Type */
             project_type?: string | null;
-            /** Starts At */
-            starts_at?: string | null;
             /** @default draft */
             status: components["schemas"]["CompanyProjectStatus"];
+            /** Starts At */
+            starts_at?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Form Opens At */
+            form_opens_at?: string | null;
+            /** Form Closes At */
+            form_closes_at?: string | null;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
         };
         /** CompanyProjectListItemResponse */
         CompanyProjectListItemResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Project Type */
+            project_type: string | null;
+            status: components["schemas"]["CompanyProjectStatus"];
+            /** Starts At */
+            starts_at: string | null;
+            /** Due At */
+            due_at: string | null;
+            /** Form Opens At */
+            form_opens_at: string | null;
+            /** Form Closes At */
+            form_closes_at: string | null;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
             /** Archived At */
             archived_at?: string | null;
             /** Archived By User Id */
             archived_by_user_id?: string | null;
             archived_from_status?: components["schemas"]["CompanyProjectStatus"] | null;
             /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Company Name */
-            company_name: string;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Description */
-            description: string | null;
-            /** Due At */
-            due_at: string | null;
-            /** Form Closes At */
-            form_closes_at: string | null;
-            /** Form Opens At */
-            form_opens_at: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Project Type */
-            project_type: string | null;
-            /** Starts At */
-            starts_at: string | null;
-            status: components["schemas"]["CompanyProjectStatus"];
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
+            /** Company Name */
+            company_name: string;
         };
         /** CompanyProjectResponse */
         CompanyProjectResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Project Type */
+            project_type: string | null;
+            status: components["schemas"]["CompanyProjectStatus"];
+            /** Starts At */
+            starts_at: string | null;
+            /** Due At */
+            due_at: string | null;
+            /** Form Opens At */
+            form_opens_at: string | null;
+            /** Form Closes At */
+            form_closes_at: string | null;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
             /** Archived At */
             archived_at?: string | null;
             /** Archived By User Id */
             archived_by_user_id?: string | null;
             archived_from_status?: components["schemas"]["CompanyProjectStatus"] | null;
             /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Description */
-            description: string | null;
-            /** Due At */
-            due_at: string | null;
-            /** Form Closes At */
-            form_closes_at: string | null;
-            /** Form Opens At */
-            form_opens_at: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Project Type */
-            project_type: string | null;
-            /** Starts At */
-            starts_at: string | null;
-            status: components["schemas"]["CompanyProjectStatus"];
             /**
              * Updated At
              * Format: date-time
@@ -2486,101 +2510,107 @@ export interface components {
         CompanyProjectStatus: "draft" | "active" | "completed" | "archived";
         /** CompanyProjectUpdateRequest */
         CompanyProjectUpdateRequest: {
-            /** Description */
-            description?: string | null;
-            /** Due At */
-            due_at?: string | null;
-            /** Form Closes At */
-            form_closes_at?: string | null;
-            /** Form Opens At */
-            form_opens_at?: string | null;
             /** Name */
             name?: string | null;
+            /** Description */
+            description?: string | null;
             /** Project Type */
             project_type?: string | null;
+            status?: components["schemas"]["CompanyProjectStatus"] | null;
             /** Starts At */
             starts_at?: string | null;
-            status?: components["schemas"]["CompanyProjectStatus"] | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Form Opens At */
+            form_opens_at?: string | null;
+            /** Form Closes At */
+            form_closes_at?: string | null;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
         };
         /** CompanyReportAggregateResponse */
         CompanyReportAggregateResponse: {
+            /** Project Id */
+            project_id?: string | null;
             /** Assessment Cycle Id */
             assessment_cycle_id?: string | null;
-            /** Boss 360 Averages */
-            boss_360_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Boss 360 Count */
-            boss_360_count: number;
+            /** Total Assigned */
+            total_assigned: number;
+            /** Total Completed */
+            total_completed: number;
+            /** Reportable Scored Count */
+            reportable_scored_count: number;
+            /** Reportable Pending Score Count */
+            reportable_pending_score_count: number;
+            /** Reportable Failed Score Count */
+            reportable_failed_score_count: number;
+            /** Reportable Orphaned Score Count */
+            reportable_orphaned_score_count: number;
             /** Completion Rate */
             completion_rate: number;
-            /** Driver Averages */
-            driver_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Lencioni Count */
+            lencioni_count: number;
             /** Driver Count */
             driver_count: number;
-            driver_rank_summary: components["schemas"]["DriverRankSummaryResponse"];
+            /** Boss 360 Count */
+            boss_360_count: number;
+            /** Pcm Base Count */
+            pcm_base_count: number;
+            /** Pcm Phase Count */
+            pcm_phase_count: number;
+            /** Lencioni Averages */
+            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
+            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
+            /** Driver Averages */
+            driver_averages: components["schemas"]["ReportAverageResponse"][];
             driver_scale: components["schemas"]["ReportScoreScaleResponse"];
-            /** Hierarchy Ambiguity Message */
-            hierarchy_ambiguity_message?: string | null;
-            /**
-             * Hierarchy Ambiguous
-             * @default false
-             */
-            hierarchy_ambiguous: boolean;
-            /** Hierarchy Issues */
-            hierarchy_issues: components["schemas"]["ReportHierarchyIssueResponse"][];
-            /** Icare Cohorts */
-            icare_cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
+            /** Boss 360 Averages */
+            boss_360_averages: components["schemas"]["ReportAverageResponse"][];
             /** Icare Target Summaries */
             icare_target_summaries: components["schemas"]["IcareTargetSummaryResponse"][];
-            /** Icare Unclassified Reason */
-            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            /** Icare Cohorts */
+            icare_cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
             /**
              * Icare Unclassified Response Count
              * @default 0
              */
             icare_unclassified_response_count: number;
+            /** Icare Unclassified Reason */
+            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            driver_rank_summary: components["schemas"]["DriverRankSummaryResponse"];
             /** Leadership Members */
             leadership_members?: components["schemas"]["LeadershipMemberSummaryResponse"][];
-            /** Lencioni Averages */
-            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Lencioni Count */
-            lencioni_count: number;
-            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
-            /** Pcm Base Count */
-            pcm_base_count: number;
             /** Pcm Base Distribution */
             pcm_base_distribution: components["schemas"]["ReportDistributionResponse"][];
-            /** Pcm Phase Count */
-            pcm_phase_count: number;
             /** Pcm Phase Distribution */
             pcm_phase_distribution: components["schemas"]["ReportDistributionResponse"][];
-            /** Project Id */
-            project_id?: string | null;
-            /** Reportable Failed Score Count */
-            reportable_failed_score_count: number;
-            /** Reportable Orphaned Score Count */
-            reportable_orphaned_score_count: number;
-            /** Reportable Pending Score Count */
-            reportable_pending_score_count: number;
-            /** Reportable Scored Count */
-            reportable_scored_count: number;
-            /** Results */
-            results: components["schemas"]["ScoringResultResponse"][];
             /** Team Lenses */
             team_lenses: components["schemas"]["ReportTeamLensResponse"][];
-            /** Total Assigned */
-            total_assigned: number;
-            /** Total Completed */
-            total_completed: number;
+            /**
+             * Hierarchy Ambiguous
+             * @default false
+             */
+            hierarchy_ambiguous: boolean;
+            /** Hierarchy Ambiguity Message */
+            hierarchy_ambiguity_message?: string | null;
+            /** Hierarchy Issues */
+            hierarchy_issues: components["schemas"]["ReportHierarchyIssueResponse"][];
+            /** Results */
+            results: components["schemas"]["ScoringResultResponse"][];
         };
         /** CompanyReportComparisonResponse */
         CompanyReportComparisonResponse: {
-            baseline: components["schemas"]["CompanyReportAggregateResponse"];
             /**
              * Baseline Cycle Id
              * Format: uuid
              */
             baseline_cycle_id: string;
-            comparison: components["schemas"]["CompanyReportAggregateResponse"];
             /**
              * Comparison Cycle Id
              * Format: uuid
@@ -2588,6 +2618,8 @@ export interface components {
             comparison_cycle_id: string;
             /** Definition Compatibility */
             definition_compatibility: components["schemas"]["CycleQuestionnaireCompatibilityResponse"][];
+            baseline: components["schemas"]["CompanyReportAggregateResponse"];
+            comparison: components["schemas"]["CompanyReportAggregateResponse"];
         };
         /** CompanyResponse */
         CompanyResponse: {
@@ -2601,16 +2633,6 @@ export interface components {
         };
         /** CompanySummaryResponse */
         CompanySummaryResponse: {
-            /**
-             * Assignment Count
-             * @default 0
-             */
-            assignment_count: number;
-            /**
-             * Completed Count
-             * @default 0
-             */
-            completed_count: number;
             /**
              * Id
              * Format: uuid
@@ -2628,6 +2650,16 @@ export interface components {
              * @default 0
              */
             project_count: number;
+            /**
+             * Assignment Count
+             * @default 0
+             */
+            assignment_count: number;
+            /**
+             * Completed Count
+             * @default 0
+             */
+            completed_count: number;
             /**
              * Scored Count
              * @default 0
@@ -2660,44 +2692,44 @@ export interface components {
         };
         /** CycleQuestionnaireCompatibilityResponse */
         CycleQuestionnaireCompatibilityResponse: {
+            /** Questionnaire Key */
+            questionnaire_key: string;
             /** Baseline Definition Id */
             baseline_definition_id: string | null;
             /** Comparison Definition Id */
             comparison_definition_id: string | null;
             /** Compatible */
             compatible: boolean;
-            /** Questionnaire Key */
-            questionnaire_key: string;
         };
         /** DriverRankSummaryResponse */
         DriverRankSummaryResponse: {
-            /** First Rank */
-            first_rank: components["schemas"]["ReportDistributionResponse"][];
-            /** First Rank Tie Breaks */
-            first_rank_tie_breaks: number;
-            /**
-             * Insufficient Driver Score Count
-             * @description Selected completed participants omitted from both rankings because fewer than two driver scores were numeric.
-             */
-            insufficient_driver_score_count: number;
-            /** Second Rank */
-            second_rank: components["schemas"]["ReportDistributionResponse"][];
-            /** Second Rank Tie Breaks */
-            second_rank_tie_breaks: number;
             /**
              * Total People
              * @description Participants with at least two numeric driver scores.
              */
             total_people: number;
+            /** First Rank */
+            first_rank: components["schemas"]["ReportDistributionResponse"][];
+            /** Second Rank */
+            second_rank: components["schemas"]["ReportDistributionResponse"][];
+            /** First Rank Tie Breaks */
+            first_rank_tie_breaks: number;
+            /** Second Rank Tie Breaks */
+            second_rank_tie_breaks: number;
+            /**
+             * Insufficient Driver Score Count
+             * @description Selected completed participants omitted from both rankings because fewer than two driver scores were numeric.
+             */
+            insufficient_driver_score_count: number;
         };
         /** EmailDeliveryMetricResponse */
         EmailDeliveryMetricResponse: {
-            /** Detail */
-            detail: string;
             /** Label */
             label: string;
             /** Value */
             value: string;
+            /** Detail */
+            detail: string;
         };
         /**
          * EmailDeliveryStatus
@@ -2706,13 +2738,13 @@ export interface components {
         EmailDeliveryStatus: "queued" | "accepted" | "failed";
         /** EmailOpsSummaryResponse */
         EmailOpsSummaryResponse: {
-            /** Assessmentrows */
-            assessmentRows: components["schemas"]["AssessmentDeliveryRowResponse"][];
-            campaign: components["schemas"]["CampaignOpsSummaryResponse"];
             /** Metrics */
             metrics: components["schemas"]["EmailDeliveryMetricResponse"][];
+            /** Assessmentrows */
+            assessmentRows: components["schemas"]["AssessmentDeliveryRowResponse"][];
             /** Rules */
             rules: string[];
+            campaign: components["schemas"]["CampaignOpsSummaryResponse"];
         };
         /**
          * EmailProviderKey
@@ -2723,42 +2755,33 @@ export interface components {
         EmailSendCapacityResponse: {
             /** Daily Cap */
             daily_cap: number;
-            /** Remaining Today */
-            remaining_today: number;
             /** Used Today */
             used_today: number;
+            /** Remaining Today */
+            remaining_today: number;
         };
         /** EmailTemplateCreateRequest */
         EmailTemplateCreateRequest: {
-            /**
-             * Active
-             * @default true
-             */
-            active: boolean;
-            /** Audience */
-            audience?: string | null;
-            /** Html Body */
-            html_body: string;
             /** Key */
             key: string;
             /** Subject */
             subject: string;
+            /** Html Body */
+            html_body: string;
             /** Text Body */
             text_body: string;
             /** Variables */
             variables?: string[];
-        };
-        /** EmailTemplateResponse */
-        EmailTemplateResponse: {
+            /** Audience */
+            audience?: string | null;
             /**
              * Active
              * @default true
              */
             active: boolean;
-            /** Audience */
-            audience?: string | null;
-            /** Html Body */
-            html_body: string;
+        };
+        /** EmailTemplateResponse */
+        EmailTemplateResponse: {
             /**
              * Id
              * Format: uuid
@@ -2766,66 +2789,75 @@ export interface components {
             id: string;
             /** Key */
             key: string;
-            /** Owner Id */
-            owner_id?: string | null;
+            /** Version */
+            version: number;
             /** Subject */
             subject: string;
+            /** Html Body */
+            html_body: string;
             /** Text Body */
             text_body: string;
             /** Variables */
             variables: string[];
-            /** Version */
-            version: number;
+            /** Audience */
+            audience?: string | null;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Owner Id */
+            owner_id?: string | null;
         };
         /** EmailTemplateUpdateRequest */
         EmailTemplateUpdateRequest: {
-            /** Active */
-            active?: boolean | null;
-            /** Audience */
-            audience?: string | null;
-            /** Html Body */
-            html_body?: string | null;
             /** Subject */
             subject?: string | null;
+            /** Html Body */
+            html_body?: string | null;
             /** Text Body */
             text_body?: string | null;
             /** Variables */
             variables?: string[] | null;
+            /** Audience */
+            audience?: string | null;
+            /** Active */
+            active?: boolean | null;
         };
         /** EmailTestSendRequest */
         EmailTestSendRequest: {
             /**
-             * Html Body
-             * @default <p>Test email din Cody.</p>
+             * To
+             * Format: email
              */
-            html_body: string;
+            to: string;
             /**
              * Subject
              * @default Test Cody email
              */
             subject: string;
             /**
+             * Html Body
+             * @default <p>Test email din Cody.</p>
+             */
+            html_body: string;
+            /**
              * Text Body
              * @default Test email din Cody.
              */
             text_body: string;
-            /**
-             * To
-             * Format: email
-             */
-            to: string;
         };
         /** EmailTestSendResponse */
         EmailTestSendResponse: {
+            provider: components["schemas"]["EmailProviderKey"];
+            status: components["schemas"]["EmailDeliveryStatus"];
             /** Message Id */
             message_id: string;
-            provider: components["schemas"]["EmailProviderKey"];
             /**
              * Recipient
              * Format: email
              */
             recipient: string;
-            status: components["schemas"]["EmailDeliveryStatus"];
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -2840,14 +2872,14 @@ export interface components {
         ErrorPayload: {
             /** Code */
             code: string;
-            /** Details */
-            details?: components["schemas"]["ErrorDetail"][] | {
-                [key: string]: unknown;
-            } | unknown[] | null;
             /** Message */
             message: string;
             /** Request Id */
             request_id?: string | null;
+            /** Details */
+            details?: components["schemas"]["ErrorDetail"][] | {
+                [key: string]: unknown;
+            } | unknown[] | null;
         };
         /** ErrorResponse */
         ErrorResponse: {
@@ -2856,65 +2888,63 @@ export interface components {
         };
         /** IcareAnswerReviewResponse */
         IcareAnswerReviewResponse: {
-            /** Row Count */
-            row_count: number;
             /** Rows */
             rows: components["schemas"]["IcareAnswerReviewRowResponse"][];
+            /** Row Count */
+            row_count: number;
         };
         /** IcareAnswerReviewRowResponse */
         IcareAnswerReviewRowResponse: {
-            /** Answer Description */
-            answer_description?: string | null;
-            /** Answer Label */
-            answer_label: string;
-            /** Answer Value */
-            answer_value: number | string;
             /**
              * Assignment Id
              * Format: uuid
              */
             assignment_id: string;
-            /** Measurement Id */
-            measurement_id: string;
-            /** Measurement Label */
-            measurement_label: string;
-            /** Respondent Email */
-            respondent_email?: string | null;
-            /** Respondent Name */
-            respondent_name: string;
-            /**
-             * Respondent Profile Id
-             * Format: uuid
-             */
-            respondent_profile_id: string;
             /**
              * Response Id
              * Format: uuid
              */
             response_id: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /**
+             * Respondent Profile Id
+             * Format: uuid
+             */
+            respondent_profile_id: string;
+            /** Respondent Name */
+            respondent_name: string;
+            /** Respondent Email */
+            respondent_email?: string | null;
+            /** Target Profile Id */
+            target_profile_id?: string | null;
+            /** Target Name */
+            target_name?: string | null;
+            /** Target Type */
+            target_type: string;
             /** Response Kind */
             response_kind: string;
             /** Section Id */
             section_id: string;
             /** Section Label */
             section_label: string;
+            /** Measurement Id */
+            measurement_id: string;
+            /** Measurement Label */
+            measurement_label: string;
             /** Statement Id */
             statement_id: string;
             /** Statement Label */
             statement_label: string;
-            /** Submitted At */
-            submitted_at?: string | null;
-            /** Target Name */
-            target_name?: string | null;
-            /** Target Profile Id */
-            target_profile_id?: string | null;
-            /** Target Type */
-            target_type: string;
+            /** Answer Value */
+            answer_value: number | string;
+            /** Answer Label */
+            answer_label: string;
+            /** Answer Description */
+            answer_description?: string | null;
         };
         /** IcareCohortSummaryResponse */
         IcareCohortSummaryResponse: {
-            /** Averages */
-            averages: components["schemas"]["ReportAverageResponse"][];
             /**
              * Cohort
              * @enum {string}
@@ -2922,49 +2952,58 @@ export interface components {
             cohort: "direct_team" | "leadership_peers" | "self";
             /** Response Count */
             response_count: number;
-            /** Scale Max */
-            scale_max?: number | null;
+            /** Averages */
+            averages: components["schemas"]["ReportAverageResponse"][];
+            /** Score Unit */
+            score_unit?: string | null;
             /** Scale Min */
             scale_min?: number | null;
+            /** Scale Max */
+            scale_max?: number | null;
             /**
              * Score Scale Compatible
              * @default true
              */
             score_scale_compatible: boolean;
-            /** Score Unit */
-            score_unit?: string | null;
             /** Unavailable Reason */
             unavailable_reason?: "incompatible_score_scales" | null;
         };
         /** IcareTargetSummaryResponse */
         IcareTargetSummaryResponse: {
-            /** Cohorts */
-            cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
-            /** External Averages */
-            external_averages: components["schemas"]["ReportAverageResponse"][];
-            /** External Response Count */
-            external_response_count: number;
-            /** Self Averages */
-            self_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Self Response Count */
-            self_response_count: number;
-            /** Target Name */
-            target_name: string;
             /**
              * Target Profile Id
              * Format: uuid
              */
             target_profile_id: string;
-            /** Unclassified Reason */
-            unclassified_reason?: "historical_cohort_unavailable" | null;
+            /** Target Name */
+            target_name: string;
+            /** External Response Count */
+            external_response_count: number;
+            /** Self Response Count */
+            self_response_count: number;
+            /** External Averages */
+            external_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Self Averages */
+            self_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Cohorts */
+            cohorts?: components["schemas"]["IcareCohortSummaryResponse"][];
             /**
              * Unclassified Response Count
              * @default 0
              */
             unclassified_response_count: number;
+            /** Unclassified Reason */
+            unclassified_reason?: "historical_cohort_unavailable" | null;
         };
         /** InvitationCreateRequest */
         InvitationCreateRequest: {
+            /**
+             * Respondent Profile Id
+             * Format: uuid
+             */
+            respondent_profile_id: string;
+            /** Project Id */
+            project_id?: string | null;
             /** Assignment Ids */
             assignment_ids?: string[] | null;
             /**
@@ -2977,33 +3016,19 @@ export interface components {
              * @default false
              */
             force_rotate: boolean;
-            /** Project Id */
-            project_id?: string | null;
-            /**
-             * Respondent Profile Id
-             * Format: uuid
-             */
-            respondent_profile_id: string;
         };
         /** InvitationResponse */
         InvitationResponse: {
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /**
-             * Expires At
-             * Format: date-time
-             */
-            expires_at: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Invite Url */
-            invite_url: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
             /** Project Id */
             project_id: string | null;
             /**
@@ -3011,43 +3036,35 @@ export interface components {
              * Format: uuid
              */
             respondent_profile_id: string;
-            /** Status */
-            status: string;
             /** Token */
             token: string;
+            /** Invite Url */
+            invite_url: string;
+            /** Status */
+            status: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
         };
         /** InviteExchangeRequest */
         InviteExchangeRequest: {
+            /** Token */
+            token: string;
             /**
              * Replace Existing Session
              * @default false
              */
             replace_existing_session: boolean;
-            /** Token */
-            token: string;
         };
         /** InviteExchangeResponse */
         InviteExchangeResponse: {
-            /**
-             * Access Mode
-             * @default secure_link
-             * @enum {string}
-             */
-            access_mode: "account" | "secure_link";
-            /** @default guest */
-            account_type: components["schemas"]["UserAccountType"];
             /**
              * Action
              * @enum {string}
              */
             action: "secure_link_ready" | "login_required" | "dashboard_ready" | "account_switch_required";
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
-            /**
-             * Consent Current
-             * @default false
-             */
-            consent_current: boolean;
             /** Destination */
             destination?: string | null;
             /**
@@ -3057,52 +3074,10 @@ export interface components {
             participant_profile_id: string;
             /** Project Id */
             project_id?: string | null;
-            /** Terms Accepted At */
-            terms_accepted_at?: string | null;
-            /** Terms Version */
-            terms_version?: string | null;
-        };
-        /** InviteTask */
-        InviteTask: {
-            /** Assessmentcycleid */
-            assessmentCycleId?: string | null;
-            /** Assignmentid */
-            assignmentId: string;
-            /** Assignmentroundid */
-            assignmentRoundId?: string | null;
-            /** Cyclename */
-            cycleName?: string | null;
-            /** Cyclesequence */
-            cycleSequence?: number | null;
-            /** Deadlinelabel */
-            deadlineLabel?: string | null;
-            /** Detail */
-            detail: string;
-            /** Dueat */
-            dueAt?: string | null;
-            /** Estimatedminutes */
-            estimatedMinutes: number;
-            /** Href */
-            href: string;
-            /** Id */
-            id: string;
-            /** Projectid */
-            projectId?: string | null;
-            /** Projectname */
-            projectName?: string | null;
-            /** Questionnairedefinitionid */
-            questionnaireDefinitionId?: string | null;
-            /** Questionnairekey */
-            questionnaireKey: string;
-            /** Status */
-            status: string;
-            /** Targetlabel */
-            targetLabel: string;
-            /** Title */
-            title: string;
-        };
-        /** InviteVerifyResponse */
-        InviteVerifyResponse: {
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
+            /** @default guest */
+            account_type: components["schemas"]["UserAccountType"];
             /**
              * Access Mode
              * @default secure_link
@@ -3110,101 +3085,158 @@ export interface components {
              */
             access_mode: "account" | "secure_link";
             /**
+             * Consent Current
+             * @default false
+             */
+            consent_current: boolean;
+            /** Terms Accepted At */
+            terms_accepted_at?: string | null;
+            /** Terms Version */
+            terms_version?: string | null;
+        };
+        /** InviteTask */
+        InviteTask: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string;
+            /** Href */
+            href: string;
+            /** Assignmentid */
+            assignmentId: string;
+            /** Targetlabel */
+            targetLabel: string;
+            /** Estimatedminutes */
+            estimatedMinutes: number;
+            /** Questionnairekey */
+            questionnaireKey: string;
+            /** Questionnairedefinitionid */
+            questionnaireDefinitionId?: string | null;
+            /** Projectid */
+            projectId?: string | null;
+            /** Projectname */
+            projectName?: string | null;
+            /** Assignmentroundid */
+            assignmentRoundId?: string | null;
+            /** Assessmentcycleid */
+            assessmentCycleId?: string | null;
+            /** Cyclename */
+            cycleName?: string | null;
+            /** Cyclesequence */
+            cycleSequence?: number | null;
+            /** Deadlinelabel */
+            deadlineLabel?: string | null;
+            /** Dueat */
+            dueAt?: string | null;
+        };
+        /** InviteVerifyResponse */
+        InviteVerifyResponse: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /** Anonymous Name */
+            anonymous_name?: string | null;
+            /** Is Leadership */
+            is_leadership: boolean;
+            /** Already Registered */
+            already_registered: boolean;
+            /**
              * Account Dashboard Available
              * @default false
              */
             account_dashboard_available: boolean;
             /** @default guest */
             account_type: components["schemas"]["UserAccountType"];
-            /** Already Registered */
-            already_registered: boolean;
-            /** Anonymous Name */
-            anonymous_name?: string | null;
+            /**
+             * Access Mode
+             * @default secure_link
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
             /**
              * Consent Current
              * @default false
              */
             consent_current: boolean;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Project Name */
+            project_name: string;
             /**
              * Expires At
              * Format: date-time
              */
             expires_at: string;
-            /** Full Name */
-            full_name: string;
-            /** Is Leadership */
-            is_leadership: boolean;
-            /** Project Id */
-            project_id?: string | null;
-            /** Project Name */
-            project_name: string;
-            /** Tasks */
-            tasks: components["schemas"]["InviteTask"][];
-            /** Terms Accepted At */
-            terms_accepted_at?: string | null;
-            /** Terms Version */
-            terms_version?: string | null;
             /**
              * Token Status
              * @constant
              */
             token_status: "active";
+            /** Terms Accepted At */
+            terms_accepted_at?: string | null;
+            /** Terms Version */
+            terms_version?: string | null;
+            /** Tasks */
+            tasks: components["schemas"]["InviteTask"][];
         };
         /** LeadershipMemberReportResponse */
         LeadershipMemberReportResponse: {
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
-            /** Driver Averages */
-            driver_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Driver Count */
-            driver_count: number;
-            driver_scale: components["schemas"]["ReportScoreScaleResponse"];
-            /** Icare Cohorts */
-            icare_cohorts: components["schemas"]["IcareCohortSummaryResponse"][];
-            /** Icare Unclassified Reason */
-            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
-            /**
-             * Icare Unclassified Response Count
-             * @default 0
-             */
-            icare_unclassified_response_count: number;
-            /** Lencioni Averages */
-            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Lencioni Count */
-            lencioni_count: number;
-            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
-            /** Lencioni Team Ambiguity Message */
-            lencioni_team_ambiguity_message?: string | null;
-            /**
-             * Lencioni Team Ambiguous
-             * @default false
-             */
-            lencioni_team_ambiguous: boolean;
-            member: components["schemas"]["LeadershipMemberSummaryResponse"];
-            /** Pcm Base */
-            pcm_base?: string | null;
-            /** Pcm Phase */
-            pcm_phase?: string | null;
             /**
              * Project Id
              * Format: uuid
              */
             project_id: string;
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
+            member: components["schemas"]["LeadershipMemberSummaryResponse"];
+            /** Pcm Base */
+            pcm_base?: string | null;
+            /** Pcm Phase */
+            pcm_phase?: string | null;
+            /** Lencioni Count */
+            lencioni_count: number;
+            /** Lencioni Averages */
+            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
+            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
+            /**
+             * Lencioni Team Ambiguous
+             * @default false
+             */
+            lencioni_team_ambiguous: boolean;
+            /** Lencioni Team Ambiguity Message */
+            lencioni_team_ambiguity_message?: string | null;
+            /** Icare Cohorts */
+            icare_cohorts: components["schemas"]["IcareCohortSummaryResponse"][];
+            /**
+             * Icare Unclassified Response Count
+             * @default 0
+             */
+            icare_unclassified_response_count: number;
+            /** Icare Unclassified Reason */
+            icare_unclassified_reason?: "historical_cohort_unavailable" | null;
+            /** Driver Count */
+            driver_count: number;
+            /** Driver Averages */
+            driver_averages: components["schemas"]["ReportAverageResponse"][];
+            driver_scale: components["schemas"]["ReportScoreScaleResponse"];
         };
         /** LeadershipMemberSummaryResponse */
         LeadershipMemberSummaryResponse: {
-            /** Full Name */
-            full_name: string;
             /**
              * Participant Profile Id
              * Format: uuid
              */
             participant_profile_id: string;
+            /** Full Name */
+            full_name: string;
             /** Position */
             position?: string | null;
             /** Role Group */
@@ -3237,76 +3269,89 @@ export interface components {
         };
         /** ParticipantAccountLinkStatusResponse */
         ParticipantAccountLinkStatusResponse: {
-            linked_account: components["schemas"]["ParticipantAccountSummary"] | null;
-            /** Matching Account Is Linked */
-            matching_account_is_linked: boolean;
-            matching_email_account: components["schemas"]["ParticipantAccountSummary"] | null;
-            /**
-             * Participant Email
-             * Format: email
-             */
-            participant_email: string;
             /**
              * Participant Id
              * Format: uuid
              */
             participant_id: string;
+            /**
+             * Participant Email
+             * Format: email
+             */
+            participant_email: string;
+            linked_account: components["schemas"]["ParticipantAccountSummary"] | null;
+            matching_email_account: components["schemas"]["ParticipantAccountSummary"] | null;
+            /** Matching Account Is Linked */
+            matching_account_is_linked: boolean;
         };
         /** ParticipantAccountSummary */
         ParticipantAccountSummary: {
             /**
-             * Account Type
-             * @enum {string}
+             * User Id
+             * Format: uuid
              */
-            account_type: "guest" | "registered";
+            user_id: string;
             /**
              * Email
              * Format: email
              */
             email: string;
-            /** Is Shadow Account */
-            is_shadow_account: boolean;
             /**
              * Role
              * @enum {string}
              */
             role: "trainer" | "participant";
             /**
-             * User Id
-             * Format: uuid
+             * Account Type
+             * @enum {string}
              */
-            user_id: string;
+            account_type: "guest" | "registered";
+            /** Is Shadow Account */
+            is_shadow_account: boolean;
         };
         /** ParticipantCreateRequest */
         ParticipantCreateRequest: {
+            /** Full Name */
+            full_name: string;
             /**
              * Email
              * Format: email
              */
             email: string;
-            /** Full Name */
-            full_name: string;
+            /** Reports To Name */
+            reports_to_name?: string | null;
+            /** Position */
+            position?: string | null;
             /** Location */
             location?: string | null;
+            /** Role Group */
+            role_group?: string | null;
+            /** Pcm Profile */
+            pcm_profile?: string | null;
             /** Pcm Base */
             pcm_base?: string | null;
             /** Pcm Phase */
             pcm_phase?: string | null;
-            /** Pcm Profile */
-            pcm_profile?: string | null;
-            /** Position */
-            position?: string | null;
-            /** Reports To Name */
-            reports_to_name?: string | null;
-            /** Role Group */
-            role_group?: string | null;
         };
         /** ParticipantInvitationStatusResponse */
         ParticipantInvitationStatusResponse: {
-            /** Active Secure Link Expires At */
-            active_secure_link_expires_at?: string | null;
-            /** Active Secure Link Url */
-            active_secure_link_url?: string | null;
+            /**
+             * Participant Id
+             * Format: uuid
+             */
+            participant_id: string;
+            /** Latest Delivery Mode */
+            latest_delivery_mode?: ("email" | "secure_links") | null;
+            /** Latest Email Status */
+            latest_email_status?: string | null;
+            /** Latest Email Error */
+            latest_email_error?: string | null;
+            /** Latest Template Key */
+            latest_template_key?: string | null;
+            /** Latest Template Version */
+            latest_template_version?: number | null;
+            /** Last Sent At */
+            last_sent_at?: string | null;
             /**
              * Email Send Count
              * @default 0
@@ -3317,163 +3362,162 @@ export interface components {
              * @default false
              */
             has_active_secure_link: boolean;
-            /** Last Sent At */
-            last_sent_at?: string | null;
-            /** Latest Delivery Mode */
-            latest_delivery_mode?: ("email" | "secure_links") | null;
-            /** Latest Email Error */
-            latest_email_error?: string | null;
-            /** Latest Email Status */
-            latest_email_status?: string | null;
-            /**
-             * Participant Id
-             * Format: uuid
-             */
-            participant_id: string;
+            /** Active Secure Link Expires At */
+            active_secure_link_expires_at?: string | null;
+            /** Active Secure Link Url */
+            active_secure_link_url?: string | null;
         };
         /** ParticipantInviteBatchRequest */
         ParticipantInviteBatchRequest: {
+            /** Participant Ids */
+            participant_ids?: string[] | null;
+            /** Project Id */
+            project_id?: string | null;
             /** Assessment Cycle Id */
             assessment_cycle_id?: string | null;
-            /**
-             * Force Rotate
-             * @default false
-             */
-            force_rotate: boolean;
             /**
              * Mode
              * @default email
              * @enum {string}
              */
             mode: "email" | "secure_links";
-            /** Participant Ids */
-            participant_ids?: string[] | null;
-            /** Project Id */
-            project_id?: string | null;
             /**
              * Target Mode
              * @default unsent
              * @enum {string}
              */
             target_mode: "unsent" | "selected" | "all";
+            /**
+             * Force Rotate
+             * @default false
+             */
+            force_rotate: boolean;
         };
         /** ParticipantInviteBatchResponse */
         ParticipantInviteBatchResponse: {
-            /** Emails Failed */
-            emails_failed: number;
+            /** Results */
+            results: components["schemas"]["RosterImportEmailResult"][];
+            /** Total */
+            total: number;
+            /** Emails Sent */
+            emails_sent: number;
             /**
              * Emails Queued
              * @default 0
              */
             emails_queued: number;
-            /** Emails Sent */
-            emails_sent: number;
+            /** Emails Failed */
+            emails_failed: number;
             /** Links Generated */
             links_generated: number;
-            /** Results */
-            results: components["schemas"]["RosterImportEmailResult"][];
-            /** Total */
-            total: number;
         };
         /** ParticipantOnboardingResponse */
         ParticipantOnboardingResponse: {
+            /** Required */
+            required: boolean;
+            /** Questionnaire Key */
+            questionnaire_key?: string | null;
             /** Assignment Id */
             assignment_id?: string | null;
             /** Href */
             href?: string | null;
-            /** Questionnaire Key */
-            questionnaire_key?: string | null;
-            /** Required */
-            required: boolean;
         };
         /** ParticipantQuestionnaireProject */
         ParticipantQuestionnaireProject: {
-            /** Company Name */
-            company_name: string;
-            /** Completed Count */
-            completed_count: number;
-            /** Deadline Label */
-            deadline_label: string;
-            /** History Bucket */
-            history_bucket: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Name */
-            name: string;
             /**
              * Participant Profile Id
              * Format: uuid
              */
             participant_profile_id: string;
-            /** Questionnaires */
-            questionnaires?: components["schemas"]["ParticipantQuestionnaireTask"][];
+            /** Company Name */
+            company_name: string;
+            /** Name */
+            name: string;
             /** Status */
             status: string;
+            /** History Bucket */
+            history_bucket: string;
+            /** Deadline Label */
+            deadline_label: string;
+            /** Completed Count */
+            completed_count: number;
             /** Total Count */
             total_count: number;
+            /** Questionnaires */
+            questionnaires?: components["schemas"]["ParticipantQuestionnaireTask"][];
         };
         /** ParticipantQuestionnaireTask */
         ParticipantQuestionnaireTask: {
-            /** Assessmentcycleid */
-            assessmentCycleId?: string | null;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string;
+            /** Href */
+            href: string;
             /** Assignmentid */
             assignmentId: string;
+            /** Targetlabel */
+            targetLabel: string;
+            /** Estimatedminutes */
+            estimatedMinutes: number;
+            /** Questionnairekey */
+            questionnaireKey: string;
+            /** Questionnairedefinitionid */
+            questionnaireDefinitionId?: string | null;
+            /** Projectid */
+            projectId?: string | null;
+            /** Projectname */
+            projectName?: string | null;
             /** Assignmentroundid */
             assignmentRoundId?: string | null;
+            /** Assessmentcycleid */
+            assessmentCycleId?: string | null;
             /** Cyclename */
             cycleName?: string | null;
             /** Cyclesequence */
             cycleSequence?: number | null;
             /** Deadlinelabel */
             deadlineLabel: string;
-            /** Detail */
-            detail: string;
             /** Dueat */
             dueAt?: string | null;
-            /** Estimatedminutes */
-            estimatedMinutes: number;
-            /** Href */
-            href: string;
-            /** Id */
-            id: string;
-            /** Projectid */
-            projectId?: string | null;
-            /** Projectname */
-            projectName?: string | null;
-            /** Questionnairedefinitionid */
-            questionnaireDefinitionId?: string | null;
-            /** Questionnairekey */
-            questionnaireKey: string;
-            /** Status */
-            status: string;
-            /** Targetlabel */
-            targetLabel: string;
-            /** Title */
-            title: string;
         };
         /** ParticipantReceivedFeedbackDimension */
         ParticipantReceivedFeedbackDimension: {
-            /** Average Score */
-            average_score: number;
-            /** Completed Count */
-            completed_count: number;
             /** Id */
             id: string;
             /** Label */
             label: string;
+            /** Average Score */
+            average_score: number;
+            /** Completed Count */
+            completed_count: number;
         };
         /** ParticipantReceivedFeedbackSummary */
         ParticipantReceivedFeedbackSummary: {
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Project Name */
+            project_name?: string | null;
             /**
              * Assignment Round Id
              * Format: uuid
              */
             assignment_round_id: string;
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
+            /** Questionnaire Key */
+            questionnaire_key: string;
+            /** Questionnaire Title */
+            questionnaire_title: string;
             /**
              * Cohort
              * @enum {string}
@@ -3481,30 +3525,22 @@ export interface components {
             cohort: "direct_team" | "leadership_peers";
             /** Completed Count */
             completed_count: number;
-            /** Dimensions */
-            dimensions?: components["schemas"]["ParticipantReceivedFeedbackDimension"][];
             /** Minimum Completed */
             minimum_completed: number;
-            /** Overall Average */
-            overall_average?: number | null;
-            /** Project Id */
-            project_id?: string | null;
-            /** Project Name */
-            project_name?: string | null;
-            /** Questionnaire Key */
-            questionnaire_key: string;
-            /** Questionnaire Title */
-            questionnaire_title: string;
-            /** Scale Max */
-            scale_max: number;
-            /** Scale Min */
-            scale_min: number;
             /** Score Unit */
             score_unit: string;
-            /** Unavailable Reason */
-            unavailable_reason?: ("privacy_threshold" | "no_eligible_dimensions" | "scoring_unavailable") | null;
+            /** Scale Min */
+            scale_min: number;
+            /** Scale Max */
+            scale_max: number;
             /** Visible */
             visible: boolean;
+            /** Unavailable Reason */
+            unavailable_reason?: ("privacy_threshold" | "no_eligible_dimensions" | "scoring_unavailable") | null;
+            /** Overall Average */
+            overall_average?: number | null;
+            /** Dimensions */
+            dimensions?: components["schemas"]["ParticipantReceivedFeedbackDimension"][];
         };
         /** ParticipantRemovalRequest */
         ParticipantRemovalRequest: {
@@ -3513,76 +3549,85 @@ export interface components {
         };
         /** ParticipantResponse */
         ParticipantResponse: {
-            /** Account Type */
-            account_type?: ("guest" | "registered") | null;
-            /** Anonymous Name */
-            anonymous_name?: string | null;
-            /** Avatar Palette Key */
-            avatar_palette_key?: number | null;
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Email */
-            email: string | null;
-            /** Full Name */
-            full_name: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** User Id */
+            user_id: string | null;
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
+            /** Account Type */
+            account_type?: ("guest" | "registered") | null;
+            /**
              * Is Shadow Account
              * @default false
              */
             is_shadow_account: boolean;
+            /** Full Name */
+            full_name: string;
+            /** Email */
+            email: string | null;
+            /** Reports To Name */
+            reports_to_name: string | null;
+            /** Position */
+            position: string | null;
             /** Location */
             location: string | null;
+            /** Role Group */
+            role_group: string | null;
+            /** Pcm Profile */
+            pcm_profile: string | null;
             /** Pcm Base */
             pcm_base?: string | null;
             /** Pcm Phase */
             pcm_phase?: string | null;
-            /** Pcm Profile */
-            pcm_profile: string | null;
-            /** Position */
-            position: string | null;
-            /** Reports To Name */
-            reports_to_name: string | null;
-            /** Role Group */
-            role_group: string | null;
-            /** User Id */
-            user_id: string | null;
+            /** Anonymous Name */
+            anonymous_name?: string | null;
         };
         /** ParticipantUpdateRequest */
         ParticipantUpdateRequest: {
-            /** Email */
-            email?: string | null;
-            /** Full Name */
-            full_name?: string | null;
-            /** Location */
-            location?: string | null;
-            /** Position */
-            position?: string | null;
             /** Project Id */
             project_id?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Email */
+            email?: string | null;
             /** Reports To Name */
             reports_to_name?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Location */
+            location?: string | null;
             /** Role Group */
             role_group?: string | null;
         };
         /** ParticipantWorkspaceCard */
         ParticipantWorkspaceCard: {
+            /** Title */
+            title: string;
             /** Description */
             description: string;
             /** Meta */
             meta?: string | null;
-            /** Title */
-            title: string;
         };
         /** ParticipantWorkspaceContext */
         ParticipantWorkspaceContext: {
+            /**
+             * Participant Profile Id
+             * Format: uuid
+             */
+            participant_profile_id: string;
+            /** Participant Full Name */
+            participant_full_name: string;
+            /** Participant Email */
+            participant_email?: string | null;
             /**
              * Company Id
              * Format: uuid
@@ -3590,31 +3635,16 @@ export interface components {
             company_id: string;
             /** Company Name */
             company_name: string;
-            /** Participant Email */
-            participant_email?: string | null;
-            /** Participant Full Name */
-            participant_full_name: string;
-            /**
-             * Participant Profile Id
-             * Format: uuid
-             */
-            participant_profile_id: string;
             /** Projects */
             projects?: components["schemas"]["ParticipantWorkspaceProject"][];
         };
         /** ParticipantWorkspaceCycle */
         ParticipantWorkspaceCycle: {
-            /** Closed At */
-            closed_at?: string | null;
-            /** Due At */
-            due_at?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Name */
-            name: string;
             /**
              * Project Id
              * Format: uuid
@@ -3622,24 +3652,19 @@ export interface components {
             project_id: string;
             /** Sequence */
             sequence: number;
-            /** Starts At */
-            starts_at?: string | null;
+            /** Name */
+            name: string;
             /** Status */
             status: string;
+            /** Starts At */
+            starts_at?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Closed At */
+            closed_at?: string | null;
         };
         /** ParticipantWorkspaceProject */
         ParticipantWorkspaceProject: {
-            /** Cycles */
-            cycles?: components["schemas"]["ParticipantWorkspaceCycle"][];
-            /** Deadline At */
-            deadline_at?: string | null;
-            /** Deadline Label */
-            deadline_label: string;
-            /**
-             * History Bucket
-             * @default current
-             */
-            history_bucket: string;
             /**
              * Id
              * Format: uuid
@@ -3652,58 +3677,81 @@ export interface components {
              * @default active
              */
             status: string;
+            /**
+             * History Bucket
+             * @default current
+             */
+            history_bucket: string;
+            /** Deadline Label */
+            deadline_label: string;
+            /** Deadline At */
+            deadline_at?: string | null;
+            /** Cycles */
+            cycles?: components["schemas"]["ParticipantWorkspaceCycle"][];
         };
         /** ParticipantWorkspaceResult */
         ParticipantWorkspaceResult: {
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
             /**
              * Assignment Id
              * Format: uuid
              */
             assignment_id: string;
-            /** Primary Result */
-            primary_result?: string | null;
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /** Project Id */
             project_id?: string | null;
             /** Project Name */
             project_name?: string | null;
             /** Questionnaire Key */
             questionnaire_key: string;
-            /** Scale Max */
-            scale_max?: number | null;
+            /** Title */
+            title: string;
+            /** Target Label */
+            target_label: string;
+            /** Scores */
+            scores: {
+                [key: string]: unknown;
+            };
+            /** Primary Result */
+            primary_result?: string | null;
+            /** Score Unit */
+            score_unit?: string | null;
             /** Scale Min */
             scale_min?: number | null;
+            /** Scale Max */
+            scale_max?: number | null;
             /**
              * Score Scale Compatible
              * @default true
              */
             score_scale_compatible: boolean;
-            /** Score Unit */
-            score_unit?: string | null;
-            /** Scores */
-            scores: {
-                [key: string]: unknown;
-            };
-            /** Target Label */
-            target_label: string;
-            /** Title */
-            title: string;
             /** Unavailable Reason */
             unavailable_reason?: "incompatible_score_scales" | null;
         };
         /** ParticipantWorkspaceSummary */
         ParticipantWorkspaceSummary: {
+            /** Participant Profile Id */
+            participant_profile_id?: string | null;
+            /** Participant Full Name */
+            participant_full_name?: string | null;
+            /** Participant Email */
+            participant_email?: string | null;
             /** Anonymous Name */
             anonymous_name?: string | null;
-            /** Assessment Cycle Id */
-            assessment_cycle_id?: string | null;
-            /** Cards */
-            cards?: components["schemas"]["ParticipantWorkspaceCard"][];
+            /** Pcm Base */
+            pcm_base?: string | null;
+            /** Pcm Phase */
+            pcm_phase?: string | null;
             /** Company Id */
             company_id?: string | null;
             /** Company Name */
             company_name?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Project Name */
+            project_name?: string | null;
+            /** Assessment Cycle Id */
+            assessment_cycle_id?: string | null;
             /**
              * Context Selection Required
              * @default false
@@ -3713,39 +3761,27 @@ export interface components {
             contexts?: components["schemas"]["ParticipantWorkspaceContext"][];
             /** Cycles */
             cycles?: components["schemas"]["ParticipantWorkspaceCycle"][];
-            /** Deadline At */
-            deadline_at?: string | null;
+            /** Projects */
+            projects?: components["schemas"]["ParticipantWorkspaceProject"][];
+            /** Questionnaire Projects */
+            questionnaire_projects?: components["schemas"]["ParticipantQuestionnaireProject"][];
             /**
              * Deadline Label
              * @default finalul evaluării
              */
             deadline_label: string;
-            empty_state?: components["schemas"]["ParticipantWorkspaceCard"];
-            /** Participant Email */
-            participant_email?: string | null;
-            /** Participant Full Name */
-            participant_full_name?: string | null;
-            /** Participant Profile Id */
-            participant_profile_id?: string | null;
-            /** Pcm Base */
-            pcm_base?: string | null;
-            /** Pcm Phase */
-            pcm_phase?: string | null;
-            /** Project Id */
-            project_id?: string | null;
-            /** Project Name */
-            project_name?: string | null;
-            /** Projects */
-            projects?: components["schemas"]["ParticipantWorkspaceProject"][];
-            /** Questionnaire Projects */
-            questionnaire_projects?: components["schemas"]["ParticipantQuestionnaireProject"][];
+            /** Deadline At */
+            deadline_at?: string | null;
+            /** Tasks */
+            tasks?: components["schemas"]["InviteTask"][];
+            /** Results */
+            results?: components["schemas"]["ParticipantWorkspaceResult"][];
             received_feedback?: components["schemas"]["ParticipantReceivedFeedbackSummary"] | null;
             /** Received Feedback Groups */
             received_feedback_groups?: components["schemas"]["ParticipantReceivedFeedbackSummary"][];
-            /** Results */
-            results?: components["schemas"]["ParticipantWorkspaceResult"][];
-            /** Tasks */
-            tasks?: components["schemas"]["InviteTask"][];
+            /** Cards */
+            cards?: components["schemas"]["ParticipantWorkspaceCard"][];
+            empty_state?: components["schemas"]["ParticipantWorkspaceCard"];
         };
         /** PasswordChangeRequest */
         PasswordChangeRequest: {
@@ -3756,10 +3792,10 @@ export interface components {
         };
         /** PasswordResetConfirmRequest */
         PasswordResetConfirmRequest: {
-            /** Password */
-            password: string;
             /** Token */
             token: string;
+            /** Password */
+            password: string;
         };
         /** PasswordResetRequest */
         PasswordResetRequest: {
@@ -3780,87 +3816,87 @@ export interface components {
         /** ProjectLifecycleEventResponse */
         ProjectLifecycleEventResponse: {
             /**
-             * Action
-             * @enum {string}
+             * Id
+             * Format: uuid
              */
-            action: "archived" | "restored" | "permanently_deleted";
-            /** Actor Email */
-            actor_email: string | null;
-            /** Actor User Id */
-            actor_user_id: string | null;
+            id: string;
             /**
              * Company Id
              * Format: uuid
              */
             company_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            next_status: components["schemas"]["CompanyProjectStatus"] | null;
-            previous_status: components["schemas"]["CompanyProjectStatus"] | null;
             /**
              * Project Id
              * Format: uuid
              */
             project_id: string;
+            /** Actor User Id */
+            actor_user_id: string | null;
+            /** Actor Email */
+            actor_email: string | null;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "archived" | "restored" | "permanently_deleted";
             /** Project Name */
             project_name: string;
+            previous_status: components["schemas"]["CompanyProjectStatus"] | null;
+            next_status: components["schemas"]["CompanyProjectStatus"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** ProjectParticipantResponse */
         ProjectParticipantResponse: {
-            /** Account Type */
-            account_type?: ("guest" | "registered") | null;
-            /** Anonymous Name */
-            anonymous_name?: string | null;
-            /** Avatar Palette Key */
-            avatar_palette_key?: number | null;
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Email */
-            email: string | null;
-            /** Full Name */
-            full_name: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** User Id */
+            user_id: string | null;
+            /** Avatar Palette Key */
+            avatar_palette_key?: number | null;
+            /** Account Type */
+            account_type?: ("guest" | "registered") | null;
+            /**
              * Is Shadow Account
              * @default false
              */
             is_shadow_account: boolean;
+            /** Full Name */
+            full_name: string;
+            /** Email */
+            email: string | null;
+            /** Reports To Name */
+            reports_to_name: string | null;
+            /** Position */
+            position: string | null;
             /** Location */
             location: string | null;
+            /** Role Group */
+            role_group: string | null;
+            /** Pcm Profile */
+            pcm_profile: string | null;
             /** Pcm Base */
             pcm_base?: string | null;
             /** Pcm Phase */
             pcm_phase?: string | null;
-            /** Pcm Profile */
-            pcm_profile: string | null;
-            /** Position */
-            position: string | null;
+            /** Anonymous Name */
+            anonymous_name?: string | null;
             /**
              * Project Membership Id
              * Format: uuid
              */
             project_membership_id: string;
-            /** Reports To Name */
-            reports_to_name: string | null;
-            /** Role Group */
-            role_group: string | null;
-            /** User Id */
-            user_id: string | null;
         };
         /** ProjectPermanentDeleteRequest */
         ProjectPermanentDeleteRequest: {
@@ -3869,76 +3905,76 @@ export interface components {
         };
         /** QuestionnaireDefinitionCreateRequest */
         QuestionnaireDefinitionCreateRequest: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Schema */
+            schema: {
+                [key: string]: unknown;
+            };
             /**
              * Active
              * @default true
              */
             active: boolean;
-            /** Description */
-            description?: string | null;
-            /** Key */
-            key: string;
-            /** Schema */
-            schema: {
-                [key: string]: unknown;
-            };
-            /** Title */
-            title: string;
         };
         /** QuestionnaireDefinitionResponse */
         QuestionnaireDefinitionResponse: {
+            /** Key */
+            key: string;
+            /** Version */
+            version: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
             /**
              * Active
              * @default true
              */
             active: boolean;
-            /** Description */
-            description: string;
-            /** Key */
-            key: string;
             /** Schema */
             schema: {
                 [key: string]: unknown;
             };
-            /** Title */
-            title: string;
-            /** Version */
-            version: number;
         };
         /** QuestionnaireDefinitionUpdateRequest */
         QuestionnaireDefinitionUpdateRequest: {
-            /** Active */
-            active?: boolean | null;
+            /** Title */
+            title?: string | null;
             /** Description */
             description?: string | null;
             /** Schema */
             schema?: {
                 [key: string]: unknown;
             } | null;
-            /** Title */
-            title?: string | null;
+            /** Active */
+            active?: boolean | null;
         };
         /** QuestionnaireResponseResponse */
         QuestionnaireResponseResponse: {
-            /** Answers */
-            answers: {
-                [key: string]: unknown;
-            };
-            /**
-             * Assignment Id
-             * Format: uuid
-             */
-            assignment_id: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Assignment Id
+             * Format: uuid
+             */
+            assignment_id: string;
             /** Questionnaire Key */
             questionnaire_key: string;
             /** Questionnaire Version */
             questionnaire_version: number;
             status: components["schemas"]["QuestionnaireResponseStatus"];
+            /** Answers */
+            answers: {
+                [key: string]: unknown;
+            };
             /** Updated At */
             updated_at?: string | null;
         };
@@ -3958,15 +3994,15 @@ export interface components {
         QuestionnaireResponseStatus: "draft" | "submitted";
         /** ReadinessResponse */
         ReadinessResponse: {
-            /** Checks */
-            checks: {
-                [key: string]: "ok";
-            };
             /**
              * Status
              * @constant
              */
             status: "ok";
+            /** Checks */
+            checks: {
+                [key: string]: "ok";
+            };
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -3977,6 +4013,8 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Token */
+            token: string;
             /**
              * Terms Accepted
              * @default false
@@ -3987,97 +4025,95 @@ export interface components {
              * @default privacy-2026-07-16
              */
             terms_version: string;
-            /** Token */
-            token: string;
         };
         /** ReportAverageResponse */
         ReportAverageResponse: {
-            /** Avg */
-            avg: number;
-            /** Feedback */
-            feedback?: string | null;
             /** Id */
             id: string;
-            /** Interpretation */
-            interpretation?: string | null;
             /** Label */
             label: string;
+            /** Avg */
+            avg: number;
+            /** Interpretation */
+            interpretation?: string | null;
             /** Range Label */
             range_label?: string | null;
+            /** Feedback */
+            feedback?: string | null;
         };
         /** ReportDistributionResponse */
         ReportDistributionResponse: {
-            /** Color */
-            color?: string | null;
             /** Id */
             id: string;
             /** Label */
             label: string;
             /** Value */
             value: number;
+            /** Color */
+            color?: string | null;
         };
         /** ReportHierarchyIssueResponse */
         ReportHierarchyIssueResponse: {
             /** Code */
             code: string;
-            /** Message */
-            message: string;
             /** Participant Id */
             participant_id?: string | null;
             /** Participant Name */
             participant_name?: string | null;
             /** Reports To Name */
             reports_to_name?: string | null;
+            /** Message */
+            message: string;
         };
         /** ReportScoreScaleResponse */
         ReportScoreScaleResponse: {
-            /** Scale Max */
-            scale_max?: number | null;
+            /** Score Unit */
+            score_unit?: string | null;
             /** Scale Min */
             scale_min?: number | null;
+            /** Scale Max */
+            scale_max?: number | null;
             /**
              * Score Scale Compatible
              * @default true
              */
             score_scale_compatible: boolean;
-            /** Score Unit */
-            score_unit?: string | null;
             /** Unavailable Reason */
             unavailable_reason?: "incompatible_score_scales" | null;
         };
         /** ReportTeamLensResponse */
         ReportTeamLensResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Member Count */
+            member_count: number;
             /** Assigned Count */
             assigned_count: number;
-            /** Boss 360 Averages */
-            boss_360_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Boss 360 Count */
-            boss_360_count: number;
             /** Completed Count */
             completed_count: number;
             /** Completion Rate */
             completion_rate: number;
-            /** Driver Averages */
-            driver_averages: components["schemas"]["ReportAverageResponse"][];
-            /** Driver Count */
-            driver_count: number;
-            /** Id */
-            id: string;
-            /** Lencioni Averages */
-            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
             /** Lencioni Count */
             lencioni_count: number;
-            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
-            /** Member Count */
-            member_count: number;
-            /** Name */
-            name: string;
+            /** Driver Count */
+            driver_count: number;
+            /** Boss 360 Count */
+            boss_360_count: number;
             /** Pcm Base Count */
             pcm_base_count: number;
-            /** Pcm Base Distribution */
-            pcm_base_distribution: components["schemas"]["ReportDistributionResponse"][];
             /** Pcm Phase Count */
             pcm_phase_count: number;
+            /** Lencioni Averages */
+            lencioni_averages: components["schemas"]["ReportAverageResponse"][];
+            lencioni_scale: components["schemas"]["ReportScoreScaleResponse"];
+            /** Driver Averages */
+            driver_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Boss 360 Averages */
+            boss_360_averages: components["schemas"]["ReportAverageResponse"][];
+            /** Pcm Base Distribution */
+            pcm_base_distribution: components["schemas"]["ReportDistributionResponse"][];
             /** Pcm Phase Distribution */
             pcm_phase_distribution: components["schemas"]["ReportDistributionResponse"][];
         };
@@ -4090,10 +4126,6 @@ export interface components {
         };
         /** ReportingRelationshipIssue */
         ReportingRelationshipIssue: {
-            /** Code */
-            code: string;
-            /** Message */
-            message: string;
             /**
              * Participant Id
              * Format: uuid
@@ -4103,6 +4135,10 @@ export interface components {
             participant_name: string;
             /** Reports To Name */
             reports_to_name: string;
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
         /**
          * ResponseVisibilityPolicy
@@ -4112,38 +4148,36 @@ export interface components {
         /** RosterImportEmailResult */
         RosterImportEmailResult: {
             /**
+             * Participant Id
+             * Format: uuid
+             */
+            participant_id: string;
+            /** Email */
+            email: string | null;
+            /** Full Name */
+            full_name: string;
+            /**
              * Delivery Mode
              * @default email
              * @enum {string}
              */
             delivery_mode: "email" | "secure_links";
-            /** Email */
-            email: string | null;
+            /** Email Sent */
+            email_sent: boolean;
             /**
              * Email Queued
              * @default false
              */
             email_queued: boolean;
-            /** Email Sent */
-            email_sent: boolean;
-            /** Error */
-            error?: string | null;
             /** Error Code */
             error_code?: string | null;
-            /** Full Name */
-            full_name: string;
+            /** Error */
+            error?: string | null;
             /** Invite Url */
             invite_url?: string | null;
-            /**
-             * Participant Id
-             * Format: uuid
-             */
-            participant_id: string;
         };
         /** RosterImportRequest */
         RosterImportRequest: {
-            /** Project Id */
-            project_id?: string | null;
             /** Rows */
             rows: components["schemas"]["RosterImportRow"][];
             /**
@@ -4151,73 +4185,80 @@ export interface components {
              * @default false
              */
             send_invites: boolean;
+            /** Project Id */
+            project_id?: string | null;
         };
         /** RosterImportResponse */
         RosterImportResponse: {
+            /** Participants */
+            participants: components["schemas"]["ParticipantResponse"][];
             /** Email Results */
             email_results: components["schemas"]["RosterImportEmailResult"][];
-            /** Emails Failed */
-            emails_failed: number;
+            /** Total Imported */
+            total_imported: number;
+            /** Emails Sent */
+            emails_sent: number;
             /**
              * Emails Queued
              * @default 0
              */
             emails_queued: number;
-            /** Emails Sent */
-            emails_sent: number;
-            /** Participants */
-            participants: components["schemas"]["ParticipantResponse"][];
-            /** Total Imported */
-            total_imported: number;
+            /** Emails Failed */
+            emails_failed: number;
         };
         /** RosterImportRow */
         RosterImportRow: {
-            /** Location */
-            Location?: string | null;
             /** Name */
             Name: string;
+            /** Reports To */
+            "Reports To"?: string | null;
+            /** Position */
+            Position?: string | null;
+            /** Location */
+            Location?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Role Group */
+            "Role Group"?: string | null;
+            /** Profil Pcm */
+            "Profil PCM"?: string | null;
             /** Pcm Bază */
             "PCM Baz\u0103"?: string | null;
             /** Pcm Fază */
             "PCM Faz\u0103"?: string | null;
-            /** Position */
-            Position?: string | null;
-            /** Profil Pcm */
-            "Profil PCM"?: string | null;
-            /** Reports To */
-            "Reports To"?: string | null;
-            /** Role Group */
-            "Role Group"?: string | null;
-            /** Email */
-            email?: string | null;
         };
         /** ScoringResultResponse */
         ScoringResultResponse: {
-            /**
-             * Assignment Id
-             * Format: uuid
-             */
-            assignment_id: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Primary Result */
-            primary_result: string | null;
+            /**
+             * Assignment Id
+             * Format: uuid
+             */
+            assignment_id: string;
             /** Scores */
             scores: {
                 [key: string]: unknown;
             };
+            /** Primary Result */
+            primary_result: string | null;
         };
         /** SessionPrincipal */
         SessionPrincipal: {
             /**
-             * Access Mode
-             * @default account
-             * @enum {string}
+             * User Id
+             * Format: uuid
              */
-            access_mode: "account" | "secure_link";
+            user_id: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            role: components["schemas"]["UserRole"];
             /** @default registered */
             account_type: components["schemas"]["UserAccountType"];
             /**
@@ -4225,29 +4266,24 @@ export interface components {
              * @default []
              */
             available_workspaces: components["schemas"]["UserRole"][];
+            default_workspace?: components["schemas"]["UserRole"] | null;
             /** Avatar Palette Key */
             avatar_palette_key?: number | null;
-            /**
-             * Consent Current
-             * @default false
-             */
-            consent_current: boolean;
-            default_workspace?: components["schemas"]["UserRole"] | null;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            role: components["schemas"]["UserRole"];
             /** Terms Accepted At */
             terms_accepted_at?: string | null;
             /** Terms Version */
             terms_version?: string | null;
             /**
-             * User Id
-             * Format: uuid
+             * Consent Current
+             * @default false
              */
-            user_id: string;
+            consent_current: boolean;
+            /**
+             * Access Mode
+             * @default account
+             * @enum {string}
+             */
+            access_mode: "account" | "secure_link";
         };
         /** TeamCreateRequest */
         TeamCreateRequest: {
@@ -4272,16 +4308,16 @@ export interface components {
              */
             id: string;
             /**
+             * Team Id
+             * Format: uuid
+             */
+            team_id: string;
+            /**
              * Participant Profile Id
              * Format: uuid
              */
             participant_profile_id: string;
             role: components["schemas"]["TeamMembershipRole"];
-            /**
-             * Team Id
-             * Format: uuid
-             */
-            team_id: string;
         };
         /**
          * TeamMembershipRole
@@ -4291,15 +4327,15 @@ export interface components {
         /** TeamResponse */
         TeamResponse: {
             /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
             /** Name */
             name: string;
             type: components["schemas"]["TeamType"];
@@ -4328,163 +4364,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    change_password_api_auth_change_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PasswordChangeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PasswordResetResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    consent_api_auth_consent_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConsentRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    csrf_token_api_auth_csrf_get: {
+    live_api_health_live_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4499,7 +4379,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CsrfTokenResponse"];
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ready_api_health_ready_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verify_invite_api_auth_invite_verify_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteVerifyResponse"];
                 };
             };
             /** @description Bad Request */
@@ -4636,24 +4675,26 @@ export interface operations {
             };
         };
     };
-    verify_invite_api_auth_invite_verify_get: {
+    register_api_auth_register_post: {
         parameters: {
-            query: {
-                token: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InviteVerifyResponse"];
+                    "application/json": components["schemas"]["AuthResponse"];
                 };
             };
             /** @description Bad Request */
@@ -4727,230 +4768,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    logout_api_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    me_api_auth_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionPrincipal"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    register_api_auth_register_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5170,6 +4987,2805 @@ export interface operations {
             };
         };
     };
+    change_password_api_auth_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    consent_api_auth_consent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout_api_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    csrf_token_api_auth_csrf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfTokenResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    me_api_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionPrincipal"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_my_workspace_api_participants_me_workspace_get: {
+        parameters: {
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantWorkspaceSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_companies_api_companies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_company_api_companies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_company_summaries_api_companies_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySummaryResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_all_company_projects_api_companies_projects_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectListItemResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_company_project_by_id_api_companies_projects__project_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectListItemResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_company_api_companies__company_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_company_projects_api_companies__company_id__projects_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_company_project_api_companies__company_id__projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyProjectCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_company_project_api_companies__company_id__projects__project_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_company_project_api_companies__company_id__projects__project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyProjectUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_company_project_api_companies__company_id__projects__project_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyProjectResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectPermanentDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_company_project_lifecycle_events_api_companies__company_id__projects__project_id__lifecycle_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectLifecycleEventResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_company_participants_api_companies__company_id__participants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_company_participant_api_companies__company_id__participants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_participant_account_link_status_api_companies__company_id__participants__participant_id__account_link_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantAccountLinkStatusResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    repair_participant_account_link_api_companies__company_id__participants__participant_id__account_link_repair_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantAccountLinkRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantAccountLinkStatusResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_project_participants_api_companies__company_id__projects__project_id__participants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectParticipantResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_company_participant_api_companies__company_id__participants__participant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantRemovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_company_participant_api_companies__company_id__participants__participant_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_project_participant_api_companies__company_id__projects__project_id__participants__participant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantRemovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_company_roster_api_companies__company_id__participants_roster_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RosterImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    send_participant_invitations_api_companies__company_id__participants_invitations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantInviteBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantInviteBatchResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_participant_invitation_statuses_api_companies__company_id__participants_invitations_status_get: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+                assessment_cycle_id?: string | null;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantInvitationStatusResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resend_participant_invite_api_companies__company_id__participants__participant_id__resend_invite_post: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+                assessment_cycle_id?: string | null;
+            };
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                company_id: string;
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_company_access_code_api_companies__company_id__access_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyAccessCodeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyAccessCodeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    register_with_company_access_code_api_companies_access_code_registration_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyAccessCodeRegistrationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_company_reporting_relationships_api_companies__company_id__participants_reporting_relationships_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportingRelationshipImportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    receive_brevo_webhook_api_communications_webhooks_brevo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrevoWebhookEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrevoWebhookResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    send_test_email_api_communications_test_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailTestSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailTestSendResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     upload_campaign_asset_api_communications_campaign_assets_post: {
         parameters: {
             query?: never;
@@ -5264,1707 +7880,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_campaigns_api_communications_campaigns_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    create_campaign_api_communications_campaigns_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    bulk_create_campaign_recipients_api_communications_campaigns_recipients_bulk_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignRecipientBulkCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recipient_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_campaign_recipient_api_communications_campaigns_recipients__recipient_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recipient_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignRecipientUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    archive_campaign_recipient_api_communications_campaigns_recipients__recipient_id__archive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recipient_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignRecipientArchiveResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recipient_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignRecipientEventCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignRecipientEventResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    permanently_delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__permanent_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recipient_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignRecipientPermanentDeleteResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recipient_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignRecipientRestoreResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    track_campaign_calendly_click_api_communications_campaigns_track_calendly__token__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    track_campaign_open_api_communications_campaigns_track_opened__token__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    track_campaign_click_api_communications_campaigns_track__event_type___token__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                event_type: string;
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    confirm_unsubscribe_campaign_recipient_api_communications_campaigns_unsubscribe__token__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    unsubscribe_campaign_recipient_api_communications_campaigns_unsubscribe__token__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_campaign_api_communications_campaigns__campaign_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_campaign_api_communications_campaigns__campaign_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    cancel_campaign_delivery_api_communications_campaigns__campaign_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignCancelResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_campaign_recipient_memberships_api_communications_campaigns__campaign_id__recipients_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignRecipientMembershipRowResponse"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    replace_campaign_recipient_memberships_api_communications_campaigns__campaign_id__recipients_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignRecipientMembershipUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignRecipientMembershipRowResponse"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    send_campaign_api_communications_campaigns__campaign_id__send_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                campaign_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CampaignSendRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CampaignSendResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_email_ops_summary_api_communications_ops_summary_get: {
-        parameters: {
-            query?: {
-                catalog_scope?: "active" | "archived";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EmailOpsSummaryResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_email_send_capacity_api_communications_send_capacity_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EmailSendCapacityResponse"];
-                };
             };
             /** @description Bad Request */
             400: {
@@ -7491,396 +8406,10 @@ export interface operations {
             };
         };
     };
-    send_test_email_api_communications_test_email_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EmailTestSendRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EmailTestSendResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    receive_brevo_webhook_api_communications_webhooks_brevo_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BrevoWebhookEvent"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrevoWebhookResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_companies_api_companies_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyResponse"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    create_company_api_companies_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompanyCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    register_with_company_access_code_api_companies_access_code_registration_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompanyAccessCodeRegistrationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_all_company_projects_api_companies_projects_get: {
+    get_email_ops_summary_api_communications_ops_summary_get: {
         parameters: {
             query?: {
-                include_archived?: boolean;
+                catalog_scope?: "active" | "archived";
             };
             header?: never;
             path?: never;
@@ -7894,7 +8423,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompanyProjectListItemResponse"][];
+                    "application/json": components["schemas"]["EmailOpsSummaryResponse"];
                 };
             };
             /** @description Bad Request */
@@ -7953,83 +8482,7 @@ export interface operations {
             };
         };
     };
-    get_company_project_by_id_api_companies_projects__project_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyProjectListItemResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_company_summaries_api_companies_summary_get: {
+    get_email_send_capacity_api_communications_send_capacity_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -8044,7 +8497,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompanySummaryResponse"][];
+                    "application/json": components["schemas"]["EmailSendCapacityResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8103,12 +8556,92 @@ export interface operations {
             };
         };
     };
-    delete_company_api_companies__company_id__delete: {
+    bulk_create_campaign_recipients_api_communications_campaigns_recipients_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignRecipientBulkCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
+                recipient_id: string;
             };
             cookie?: never;
         };
@@ -8177,28 +8710,30 @@ export interface operations {
             };
         };
     };
-    create_company_access_code_api_companies__company_id__access_codes_post: {
+    update_campaign_recipient_api_communications_campaigns_recipients__recipient_id__patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
+                recipient_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CompanyAccessCodeCreateRequest"];
+                "application/json": components["schemas"]["CampaignRecipientUpdateRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompanyAccessCodeResponse"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Bad Request */
@@ -8257,15 +8792,12 @@ export interface operations {
             };
         };
     };
-    list_company_assignments_api_companies__company_id__assignments_get: {
+    archive_campaign_recipient_api_communications_campaigns_recipients__recipient_id__archive_post: {
         parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
-                company_id: string;
+                recipient_id: string;
             };
             cookie?: never;
         };
@@ -8277,7 +8809,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssignmentResponse"][];
+                    "application/json": components["schemas"]["CampaignRecipientArchiveResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8336,96 +8868,12 @@ export interface operations {
             };
         };
     };
-    create_company_assignment_api_companies__company_id__assignments_post: {
+    restore_campaign_recipient_api_communications_campaigns_recipients__recipient_id__restore_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssignmentCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssignmentResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_company_default_assignment_plan_api_companies__company_id__assignments_default_plan_get: {
-        parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-                source_cycle_id?: string | null;
-            };
-            header?: never;
-            path: {
-                company_id: string;
+                recipient_id: string;
             };
             cookie?: never;
         };
@@ -8437,7 +8885,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssignmentPlanResponse"];
+                    "application/json": components["schemas"]["CampaignRecipientRestoreResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8496,331 +8944,12 @@ export interface operations {
             };
         };
     };
-    save_company_assignment_plan_api_companies__company_id__assignments_default_plan_post: {
-        parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-            };
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssignmentPlanSaveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssignmentPlanSaveResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_company_assignment_status_api_companies__company_id__assignments__assignment_id__status_patch: {
+    permanently_delete_campaign_recipient_api_communications_campaigns_recipients__recipient_id__permanent_delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
-                assignment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssignmentStatusUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssignmentResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    create_company_invitation_api_companies__company_id__invitations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InvitationCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InvitationResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    invalidate_company_invitation_api_companies__company_id__invitations__respondent_profile_id__invalidate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                respondent_profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_company_participants_api_companies__company_id__participants_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
+                recipient_id: string;
             };
             cookie?: never;
         };
@@ -8832,7 +8961,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ParticipantResponse"][];
+                    "application/json": components["schemas"]["CampaignRecipientPermanentDeleteResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8891,28 +9020,28 @@ export interface operations {
             };
         };
     };
-    create_company_participant_api_companies__company_id__participants_post: {
+    record_campaign_recipient_event_api_communications_campaigns_recipients__recipient_id__events_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
+                recipient_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ParticipantCreateRequest"];
+                "application/json": components["schemas"]["CampaignRecipientEventCreateRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ParticipantResponse"];
+                    "application/json": components["schemas"]["CampaignRecipientEventResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8971,20 +9100,713 @@ export interface operations {
             };
         };
     };
-    send_participant_invitations_api_companies__company_id__participants_invitations_post: {
+    track_campaign_calendly_click_api_communications_campaigns_track_calendly__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    track_campaign_open_api_communications_campaigns_track_opened__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    track_campaign_click_api_communications_campaigns_track__event_type___token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_type: string;
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    confirm_unsubscribe_campaign_recipient_api_communications_campaigns_unsubscribe__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unsubscribe_campaign_recipient_api_communications_campaigns_unsubscribe__token__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_campaigns_api_communications_campaigns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_campaign_api_communications_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_campaign_recipient_memberships_api_communications_campaigns__campaign_id__recipients_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignRecipientMembershipRowResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    replace_campaign_recipient_memberships_api_communications_campaigns__campaign_id__recipients_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignRecipientMembershipUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignRecipientMembershipRowResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    send_campaign_api_communications_campaigns__campaign_id__send_post: {
         parameters: {
             query?: never;
             header?: {
                 "Idempotency-Key"?: string | null;
             };
             path: {
-                company_id: string;
+                campaign_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ParticipantInviteBatchRequest"];
+                "application/json": components["schemas"]["CampaignSendRequest"];
             };
         };
         responses: {
@@ -8994,7 +9816,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ParticipantInviteBatchResponse"];
+                    "application/json": components["schemas"]["CampaignSendResponse"];
                 };
             };
             /** @description Bad Request */
@@ -9053,15 +9875,12 @@ export interface operations {
             };
         };
     };
-    list_participant_invitation_statuses_api_companies__company_id__participants_invitations_status_get: {
+    cancel_campaign_delivery_api_communications_campaigns__campaign_id__cancel_post: {
         parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
-                company_id: string;
+                campaign_id: string;
             };
             cookie?: never;
         };
@@ -9073,7 +9892,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ParticipantInvitationStatusResponse"][];
+                    "application/json": components["schemas"]["CampaignCancelResponse"];
                 };
             };
             /** @description Bad Request */
@@ -9132,729 +9951,12 @@ export interface operations {
             };
         };
     };
-    import_company_reporting_relationships_api_companies__company_id__participants_reporting_relationships_import_post: {
+    delete_campaign_api_communications_campaigns__campaign_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReportingRelationshipImportResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    import_company_roster_api_companies__company_id__participants_roster_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RosterImportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RosterImportResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_company_participant_api_companies__company_id__participants__participant_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                participant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParticipantRemovalRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_company_participant_api_companies__company_id__participants__participant_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                participant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParticipantUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParticipantResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_participant_account_link_status_api_companies__company_id__participants__participant_id__account_link_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                participant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParticipantAccountLinkStatusResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    repair_participant_account_link_api_companies__company_id__participants__participant_id__account_link_repair_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                participant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParticipantAccountLinkRepairRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParticipantAccountLinkStatusResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    resend_participant_invite_api_companies__company_id__participants__participant_id__resend_invite_post: {
-        parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-            };
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                company_id: string;
-                participant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RosterImportResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_company_projects_api_companies__company_id__projects_get: {
-        parameters: {
-            query?: {
-                include_archived?: boolean;
-            };
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyProjectResponse"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    create_company_project_api_companies__company_id__projects_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompanyProjectCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyProjectResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_company_project_api_companies__company_id__projects__project_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
+                campaign_id: string;
             };
             cookie?: never;
         };
@@ -9923,19 +10025,18 @@ export interface operations {
             };
         };
     };
-    update_company_project_api_companies__company_id__projects__project_id__patch: {
+    update_campaign_api_communications_campaigns__campaign_id__patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                company_id: string;
-                project_id: string;
+                campaign_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CompanyProjectUpdateRequest"];
+                "application/json": components["schemas"]["CampaignUpdateRequest"];
             };
         };
         responses: {
@@ -9945,7 +10046,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompanyProjectResponse"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Bad Request */
@@ -10402,714 +10505,6 @@ export interface operations {
             };
         };
     };
-    list_company_project_lifecycle_events_api_companies__company_id__projects__project_id__lifecycle_events_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectLifecycleEventResponse"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_project_participants_api_companies__company_id__projects__project_id__participants_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectParticipantResponse"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    remove_project_participant_api_companies__company_id__projects__project_id__participants__participant_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
-                participant_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParticipantRemovalRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    permanently_delete_company_project_api_companies__company_id__projects__project_id__permanent_delete_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProjectPermanentDeleteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get: {
-        parameters: {
-            query?: {
-                assessment_cycle_id?: string | null;
-            };
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
-                participant_profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LeadershipMemberReportResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    restore_company_project_api_companies__company_id__projects__project_id__restore_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                project_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyProjectResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_company_report_aggregate_api_companies__company_id__reports_aggregate_get: {
-        parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-            };
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyReportAggregateResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_company_report_comparison_api_companies__company_id__reports_comparison_get: {
-        parameters: {
-            query: {
-                project_id: string;
-                baseline_cycle_id: string;
-                comparison_cycle_id: string;
-            };
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyReportComparisonResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get: {
-        parameters: {
-            query?: {
-                project_id?: string | null;
-                assessment_cycle_id?: string | null;
-            };
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IcareAnswerReviewResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     list_company_teams_api_companies__company_id__teams_get: {
         parameters: {
             query?: never;
@@ -11500,16 +10895,15 @@ export interface operations {
             };
         };
     };
-    get_assignment_definition_api_forms_assignments__assignment_id__definition_get: {
+    list_company_assignments_api_companies__company_id__assignments_get: {
         parameters: {
             query?: {
-                participant_profile_id?: string | null;
                 project_id?: string | null;
-                cycle_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
-                assignment_id: string;
+                company_id: string;
             };
             cookie?: never;
         };
@@ -11521,7 +10915,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["QuestionnaireDefinitionResponse"];
+                    "application/json": components["schemas"]["AssignmentResponse"][];
                 };
             };
             /** @description Bad Request */
@@ -11580,16 +10974,96 @@ export interface operations {
             };
         };
     };
-    get_assignment_response_api_forms_assignments__assignment_id__response_get: {
+    create_company_assignment_api_companies__company_id__assignments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_company_default_assignment_plan_api_companies__company_id__assignments_default_plan_get: {
         parameters: {
             query?: {
-                participant_profile_id?: string | null;
                 project_id?: string | null;
-                cycle_id?: string | null;
+                assessment_cycle_id?: string | null;
+                source_cycle_id?: string | null;
             };
             header?: never;
             path: {
-                assignment_id: string;
+                company_id: string;
             };
             cookie?: never;
         };
@@ -11601,7 +11075,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["QuestionnaireResponseResponse"];
+                    "application/json": components["schemas"]["AssignmentPlanResponse"];
                 };
             };
             /** @description Bad Request */
@@ -11660,22 +11134,21 @@ export interface operations {
             };
         };
     };
-    save_assignment_response_api_forms_assignments__assignment_id__response_put: {
+    save_company_assignment_plan_api_companies__company_id__assignments_default_plan_post: {
         parameters: {
             query?: {
-                participant_profile_id?: string | null;
                 project_id?: string | null;
-                cycle_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
-                assignment_id: string;
+                company_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["QuestionnaireResponseSaveRequest"];
+                "application/json": components["schemas"]["AssignmentPlanSaveRequest"];
             };
         };
         responses: {
@@ -11685,7 +11158,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["QuestionnaireResponseResponse"];
+                    "application/json": components["schemas"]["AssignmentPlanSaveResponse"];
                 };
             };
             /** @description Bad Request */
@@ -11744,22 +11217,337 @@ export interface operations {
             };
         };
     };
-    submit_assignment_response_api_forms_assignments__assignment_id__response_submit_post: {
+    get_company_report_aggregate_api_companies__company_id__reports_aggregate_get: {
         parameters: {
             query?: {
-                participant_profile_id?: string | null;
                 project_id?: string | null;
-                cycle_id?: string | null;
+                assessment_cycle_id?: string | null;
             };
             header?: never;
             path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyReportAggregateResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_leadership_member_report_api_companies__company_id__projects__project_id__reports_leadership__participant_profile_id__get: {
+        parameters: {
+            query?: {
+                assessment_cycle_id?: string | null;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                project_id: string;
+                participant_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadershipMemberReportResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_company_report_comparison_api_companies__company_id__reports_comparison_get: {
+        parameters: {
+            query: {
+                project_id: string;
+                baseline_cycle_id: string;
+                comparison_cycle_id: string;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyReportComparisonResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_company_icare_answer_review_api_companies__company_id__reports_icare_answers_get: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+                assessment_cycle_id?: string | null;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IcareAnswerReviewResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_company_assignment_status_api_companies__company_id__assignments__assignment_id__status_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
                 assignment_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["QuestionnaireResponseSaveRequest"];
+                "application/json": components["schemas"]["AssignmentStatusUpdateRequest"];
             };
         };
         responses: {
@@ -11769,7 +11557,238 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["QuestionnaireResponseResponse"];
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_company_invitation_api_companies__company_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    invalidate_company_invitation_api_companies__company_id__invitations__respondent_profile_id__invalidate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                respondent_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_participant_onboarding_api_forms_participant_onboarding_get: {
+        parameters: {
+            query?: {
+                participant_profile_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantOnboardingResponse"];
                 };
             };
             /** @description Bad Request */
@@ -12223,6 +12242,86 @@ export interface operations {
             };
         };
     };
+    get_assignment_definition_api_forms_assignments__assignment_id__definition_get: {
+        parameters: {
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
+            header?: never;
+            path: {
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionnaireDefinitionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     activate_questionnaire_definition_api_forms_definitions__key__versions__version__activate_post: {
         parameters: {
             query?: never;
@@ -12300,13 +12399,17 @@ export interface operations {
             };
         };
     };
-    get_participant_onboarding_api_forms_participant_onboarding_get: {
+    get_assignment_response_api_forms_assignments__assignment_id__response_get: {
         parameters: {
             query?: {
                 participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
             };
             header?: never;
-            path?: never;
+            path: {
+                assignment_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -12317,7 +12420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ParticipantOnboardingResponse"];
+                    "application/json": components["schemas"]["QuestionnaireResponseResponse"];
                 };
             };
             /** @description Bad Request */
@@ -12376,17 +12479,24 @@ export interface operations {
             };
         };
     };
-    get_secure_assignment_definition_api_forms_secure_links__token__assignments__assignment_id__definition_get: {
+    save_assignment_response_api_forms_assignments__assignment_id__response_put: {
         parameters: {
-            query?: never;
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
             header?: never;
             path: {
-                token: string;
                 assignment_id: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionnaireResponseSaveRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -12394,7 +12504,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["QuestionnaireDefinitionResponse"];
+                    "application/json": components["schemas"]["QuestionnaireResponseResponse"];
                 };
             };
             /** @description Bad Request */
@@ -12611,12 +12721,92 @@ export interface operations {
             };
         };
     };
-    submit_secure_assignment_response_api_forms_secure_links__token__assignments__assignment_id__response_submit_post: {
+    get_secure_assignment_definition_api_forms_secure_links__token__assignments__assignment_id__definition_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 token: string;
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionnaireDefinitionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submit_assignment_response_api_forms_assignments__assignment_id__response_submit_post: {
+        parameters: {
+            query?: {
+                participant_profile_id?: string | null;
+                project_id?: string | null;
+                cycle_id?: string | null;
+            };
+            header?: never;
+            path: {
                 assignment_id: string;
             };
             cookie?: never;
@@ -12692,14 +12882,21 @@ export interface operations {
             };
         };
     };
-    live_api_health_live_get: {
+    submit_secure_assignment_response_api_forms_secure_links__token__assignments__assignment_id__response_submit_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                token: string;
+                assignment_id: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionnaireResponseSaveRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -12707,168 +12904,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ready_api_health_ready_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadinessResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Service not ready */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_my_workspace_api_participants_me_workspace_get: {
-        parameters: {
-            query?: {
-                participant_profile_id?: string | null;
-                project_id?: string | null;
-                cycle_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParticipantWorkspaceSummary"];
+                    "application/json": components["schemas"]["QuestionnaireResponseResponse"];
                 };
             };
             /** @description Bad Request */

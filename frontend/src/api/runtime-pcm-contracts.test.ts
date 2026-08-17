@@ -54,10 +54,12 @@ describe("runtime safety contracts", () => {
 
   it("honors explicit fallback disablement and test-only defaults", async () => {
     const runtime = await import("./runtime");
+    vi.stubEnv("NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK", "false");
     vi.stubEnv("CODRUT_FRONTEND_DEMO_FALLBACK", "false");
     expect(runtime.isDemoFallbackEnabled()).toBe(false);
     expect(runtime.isSeededDemoFallbackEnabled()).toBe(false);
 
+    vi.stubEnv("NEXT_PUBLIC_CODRUT_FRONTEND_DEMO_FALLBACK", "");
     vi.stubEnv("CODRUT_FRONTEND_DEMO_FALLBACK", "");
     expect(runtime.isDemoFallbackEnabled()).toBe(true);
     expect(runtime.isLocalSeededDemoFallbackEnabled()).toBe(true);

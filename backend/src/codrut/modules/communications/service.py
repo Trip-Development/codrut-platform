@@ -96,6 +96,15 @@ SYSTEM_TEMPLATE_REQUIRED_VARS = {
     "assignment_bundle": {"participant_name", "company_name", "task_count", "action_url"},
     "assignment_reminder": {"participant_name", "company_name", "action_url"},
 }
+INVITATION_TEMPLATE_ALLOWED_VARS = frozenset(
+    {
+        "participant_name",
+        "trainer_name",
+        "company_name",
+        "task_count",
+        "action_url",
+    }
+)
 CAMPAIGN_TEMPLATE_VARIABLES = frozenset(
     {
         "calendly_url",
@@ -2971,37 +2980,81 @@ class TransactionalEmailService:
         assignment_ids: list[UUID] | None = None,
         reminder_assignment_ids: list[UUID] | None = None,
         allow_new: bool = True,
+        leadership_invitation_template_key: str | None = None,
+        member_invitation_template_key: str | None = None,
+        leadership_reminder_template_key: str | None = None,
+        member_reminder_template_key: str | None = None,
     ) -> AssignmentInvitationQueueResult:
         if self.session is None:
             raise RuntimeError("Durable invitation delivery requires a database session")
         owner_id = _require_delivery_owner_id(self.owner_id)
         is_reminder = bool(reminder_assignment_ids)
-        template_key = _select_invitation_template(respondent, reminder=is_reminder)
+        template_key = _select_invitation_template(
+            respondent,
+            reminder=is_reminder,
+            leadership_invitation_template_key=leadership_invitation_template_key,
+            member_invitation_template_key=member_invitation_template_key,
+            leadership_reminder_template_key=leadership_reminder_template_key,
+            member_reminder_template_key=member_reminder_template_key,
+        )
 
         version = 1
         db_template = None
         if self.session is not None:
-            cache_key = (owner_id, template_key.value)
+            cache_key = (owner_id, template_key)
             if cache_key not in self._template_cache:
                 repository = CommunicationsRepository(self.session)
                 self._template_cache[cache_key] = await repository.get_template(
-                    template_key.value,
+                    template_key,
                     owner_id=owner_id,
                 )
             db_template = self._template_cache[cache_key]
+
         if db_template is not None:
+            if not db_template.active:
+                raise DomainError(
+                    f"Șablonul '{template_key}' este inactiv.",
+                    code="template_inactive",
+                )
+            if db_template.audience and str(db_template.audience).startswith("campaign"):
+                raise DomainError(
+                    f"Șablonul de campanie '{template_key}' nu poate fi folosit pentru invitații.",
+                    code="campaign_template_not_allowed",
+                )
+            placeholders = (
+                extract_placeholders(db_template.subject)
+                | extract_placeholders(db_template.html_body)
+                | extract_placeholders(db_template.text_body)
+            )
+            if "action_url" not in placeholders:
+                raise DomainError(
+                    f"Șablonul '{template_key}' nu conține linkul de acces (action_url).",
+                    code="email_template_missing_action_url",
+                )
+            unsupported = placeholders - INVITATION_TEMPLATE_ALLOWED_VARS
+            if unsupported:
+                vars_str = ", ".join(sorted(unsupported))
+                raise DomainError(
+                    f"Șablonul '{template_key}' conține variabile nesuportate: {vars_str}",
+                    code="email_template_unsupported_variables",
+                )
             subject = db_template.subject
             html_body = db_template.html_body
             text_body = db_template.text_body
             variables = db_template.variables
             version = db_template.version
-        else:
-            template = get_transactional_template(template_key)
+        elif template_key in TransactionalTemplateKey.__members__:
+            template = get_transactional_template(TransactionalTemplateKey(template_key))
             subject = template.subject
             html_body = template.html_body
             text_body = template.text_body
             variables = list(template.required_context)
             version = template.version
+        else:
+            raise DomainError(
+                f"Șablonul '{template_key}' nu a fost găsit sau este inactiv.",
+                code="template_not_found",
+            )
 
         message = render_template_content(
             subject=subject,
@@ -3046,7 +3099,7 @@ class TransactionalEmailService:
                 owner_id=owner_id,
                 assignment_id=assignment.id,
                 recipient_email=respondent.email,
-                template_key=template_key.value,
+                template_key=template_key,
                 template_version=version,
                 provider=str(getattr(self.provider, "key", "unknown")),
                 provider_message_id=None,
@@ -3748,9 +3801,32 @@ def _select_invitation_template(
     respondent: ParticipantProfile,
     *,
     reminder: bool = False,
-) -> TransactionalTemplateKey:
+    leadership_invitation_template_key: str | None = None,
+    member_invitation_template_key: str | None = None,
+    leadership_reminder_template_key: str | None = None,
+    member_reminder_template_key: str | None = None,
+) -> str:
+    is_leadership = (respondent.role_group or "").strip().casefold() == "leadership"
     if reminder:
-        return TransactionalTemplateKey.assignment_reminder
-    if (respondent.role_group or "").strip().casefold() == "leadership":
-        return TransactionalTemplateKey.account_setup
-    return TransactionalTemplateKey.assignment_bundle
+        if is_leadership:
+            return (
+                leadership_reminder_template_key.strip()
+                if leadership_reminder_template_key and leadership_reminder_template_key.strip()
+                else TransactionalTemplateKey.assignment_reminder.value
+            )
+        return (
+            member_reminder_template_key.strip()
+            if member_reminder_template_key and member_reminder_template_key.strip()
+            else TransactionalTemplateKey.assignment_reminder.value
+        )
+    if is_leadership:
+        return (
+            leadership_invitation_template_key.strip()
+            if leadership_invitation_template_key and leadership_invitation_template_key.strip()
+            else TransactionalTemplateKey.account_setup.value
+        )
+    return (
+        member_invitation_template_key.strip()
+        if member_invitation_template_key and member_invitation_template_key.strip()
+        else TransactionalTemplateKey.assignment_bundle.value
+    )

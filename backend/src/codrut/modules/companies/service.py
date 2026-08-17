@@ -198,6 +198,63 @@ class CompanyService:
             include_archived=include_archived,
         )
 
+    async def _validate_project_template_key(
+        self,
+        key: str | None,
+        owner_id: UUID,
+        field_name: str,
+    ) -> str | None:
+        if key is None:
+            return None
+        cleaned = key.strip()
+        if not cleaned:
+            return None
+        from codrut.modules.communications.templates import TransactionalTemplateKey
+
+        if cleaned in TransactionalTemplateKey.__members__:
+            return cleaned
+        from codrut.modules.communications.repository import CommunicationsRepository
+        from codrut.modules.communications.service import (
+            INVITATION_TEMPLATE_ALLOWED_VARS,
+            extract_placeholders,
+        )
+
+        comm_repo = CommunicationsRepository(self.repository.session)
+        template = await comm_repo.get_template(cleaned, owner_id=owner_id)
+        if template is None:
+            raise DomainError(
+                f"Șablonul '{cleaned}' pentru {field_name} nu a fost găsit.",
+                code="template_not_found",
+            )
+        if not template.active:
+            raise DomainError(
+                f"Șablonul '{cleaned}' pentru {field_name} este inactiv.",
+                code="template_inactive",
+            )
+        if template.audience and str(template.audience).startswith("campaign"):
+            raise DomainError(
+                f"Șablonul de campanie '{cleaned}' nu poate fi folosit pentru {field_name}.",
+                code="campaign_template_not_allowed",
+            )
+        placeholders = (
+            extract_placeholders(template.subject)
+            | extract_placeholders(template.html_body)
+            | extract_placeholders(template.text_body)
+        )
+        if "action_url" not in placeholders:
+            raise DomainError(
+                f"Șablonul '{cleaned}' nu conține linkul de acces (action_url).",
+                code="email_template_missing_action_url",
+            )
+        unsupported = placeholders - INVITATION_TEMPLATE_ALLOWED_VARS
+        if unsupported:
+            vars_str = ", ".join(sorted(unsupported))
+            raise DomainError(
+                f"Șablonul '{cleaned}' conține variabile nesuportate: {vars_str}",
+                code="email_template_unsupported_variables",
+            )
+        return cleaned
+
     async def create_project(
         self,
         user_id: UUID,
@@ -224,6 +281,26 @@ class CompanyService:
             payload.form_closes_at,
             "invalid_form_window",
         )
+        leadership_inv_key = await self._validate_project_template_key(
+            payload.leadership_invitation_template_key,
+            user_id,
+            "invitația de leadership",
+        )
+        member_inv_key = await self._validate_project_template_key(
+            payload.member_invitation_template_key,
+            user_id,
+            "invitația de membri",
+        )
+        leadership_rem_key = await self._validate_project_template_key(
+            payload.leadership_reminder_template_key,
+            user_id,
+            "reminderul de leadership",
+        )
+        member_rem_key = await self._validate_project_template_key(
+            payload.member_reminder_template_key,
+            user_id,
+            "reminderul de membri",
+        )
         project = await self.repository.add_project(
             CompanyProject(
                 company_id=company_id,
@@ -235,6 +312,10 @@ class CompanyService:
                 due_at=payload.due_at,
                 form_opens_at=payload.form_opens_at,
                 form_closes_at=payload.form_closes_at,
+                leadership_invitation_template_key=leadership_inv_key,
+                member_invitation_template_key=member_inv_key,
+                leadership_reminder_template_key=leadership_rem_key,
+                member_reminder_template_key=member_rem_key,
             )
         )
         self.repository.session.add(
@@ -298,6 +379,38 @@ class CompanyService:
             project.form_opens_at = payload.form_opens_at
         if "form_closes_at" in payload.model_fields_set:
             project.form_closes_at = payload.form_closes_at
+        if "leadership_invitation_template_key" in payload.model_fields_set:
+            project.leadership_invitation_template_key = (
+                await self._validate_project_template_key(
+                    payload.leadership_invitation_template_key,
+                    user_id,
+                    "invitația de leadership",
+                )
+            )
+        if "member_invitation_template_key" in payload.model_fields_set:
+            project.member_invitation_template_key = (
+                await self._validate_project_template_key(
+                    payload.member_invitation_template_key,
+                    user_id,
+                    "invitația de membri",
+                )
+            )
+        if "leadership_reminder_template_key" in payload.model_fields_set:
+            project.leadership_reminder_template_key = (
+                await self._validate_project_template_key(
+                    payload.leadership_reminder_template_key,
+                    user_id,
+                    "reminderul de leadership",
+                )
+            )
+        if "member_reminder_template_key" in payload.model_fields_set:
+            project.member_reminder_template_key = (
+                await self._validate_project_template_key(
+                    payload.member_reminder_template_key,
+                    user_id,
+                    "reminderul de membri",
+                )
+            )
 
         _validate_date_window(project.starts_at, project.due_at, "invalid_project_dates")
         _validate_date_window(project.form_opens_at, project.form_closes_at, "invalid_form_window")
@@ -1398,6 +1511,18 @@ class CompanyService:
                                 reminder_assignment_ids if has_prior_delivery else None
                             ),
                             allow_new=remaining_sends > 0,
+                            leadership_invitation_template_key=(
+                                project.leadership_invitation_template_key if project else None
+                            ),
+                            member_invitation_template_key=(
+                                project.member_invitation_template_key if project else None
+                            ),
+                            leadership_reminder_template_key=(
+                                project.leadership_reminder_template_key if project else None
+                            ),
+                            member_reminder_template_key=(
+                                project.member_reminder_template_key if project else None
+                            ),
                         )
                         result = queued.delivery
                         new_email_reserved = queued.created
@@ -1638,6 +1763,12 @@ class CompanyService:
                     if latest_send is not None
                     else None,
                     latest_email_error=latest_send.error_details
+                    if latest_send is not None
+                    else None,
+                    latest_template_key=latest_send.template_key
+                    if latest_send is not None
+                    else None,
+                    latest_template_version=latest_send.template_version
                     if latest_send is not None
                     else None,
                     last_sent_at=latest_send.created_at if latest_send is not None else None,

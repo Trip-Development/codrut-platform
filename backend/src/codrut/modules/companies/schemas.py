@@ -52,6 +52,10 @@ class CompanyProjectCreateRequest(StrictRequestModel):
     due_at: datetime | None = None
     form_opens_at: datetime | None = None
     form_closes_at: datetime | None = None
+    leadership_invitation_template_key: str | None = Field(default=None, max_length=120)
+    member_invitation_template_key: str | None = Field(default=None, max_length=120)
+    leadership_reminder_template_key: str | None = Field(default=None, max_length=120)
+    member_reminder_template_key: str | None = Field(default=None, max_length=120)
 
 
 class CompanyProjectUpdateRequest(StrictRequestModel):
@@ -63,6 +67,10 @@ class CompanyProjectUpdateRequest(StrictRequestModel):
     due_at: datetime | None = None
     form_opens_at: datetime | None = None
     form_closes_at: datetime | None = None
+    leadership_invitation_template_key: str | None = Field(default=None, max_length=120)
+    member_invitation_template_key: str | None = Field(default=None, max_length=120)
+    leadership_reminder_template_key: str | None = Field(default=None, max_length=120)
+    member_reminder_template_key: str | None = Field(default=None, max_length=120)
 
 
 class CompanyProjectResponse(BaseModel):
@@ -78,6 +86,10 @@ class CompanyProjectResponse(BaseModel):
     due_at: datetime | None
     form_opens_at: datetime | None
     form_closes_at: datetime | None
+    leadership_invitation_template_key: str | None = None
+    member_invitation_template_key: str | None = None
+    leadership_reminder_template_key: str | None = None
+    member_reminder_template_key: str | None = None
     archived_at: datetime | None = None
     archived_by_user_id: UUID | None = None
     archived_from_status: CompanyProjectStatus | None = None
@@ -306,6 +318,8 @@ class ParticipantInvitationStatusResponse(BaseModel):
     latest_delivery_mode: Literal["email", "secure_links"] | None = None
     latest_email_status: str | None = None
     latest_email_error: str | None = None
+    latest_template_key: str | None = None
+    latest_template_version: int | None = None
     last_sent_at: datetime | None = None
     email_send_count: int = 0
     has_active_secure_link: bool = False
