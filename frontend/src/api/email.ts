@@ -130,6 +130,7 @@ function templateDisplayName(key: string): string {
     evaluation_team_invite: "Evaluare echipe - invitație",
     evaluation_team_reminder: "Evaluare echipe - reminder",
     local_preview_follow_up: "Urmărire evaluare",
+    invitation_leadership_team: "Invitație echipa de direcție",
   };
   return names[key] ?? key;
 }

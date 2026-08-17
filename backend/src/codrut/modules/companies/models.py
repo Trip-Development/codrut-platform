@@ -108,6 +108,22 @@ class CompanyProject(TimestampMixin, Base):
         Enum(CompanyProjectStatus),
         nullable=True,
     )
+    leadership_invitation_template_key: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+    member_invitation_template_key: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+    leadership_reminder_template_key: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+    member_reminder_template_key: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
 
     company: Mapped[Company] = relationship(back_populates="projects")
     memberships: Mapped[list[ProjectMembership]] = relationship(

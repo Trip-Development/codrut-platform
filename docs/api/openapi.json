@@ -2660,6 +2660,54 @@
             ],
             "title": "Form Opens At"
           },
+          "leadership_invitation_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Invitation Template Key"
+          },
+          "leadership_reminder_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Reminder Template Key"
+          },
+          "member_invitation_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Invitation Template Key"
+          },
+          "member_reminder_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Reminder Template Key"
+          },
           "name": {
             "maxLength": 255,
             "minLength": 1,
@@ -2802,6 +2850,50 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "leadership_invitation_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Invitation Template Key"
+          },
+          "leadership_reminder_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Reminder Template Key"
+          },
+          "member_invitation_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Invitation Template Key"
+          },
+          "member_reminder_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Reminder Template Key"
           },
           "name": {
             "title": "Name",
@@ -2955,6 +3047,50 @@
             "title": "Id",
             "type": "string"
           },
+          "leadership_invitation_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Invitation Template Key"
+          },
+          "leadership_reminder_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Reminder Template Key"
+          },
+          "member_invitation_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Invitation Template Key"
+          },
+          "member_reminder_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Reminder Template Key"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3068,6 +3204,54 @@
               }
             ],
             "title": "Form Opens At"
+          },
+          "leadership_invitation_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Invitation Template Key"
+          },
+          "leadership_reminder_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leadership Reminder Template Key"
+          },
+          "member_invitation_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Invitation Template Key"
+          },
+          "member_reminder_template_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Reminder Template Key"
           },
           "name": {
             "anyOf": [
@@ -5393,6 +5577,28 @@
               }
             ],
             "title": "Latest Email Status"
+          },
+          "latest_template_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Template Key"
+          },
+          "latest_template_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Template Version"
           },
           "participant_id": {
             "format": "uuid",

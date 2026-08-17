@@ -15,6 +15,14 @@ def isolate_local_auth_bypass(monkeypatch: pytest.MonkeyPatch):
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+async def cleanup_db_engine():
+    yield
+    from codrut.core.database import engine
+
+    await engine.dispose()
+
+
 @pytest.fixture
 def questionnaire_definition_factory() -> Callable[[str], QuestionnaireDefinition]:
     def build(key: str) -> QuestionnaireDefinition:
