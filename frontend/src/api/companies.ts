@@ -163,6 +163,10 @@ export type CompanyProject = {
   due_at: string | null;
   form_opens_at: string | null;
   form_closes_at: string | null;
+  leadership_invitation_template_key?: string | null;
+  member_invitation_template_key?: string | null;
+  leadership_reminder_template_key?: string | null;
+  member_reminder_template_key?: string | null;
   archived_at?: string | null;
   archived_by_user_id?: string | null;
   archived_from_status?: CompanyProjectStatus | null;
@@ -192,6 +196,14 @@ export type CompanyProjectPayload = {
   dueAt?: string | null;
   formOpensAt?: string | null;
   formClosesAt?: string | null;
+  leadershipInvitationTemplateKey?: string | null;
+  memberInvitationTemplateKey?: string | null;
+  leadershipReminderTemplateKey?: string | null;
+  memberReminderTemplateKey?: string | null;
+  leadership_invitation_template_key?: string | null;
+  member_invitation_template_key?: string | null;
+  leadership_reminder_template_key?: string | null;
+  member_reminder_template_key?: string | null;
 };
 
 export type CompanyAssignment = {
@@ -291,6 +303,8 @@ export type ParticipantInvitationStatus = {
   latest_delivery_mode: "email" | "secure_links" | null;
   latest_email_status: string | null;
   latest_email_error: string | null;
+  latest_template_key?: string | null;
+  latest_template_version?: number | null;
   last_sent_at: string | null;
   email_send_count: number;
   has_active_secure_link: boolean;
@@ -2534,5 +2548,29 @@ function projectPayloadToApi(payload: CompanyProjectPayload) {
   if ("dueAt" in payload) body.due_at = payload.dueAt ?? null;
   if ("formOpensAt" in payload) body.form_opens_at = payload.formOpensAt ?? null;
   if ("formClosesAt" in payload) body.form_closes_at = payload.formClosesAt ?? null;
+  if ("leadershipInvitationTemplateKey" in payload) {
+    body.leadership_invitation_template_key = payload.leadershipInvitationTemplateKey ?? null;
+  }
+  if ("leadership_invitation_template_key" in payload) {
+    body.leadership_invitation_template_key = payload.leadership_invitation_template_key ?? null;
+  }
+  if ("memberInvitationTemplateKey" in payload) {
+    body.member_invitation_template_key = payload.memberInvitationTemplateKey ?? null;
+  }
+  if ("member_invitation_template_key" in payload) {
+    body.member_invitation_template_key = payload.member_invitation_template_key ?? null;
+  }
+  if ("leadershipReminderTemplateKey" in payload) {
+    body.leadership_reminder_template_key = payload.leadershipReminderTemplateKey ?? null;
+  }
+  if ("leadership_reminder_template_key" in payload) {
+    body.leadership_reminder_template_key = payload.leadership_reminder_template_key ?? null;
+  }
+  if ("memberReminderTemplateKey" in payload) {
+    body.member_reminder_template_key = payload.memberReminderTemplateKey ?? null;
+  }
+  if ("member_reminder_template_key" in payload) {
+    body.member_reminder_template_key = payload.member_reminder_template_key ?? null;
+  }
   return body;
 }

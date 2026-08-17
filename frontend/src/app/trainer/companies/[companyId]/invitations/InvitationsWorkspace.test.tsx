@@ -25,7 +25,7 @@ import {
   saveCompanyDefaultAssignmentPlan,
   sendParticipantInvitations,
 } from "@/api/companies";
-import { getEmailSendCapacity } from "@/api/email";
+import { getEmailSendCapacity, listEmailTemplatesOnServer } from "@/api/email";
 import { listQuestionnaireDefinitionStubs } from "@/api/questionnaires";
 import { AssignmentWorkspace, buildCyclePreviewPlan } from "./AssignmentWorkspace";
 import {
@@ -48,6 +48,7 @@ vi.mock("@/api/companies", async (importOriginal) => {
     saveCompanyDefaultAssignmentPlan: vi.fn(),
     sendParticipantInvitations: vi.fn(),
     resendParticipantInvitation: vi.fn(),
+    updateCompanyProject: vi.fn(),
   };
 });
 
@@ -64,6 +65,7 @@ vi.mock("@/api/email", async (importOriginal) => {
   return {
     ...original,
     getEmailSendCapacity: vi.fn(),
+    listEmailTemplatesOnServer: vi.fn(),
   };
 });
 
@@ -197,6 +199,7 @@ describe("buildInvitationRows", () => {
       used_today: 0,
       remaining_today: 2000,
     });
+    vi.mocked(listEmailTemplatesOnServer).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -1417,5 +1420,90 @@ describe("buildInvitationRows", () => {
     expect(resendParticipantInvitation).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Emailul nu a fost retrimis către ana@example.com: provider unavailable")).toBeTruthy();
     expect(screen.getByText("Trimitere eșuată")).toBeTruthy();
+  });
+
+  it("renders project template selectors and exposes latest sent template version badge", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    vi.mocked(listEmailTemplatesOnServer).mockResolvedValue([
+      {
+        id: "custom_invite_1@1",
+        baseKey: "custom_invite_1",
+        version: 1,
+        name: "Invitație Specială",
+        subject: "Salut ${participant_name}",
+        body: '<a href="${action_url}">Link</a>',
+        textBody: "Link: ${action_url}",
+        lane: "transactional",
+        audience: "transactional",
+        placeholders: ["{participant_name}", "{action_url}"],
+      },
+    ]);
+
+    const projectWithTemplate: CompanyProject = {
+      ...projects[0],
+      leadership_invitation_template_key: "custom_invite_1",
+    };
+    const statusesWithTemplate: ParticipantInvitationStatus[] = [
+      {
+        ...invitationStatuses[0],
+        latest_delivery_mode: "email",
+        latest_email_status: "delivered",
+        latest_template_key: "custom_invite_1",
+        latest_template_version: 2,
+      },
+    ];
+
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={[projectWithTemplate]}
+        selectedProjectId={projectWithTemplate.id}
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={statusesWithTemplate}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
+        teams={teams}
+      />,
+    );
+
+    expect(screen.getByText("Șabloane de email pentru proiect")).toBeTruthy();
+    expect(screen.getByText(/Șablon: custom_invite_1 v2/)).toBeTruthy();
+  });
+
+  it("performs UI pre-flight check (Layer A) and disables sending when configured template is missing or invalid", async () => {
+    vi.mocked(listQuestionnaireDefinitionStubs).mockResolvedValue([]);
+    // Return empty list so configured custom template is missing/inactive
+    vi.mocked(listEmailTemplatesOnServer).mockResolvedValue([]);
+
+    const projectWithMissingTemplate: CompanyProject = {
+      ...projects[0],
+      leadership_invitation_template_key: "non_existent_template",
+    };
+
+    render(
+      <InvitationDeliveryWorkspace
+        companyId="company-1"
+        companyName="Michelin"
+        projects={[projectWithMissingTemplate]}
+        selectedProjectId={projectWithMissingTemplate.id}
+        participants={participants}
+        assignments={assignments}
+        invitationStatuses={invitationStatuses}
+        initialAssessmentCycles={[initialCycle]}
+        initialSelectedCycleId={initialCycle.id}
+        teams={teams}
+      />,
+    );
+
+    // Stratul A: Error banner displayed
+    const alert = await screen.findByTestId("template-preflight-errors");
+    expect(alert).toBeTruthy();
+    expect(within(alert).getByText(/non_existent_template/)).toBeTruthy();
+
+    // Sending buttons must be disabled
+    expect(screen.getByRole("button", { name: "Trimite email netrimișilor" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Trimite tuturor" })).toHaveProperty("disabled", true);
   });
 });

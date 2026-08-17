@@ -2382,6 +2382,14 @@ export interface components {
             form_closes_at?: string | null;
             /** Form Opens At */
             form_opens_at?: string | null;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
             /** Name */
             name: string;
             /** Project Type */
@@ -2423,6 +2431,14 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
             /** Name */
             name: string;
             /** Project Type */
@@ -2466,6 +2482,14 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
             /** Name */
             name: string;
             /** Project Type */
@@ -2494,6 +2518,14 @@ export interface components {
             form_closes_at?: string | null;
             /** Form Opens At */
             form_opens_at?: string | null;
+            /** Leadership Invitation Template Key */
+            leadership_invitation_template_key?: string | null;
+            /** Leadership Reminder Template Key */
+            leadership_reminder_template_key?: string | null;
+            /** Member Invitation Template Key */
+            member_invitation_template_key?: string | null;
+            /** Member Reminder Template Key */
+            member_reminder_template_key?: string | null;
             /** Name */
             name?: string | null;
             /** Project Type */
@@ -3325,6 +3357,10 @@ export interface components {
             latest_email_error?: string | null;
             /** Latest Email Status */
             latest_email_status?: string | null;
+            /** Latest Template Key */
+            latest_template_key?: string | null;
+            /** Latest Template Version */
+            latest_template_version?: number | null;
             /**
              * Participant Id
              * Format: uuid

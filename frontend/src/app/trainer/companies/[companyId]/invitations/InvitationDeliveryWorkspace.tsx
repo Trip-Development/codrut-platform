@@ -20,6 +20,7 @@ import {
   hasPermanentParticipantAccount,
   resendParticipantInvitation,
   sendParticipantInvitations,
+  updateCompanyProject,
   type AssessmentCycle,
   type CompanyAssignment,
   type CompanyParticipant,
@@ -31,7 +32,9 @@ import {
 } from "@/api/companies";
 import {
   getEmailSendCapacity,
+  listEmailTemplatesOnServer,
   type EmailSendCapacity,
+  type EmailTemplate,
 } from "@/api/email";
 import { InlineFeedback } from "@/components/presentation/inline-feedback";
 import { IdentityMark } from "@/components/presentation/identity-mark";
@@ -69,6 +72,8 @@ type ParticipantInviteRow = {
   deliveryTone: "default" | "success" | "warning" | "danger";
   deliveryState: "none" | "ready" | "pending" | "success" | "danger";
   deliveryError: string | null;
+  latestTemplateKey: string | null;
+  latestTemplateVersion: number | null;
   secureLinkUrl: string | null;
   secureLinkExpiresAt: string | null;
   nextAction: string;
@@ -271,6 +276,9 @@ export function buildInvitationRows(
                 ? "Verifică livrarea"
                 : "Trimite invitația";
 
+    const latestTemplateKey = persistedStatus?.latest_template_key ?? null;
+    const latestTemplateVersion = persistedStatus?.latest_template_version ?? null;
+
     return {
       participant,
       assignments: participantAssignments,
@@ -282,6 +290,8 @@ export function buildInvitationRows(
       deliveryTone,
       deliveryState,
       deliveryError,
+      latestTemplateKey,
+      latestTemplateVersion,
       secureLinkUrl,
       secureLinkExpiresAt,
       nextAction,
@@ -356,6 +366,139 @@ export function InvitationDeliveryWorkspace({
       return null;
     }
   }, []);
+
+  const [projectList, setProjectList] = useState<CompanyProject[]>(projects);
+  const currentProject = projectList.find((p) => p.id === selectedProjectId) ?? null;
+  const [availableTemplates, setAvailableTemplates] = useState<EmailTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templateUpdating, setTemplateUpdating] = useState(false);
+
+  useEffect(() => {
+    setProjectList(projects);
+  }, [projects]);
+
+  useEffect(() => {
+    let active = true;
+    setTemplatesLoading(true);
+    Promise.resolve(listEmailTemplatesOnServer())
+      .then((templates) => {
+        if (!active || !Array.isArray(templates)) return;
+        // Amendment 6: Filter strict active transactional templates only
+        const valid = templates.filter(
+          (t) => t.lane === "transactional" && !t.audience?.startsWith("campaign"),
+        );
+        setAvailableTemplates(valid);
+      })
+      .catch(() => {
+        if (active) setAvailableTemplates([]);
+      })
+      .finally(() => {
+        if (active) setTemplatesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const INVITATION_ALLOWED_VARS = useMemo(
+    () =>
+      new Set([
+        "participant_name",
+        "trainer_name",
+        "company_name",
+        "task_count",
+        "action_url",
+      ]),
+    [],
+  );
+
+  const templateValidationErrors = useMemo(() => {
+    if (!currentProject) return [];
+    const errors: Array<{ slot: string; key: string; reason: string }> = [];
+    const slots = [
+      { name: "Invitație leadership", key: currentProject.leadership_invitation_template_key },
+      { name: "Invitație membru", key: currentProject.member_invitation_template_key },
+      { name: "Reminder leadership", key: currentProject.leadership_reminder_template_key },
+      { name: "Reminder membru", key: currentProject.member_reminder_template_key },
+    ];
+
+    for (const slot of slots) {
+      if (!slot.key) continue;
+      const found = availableTemplates.find((t) => t.baseKey === slot.key);
+      if (!found) {
+        errors.push({
+          slot: slot.name,
+          key: slot.key,
+          reason: `Șablonul '${slot.key}' nu a fost găsit sau este inactiv.`,
+        });
+        continue;
+      }
+      if (found.lane !== "transactional" || found.audience?.startsWith("campaign")) {
+        errors.push({
+          slot: slot.name,
+          key: slot.key,
+          reason: `Șablonul '${slot.key}' este marcat ca șablon de campanie.`,
+        });
+        continue;
+      }
+
+      const rawText = `${found.subject} ${found.body} ${found.textBody ?? ""}`;
+      const placeholders = new Set<string>();
+      for (const match of rawText.matchAll(/\$\{([a-zA-Z0-9_]+)\}/g)) {
+        placeholders.add(match[1]);
+      }
+      for (const match of rawText.matchAll(/\{([a-zA-Z0-9_]+)\}/g)) {
+        placeholders.add(match[1]);
+      }
+
+      if (!placeholders.has("action_url")) {
+        errors.push({
+          slot: slot.name,
+          key: slot.key,
+          reason: `Șablonul '${slot.key}' nu conține linkul de acces (\${action_url}).`,
+        });
+      }
+
+      const unsupported = Array.from(placeholders).filter((p) => !INVITATION_ALLOWED_VARS.has(p));
+      if (unsupported.length > 0) {
+        errors.push({
+          slot: slot.name,
+          key: slot.key,
+          reason: `Șablonul '${slot.key}' conține variabile nepermise: ${unsupported.join(", ")}.`,
+        });
+      }
+    }
+    return errors;
+  }, [currentProject, availableTemplates, INVITATION_ALLOWED_VARS]);
+
+  const hasTemplateErrors = templateValidationErrors.length > 0;
+
+  async function handleProjectTemplateChange(
+    field:
+      | "leadership_invitation_template_key"
+      | "member_invitation_template_key"
+      | "leadership_reminder_template_key"
+      | "member_reminder_template_key",
+    value: string,
+  ) {
+    if (!selectedProjectId) return;
+    const templateKey = value === "__default__" ? null : value;
+    setTemplateUpdating(true);
+    try {
+      const updated = await updateCompanyProject(companyId, selectedProjectId, {
+        [field]: templateKey,
+      });
+      setProjectList((prev) =>
+        prev.map((p) => (p.id === selectedProjectId ? { ...p, ...updated } : p)),
+      );
+      setMessage("Șabloanele de email pentru proiect au fost actualizate.");
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Nu am putut actualiza șablonul.";
+      setMessage(errorMsg);
+    } finally {
+      setTemplateUpdating(false);
+    }
+  }
 
   useEffect(() => {
     setAssignmentState(assignments);
@@ -824,6 +967,116 @@ export function InvitationDeliveryWorkspace({
           <ProjectScopeSelector projects={projects} selectedProjectId={selectedProjectId} />
         ) : null}
 
+        {currentProject ? (
+          <div className="border-b border-border bg-muted/40 px-4 py-4 md:px-5">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Șabloane de email pentru proiect</h3>
+                <p className="text-xs text-muted-foreground">
+                  Alege șabloanele folosite la trimiterea invitațiilor și a reminderelor pentru acest proiect.
+                </p>
+              </div>
+
+              {hasTemplateErrors ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive"
+                  data-testid="template-preflight-errors"
+                >
+                  <p className="font-semibold">
+                    Trimiterea de emailuri este blocată din cauza configurării șabloanelor:
+                  </p>
+                  <ul className="mt-1 list-inside list-disc space-y-0.5">
+                    {templateValidationErrors.map((err, idx) => (
+                      <li key={idx}>
+                        <strong>{err.slot}</strong> ({err.key}): {err.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <SelectControl
+                  label="Invitație Leadership"
+                  value={currentProject.leadership_invitation_template_key ?? "__default__"}
+                  disabled={templateUpdating || templatesLoading}
+                  onChange={(e) =>
+                    void handleProjectTemplateChange(
+                      "leadership_invitation_template_key",
+                      e.target.value,
+                    )
+                  }
+                >
+                  <option value="__default__">Implicit (Creare cont)</option>
+                  {availableTemplates.map((t) => (
+                    <option key={t.id} value={t.baseKey}>
+                      {t.name} ({t.baseKey} v{t.version})
+                    </option>
+                  ))}
+                </SelectControl>
+
+                <SelectControl
+                  label="Invitație Membri"
+                  value={currentProject.member_invitation_template_key ?? "__default__"}
+                  disabled={templateUpdating || templatesLoading}
+                  onChange={(e) =>
+                    void handleProjectTemplateChange(
+                      "member_invitation_template_key",
+                      e.target.value,
+                    )
+                  }
+                >
+                  <option value="__default__">Implicit (Pachet sarcini)</option>
+                  {availableTemplates.map((t) => (
+                    <option key={t.id} value={t.baseKey}>
+                      {t.name} ({t.baseKey} v{t.version})
+                    </option>
+                  ))}
+                </SelectControl>
+
+                <SelectControl
+                  label="Reminder Leadership"
+                  value={currentProject.leadership_reminder_template_key ?? "__default__"}
+                  disabled={templateUpdating || templatesLoading}
+                  onChange={(e) =>
+                    void handleProjectTemplateChange(
+                      "leadership_reminder_template_key",
+                      e.target.value,
+                    )
+                  }
+                >
+                  <option value="__default__">Implicit (Reminder sarcini)</option>
+                  {availableTemplates.map((t) => (
+                    <option key={t.id} value={t.baseKey}>
+                      {t.name} ({t.baseKey} v{t.version})
+                    </option>
+                  ))}
+                </SelectControl>
+
+                <SelectControl
+                  label="Reminder Membri"
+                  value={currentProject.member_reminder_template_key ?? "__default__"}
+                  disabled={templateUpdating || templatesLoading}
+                  onChange={(e) =>
+                    void handleProjectTemplateChange(
+                      "member_reminder_template_key",
+                      e.target.value,
+                    )
+                  }
+                >
+                  <option value="__default__">Implicit (Reminder sarcini)</option>
+                  {availableTemplates.map((t) => (
+                    <option key={t.id} value={t.baseKey}>
+                      {t.name} ({t.baseKey} v{t.version})
+                    </option>
+                  ))}
+                </SelectControl>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <header className="border-b border-border px-4 py-4 md:px-5">
           <p className="mb-3 w-fit rounded-md border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground/70">
             {emailCapacity
@@ -845,6 +1098,7 @@ export function InvitationDeliveryWorkspace({
                   || !canUseProjectActions
                   || !cycleScopeReady
                   || sendingMode !== null
+                  || hasTemplateErrors
                   || readyCount === 0
                   || (emailCapacity !== null
                     && readyEmailCount > emailCapacity.remaining_today)
@@ -880,6 +1134,7 @@ export function InvitationDeliveryWorkspace({
                   || !canUseProjectActions
                   || !cycleScopeReady
                   || sendingMode !== null
+                  || hasTemplateErrors
                   || rows.every((row) => row.totalTasks === 0)
                   || (emailCapacity !== null
                     && allEmailCount > emailCapacity.remaining_today)
@@ -978,6 +1233,7 @@ export function InvitationDeliveryWorkspace({
                   !deliveryEnabled
                   || !cycleScopeReady
                   || sendingMode !== null
+                  || hasTemplateErrors
                   || selectedReadyCount === 0
                   || (emailCapacity !== null
                     && selectedEmailCount > emailCapacity.remaining_today)
@@ -1068,6 +1324,14 @@ export function InvitationDeliveryWorkspace({
                     <td className="col-span-2 col-start-2 row-start-2 min-w-0 md:table-cell md:px-4 md:py-3">
                       <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:hidden">Livrare</p>
                       <StatusMarker tone={row.deliveryTone}>{row.deliveryLabel}</StatusMarker>
+                      {row.latestTemplateKey ? (
+                        <p
+                          className="mt-1 font-mono text-[11px] text-muted-foreground"
+                          data-testid={`template-badge-${row.participant.id}`}
+                        >
+                          Șablon: {row.latestTemplateKey} {row.latestTemplateVersion ? `v${row.latestTemplateVersion}` : ""}
+                        </p>
+                      ) : null}
                       {row.deliveryError ? (
                         <p className="mt-2 max-w-56 text-xs font-medium text-destructive">{row.deliveryError}</p>
                       ) : null}
@@ -1135,6 +1399,7 @@ export function InvitationDeliveryWorkspace({
                             !deliveryEnabled
                             || !cycleScopeReady
                             || sendingMode !== null
+                            || hasTemplateErrors
                             || row.totalTasks === 0
                             || (emailCapacity !== null
                               && emailCapacity.remaining_today < 1)
