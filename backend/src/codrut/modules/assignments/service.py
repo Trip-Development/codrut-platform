@@ -1307,57 +1307,14 @@ class AssignmentService:
             cycle.id,
             team_id,
         )
+        if existing_snapshot:
+            return
         memberships = await self.assignment_repository.list_team_memberships(team_id)
         if not memberships:
             raise DomainError(
                 "The team must include at least one participant.",
                 code="assessment_cycle_team_members_required",
             )
-        expected = {
-            membership.participant_profile_id: membership.role
-            for membership in memberships
-        }
-        if existing_snapshot:
-            actual = {
-                membership.participant_profile_id: membership.role
-                for membership in existing_snapshot
-            }
-            removed_members = set(actual.keys()) - set(expected.keys())
-            if removed_members:
-                raise DomainError(
-                    "Cannot remove team members from an assessment cycle team snapshot.",
-                    code="assessment_cycle_team_member_removed",
-                )
-            for member_id, actual_role in actual.items():
-                if expected[member_id] != actual_role:
-                    raise DomainError(
-                        "Cannot change team member roles in an assessment cycle team snapshot.",
-                        code="assessment_cycle_team_role_changed",
-                    )
-            added_members = [
-                m for m in memberships if m.participant_profile_id not in actual
-            ]
-            if not added_members:
-                return
-            for membership in added_members:
-                await self._require_project_participant(
-                    cycle.company_id,
-                    cycle.project_id,
-                    membership.participant_profile_id,
-                )
-            await self.assignment_repository.add_cycle_team_memberships(
-                [
-                    AssessmentCycleTeamMembership(
-                        assessment_cycle_id=cycle.id,
-                        team_id=team_id,
-                        participant_profile_id=membership.participant_profile_id,
-                        role=expected[membership.participant_profile_id],
-                    )
-                    for membership in added_members
-                ]
-            )
-            return
-
         for membership in memberships:
             await self._require_project_participant(
                 cycle.company_id,
@@ -1386,9 +1343,10 @@ class AssignmentService:
             CompanyMembershipRole.trainer,
         }:
             return
+
         raise DomainError(
-            "Only company managers can perform this action.",
-            code="company_manager_required",
+            "You do not have access to manage assignments for this company.",
+            code="company_access_denied",
         )
 
     async def _require_company_participant(

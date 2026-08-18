@@ -92,6 +92,41 @@ const questionnaireLabels: Record<string, string> = {
 
 function formatPlanErrorMessage(error: unknown, fallback = "Asignările nu au putut fi salvate."): string {
   if (!error) return fallback;
+
+  const code =
+    error instanceof CompanyMutationError && error.code
+      ? error.code
+      : typeof error === "object" && error !== null && "code" in error && typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : null;
+
+  if (code) {
+    switch (code) {
+      case "assessment_cycle_team_member_removed":
+        return "Nu poți elimina membri dintr-o echipă a unui ciclu de evaluare deja inițiat.";
+      case "assessment_cycle_team_role_changed":
+        return "Nu poți modifica rolul membrilor sau liderul echipei într-un ciclu de evaluare deja inițiat.";
+      case "assessment_cycle_team_snapshot_conflict":
+        return "Componența echipei nu se potrivește cu instantaneul salvat pentru acest ciclu.";
+      case "assessment_cycle_team_members_required":
+        return "Echipa evaluată trebuie să includă cel puțin un participant.";
+      case "assessment_cycle_closed":
+        return "Ciclul de evaluare este închis și nu mai permite modificarea asignărilor.";
+      case "assessment_cycle_not_draft":
+        return "Doar un ciclu în stadiul de draft poate fi modificat astfel.";
+      case "assessment_cycle_not_open":
+        return "Ciclul de evaluare nu este deschis pentru modificări.";
+      case "assessment_cycle_open_exists":
+        return "Există deja un ciclu de evaluare deschis în acest proiect.";
+      case "assessment_cycle_icare_self_target_not_leadership":
+        return "Autoevaluarea iCARE este disponibilă doar pentru echipa de direcție.";
+      case "icare_cohort_unavailable":
+        return "Relația de evaluare iCARE nu face parte din organigrama acestui proiect.";
+      case "company_access_denied":
+        return "Nu ai permisiunea de a gestiona asignările pentru această companie.";
+    }
+  }
+
   const raw = error instanceof Error ? error.message : String(error);
   if (raw.includes("assessment_cycle_team_member_removed") || raw.includes("Cannot remove team members")) {
     return "Nu poți elimina membri dintr-o echipă a unui ciclu de evaluare deja inițiat.";
@@ -775,7 +810,6 @@ export function AssignmentWorkspace({
       {currentOperation ? (
         <OperationFeedback title={currentOperation.title} detail={currentOperation.detail} />
       ) : null}
-      {message ? <InlineFeedback>{message}</InlineFeedback> : null}
       {cycleMessage && !cycleSheetOpen ? <InlineFeedback>{cycleMessage}</InlineFeedback> : null}
 
       {assessmentCycles.length > 0 ? (
@@ -875,6 +909,12 @@ export function AssignmentWorkspace({
         {planErrorMessage ? (
           <InlineFeedback tone="danger" className="m-4 md:m-5">
             {planErrorMessage}
+          </InlineFeedback>
+        ) : null}
+
+        {message ? (
+          <InlineFeedback tone="neutral" className="m-4 md:m-5">
+            {message}
           </InlineFeedback>
         ) : null}
 
