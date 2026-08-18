@@ -119,14 +119,14 @@ export function emailTemplateDraftValidation({
 
   if (lane === "transactional") {
     if (placeholders.includes("{due_date}")) {
-      return "Ai folosit {due_date}, care nu poate fi completat automat. Scrie data direct în text.";
+      return "Ai scris {due_date}, iar aplicația nu poate completa asta. Scrie data direct în text, ca text obișnuit.";
     }
     if (placeholders.includes("{sender_name}")) {
-      return "Ai folosit {sender_name}. Folosește {trainer_name} pentru numele trainerului.";
+      return "Ai scris {sender_name}. Folosește {trainer_name} pentru numele trainerului sau scrie numele direct în text.";
     }
     const unsupported = placeholders.filter((placeholder) => !TRANSACTIONAL_PLACEHOLDERS.has(placeholder));
     if (unsupported.length > 0) {
-      return `Codrut nu recunoaște ${unsupported.join(", ")} în emailurile tranzacționale. Folosește etichetele afișate pentru acest șablon.`;
+      return `Ai scris ${unsupported.join(", ")}, iar aplicația nu poate completa asta. Folosește variabilele afișate sau scrie textul direct.`;
     }
   }
 
