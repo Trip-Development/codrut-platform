@@ -189,24 +189,25 @@ export function formatEmailTemplateApiError(
 
   if (Array.isArray(error.details) && error.details.length > 0) {
     const detailMessages = error.details
-      .map((d: any) => {
+      .map((d: unknown) => {
         if (typeof d === "string") return d;
         if (d && typeof d === "object") {
-          const loc = Array.isArray(d.loc)
-            ? d.loc.filter((p: any) => p !== "body").join(".")
+          const detail = d as { loc?: unknown; type?: unknown; message?: unknown };
+          const loc = Array.isArray(detail.loc)
+            ? detail.loc.filter((p) => typeof p === "string" && p !== "body").join(".")
             : "";
-          if (d.type === "extra_forbidden") {
+          if (detail.type === "extra_forbidden") {
             return loc
               ? `Câmpul „${loc}” nu este permis.`
               : "S-au trimis câmpuri suplimentare nepermise.";
           }
-          if (d.type === "missing") {
+          if (detail.type === "missing") {
             return loc
               ? `Câmpul „${loc}” este obligatoriu.`
               : "Lipsește un câmp obligatoriu.";
           }
-          if (d.message) {
-            return loc ? `${loc}: ${d.message}` : d.message;
+          if (typeof detail.message === "string") {
+            return loc ? `${loc}: ${detail.message}` : detail.message;
           }
         }
         return null;
@@ -369,7 +370,15 @@ export async function updateEmailTemplateOnServer(template: EmailTemplate): Prom
     };
   }
 
-  const { key, ...payload } = frontendToBackendTemplate(template);
+  const rawPayload = frontendToBackendTemplate(template);
+  const payload = {
+    subject: rawPayload.subject,
+    html_body: rawPayload.html_body,
+    text_body: rawPayload.text_body,
+    variables: rawPayload.variables,
+    audience: rawPayload.audience,
+    active: rawPayload.active,
+  };
   const response = await apiFetch(`${getApiBaseUrl()}/communications/templates/${template.baseKey}?version=${template.version}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
